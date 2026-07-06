@@ -12,11 +12,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window = HostWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 560))
         let content = window.contentView!
 
-        // Task 5: place the terminal edge-to-edge. Task 6 wraps it in PaneHostView.
-        let terminalView = surface.view
-        terminalView.frame = content.bounds
-        terminalView.autoresizingMask = [.width, .height]
-        content.addSubview(terminalView)
+        let pane = PaneHostView(content: surface.view)
+        pane.frame = content.bounds
+        pane.autoresizingMask = [.width, .height]
+        content.addSubview(pane)
 
         window.center()
         window.makeKeyAndOrderFront(nil)
