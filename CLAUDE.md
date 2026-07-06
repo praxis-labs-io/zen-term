@@ -74,7 +74,10 @@ team.
   tickets as it takes; don't force one ticket per plan task.
   - Exception — a tightly-coupled foundational stack where each step depends on
     the last and nothing is separately mergeable (e.g. the Epic 0 scaffold: ZEN-2)
-    is legitimately one ticket / one PR covering all its plan tasks.
+    is legitimately one ticket / one PR covering all its plan tasks. When that
+    happens, still create a ticket per plan task afterward (linked to the project
+    and the PR) so each task keeps its own history — the single PR is the delivery
+    unit, the per-task tickets are the record.
 - **Branch off the ticket's Linear `gitBranchName`** (from `save_issue`), and
   reference the ticket id in commits/PRs so Linear auto-links. Keep ticket
   descriptions lean: title + a short goal/scope line.
