@@ -26,11 +26,18 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
             ?? ProcessInfo.processInfo.environment["SHELL"]
             ?? "/bin/zsh"
 
+        // Launch a LOGIN shell by prefixing argv[0] with "-". Without this the
+        // shell skips its login files (~/.zprofile, /etc/zprofile), so Homebrew's
+        // `brew shellenv` never runs and the user gets a bare PATH with no
+        // HOMEBREW_PREFIX — SwiftTerm's base env also omits PATH by design. A login
+        // shell rebuilds PATH/env from the user's real config, matching Terminal.app.
+        let loginArgv0 = "-" + URL(fileURLWithPath: shell).lastPathComponent
+
         term.startProcess(
             executable: shell,
             args: config.args,
             environment: environment,
-            execName: nil,
+            execName: loginArgv0,
             currentDirectory: config.workingDirectory?.path
         )
     }
