@@ -1,40 +1,76 @@
 import AppKit
+import PaneKit
 
-/// The single floating pane: canvas background, a rounded + bordered pane inset by
-/// the gutter, hosting `content`. This is the one-pane seed of the split canvas
-/// that Epic 1 generalizes; the dynamic focus halo is deferred to Epic 1.
+/// Hosts one leaf's terminal surface: the rounded/bordered frame over the canvas,
+/// plus the iris focus halo (accent border + soft glow) when focused. Clicking
+/// anywhere in the pane requests focus for its leaf.
 final class PaneHostView: NSView {
-    private let gutter: CGFloat = 12
+    let paneID: PaneID
+    private let onFocusRequest: (PaneID) -> Void
+    private let pane = NSView()
 
-    init(content: NSView) {
+    var isFocused: Bool = false { didSet { updateHalo() } }
+
+    init(paneID: PaneID, content: NSView, onFocusRequest: @escaping (PaneID) -> Void) {
+        self.paneID = paneID
+        self.onFocusRequest = onFocusRequest
         super.init(frame: .zero)
-        wantsLayer = true
-        layer?.backgroundColor = NSColor(srgbRed: 0x23 / 255.0, green: 0x21 / 255.0, blue: 0x36 / 255.0, alpha: 1).cgColor
 
-        let pane = NSView()
+        wantsLayer = true
         pane.wantsLayer = true
         pane.layer?.cornerRadius = 12
-        pane.layer?.masksToBounds = true          // clip terminal content to rounded corners
+        pane.layer?.masksToBounds = false          // glow must escape bounds; content clip is on a mask below
         pane.layer?.borderWidth = 1
-        pane.layer?.borderColor = NSColor(white: 1, alpha: 0.08).cgColor
-        pane.translatesAutoresizingMaskIntoConstraints = false
         addSubview(pane)
 
         content.translatesAutoresizingMaskIntoConstraints = false
-        pane.addSubview(content)
+        let clip = NSView()                         // inner clip so terminal content stays inside the radius
+        clip.wantsLayer = true
+        clip.layer?.cornerRadius = 12
+        clip.layer?.masksToBounds = true
+        clip.translatesAutoresizingMaskIntoConstraints = false
+        pane.addSubview(clip)
+        clip.addSubview(content)
 
+        pane.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            pane.leadingAnchor.constraint(equalTo: leadingAnchor, constant: gutter),
-            pane.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -gutter),
-            pane.topAnchor.constraint(equalTo: topAnchor, constant: gutter),
-            pane.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -gutter),
-
-            content.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
-            content.topAnchor.constraint(equalTo: pane.topAnchor),
-            content.bottomAnchor.constraint(equalTo: pane.bottomAnchor),
+            pane.leadingAnchor.constraint(equalTo: leadingAnchor),
+            pane.trailingAnchor.constraint(equalTo: trailingAnchor),
+            pane.topAnchor.constraint(equalTo: topAnchor),
+            pane.bottomAnchor.constraint(equalTo: bottomAnchor),
+            clip.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
+            clip.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+            clip.topAnchor.constraint(equalTo: pane.topAnchor),
+            clip.bottomAnchor.constraint(equalTo: pane.bottomAnchor),
+            content.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
+            content.topAnchor.constraint(equalTo: clip.topAnchor),
+            content.bottomAnchor.constraint(equalTo: clip.bottomAnchor),
         ])
+        updateHalo()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func mouseDown(with event: NSEvent) {
+        onFocusRequest(paneID)
+        super.mouseDown(with: event)
+    }
+
+    private static let iris = NSColor(srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0, blue: 0xe7 / 255.0, alpha: 1)
+    private static let idleBorder = NSColor(white: 1, alpha: 0.08)
+
+    private func updateHalo() {
+        guard let layer = pane.layer else { return }
+        if isFocused {
+            layer.borderColor = Self.iris.cgColor
+            layer.shadowColor = Self.iris.cgColor
+            layer.shadowOpacity = 0.35
+            layer.shadowRadius = 10
+            layer.shadowOffset = .zero
+        } else {
+            layer.borderColor = Self.idleBorder.cgColor
+            layer.shadowOpacity = 0
+        }
+    }
 }

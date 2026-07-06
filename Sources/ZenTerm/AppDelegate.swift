@@ -2,64 +2,37 @@ import AppKit
 import TerminalKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    // Set in applicationDidFinishLaunching before any code path can read it (the
-    // surface starts, and thus can emit events, only after the window is built);
-    // a documented AppKit force-unwrap, like contentView!.
+    // Set in applicationDidFinishLaunching before any code path can read it; a
+    // documented AppKit force-unwrap, like contentView!.
     private var window: HostWindow!
-    private let surface = TerminalSurfaceFactory.make()
+    private let canvas = PaneCanvasController()
     private let keys = KeyInterceptor()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        surface.delegate = self
-
         window = HostWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 560))
         let content = window.contentView!
 
-        let pane = PaneHostView(content: surface.view)
-        pane.frame = content.bounds
-        pane.autoresizingMask = [.width, .height]
-        content.addSubview(pane)
+        canvas.canvasView.frame = content.bounds
+        canvas.canvasView.autoresizingMask = [.width, .height]
+        content.addSubview(canvas.canvasView)
 
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
-        surface.start(TerminalSurfaceConfig())
-        surface.focus()
+        canvas.start()
 
         keys.onReservedChord = { [weak self] chord in
-            switch chord {
-            case .logProbe:
-                print("[reserved] ⌘K intercepted by chrome — did NOT reach the PTY")
-            case .close:
-                print("[reserved] ⌘W intercepted by chrome")
-                self?.surface.terminate()
-                self?.window.close()
-            }
+            self?.handle(chord)
         }
         keys.start()
     }
 
+    private func handle(_ chord: KeyInterceptor.ReservedChord) {
+        // Split/close/nav wired in Task 11.
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
-    }
-}
-
-/// Chrome-side handling of surface events: Epic 0 logs the observable ones to the
-/// console, and closes the window when the shell exits — which quits the app via
-/// `applicationShouldTerminateAfterLastWindowClosed`.
-extension AppDelegate: TerminalSurfaceDelegate {
-    func surface(_ s: TerminalSurface, titleDidChange title: String) {
-        print("[title] \(title)")
-    }
-    func surface(_ s: TerminalSurface, cwdDidChange url: URL) {
-        print("[cwd] \(url.path)")
-    }
-    func surfaceDidRingBell(_ s: TerminalSurface) {
-        print("[bell]")
-    }
-    func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
-        print("[exit] code=\(code.map(String.init) ?? "nil")")
-        window.close()
     }
 }
