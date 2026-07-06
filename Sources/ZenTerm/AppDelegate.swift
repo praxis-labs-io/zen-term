@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: HostWindow!
     private let surface = TerminalSurfaceFactory.make()
     private let logger = ConsoleSurfaceLogger()
+    private let keys = KeyInterceptor()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         surface.delegate = logger
@@ -23,6 +24,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         surface.start(TerminalSurfaceConfig())
         surface.focus()
+
+        keys.onReservedChord = { [weak self] chord in
+            switch chord {
+            case .logProbe:
+                print("[reserved] ⌘K intercepted by chrome — did NOT reach the PTY")
+            case .close:
+                print("[reserved] ⌘W intercepted by chrome")
+                self?.surface.terminate()
+                self?.window.close()
+            }
+        }
+        keys.start()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
