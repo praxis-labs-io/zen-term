@@ -140,19 +140,28 @@ of the app, not scaffolding.
    `LocalProcessTerminalView`, maps `LocalProcessTerminalViewDelegate` +
    `TerminalViewDelegate` callbacks into `TerminalSurfaceDelegate`. Method/accessor
    names verified against the live SwiftTerm API (selection, scroll, bell, OSC 9;4).
-3. **Borderless host window** — a borderless `NSWindow` that places
-   `surface.view` edge-to-edge, applies the canvas background, spawns the user's
-   default shell via `start(config)`.
-4. **Global keybind interception proof** — a local key-event monitor that catches
-   one reserved chord (e.g. `⌘W` → close / `Ctrl+H` logged) _before_ the terminal
-   consumes it, proving the input-routing asterisk is solvable.
-5. **Delegate events logging** — title / cwd / bell / progress / exit printed to
-   console, proving events flow up through the seam.
+3. **Minimal-chrome host window** — a titled `NSWindow` with a hidden/transparent
+   title bar + `.fullSizeContentView` (traffic lights optionally hidden), _not_ a
+   true `.borderless` window (which forfeits free key-window / drag / resize).
+   This is the low-effort path to minimal chrome.
+4. **Single floating pane** — the host window places `surface.view` inside a
+   rounded, bordered pane inset with gutter padding over the Rosé Pine canvas
+   (`--canvas` `#232136`). This is the single-pane seed of the canvas that Epic 1
+   generalizes into the split tree; it spawns the user's default shell via
+   `start(config)`.
+5. **Global keybind interception proof** — a local key-event monitor that catches
+   one reserved chord (e.g. `⌘W` → close / `⌘K` logged) _before_ the terminal
+   consumes it, while an un-reserved chord (`Ctrl+H`) passes through to the PTY —
+   proving selective interception (the input-routing asterisk) is solvable.
+6. **Delegate events logging** — title / cwd / exit printed to console via the
+   reliable `processDelegate` path; a documented spike on whether bell / OSC 9
+   notify / OSC 9;4 progress can be surfaced (they live on `TerminalDelegate`,
+   below the view delegate), so Epic 4's toast story is de-risked early.
 
 ### Not in Epic 0 — deferred to the epics built on top of it
 
 These are **the app** — not cut, just sequenced after the PoC floor is proven.
-Epic 0 is deliberately the empty borderless terminal we build everything on:
+Epic 0 is deliberately a single floating terminal pane we build everything on:
 
 - Floating-pane canvas, split tree, iris halo, spatial pane nav → **Epic 1**
 - Tabs + multi-window → **Epic 2**
@@ -166,29 +175,43 @@ on the v0 path.
 
 ### Definition of done
 
-- [ ] Live default shell runs in a borderless `NSWindow`; typing, output, and
-      resize behave; the window is focusable and the terminal is first responder.
+- [ ] Live default shell runs in a minimal-chrome (hidden-titlebar) `NSWindow`,
+      inside the rounded/bordered floating pane with gutters over the canvas;
+      typing, output, and resize behave; window is key and the terminal is first
+      responder.
 - [ ] The terminal is reached **only** through `TerminalSurfaceFactory.make()` —
       no chrome code references `SwiftTerm` or `SwiftTermSurface` directly.
-- [ ] At least one global chord is intercepted before the terminal swallows it
-      (input-routing asterisk proven).
+- [ ] One reserved chord is intercepted before the terminal swallows it, and an
+      un-reserved chord (`Ctrl+H`) reaches the PTY (selective interception proven).
 - [ ] Delegate events (title, cwd, exit at minimum) are observed in the console.
 - [ ] SwiftTerm accessor/delegate names are verified against the live API, not
-      assumed from the plan's sketch.
+      assumed from the plan's sketch. (Done during planning — see the plan.)
 
 ### Repo layout introduced
 
+A terminal-native **SwiftPM package** (no `.xcodeproj`) — buildable and runnable
+entirely from the shell (`swift build` / `swift run` / `swift test`). It opens in
+Xcode any time via `open Package.swift` if a debugger/Instruments session is
+wanted; an Xcode wrapper/app-bundle is added only later, when code-signing or
+entitlements force it (not on the Epic 0–3 path).
+
 ```text
 zen-term/
-├── Packages/
-│   └── TerminalKit/                 # the seam + SwiftTerm conformance
-│       ├── TerminalSurface.swift    # protocol + config/delegate/factory types
-│       └── SwiftTermSurface.swift   # depends on SwiftTerm (SPM)
-└── ZenTerm.xcodeproj                # borderless window, entitlements, entry point
+├── Package.swift                     # targets: TerminalKit (lib) + ZenTerm (exe); SwiftTerm dep
+├── Sources/
+│   ├── TerminalKit/                  # the seam + SwiftTerm conformance (only SwiftTerm consumer)
+│   │   ├── TerminalSurface.swift     # protocol + config/delegate/progress types
+│   │   ├── TerminalSurfaceFactory.swift
+│   │   ├── SwiftTermSurface.swift    # depends on SwiftTerm (SPM)
+│   │   └── (OSC7 / EnvBuilder helpers)
+│   └── ZenTerm/                      # the app chrome — depends on TerminalKit ONLY
+└── Tests/TerminalKitTests/
 ```
 
-`Chrome/` (Epic 1+) imports `TerminalKit` only — never a backend directly. That
-import discipline is the one thing to lint against; it is how the seam rots.
+The `ZenTerm` target does not list SwiftTerm as a dependency, so it **cannot**
+`import` a backend directly — the seam is enforced at the module level, not just
+by convention. That import discipline is the one thing to guard; it is how the
+seam rots.
 
 ## Open questions to resolve before/inside Epic 0
 
