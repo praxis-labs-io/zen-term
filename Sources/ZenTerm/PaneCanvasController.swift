@@ -50,7 +50,7 @@ final class PaneCanvasController: NSObject {
             surface.delegate = self
             // Each created leaf starts with the cwd pre-seeded for it (nil → default
             // for the first pane; a split seeds the new leaf with its parent's cwd).
-            surface.start(TerminalSurfaceConfig(workingDirectory: cwdByLeaf[id]))
+            surface.start(TerminalSurfaceConfig(workingDirectory: cwdByLeaf[id], theme: Theme.rosePineMoon))
         }
         for id in diff.removed { cwdByLeaf[id] = nil; hostByLeaf[id] = nil }
         rebuildViews()
@@ -64,12 +64,13 @@ final class PaneCanvasController: NSObject {
             self?.hostView(for: id) ?? NSView()
         })
         // SplitContainerView.init already sets translatesAutoresizingMaskIntoConstraints=false.
-        // 12pt gutter around the whole canvas (matches Epic 0's outer inset).
+        // 12pt gutter around the canvas; a taller top inset clears the window's traffic
+        // lights (the window uses .fullSizeContentView, so they float over the top).
         canvasView.addSubview(root)
         NSLayoutConstraint.activate([
             root.leadingAnchor.constraint(equalTo: canvasView.leadingAnchor, constant: 12),
             root.trailingAnchor.constraint(equalTo: canvasView.trailingAnchor, constant: -12),
-            root.topAnchor.constraint(equalTo: canvasView.topAnchor, constant: 12),
+            root.topAnchor.constraint(equalTo: canvasView.topAnchor, constant: 36),
             root.bottomAnchor.constraint(equalTo: canvasView.bottomAnchor, constant: -12),
         ])
         updateHalo()
@@ -77,7 +78,9 @@ final class PaneCanvasController: NSObject {
 
     private func hostView(for id: PaneID) -> NSView {
         guard let surface = registry.surface(for: id) else { return NSView() }
-        let host = PaneHostView(paneID: id, content: surface.view, onFocusRequest: { [weak self] pid in
+        let host = PaneHostView(paneID: id, content: surface.view,
+                                background: Theme.rosePineMoon.background.nsColor,
+                                onFocusRequest: { [weak self] pid in
             self?.focus(pid)
         })
         hostByLeaf[id] = host
