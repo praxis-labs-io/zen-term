@@ -53,18 +53,21 @@ team.
   - In Progress `29401739-cb4f-4013-b389-459598f06d8c`
   - In Review `c8f755f6-5c17-4bdd-b41f-9161166fdb19`
   - Done `ceefb860-420c-4640-88d6-70acda792fc6`
-- **Team key:** auto-confirms on the first issue (likely `ZEN`). Once known, use
-  Linear's generated `gitBranchName` for branches; reference the issue id in
-  commits/PRs so Linear auto-links.
+- **Team key:** `ZEN`. Use Linear's generated `gitBranchName` for branches;
+  reference the issue id in commits/PRs so Linear auto-links.
 
 ## Epics → Linear (just-in-time, not up front)
 
 - Epics are documented **locally first** — the charters in the design spec plus a
   per-epic plan. That local pair is the durable record and does not depend on
   Linear.
-- **When we pick up an epic:** create/choose its Linear project, open the epic
-  issue, then create task tickets **from that epic's plan, as we go** — never a
-  full backlog dumped up front.
+- **An epic IS a Linear Project — never an issue.** Task tickets belong directly
+  to the project. There is no "epic tracking issue"; the project + its child
+  tickets are the whole structure.
+- **When we pick up an epic:** create/choose its Linear **project**, then create
+  task tickets under that project **from the epic's plan, as we go** — never a
+  full backlog dumped up front, and never a parent "epic issue" for them to nest
+  under.
 - 1 task ticket = 1 branch = 1 PR (rule of thumb). Keep ticket descriptions lean:
   title + a short goal/scope line.
 
