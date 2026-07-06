@@ -5,7 +5,11 @@ import AppKit
 /// the "don't steal Ctrl+hjkl from nvim" rule — un-reserved chords are returned
 /// untouched so the terminal (and the program inside it) receives them.
 final class KeyInterceptor {
-    enum ReservedChord { case close, logProbe }
+    enum ReservedChord {
+        case splitVertical, splitHorizontal
+        case navLeft, navRight, navUp, navDown
+        case closePane
+    }
 
     var onReservedChord: ((ReservedChord) -> Void)?
     private var monitor: Any?
@@ -15,20 +19,25 @@ final class KeyInterceptor {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            guard flags == .command else { return event }   // only bare ⌘ chords are reserved
             let key = event.charactersIgnoringModifiers?.lowercased()
 
-            // Reserved allowlist — consume (return nil), never reaches the terminal.
-            if flags == .command, key == "w" {
-                self.onReservedChord?(.close)
-                return nil
+            let chord: ReservedChord?
+            switch key {
+            case "\\": chord = .splitVertical
+            case "-":  chord = .splitHorizontal
+            case "h":  chord = .navLeft
+            case "l":  chord = .navRight
+            case "k":  chord = .navUp
+            case "j":  chord = .navDown
+            case "w":  chord = .closePane
+            default:   chord = nil
             }
-            if flags == .command, key == "k" {
-                self.onReservedChord?(.logProbe)
-                return nil
+            if let chord {
+                self.onReservedChord?(chord)
+                return nil                                   // consumed — never reaches the PTY
             }
-
-            // Everything else — including Ctrl+H — passes straight through.
-            return event
+            return event                                     // everything else passes through
         }
     }
 

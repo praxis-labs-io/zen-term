@@ -15,6 +15,10 @@ final class PaneCanvasController: NSObject {
     private var nextID = 1
 
     private static let canvasColor = NSColor(srgbRed: 0x23 / 255.0, green: 0x21 / 255.0, blue: 0x36 / 255.0, alpha: 1)
+    private static let minSplitExtent: CGFloat = 240
+
+    /// Invoked when the final pane goes away (last close or last shell exit).
+    var onLastPaneClosed: (() -> Void)?
 
     override init() {
         let firstLeaf = PaneID(1)
@@ -107,6 +111,31 @@ final class PaneCanvasController: NSObject {
             focus(target)
         }
     }
+
+    /// Split the focused pane along `axis`, unless it is too small to halve usefully.
+    func split(_ axis: SplitAxis) {
+        guard let host = hostByLeaf[tree.focusedLeaf] else { return }
+        let size = host.bounds.size
+        let extent = (axis == .vertical) ? size.width : size.height
+        guard extent >= Self.minSplitExtent else { NSSound.beep(); return }
+
+        let source = tree.focusedLeaf
+        let newLeaf = mintPaneID()
+        cwdByLeaf[newLeaf] = cwdByLeaf[source]   // inherit the focused pane's cwd
+        tree = tree.splitting(source, axis: axis, newLeaf: newLeaf, newSplit: mintSplitID())
+        reconcileAndRender()
+        registry.surface(for: tree.focusedLeaf)?.focus()
+    }
+
+    /// Close the focused pane. Returns false when it was the last pane (caller closes the window).
+    @discardableResult
+    func closeFocused() -> Bool {
+        guard let next = tree.closing(tree.focusedLeaf) else { return false }
+        tree = next
+        reconcileAndRender()
+        registry.surface(for: tree.focusedLeaf)?.focus()
+        return true
+    }
 }
 
 extension PaneCanvasController: TerminalSurfaceDelegate {
@@ -114,7 +143,14 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
         if let id = leafID(of: s) { cwdByLeaf[id] = url }
     }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
-        // Handled fully in Task 11 (close that leaf); for now, no-op keeps Epic-0 parity.
+        guard let id = leafID(of: s) else { return }
+        guard let next = tree.closing(id) else {
+            onLastPaneClosed?()      // last pane's shell exited → close window
+            return
+        }
+        tree = next
+        reconcileAndRender()
+        registry.surface(for: tree.focusedLeaf)?.focus()
     }
 
     private func leafID(of surface: TerminalSurface) -> PaneID? {

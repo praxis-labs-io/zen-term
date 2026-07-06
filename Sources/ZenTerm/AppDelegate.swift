@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
 
         canvas.start()
+        canvas.onLastPaneClosed = { [weak self] in self?.window.close() }
 
         keys.onReservedChord = { [weak self] chord in
             self?.handle(chord)
@@ -29,7 +30,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handle(_ chord: KeyInterceptor.ReservedChord) {
-        // Split/close/nav wired in Task 11.
+        switch chord {
+        case .splitVertical:   canvas.split(.vertical)
+        case .splitHorizontal: canvas.split(.horizontal)
+        case .navLeft:  canvas.navigate(.left)
+        case .navRight: canvas.navigate(.right)
+        case .navUp:    canvas.navigate(.up)
+        case .navDown:  canvas.navigate(.down)
+        case .closePane:
+            if canvas.closeFocused() == false { window.close() }
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
