@@ -217,9 +217,16 @@ seam rots.
 
 - Exact live SwiftTerm accessor names for selection, scroll-to-bottom, the bell
   hook, and the OSC 9;4 progress delegate method (the plan flags these "verify").
-- Whether OSC 9;4 progress surfaces cleanly from SwiftTerm — it underpins the
-  later "agent idle/working" toast; if it does not, that feature is at risk and we
-  learn it cheaply here.
+  **Resolved in Epic 0** — selection/scroll/bell accessors are wired and verified
+  by a green build + runtime.
+- ~~Whether OSC 9;4 progress surfaces cleanly from SwiftTerm~~ — **Resolved in
+  Epic 0 (see [`../notes/epic-0-delegate-spike.md`](../notes/epic-0-delegate-spike.md)).**
+  **bell** is reachable and runtime-confirmed. **notify (OSC 9) and progress
+  (OSC 9;4) are NOT reachable by subclassing** SwiftTerm as shipped (`progressReport`
+  is `public` not `open`; `notify` has no overridable member). This is an **Epic 4
+  entry risk**: before the "agent idle/working" progress toast, resolve via a
+  delegate-property hook (investigate first), an upstream PR to open those members,
+  or a SwiftTerm fork. Does not block Epic 0.
 - `cwdDidChange` should build its `URL` with `URL(fileURLWithPath:)` (after
   stripping any `file://`), not `URL(string:)`, which silently drops paths with
   spaces.
