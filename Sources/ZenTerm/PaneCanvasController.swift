@@ -91,6 +91,22 @@ final class PaneCanvasController: NSObject {
     }
 
     private func focusFrontmost() { focus(tree.focusedLeaf) }
+
+    /// Move focus to the nearest pane in `direction`, using on-screen frames.
+    func navigate(_ direction: Direction) {
+        guard hostByLeaf.count > 1 else { return }
+        // Frames in the canvas's coordinate space. AppKit is y-up; flip y so that
+        // `.up` (smaller screen-y) maps to the smaller value the scorer expects.
+        let h = canvasView.bounds.height
+        var frames: [PaneID: CGRect] = [:]
+        for (id, host) in hostByLeaf {
+            let f = host.convert(host.bounds, to: canvasView)
+            frames[id] = CGRect(x: f.minX, y: h - f.maxY, width: f.width, height: f.height)
+        }
+        if let target = nearestLeaf(from: tree.focusedLeaf, frames: frames, direction: direction) {
+            focus(target)
+        }
+    }
 }
 
 extension PaneCanvasController: TerminalSurfaceDelegate {
