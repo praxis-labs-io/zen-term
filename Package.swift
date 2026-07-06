@@ -12,13 +12,21 @@ let package = Package(
             name: "TerminalKit",
             dependencies: [.product(name: "SwiftTerm", package: "SwiftTerm")]
         ),
+        .target(
+            name: "PaneKit",
+            dependencies: ["TerminalKit"]   // seam type only — NOT SwiftTerm
+        ),
         .executableTarget(
             name: "ZenTerm",
-            dependencies: ["TerminalKit"]   // NOTE: no SwiftTerm — the seam is enforced here.
+            dependencies: ["TerminalKit", "PaneKit"]  // still no SwiftTerm
         ),
         .testTarget(
             name: "TerminalKitTests",
             dependencies: ["TerminalKit"]
+        ),
+        .testTarget(
+            name: "PaneKitTests",
+            dependencies: ["PaneKit"]
         ),
     ]
 )
