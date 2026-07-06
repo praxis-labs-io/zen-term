@@ -42,8 +42,9 @@ final class PaneCanvasController: NSObject {
         let created = registry.apply(diff)
         for (id, surface) in created {
             surface.delegate = self
-            let cwd = cwdByLeaf[tree.focusedLeaf]            // inherit focused pane's cwd
-            surface.start(TerminalSurfaceConfig(workingDirectory: cwd))
+            // Each created leaf starts with the cwd pre-seeded for it (nil → default
+            // for the first pane; a split seeds the new leaf with its parent's cwd).
+            surface.start(TerminalSurfaceConfig(workingDirectory: cwdByLeaf[id]))
         }
         for id in diff.removed { cwdByLeaf[id] = nil; hostByLeaf[id] = nil }
         rebuildViews()
