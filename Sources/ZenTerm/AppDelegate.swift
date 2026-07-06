@@ -20,6 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
+        // Assign before start() so a first shell that dies instantly still closes the window.
+        canvas.onLastPaneClosed = { [weak self] in self?.window.close() }
         canvas.start()
 
         keys.onReservedChord = { [weak self] chord in
@@ -29,7 +31,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handle(_ chord: KeyInterceptor.ReservedChord) {
-        // Split/close/nav wired in Task 11.
+        switch chord {
+        case .splitVertical:   canvas.split(.vertical)
+        case .splitHorizontal: canvas.split(.horizontal)
+        case .navLeft:  canvas.navigate(.left)
+        case .navRight: canvas.navigate(.right)
+        case .navUp:    canvas.navigate(.up)
+        case .navDown:  canvas.navigate(.down)
+        case .closePane:
+            if canvas.closeFocused() == false { window.close() }
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
