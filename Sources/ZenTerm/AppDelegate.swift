@@ -4,11 +4,10 @@ import TerminalKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: HostWindow!
     private let surface = TerminalSurfaceFactory.make()
-    private let logger = ConsoleSurfaceLogger()
     private let keys = KeyInterceptor()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        surface.delegate = logger
+        surface.delegate = self
 
         window = HostWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 560))
         let content = window.contentView!
@@ -40,5 +39,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+}
+
+/// Chrome-side handling of surface events: Epic 0 logs the observable ones to the
+/// console, and closes the window when the shell exits — which quits the app via
+/// `applicationShouldTerminateAfterLastWindowClosed`.
+extension AppDelegate: TerminalSurfaceDelegate {
+    func surface(_ s: TerminalSurface, titleDidChange title: String) {
+        print("[title] \(title)")
+    }
+    func surface(_ s: TerminalSurface, cwdDidChange url: URL) {
+        print("[cwd] \(url.path)")
+    }
+    func surfaceDidRingBell(_ s: TerminalSurface) {
+        print("[bell]")
+    }
+    func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
+        print("[exit] code=\(code.map(String.init) ?? "nil")")
+        window.close()
     }
 }
