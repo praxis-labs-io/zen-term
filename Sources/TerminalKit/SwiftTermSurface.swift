@@ -2,10 +2,11 @@ import AppKit
 import SwiftTerm
 
 /// SwiftTerm-backed terminal surface. The only type in TerminalKit that touches
-/// SwiftTerm. Bell / notify / progress live on TerminalDelegate (below this view
-/// delegate) and are the subject of the Task 8 spike, not wired here.
+/// SwiftTerm. Bell is forwarded via the `ProbeTerminalView` subclass override
+/// (Task 8 spike); notify / progress could not be overridden from a subclass
+/// (see `ProbeTerminalView`'s doc comment) and are not wired.
 public final class SwiftTermSurface: NSObject, TerminalSurface {
-    private let term = LocalProcessTerminalView(frame: .zero)
+    private let term = ProbeTerminalView(frame: .zero)
     private var lastTitle = ""
 
     public weak var delegate: TerminalSurfaceDelegate?
@@ -17,6 +18,10 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
     public override init() {
         super.init()
         term.processDelegate = self
+        term.onBell = { [weak self] in
+            guard let self else { return }
+            self.delegate?.surfaceDidRingBell(self)
+        }
     }
 
     public func start(_ config: TerminalSurfaceConfig) {
