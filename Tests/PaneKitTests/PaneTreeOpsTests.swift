@@ -77,4 +77,28 @@ final class PaneTreeOpsTests: XCTestCase {
         guard case let .split(_, _, ratio, _, _) = out.root else { return XCTFail() }
         XCTAssertEqual(ratio, 0.3)
     }
+
+    func test_closing_focusedLeaf_promotesSiblingSubtree_toFirstLeaf() {
+        // 1 | (2 | 3): focus 1 (its sibling is the (2|3) split), close 1 →
+        // the (2|3) subtree is promoted; focus lands on its firstLeaf = 2.
+        var tree = PaneTree(singleLeaf: PaneID(1))
+            .splitting(PaneID(1), axis: .vertical, newLeaf: PaneID(2), newSplit: SplitID(10))
+            .splitting(PaneID(2), axis: .vertical, newLeaf: PaneID(3), newSplit: SplitID(11))
+        tree.focusedLeaf = PaneID(1)
+        let out = tree.closing(PaneID(1))
+        XCTAssertEqual(out?.leafIDs, [PaneID(2), PaneID(3)])
+        XCTAssertEqual(out?.focusedLeaf, PaneID(2))
+    }
+
+    func test_closing_focusedDeepLeaf_forwardsPromotionThroughAncestor() {
+        // 1 | (2 | 3): focus 3, close the focused leaf 3 → its sibling 2 is promoted,
+        // and promotedFocus must forward up through the root split. Focus → 2.
+        let tree = PaneTree(singleLeaf: PaneID(1))
+            .splitting(PaneID(1), axis: .vertical, newLeaf: PaneID(2), newSplit: SplitID(10))
+            .splitting(PaneID(2), axis: .vertical, newLeaf: PaneID(3), newSplit: SplitID(11))
+        XCTAssertEqual(tree.focusedLeaf, PaneID(3))
+        let out = tree.closing(PaneID(3))
+        XCTAssertEqual(out?.leafIDs, [PaneID(1), PaneID(2)])
+        XCTAssertEqual(out?.focusedLeaf, PaneID(2))
+    }
 }
