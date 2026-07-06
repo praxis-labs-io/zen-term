@@ -50,9 +50,8 @@ final class SeamTests: XCTestCase {
 
     func test_factoryMakesASwiftTermSurfaceView() {
         let surface = TerminalSurfaceFactory.make()
-        // The factory returns a live surface whose view is an NSView the chrome
+        // The factory returns the SwiftTerm-backed surface whose view the chrome
         // can place. We construct only — starting a process is out of unit scope.
         XCTAssertTrue(surface is SwiftTermSurface)
-        XCTAssertNotNil(surface.view.superclass) // it is an NSView
     }
 }

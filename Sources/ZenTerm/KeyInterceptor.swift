@@ -11,6 +11,7 @@ final class KeyInterceptor {
     private var monitor: Any?
 
     func start() {
+        stop() // idempotent: never stack a second monitor on repeat calls
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
@@ -35,4 +36,6 @@ final class KeyInterceptor {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
     }
+
+    deinit { stop() }
 }
