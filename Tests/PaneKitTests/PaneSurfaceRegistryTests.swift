@@ -20,8 +20,7 @@ private final class FakeSurface: NSObject, TerminalSurface {
 
 final class PaneSurfaceRegistryTests: XCTestCase {
     func test_retainedLeafKeepsSameSurfaceInstance_acrossSplitAndClose() {
-        var made: [FakeSurface] = []
-        let registry = PaneSurfaceRegistry(makeSurface: { let s = FakeSurface(); made.append(s); return s })
+        let registry = PaneSurfaceRegistry(makeSurface: { FakeSurface() })
 
         // Split: create A.
         registry.apply(paneDiff(from: [], to: [PaneID(1)]))

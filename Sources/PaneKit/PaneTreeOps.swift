@@ -2,7 +2,7 @@ import Foundation
 
 public extension PaneTree {
     func splitting(_ leaf: PaneID, axis: SplitAxis, newLeaf: PaneID, newSplit: SplitID) -> PaneTree {
-        guard let newRoot = PaneNode.split(node: root, at: leaf, axis: axis, newLeaf: newLeaf, newSplit: newSplit) else {
+        guard let newRoot = PaneNode.splitting(node: root, at: leaf, axis: axis, newLeaf: newLeaf, newSplit: newSplit) else {
             return self
         }
         return PaneTree(root: newRoot, focusedLeaf: newLeaf)
@@ -29,16 +29,16 @@ public extension PaneTree {
 
 extension PaneNode {
     /// Returns a new node with `leaf` replaced by a split of [leaf, newLeaf], or nil if `leaf` absent.
-    static func split(node: PaneNode, at leaf: PaneID, axis: SplitAxis, newLeaf: PaneID, newSplit: SplitID) -> PaneNode? {
+    static func splitting(node: PaneNode, at leaf: PaneID, axis: SplitAxis, newLeaf: PaneID, newSplit: SplitID) -> PaneNode? {
         switch node {
         case let .leaf(id):
             guard id == leaf else { return nil }
             return .split(id: newSplit, axis: axis, ratio: 0.5, a: .leaf(id), b: .leaf(newLeaf))
         case let .split(id, ax, ratio, a, b):
-            if let na = split(node: a, at: leaf, axis: axis, newLeaf: newLeaf, newSplit: newSplit) {
+            if let na = splitting(node: a, at: leaf, axis: axis, newLeaf: newLeaf, newSplit: newSplit) {
                 return .split(id: id, axis: ax, ratio: ratio, a: na, b: b)
             }
-            if let nb = split(node: b, at: leaf, axis: axis, newLeaf: newLeaf, newSplit: newSplit) {
+            if let nb = splitting(node: b, at: leaf, axis: axis, newLeaf: newLeaf, newSplit: newSplit) {
                 return .split(id: id, axis: ax, ratio: ratio, a: a, b: nb)
             }
             return nil

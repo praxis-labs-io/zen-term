@@ -22,7 +22,11 @@ public func nearestLeaf(from: PaneID, frames: [PaneID: CGRect], direction: Direc
         case .down:  if dy <=  4 { continue }; primary =  dy; perp = abs(dx)
         }
         let score = primary + perp * 2
-        if best == nil || score < best!.score { best = (id, score) }
+        if let current = best {
+            if score < current.score { best = (id, score) }
+        } else {
+            best = (id, score)
+        }
     }
     return best?.id
 }
