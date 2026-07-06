@@ -12,7 +12,9 @@ final class PaneHostView: NSView {
     var isFocused: Bool = false { didSet { updateHalo() } }
 
     /// Inner breathing room between the pane border and the terminal content.
+    /// The top is tighter so the first line sits near the top (terminal convention).
     private let padding: CGFloat = 10
+    private let topPadding: CGFloat = 2
 
     init(paneID: PaneID, content: NSView, background: NSColor, onFocusRequest: @escaping (PaneID) -> Void) {
         self.paneID = paneID
@@ -48,7 +50,7 @@ final class PaneHostView: NSView {
             clip.bottomAnchor.constraint(equalTo: pane.bottomAnchor),
             content.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
             content.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
-            content.topAnchor.constraint(equalTo: clip.topAnchor, constant: padding),
+            content.topAnchor.constraint(equalTo: clip.topAnchor, constant: topPadding),
             content.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -padding),
         ])
         updateHalo()

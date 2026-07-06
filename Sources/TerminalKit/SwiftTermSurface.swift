@@ -49,6 +49,14 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
             execName: execName,
             currentDirectory: config.workingDirectory?.path
         )
+
+        // Suppress SwiftTerm's built-in scroller: terminals don't need a persistent
+        // scroll handle, and it visually doubles up with TUIs (e.g. nvim) that draw
+        // their own. updateScroller() only toggles enabled/value, never isHidden, so
+        // this sticks.
+        for case let scroller as NSScroller in term.subviews {
+            scroller.isHidden = true
+        }
     }
 
     /// Maps a chrome-supplied `TerminalTheme` onto the SwiftTerm view: font, the 16
