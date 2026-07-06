@@ -20,8 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
-        canvas.start()
+        // Assign before start() so a first shell that dies instantly still closes the window.
         canvas.onLastPaneClosed = { [weak self] in self?.window.close() }
+        canvas.start()
 
         keys.onReservedChord = { [weak self] chord in
             self?.handle(chord)

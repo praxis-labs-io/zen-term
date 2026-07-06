@@ -17,7 +17,9 @@ final class PaneCanvasController: NSObject {
     private static let canvasColor = NSColor(srgbRed: 0x23 / 255.0, green: 0x21 / 255.0, blue: 0x36 / 255.0, alpha: 1)
     private static let minSplitExtent: CGFloat = 240
 
-    /// Invoked when the final pane goes away (last close or last shell exit).
+    /// Invoked when the last remaining pane's shell exits on its own. (A manual ⌘W
+    /// on the last pane is handled separately: `closeFocused()` returns false and the
+    /// chrome closes the window directly.)
     var onLastPaneClosed: (() -> Void)?
 
     override init() {
@@ -99,8 +101,9 @@ final class PaneCanvasController: NSObject {
     /// Move focus to the nearest pane in `direction`, using on-screen frames.
     func navigate(_ direction: Direction) {
         guard hostByLeaf.count > 1 else { return }
-        // Frames in the canvas's coordinate space. AppKit is y-up; flip y so that
-        // `.up` (smaller screen-y) maps to the smaller value the scorer expects.
+        // AppKit is y-up (higher on screen = larger y), but the scorer treats `.up`
+        // as decreasing y (top-left origin). Flip each frame into that y-down space
+        // (`h - maxY`) so visual-up maps to the scorer's `.up`.
         let h = canvasView.bounds.height
         var frames: [PaneID: CGRect] = [:]
         for (id, host) in hostByLeaf {
