@@ -27,22 +27,25 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
     public func start(_ config: TerminalSurfaceConfig) {
         let base = Terminal.getEnvironmentVariables(termName: "xterm-256color", trueColor: true)
         let environment = EnvBuilder.merged(base: base, overrides: config.environment)
+        let isDefaultShell = config.command == nil
         let shell = config.command
             ?? ProcessInfo.processInfo.environment["SHELL"]
             ?? "/bin/zsh"
 
-        // Launch a LOGIN shell by prefixing argv[0] with "-". Without this the
-        // shell skips its login files (~/.zprofile, /etc/zprofile), so Homebrew's
-        // `brew shellenv` never runs and the user gets a bare PATH with no
-        // HOMEBREW_PREFIX — SwiftTerm's base env also omits PATH by design. A login
-        // shell rebuilds PATH/env from the user's real config, matching Terminal.app.
-        let loginArgv0 = "-" + URL(fileURLWithPath: shell).lastPathComponent
+        // When launching the user's DEFAULT shell, make it a LOGIN shell by prefixing
+        // argv[0] with "-". Without this the shell skips its login files (~/.zprofile,
+        // /etc/zprofile), so Homebrew's `brew shellenv` never runs and the user gets a
+        // bare PATH with no HOMEBREW_PREFIX — SwiftTerm's base env also omits PATH by
+        // design. A login shell rebuilds PATH/env from the user's real config, matching
+        // Terminal.app. An explicitly requested command (e.g. a future `lazygit`) is
+        // launched as-is — argv[0] rewriting only makes sense for a shell.
+        let execName = isDefaultShell ? "-" + URL(fileURLWithPath: shell).lastPathComponent : nil
 
         term.startProcess(
             executable: shell,
             args: config.args,
             environment: environment,
-            execName: loginArgv0,
+            execName: execName,
             currentDirectory: config.workingDirectory?.path
         )
     }

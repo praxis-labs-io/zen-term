@@ -2,6 +2,9 @@ import AppKit
 import TerminalKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    // Set in applicationDidFinishLaunching before any code path can read it (the
+    // surface starts, and thus can emit events, only after the window is built);
+    // a documented AppKit force-unwrap, like contentView!.
     private var window: HostWindow!
     private let surface = TerminalSurfaceFactory.make()
     private let keys = KeyInterceptor()
