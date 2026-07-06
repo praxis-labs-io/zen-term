@@ -29,4 +29,15 @@ final class SpatialNavTests: XCTestCase {
     func test_unknownSource_returnsNil() {
         XCTAssertNil(nearestLeaf(from: PaneID(99), frames: frames, direction: .left))
     }
+    func test_tie_isBrokenByLowerPaneID_deterministically() {
+        // Panes 2 and 3 are both to the right of 1 with identical score
+        // (dx=200, |dy|=60). The lower PaneID.raw (2) must win regardless of
+        // dictionary iteration order.
+        let f: [PaneID: CGRect] = [
+            PaneID(1): CGRect(x: 0,   y: 0,   width: 100, height: 100),
+            PaneID(2): CGRect(x: 200, y: -60, width: 100, height: 100),
+            PaneID(3): CGRect(x: 200, y: 60,  width: 100, height: 100),
+        ]
+        XCTAssertEqual(nearestLeaf(from: PaneID(1), frames: f, direction: .right), PaneID(2))
+    }
 }

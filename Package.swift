@@ -26,7 +26,7 @@ let package = Package(
         ),
         .testTarget(
             name: "PaneKitTests",
-            dependencies: ["PaneKit"]
+            dependencies: ["PaneKit", "TerminalKit"]
         ),
     ]
 )

@@ -40,6 +40,11 @@ public extension PaneNode {
     }
 
     func contains(_ id: PaneID) -> Bool {
-        leafIDs.contains(id)
+        switch self {
+        case let .leaf(leafID):
+            return leafID == id
+        case let .split(_, _, _, a, b):
+            return a.contains(id) || b.contains(id)
+        }
     }
 }
