@@ -52,16 +52,22 @@ A new pure library target isolates the testable chrome logic:
 
 ```text
 TerminalKit  (Epic 0)  — the seam + SwiftTerm backend (only SwiftTerm consumer)
-PaneKit      (NEW)     — pure pane-tree model, spatial nav, reconcile-diff. No AppKit-view,
-                         no SwiftTerm, no TerminalKit dep. Foundation/CoreGraphics only.
-ZenTerm      (Epic 0)  — the AppKit chrome. Depends on PaneKit + TerminalKit.
+PaneKit      (NEW)     — pane-tree model, spatial nav, reconcile-diff, and the surface
+                         registry. Depends on TerminalKit (for the TerminalSurface seam
+                         type) — NOT on SwiftTerm. AppKit only for CoreGraphics types.
+ZenTerm      (Epic 0)  — the AppKit chrome (views/menu/keybinds). Depends on PaneKit + TerminalKit.
 ```
 
 `ZenTerm` uses `main.swift` (top-level executable code), which cannot be cleanly
-`@testable`-imported — so the DoD-critical pure logic lives in `PaneKit`, which
-gets its own `PaneKitTests`. **Seam unchanged:** `PaneKit` has no backend
-dependency; only `TerminalKit` imports SwiftTerm; `ZenTerm` still imports no
-backend.
+`@testable`-imported — so the DoD-critical logic (tree ops, nav, reconcile-diff,
+and the surface registry) lives in `PaneKit`, which gets its own `PaneKitTests`.
+The registry takes an **injected surface factory** (`() -> TerminalSurface`) so
+tests drive it with a fake; `ZenTerm` passes `TerminalSurfaceFactory.make`.
+
+**Seam unchanged:** `PaneKit` depends on `TerminalKit` for the `TerminalSurface`
+protocol only. SwiftTerm is not a *direct* dependency of `PaneKit`, so `PaneKit`
+cannot `import SwiftTerm` — only `TerminalKit` imports the backend, and `ZenTerm`
+still imports no backend.
 
 ## Components
 
@@ -126,18 +132,20 @@ Scoring matches the prototype: candidates must lie in the requested direction
 views but the scoring is pure `CGRect` math — unit-tested with hand-built frame
 maps.
 
-### 3. Surface registry + reconciler (`ZenTerm`, with pure diff in `PaneKit`)
+### 3. Surface registry + reconciler (`PaneKit`, TDD'd)
 
 The DoD-critical part: **a leaf's running shell survives tree restructures.**
 
-- **Reconcile-diff (pure, `PaneKit`, TDD'd):** given the previous and next
-  `leafIDs`, returns `(created: [PaneID], removed: [PaneID], retained: [PaneID])`.
-  Pure set logic.
-- **`PaneSurfaceRegistry` (`ZenTerm`):** owns `[PaneID: TerminalSurface]`. Applies
-  a diff: **create** via `TerminalSurfaceFactory.make()` + `start(...)` only for
-  `created` ids; **terminate** only for `removed` ids; **retain** (do nothing to)
-  the rest. Reused surfaces keep their shell, scrollback, and first-responder
-  state — their views are re-parented, never recreated.
+- **Reconcile-diff (pure, `PaneKit`):** given the previous and next `leafIDs`,
+  returns `(created: [PaneID], removed: [PaneID], retained: [PaneID])`. Pure set
+  logic.
+- **`PaneSurfaceRegistry` (`PaneKit`):** owns `[PaneID: TerminalSurface]` and an
+  injected `makeSurface: () -> TerminalSurface`. Applies a diff: **create** (via
+  the injected factory) only for `created` ids; **terminate** only for `removed`
+  ids; **retain** (do nothing to) the rest. Reused surfaces keep their shell,
+  scrollback, and first-responder state — their views are re-parented, never
+  recreated. `ZenTerm` constructs it with `makeSurface: TerminalSurfaceFactory.make`;
+  `PaneKitTests` constructs it with a fake surface to assert instance identity.
 
 New-pane `TerminalSurfaceConfig` carries `workingDirectory =` the focused pane's
 last-known cwd. The chrome tracks per-leaf cwd from the Epic 0
