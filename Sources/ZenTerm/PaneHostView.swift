@@ -11,7 +11,10 @@ final class PaneHostView: NSView {
 
     var isFocused: Bool = false { didSet { updateHalo() } }
 
-    init(paneID: PaneID, content: NSView, onFocusRequest: @escaping (PaneID) -> Void) {
+    /// Inner breathing room between the pane border and the terminal content.
+    private let padding: CGFloat = 10
+
+    init(paneID: PaneID, content: NSView, background: NSColor, onFocusRequest: @escaping (PaneID) -> Void) {
         self.paneID = paneID
         self.onFocusRequest = onFocusRequest
         super.init(frame: .zero)
@@ -28,6 +31,7 @@ final class PaneHostView: NSView {
         clip.wantsLayer = true
         clip.layer?.cornerRadius = 12
         clip.layer?.masksToBounds = true
+        clip.layer?.backgroundColor = background.cgColor   // fills the padding ring with the terminal bg
         clip.translatesAutoresizingMaskIntoConstraints = false
         pane.addSubview(clip)
         clip.addSubview(content)
@@ -42,10 +46,10 @@ final class PaneHostView: NSView {
             clip.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
             clip.topAnchor.constraint(equalTo: pane.topAnchor),
             clip.bottomAnchor.constraint(equalTo: pane.bottomAnchor),
-            content.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
-            content.topAnchor.constraint(equalTo: clip.topAnchor),
-            content.bottomAnchor.constraint(equalTo: clip.bottomAnchor),
+            content.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
+            content.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
+            content.topAnchor.constraint(equalTo: clip.topAnchor, constant: padding),
+            content.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -padding),
         ])
         updateHalo()
     }

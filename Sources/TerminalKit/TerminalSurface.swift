@@ -7,19 +7,22 @@ public struct TerminalSurfaceConfig {
     public var workingDirectory: URL?
     public var environment: [String: String]
     public var fontSize: CGFloat?
+    public var theme: TerminalTheme?
 
     public init(
         command: String? = nil,
         args: [String] = [],
         workingDirectory: URL? = nil,
         environment: [String: String] = [:],
-        fontSize: CGFloat? = nil
+        fontSize: CGFloat? = nil,
+        theme: TerminalTheme? = nil
     ) {
         self.command = command
         self.args = args
         self.workingDirectory = workingDirectory
         self.environment = environment
         self.fontSize = fontSize
+        self.theme = theme
     }
 }
 
