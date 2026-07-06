@@ -50,12 +50,13 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
             currentDirectory: config.workingDirectory?.path
         )
 
-        // Suppress SwiftTerm's built-in scroller: terminals don't need a persistent
-        // scroll handle, and it visually doubles up with TUIs (e.g. nvim) that draw
-        // their own. updateScroller() only toggles enabled/value, never isHidden, so
-        // this sticks.
+        // Remove SwiftTerm's built-in scroller entirely: terminals don't need a
+        // persistent scroll handle, and it visually doubles up with TUIs (e.g. nvim)
+        // that draw their own. It's installed at init (setup → setupScroller), so it
+        // exists here. Fully detach it — updateScroller() keeps operating on the
+        // (now off-screen) instance harmlessly.
         for case let scroller as NSScroller in term.subviews {
-            scroller.isHidden = true
+            scroller.removeFromSuperview()
         }
     }
 
