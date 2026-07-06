@@ -65,11 +65,19 @@ team.
   to the project. There is no "epic tracking issue"; the project + its child
   tickets are the whole structure.
 - **When we pick up an epic:** create/choose its Linear **project**, then create
-  task tickets under that project **from the epic's plan, as we go** — never a
-  full backlog dumped up front, and never a parent "epic issue" for them to nest
-  under.
-- 1 task ticket = 1 branch = 1 PR (rule of thumb). Keep ticket descriptions lean:
-  title + a short goal/scope line.
+  tickets under that project **as we go** — never a full backlog dumped up front,
+  and never a parent "epic issue" for them to nest under.
+- **A ticket is PR-sized: 1 ticket = 1 branch = 1 PR.** Size tickets to the pull
+  request, not to plan tasks — a plan's implementation "tasks" are steps, and a
+  PR-sized ticket usually bundles several of them into one independently
+  reviewable, independently mergeable change. Break an epic into as many PR-sized
+  tickets as it takes; don't force one ticket per plan task.
+  - Exception — a tightly-coupled foundational stack where each step depends on
+    the last and nothing is separately mergeable (e.g. the Epic 0 scaffold: ZEN-2)
+    is legitimately one ticket / one PR covering all its plan tasks.
+- **Branch off the ticket's Linear `gitBranchName`** (from `save_issue`), and
+  reference the ticket id in commits/PRs so Linear auto-links. Keep ticket
+  descriptions lean: title + a short goal/scope line.
 
 ## Shipping a ticket — the `ship-feature` flow
 
