@@ -6,7 +6,8 @@ public struct PaneDiff: Equatable, Sendable {
 }
 
 public func paneDiff(from old: [PaneID], to new: [PaneID]) -> PaneDiff {
-    let oldSet = Set(old), newSet = Set(new)
+    let oldSet = Set(old)
+    let newSet = Set(new)
     return PaneDiff(
         created: new.filter { !oldSet.contains($0) },
         removed: old.filter { !newSet.contains($0) },

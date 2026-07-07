@@ -27,7 +27,7 @@ final class LazygitOverlay: NSView {
         card.layer?.cornerRadius = 14
         card.layer?.backgroundColor = background.cgColor
         card.layer?.borderWidth = 1
-        card.layer?.borderColor = FloatShadow.edge.cgColor     // subtle neutral edge
+        card.layer?.borderColor = FloatShadow.edge.cgColor  // subtle neutral edge
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
         // Dark elevation shadow on the card itself (masksToBounds stays off so it isn't

@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import ZenTerm
 
 final class RepoScannerTests: XCTestCase {
@@ -29,7 +30,7 @@ final class RepoScannerTests: XCTestCase {
         FileManager.default.createFile(atPath: root.appendingPathComponent("loose.txt").path, contents: nil)
 
         let names = RepoScanner.scan(root: root).map(\.name)
-        XCTAssertEqual(names, ["Alpha", "zebra"])   // file excluded, case-insensitive order
+        XCTAssertEqual(names, ["Alpha", "zebra"])  // file excluded, case-insensitive order
     }
 
     func test_flagsGitRepos() throws {

@@ -25,8 +25,10 @@ final class RepoPickerOverlay: NSView {
     private static let maxListHeight: CGFloat = 320
     private static let emptyListHeight: CGFloat = 56
 
-    init(entries: [RepoEntry], background: NSColor,
-         onChoose: @escaping (URL, Bool) -> Void, onDismiss: @escaping () -> Void) {
+    init(
+        entries: [RepoEntry], background: NSColor,
+        onChoose: @escaping (URL, Bool) -> Void, onDismiss: @escaping () -> Void
+    ) {
         self.entries = entries
         self.filtered = entries
         self.onChoose = onChoose
@@ -86,7 +88,7 @@ final class RepoPickerOverlay: NSView {
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(rowsStack)
         scrollView.drawsBackground = false
-        scrollView.scrollerStyle = .overlay   // slim, auto-hiding — narrower than the legacy track
+        scrollView.scrollerStyle = .overlay  // slim, auto-hiding — narrower than the legacy track
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.documentView = doc
@@ -179,11 +181,13 @@ final class RepoPickerOverlay: NSView {
         if q.isEmpty {
             filtered = entries
         } else {
-            filtered = entries
+            filtered =
+                entries
                 .filter { $0.name.lowercased().contains(q) }
                 .sorted { a, b in
-                    let ap = a.name.lowercased().hasPrefix(q), bp = b.name.lowercased().hasPrefix(q)
-                    if ap != bp { return ap }   // prefix matches rank first
+                    let ap = a.name.lowercased().hasPrefix(q)
+                    let bp = b.name.lowercased().hasPrefix(q)
+                    if ap != bp { return ap }  // prefix matches rank first
                     return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
                 }
         }
@@ -208,7 +212,8 @@ final class RepoPickerOverlay: NSView {
         emptyLabel.isHidden = !filtered.isEmpty
         // Empty → keep a small fixed height so the "no results" label isn't clipped by a
         // zero-height scroll view.
-        listHeight.constant = filtered.isEmpty
+        listHeight.constant =
+            filtered.isEmpty
             ? Self.emptyListHeight
             : min(CGFloat(filtered.count) * Self.rowHeight, Self.maxListHeight)
         updateHighlight()
@@ -291,8 +296,9 @@ final class RepoPickerOverlay: NSView {
 
         override func mouseDown(with event: NSEvent) { onClick(event.clickCount) }
 
-        private static let selectedBG = NSColor(srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0,
-                                                blue: 0xe7 / 255.0, alpha: 0.18)
+        private static let selectedBG = NSColor(
+            srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0,
+            blue: 0xe7 / 255.0, alpha: 0.18)
         private func updateBackground() {
             layer?.backgroundColor = (isSelected ? Self.selectedBG : .clear).cgColor
         }

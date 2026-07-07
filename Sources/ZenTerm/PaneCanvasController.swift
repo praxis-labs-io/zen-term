@@ -151,11 +151,12 @@ final class PaneCanvasController: NSObject {
             root = hostView(for: zoomedLeaf)
             root.translatesAutoresizingMaskIntoConstraints = false
         } else {
-            root = SplitContainerView(node: tree.root,
-                                      register: { [weak self] id, v in self?.splitViewByID[id] = v },
-                                      leafView: { [weak self] id in
-                self?.hostView(for: id) ?? NSView()
-            })
+            root = SplitContainerView(
+                node: tree.root,
+                register: { [weak self] id, v in self?.splitViewByID[id] = v },
+                leafView: { [weak self] id in
+                    self?.hostView(for: id) ?? NSView()
+                })
         }
         // SplitContainerView.init (and PanelHostView) already set
         // translatesAutoresizingMaskIntoConstraints=false. `canvasView` fills exactly
@@ -174,12 +175,13 @@ final class PaneCanvasController: NSObject {
 
     private func hostView(for id: PaneID) -> NSView {
         guard let surface = registry.surface(for: id) else { return NSView() }
-        let host = PanelHostView(content: surface.view,
-                                 background: Theme.rosePineMoon.background.nsColor,
-                                 meta: nil,
-                                 onFocusRequest: { [weak self] in
-            self?.focus(id)
-        })
+        let host = PanelHostView(
+            content: surface.view,
+            background: Theme.rosePineMoon.background.nsColor,
+            meta: nil,
+            onFocusRequest: { [weak self] in
+                self?.focus(id)
+            })
         host.onZoomExit = { [weak self] in self?.onZoomExitRequested?() }
         hostByLeaf[id] = host
         return host
@@ -283,10 +285,11 @@ final class PaneCanvasController: NSObject {
         let axis: SplitAxis = (direction == .left || direction == .right) ? .vertical : .horizontal
         let positive = (direction == .right || direction == .down)
         guard let split = tree.edgeSplitID(for: tree.focusedLeaf, axis: axis, positive: positive),
-              let current = tree.ratio(of: split) else { NSSound.beep(); return }
+            let current = tree.ratio(of: split)
+        else { NSSound.beep(); return }
         let minRatio = minRatioForSplit(split, axis: axis)
         let next = min(max(current + (positive ? Self.resizeStep : -Self.resizeStep), minRatio), 1 - minRatio)
-        guard abs(next - current) > 1e-6 else { NSSound.beep(); return }   // already at the min-size wall
+        guard abs(next - current) > 1e-6 else { NSSound.beep(); return }  // already at the min-size wall
         tree = tree.settingRatio(split, to: next)
         reconcileAndRender()
         focusActivePane()
@@ -355,7 +358,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }
         guard let next = tree.closing(id) else {
-            onLastPaneClosed?()      // last pane's shell exited → close window
+            onLastPaneClosed?()  // last pane's shell exited → close window
             return
         }
         tree = next

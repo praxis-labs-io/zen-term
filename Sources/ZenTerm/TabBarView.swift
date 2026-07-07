@@ -3,7 +3,7 @@ import TabKit
 
 struct TabBarItem {
     let id: TabID
-    let index: Int      // 1-based number shown before the title
+    let index: Int  // 1-based number shown before the title
     let title: String
     let isActive: Bool
 }
@@ -27,9 +27,11 @@ final class TabBarView: NSView {
 
     private let stack = NSStackView()
 
-    init(onSelect: @escaping (TabID) -> Void,
-         onClose: @escaping (TabID) -> Void,
-         onNewTab: @escaping () -> Void) {
+    init(
+        onSelect: @escaping (TabID) -> Void,
+        onClose: @escaping (TabID) -> Void,
+        onNewTab: @escaping () -> Void
+    ) {
         self.onSelect = onSelect
         self.onClose = onClose
         self.onNewTab = onNewTab
@@ -57,14 +59,16 @@ final class TabBarView: NSView {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for item in items {
             let id = item.id
-            let chip = Chip(attributed: Self.tabLabel(item), isActive: item.isActive, showsUnderline: true,
-                            onClick: { [weak self] in self?.onSelect(id) },
-                            onMiddleClick: { [weak self] in self?.onClose(id) })
+            let chip = Chip(
+                attributed: Self.tabLabel(item), isActive: item.isActive, showsUnderline: true,
+                onClick: { [weak self] in self?.onSelect(id) },
+                onMiddleClick: { [weak self] in self?.onClose(id) })
             stack.addArrangedSubview(chip)
         }
-        let plus = IconButton(symbol: "plus", size: NSSize(width: 22, height: 22),
-                              pointSize: 11, accessibilityLabel: "New tab",
-                              onClick: { [weak self] in self?.onNewTab() })
+        let plus = IconButton(
+            symbol: "plus", size: NSSize(width: 22, height: 22),
+            pointSize: 11, accessibilityLabel: "New tab",
+            onClick: { [weak self] in self?.onNewTab() })
         stack.addArrangedSubview(plus)
     }
 
@@ -74,9 +78,10 @@ final class TabBarView: NSView {
         let s = NSMutableAttributedString(
             string: "\(item.index) ",
             attributes: [.font: font, .foregroundColor: numberInk])
-        s.append(NSAttributedString(
-            string: item.title,
-            attributes: [.font: font, .foregroundColor: ink, .kern: 0.4]))
+        s.append(
+            NSAttributedString(
+                string: item.title,
+                attributes: [.font: font, .foregroundColor: ink, .kern: 0.4]))
         return s
     }
 
@@ -89,8 +94,10 @@ final class TabBarView: NSView {
         private var isHovered = false
         private let underline = NSView()
 
-        init(attributed: NSAttributedString, isActive: Bool, showsUnderline: Bool,
-             onClick: @escaping () -> Void, onMiddleClick: (() -> Void)?) {
+        init(
+            attributed: NSAttributedString, isActive: Bool, showsUnderline: Bool,
+            onClick: @escaping () -> Void, onMiddleClick: (() -> Void)?
+        ) {
             self.onClick = onClick
             self.onMiddleClick = onMiddleClick
             super.init(frame: .zero)
@@ -124,17 +131,18 @@ final class TabBarView: NSView {
         override func updateTrackingAreas() {
             super.updateTrackingAreas()
             trackingAreas.forEach(removeTrackingArea)
-            addTrackingArea(NSTrackingArea(
-                rect: bounds,
-                options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
-                owner: self))
+            addTrackingArea(
+                NSTrackingArea(
+                    rect: bounds,
+                    options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+                    owner: self))
         }
 
         override func mouseEntered(with event: NSEvent) { isHovered = true; updateBackground() }
         override func mouseExited(with event: NSEvent) { isHovered = false; updateBackground() }
         override func mouseDown(with event: NSEvent) { onClick() }
         override func otherMouseDown(with event: NSEvent) {
-            if event.buttonNumber == 2 { onMiddleClick?() }   // middle-click closes
+            if event.buttonNumber == 2 { onMiddleClick?() }  // middle-click closes
         }
 
         private func updateBackground() {

@@ -24,7 +24,7 @@ final class TabController: NSObject {
     let view = NSView()
     private let content = NSView()
     private let paneCanvas: PaneCanvasController
-    private let canvas: NSView            // paneCanvas.canvasView, cached
+    private let canvas: NSView  // paneCanvas.canvasView, cached
 
     // Drawer sizes are seeded proportionally from the tab's working area the first time
     // `content` has a real size — a bit under a third each, which lands near the ~300/480
@@ -151,7 +151,7 @@ final class TabController: NSObject {
     func start() { paneCanvas.start() }
     func split(_ axis: SplitAxis) { exitZoomIfNeeded(); paneCanvas.split(axis) }
     @discardableResult func closeFocused() -> Bool {
-        exitZoomIfNeeded()   // exit zoom before closing so zoom state can't desync
+        exitZoomIfNeeded()  // exit zoom before closing so zoom state can't desync
         return paneCanvas.closeFocused()
     }
     func focusActivePane() { paneCanvas.focusActivePane() }
@@ -231,14 +231,14 @@ final class TabController: NSObject {
     /// Toggle the bottom drawer. First open creates a persistent login-shell surface
     /// in the tab's cwd; toggling hidden keeps it running; it dies only in `shutdown()`.
     func toggleBottomDrawer() {
-        exitZoomIfNeeded()   // any layout change exits zoom first (keeps state in sync)
+        exitZoomIfNeeded()  // any layout change exits zoom first (keeps state in sync)
         isBottomOpen.toggle()
         if isBottomOpen {
             _ = ensureBottomDrawerPanel()
-            relayoutPanels()   // attaches + tiles it (visibility follows open state)
+            relayoutPanels()  // attaches + tiles it (visibility follows open state)
             focusDrawer(.bottom)
         } else {
-            relayoutPanels()   // detaches it (surface stays alive)
+            relayoutPanels()  // detaches it (surface stays alive)
             // Only steal focus back to the pane canvas if the drawer being hidden was
             // the one holding unified focus. `focusActivePane()` bubbles through
             // `paneCanvas.onFocusChanged` to reassert unified focus onto the canvas.
@@ -253,7 +253,7 @@ final class TabController: NSObject {
         surface.start(ShellLaunch.shell(cwd: focusedCWD))
         bottomDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .bottom, surface: surface)
-        bottomDrawerPanel = panel   // relayoutPanels() attaches it to `content`
+        bottomDrawerPanel = panel  // relayoutPanels() attaches it to `content`
         return panel
     }
 
@@ -281,11 +281,12 @@ final class TabController: NSObject {
         surface.delegate = self
         // The workspace preset runs a program here (claude) that drops back to a shell;
         // a plain toggle-open right drawer is just a shell.
-        surface.start(rightDrawerCommand.map { ShellLaunch.program($0, cwd: focusedCWD) }
-                      ?? ShellLaunch.shell(cwd: focusedCWD))
+        surface.start(
+            rightDrawerCommand.map { ShellLaunch.program($0, cwd: focusedCWD) }
+                ?? ShellLaunch.shell(cwd: focusedCWD))
         rightDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .right, surface: surface)
-        rightDrawerPanel = panel   // relayoutPanels() attaches it to `content`
+        rightDrawerPanel = panel  // relayoutPanels() attaches it to `content`
         return panel
     }
 
@@ -298,7 +299,7 @@ final class TabController: NSObject {
     /// exits (`surfaceDidExit`); `⌘G` again, or a backdrop click, also dismiss it.
     func toggleLazygit() {
         if isLazygitOpen { closeLazygit(); return }
-        exitZoomIfNeeded()   // zoom and the float are mutually exclusive
+        exitZoomIfNeeded()  // zoom and the float are mutually exclusive
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let surface = TerminalSurfaceFactory.make()
         surface.delegate = self
@@ -306,12 +307,15 @@ final class TabController: NSObject {
         // `.zshrc` — matching how lazygit runs when typed in a pane. Without `-i`, a
         // login-only shell skips `.zshrc`, so env it sets (e.g. XDG_CONFIG_HOME →
         // lazygit's config path, COLORTERM) is missing and lazygit renders different colors.
-        surface.start(TerminalSurfaceConfig(command: shell, args: ["-l", "-i", "-c", "lazygit"],
-                                            workingDirectory: focusedCWD, theme: Theme.rosePineMoon))
+        surface.start(
+            TerminalSurfaceConfig(
+                command: shell, args: ["-l", "-i", "-c", "lazygit"],
+                workingDirectory: focusedCWD, theme: Theme.rosePineMoon))
         lazygitSurface = surface
-        let overlay = LazygitOverlay(content: surface.view,
-                                     background: Theme.rosePineMoon.background.nsColor,
-                                     onDismiss: { [weak self] in self?.closeLazygit() })
+        let overlay = LazygitOverlay(
+            content: surface.view,
+            background: Theme.rosePineMoon.background.nsColor,
+            onDismiss: { [weak self] in self?.closeLazygit() })
         overlay.translatesAutoresizingMaskIntoConstraints = false
         // Mount in `content` (the tile region), not `view`: the modal covers only the
         // tab's working area — never the window gutters or the tab bar — and sits above
@@ -330,7 +334,7 @@ final class TabController: NSObject {
         bottomDrawerPanel?.isFocused = false
         rightDrawerPanel?.isFocused = false
         surface.focus()
-        onOverlayStateChanged?()   // lazygit now open → refresh the dock
+        onOverlayStateChanged?()  // lazygit now open → refresh the dock
     }
 
     private func closeLazygit() {
@@ -341,8 +345,8 @@ final class TabController: NSObject {
         let surface = lazygitSurface
         lazygitSurface = nil
         surface?.terminate()
-        restoreUnifiedFocus()   // the float held keyboard focus; hand it back to its panel
-        onOverlayStateChanged?()   // lazygit now closed → refresh the dock
+        restoreUnifiedFocus()  // the float held keyboard focus; hand it back to its panel
+        onOverlayStateChanged?()  // lazygit now closed → refresh the dock
     }
 
     /// Re-focus whichever panel held the tab's unified focus before the float opened
@@ -363,16 +367,20 @@ final class TabController: NSObject {
         // corner hide button (chevron pointing the way it collapses) toggles the drawer.
         let hideSymbol = edge == .bottom ? "chevron.down" : "chevron.right"
         let hideLabel = edge == .bottom ? "Hide bottom drawer" : "Hide right drawer"
-        let panel = PanelHostView(content: surface.view,
-                                  background: Theme.rosePineMoon.background.nsColor,
-                                  meta: nil,
-                                  hideButton: (symbol: hideSymbol, label: hideLabel, onHide: { [weak self] in
-                                      switch edge {
-                                      case .bottom: self?.toggleBottomDrawer()
-                                      case .right: self?.toggleRightDrawer()
-                                      }
-                                  }),
-                                  onFocusRequest: { [weak self] in self?.focusDrawer(edge) })
+        let panel = PanelHostView(
+            content: surface.view,
+            background: Theme.rosePineMoon.background.nsColor,
+            meta: nil,
+            hideButton: (
+                symbol: hideSymbol, label: hideLabel,
+                onHide: { [weak self] in
+                    switch edge {
+                    case .bottom: self?.toggleBottomDrawer()
+                    case .right: self?.toggleRightDrawer()
+                    }
+                }
+            ),
+            onFocusRequest: { [weak self] in self?.focusDrawer(edge) })
         panel.onZoomExit = { [weak self] in self?.toggleZoom() }
         panel.translatesAutoresizingMaskIntoConstraints = false
         return panel
@@ -413,7 +421,7 @@ final class TabController: NSObject {
     /// Zoom the focused panel to fill the tab (others hidden), or unzoom if already
     /// zoomed. For a pane, the pane canvas also renders just the focused leaf.
     func toggleZoom() {
-        guard !isLazygitOpen else { return }   // can't zoom a panel under the float
+        guard !isLazygitOpen else { return }  // can't zoom a panel under the float
         if isZoomed { exitZoom(); return }
         switch focusedPanel {
         case .pane:
@@ -469,7 +477,7 @@ final class TabController: NSObject {
     /// by PaneKit's `nearestLeaf`, the same geometric scorer pane-to-pane nav already
     /// uses, so a drawer is just another panel in the graph.
     func navigate(_ direction: Direction) {
-        if exitZoomIfNeeded() { return }   // ⌘hjkl while zoomed just unzooms
+        if exitZoomIfNeeded() { return }  // ⌘hjkl while zoomed just unzooms
         var frames = paneCanvas.leafFrames(in: content)
         if isBottomOpen, let panel = bottomDrawerPanel {
             frames[Self.bottomDrawerID] = flippedFrame(of: panel)
@@ -484,12 +492,13 @@ final class TabController: NSObject {
         // geometric scorer picks — but only when it's still open and genuinely lies in
         // `direction`; otherwise fall back to nearest-neighbor.
         let remembered = navReturn[origin]?[direction]
-        let target = (remembered.map { isPanel($0, inDirection: direction, from: origin, frames: frames) } == true)
+        let target =
+            (remembered.map { isPanel($0, inDirection: direction, from: origin, frames: frames) } == true)
             ? remembered
             : nearestLeaf(from: origin, frames: frames, direction: direction)
         guard let target else { return }
 
-        navReturn[target, default: [:]][direction.opposite] = origin   // enable the return hop
+        navReturn[target, default: [:]][direction.opposite] = origin  // enable the return hop
         focusPanel(target)
     }
 
@@ -506,23 +515,30 @@ final class TabController: NSObject {
     /// `focusLeaf` bubbles through `paneCanvas.onFocusChanged` → `paneGainedFocus()`, which
     /// reasserts unified focus (halo + panel routing) onto the pane canvas.
     private func focusPanel(_ id: PaneID) {
-        if id == Self.bottomDrawerID { focusDrawer(.bottom) }
-        else if id == Self.rightDrawerID { focusDrawer(.right) }
-        else { paneCanvas.focusLeaf(id) }
+        if id == Self.bottomDrawerID {
+            focusDrawer(.bottom)
+        } else if id == Self.rightDrawerID {
+            focusDrawer(.right)
+        } else {
+            paneCanvas.focusLeaf(id)
+        }
     }
 
     /// Whether `candidate` lies in `direction` from `origin`, using the same y-flipped
     /// frames and thresholds as `nearestLeaf` — so a remembered return target is only used
     /// when it's still spatially in that direction.
-    private func isPanel(_ candidate: PaneID, inDirection direction: Direction,
-                         from origin: PaneID, frames: [PaneID: CGRect]) -> Bool {
+    private func isPanel(
+        _ candidate: PaneID, inDirection direction: Direction,
+        from origin: PaneID, frames: [PaneID: CGRect]
+    ) -> Bool {
         guard let s = frames[origin], let r = frames[candidate] else { return false }
-        let dx = r.midX - s.midX, dy = r.midY - s.midY
+        let dx = r.midX - s.midX
+        let dy = r.midY - s.midY
         switch direction {
-        case .left:  return dx < -4
+        case .left: return dx < -4
         case .right: return dx > 4
-        case .up:    return dy < -4
-        case .down:  return dy > 4
+        case .up: return dy < -4
+        case .down: return dy > 4
         }
     }
 
@@ -539,15 +555,23 @@ final class TabController: NSObject {
             paneCanvas.resize(direction)
         case .bottomDrawer:
             switch direction {
-            case .up: bottomDrawerHeight = clampedDrawerExtent(bottomDrawerHeight + Self.drawerResizeStep, along: content.bounds.height)
-            case .down: bottomDrawerHeight = clampedDrawerExtent(bottomDrawerHeight - Self.drawerResizeStep, along: content.bounds.height)
+            case .up:
+                bottomDrawerHeight = clampedDrawerExtent(
+                    bottomDrawerHeight + Self.drawerResizeStep, along: content.bounds.height)
+            case .down:
+                bottomDrawerHeight = clampedDrawerExtent(
+                    bottomDrawerHeight - Self.drawerResizeStep, along: content.bounds.height)
             case .left, .right: NSSound.beep(); return
             }
             relayoutPanels()
         case .rightDrawer:
             switch direction {
-            case .left: rightDrawerWidth = clampedDrawerExtent(rightDrawerWidth + Self.drawerResizeStep, along: content.bounds.width)
-            case .right: rightDrawerWidth = clampedDrawerExtent(rightDrawerWidth - Self.drawerResizeStep, along: content.bounds.width)
+            case .left:
+                rightDrawerWidth = clampedDrawerExtent(
+                    rightDrawerWidth + Self.drawerResizeStep, along: content.bounds.width)
+            case .right:
+                rightDrawerWidth = clampedDrawerExtent(
+                    rightDrawerWidth - Self.drawerResizeStep, along: content.bounds.width)
             case .up, .down: NSSound.beep(); return
             }
             relayoutPanels()
@@ -618,7 +642,9 @@ final class TabController: NSObject {
         // whose shell just exited falls back to normal tiling).
         let effectiveZoom: PanelRef? = zoomedPanel.flatMap { zoomedView($0) != nil ? $0 : nil }
 
-        let canvasVisible: Bool, bottomVisible: Bool, rightVisible: Bool
+        let canvasVisible: Bool
+        let bottomVisible: Bool
+        let rightVisible: Bool
         if let z = effectiveZoom {
             canvasVisible = z == .pane
             bottomVisible = z == .bottomDrawer
@@ -681,7 +707,9 @@ final class TabController: NSObject {
             // The bottom drawer spans the canvas column only — it stops short of the
             // right drawer's column, so the two never overlap when both are open.
             if isRightOpen, let rightPanel = rightDrawerPanel {
-                cs.append(bottomPanel.trailingAnchor.constraint(equalTo: rightPanel.leadingAnchor, constant: -ChromeMetrics.panelGap))
+                cs.append(
+                    bottomPanel.trailingAnchor.constraint(
+                        equalTo: rightPanel.leadingAnchor, constant: -ChromeMetrics.panelGap))
             } else {
                 cs.append(bottomPanel.trailingAnchor.constraint(equalTo: content.trailingAnchor))
             }
@@ -698,17 +726,16 @@ extension TabController: TerminalSurfaceDelegate {
     /// A click landed in one of the tab's drawer surfaces — give that drawer unified
     /// focus. The lazygit float is modal and already holds focus, so it's ignored.
     func surfaceWantsFocus(_ s: TerminalSurface) {
-        if s === bottomDrawerSurface { focusDrawer(.bottom) }
-        else if s === rightDrawerSurface { focusDrawer(.right) }
+        if s === bottomDrawerSurface { focusDrawer(.bottom) } else if s === rightDrawerSurface { focusDrawer(.right) }
     }
     /// A drawer's shell exited on its own (e.g. the user typed `exit`): close+clear
     /// that drawer entirely — rather than leaving a dead shell docked — so the next
     /// toggle lazily spawns a fresh one. Panes have their own exit handling in
     /// `PaneCanvasController`; this only reacts to the two drawer surfaces.
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
-        if s === lazygitSurface { closeLazygit(); return }   // lazygit quit (`q`) → auto-close
+        if s === lazygitSurface { closeLazygit(); return }  // lazygit quit (`q`) → auto-close
         if s === bottomDrawerSurface {
-            if zoomedPanel == .bottomDrawer { zoomedPanel = nil }   // don't leave zoom stuck
+            if zoomedPanel == .bottomDrawer { zoomedPanel = nil }  // don't leave zoom stuck
             bottomDrawerPanel?.removeFromSuperview()
             bottomDrawerSurface?.terminate()
             bottomDrawerSurface = nil
@@ -725,7 +752,7 @@ extension TabController: TerminalSurfaceDelegate {
                 if isLazygitOpen { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
             }
         } else if s === rightDrawerSurface {
-            if zoomedPanel == .rightDrawer { zoomedPanel = nil }   // don't leave zoom stuck
+            if zoomedPanel == .rightDrawer { zoomedPanel = nil }  // don't leave zoom stuck
             rightDrawerPanel?.removeFromSuperview()
             rightDrawerSurface?.terminate()
             rightDrawerSurface = nil

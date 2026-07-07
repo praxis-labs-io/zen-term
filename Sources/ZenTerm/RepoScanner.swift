@@ -21,11 +21,13 @@ enum RepoScanner {
     /// Missing/unreadable root → empty list.
     static func scan(root: URL) -> [RepoEntry] {
         let fm = FileManager.default
-        guard let children = try? fm.contentsOfDirectory(
-            at: root,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
+        guard
+            let children = try? fm.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        else { return [] }
 
         return children.compactMap { url -> RepoEntry? in
             guard (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else { return nil }

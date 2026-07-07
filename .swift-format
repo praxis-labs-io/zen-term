@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "indentation": { "spaces": 4 },
+  "lineLength": 120,
+  "maximumBlankLines": 1,
+  "respectsExistingLineBreaks": true,
+  "lineBreakBeforeControlFlowKeywords": false,
+  "rules": {
+    "OrderedImports": true,
+    "UseLetInEveryBoundCaseVariable": true,
+    "OneVariableDeclarationPerLine": true
+  }
+}

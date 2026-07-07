@@ -13,18 +13,20 @@ final class ToggleDock: NSView {
 
     private static let iconPointSize: CGFloat = 11
 
-    init(onSplitH: @escaping () -> Void, onSplitV: @escaping () -> Void,
-         onPalette: @escaping () -> Void, onBottom: @escaping () -> Void,
-         onRight: @escaping () -> Void, onLazygit: @escaping () -> Void) {
+    init(
+        onSplitH: @escaping () -> Void, onSplitV: @escaping () -> Void,
+        onPalette: @escaping () -> Void, onBottom: @escaping () -> Void,
+        onRight: @escaping () -> Void, onLazygit: @escaping () -> Void
+    ) {
         func button(_ symbol: String, _ label: String, _ onClick: @escaping () -> Void) -> IconButton {
             IconButton(symbol: symbol, pointSize: Self.iconPointSize, accessibilityLabel: label, onClick: onClick)
         }
-        let splitH = button("rectangle.split.1x2", "Split horizontally", onSplitH)   // ⌘- stacked
-        let splitV = button("rectangle.split.2x1", "Split vertically", onSplitV)     // ⌘⇧\ side-by-side
-        paletteBtn = button("command", "Repo picker", onPalette)                     // ⌘P
+        let splitH = button("rectangle.split.1x2", "Split horizontally", onSplitH)  // ⌘- stacked
+        let splitV = button("rectangle.split.2x1", "Split vertically", onSplitV)  // ⌘⇧\ side-by-side
+        paletteBtn = button("command", "Repo picker", onPalette)  // ⌘P
         bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", onBottom)  // ⌘B
-        rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", onRight)   // ⌘\
-        lazygitBtn = button("arrow.triangle.branch", "Toggle lazygit", onLazygit)                   // ⌘G
+        rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", onRight)  // ⌘\
+        lazygitBtn = button("arrow.triangle.branch", "Toggle lazygit", onLazygit)  // ⌘G
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 

@@ -38,35 +38,39 @@ final class PanelHostView: NSView {
     /// all sides so content (e.g. nvim) doesn't sit against the pane border.
     private let padding: CGFloat = 10
 
-    init(content: NSView, background: NSColor, meta: PanelMeta?,
-         hideButton hideSpec: (symbol: String, label: String, onHide: () -> Void)? = nil,
-         onFocusRequest: @escaping () -> Void) {
+    init(
+        content: NSView, background: NSColor, meta: PanelMeta?,
+        hideButton hideSpec: (symbol: String, label: String, onHide: () -> Void)? = nil,
+        onFocusRequest: @escaping () -> Void
+    ) {
         self.onFocusRequest = onFocusRequest
         // Shown only while zoomed → exit-zoom (inward arrows). onClick wired post-super.
-        self.zoomButton = IconButton(symbol: "arrow.down.right.and.arrow.up.left",
-                                     size: Self.cornerSize, pointSize: 11,
-                                     accessibilityLabel: "Exit zoom", onClick: {})
+        self.zoomButton = IconButton(
+            symbol: "arrow.down.right.and.arrow.up.left",
+            size: Self.cornerSize, pointSize: 11,
+            accessibilityLabel: "Exit zoom", onClick: {})
         self.hideButton = hideSpec.map {
-            IconButton(symbol: $0.symbol, size: Self.cornerSize, pointSize: 11,
-                       accessibilityLabel: $0.label, onClick: $0.onHide)
+            IconButton(
+                symbol: $0.symbol, size: Self.cornerSize, pointSize: 11,
+                accessibilityLabel: $0.label, onClick: $0.onHide)
         }
         super.init(frame: .zero)
         zoomButton.onClick = { [weak self] in self?.onZoomExit?() }
-        zoomButton.isHidden = true   // only appears while zoomed
+        zoomButton.isHidden = true  // only appears while zoomed
 
         wantsLayer = true
         pane.wantsLayer = true
         pane.layer?.cornerRadius = 12
-        pane.layer?.masksToBounds = false          // glow must escape bounds; content clip is on a mask below
+        pane.layer?.masksToBounds = false  // glow must escape bounds; content clip is on a mask below
         pane.layer?.borderWidth = 1
         addSubview(pane)
 
         content.translatesAutoresizingMaskIntoConstraints = false
-        let clip = NSView()                         // inner clip so terminal content stays inside the radius
+        let clip = NSView()  // inner clip so terminal content stays inside the radius
         clip.wantsLayer = true
         clip.layer?.cornerRadius = 12
         clip.layer?.masksToBounds = true
-        clip.layer?.backgroundColor = background.cgColor   // fills the padding ring with the terminal bg
+        clip.layer?.backgroundColor = background.cgColor  // fills the padding ring with the terminal bg
         clip.translatesAutoresizingMaskIntoConstraints = false
         pane.addSubview(clip)
         clip.addSubview(content)

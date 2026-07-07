@@ -17,6 +17,6 @@ enum FloatShadow {
         layer.shadowColor = NSColor.black.cgColor
         layer.shadowOpacity = 0.5
         layer.shadowRadius = 14
-        layer.shadowOffset = CGSize(width: 0, height: -12)   // AppKit y-up: cast downward
+        layer.shadowOffset = CGSize(width: 0, height: -12)  // AppKit y-up: cast downward
     }
 }

@@ -26,24 +26,24 @@ public extension PaneNode {
     /// Leaf ids in left-to-right / a-before-b order.
     var leafIDs: [PaneID] {
         switch self {
-        case let .leaf(id): return [id]
-        case let .split(_, _, _, a, b): return a.leafIDs + b.leafIDs
+        case .leaf(let id): return [id]
+        case .split(_, _, _, let a, let b): return a.leafIDs + b.leafIDs
         }
     }
 
     /// The first leaf reached by always descending into `a`.
     var firstLeaf: PaneID {
         switch self {
-        case let .leaf(id): return id
-        case let .split(_, _, _, a, _): return a.firstLeaf
+        case .leaf(let id): return id
+        case .split(_, _, _, let a, _): return a.firstLeaf
         }
     }
 
     func contains(_ id: PaneID) -> Bool {
         switch self {
-        case let .leaf(leafID):
+        case .leaf(let leafID):
             return leafID == id
-        case let .split(_, _, _, a, b):
+        case .split(_, _, _, let a, let b):
             return a.contains(id) || b.contains(id)
         }
     }
