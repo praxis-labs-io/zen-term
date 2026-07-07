@@ -11,8 +11,13 @@ final class PaneCanvasController: NSObject {
     private var tree: PaneTree
     private let registry: PaneSurfaceRegistry
     private var cwdByLeaf: [PaneID: URL] = [:]
-    private var hostByLeaf: [PaneID: PaneHostView] = [:]
+    private var hostByLeaf: [PaneID: PanelHostView] = [:]
     private var nextID = 1
+
+    /// Whether panes may show their focus halo. `TabController` sets this to false
+    /// when a drawer holds unified focus, so exactly one panel is haloed across the
+    /// whole tab.
+    private var panesHoldFocus = true
 
     private static let canvasColor = NSColor(srgbRed: 0x23 / 255.0, green: 0x21 / 255.0, blue: 0x36 / 255.0, alpha: 1)
     private static let minSplitExtent: CGFloat = 240
@@ -25,6 +30,11 @@ final class PaneCanvasController: NSObject {
     /// Fired when the tab's title may have changed — the focused pane's cwd
     /// changed, or focus moved to a different pane.
     var onTitleChanged: (() -> Void)?
+
+    /// Fired at the end of `focus(_:)` — lets `TabController` know a pane has
+    /// (re)gained focus, so it can reassert unified panel focus (halo, copy/paste
+    /// routing) onto the pane canvas.
+    var onFocusChanged: (() -> Void)?
 
     /// The focused pane's cwd, for new-tab / new-window inheritance. Prefers the live
     /// process cwd over the last OSC-reported one so inheritance works without OSC 7.
@@ -94,31 +104,42 @@ final class PaneCanvasController: NSObject {
             self?.hostView(for: id) ?? NSView()
         })
         // SplitContainerView.init already sets translatesAutoresizingMaskIntoConstraints=false.
-        // 12pt gutter around the canvas; a taller top inset clears the window's traffic
-        // lights (the window uses .fullSizeContentView, so they float over the top).
+        // `canvasView` fills exactly the tile `TabController` gives it — the outer
+        // 12pt gutter + 36pt top inset (clearing the window's traffic lights) live in
+        // `TabController`'s content-rect tiling, not here.
         canvasView.addSubview(root)
         NSLayoutConstraint.activate([
-            root.leadingAnchor.constraint(equalTo: canvasView.leadingAnchor, constant: 12),
-            root.trailingAnchor.constraint(equalTo: canvasView.trailingAnchor, constant: -12),
-            root.topAnchor.constraint(equalTo: canvasView.topAnchor, constant: 36),
-            root.bottomAnchor.constraint(equalTo: canvasView.bottomAnchor, constant: -12),
+            root.leadingAnchor.constraint(equalTo: canvasView.leadingAnchor),
+            root.trailingAnchor.constraint(equalTo: canvasView.trailingAnchor),
+            root.topAnchor.constraint(equalTo: canvasView.topAnchor),
+            root.bottomAnchor.constraint(equalTo: canvasView.bottomAnchor),
         ])
         updateHalo()
     }
 
     private func hostView(for id: PaneID) -> NSView {
         guard let surface = registry.surface(for: id) else { return NSView() }
-        let host = PaneHostView(paneID: id, content: surface.view,
-                                background: Theme.rosePineMoon.background.nsColor,
-                                onFocusRequest: { [weak self] pid in
-            self?.focus(pid)
+        let host = PanelHostView(content: surface.view,
+                                 background: Theme.rosePineMoon.background.nsColor,
+                                 meta: nil,
+                                 onFocusRequest: { [weak self] in
+            self?.focus(id)
         })
         hostByLeaf[id] = host
         return host
     }
 
     private func updateHalo() {
-        for (id, host) in hostByLeaf { host.isFocused = (id == tree.focusedLeaf) }
+        for (id, host) in hostByLeaf {
+            host.isFocused = panesHoldFocus && (id == tree.focusedLeaf)
+        }
+    }
+
+    /// Give panes the tab's unified focus halo (`on == true`), or yield it — used
+    /// when a drawer takes focus so at most one panel is haloed across the tab.
+    func setPanesFocused(_ on: Bool) {
+        panesHoldFocus = on
+        updateHalo()
     }
 
     // Focus routing (fleshed out in Task 10).
@@ -128,6 +149,7 @@ final class PaneCanvasController: NSObject {
         updateHalo()
         onTitleChanged?()
         registry.surface(for: id)?.focus()
+        onFocusChanged?()
     }
 
     private func focusFrontmost() { focus(tree.focusedLeaf) }
@@ -136,22 +158,28 @@ final class PaneCanvasController: NSObject {
     /// re-mounted after a switch).
     func focusActivePane() { focus(tree.focusedLeaf) }
 
-    /// Move focus to the nearest pane in `direction`, using on-screen frames.
-    func navigate(_ direction: Direction) {
-        guard hostByLeaf.count > 1 else { return }
-        // AppKit is y-up (higher on screen = larger y), but the scorer treats `.up`
-        // as decreasing y (top-left origin). Flip each frame into that y-down space
-        // (`h - maxY`) so visual-up maps to the scorer's `.up`.
-        let h = canvasView.bounds.height
+    /// Every leaf's on-screen frame converted into `target`'s coordinate space, with
+    /// the same y-flip cross-panel nav needs: AppKit is y-up, but `nearestLeaf`'s
+    /// scorer treats `.up` as decreasing y (top-left origin), so each frame is
+    /// flipped (`h - maxY`) using `target`'s own height. `TabController` calls this
+    /// with its `content` view so drawer panel frames (converted + flipped the same
+    /// way) score uniformly alongside these.
+    func leafFrames(in target: NSView) -> [PaneID: CGRect] {
+        let h = target.bounds.height
         var frames: [PaneID: CGRect] = [:]
         for (id, host) in hostByLeaf {
-            let f = host.convert(host.bounds, to: canvasView)
+            let f = host.convert(host.bounds, to: target)
             frames[id] = CGRect(x: f.minX, y: h - f.maxY, width: f.width, height: f.height)
         }
-        if let target = nearestLeaf(from: tree.focusedLeaf, frames: frames, direction: direction) {
-            focus(target)
-        }
+        return frames
     }
+
+    /// The pane tree's currently focused leaf.
+    var focusedLeafID: PaneID { tree.focusedLeaf }
+
+    /// Public entry point to focus a specific leaf — used by `TabController`'s
+    /// cross-panel spatial nav when it resolves to a pane.
+    func focusLeaf(_ id: PaneID) { focus(id) }
 
     /// Split the focused pane along `axis`, unless it is too small to halve usefully.
     func split(_ axis: SplitAxis) {
@@ -166,7 +194,11 @@ final class PaneCanvasController: NSObject {
         cwdByLeaf[newLeaf] = registry.surface(for: source)?.currentDirectory ?? cwdByLeaf[source]
         tree = tree.splitting(source, axis: axis, newLeaf: newLeaf, newSplit: mintSplitID())
         reconcileAndRender()
-        registry.surface(for: tree.focusedLeaf)?.focus()
+        // `focusActivePane()` goes through `focus(_:)` (halo + first-responder +
+        // `onFocusChanged`), unlike a raw `.focus()` — so a split while a drawer holds
+        // unified focus re-syncs `TabController.focusedPanel` back to `.pane` instead
+        // of leaving the halo stuck on the drawer.
+        focusActivePane()
     }
 
     /// Close the focused pane. Returns false when it was the last pane (caller closes the window).
@@ -175,7 +207,9 @@ final class PaneCanvasController: NSObject {
         guard let next = tree.closing(tree.focusedLeaf) else { return false }
         tree = next
         reconcileAndRender()
-        registry.surface(for: tree.focusedLeaf)?.focus()
+        // See `split(_:)`: `focusActivePane()` fires `onFocusChanged` so unified focus
+        // re-syncs to `.pane` instead of getting stuck on a previously focused drawer.
+        focusActivePane()
         return true
     }
 

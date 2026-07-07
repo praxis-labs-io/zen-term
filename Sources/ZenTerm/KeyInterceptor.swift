@@ -11,6 +11,8 @@ final class KeyInterceptor {
         case closePane
         case newTab, newWindow
         case selectTab(Int)   // 1...9
+        case toggleBottomDrawer
+        case toggleRightDrawer
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?
@@ -21,8 +23,16 @@ final class KeyInterceptor {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            guard flags == .command else { return event }   // only bare ⌘ chords are reserved
             let key = event.charactersIgnoringModifiers?.lowercased()
+
+            // The one reserved ⌘⇧ chord: ⌘⇧\ ( "⌘|" ) → right drawer. With shift held,
+            // charactersIgnoringModifiers is "|"; also accept "\\" defensively.
+            if flags == [.command, .shift], key == "|" || key == "\\" {
+                self.onReservedChord?(.toggleRightDrawer)
+                return nil
+            }
+
+            guard flags == .command else { return event }   // all other reserved chords are bare-⌘
 
             let chord: ReservedChord?
             switch key {
@@ -35,6 +45,7 @@ final class KeyInterceptor {
             case "w":  chord = .closePane
             case "t": chord = .newTab
             case "n": chord = .newWindow
+            case "b": chord = .toggleBottomDrawer
             case "1", "2", "3", "4", "5", "6", "7", "8", "9":
                 chord = key.flatMap { Int($0) }.map { .selectTab($0) }
             default:   chord = nil
