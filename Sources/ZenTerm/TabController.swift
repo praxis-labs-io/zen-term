@@ -296,11 +296,16 @@ final class TabController: NSObject {
         ]
 
         if isRightOpen, let rightPanel = rightDrawerPanel {
+            // `.defaultHigh` (not required) so on an extremely small window this
+            // constraint relaxes instead of forcing the canvas to a negative size and
+            // logging a broken-constraint error — the drawer shrinks under squeeze.
+            let width = rightPanel.widthAnchor.constraint(equalToConstant: Self.rightDrawerWidth)
+            width.priority = .defaultHigh
             cs += [
                 rightPanel.topAnchor.constraint(equalTo: content.topAnchor),
                 rightPanel.bottomAnchor.constraint(equalTo: content.bottomAnchor),
                 rightPanel.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-                rightPanel.widthAnchor.constraint(equalToConstant: Self.rightDrawerWidth),
+                width,
                 canvas.trailingAnchor.constraint(equalTo: rightPanel.leadingAnchor, constant: -Self.gutter),
             ]
         } else {
@@ -308,10 +313,13 @@ final class TabController: NSObject {
         }
 
         if isBottomOpen, let bottomPanel = bottomDrawerPanel {
+            // See the right-drawer width constraint above: same rationale for height.
+            let height = bottomPanel.heightAnchor.constraint(equalToConstant: Self.bottomDrawerHeight)
+            height.priority = .defaultHigh
             cs += [
                 bottomPanel.leadingAnchor.constraint(equalTo: content.leadingAnchor),
                 bottomPanel.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-                bottomPanel.heightAnchor.constraint(equalToConstant: Self.bottomDrawerHeight),
+                height,
                 canvas.bottomAnchor.constraint(equalTo: bottomPanel.topAnchor, constant: -Self.gutter),
             ]
             // The bottom drawer spans the canvas column only — it stops short of the
@@ -343,7 +351,11 @@ extension TabController: TerminalSurfaceDelegate {
             bottomDrawerPanel = nil
             isBottomOpen = false
             relayoutPanels()
-            if focusedPanel == .bottomDrawer { paneGainedFocus() }
+            // `focusActivePane()` restores BOTH the pane's keyboard first-responder
+            // and — via `onFocusChanged` → `paneGainedFocus()` — the unified halo/
+            // routing state, so typing `exit` in a focused drawer doesn't orphan
+            // keystrokes until the next click.
+            if focusedPanel == .bottomDrawer { paneCanvas.focusActivePane() }
         } else if s === rightDrawerSurface {
             rightDrawerPanel?.removeFromSuperview()
             rightDrawerSurface?.terminate()
@@ -351,7 +363,9 @@ extension TabController: TerminalSurfaceDelegate {
             rightDrawerPanel = nil
             isRightOpen = false
             relayoutPanels()
-            if focusedPanel == .rightDrawer { paneGainedFocus() }
+            // See the bottom-drawer branch above: `focusActivePane()` restores both
+            // keyboard focus and unified halo/routing in one call.
+            if focusedPanel == .rightDrawer { paneCanvas.focusActivePane() }
         }
     }
 }

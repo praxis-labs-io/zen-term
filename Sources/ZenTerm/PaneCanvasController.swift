@@ -194,7 +194,11 @@ final class PaneCanvasController: NSObject {
         cwdByLeaf[newLeaf] = registry.surface(for: source)?.currentDirectory ?? cwdByLeaf[source]
         tree = tree.splitting(source, axis: axis, newLeaf: newLeaf, newSplit: mintSplitID())
         reconcileAndRender()
-        registry.surface(for: tree.focusedLeaf)?.focus()
+        // `focusActivePane()` goes through `focus(_:)` (halo + first-responder +
+        // `onFocusChanged`), unlike a raw `.focus()` — so a split while a drawer holds
+        // unified focus re-syncs `TabController.focusedPanel` back to `.pane` instead
+        // of leaving the halo stuck on the drawer.
+        focusActivePane()
     }
 
     /// Close the focused pane. Returns false when it was the last pane (caller closes the window).
@@ -203,7 +207,9 @@ final class PaneCanvasController: NSObject {
         guard let next = tree.closing(tree.focusedLeaf) else { return false }
         tree = next
         reconcileAndRender()
-        registry.surface(for: tree.focusedLeaf)?.focus()
+        // See `split(_:)`: `focusActivePane()` fires `onFocusChanged` so unified focus
+        // re-syncs to `.pane` instead of getting stuck on a previously focused drawer.
+        focusActivePane()
         return true
     }
 
