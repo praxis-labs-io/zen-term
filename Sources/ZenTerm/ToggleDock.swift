@@ -25,7 +25,7 @@ final class ToggleDock: NSView {
         }
         let splitH = button("rectangle.split.1x2", "Split horizontally", onSplitH)  // ⌘- stacked
         let splitV = button("rectangle.split.2x1", "Split vertically", onSplitV)  // ⌘⇧\ side-by-side
-        paletteBtn = button("command", "Repo picker", onPalette)  // ⌘P
+        paletteBtn = button("command", "Command palette", onPalette)  // ⌘P
         bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", onBottom)  // ⌘B
         rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", onRight)  // ⌘\
         zoomBtn = button("arrow.up.left.and.arrow.down.right", "Toggle zoom", onZoom)  // ⌘F
