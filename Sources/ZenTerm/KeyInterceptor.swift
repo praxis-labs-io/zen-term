@@ -9,6 +9,8 @@ final class KeyInterceptor {
         case splitVertical, splitHorizontal
         case navLeft, navRight, navUp, navDown
         case closePane
+        case newTab, newWindow
+        case selectTab(Int)   // 1...9
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?
@@ -31,6 +33,10 @@ final class KeyInterceptor {
             case "k":  chord = .navUp
             case "j":  chord = .navDown
             case "w":  chord = .closePane
+            case "t": chord = .newTab
+            case "n": chord = .newWindow
+            case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+                chord = key.flatMap { Int($0) }.map { .selectTab($0) }
             default:   chord = nil
             }
             if let chord {

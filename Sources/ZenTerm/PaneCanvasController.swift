@@ -117,6 +117,10 @@ final class PaneCanvasController: NSObject {
 
     private func focusFrontmost() { focus(tree.focusedLeaf) }
 
+    /// Restore focus + halo to this tab's focused pane (used when its tab is
+    /// re-mounted after a switch).
+    func focusActivePane() { focus(tree.focusedLeaf) }
+
     /// Move focus to the nearest pane in `direction`, using on-screen frames.
     func navigate(_ direction: Direction) {
         guard hostByLeaf.count > 1 else { return }
