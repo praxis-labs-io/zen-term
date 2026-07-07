@@ -11,10 +11,10 @@ final class PaneHostView: NSView {
 
     var isFocused: Bool = false { didSet { updateHalo() } }
 
-    /// Inner breathing room between the pane border and the terminal content.
-    /// The top is tighter so the first line sits near the top (terminal convention).
+    /// Inner breathing room between the pane border and the terminal content, even on
+    /// all sides so content (e.g. nvim) doesn't sit against the pane border.
     private let padding: CGFloat = 10
-    private let topPadding: CGFloat = 2
+    private let topPadding: CGFloat = 10
 
     init(paneID: PaneID, content: NSView, background: NSColor, onFocusRequest: @escaping (PaneID) -> Void) {
         self.paneID = paneID
