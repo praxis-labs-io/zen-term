@@ -162,10 +162,13 @@ final class TabController: NSObject {
 
     /// Restore keyboard focus when this tab is (re)mounted: the modal lazygit float if
     /// open — it must keep first-responder, it's modal over the whole tab — otherwise
-    /// the active pane. Without the float check, remounting (tab switch-back, new/close
-    /// tab) steals focus to the pane hidden behind the still-visible float.
+    /// whichever panel held the tab's unified focus (pane or a drawer). Without the
+    /// float check, remounting steals focus to the pane hidden behind the still-visible
+    /// float; without honoring `focusedPanel`, remounting a tab that was focused on a
+    /// drawer wrongly drops focus onto the central pane.
     func restoreKeyFocus() {
-        if isLazygitOpen { lazygitSurface?.focus() } else { paneCanvas.focusActivePane() }
+        if isLazygitOpen { lazygitSurface?.focus(); return }
+        restoreUnifiedFocus()
     }
 
     func shutdown() {
@@ -590,6 +593,12 @@ final class TabController: NSObject {
 }
 
 extension TabController: TerminalSurfaceDelegate {
+    /// A click landed in one of the tab's drawer surfaces — give that drawer unified
+    /// focus. The lazygit float is modal and already holds focus, so it's ignored.
+    func surfaceWantsFocus(_ s: TerminalSurface) {
+        if s === bottomDrawerSurface { focusDrawer(.bottom) }
+        else if s === rightDrawerSurface { focusDrawer(.right) }
+    }
     /// A drawer's shell exited on its own (e.g. the user typed `exit`): close+clear
     /// that drawer entirely — rather than leaving a dead shell docked — so the next
     /// toggle lazily spawns a fresh one. Panes have their own exit handling in

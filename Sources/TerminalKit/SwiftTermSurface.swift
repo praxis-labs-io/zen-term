@@ -9,6 +9,13 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
     private let term = ProbeTerminalView(frame: .zero)
     private var lastTitle = ""
 
+    /// A local NSEvent monitor for two behaviors SwiftTerm doesn't give us and won't let
+    /// us add by subclassing (it seals `keyDown`/`mouseDown` as `public`, not `open`):
+    /// Shift+Enter → LF (soft newline), and focus-on-content-click (SwiftTerm's mouseDown
+    /// neither becomes first responder nor bubbles). Each surface installs one; every
+    /// handler no-ops unless the event targets *this* surface, so they don't interfere.
+    private var eventMonitor: Any?
+
     public weak var delegate: TerminalSurfaceDelegate?
 
     public var view: NSView { term }
@@ -42,6 +49,38 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
             guard let self else { return }
             self.delegate?.surfaceDidRingBell(self)
         }
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { [weak self] event in
+            guard let self else { return event }
+            switch event.type {
+            case .keyDown: return self.handleShiftEnter(event)
+            case .leftMouseDown: self.reportFocusIfClicked(event); return event
+            default: return event
+            }
+        }
+    }
+
+    /// Map Shift+Enter to a line feed so multiline-aware CLIs treat it as a soft newline
+    /// while plain Enter (carriage return) still submits — the CR-submits / LF-inserts
+    /// convention, and exactly what `claude /terminal-setup` writes for the terminals it
+    /// configures. Only the focused surface acts.
+    private func handleShiftEnter(_ event: NSEvent) -> NSEvent? {
+        guard term.window?.firstResponder === term,
+              event.keyCode == 36,                     // kVK_Return (main Return)
+              event.modifierFlags.contains(.shift) else { return event }
+        term.send([0x0A])                              // LF
+        return nil
+    }
+
+    /// Report a focus intent when a click lands in this surface's content. SwiftTerm's
+    /// `mouseDown` consumes the click for selection without becoming first responder or
+    /// bubbling, so clicks never reached the chrome's focus routing. We only observe
+    /// (never swallow the event, so selection still works) and only when the click
+    /// hit-tests into this surface's view — never a covered one behind an overlay.
+    private func reportFocusIfClicked(_ event: NSEvent) {
+        guard event.window === term.window,
+              let hit = term.window?.contentView?.hitTest(event.locationInWindow),
+              hit === term || hit.isDescendant(of: term) else { return }
+        delegate?.surfaceWantsFocus(self)
     }
 
     public func start(_ config: TerminalSurfaceConfig) {
@@ -99,7 +138,15 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
     }
 
     public func focus() { term.window?.makeFirstResponder(term) }
-    public func terminate() { term.terminate() }
+    public func terminate() {
+        if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
+        eventMonitor = nil
+        term.terminate()
+    }
+
+    deinit {
+        if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
+    }
     public func paste(_ text: String) { term.send(txt: text) }
     public func copySelection() -> String? { term.getSelection() }
     public func scrollToBottom() { term.scroll(toPosition: 1) }

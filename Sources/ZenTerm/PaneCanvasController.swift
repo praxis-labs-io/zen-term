@@ -304,6 +304,10 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
         guard let id = leafID(of: s), id == tree.focusedLeaf else { return }
         onTitleChanged?()
     }
+    func surfaceWantsFocus(_ s: TerminalSurface) {
+        guard let id = leafID(of: s) else { return }
+        focus(id)
+    }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }
         guard let next = tree.closing(id) else {

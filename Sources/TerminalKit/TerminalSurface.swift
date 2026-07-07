@@ -55,6 +55,10 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?)
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?)
     func surfaceWantsClose(_ s: TerminalSurface)
+    /// The user clicked the surface's content — the chrome should route unified focus
+    /// (halo + first-responder) to this surface. The surface only reports the intent;
+    /// the chrome stays the single owner of focus.
+    func surfaceWantsFocus(_ s: TerminalSurface)
 }
 
 /// Default no-ops so a consumer implements only the events it cares about.
@@ -66,6 +70,7 @@ public extension TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?) {}
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {}
     func surfaceWantsClose(_ s: TerminalSurface) {}
+    func surfaceWantsFocus(_ s: TerminalSurface) {}
 }
 
 /// The leaf contract. A backend is anything that can BE a terminal in our chrome.
