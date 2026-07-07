@@ -1,12 +1,20 @@
 import AppKit
-import PaneKit
 
-/// Hosts one leaf's terminal surface: the rounded/bordered frame over the canvas,
-/// plus the iris focus halo (accent border + soft glow) when focused. Clicking
-/// anywhere in the pane requests focus for its leaf.
-final class PaneHostView: NSView {
-    let paneID: PaneID
-    private let onFocusRequest: (PaneID) -> Void
+/// Optional top meta header for a `PanelHostView` — a small-caps label (left) and its
+/// toggle keybind (right), e.g. `("BOTTOM", "⌘B")` for a drawer panel.
+struct PanelMeta {
+    let label: String
+    let keybind: String
+}
+
+/// Hosts one terminal surface (a pane leaf today; a drawer later) inside the shared
+/// rounded/bordered chrome: the iris focus halo (accent border + soft glow) and an
+/// inner clip that keeps content within the corner radius. An optional top meta row
+/// (label + keybind) renders above the content when `meta` is non-nil; panes pass
+/// `meta: nil` and look/behave exactly as the original pane-only chrome. Clicking
+/// anywhere in the panel requests focus.
+final class PanelHostView: NSView {
+    private let onFocusRequest: () -> Void
     private let pane = NSView()
 
     var isFocused: Bool = false { didSet { updateHalo() } }
@@ -14,10 +22,8 @@ final class PaneHostView: NSView {
     /// Inner breathing room between the pane border and the terminal content, even on
     /// all sides so content (e.g. nvim) doesn't sit against the pane border.
     private let padding: CGFloat = 10
-    private let topPadding: CGFloat = 10
 
-    init(paneID: PaneID, content: NSView, background: NSColor, onFocusRequest: @escaping (PaneID) -> Void) {
-        self.paneID = paneID
+    init(content: NSView, background: NSColor, meta: PanelMeta?, onFocusRequest: @escaping () -> Void) {
         self.onFocusRequest = onFocusRequest
         super.init(frame: .zero)
 
@@ -50,16 +56,30 @@ final class PaneHostView: NSView {
             clip.bottomAnchor.constraint(equalTo: pane.bottomAnchor),
             content.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
             content.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
-            content.topAnchor.constraint(equalTo: clip.topAnchor, constant: topPadding),
             content.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -padding),
         ])
+
+        if let meta {
+            let header = Self.makeMetaHeader(meta)
+            header.translatesAutoresizingMaskIntoConstraints = false
+            clip.addSubview(header)
+            NSLayoutConstraint.activate([
+                header.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: 6),
+                header.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -6),
+                header.topAnchor.constraint(equalTo: clip.topAnchor, constant: 6),
+                content.topAnchor.constraint(equalTo: header.bottomAnchor, constant: padding),
+            ])
+        } else {
+            content.topAnchor.constraint(equalTo: clip.topAnchor, constant: padding).isActive = true
+        }
+
         updateHalo()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     override func mouseDown(with event: NSEvent) {
-        onFocusRequest(paneID)
+        onFocusRequest()
         super.mouseDown(with: event)
     }
 
@@ -78,5 +98,26 @@ final class PaneHostView: NSView {
             layer.borderColor = Self.idleBorder.cgColor
             layer.shadowOpacity = 0
         }
+    }
+
+    /// A muted small-caps mono label (left) and its keybind (right), e.g. "BOTTOM  ⌘B".
+    private static func makeMetaHeader(_ meta: PanelMeta) -> NSStackView {
+        let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
+
+        let labelField = NSTextField(labelWithString: "")
+        labelField.attributedStringValue = NSAttributedString(
+            string: meta.label.uppercased(),
+            attributes: [.font: font, .foregroundColor: NSColor(white: 0.92, alpha: 0.4), .kern: 1.2]
+        )
+
+        let keybindField = NSTextField(labelWithString: meta.keybind)
+        keybindField.font = font
+        keybindField.textColor = NSColor(white: 0.92, alpha: 0.3)
+        keybindField.alignment = .right
+
+        let stack = NSStackView(views: [labelField, keybindField])
+        stack.orientation = .horizontal
+        stack.distribution = .equalSpacing
+        return stack
     }
 }

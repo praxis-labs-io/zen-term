@@ -11,7 +11,7 @@ final class PaneCanvasController: NSObject {
     private var tree: PaneTree
     private let registry: PaneSurfaceRegistry
     private var cwdByLeaf: [PaneID: URL] = [:]
-    private var hostByLeaf: [PaneID: PaneHostView] = [:]
+    private var hostByLeaf: [PaneID: PanelHostView] = [:]
     private var nextID = 1
 
     private static let canvasColor = NSColor(srgbRed: 0x23 / 255.0, green: 0x21 / 255.0, blue: 0x36 / 255.0, alpha: 1)
@@ -108,10 +108,11 @@ final class PaneCanvasController: NSObject {
 
     private func hostView(for id: PaneID) -> NSView {
         guard let surface = registry.surface(for: id) else { return NSView() }
-        let host = PaneHostView(paneID: id, content: surface.view,
-                                background: Theme.rosePineMoon.background.nsColor,
-                                onFocusRequest: { [weak self] pid in
-            self?.focus(pid)
+        let host = PanelHostView(content: surface.view,
+                                 background: Theme.rosePineMoon.background.nsColor,
+                                 meta: nil,
+                                 onFocusRequest: { [weak self] in
+            self?.focus(id)
         })
         hostByLeaf[id] = host
         return host
