@@ -39,9 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let rect = NSRect(x: 0, y: 0, width: 900, height: 560).offsetBy(dx: offset, dy: -offset)
         let wc = WindowController(contentRect: rect, initialCWD: initialCWD)
         if centered { wc.window.center() }
-        wc.onLastTabClosed = { [weak self, weak wc] in
+        wc.onClosed = { [weak self, weak wc] in
             guard let self, let wc else { return }
-            wc.window.close()
             self.windows.removeAll { $0 === wc }
         }
         windows.append(wc)

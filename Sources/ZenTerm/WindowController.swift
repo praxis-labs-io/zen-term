@@ -22,8 +22,11 @@ final class WindowController: NSObject {
     /// current; it only re-renders when a title actually changed.
     private var titlePoll: Timer?
 
-    /// The window's last tab closed → the window should go away.
-    var onLastTabClosed: (() -> Void)?
+    /// The window has closed (via the last-tab cascade OR the native close button) →
+    /// the manager should forget this controller. Fired once, from `windowWillClose`.
+    var onClosed: (() -> Void)?
+
+    private var didTearDown = false
 
     /// The active tab's focused-pane cwd, for `⌘n` new-window inheritance.
     var focusedCWD: URL? { activeController?.focusedCWD }
@@ -59,6 +62,7 @@ final class WindowController: NSObject {
         titles[firstID] = first.title
 
         layoutContainer()
+        window.delegate = self   // for windowWillClose teardown (native close button + cascade)
     }
 
     // MARK: layout
@@ -102,7 +106,7 @@ final class WindowController: NSObject {
         if changed { renderTabBar() }
     }
 
-    deinit { titlePoll?.invalidate() }
+    deinit { titlePoll?.invalidate() }   // backstop; tearDown() normally handles it
 
     // MARK: controller factory
 
@@ -171,7 +175,7 @@ final class WindowController: NSObject {
         controller?.shutdown()      // terminate the tab's shells — never leak them
         controllers[id] = nil
         titles[id] = nil
-        if !survived { titlePoll?.invalidate(); titlePoll = nil; onLastTabClosed?(); return }
+        if !survived { window.close(); return }   // last tab → close window → windowWillClose tears down
         mountActive()
         renderTabBar()
     }
@@ -235,4 +239,21 @@ final class WindowController: NSObject {
         let firstID = tabs.order[0]
         if let c = controllers[firstID] { wire(c, id: firstID) }
     }
+
+    /// Single teardown path for BOTH the ⌘w last-tab cascade and the native close
+    /// button: stop the poll, terminate every still-open tab's shells, and let the
+    /// manager forget this window. Idempotent.
+    private func tearDown() {
+        guard !didTearDown else { return }
+        didTearDown = true
+        titlePoll?.invalidate()
+        titlePoll = nil
+        for c in controllers.values { c.shutdown() }
+        controllers.removeAll()
+        onClosed?()
+    }
+}
+
+extension WindowController: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) { tearDown() }
 }
