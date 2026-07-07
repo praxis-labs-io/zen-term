@@ -2,14 +2,14 @@ import AppKit
 import TabKit
 
 /// Owns one window and its independent set of tabs. Each tab is a
-/// `PaneCanvasController` (Epic 1's pane tree + registry + focus). Only the active
-/// tab's `canvasView` is mounted; inactive tabs are detached but retained, so their
+/// `TabController` (wrapping Epic 1's pane tree + registry + focus). Only the active
+/// tab's `view` is mounted; inactive tabs are detached but retained, so their
 /// shells keep running. The tab bar is pinned to the bottom.
 final class WindowController: NSObject {
     let window: HostWindow
 
     private var tabs: TabList
-    private var controllers: [TabID: PaneCanvasController] = [:]
+    private var controllers: [TabID: TabController] = [:]
     private var titles: [TabID: String] = [:]
     private var nextTabID = 1
 
@@ -34,7 +34,7 @@ final class WindowController: NSObject {
     /// The active tab's controller, or nil once the last tab has closed (the window
     /// is being torn down). Reading `tabs.activeID` on an empty list traps, so every
     /// active-tab access goes through here.
-    private var activeController: PaneCanvasController? {
+    private var activeController: TabController? {
         guard !tabs.order.isEmpty else { return nil }
         return controllers[tabs.activeID]
     }
@@ -110,8 +110,8 @@ final class WindowController: NSObject {
 
     // MARK: controller factory
 
-    private func makeController(initialCWD: URL?) -> PaneCanvasController {
-        let c = PaneCanvasController(initialCWD: initialCWD)
+    private func makeController(initialCWD: URL?) -> TabController {
+        let c = TabController(initialCWD: initialCWD)
         // Bind title + last-pane-exit to this controller's id at call sites that
         // know the id (newTab / init assign into the dict first, then wire).
         return c
@@ -125,9 +125,9 @@ final class WindowController: NSObject {
     /// Always restores focus to the active tab's focused pane after mounting.
     private func mountActive() {
         guard let c = activeController else { return }
-        if mountedCanvas !== c.canvasView {
+        if mountedCanvas !== c.view {
             mountedCanvas?.removeFromSuperview()
-            let canvas = c.canvasView
+            let canvas = c.view
             canvas.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(canvas, positioned: .below, relativeTo: tabBar)
             NSLayoutConstraint.activate([
@@ -168,8 +168,8 @@ final class WindowController: NSObject {
     private func closeTab(_ id: TabID) {
         let survived = tabs.close(id)
         let controller = controllers[id]
-        if mountedCanvas === controller?.canvasView {
-            controller?.canvasView.removeFromSuperview()
+        if mountedCanvas === controller?.view {
+            controller?.view.removeFromSuperview()
             mountedCanvas = nil
         }
         controller?.shutdown()      // terminate the tab's shells — never leak them
@@ -212,7 +212,7 @@ final class WindowController: NSObject {
     // MARK: wiring
 
     /// Bind a controller's title + last-pane-exit callbacks to its tab id.
-    private func wire(_ c: PaneCanvasController, id: TabID) {
+    private func wire(_ c: TabController, id: TabID) {
         // Look the controller up by id rather than capturing `c` — capturing `c`
         // strongly in a closure stored on `c` would retain the controller forever.
         c.onTitleChanged = { [weak self] in
