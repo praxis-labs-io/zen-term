@@ -18,6 +18,7 @@ final class KeyInterceptor {
         case toggleZoom
         case toggleLazygit
         case toggleRepoPicker
+        case toggleCommandPalette
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?
@@ -30,9 +31,10 @@ final class KeyInterceptor {
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             let key = event.charactersIgnoringModifiers?.lowercased()
 
-            // ⌘⇧ family: vertical split (⌘⇧\ → "|"; also "\\" defensively) and pane/drawer
+            // ⌘⇧ family: vertical split (⌘⇧\ → "|"; also "\\" defensively), pane/drawer
             // resize on ⌘⇧HJKL — the same HJKL directions as ⌘-nav, Shift meaning "push the
-            // divider" instead of "hop to the neighbor". With Shift held,
+            // divider" instead of "hop to the neighbor" — and ⌘⇧P for the repo picker (bare
+            // ⌘P now opens the command palette instead). With Shift held,
             // charactersIgnoringModifiers is the shifted glyph, so `.lowercased()` normalizes
             // "H" → "h". Unmatched ⌘⇧ chords fall through to the terminal.
             if flags == [.command, .shift] {
@@ -43,6 +45,7 @@ final class KeyInterceptor {
                 case "l": chord = .resizeRight
                 case "k": chord = .resizeUp
                 case "j": chord = .resizeDown
+                case "p": chord = .toggleRepoPicker
                 default: chord = nil
                 }
                 if let chord { self.onReservedChord?(chord); return nil }
@@ -67,7 +70,7 @@ final class KeyInterceptor {
             case "b": chord = .toggleBottomDrawer
             case "f": chord = .toggleZoom
             case "g": chord = .toggleLazygit
-            case "p": chord = .toggleRepoPicker
+            case "p": chord = .toggleCommandPalette
             case "1", "2", "3", "4", "5", "6", "7", "8", "9":
                 chord = key.flatMap { Int($0) }.map { .selectTab($0) }
             default: chord = nil

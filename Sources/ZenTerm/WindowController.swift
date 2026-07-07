@@ -26,9 +26,16 @@ final class WindowController: NSObject {
     /// The `⌘P` repo picker, when open. Window-level (it opens/replaces tabs) but
     /// presented over the active tab's tile region. Modal while open.
     private var repoPicker: RepoPickerOverlay?
-    /// Whether the repo picker is modal right now. Read by `AppDelegate` so window-level
-    /// chords (⌘N) and Copy/Paste routing respect the modal too, not just `handle(_:)`.
     var isRepoPickerOpen: Bool { repoPicker != nil }
+
+    /// The `⌘P` command palette, when open. Window-level like the repo picker (it can
+    /// open/switch tabs) but presented over the active tab's tile region. Modal while open.
+    private var commandPalette: CommandPaletteOverlay?
+    var isCommandPaletteOpen: Bool { commandPalette != nil }
+
+    /// Whether either palette is modal right now. Read by `AppDelegate` so window-level
+    /// chords (⌘N) and Copy/Paste routing respect the modal too, not just `handle(_:)`.
+    var isModalPaletteOpen: Bool { isRepoPickerOpen || isCommandPaletteOpen }
 
     /// Re-derives tab titles from each tab's live cwd. Shells report cwd changes
     /// without OSC 7, so there's no push event on `cd` — a light poll keeps titles
@@ -87,7 +94,7 @@ final class WindowController: NSObject {
         // same modal gates as the keyboard chords.
         onSplitH = { [weak self] in self?.handle(.splitHorizontal) }
         onSplitV = { [weak self] in self?.handle(.splitVertical) }
-        onPalette = { [weak self] in self?.handle(.toggleRepoPicker) }
+        onPalette = { [weak self] in self?.handle(.toggleCommandPalette) }
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
         onZoom = { [weak self] in self?.handle(.toggleZoom) }
@@ -219,7 +226,7 @@ final class WindowController: NSObject {
     /// picker passes the repo dir + its basename; plain `⌘t` passes the inherited cwd
     /// and no pin).
     private func addTab(cwd: URL?, pinnedTitle: String?, workspace: Bool = false) {
-        dismissRepoPickerIfOpen()  // the "+" button is reachable while the picker is up
+        dismissOpenPalettes()  // the "+" button is reachable while a palette is up
         let id = mintTabID()
         tabs.add(id)
         installController(id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace)
@@ -253,7 +260,7 @@ final class WindowController: NSObject {
     }
 
     private func select(_ id: TabID) {
-        dismissRepoPickerIfOpen()  // a tab-bar click must not orphan the modal picker
+        dismissOpenPalettes()  // a tab-bar click must not orphan a modal palette
         guard tabs.order.contains(id), id != tabs.activeID else { return }
         tabs.select(id)
         mountActive()
@@ -271,7 +278,7 @@ final class WindowController: NSObject {
     /// Close a specific tab: terminate its shells, detach its canvas, and cascade to
     /// closing the window when it was the last tab.
     private func closeTab(_ id: TabID) {
-        dismissRepoPickerIfOpen()  // the "×" button is reachable while the picker is up
+        dismissOpenPalettes()  // the "×" button is reachable while a palette is up
         let survived = tabs.close(id)
         let controller = controllers[id]
         if mountedCanvas === controller?.view {
@@ -286,10 +293,10 @@ final class WindowController: NSObject {
         renderTabBar()
     }
 
-    // MARK: repo picker (⌘P)
+    // MARK: repo picker (⌘⇧P)
 
     /// Toggle the repo picker over the active tab. Scans `~/dev` fresh on open and
-    /// focuses its search field. Closing (⌘P again, Esc, backdrop, or after a choice)
+    /// focuses its search field. Closing (⌘⇧P again, Esc, backdrop, or after a choice)
     /// restores keyboard focus to the active tab.
     private func toggleRepoPicker() {
         if isRepoPickerOpen { closeRepoPicker(); return }
@@ -313,11 +320,49 @@ final class WindowController: NSObject {
         renderDock()  // palette button now inactive
     }
 
-    /// Dismiss the picker if it's up — called before any tab-bar mouse op (select/new/
-    /// close), which would otherwise unmount the picker's host tab and leave the modal
+    // MARK: command palette (⌘P)
+
+    /// Toggle the command palette over the active tab. Builds the catalog fresh (its
+    /// tab-select entries track the live tab count) and focuses its search field. Closing
+    /// (⌘P again, Esc, backdrop, or after running a command) restores focus to the tab.
+    private func toggleCommandPalette() {
+        if isCommandPaletteOpen { closeCommandPalette(); return }
+        guard let active = activeController else { return }
+        let palette = CommandPaletteOverlay(
+            commands: CommandCatalog.commands(tabCount: tabs.order.count),
+            background: Theme.rosePineMoon.background.nsColor,
+            onRun: { [weak self] chord in self?.runCommand(chord) },
+            onDismiss: { [weak self] in self?.closeCommandPalette() }
+        )
+        active.presentTileOverlay(palette)
+        commandPalette = palette
+        palette.focusSearchField()
+        renderDock()  // command button now active
+    }
+
+    private func closeCommandPalette() {
+        commandPalette?.removeFromSuperview()
+        commandPalette = nil
+        activeController?.restoreKeyFocus()
+        renderDock()  // command button now inactive
+    }
+
+    /// Run a chosen command: close the palette first (clears its modal gate), then dispatch
+    /// the chord through the normal `handle(_:)` path — including `.toggleRepoPicker`, which
+    /// opens the repo picker once the palette is gone.
+    private func runCommand(_ chord: KeyInterceptor.ReservedChord) {
+        closeCommandPalette()
+        handle(chord)
+    }
+
+    // MARK: modal dismissal
+
+    /// Dismiss whichever palette is up — called before any tab-bar mouse op (select/new/
+    /// close), which would otherwise unmount the palette's host tab and leave its modal
     /// flag stuck on, soft-locking every keyboard chord.
-    private func dismissRepoPickerIfOpen() {
+    private func dismissOpenPalettes() {
         if isRepoPickerOpen { closeRepoPicker() }
+        if isCommandPaletteOpen { closeCommandPalette() }
     }
 
     /// Open a picked directory as a shell session: a new tab (Enter) or by replacing
@@ -347,10 +392,17 @@ final class WindowController: NSObject {
             if case .toggleRepoPicker = chord { toggleRepoPicker() }
             return
         }
+        // The command palette is modal the same way: while it's open only ⌘P (close it)
+        // acts; every other chord is swallowed. Running a command closes the palette first,
+        // so the dispatched chord arrives here with the gate already clear.
+        if isCommandPaletteOpen {
+            if case .toggleCommandPalette = chord { toggleCommandPalette() }
+            return
+        }
         // The lazygit float is modal over its tab: while it's open, every tab-internal
         // chord (split/nav/close/drawers/zoom) is swallowed. Only ⌘G (toggle it off) and
-        // cross-tab/window chords — switch tab, new tab, new window — still act. ⌘P is
-        // not in the allow-list, so the picker can't open over the float.
+        // cross-tab/window chords — switch tab, new tab, new window — still act. The
+        // palettes aren't in the allow-list, so neither can open over the float.
         if active?.isLazygitOpen == true {
             switch chord {
             case .toggleLazygit, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
@@ -386,6 +438,7 @@ final class WindowController: NSObject {
         case .toggleZoom: active?.toggleZoom()
         case .toggleLazygit: active?.toggleLazygit()
         case .toggleRepoPicker: toggleRepoPicker()
+        case .toggleCommandPalette: toggleCommandPalette()
         }
     }
 
@@ -421,10 +474,10 @@ final class WindowController: NSObject {
         tabBar.render(items)
     }
 
-    /// Mirror the active tab's overlay state + the window's repo-picker state onto the
-    /// dock's active tints. Called on tab switch, overlay toggles, and picker open/close.
+    /// Mirror the active tab's overlay state + the window's command-palette state onto the
+    /// dock's active tints. Called on tab switch, overlay toggles, and palette open/close.
     private func renderDock() {
-        dock.render(overlay: activeController?.overlayState ?? OverlayState(), paletteOpen: isRepoPickerOpen)
+        dock.render(overlay: activeController?.overlayState ?? OverlayState(), paletteOpen: isCommandPaletteOpen)
     }
 
     /// Wire the first controller once the dict is populated. Called from

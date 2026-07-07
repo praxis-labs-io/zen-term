@@ -21,9 +21,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// window's controller.
     private func route(_ chord: KeyInterceptor.ReservedChord) {
         if case .newWindow = chord {
-            // ⌘N is intercepted here before `handle(_:)`, so its repo-picker modal gate
-            // doesn't cover it — swallow it explicitly while the picker is open.
-            if keyController()?.isRepoPickerOpen == true { return }
+            // ⌘N is intercepted here before `handle(_:)`, so a palette's modal gate
+            // doesn't cover it — swallow it explicitly while either palette is open.
+            if keyController()?.isModalPaletteOpen == true { return }
             newWindow(initialCWD: keyController()?.focusedCWD, centered: false)
             return
         }
@@ -53,21 +53,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Copy/Paste forwarders reached via the responder chain (menu items have a nil
     /// target) — always act on the key window's active tab, never a stale window.
     @objc func copyFromSurface(_ sender: Any?) {
-        if isRepoPickerModal {
+        if isPaletteModal {
             NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.copy(_:)), with: sender); return
         }
         keyController()?.copyFromSurface(sender)
     }
     @objc func pasteToSurface(_ sender: Any?) {
-        if isRepoPickerModal {
+        if isPaletteModal {
             NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.paste(_:)), with: sender); return
         }
         keyController()?.pasteToSurface(sender)
     }
 
-    /// While the repo picker is modal, Copy/Paste must act on its search field, not the
+    /// While either palette is modal, Copy/Paste must act on its search field, not the
     /// terminal hidden behind it (else ⌘V would inject the clipboard into that shell).
-    private var isRepoPickerModal: Bool { keyController()?.isRepoPickerOpen == true }
+    private var isPaletteModal: Bool { keyController()?.isModalPaletteOpen == true }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
