@@ -12,12 +12,17 @@ final class TabController: NSObject {
 
     private let canvas: NSView            // paneCanvas.canvasView, cached
     private var canvasBottom: NSLayoutConstraint
+    private var canvasTrailing: NSLayoutConstraint
 
     // Per-tab auxiliary surfaces (created lazily; kept alive when hidden — the shell
     // persists across toggles and is only terminated in `shutdown()`).
     private var bottomDrawerSurface: TerminalSurface?
     private var bottomDrawerView: DrawerView?
     private var isBottomOpen = false
+
+    private var rightDrawerSurface: TerminalSurface?
+    private var rightDrawerView: DrawerView?
+    private var isRightOpen = false
 
     var onTitleChanged: (() -> Void)? {
         get { paneCanvas.onTitleChanged }
@@ -36,13 +41,14 @@ final class TabController: NSObject {
         canvas = paneCanvas.canvasView
         canvas.translatesAutoresizingMaskIntoConstraints = false
         canvasBottom = canvas.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        canvasTrailing = canvas.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         super.init()
         view.addSubview(canvas)
         NSLayoutConstraint.activate([
             canvas.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            canvas.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             canvas.topAnchor.constraint(equalTo: view.topAnchor),
             canvasBottom,
+            canvasTrailing,
         ])
     }
 
@@ -56,6 +62,8 @@ final class TabController: NSObject {
         paneCanvas.shutdown()
         bottomDrawerSurface?.terminate()
         bottomDrawerSurface = nil
+        rightDrawerSurface?.terminate()
+        rightDrawerSurface = nil
     }
 
     @objc func copyFromSurface(_ sender: Any?) { paneCanvas.copyFromSurface(sender) }
@@ -104,6 +112,52 @@ final class TabController: NSObject {
             dv.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
         bottomDrawerView = dv
+        return dv
+    }
+
+    // MARK: right drawer (⌘|)
+
+    /// Toggle the right drawer. First open creates a persistent login-shell surface
+    /// in the tab's cwd; toggling hidden keeps it running; it dies only in `shutdown()`.
+    func toggleRightDrawer() {
+        if isRightOpen {
+            isRightOpen = false
+            rightDrawerView?.isHidden = true
+            repointCanvasTrailing(to: view.trailingAnchor)
+            paneCanvas.focusActivePane()
+            return
+        }
+        isRightOpen = true
+        let drawerView = ensureRightDrawerView()
+        drawerView.isHidden = false
+        repointCanvasTrailing(to: drawerView.leadingAnchor)
+        rightDrawerSurface?.focus()
+    }
+
+    /// The one place the canvas's trailing constraint changes target: deactivate the
+    /// current constraint and activate a freshly built one pinned to `anchor`, so
+    /// exactly one canvas-trailing constraint is ever active — no accumulation across
+    /// repeated toggles.
+    private func repointCanvasTrailing(to anchor: NSLayoutXAxisAnchor) {
+        canvasTrailing.isActive = false
+        canvasTrailing = canvas.trailingAnchor.constraint(equalTo: anchor)
+        canvasTrailing.isActive = true
+    }
+
+    private func ensureRightDrawerView() -> DrawerView {
+        if let existing = rightDrawerView { return existing }
+        let surface = TerminalSurfaceFactory.make()
+        surface.start(TerminalSurfaceConfig(workingDirectory: focusedCWD, theme: Theme.rosePineMoon))
+        rightDrawerSurface = surface
+        let dv = DrawerView(edge: .right, content: surface.view,
+                            background: Theme.rosePineMoon.background.nsColor)
+        view.addSubview(dv)
+        NSLayoutConstraint.activate([
+            dv.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            dv.topAnchor.constraint(equalTo: view.topAnchor),
+            dv.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+        rightDrawerView = dv
         return dv
     }
 }

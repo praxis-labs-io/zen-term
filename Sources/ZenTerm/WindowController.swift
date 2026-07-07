@@ -202,6 +202,7 @@ final class WindowController: NSObject {
         case .newWindow:
             break   // handled by AppDelegate (window manager); no-op here
         case .toggleBottomDrawer: active?.toggleBottomDrawer()
+        case .toggleRightDrawer: active?.toggleRightDrawer()
         }
     }
 
