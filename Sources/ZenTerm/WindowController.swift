@@ -140,7 +140,7 @@ final class WindowController: NSObject {
     // MARK: tab ops
 
     private func newTab() {
-        let inheritCWD = controllers[tabs.activeID]?.focusedCWD
+        let inheritCWD = activeController?.focusedCWD
         let id = mintTabID()
         let c = makeController(initialCWD: inheritCWD)
         controllers[id] = c
@@ -153,7 +153,7 @@ final class WindowController: NSObject {
     }
 
     private func select(_ id: TabID) {
-        guard id != tabs.activeID else { return }
+        guard tabs.order.contains(id), id != tabs.activeID else { return }
         tabs.select(id)
         mountActive()
         renderTabBar()
