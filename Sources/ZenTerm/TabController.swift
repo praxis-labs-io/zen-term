@@ -5,6 +5,14 @@ import TerminalKit
 /// Which edge a drawer panel docks to.
 enum DrawerEdge { case bottom, right }
 
+/// A tab's overlay open-state (drawers + lazygit), produced by `TabController` and
+/// mirrored by the footer toggle dock's active tints.
+struct OverlayState: Equatable {
+    var isBottomOpen = false
+    var isRightOpen = false
+    var isLazygitOpen = false
+}
+
 /// One tab: owns the pane tree (`PaneCanvasController`) and the per-tab overlay
 /// surfaces (drawers, lazygit) and zoom. `view` is the tab's container that
 /// `WindowController` mounts. `content` is the tab's tile region (inset from `view`
@@ -25,11 +33,11 @@ final class TabController: NSObject {
     // persists across toggles and is only terminated in `shutdown()`).
     private var bottomDrawerSurface: TerminalSurface?
     private var bottomDrawerPanel: PanelHostView?
-    private var isBottomOpen = false
+    private var isBottomOpen = false { didSet { onOverlayStateChanged?() } }
 
     private var rightDrawerSurface: TerminalSurface?
     private var rightDrawerPanel: PanelHostView?
-    private var isRightOpen = false
+    private var isRightOpen = false { didSet { onOverlayStateChanged?() } }
 
     // The lazygit float: a transient top-most overlay (unlike drawers, its surface is
     // NOT persistent — it's terminated on every dismiss and re-spawned on the next ⌘G).
@@ -75,6 +83,13 @@ final class TabController: NSObject {
     var pinnedTitle: String?
     var title: String { pinnedTitle ?? paneCanvas.title }
     var focusedCWD: URL? { paneCanvas.focusedCWD }
+
+    /// The tab's overlay open-state (drawers + lazygit), for the footer dock's active
+    /// tints; fired via `onOverlayStateChanged` whenever one of them toggles.
+    var overlayState: OverlayState {
+        OverlayState(isBottomOpen: isBottomOpen, isRightOpen: isRightOpen, isLazygitOpen: isLazygitOpen)
+    }
+    var onOverlayStateChanged: (() -> Void)?
 
     /// A startup command for the right drawer (the `⌘P` workspace preset sets `claude`).
     /// When set, opening the right drawer launches the program-then-shell recipe instead
@@ -293,6 +308,7 @@ final class TabController: NSObject {
         bottomDrawerPanel?.isFocused = false
         rightDrawerPanel?.isFocused = false
         surface.focus()
+        onOverlayStateChanged?()   // lazygit now open → refresh the dock
     }
 
     private func closeLazygit() {
@@ -304,6 +320,7 @@ final class TabController: NSObject {
         lazygitSurface = nil
         surface?.terminate()
         restoreUnifiedFocus()   // the float held keyboard focus; hand it back to its panel
+        onOverlayStateChanged?()   // lazygit now closed → refresh the dock
     }
 
     /// Re-focus whichever panel held the tab's unified focus before the float opened

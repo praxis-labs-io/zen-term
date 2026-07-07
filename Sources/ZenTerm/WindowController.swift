@@ -15,6 +15,7 @@ final class WindowController: NSObject {
 
     private let container = NSView()
     private let tabBar: TabBarView
+    private let dock: ToggleDock
     private var mountedCanvas: NSView?
 
     /// The `⌘P` repo picker, when open. Window-level (it opens/replaces tabs) but
@@ -51,18 +52,37 @@ final class WindowController: NSObject {
         let firstID = TabID(1)
         tabs = TabList(first: firstID)
         // tabBar needs `self` for callbacks; build with placeholders, wire after super.init.
+        // Both tabBar and dock need `self` for callbacks; build with placeholders, wire
+        // after super.init (so both can stay `let`).
         var onSelect: (TabID) -> Void = { _ in }
         var onClose: (TabID) -> Void = { _ in }
         var onNewTab: () -> Void = { }
         tabBar = TabBarView(onSelect: { onSelect($0) },
                             onClose: { onClose($0) },
                             onNewTab: { onNewTab() })
+        var onSplitH: () -> Void = {}
+        var onSplitV: () -> Void = {}
+        var onPalette: () -> Void = {}
+        var onBottom: () -> Void = {}
+        var onRight: () -> Void = {}
+        var onLazygit: () -> Void = {}
+        dock = ToggleDock(onSplitH: { onSplitH() }, onSplitV: { onSplitV() },
+                          onPalette: { onPalette() }, onBottom: { onBottom() },
+                          onRight: { onRight() }, onLazygit: { onLazygit() })
         super.init()
         nextTabID = 2
 
         onSelect = { [weak self] in self?.select($0) }
         onClose = { [weak self] in self?.closeTab($0) }
         onNewTab = { [weak self] in self?.newTab() }
+        // Dock buttons route through `handle(_:)` (not the tab directly) so they obey the
+        // same modal gates as the keyboard chords.
+        onSplitH = { [weak self] in self?.handle(.splitHorizontal) }
+        onSplitV = { [weak self] in self?.handle(.splitVertical) }
+        onPalette = { [weak self] in self?.handle(.toggleRepoPicker) }
+        onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
+        onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
+        onLazygit = { [weak self] in self?.handle(.toggleLazygit) }
 
         let first = makeController(initialCWD: initialCWD)
         controllers[firstID] = first
@@ -81,12 +101,19 @@ final class WindowController: NSObject {
         content.addSubview(container)
 
         tabBar.translatesAutoresizingMaskIntoConstraints = false
+        dock.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(tabBar)
+        container.addSubview(dock)
         NSLayoutConstraint.activate([
             tabBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            tabBar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             tabBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             tabBar.heightAnchor.constraint(equalToConstant: TabBarView.height),
+            // Dock sits at the trailing edge of the tab-bar row; the tab strip ends before
+            // it (== so the tab bar's width is unambiguous). The dock shares the chips' -6
+            // band nudge so its icons align with the tab labels, not 6pt below them.
+            dock.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+            dock.centerYAnchor.constraint(equalTo: tabBar.centerYAnchor, constant: -6),
+            tabBar.trailingAnchor.constraint(equalTo: dock.leadingAnchor, constant: -8),
         ])
     }
 
@@ -153,6 +180,7 @@ final class WindowController: NSObject {
             mountedCanvas = canvas
         }
         c.restoreKeyFocus()   // float-aware: keeps focus on the modal float when open
+        renderDock()          // dock mirrors the newly-active tab's overlay state
     }
 
     // MARK: tab ops
@@ -239,12 +267,14 @@ final class WindowController: NSObject {
         active.presentTileOverlay(picker)
         repoPicker = picker
         picker.focusSearchField()
+        renderDock()   // palette button now active
     }
 
     private func closeRepoPicker() {
         repoPicker?.removeFromSuperview()
         repoPicker = nil
         activeController?.restoreKeyFocus()
+        renderDock()   // palette button now inactive
     }
 
     /// Dismiss the picker if it's up — called before any tab-bar mouse op (select/new/
@@ -334,6 +364,9 @@ final class WindowController: NSObject {
             self.renderTabBar()
         }
         c.onLastPaneClosed = { [weak self] in self?.closeTab(id) }
+        // Only the active tab toggles overlays (chords route to it); re-render the dock
+        // so its tints track that tab.
+        c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
     }
 
     private func renderTabBar() {
@@ -343,6 +376,12 @@ final class WindowController: NSObject {
                        isActive: id == tabs.activeID)
         }
         tabBar.render(items)
+    }
+
+    /// Mirror the active tab's overlay state + the window's repo-picker state onto the
+    /// dock's active tints. Called on tab switch, overlay toggles, and picker open/close.
+    private func renderDock() {
+        dock.render(overlay: activeController?.overlayState ?? OverlayState(), paletteOpen: isRepoPickerOpen)
     }
 
     /// Wire the first controller once the dict is populated. Called from
