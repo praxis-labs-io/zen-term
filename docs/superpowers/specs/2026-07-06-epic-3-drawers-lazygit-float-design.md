@@ -149,7 +149,9 @@ indicator is a small iris corner badge on `PaneHostView` / `DrawerView` (an
 - `⌘F` again **or Escape** restores the prior layout (including whichever drawers
   were open). Zoom is per-tab transient state (not persisted); switching tabs leaves
   each tab's zoom as it was.
-- The lazygit float is independent of zoom (it's already a full-tab overlay).
+- The lazygit float always renders **above** the zoom (it's a full-tab overlay that
+  supersedes the zoomed window) — no conflict, same behavior either way. Escape
+  dismisses the topmost overlay first: the float if open, otherwise unzoom.
 
 ### Toggle dock (global, mirrors active tab)
 - One dock in the tab-bar row: tab bar left, dock right.
