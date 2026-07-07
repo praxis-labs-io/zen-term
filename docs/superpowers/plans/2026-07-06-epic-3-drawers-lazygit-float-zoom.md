@@ -585,6 +585,8 @@ Set `focusedKind = .bottomDrawer` in `toggleBottomDrawer`'s open branch (after `
 
 > Add `var onFocusChanged: (() -> Void)?` to `PaneCanvasController` and fire it inside `focus(_:)` (right after `onTitleChanged?()`). Also add drawer click-focus: `DrawerView` gains an `onFocusRequest: (() -> Void)?` invoked from `mouseDown`, and `TabController` sets it to update `focusedKind` + focus that drawer's surface. Implement both so clicking a pane or a drawer updates `focusedKind`.
 
+> **Also route copy/paste through the focused surface (fixes ZEN-19 #1).** Once `focusedKind` exists, change `TabController.copyFromSurface`/`pasteToSurface` to act on the focused surface: `.pane` → forward to `paneCanvas` (as today); `.bottomDrawer` → the bottom drawer surface; `.rightDrawer` → the right drawer surface (and, in PR3, `.lazygit` if the float is open). A tiny helper `private var focusedSurface: TerminalSurface?` returning the surface for the current `focusedKind` (nil for pane → fall back to `paneCanvas` routing) keeps this clean. Requirement: with a drawer focused, `⌘C`/`⌘V` operate on that drawer's terminal, not the pane.
+
 - [ ] **Step 2: Add `onFocusRequest` to `DrawerView`**
 
 In `DrawerView`, add `var onFocusRequest: (() -> Void)?` and:
