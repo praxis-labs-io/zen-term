@@ -4,6 +4,12 @@
 **Date:** 2026-07-06
 **Depends on:** Epic 1 (pane canvas), Epic 2 (tabs + windows, live cwd)
 
+> **Scope update (2026-07-07):** The **global left sidebar (`⌘E`) was dropped** and
+> replaced by a **`⌘P` repo picker** (see `2026-07-07-cmd-p-repo-picker-design.md`).
+> In the toggle dock, the former sidebar button is now the **command-palette (`⌘P`)
+> toggle**. Also: `⌘\` and `⌘⇧\` were swapped (`⌘\` = right drawer, `⌘⇧\` = vertical
+> split), so sidebar/`⌘E` mentions below are historical.
+
 ## Goal
 
 Generalize the QuickTerminal pattern into a toggleable overlay layer: per-tab
