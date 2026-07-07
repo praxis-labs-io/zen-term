@@ -31,7 +31,8 @@ Drawer/lazygit contents are just more `TerminalSurface`s behind the seam.
   state and updates on tab switch.
 - **`⌘F` zooms the focused terminal** (a pane OR a drawer) to fill the tab region,
   as if it were the only terminal in the tab, with a zoom indicator. Toggling off
-  (or Escape) restores the prior layout.
+  (or Escape) restores the prior layout. Zoom and the lazygit float are mutually
+  exclusive — `⌘F` is ignored while the float is open.
 
 ## Architecture — per-tab `TabController` wrapper
 
@@ -149,9 +150,10 @@ indicator is a small iris corner badge on `PaneHostView` / `DrawerView` (an
 - `⌘F` again **or Escape** restores the prior layout (including whichever drawers
   were open). Zoom is per-tab transient state (not persisted); switching tabs leaves
   each tab's zoom as it was.
-- The lazygit float always renders **above** the zoom (it's a full-tab overlay that
-  supersedes the zoomed window) — no conflict, same behavior either way. Escape
-  dismisses the topmost overlay first: the float if open, otherwise unzoom.
+- Zoom and the lazygit float are **mutually exclusive**: `⌘F` is ignored while the
+  float is open (you can't zoom a pane/drawer under a float), and opening the float
+  is the only full-tab overlay in play. So Escape is unambiguous — it dismisses the
+  float if open, otherwise unzooms if zoomed.
 
 ### Toggle dock (global, mirrors active tab)
 - One dock in the tab-bar row: tab bar left, dock right.
