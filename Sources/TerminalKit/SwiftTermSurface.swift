@@ -15,6 +15,26 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
     public var title: String { lastTitle }
     public var isFocused: Bool { term.window?.firstResponder === term }
 
+    /// The shell's live cwd, read from the child process via the kernel
+    /// (`proc_pidinfo` / `PROC_PIDVNODEPATHINFO`). This is how Terminal.app and iTerm
+    /// track cwd without shell integration — no OSC 7 required. Nil before the
+    /// process starts or if the lookup fails.
+    public var currentDirectory: URL? {
+        let pid = term.process?.shellPid ?? 0
+        guard pid > 0 else { return nil }
+        var info = proc_vnodepathinfo()
+        let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
+        let read = withUnsafeMutablePointer(to: &info) {
+            proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, $0, size)
+        }
+        guard read == size else { return nil }
+        let path = withUnsafeBytes(of: &info.pvi_cdir.vip_path) { raw -> String in
+            let bytes = raw.bindMemory(to: CChar.self)
+            return String(cString: Array(bytes))
+        }
+        return path.isEmpty ? nil : URL(fileURLWithPath: path)
+    }
+
     public override init() {
         super.init()
         term.processDelegate = self

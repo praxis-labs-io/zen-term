@@ -41,4 +41,15 @@ final class PaneSurfaceRegistryTests: XCTestCase {
         XCTAssertTrue(registry.surface(for: PaneID(1)) === a1)
         XCTAssertEqual(registry.ids, [PaneID(1)])
     }
+
+    func test_terminateAll_terminatesEverySurfaceAndEmpties() {
+        let registry = PaneSurfaceRegistry(makeSurface: { FakeSurface() })
+        registry.apply(paneDiff(from: [], to: [PaneID(1), PaneID(2), PaneID(3)]))
+        let surfaces = [PaneID(1), PaneID(2), PaneID(3)].map { registry.surface(for: $0) as? FakeSurface }
+
+        registry.terminateAll()
+
+        XCTAssertTrue(registry.ids.isEmpty)
+        XCTAssertTrue(surfaces.allSatisfy { $0?.terminated == true }, "terminateAll left a surface running")
+    }
 }
