@@ -16,16 +16,36 @@ struct PanelMeta {
 final class PanelHostView: NSView {
     private let onFocusRequest: () -> Void
     private let pane = NSView()
+    private let zoomButton: CornerButton
+    private let hideButton: CornerButton?
+
+    /// Invoked when the corner zoom action button is clicked — the chrome exits zoom.
+    var onZoomExit: (() -> Void)?
 
     var isFocused: Bool = false { didSet { updateHalo() } }
+
+    /// Whether this panel is the sole full-canvas panel (zoomed). Shows the corner
+    /// unzoom button and hides the (drawer) hide button — they share the corner.
+    var isZoomed: Bool = false {
+        didSet {
+            zoomButton.isHidden = !isZoomed
+            hideButton?.isHidden = isZoomed
+        }
+    }
 
     /// Inner breathing room between the pane border and the terminal content, even on
     /// all sides so content (e.g. nvim) doesn't sit against the pane border.
     private let padding: CGFloat = 10
 
-    init(content: NSView, background: NSColor, meta: PanelMeta?, onFocusRequest: @escaping () -> Void) {
+    init(content: NSView, background: NSColor, meta: PanelMeta?,
+         hideButton hideSpec: (glyph: String, onHide: () -> Void)? = nil,
+         onFocusRequest: @escaping () -> Void) {
         self.onFocusRequest = onFocusRequest
+        self.zoomButton = CornerButton(glyph: "⤢")
+        self.hideButton = hideSpec.map { CornerButton(glyph: $0.glyph) }
         super.init(frame: .zero)
+        zoomButton.onClick = { [weak self] in self?.onZoomExit?() }
+        if let hideSpec { hideButton?.onClick = hideSpec.onHide }
 
         wantsLayer = true
         pane.wantsLayer = true
@@ -59,6 +79,17 @@ final class PanelHostView: NSView {
             content.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -padding),
         ])
 
+        // Both corner buttons share the top-right slot; visibility is mutually
+        // exclusive (hide button when not zoomed, unzoom button when zoomed).
+        pane.addSubview(zoomButton)
+        var buttonCs = cornerConstraints(for: zoomButton)
+        if let hideButton {
+            hideButton.isHidden = false
+            pane.addSubview(hideButton)
+            buttonCs += cornerConstraints(for: hideButton)
+        }
+        NSLayoutConstraint.activate(buttonCs)
+
         if let meta {
             let header = Self.makeMetaHeader(meta)
             header.translatesAutoresizingMaskIntoConstraints = false
@@ -83,6 +114,16 @@ final class PanelHostView: NSView {
         super.mouseDown(with: event)
     }
 
+    /// Top-right corner slot (22×20, 8pt inset) shared by the corner action buttons.
+    private func cornerConstraints(for button: NSView) -> [NSLayoutConstraint] {
+        [
+            button.topAnchor.constraint(equalTo: pane.topAnchor, constant: 8),
+            button.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -8),
+            button.widthAnchor.constraint(equalToConstant: 22),
+            button.heightAnchor.constraint(equalToConstant: 20),
+        ]
+    }
+
     private static let iris = NSColor(srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0, blue: 0xe7 / 255.0, alpha: 1)
     private static let idleBorder = NSColor(white: 1, alpha: 0.08)
 
@@ -97,6 +138,56 @@ final class PanelHostView: NSView {
         } else {
             layer.borderColor = Self.idleBorder.cgColor
             layer.shadowOpacity = 0
+        }
+    }
+
+    /// A small corner action button: a white glyph with no background until hover
+    /// (matching the tab bar's "+"), pointing-hand cursor, click fires `onClick`.
+    /// Used for the unzoom control and the drawer hide controls.
+    private final class CornerButton: NSView {
+        var onClick: (() -> Void)?
+        private let glyph: NSTextField
+        private var trackingArea: NSTrackingArea?
+        private var isHovered = false { didSet { update() } }
+
+        init(glyph glyphChar: String) {
+            self.glyph = NSTextField(labelWithString: glyphChar)
+            super.init(frame: .zero)
+            isHidden = true
+            wantsLayer = true
+            layer?.cornerRadius = 5
+            glyph.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
+            glyph.alignment = .center
+            glyph.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(glyph)
+            NSLayoutConstraint.activate([
+                glyph.centerXAnchor.constraint(equalTo: centerXAnchor),
+                glyph.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+            translatesAutoresizingMaskIntoConstraints = false
+            update()
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            if let trackingArea { removeTrackingArea(trackingArea) }
+            let area = NSTrackingArea(rect: bounds,
+                                     options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+                                     owner: self)
+            addTrackingArea(area)
+            trackingArea = area
+        }
+
+        override func mouseEntered(with event: NSEvent) { isHovered = true }
+        override func mouseExited(with event: NSEvent) { isHovered = false }
+        override func mouseDown(with event: NSEvent) { onClick?() }   // consumes — no focus bubble
+        override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
+
+        private func update() {
+            layer?.backgroundColor = (isHovered ? NSColor(white: 1, alpha: 0.12) : .clear).cgColor
+            glyph.textColor = NSColor(white: 0.95, alpha: isHovered ? 1.0 : 0.65)
         }
     }
 
