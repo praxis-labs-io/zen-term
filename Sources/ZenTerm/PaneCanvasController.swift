@@ -22,12 +22,27 @@ final class PaneCanvasController: NSObject {
     /// chrome closes the window directly.)
     var onLastPaneClosed: (() -> Void)?
 
-    override init() {
+    /// Fired when the tab's title may have changed — the focused pane's cwd
+    /// changed, or focus moved to a different pane.
+    var onTitleChanged: (() -> Void)?
+
+    /// The focused pane's cwd, for new-tab / new-window inheritance.
+    var focusedCWD: URL? { cwdByLeaf[tree.focusedLeaf] }
+
+    /// The tab's display title: the focused pane's cwd basename, or "~".
+    var title: String {
+        guard let url = cwdByLeaf[tree.focusedLeaf] else { return "~" }
+        let name = url.lastPathComponent
+        return name.isEmpty || name == "/" ? "~" : name
+    }
+
+    init(initialCWD: URL? = nil) {
         let firstLeaf = PaneID(1)
         self.tree = PaneTree(singleLeaf: firstLeaf)
         self.registry = PaneSurfaceRegistry(makeSurface: TerminalSurfaceFactory.make)
         super.init()
         nextID = 2
+        if let initialCWD { cwdByLeaf[firstLeaf] = initialCWD }
         canvasView.wantsLayer = true
         canvasView.layer?.backgroundColor = Self.canvasColor.cgColor
     }
@@ -96,6 +111,7 @@ final class PaneCanvasController: NSObject {
         guard tree.contains(id) else { return }
         tree.focusedLeaf = id
         updateHalo()
+        onTitleChanged?()
         registry.surface(for: id)?.focus()
     }
 
@@ -157,7 +173,9 @@ final class PaneCanvasController: NSObject {
 
 extension PaneCanvasController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, cwdDidChange url: URL) {
-        if let id = leafID(of: s) { cwdByLeaf[id] = url }
+        guard let id = leafID(of: s) else { return }
+        cwdByLeaf[id] = url
+        if id == tree.focusedLeaf { onTitleChanged?() }
     }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }
