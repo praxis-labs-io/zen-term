@@ -1,7 +1,7 @@
 import AppKit
 
 /// The global footer toggle dock (bottom-right of the tab-bar row): a row of `IconButton`s
-/// — split-h, split-v │ bottom drawer, right drawer, zoom │ command palette, lazygit —
+/// — split-h, split-v │ bottom drawer, right drawer, zoom │ repo picker, lazygit —
 /// grouped by thin dividers. Active toggles tint iris. Buttons fire injected closures (routed
 /// through the window's chord handler, so they respect the modals). `render` mirrors the
 /// active tab's overlay state plus the window's repo-picker state.
