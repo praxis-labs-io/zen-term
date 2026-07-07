@@ -16,8 +16,13 @@ struct PanelMeta {
 final class PanelHostView: NSView {
     private let onFocusRequest: () -> Void
     private let pane = NSView()
+    private let zoomBadge: NSTextField
 
     var isFocused: Bool = false { didSet { updateHalo() } }
+
+    /// Whether this panel is the sole full-canvas pane (zoomed) — shows a small
+    /// corner badge so it's clear the split view is temporarily collapsed.
+    var isZoomed: Bool = false { didSet { zoomBadge.isHidden = !isZoomed } }
 
     /// Inner breathing room between the pane border and the terminal content, even on
     /// all sides so content (e.g. nvim) doesn't sit against the pane border.
@@ -25,6 +30,7 @@ final class PanelHostView: NSView {
 
     init(content: NSView, background: NSColor, meta: PanelMeta?, onFocusRequest: @escaping () -> Void) {
         self.onFocusRequest = onFocusRequest
+        self.zoomBadge = Self.makeZoomBadge()
         super.init(frame: .zero)
 
         wantsLayer = true
@@ -57,6 +63,14 @@ final class PanelHostView: NSView {
             content.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
             content.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
             content.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -padding),
+        ])
+
+        pane.addSubview(zoomBadge)
+        NSLayoutConstraint.activate([
+            zoomBadge.topAnchor.constraint(equalTo: pane.topAnchor, constant: 8),
+            zoomBadge.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -8),
+            zoomBadge.widthAnchor.constraint(equalToConstant: 22),
+            zoomBadge.heightAnchor.constraint(equalToConstant: 18),
         ])
 
         if let meta {
@@ -98,6 +112,21 @@ final class PanelHostView: NSView {
             layer.borderColor = Self.idleBorder.cgColor
             layer.shadowOpacity = 0
         }
+    }
+
+    /// A small iris "zoomed" indicator pinned to a panel's top-right corner. Hidden
+    /// until `isZoomed` is set.
+    private static func makeZoomBadge() -> NSTextField {
+        let badge = NSTextField(labelWithString: "⤢")
+        badge.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .bold)
+        badge.textColor = iris
+        badge.alignment = .center
+        badge.isHidden = true
+        badge.wantsLayer = true
+        badge.layer?.backgroundColor = NSColor(white: 0, alpha: 0.35).cgColor
+        badge.layer?.cornerRadius = 5
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        return badge
     }
 
     /// A muted small-caps mono label (left) and its keybind (right), e.g. "BOTTOM  ⌘B".

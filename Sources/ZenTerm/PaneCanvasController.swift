@@ -14,6 +14,13 @@ final class PaneCanvasController: NSObject {
     private var hostByLeaf: [PaneID: PanelHostView] = [:]
     private var nextID = 1
 
+    /// The single leaf rendered full-canvas when zoomed, or nil when the whole tree
+    /// renders normally. Zoom only swaps what `rebuildViews()` puts at the root —
+    /// the tree, registry, and every surface are untouched, so unzooming restores
+    /// the split layout with no restart.
+    private var zoomedLeaf: PaneID?
+    var isZoomed: Bool { zoomedLeaf != nil }
+
     /// Whether panes may show their focus halo. `TabController` sets this to false
     /// when a drawer holds unified focus, so exactly one panel is haloed across the
     /// whole tab.
@@ -100,13 +107,20 @@ final class PaneCanvasController: NSObject {
         canvasView.subviews.forEach { $0.removeFromSuperview() }
         hostByLeaf.removeAll(keepingCapacity: true)
 
-        let root = SplitContainerView(node: tree.root, leafView: { [weak self] id in
-            self?.hostView(for: id) ?? NSView()
-        })
-        // SplitContainerView.init already sets translatesAutoresizingMaskIntoConstraints=false.
-        // `canvasView` fills exactly the tile `TabController` gives it — the outer
-        // 12pt gutter + 36pt top inset (clearing the window's traffic lights) live in
-        // `TabController`'s content-rect tiling, not here.
+        let root: NSView
+        if let zoomedLeaf, tree.leafIDs.contains(zoomedLeaf) {
+            root = hostView(for: zoomedLeaf)
+            root.translatesAutoresizingMaskIntoConstraints = false
+        } else {
+            root = SplitContainerView(node: tree.root, leafView: { [weak self] id in
+                self?.hostView(for: id) ?? NSView()
+            })
+        }
+        // SplitContainerView.init (and PanelHostView) already set
+        // translatesAutoresizingMaskIntoConstraints=false. `canvasView` fills exactly
+        // the tile `TabController` gives it — the outer 12pt gutter + 36pt top inset
+        // (clearing the window's traffic lights) live in `TabController`'s
+        // content-rect tiling, not here.
         canvasView.addSubview(root)
         NSLayoutConstraint.activate([
             root.leadingAnchor.constraint(equalTo: canvasView.leadingAnchor),
@@ -132,7 +146,24 @@ final class PaneCanvasController: NSObject {
     private func updateHalo() {
         for (id, host) in hostByLeaf {
             host.isFocused = panesHoldFocus && (id == tree.focusedLeaf)
+            host.isZoomed = (id == zoomedLeaf)
         }
+    }
+
+    /// Render the focused leaf full-canvas, retaining its surface — no restart.
+    func zoomFocusedLeaf() {
+        guard zoomedLeaf == nil else { return }
+        zoomedLeaf = tree.focusedLeaf
+        reconcileAndRender()
+        focusActivePane()
+    }
+
+    /// Restore the split layout after `zoomFocusedLeaf()`.
+    func unzoom() {
+        guard zoomedLeaf != nil else { return }
+        zoomedLeaf = nil
+        reconcileAndRender()
+        focusActivePane()
     }
 
     /// Give panes the tab's unified focus halo (`on == true`), or yield it — used
@@ -206,6 +237,7 @@ final class PaneCanvasController: NSObject {
     func closeFocused() -> Bool {
         guard let next = tree.closing(tree.focusedLeaf) else { return false }
         tree = next
+        if let z = zoomedLeaf, !tree.leafIDs.contains(z) { zoomedLeaf = nil }
         reconcileAndRender()
         // See `split(_:)`: `focusActivePane()` fires `onFocusChanged` so unified focus
         // re-syncs to `.pane` instead of getting stuck on a previously focused drawer.
@@ -250,6 +282,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
             return
         }
         tree = next
+        if let z = zoomedLeaf, !tree.leafIDs.contains(z) { zoomedLeaf = nil }
         reconcileAndRender()
         registry.surface(for: tree.focusedLeaf)?.focus()
     }
