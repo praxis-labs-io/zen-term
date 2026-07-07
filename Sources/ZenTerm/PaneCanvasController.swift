@@ -25,13 +25,21 @@ final class PaneCanvasController: NSObject {
     private var zoomedLeaf: PaneID?
     var isZoomed: Bool { zoomedLeaf != nil }
 
+    /// Each split's rendered container view, refreshed every `rebuildViews()`. Read at
+    /// resize time so a nudge can be clamped to keep both sides ≥ `minSplitExtent` in
+    /// pixels, not just a bare ratio.
+    private var splitViewByID: [SplitID: NSView] = [:]
+
     /// Whether panes may show their focus halo. `TabController` sets this to false
     /// when a drawer holds unified focus, so exactly one panel is haloed across the
     /// whole tab.
     private var panesHoldFocus = true
 
-    private static let canvasColor = NSColor(srgbRed: 0x23 / 255.0, green: 0x21 / 255.0, blue: 0x36 / 255.0, alpha: 1)
     private static let minSplitExtent: CGFloat = 240
+    /// One ⌥-arrow nudge, as a fraction of the enclosing split; ratios never pass
+    /// `minSplitRatio` from either end.
+    private static let resizeStep: Double = 0.04
+    private static let minSplitRatio: Double = 0.12
 
     /// Invoked when the last remaining pane's shell exits on its own. (A manual ⌘W
     /// on the last pane is handled separately: `closeFocused()` returns false and the
@@ -97,8 +105,10 @@ final class PaneCanvasController: NSObject {
         nextID = 2
         if let initialCWD { cwdByLeaf[firstLeaf] = initialCWD }
         if let initialCommand { startupCommandByLeaf[firstLeaf] = initialCommand }
+        // Transparent canvas: only the panes (opaque PanelHostView clips) paint. The pane
+        // gutters and the window inset fall through to the tinted blur backdrop.
         canvasView.wantsLayer = true
-        canvasView.layer?.backgroundColor = Self.canvasColor.cgColor
+        canvasView.layer?.backgroundColor = NSColor.clear.cgColor
     }
 
     private func mintPaneID() -> PaneID { defer { nextID += 1 }; return PaneID(nextID) }
@@ -134,13 +144,16 @@ final class PaneCanvasController: NSObject {
     private func rebuildViews() {
         canvasView.subviews.forEach { $0.removeFromSuperview() }
         hostByLeaf.removeAll(keepingCapacity: true)
+        splitViewByID.removeAll(keepingCapacity: true)
 
         let root: NSView
         if let zoomedLeaf, tree.leafIDs.contains(zoomedLeaf) {
             root = hostView(for: zoomedLeaf)
             root.translatesAutoresizingMaskIntoConstraints = false
         } else {
-            root = SplitContainerView(node: tree.root, leafView: { [weak self] id in
+            root = SplitContainerView(node: tree.root,
+                                      register: { [weak self] id, v in self?.splitViewByID[id] = v },
+                                      leafView: { [weak self] id in
                 self?.hostView(for: id) ?? NSView()
             })
         }
@@ -259,6 +272,35 @@ final class PaneCanvasController: NSObject {
         // unified focus re-syncs `TabController.focusedPanel` back to `.pane` instead
         // of leaving the halo stuck on the drawer.
         focusActivePane()
+    }
+
+    /// Resize the focused pane by moving its edge in `direction`: it grows into a neighbor
+    /// that way, or shrinks (moving the opposite divider) when it's flush to that edge.
+    /// `.right`/`.down` push positive, `.left`/`.up` negative. The nudge is clamped so both
+    /// sides of the moved split stay ≥ `minSplitExtent` in pixels; beeps when there's no
+    /// split of that axis or the split is already at that floor. Re-renders, keeps focus.
+    func resize(_ direction: Direction) {
+        let axis: SplitAxis = (direction == .left || direction == .right) ? .vertical : .horizontal
+        let positive = (direction == .right || direction == .down)
+        guard let split = tree.edgeSplitID(for: tree.focusedLeaf, axis: axis, positive: positive),
+              let current = tree.ratio(of: split) else { NSSound.beep(); return }
+        let minRatio = minRatioForSplit(split, axis: axis)
+        let next = min(max(current + (positive ? Self.resizeStep : -Self.resizeStep), minRatio), 1 - minRatio)
+        guard abs(next - current) > 1e-6 else { NSSound.beep(); return }   // already at the min-size wall
+        tree = tree.settingRatio(split, to: next)
+        reconcileAndRender()
+        focusActivePane()
+    }
+
+    /// The smallest ratio that keeps BOTH sides of `split` at least `minSplitExtent` along
+    /// `axis`, from the split's rendered extent (the max ratio is the mirror, `1 - this`).
+    /// Falls back to `minSplitRatio` before the split has been laid out, and pins to 0.5
+    /// when the split is too small to honor the floor on both sides.
+    private func minRatioForSplit(_ split: SplitID, axis: SplitAxis) -> Double {
+        guard let view = splitViewByID[split] else { return Self.minSplitRatio }
+        let extent = axis == .vertical ? view.bounds.width : view.bounds.height
+        guard extent > 0 else { return Self.minSplitRatio }
+        return min(0.5, Double(Self.minSplitExtent) / Double(extent))
     }
 
     /// Close the focused pane. Returns false when it was the last pane (caller closes the window).

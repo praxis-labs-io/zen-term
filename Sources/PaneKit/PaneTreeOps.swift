@@ -25,6 +25,20 @@ public extension PaneTree {
     func settingRatio(_ split: SplitID, to ratio: Double) -> PaneTree {
         PaneTree(root: PaneNode.setRatio(node: root, split: split, ratio: ratio), focusedLeaf: focusedLeaf)
     }
+
+    /// The split whose divider a resize should move for the focused `leaf` along `axis` in
+    /// a key's screen direction (`positive` = rightward l / downward j). Prefers the
+    /// grow-side divider — the neighbor the pane would expand into — and falls back to the
+    /// opposite divider so an edge pane still resizes (shrinking). Nil when the leaf has no
+    /// split of `axis` in its ancestry. The caller reads the split's rendered extent to
+    /// clamp the ratio to a pixel minimum, which the pure tree can't know.
+    func edgeSplitID(for leaf: PaneID, axis: SplitAxis, positive: Bool) -> SplitID? {
+        root.nearestSplit(to: leaf, axis: axis, onSideA: positive)
+            ?? root.nearestSplit(to: leaf, axis: axis, onSideA: !positive)
+    }
+
+    /// The ratio of `split`, or nil if it isn't in the tree.
+    func ratio(of split: SplitID) -> Double? { root.ratio(of: split) }
 }
 
 extension PaneNode {
@@ -70,6 +84,28 @@ extension PaneNode {
                                    promotedFocus: r.promotedFocus)
             }
             return CloseResult(node: node, promotedFocus: nil)
+        }
+    }
+
+    /// The deepest ancestor split of `leaf` whose axis is `axis` and whose subtree holding
+    /// `leaf` is the a-side (`onSideA`) or b-side. Deepest is the divider closest to the
+    /// leaf — the one that resizes it most locally. Nil when no split on the leaf's path
+    /// matches both axis and side.
+    func nearestSplit(to leaf: PaneID, axis: SplitAxis, onSideA: Bool) -> SplitID? {
+        guard case let .split(id, ax, _, a, b) = self else { return nil }
+        let inA = a.contains(leaf)
+        let child = inA ? a : b
+        if let deeper = child.nearestSplit(to: leaf, axis: axis, onSideA: onSideA) { return deeper }
+        return (ax == axis && inA == onSideA) ? id : nil
+    }
+
+    /// The ratio of the split identified by `id`, or nil if it isn't in this subtree.
+    func ratio(of id: SplitID) -> Double? {
+        switch self {
+        case .leaf: return nil
+        case let .split(sid, _, r, a, b):
+            if sid == id { return r }
+            return a.ratio(of: id) ?? b.ratio(of: id)
         }
     }
 

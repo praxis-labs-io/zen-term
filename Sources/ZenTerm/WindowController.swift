@@ -13,6 +13,11 @@ final class WindowController: NSObject {
     private var titles: [TabID: String] = [:]
     private var nextTabID = 1
 
+    /// Opacity of the base-color tint laid over the behind-window blur. 1 = solid shell,
+    /// 0 = raw system blur. Tuned for a cohesive shell that still shows depth through the
+    /// gutters; the single knob for the whole transparent look.
+    private static let backdropTintAlpha: CGFloat = 0.82
+
     private let container = NSView()
     private let tabBar: TabBarView
     private let dock: ToggleDock
@@ -96,6 +101,24 @@ final class WindowController: NSObject {
 
     private func layoutContainer() {
         let content = window.contentView!
+
+        // Backmost: a behind-window blur, then a base-color tint over it. Everything the
+        // opaque terminal surfaces don't cover (pane gutters, window inset, rounded pane
+        // corners) reads as this tinted, blurred backdrop. The tint keeps the chrome on-brand
+        // instead of a raw system blur; its alpha is the one knob to dial the look.
+        let backdrop = NSVisualEffectView(frame: content.bounds)
+        backdrop.material = .hudWindow
+        backdrop.blendingMode = .behindWindow
+        backdrop.state = .active
+        backdrop.autoresizingMask = [.width, .height]
+        content.addSubview(backdrop)
+
+        let tint = NSView(frame: content.bounds)
+        tint.wantsLayer = true
+        tint.layer?.backgroundColor = Theme.rosePineMoon.background.nsColor.withAlphaComponent(Self.backdropTintAlpha).cgColor
+        tint.autoresizingMask = [.width, .height]
+        content.addSubview(tint)
+
         container.frame = content.bounds
         container.autoresizingMask = [.width, .height]
         content.addSubview(container)
@@ -232,6 +255,14 @@ final class WindowController: NSObject {
         renderTabBar()
     }
 
+    /// Cycle the active tab by `delta` (⌘] = +1, ⌘[ = -1), wrapping around the ends.
+    /// No-op with a single tab.
+    private func cycleTab(_ delta: Int) {
+        guard tabs.order.count > 1, let i = tabs.order.firstIndex(of: tabs.activeID) else { return }
+        let n = tabs.order.count
+        select(tabs.order[(i + delta + n) % n])
+    }
+
     /// Close a specific tab: terminate its shells, detach its canvas, and cascade to
     /// closing the window when it was the last tab.
     private func closeTab(_ id: TabID) {
@@ -317,7 +348,7 @@ final class WindowController: NSObject {
         // not in the allow-list, so the picker can't open over the float.
         if active?.isLazygitOpen == true {
             switch chord {
-            case .toggleLazygit, .newTab, .newWindow, .selectTab:
+            case .toggleLazygit, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
             default:
                 return
@@ -330,10 +361,16 @@ final class WindowController: NSObject {
         case .navRight: active?.navigate(.right)
         case .navUp:    active?.navigate(.up)
         case .navDown:  active?.navigate(.down)
+        case .resizeLeft:  active?.resize(.left)
+        case .resizeRight: active?.resize(.right)
+        case .resizeUp:    active?.resize(.up)
+        case .resizeDown:  active?.resize(.down)
         case .newTab:   newTab()
         case .selectTab(let n):
             let idx = n - 1
             if idx >= 0 && idx < tabs.order.count { select(tabs.order[idx]) }
+        case .prevTab: cycleTab(-1)
+        case .nextTab: cycleTab(1)
         case .closePane:
             // pane → tab → window cascade
             if active?.closeFocused() == false { closeTab(tabs.activeID) }

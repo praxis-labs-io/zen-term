@@ -26,8 +26,23 @@ final class TabController: NSObject {
     private let paneCanvas: PaneCanvasController
     private let canvas: NSView            // paneCanvas.canvasView, cached
 
-    private static let bottomDrawerHeight: CGFloat = 300
-    private static let rightDrawerWidth: CGFloat = 480   // roomy enough for a Claude chat panel
+    // Drawer sizes are seeded proportionally from the tab's working area the first time
+    // `content` has a real size — a bit under a third each, which lands near the ~300/480
+    // that felt right on a MacBook Air, while the caps keep drawers from ballooning on large
+    // displays. The stored vars start at those values as a fallback for the (unreachable in
+    // practice) case of a drawer opening before `content` is laid out.
+    private static let bottomDrawerFraction: CGFloat = 0.28
+    private static let rightDrawerFraction: CGFloat = 0.30
+    private static let bottomDrawerMax: CGFloat = 360
+    private static let rightDrawerMax: CGFloat = 560
+    private var bottomDrawerHeight: CGFloat = 300
+    private var rightDrawerWidth: CGFloat = 480
+    private var didSeedDrawerSizes = false
+    /// One ⌥-arrow nudge for a focused drawer, and the floor it can shrink to; a drawer
+    /// never grows past 70% of the working area (the canvas keeps the rest).
+    private static let drawerResizeStep: CGFloat = 40
+    private static let minDrawerExtent: CGFloat = 160
+    private static let maxDrawerFraction: CGFloat = 0.7
 
     // Per-tab auxiliary surfaces (created lazily; kept alive when hidden — the shell
     // persists across toggles and is only terminated in `shutdown()`).
@@ -103,6 +118,10 @@ final class TabController: NSObject {
         super.init()
 
         content.translatesAutoresizingMaskIntoConstraints = false
+        // Layer-back the tile container so the floats added into it later (⌘P picker, lazygit)
+        // composite their drop shadows — a layer-backed view dropped into a non-layer-backed
+        // parent after layout doesn't render its shadow.
+        content.wantsLayer = true
         view.addSubview(content)
         // Content-rect inset: an even `windowGutter` on all four sides (the traffic
         // lights are hidden, so the top no longer needs extra clearance).
@@ -438,6 +457,13 @@ final class TabController: NSObject {
     private static let bottomDrawerID = PaneID(Int.min)
     private static let rightDrawerID = PaneID(Int.min + 1)
 
+    /// Directional focus memory: `navReturn[panel][direction]` is the panel last left to
+    /// reach `panel` by moving the opposite way — so the reverse hop returns there instead
+    /// of whatever the geometric scorer picks. Used only when that panel is still open and
+    /// actually lies in `direction`; else nav falls back to nearest-neighbor. Pane ids are
+    /// never reused, so stale entries can't mis-target — they just fail the checks.
+    private var navReturn: [PaneID: [Direction: PaneID]] = [:]
+
     /// Move the tab's unified focus to the nearest panel — pane or open drawer — in
     /// `direction`. Pane leaf frames and any open drawer's frame are scored together
     /// by PaneKit's `nearestLeaf`, the same geometric scorer pane-to-pane nav already
@@ -452,23 +478,86 @@ final class TabController: NSObject {
             frames[Self.rightDrawerID] = flippedFrame(of: panel)
         }
 
-        let origin: PaneID
-        switch focusedPanel {
-        case .pane: origin = paneCanvas.focusedLeafID
-        case .bottomDrawer: origin = Self.bottomDrawerID
-        case .rightDrawer: origin = Self.rightDrawerID
-        }
+        let origin = currentPanelID
+        // Prefer the panel we last came from when leaving `origin` this way, so hopping back
+        // and forth (esp. pane ↔ drawer) returns to where you were rather than whatever the
+        // geometric scorer picks — but only when it's still open and genuinely lies in
+        // `direction`; otherwise fall back to nearest-neighbor.
+        let remembered = navReturn[origin]?[direction]
+        let target = (remembered.map { isPanel($0, inDirection: direction, from: origin, frames: frames) } == true)
+            ? remembered
+            : nearestLeaf(from: origin, frames: frames, direction: direction)
+        guard let target else { return }
 
-        guard let target = nearestLeaf(from: origin, frames: frames, direction: direction) else { return }
-        if target == Self.bottomDrawerID {
-            focusDrawer(.bottom)
-        } else if target == Self.rightDrawerID {
-            focusDrawer(.right)
-        } else {
-            // `focusLeaf` bubbles through `paneCanvas.onFocusChanged` → `paneGainedFocus()`,
-            // which reasserts unified focus (halo + panel routing) onto the pane canvas.
-            paneCanvas.focusLeaf(target)
+        navReturn[target, default: [:]][direction.opposite] = origin   // enable the return hop
+        focusPanel(target)
+    }
+
+    /// The id of the panel that currently holds unified focus, in the shared nav id space.
+    private var currentPanelID: PaneID {
+        switch focusedPanel {
+        case .pane: return paneCanvas.focusedLeafID
+        case .bottomDrawer: return Self.bottomDrawerID
+        case .rightDrawer: return Self.rightDrawerID
         }
+    }
+
+    /// Move unified focus to the panel with `id` (a drawer sentinel or a pane leaf).
+    /// `focusLeaf` bubbles through `paneCanvas.onFocusChanged` → `paneGainedFocus()`, which
+    /// reasserts unified focus (halo + panel routing) onto the pane canvas.
+    private func focusPanel(_ id: PaneID) {
+        if id == Self.bottomDrawerID { focusDrawer(.bottom) }
+        else if id == Self.rightDrawerID { focusDrawer(.right) }
+        else { paneCanvas.focusLeaf(id) }
+    }
+
+    /// Whether `candidate` lies in `direction` from `origin`, using the same y-flipped
+    /// frames and thresholds as `nearestLeaf` — so a remembered return target is only used
+    /// when it's still spatially in that direction.
+    private func isPanel(_ candidate: PaneID, inDirection direction: Direction,
+                         from origin: PaneID, frames: [PaneID: CGRect]) -> Bool {
+        guard let s = frames[origin], let r = frames[candidate] else { return false }
+        let dx = r.midX - s.midX, dy = r.midY - s.midY
+        switch direction {
+        case .left:  return dx < -4
+        case .right: return dx > 4
+        case .up:    return dy < -4
+        case .down:  return dy > 4
+        }
+    }
+
+    /// Resize whichever panel holds focus by moving its edge in `direction`. For a pane
+    /// this defers to the pane canvas's edge-aware resize. A docked drawer only resizes
+    /// along its own axis, growing toward the canvas: the bottom drawer grows up (⌘⇧K) and
+    /// shrinks down (⌘⇧J); the right drawer grows left into the canvas (⌘⇧H) and shrinks
+    /// right (⌘⇧L) — the same feel as an edge pane on that side. The cross axis beeps. A
+    /// resize chord while zoomed just unzooms, matching `navigate`.
+    func resize(_ direction: Direction) {
+        if exitZoomIfNeeded() { return }
+        switch focusedPanel {
+        case .pane:
+            paneCanvas.resize(direction)
+        case .bottomDrawer:
+            switch direction {
+            case .up: bottomDrawerHeight = clampedDrawerExtent(bottomDrawerHeight + Self.drawerResizeStep, along: content.bounds.height)
+            case .down: bottomDrawerHeight = clampedDrawerExtent(bottomDrawerHeight - Self.drawerResizeStep, along: content.bounds.height)
+            case .left, .right: NSSound.beep(); return
+            }
+            relayoutPanels()
+        case .rightDrawer:
+            switch direction {
+            case .left: rightDrawerWidth = clampedDrawerExtent(rightDrawerWidth + Self.drawerResizeStep, along: content.bounds.width)
+            case .right: rightDrawerWidth = clampedDrawerExtent(rightDrawerWidth - Self.drawerResizeStep, along: content.bounds.width)
+            case .up, .down: NSSound.beep(); return
+            }
+            relayoutPanels()
+        }
+    }
+
+    /// Clamp a drawer extent to `[minDrawerExtent, maxDrawerFraction · working axis]`.
+    private func clampedDrawerExtent(_ value: CGFloat, along axis: CGFloat) -> CGFloat {
+        let ceiling = max(Self.minDrawerExtent, axis * Self.maxDrawerFraction)
+        return min(max(value, Self.minDrawerExtent), ceiling)
     }
 
     /// A drawer panel's frame converted into `content` coords and flipped the same
@@ -508,7 +597,18 @@ final class TabController: NSObject {
         }
     }
 
+    /// Seed the drawer sizes from the working area the first time `content` has a real
+    /// size — a third of it, capped. Runs once; later manual resizes (⌥-arrows) own the
+    /// value from then on.
+    private func seedDrawerSizesIfNeeded() {
+        guard !didSeedDrawerSizes, content.bounds.height > 0, content.bounds.width > 0 else { return }
+        didSeedDrawerSizes = true
+        bottomDrawerHeight = min(content.bounds.height * Self.bottomDrawerFraction, Self.bottomDrawerMax)
+        rightDrawerWidth = min(content.bounds.width * Self.rightDrawerFraction, Self.rightDrawerMax)
+    }
+
     private func relayoutPanels() {
+        seedDrawerSizesIfNeeded()
         NSLayoutConstraint.deactivate(tileConstraints)
         tileConstraints = []
 
@@ -553,7 +653,7 @@ final class TabController: NSObject {
             // `.defaultHigh` (not required) so on an extremely small window this
             // constraint relaxes instead of forcing the canvas to a negative size and
             // logging a broken-constraint error — the drawer shrinks under squeeze.
-            let width = rightPanel.widthAnchor.constraint(equalToConstant: Self.rightDrawerWidth)
+            let width = rightPanel.widthAnchor.constraint(equalToConstant: rightDrawerWidth)
             width.priority = .defaultHigh
             cs += [
                 rightPanel.topAnchor.constraint(equalTo: content.topAnchor),
@@ -568,7 +668,7 @@ final class TabController: NSObject {
 
         if isBottomOpen, let bottomPanel = bottomDrawerPanel {
             // See the right-drawer width constraint above: same rationale for height.
-            let height = bottomPanel.heightAnchor.constraint(equalToConstant: Self.bottomDrawerHeight)
+            let height = bottomPanel.heightAnchor.constraint(equalToConstant: bottomDrawerHeight)
             height.priority = .defaultHigh
             cs += [
                 bottomPanel.leadingAnchor.constraint(equalTo: content.leadingAnchor),
