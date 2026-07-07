@@ -148,11 +148,11 @@ final class TabController: NSObject {
     // MARK: tiling
 
     private func makeDrawerPanel(edge: DrawerEdge, surface: TerminalSurface) -> PanelHostView {
-        let meta = PanelMeta(label: edge == .bottom ? "BOTTOM" : "RIGHT",
-                             keybind: edge == .bottom ? "⌘B" : "⌘|")
+        // Headers dropped for now — drawers use the bare pane chrome (meta: nil). The
+        // PanelHostView meta capability stays available for when we bring them back.
         let panel = PanelHostView(content: surface.view,
                                   background: Theme.rosePineMoon.background.nsColor,
-                                  meta: meta,
+                                  meta: nil,
                                   onFocusRequest: { [weak self] in self?.focusDrawer(edge) })
         panel.translatesAutoresizingMaskIntoConstraints = false
         return panel
