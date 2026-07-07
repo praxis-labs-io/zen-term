@@ -8,10 +8,15 @@ import TerminalKit
 enum ShellLaunch {
     static var userShell: String { ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh" }
 
+    /// Fallback cwd when none is supplied. Launched from an app bundle the process cwd is
+    /// `/`, and a login shell doesn't `cd` home on its own — so an unspecified cwd would
+    /// otherwise open a pane at the filesystem root. Home is the right default.
+    static var defaultCWD: URL { FileManager.default.homeDirectoryForCurrentUser }
+
     /// A plain login+interactive shell (`command: nil` → the backend rewrites argv[0] to
     /// a login shell), the default pane/drawer session.
     static func shell(cwd: URL?) -> TerminalSurfaceConfig {
-        TerminalSurfaceConfig(workingDirectory: cwd, theme: Theme.rosePineMoon)
+        TerminalSurfaceConfig(workingDirectory: cwd ?? defaultCWD, theme: Theme.rosePineMoon)
     }
 
     /// Run `command` in a login+interactive shell, then `exec` a fresh one so the session
@@ -22,7 +27,7 @@ enum ShellLaunch {
         return TerminalSurfaceConfig(
             command: sh,
             args: ["-l", "-i", "-c", "\(command); exec \(sh) -l -i"],
-            workingDirectory: cwd,
+            workingDirectory: cwd ?? defaultCWD,
             theme: Theme.rosePineMoon
         )
     }
