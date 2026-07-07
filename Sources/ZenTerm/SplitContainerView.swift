@@ -4,15 +4,20 @@ import PaneKit
 /// Recursively lays out a PaneNode: a leaf hosts its provided view; a split places
 /// two child containers along its axis at the fixed ratio with a gutter gap.
 final class SplitContainerView: NSView {
-    init(node: PaneNode, gutter: CGFloat = ChromeMetrics.panelGap, leafView: (PaneID) -> NSView) {
+    /// Called for every split node as its container is built, with the split's id and the
+    /// view whose axis-extent equals that split's rendered size. Lets the pane controller
+    /// clamp resizes to a pixel min instead of a bare ratio.
+    init(node: PaneNode, gutter: CGFloat = ChromeMetrics.panelGap,
+         register: ((SplitID, NSView) -> Void)? = nil, leafView: (PaneID) -> NSView) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        build(node, gutter: gutter, leafView: leafView)
+        build(node, gutter: gutter, register: register, leafView: leafView)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    private func build(_ node: PaneNode, gutter: CGFloat, leafView: (PaneID) -> NSView) {
+    private func build(_ node: PaneNode, gutter: CGFloat,
+                       register: ((SplitID, NSView) -> Void)?, leafView: (PaneID) -> NSView) {
         switch node {
         case let .leaf(id):
             let v = leafView(id)
@@ -25,9 +30,10 @@ final class SplitContainerView: NSView {
                 v.bottomAnchor.constraint(equalTo: bottomAnchor),
             ])
 
-        case let .split(_, axis, ratio, a, b):
-            let first = SplitContainerView(node: a, gutter: gutter, leafView: leafView)
-            let second = SplitContainerView(node: b, gutter: gutter, leafView: leafView)
+        case let .split(id, axis, ratio, a, b):
+            register?(id, self)   // `self` is this split's container; its axis-extent is the split size
+            let first = SplitContainerView(node: a, gutter: gutter, register: register, leafView: leafView)
+            let second = SplitContainerView(node: b, gutter: gutter, register: register, leafView: leafView)
             addSubview(first)
             addSubview(second)
 

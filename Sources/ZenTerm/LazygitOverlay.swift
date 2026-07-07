@@ -1,31 +1,24 @@
 import AppKit
 
-/// A modal overlay over the tab's tile region hosting the lazygit surface. It fills
-/// exactly the tile area (its host pins it to `content`, so it never bleeds over the
-/// window gutters or the tab bar): a dim backdrop over the panes behind, rounded to the
-/// panel corner radius, and a centered card holding the surface. A click on the backdrop
-/// dismisses; clicks on the terminal reach lazygit (clicks in the card's thin padding
-/// ring are inert — they neither dismiss nor reach the terminal).
+/// A float over the tab's tile region hosting the lazygit surface. It fills exactly the
+/// tile area (its host pins it to `content`, so it never bleeds over the window gutters or
+/// the tab bar): a transparent click-catcher and a centered card holding the surface,
+/// lifted off the panes by a dark elevation shadow. A click outside the card dismisses;
+/// clicks on the terminal reach lazygit (clicks in the card's thin padding ring are inert
+/// — they neither dismiss nor reach the terminal).
 final class LazygitOverlay: NSView {
     private let onDismiss: () -> Void
-
-    private static let iris = NSColor(srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0, blue: 0xe7 / 255.0, alpha: 1)
 
     init(content: NSView, background: NSColor, onDismiss: @escaping () -> Void) {
         self.onDismiss = onDismiss
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-
-        // Rounded to the panel corner radius so the frosted backdrop sits cleanly inside
-        // the tile area rather than squaring off over the rounded panels beneath.
         wantsLayer = true
-        layer?.cornerRadius = 12
-        layer?.masksToBounds = true
 
-        // Dim backdrop over the panes behind; this view also catches backdrop clicks.
+        // Transparent click-catcher over the panes behind (no dimming) — still dismisses
+        // on an outside click.
         let backdrop = BackdropView(onClick: onDismiss)
         backdrop.wantsLayer = true
-        backdrop.layer?.backgroundColor = NSColor(white: 0, alpha: 0.35).cgColor
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
@@ -34,10 +27,12 @@ final class LazygitOverlay: NSView {
         card.layer?.cornerRadius = 14
         card.layer?.backgroundColor = background.cgColor
         card.layer?.borderWidth = 1
-        card.layer?.borderColor = Self.iris.cgColor            // iris focus ring
-        card.layer?.masksToBounds = true
+        card.layer?.borderColor = FloatShadow.edge.cgColor     // subtle neutral edge
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
+        // Dark elevation shadow on the card itself (masksToBounds stays off so it isn't
+        // clipped); the 10pt content inset keeps the terminal off the rounded corners.
+        FloatShadow.applyShadow(to: card)
 
         content.translatesAutoresizingMaskIntoConstraints = false
         // The card is sized as a fraction of the tile (relaxable, `.defaultHigh`).

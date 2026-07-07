@@ -78,6 +78,76 @@ final class PaneTreeOpsTests: XCTestCase {
         XCTAssertEqual(ratio, 0.3)
     }
 
+    // MARK: edge-aware resize (⌘⇧HJKL) — which split's divider a nudge moves
+
+    /// (1 | 2). `l` (positive) and `h` (negative) both target the shared divider whichever
+    /// pane is focused — so the same key moves it the same way regardless of focus. (The
+    /// controller applies +step for positive, -step for negative, hence the consistent feel.)
+    func test_edgeSplitID_sharedDivider_sameSplit_regardlessOfFocus() {
+        var tree = PaneTree(singleLeaf: PaneID(1))
+            .splitting(PaneID(1), axis: .vertical, newLeaf: PaneID(2), newSplit: SplitID(1))
+        tree.focusedLeaf = PaneID(1)
+        XCTAssertEqual(tree.edgeSplitID(for: PaneID(1), axis: .vertical, positive: true), SplitID(1))
+        XCTAssertEqual(tree.edgeSplitID(for: PaneID(1), axis: .vertical, positive: false), SplitID(1))
+        tree.focusedLeaf = PaneID(2)
+        XCTAssertEqual(tree.edgeSplitID(for: PaneID(2), axis: .vertical, positive: true), SplitID(1))
+        XCTAssertEqual(tree.edgeSplitID(for: PaneID(2), axis: .vertical, positive: false), SplitID(1))
+    }
+
+    /// The fix for the old beep: an edge pane (2, flush right) still resolves a split on
+    /// BOTH keys by falling back to the divider on its other side.
+    func test_edgeSplitID_edgePane_resolvesFromEitherKey() {
+        let tree = PaneTree(singleLeaf: PaneID(1))
+            .splitting(PaneID(1), axis: .vertical, newLeaf: PaneID(2), newSplit: SplitID(1))
+        XCTAssertEqual(tree.focusedLeaf, PaneID(2))
+        XCTAssertNotNil(tree.edgeSplitID(for: PaneID(2), axis: .vertical, positive: true))
+        XCTAssertNotNil(tree.edgeSplitID(for: PaneID(2), axis: .vertical, positive: false))
+    }
+
+    /// A single pane has no split of the axis → nil (beep). Same for the wrong axis.
+    func test_edgeSplitID_noSplitOnAxis_returnsNil() {
+        let single = PaneTree(singleLeaf: PaneID(1))
+        XCTAssertNil(single.edgeSplitID(for: PaneID(1), axis: .vertical, positive: true))
+        let vertical = single.splitting(PaneID(1), axis: .vertical, newLeaf: PaneID(2), newSplit: SplitID(1))
+        XCTAssertNil(vertical.edgeSplitID(for: PaneID(2), axis: .horizontal, positive: true), "no horizontal split")
+    }
+
+    /// A leaf absent from the tree resolves no split (rather than falling into the b-side
+    /// assumption and returning one).
+    func test_edgeSplitID_absentLeaf_returnsNil() {
+        let tree = PaneTree(singleLeaf: PaneID(1))
+            .splitting(PaneID(1), axis: .vertical, newLeaf: PaneID(2), newSplit: SplitID(1))
+        XCTAssertNil(tree.edgeSplitID(for: PaneID(99), axis: .vertical, positive: true))
+    }
+
+    /// (1 / 2) stacked: j/k resolve the shared horizontal divider — the vertical-stack
+    /// analog, confirming j/k are edge-aware too.
+    func test_edgeSplitID_horizontalStack_resolvesSharedDivider() {
+        var tree = PaneTree(singleLeaf: PaneID(1))
+            .splitting(PaneID(1), axis: .horizontal, newLeaf: PaneID(2), newSplit: SplitID(1))
+        tree.focusedLeaf = PaneID(2)   // bottom pane (b-side), flush to the bottom edge
+        XCTAssertEqual(tree.edgeSplitID(for: PaneID(2), axis: .horizontal, positive: true), SplitID(1))
+        XCTAssertEqual(tree.edgeSplitID(for: PaneID(2), axis: .horizontal, positive: false), SplitID(1))
+    }
+
+    /// 1 | (2 | 3): focus 2, `l` grows into 3 via the NEAREST (inner) split, not the outer.
+    func test_edgeSplitID_nested_picksNearestSplit() {
+        var tree = PaneTree(singleLeaf: PaneID(1))
+            .splitting(PaneID(1), axis: .vertical, newLeaf: PaneID(2), newSplit: SplitID(10))
+            .splitting(PaneID(2), axis: .vertical, newLeaf: PaneID(3), newSplit: SplitID(11))
+        tree.focusedLeaf = PaneID(2)
+        XCTAssertEqual(tree.edgeSplitID(for: PaneID(2), axis: .vertical, positive: true), SplitID(11), "grows into 3 via inner split")
+    }
+
+    /// The `ratio(of:)` accessor reads and (via `settingRatio`) round-trips a split ratio.
+    func test_ratioOf_readsSplitRatio() {
+        let tree = PaneTree(singleLeaf: PaneID(1))
+            .splitting(PaneID(1), axis: .vertical, newLeaf: PaneID(2), newSplit: SplitID(1))
+            .settingRatio(SplitID(1), to: 0.3)
+        XCTAssertEqual(tree.ratio(of: SplitID(1)), 0.3)
+        XCTAssertNil(tree.ratio(of: SplitID(99)))
+    }
+
     func test_closing_focusedLeaf_promotesSiblingSubtree_toFirstLeaf() {
         // 1 | (2 | 3): focus 1 (its sibling is the (2|3) split), close 1 →
         // the (2|3) subtree is promoted; focus lands on its firstLeaf = 2.

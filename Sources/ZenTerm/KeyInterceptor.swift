@@ -11,6 +11,8 @@ final class KeyInterceptor {
         case closePane
         case newTab, newWindow
         case selectTab(Int)   // 1...9
+        case prevTab, nextTab
+        case resizeLeft, resizeRight, resizeUp, resizeDown
         case toggleBottomDrawer
         case toggleRightDrawer
         case toggleZoom
@@ -28,12 +30,23 @@ final class KeyInterceptor {
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             let key = event.charactersIgnoringModifiers?.lowercased()
 
-            // ⌘⇧\ ( "⌘|" ) → vertical split. With shift held, charactersIgnoringModifiers
-            // is "|"; also accept "\\" defensively. (Swapped with the right drawer, which
-            // is now on bare ⌘\.)
-            if flags == [.command, .shift], key == "|" || key == "\\" {
-                self.onReservedChord?(.splitVertical)
-                return nil
+            // ⌘⇧ family: vertical split (⌘⇧\ → "|"; also "\\" defensively) and pane/drawer
+            // resize on ⌘⇧HJKL — the same HJKL directions as ⌘-nav, Shift meaning "push the
+            // divider" instead of "hop to the neighbor". With Shift held,
+            // charactersIgnoringModifiers is the shifted glyph, so `.lowercased()` normalizes
+            // "H" → "h". Unmatched ⌘⇧ chords fall through to the terminal.
+            if flags == [.command, .shift] {
+                let chord: ReservedChord?
+                switch key {
+                case "|", "\\": chord = .splitVertical
+                case "h": chord = .resizeLeft
+                case "l": chord = .resizeRight
+                case "k": chord = .resizeUp
+                case "j": chord = .resizeDown
+                default:  chord = nil
+                }
+                if let chord { self.onReservedChord?(chord); return nil }
+                return event
             }
 
             guard flags == .command else { return event }   // all other reserved chords are bare-⌘
@@ -41,6 +54,8 @@ final class KeyInterceptor {
             let chord: ReservedChord?
             switch key {
             case "\\": chord = .toggleRightDrawer
+            case "[":  chord = .prevTab
+            case "]":  chord = .nextTab
             case "-":  chord = .splitHorizontal
             case "h":  chord = .navLeft
             case "l":  chord = .navRight

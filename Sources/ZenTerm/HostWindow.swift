@@ -19,7 +19,13 @@ final class HostWindow: NSWindow {
         // AppKit ALSO releases the window on close (default true), underflowing the
         // retain count and crashing in the close-time CoreAnimation commit.
         isReleasedWhenClosed = false
-        backgroundColor = NSColor(srgbRed: 0x23 / 255.0, green: 0x21 / 255.0, blue: 0x36 / 255.0, alpha: 1)
+        // Transparent window: the tinted blur backdrop (a behind-window NSVisualEffectView
+        // installed by WindowController) shows through every gap the opaque terminal
+        // surfaces don't cover — the pane gutters, the window inset, and the rounded pane
+        // corners. `isOpaque = false` + a clear background is what lets the vibrancy read
+        // through; the window keeps its titled shadow (no hard app border).
+        isOpaque = false
+        backgroundColor = .clear
         // Fully chromeless top: hide the traffic lights. Close/minimize/zoom via ⌘W /
         // ⌘M / ⌘F-equivs and the menu; the window drags by its background.
         standardWindowButton(.closeButton)?.isHidden = true

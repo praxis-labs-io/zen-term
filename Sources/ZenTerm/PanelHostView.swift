@@ -138,8 +138,8 @@ final class PanelHostView: NSView {
         if isFocused {
             layer.borderColor = Self.iris.cgColor
             layer.shadowColor = Self.iris.cgColor
-            layer.shadowOpacity = 0.35
-            layer.shadowRadius = 10
+            layer.shadowOpacity = 0.2
+            layer.shadowRadius = 6
             layer.shadowOffset = .zero
         } else {
             layer.borderColor = Self.idleBorder.cgColor

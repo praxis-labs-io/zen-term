@@ -1,6 +1,18 @@
 import CoreGraphics
 
-public enum Direction: Sendable { case left, right, up, down }
+public enum Direction: Sendable, Hashable {
+    case left, right, up, down
+
+    /// The reverse direction — used to record the return hop for directional focus memory.
+    public var opposite: Direction {
+        switch self {
+        case .left: return .right
+        case .right: return .left
+        case .up: return .down
+        case .down: return .up
+        }
+    }
+}
 
 /// Geometric nearest-neighbor pane navigation (ported from the prototype). Returns
 /// the id of the closest pane in `direction`, or nil if none lies that way.

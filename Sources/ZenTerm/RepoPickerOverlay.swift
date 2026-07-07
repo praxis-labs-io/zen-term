@@ -21,7 +21,6 @@ final class RepoPickerOverlay: NSView {
     private var listHeight: NSLayoutConstraint!
     private var rowViews: [RowView] = []
 
-    private static let iris = NSColor(srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0, blue: 0xe7 / 255.0, alpha: 1)
     private static let rowHeight: CGFloat = 32
     private static let maxListHeight: CGFloat = 320
     private static let emptyListHeight: CGFloat = 56
@@ -36,12 +35,10 @@ final class RepoPickerOverlay: NSView {
         translatesAutoresizingMaskIntoConstraints = false
 
         wantsLayer = true
-        layer?.cornerRadius = 12
-        layer?.masksToBounds = true
 
+        // Transparent click-catcher (no dimming) — still dismisses on an outside click.
         let backdrop = BackdropView(onClick: onDismiss)
         backdrop.wantsLayer = true
-        backdrop.layer?.backgroundColor = NSColor(white: 0, alpha: 0.35).cgColor
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
@@ -50,10 +47,12 @@ final class RepoPickerOverlay: NSView {
         card.layer?.cornerRadius = 12
         card.layer?.backgroundColor = background.cgColor
         card.layer?.borderWidth = 1
-        card.layer?.borderColor = Self.iris.cgColor
-        card.layer?.masksToBounds = true
+        card.layer?.borderColor = FloatShadow.edge.cgColor
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
+        // Dark elevation shadow on the card itself (masksToBounds stays off so it isn't
+        // clipped); the list clips its own rows, so nothing overflows the rounded corners.
+        FloatShadow.applyShadow(to: card)
 
         // Search row: a magnifier glyph + a borderless field.
         let glyph = NSTextField(labelWithString: "⌕")
@@ -87,6 +86,7 @@ final class RepoPickerOverlay: NSView {
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(rowsStack)
         scrollView.drawsBackground = false
+        scrollView.scrollerStyle = .overlay   // slim, auto-hiding — narrower than the legacy track
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.documentView = doc
@@ -104,8 +104,13 @@ final class RepoPickerOverlay: NSView {
         footer.textColor = NSColor(white: 1, alpha: 0.35)
         footer.alignment = .center
         footer.translatesAutoresizingMaskIntoConstraints = false
+        // Wrap in a container and center vertically: a stretched label cell top-aligns its
+        // text, so the hints would otherwise ride the top of the 34pt footer row.
+        let footerRow = NSView()
+        footerRow.translatesAutoresizingMaskIntoConstraints = false
+        footerRow.addSubview(footer)
 
-        let stack = NSStackView(views: [searchRow, divider, scrollView, footer])
+        let stack = NSStackView(views: [searchRow, divider, scrollView, footerRow])
         stack.orientation = .vertical
         stack.spacing = 0
         stack.alignment = .leading
@@ -138,17 +143,21 @@ final class RepoPickerOverlay: NSView {
             searchRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             divider.widthAnchor.constraint(equalTo: stack.widthAnchor),
             scrollView.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            footer.leadingAnchor.constraint(equalTo: stack.leadingAnchor),
-            footer.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
-            footer.heightAnchor.constraint(equalToConstant: 34),
+            footerRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            footerRow.heightAnchor.constraint(equalToConstant: 34),
+            footer.leadingAnchor.constraint(equalTo: footerRow.leadingAnchor),
+            footer.trailingAnchor.constraint(equalTo: footerRow.trailingAnchor),
+            footer.centerYAnchor.constraint(equalTo: footerRow.centerYAnchor),
             listHeight,
 
             doc.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
             doc.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
             doc.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
             rowsStack.topAnchor.constraint(equalTo: doc.topAnchor),
-            rowsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor),
-            rowsStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor),
+            // Inset the rows so a selected row's highlight keeps a margin from the list
+            // edges (and the overlay scroller) instead of touching them.
+            rowsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 8),
+            rowsStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -8),
             rowsStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
 
             emptyLabel.centerXAnchor.constraint(equalTo: scrollView.contentView.centerXAnchor),
@@ -263,7 +272,7 @@ final class RepoPickerOverlay: NSView {
             name.translatesAutoresizingMaskIntoConstraints = false
             addSubview(name)
             NSLayoutConstraint.activate([
-                name.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+                name.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
                 name.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
 
