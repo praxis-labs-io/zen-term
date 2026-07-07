@@ -18,8 +18,8 @@ final class TabController: NSObject {
     private let paneCanvas: PaneCanvasController
     private let canvas: NSView            // paneCanvas.canvasView, cached
 
-    private static let bottomDrawerHeight: CGFloat = 240
-    private static let rightDrawerWidth: CGFloat = 360
+    private static let bottomDrawerHeight: CGFloat = 300
+    private static let rightDrawerWidth: CGFloat = 480   // roomy enough for a Claude chat panel
     private static let gutter: CGFloat = 12
 
     // Per-tab auxiliary surfaces (created lazily; kept alive when hidden — the shell
