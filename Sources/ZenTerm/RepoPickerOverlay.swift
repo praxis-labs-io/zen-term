@@ -24,6 +24,7 @@ final class RepoPickerOverlay: NSView {
     private static let iris = NSColor(srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0, blue: 0xe7 / 255.0, alpha: 1)
     private static let rowHeight: CGFloat = 32
     private static let maxListHeight: CGFloat = 320
+    private static let emptyListHeight: CGFloat = 56
 
     init(entries: [RepoEntry], background: NSColor,
          onChoose: @escaping (URL, Bool) -> Void, onDismiss: @escaping () -> Void) {
@@ -113,6 +114,11 @@ final class RepoPickerOverlay: NSView {
 
         listHeight = scrollView.heightAnchor.constraint(equalToConstant: Self.maxListHeight)
 
+        // Preferred 560pt width, but `.defaultHigh` so the required ≤0.92×tile cap wins on
+        // a narrow window rather than the two conflicting as required constraints.
+        let cardWidth = card.widthAnchor.constraint(equalToConstant: 560)
+        cardWidth.priority = .defaultHigh
+
         NSLayoutConstraint.activate([
             backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
             backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -121,7 +127,7 @@ final class RepoPickerOverlay: NSView {
 
             card.centerXAnchor.constraint(equalTo: centerXAnchor),
             card.centerYAnchor.constraint(equalTo: centerYAnchor),
-            card.widthAnchor.constraint(equalToConstant: 560),
+            cardWidth,
             card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
 
             stack.leadingAnchor.constraint(equalTo: card.leadingAnchor),
@@ -191,7 +197,11 @@ final class RepoPickerOverlay: NSView {
             return row
         }
         emptyLabel.isHidden = !filtered.isEmpty
-        listHeight.constant = min(CGFloat(filtered.count) * Self.rowHeight, Self.maxListHeight)
+        // Empty → keep a small fixed height so the "no results" label isn't clipped by a
+        // zero-height scroll view.
+        listHeight.constant = filtered.isEmpty
+            ? Self.emptyListHeight
+            : min(CGFloat(filtered.count) * Self.rowHeight, Self.maxListHeight)
         updateHighlight()
         scrollSelectedToVisible()
     }

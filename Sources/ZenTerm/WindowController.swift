@@ -20,7 +20,9 @@ final class WindowController: NSObject {
     /// The `⌘P` repo picker, when open. Window-level (it opens/replaces tabs) but
     /// presented over the active tab's tile region. Modal while open.
     private var repoPicker: RepoPickerOverlay?
-    private var isRepoPickerOpen: Bool { repoPicker != nil }
+    /// Whether the repo picker is modal right now. Read by `AppDelegate` so window-level
+    /// chords (⌘N) and Copy/Paste routing respect the modal too, not just `handle(_:)`.
+    var isRepoPickerOpen: Bool { repoPicker != nil }
 
     /// Re-derives tab titles from each tab's live cwd. Shells report cwd changes
     /// without OSC 7, so there's no push event on `cd` — a light poll keeps titles
@@ -161,22 +163,15 @@ final class WindowController: NSObject {
     /// picker passes the repo dir + its basename; plain `⌘t` passes the inherited cwd
     /// and no pin).
     private func addTab(cwd: URL?, pinnedTitle: String?, workspace: Bool = false) {
+        dismissRepoPickerIfOpen()   // the "+" button is reachable while the picker is up
         let id = mintTabID()
-        let c = makeController(initialCWD: cwd, workspace: workspace)
-        c.pinnedTitle = pinnedTitle
-        controllers[id] = c
-        titles[id] = c.title
-        wire(c, id: id)
         tabs.add(id)
-        mountActive()
-        c.start()
-        if workspace { c.openWorkspaceLayout() }
-        renderTabBar()
+        installController(id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace)
     }
 
     /// Replace the active tab's controller in place (same tab id/slot) with a fresh
-    /// session in `cwd`, pinned to `pinnedTitle`. Used by `⌘P` + Shift+Enter.
-    private func replaceActiveTab(cwd: URL, pinnedTitle: String?, workspace: Bool = false) {
+    /// workspace session in `cwd`, pinned to `pinnedTitle`. Used by `⌘P` + Shift+Enter.
+    private func replaceActiveTab(cwd: URL, pinnedTitle: String?) {
         let id = tabs.activeID
         let old = controllers[id]
         if mountedCanvas === old?.view {
@@ -184,6 +179,12 @@ final class WindowController: NSObject {
             mountedCanvas = nil
         }
         old?.shutdown()   // terminate the replaced tab's shells — never leak them
+        installController(id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: true)
+    }
+
+    /// Build, wire, mount, and start a controller for `id` (already in `tabs`), applying
+    /// the workspace preset when requested. Shared by new-tab and replace-tab.
+    private func installController(id: TabID, cwd: URL?, pinnedTitle: String?, workspace: Bool) {
         let c = makeController(initialCWD: cwd, workspace: workspace)
         c.pinnedTitle = pinnedTitle
         controllers[id] = c
@@ -196,6 +197,7 @@ final class WindowController: NSObject {
     }
 
     private func select(_ id: TabID) {
+        dismissRepoPickerIfOpen()   // a tab-bar click must not orphan the modal picker
         guard tabs.order.contains(id), id != tabs.activeID else { return }
         tabs.select(id)
         mountActive()
@@ -205,6 +207,7 @@ final class WindowController: NSObject {
     /// Close a specific tab: terminate its shells, detach its canvas, and cascade to
     /// closing the window when it was the last tab.
     private func closeTab(_ id: TabID) {
+        dismissRepoPickerIfOpen()   // the "×" button is reachable while the picker is up
         let survived = tabs.close(id)
         let controller = controllers[id]
         if mountedCanvas === controller?.view {
@@ -244,6 +247,13 @@ final class WindowController: NSObject {
         activeController?.restoreKeyFocus()
     }
 
+    /// Dismiss the picker if it's up — called before any tab-bar mouse op (select/new/
+    /// close), which would otherwise unmount the picker's host tab and leave the modal
+    /// flag stuck on, soft-locking every keyboard chord.
+    private func dismissRepoPickerIfOpen() {
+        if isRepoPickerOpen { closeRepoPicker() }
+    }
+
     /// Open a picked directory as a shell session: a new tab (Enter) or by replacing
     /// the current tab (Shift+Enter). Either way the tab name is pinned to the dir
     /// basename so it survives the focused pane's cwd changes.
@@ -253,7 +263,7 @@ final class WindowController: NSObject {
         // A repo open builds the workspace layout: nvim in the primary pane, claude in
         // the right drawer, a shell in the bottom drawer.
         if replaceCurrentTab {
-            replaceActiveTab(cwd: dir, pinnedTitle: name, workspace: true)
+            replaceActiveTab(cwd: dir, pinnedTitle: name)
         } else {
             addTab(cwd: dir, pinnedTitle: name, workspace: true)
         }
