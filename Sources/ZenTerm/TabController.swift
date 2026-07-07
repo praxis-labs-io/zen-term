@@ -88,7 +88,6 @@ final class TabController: NSObject {
 
     func start() { paneCanvas.start() }
     func split(_ axis: SplitAxis) { paneCanvas.split(axis) }
-    func navigate(_ direction: Direction) { paneCanvas.navigate(direction) }
     @discardableResult func closeFocused() -> Bool { paneCanvas.closeFocused() }
     func focusActivePane() { paneCanvas.focusActivePane() }
 
@@ -230,6 +229,56 @@ final class TabController: NSObject {
         paneCanvas.setPanesFocused(true)
         bottomDrawerPanel?.isFocused = false
         rightDrawerPanel?.isFocused = false
+    }
+
+    // MARK: cross-panel spatial nav (⌘hjkl)
+
+    /// Sentinel ids standing in for the drawer panels in the shared nav graph —
+    /// pane leaf ids are always non-negative, so these can't collide with a real
+    /// `PaneID`.
+    private static let bottomDrawerID = PaneID(Int.min)
+    private static let rightDrawerID = PaneID(Int.min + 1)
+
+    /// Move the tab's unified focus to the nearest panel — pane or open drawer — in
+    /// `direction`. Pane leaf frames and any open drawer's frame are scored together
+    /// by PaneKit's `nearestLeaf`, the same geometric scorer pane-to-pane nav already
+    /// uses, so a drawer is just another panel in the graph.
+    func navigate(_ direction: Direction) {
+        var frames = paneCanvas.leafFrames(in: content)
+        if isBottomOpen, let panel = bottomDrawerPanel {
+            frames[Self.bottomDrawerID] = flippedFrame(of: panel)
+        }
+        if isRightOpen, let panel = rightDrawerPanel {
+            frames[Self.rightDrawerID] = flippedFrame(of: panel)
+        }
+
+        let origin: PaneID
+        switch focusedPanel {
+        case .pane: origin = paneCanvas.focusedLeafID
+        case .bottomDrawer: origin = Self.bottomDrawerID
+        case .rightDrawer: origin = Self.rightDrawerID
+        }
+
+        guard let target = nearestLeaf(from: origin, frames: frames, direction: direction) else { return }
+        if target == Self.bottomDrawerID {
+            focusDrawer(.bottom)
+        } else if target == Self.rightDrawerID {
+            focusDrawer(.right)
+        } else {
+            // `focusLeaf` bubbles through `paneCanvas.onFocusChanged` → `paneGainedFocus()`,
+            // which reasserts unified focus (halo + panel routing) onto the pane canvas.
+            paneCanvas.focusLeaf(target)
+        }
+    }
+
+    /// A drawer panel's frame converted into `content` coords and flipped the same
+    /// way `PaneCanvasController.leafFrames(in:)` flips pane frames (top-left origin,
+    /// relative to `content`'s own height), so the two frame sets score uniformly in
+    /// `nearestLeaf`.
+    private func flippedFrame(of panel: NSView) -> CGRect {
+        let f = panel.convert(panel.bounds, to: content)
+        let h = content.bounds.height
+        return CGRect(x: f.minX, y: h - f.maxY, width: f.width, height: f.height)
     }
 
     /// Rebuild the tile layout from `isBottomOpen`/`isRightOpen`: the canvas + any

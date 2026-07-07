@@ -158,22 +158,28 @@ final class PaneCanvasController: NSObject {
     /// re-mounted after a switch).
     func focusActivePane() { focus(tree.focusedLeaf) }
 
-    /// Move focus to the nearest pane in `direction`, using on-screen frames.
-    func navigate(_ direction: Direction) {
-        guard hostByLeaf.count > 1 else { return }
-        // AppKit is y-up (higher on screen = larger y), but the scorer treats `.up`
-        // as decreasing y (top-left origin). Flip each frame into that y-down space
-        // (`h - maxY`) so visual-up maps to the scorer's `.up`.
-        let h = canvasView.bounds.height
+    /// Every leaf's on-screen frame converted into `target`'s coordinate space, with
+    /// the same y-flip cross-panel nav needs: AppKit is y-up, but `nearestLeaf`'s
+    /// scorer treats `.up` as decreasing y (top-left origin), so each frame is
+    /// flipped (`h - maxY`) using `target`'s own height. `TabController` calls this
+    /// with its `content` view so drawer panel frames (converted + flipped the same
+    /// way) score uniformly alongside these.
+    func leafFrames(in target: NSView) -> [PaneID: CGRect] {
+        let h = target.bounds.height
         var frames: [PaneID: CGRect] = [:]
         for (id, host) in hostByLeaf {
-            let f = host.convert(host.bounds, to: canvasView)
+            let f = host.convert(host.bounds, to: target)
             frames[id] = CGRect(x: f.minX, y: h - f.maxY, width: f.width, height: f.height)
         }
-        if let target = nearestLeaf(from: tree.focusedLeaf, frames: frames, direction: direction) {
-            focus(target)
-        }
+        return frames
     }
+
+    /// The pane tree's currently focused leaf.
+    var focusedLeafID: PaneID { tree.focusedLeaf }
+
+    /// Public entry point to focus a specific leaf — used by `TabController`'s
+    /// cross-panel spatial nav when it resolves to a pane.
+    func focusLeaf(_ id: PaneID) { focus(id) }
 
     /// Split the focused pane along `axis`, unless it is too small to halve usefully.
     func split(_ axis: SplitAxis) {
