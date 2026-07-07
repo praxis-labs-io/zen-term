@@ -88,6 +88,7 @@ final class TabController: NSObject {
         relayoutPanels()
 
         paneCanvas.onFocusChanged = { [weak self] in self?.paneGainedFocus() }
+        paneCanvas.onZoomExitRequested = { [weak self] in self?.toggleZoom() }
     }
 
     func start() { paneCanvas.start() }
@@ -199,6 +200,7 @@ final class TabController: NSObject {
                                   background: Theme.rosePineMoon.background.nsColor,
                                   meta: nil,
                                   onFocusRequest: { [weak self] in self?.focusDrawer(edge) })
+        panel.onZoomExit = { [weak self] in self?.toggleZoom() }
         panel.translatesAutoresizingMaskIntoConstraints = false
         return panel
     }

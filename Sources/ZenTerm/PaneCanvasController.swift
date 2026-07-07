@@ -43,6 +43,10 @@ final class PaneCanvasController: NSObject {
     /// routing) onto the pane canvas.
     var onFocusChanged: (() -> Void)?
 
+    /// Fired when a zoomed pane's corner unzoom button is clicked — the owning
+    /// `TabController` exits zoom (keeping its `zoomedPanel` in sync).
+    var onZoomExitRequested: (() -> Void)?
+
     /// The focused pane's cwd, for new-tab / new-window inheritance. Prefers the live
     /// process cwd over the last OSC-reported one so inheritance works without OSC 7.
     var focusedCWD: URL? {
@@ -139,6 +143,7 @@ final class PaneCanvasController: NSObject {
                                  onFocusRequest: { [weak self] in
             self?.focus(id)
         })
+        host.onZoomExit = { [weak self] in self?.onZoomExitRequested?() }
         hostByLeaf[id] = host
         return host
     }

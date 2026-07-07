@@ -16,13 +16,16 @@ struct PanelMeta {
 final class PanelHostView: NSView {
     private let onFocusRequest: () -> Void
     private let pane = NSView()
-    private let zoomBadge: NSTextField
+    private let zoomButton: ZoomButton
+
+    /// Invoked when the corner zoom action button is clicked — the chrome exits zoom.
+    var onZoomExit: (() -> Void)?
 
     var isFocused: Bool = false { didSet { updateHalo() } }
 
-    /// Whether this panel is the sole full-canvas pane (zoomed) — shows a small
-    /// corner badge so it's clear the split view is temporarily collapsed.
-    var isZoomed: Bool = false { didSet { zoomBadge.isHidden = !isZoomed } }
+    /// Whether this panel is the sole full-canvas panel (zoomed) — shows the corner
+    /// unzoom action button so it's clear the layout is temporarily collapsed.
+    var isZoomed: Bool = false { didSet { zoomButton.isHidden = !isZoomed } }
 
     /// Inner breathing room between the pane border and the terminal content, even on
     /// all sides so content (e.g. nvim) doesn't sit against the pane border.
@@ -30,8 +33,9 @@ final class PanelHostView: NSView {
 
     init(content: NSView, background: NSColor, meta: PanelMeta?, onFocusRequest: @escaping () -> Void) {
         self.onFocusRequest = onFocusRequest
-        self.zoomBadge = Self.makeZoomBadge()
+        self.zoomButton = ZoomButton()
         super.init(frame: .zero)
+        zoomButton.onClick = { [weak self] in self?.onZoomExit?() }
 
         wantsLayer = true
         pane.wantsLayer = true
@@ -65,12 +69,12 @@ final class PanelHostView: NSView {
             content.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -padding),
         ])
 
-        pane.addSubview(zoomBadge)
+        pane.addSubview(zoomButton)
         NSLayoutConstraint.activate([
-            zoomBadge.topAnchor.constraint(equalTo: pane.topAnchor, constant: 8),
-            zoomBadge.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -8),
-            zoomBadge.widthAnchor.constraint(equalToConstant: 22),
-            zoomBadge.heightAnchor.constraint(equalToConstant: 18),
+            zoomButton.topAnchor.constraint(equalTo: pane.topAnchor, constant: 8),
+            zoomButton.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -8),
+            zoomButton.widthAnchor.constraint(equalToConstant: 22),
+            zoomButton.heightAnchor.constraint(equalToConstant: 20),
         ])
 
         if let meta {
@@ -114,19 +118,53 @@ final class PanelHostView: NSView {
         }
     }
 
-    /// A small iris "zoomed" indicator pinned to a panel's top-right corner. Hidden
+    /// The corner unzoom action button: a white glyph with no background until hover
+    /// (matching the tab bar's "+"), pointing-hand cursor, click to exit zoom. Hidden
     /// until `isZoomed` is set.
-    private static func makeZoomBadge() -> NSTextField {
-        let badge = NSTextField(labelWithString: "⤢")
-        badge.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .bold)
-        badge.textColor = iris
-        badge.alignment = .center
-        badge.isHidden = true
-        badge.wantsLayer = true
-        badge.layer?.backgroundColor = NSColor(white: 0, alpha: 0.35).cgColor
-        badge.layer?.cornerRadius = 5
-        badge.translatesAutoresizingMaskIntoConstraints = false
-        return badge
+    private final class ZoomButton: NSView {
+        var onClick: (() -> Void)?
+        private let glyph = NSTextField(labelWithString: "⤢")
+        private var trackingArea: NSTrackingArea?
+        private var isHovered = false { didSet { update() } }
+
+        init() {
+            super.init(frame: .zero)
+            isHidden = true
+            wantsLayer = true
+            layer?.cornerRadius = 5
+            glyph.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
+            glyph.alignment = .center
+            glyph.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(glyph)
+            NSLayoutConstraint.activate([
+                glyph.centerXAnchor.constraint(equalTo: centerXAnchor),
+                glyph.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+            translatesAutoresizingMaskIntoConstraints = false
+            update()
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            if let trackingArea { removeTrackingArea(trackingArea) }
+            let area = NSTrackingArea(rect: bounds,
+                                     options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+                                     owner: self)
+            addTrackingArea(area)
+            trackingArea = area
+        }
+
+        override func mouseEntered(with event: NSEvent) { isHovered = true }
+        override func mouseExited(with event: NSEvent) { isHovered = false }
+        override func mouseDown(with event: NSEvent) { onClick?() }   // consumes — no focus bubble
+        override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
+
+        private func update() {
+            layer?.backgroundColor = (isHovered ? NSColor(white: 1, alpha: 0.12) : .clear).cgColor
+            glyph.textColor = NSColor(white: 0.95, alpha: isHovered ? 1.0 : 0.65)
+        }
     }
 
     /// A muted small-caps mono label (left) and its keybind (right), e.g. "BOTTOM  ⌘B".
