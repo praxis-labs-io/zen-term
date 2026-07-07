@@ -5,12 +5,16 @@ import TerminalKit
 /// Which edge a drawer panel docks to.
 enum DrawerEdge { case bottom, right }
 
-/// A tab's overlay open-state (drawers + lazygit), produced by `TabController` and
-/// mirrored by the footer toggle dock's active tints.
+/// Which panel is filling the tab (zoomed), for the footer dock's zoom tint.
+enum ZoomedPanel: Equatable { case pane, bottomDrawer, rightDrawer }
+
+/// A tab's overlay open-state (drawers + lazygit + zoom), produced by `TabController`
+/// and mirrored by the footer toggle dock's active tints.
 struct OverlayState: Equatable {
     var isBottomOpen = false
     var isRightOpen = false
     var isLazygitOpen = false
+    var zoomed: ZoomedPanel?
 }
 
 /// One tab: owns the pane tree (`PaneCanvasController`) and the per-tab overlay
@@ -61,11 +65,21 @@ final class TabController: NSObject {
     var isLazygitOpen: Bool { lazygitOverlay != nil }
 
     /// Which panel currently holds the tab's single unified focus/halo.
-    private enum PanelRef: Equatable { case pane, bottomDrawer, rightDrawer }
+    private enum PanelRef: Equatable {
+        case pane, bottomDrawer, rightDrawer
+        var asZoomed: ZoomedPanel {
+            switch self {
+            case .pane: return .pane
+            case .bottomDrawer: return .bottomDrawer
+            case .rightDrawer: return .rightDrawer
+            }
+        }
+    }
     private var focusedPanel: PanelRef = .pane
 
     /// The zoomed panel (fills the tab, others hidden), or nil when not zoomed.
-    private var zoomedPanel: PanelRef?
+    /// Toggling it re-renders the footer dock so the zoom tint tracks it.
+    private var zoomedPanel: PanelRef? { didSet { onOverlayStateChanged?() } }
     var isZoomed: Bool { zoomedPanel != nil }
 
     /// The focused drawer's surface, or nil when the pane canvas is focused (copy/
@@ -102,7 +116,9 @@ final class TabController: NSObject {
     /// The tab's overlay open-state (drawers + lazygit), for the footer dock's active
     /// tints; fired via `onOverlayStateChanged` whenever one of them toggles.
     var overlayState: OverlayState {
-        OverlayState(isBottomOpen: isBottomOpen, isRightOpen: isRightOpen, isLazygitOpen: isLazygitOpen)
+        OverlayState(
+            isBottomOpen: isBottomOpen, isRightOpen: isRightOpen,
+            isLazygitOpen: isLazygitOpen, zoomed: zoomedPanel.map(\.asZoomed))
     }
     var onOverlayStateChanged: (() -> Void)?
 

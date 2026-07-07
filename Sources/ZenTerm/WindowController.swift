@@ -71,11 +71,12 @@ final class WindowController: NSObject {
         var onPalette: () -> Void = {}
         var onBottom: () -> Void = {}
         var onRight: () -> Void = {}
+        var onZoom: () -> Void = {}
         var onLazygit: () -> Void = {}
         dock = ToggleDock(
             onSplitH: { onSplitH() }, onSplitV: { onSplitV() },
             onPalette: { onPalette() }, onBottom: { onBottom() },
-            onRight: { onRight() }, onLazygit: { onLazygit() })
+            onRight: { onRight() }, onZoom: { onZoom() }, onLazygit: { onLazygit() })
         super.init()
         nextTabID = 2
 
@@ -89,6 +90,7 @@ final class WindowController: NSObject {
         onPalette = { [weak self] in self?.handle(.toggleRepoPicker) }
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
+        onZoom = { [weak self] in self?.handle(.toggleZoom) }
         onLazygit = { [weak self] in self?.handle(.toggleLazygit) }
 
         let first = makeController(initialCWD: initialCWD)
