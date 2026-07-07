@@ -1,7 +1,12 @@
-/// The ordered set of tabs in one window plus which is active. A value type —
-/// pure ordering/active-index bookkeeping, no view or process state. The window
-/// chrome keeps a parallel `[TabID: controller]` dict keyed by id, so ordering and
-/// active live only here.
+/// The ordered list of tabs in one window plus which is active. A value type —
+/// pure ordering/active-index bookkeeping, no view or process state. Callers mint
+/// unique `TabID`s and keep a parallel `[TabID: controller]` dict keyed by id, so
+/// ordering and active live only here.
+///
+/// A `TabList` always holds at least one tab while in use: `close` returns `false`
+/// the moment it would empty the list, at which point the caller closes the window
+/// and stops using the list. Reading `activeID` on an emptied list is a programmer
+/// error (see its precondition).
 public struct TabList {
     public private(set) var order: [TabID]
     public private(set) var activeIndex: Int
@@ -11,7 +16,12 @@ public struct TabList {
         activeIndex = 0
     }
 
-    public var activeID: TabID { order[activeIndex] }
+    /// The active tab's id. Requires a non-empty list — once `close` empties the
+    /// list (returns `false`) the caller must discard it rather than query here.
+    public var activeID: TabID {
+        precondition(!order.isEmpty, "activeID read on an empty TabList — the window should have been closed when close(_:) returned false")
+        return order[activeIndex]
+    }
 
     /// Append a tab and make it active.
     public mutating func add(_ id: TabID) {
