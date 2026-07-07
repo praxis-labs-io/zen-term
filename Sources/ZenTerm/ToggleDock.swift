@@ -1,14 +1,15 @@
 import AppKit
 
 /// The global footer toggle dock (bottom-right of the tab-bar row): a row of `IconButton`s
-/// — split-h, split-v │ command palette, bottom drawer, right drawer │ lazygit — grouped
-/// by thin dividers. Active toggles tint iris. Buttons fire injected closures (routed
+/// — split-h, split-v │ bottom drawer, right drawer, zoom │ repo picker, lazygit —
+/// grouped by thin dividers. Active toggles tint iris. Buttons fire injected closures (routed
 /// through the window's chord handler, so they respect the modals). `render` mirrors the
 /// active tab's overlay state plus the window's repo-picker state.
 final class ToggleDock: NSView {
     private let paletteBtn: IconButton
     private let bottomBtn: IconButton
     private let rightBtn: IconButton
+    private let zoomBtn: IconButton
     private let lazygitBtn: IconButton
 
     private static let iconPointSize: CGFloat = 11
@@ -16,7 +17,8 @@ final class ToggleDock: NSView {
     init(
         onSplitH: @escaping () -> Void, onSplitV: @escaping () -> Void,
         onPalette: @escaping () -> Void, onBottom: @escaping () -> Void,
-        onRight: @escaping () -> Void, onLazygit: @escaping () -> Void
+        onRight: @escaping () -> Void, onZoom: @escaping () -> Void,
+        onLazygit: @escaping () -> Void
     ) {
         func button(_ symbol: String, _ label: String, _ onClick: @escaping () -> Void) -> IconButton {
             IconButton(symbol: symbol, pointSize: Self.iconPointSize, accessibilityLabel: label, onClick: onClick)
@@ -26,14 +28,15 @@ final class ToggleDock: NSView {
         paletteBtn = button("command", "Repo picker", onPalette)  // ⌘P
         bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", onBottom)  // ⌘B
         rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", onRight)  // ⌘\
+        zoomBtn = button("arrow.up.left.and.arrow.down.right", "Toggle zoom", onZoom)  // ⌘F
         lazygitBtn = button("arrow.triangle.branch", "Toggle lazygit", onLazygit)  // ⌘G
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
         let stack = NSStackView(views: [
             splitH, splitV, Self.divider(),
-            paletteBtn, bottomBtn, rightBtn, Self.divider(),
-            lazygitBtn,
+            bottomBtn, rightBtn, zoomBtn, Self.divider(),
+            paletteBtn, lazygitBtn,
         ])
         stack.orientation = .horizontal
         stack.alignment = .centerY
@@ -50,13 +53,28 @@ final class ToggleDock: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Mirror the active tab's overlay state (drawers, lazygit) and the window's repo
-    /// picker; split buttons are momentary and have no active state.
+    /// Mirror the active tab's overlay state (drawers, lazygit, zoom) and the window's
+    /// repo picker; split buttons are momentary and have no active state. While zoomed,
+    /// the drawer tints reflect only what's actually visible: a zoomed pane hides both
+    /// drawers (neither lit), a zoomed drawer hides its sibling (only its own lit).
     func render(overlay: OverlayState, paletteOpen: Bool) {
         paletteBtn.isActive = paletteOpen
-        bottomBtn.isActive = overlay.isBottomOpen
-        rightBtn.isActive = overlay.isRightOpen
         lazygitBtn.isActive = overlay.isLazygitOpen
+        zoomBtn.isActive = overlay.zoomed != nil
+        switch overlay.zoomed {
+        case nil:
+            bottomBtn.isActive = overlay.isBottomOpen
+            rightBtn.isActive = overlay.isRightOpen
+        case .pane:
+            bottomBtn.isActive = false
+            rightBtn.isActive = false
+        case .bottomDrawer:
+            bottomBtn.isActive = true
+            rightBtn.isActive = false
+        case .rightDrawer:
+            bottomBtn.isActive = false
+            rightBtn.isActive = true
+        }
     }
 
     /// A thin 1×12 vertical divider matching the demo's group separators.
