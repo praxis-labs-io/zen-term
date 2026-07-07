@@ -35,5 +35,9 @@ let package = Package(
             name: "TabKitTests",
             dependencies: ["TabKit"]
         ),
+        .testTarget(
+            name: "ZenTermTests",
+            dependencies: ["ZenTerm"]
+        ),
     ]
 )

@@ -15,6 +15,7 @@ final class KeyInterceptor {
         case toggleRightDrawer
         case toggleZoom
         case toggleLazygit
+        case toggleRepoPicker
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?
@@ -27,10 +28,11 @@ final class KeyInterceptor {
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             let key = event.charactersIgnoringModifiers?.lowercased()
 
-            // The one reserved ⌘⇧ chord: ⌘⇧\ ( "⌘|" ) → right drawer. With shift held,
-            // charactersIgnoringModifiers is "|"; also accept "\\" defensively.
+            // ⌘⇧\ ( "⌘|" ) → vertical split. With shift held, charactersIgnoringModifiers
+            // is "|"; also accept "\\" defensively. (Swapped with the right drawer, which
+            // is now on bare ⌘\.)
             if flags == [.command, .shift], key == "|" || key == "\\" {
-                self.onReservedChord?(.toggleRightDrawer)
+                self.onReservedChord?(.splitVertical)
                 return nil
             }
 
@@ -38,7 +40,7 @@ final class KeyInterceptor {
 
             let chord: ReservedChord?
             switch key {
-            case "\\": chord = .splitVertical
+            case "\\": chord = .toggleRightDrawer
             case "-":  chord = .splitHorizontal
             case "h":  chord = .navLeft
             case "l":  chord = .navRight
@@ -50,6 +52,7 @@ final class KeyInterceptor {
             case "b": chord = .toggleBottomDrawer
             case "f": chord = .toggleZoom
             case "g": chord = .toggleLazygit
+            case "p": chord = .toggleRepoPicker
             case "1", "2", "3", "4", "5", "6", "7", "8", "9":
                 chord = key.flatMap { Int($0) }.map { .selectTab($0) }
             default:   chord = nil

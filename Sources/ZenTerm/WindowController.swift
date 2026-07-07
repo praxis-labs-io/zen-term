@@ -17,6 +17,11 @@ final class WindowController: NSObject {
     private let tabBar: TabBarView
     private var mountedCanvas: NSView?
 
+    /// The `⌘P` repo picker, when open. Window-level (it opens/replaces tabs) but
+    /// presented over the active tab's tile region. Modal while open.
+    private var repoPicker: RepoPickerOverlay?
+    private var isRepoPickerOpen: Bool { repoPicker != nil }
+
     /// Re-derives tab titles from each tab's live cwd. Shells report cwd changes
     /// without OSC 7, so there's no push event on `cd` — a light poll keeps titles
     /// current; it only re-renders when a title actually changed.
@@ -110,8 +115,15 @@ final class WindowController: NSObject {
 
     // MARK: controller factory
 
-    private func makeController(initialCWD: URL?) -> TabController {
-        let c = TabController(initialCWD: initialCWD)
+    private func makeController(initialCWD: URL?, workspace: Bool = false) -> TabController {
+        // The ⌘P workspace preset seeds the primary pane with nvim and the right drawer
+        // with claude; the caller calls `openWorkspaceLayout()` after `start()` to reveal
+        // the drawers. A plain tab (⌘t / first tab) gets neither.
+        // `nvim` (no path arg): opens the normal dashboard in the repo cwd, exactly like
+        // typing `nvim` at a prompt. `nvim .` would open the directory and expand the file
+        // explorer, which isn't what a bare launch does.
+        let c = TabController(initialCWD: initialCWD, initialCommand: workspace ? "nvim" : nil)
+        if workspace { c.rightDrawerCommand = "claude" }
         // Bind title + last-pane-exit to this controller's id at call sites that
         // know the id (newTab / init assign into the dict first, then wire).
         return c
@@ -143,16 +155,43 @@ final class WindowController: NSObject {
 
     // MARK: tab ops
 
-    private func newTab() {
-        let inheritCWD = activeController?.focusedCWD
+    private func newTab() { addTab(cwd: activeController?.focusedCWD, pinnedTitle: nil) }
+
+    /// Append a new tab with an explicit cwd and optional pinned title (the `⌘P` repo
+    /// picker passes the repo dir + its basename; plain `⌘t` passes the inherited cwd
+    /// and no pin).
+    private func addTab(cwd: URL?, pinnedTitle: String?, workspace: Bool = false) {
         let id = mintTabID()
-        let c = makeController(initialCWD: inheritCWD)
+        let c = makeController(initialCWD: cwd, workspace: workspace)
+        c.pinnedTitle = pinnedTitle
         controllers[id] = c
         titles[id] = c.title
         wire(c, id: id)
         tabs.add(id)
         mountActive()
         c.start()
+        if workspace { c.openWorkspaceLayout() }
+        renderTabBar()
+    }
+
+    /// Replace the active tab's controller in place (same tab id/slot) with a fresh
+    /// session in `cwd`, pinned to `pinnedTitle`. Used by `⌘P` + Shift+Enter.
+    private func replaceActiveTab(cwd: URL, pinnedTitle: String?, workspace: Bool = false) {
+        let id = tabs.activeID
+        let old = controllers[id]
+        if mountedCanvas === old?.view {
+            old?.view.removeFromSuperview()
+            mountedCanvas = nil
+        }
+        old?.shutdown()   // terminate the replaced tab's shells — never leak them
+        let c = makeController(initialCWD: cwd, workspace: workspace)
+        c.pinnedTitle = pinnedTitle
+        controllers[id] = c
+        titles[id] = c.title
+        wire(c, id: id)
+        mountActive()
+        c.start()
+        if workspace { c.openWorkspaceLayout() }
         renderTabBar()
     }
 
@@ -180,14 +219,62 @@ final class WindowController: NSObject {
         renderTabBar()
     }
 
+    // MARK: repo picker (⌘P)
+
+    /// Toggle the repo picker over the active tab. Scans `~/dev` fresh on open and
+    /// focuses its search field. Closing (⌘P again, Esc, backdrop, or after a choice)
+    /// restores keyboard focus to the active tab.
+    private func toggleRepoPicker() {
+        if isRepoPickerOpen { closeRepoPicker(); return }
+        guard let active = activeController else { return }
+        let picker = RepoPickerOverlay(
+            entries: RepoScanner.scan(root: RepoScanner.defaultRoot),
+            background: Theme.rosePineMoon.background.nsColor,
+            onChoose: { [weak self] dir, replace in self?.openRepo(dir, replaceCurrentTab: replace) },
+            onDismiss: { [weak self] in self?.closeRepoPicker() }
+        )
+        active.presentTileOverlay(picker)
+        repoPicker = picker
+        picker.focusSearchField()
+    }
+
+    private func closeRepoPicker() {
+        repoPicker?.removeFromSuperview()
+        repoPicker = nil
+        activeController?.restoreKeyFocus()
+    }
+
+    /// Open a picked directory as a shell session: a new tab (Enter) or by replacing
+    /// the current tab (Shift+Enter). Either way the tab name is pinned to the dir
+    /// basename so it survives the focused pane's cwd changes.
+    private func openRepo(_ dir: URL, replaceCurrentTab: Bool) {
+        closeRepoPicker()
+        let name = dir.lastPathComponent
+        // A repo open builds the workspace layout: nvim in the primary pane, claude in
+        // the right drawer, a shell in the bottom drawer.
+        if replaceCurrentTab {
+            replaceActiveTab(cwd: dir, pinnedTitle: name, workspace: true)
+        } else {
+            addTab(cwd: dir, pinnedTitle: name, workspace: true)
+        }
+    }
+
     // MARK: chord routing
 
     func handle(_ chord: KeyInterceptor.ReservedChord) {
         guard !tabs.order.isEmpty else { return }   // window tearing down after last tab closed
         let active = activeController
+        // The repo picker is modal over the window: while it's open only ⌘P (close it)
+        // acts; every other chord is swallowed. Its arrow/Enter/Esc keys aren't chords —
+        // they go to the search field's field editor, never here.
+        if isRepoPickerOpen {
+            if case .toggleRepoPicker = chord { toggleRepoPicker() }
+            return
+        }
         // The lazygit float is modal over its tab: while it's open, every tab-internal
         // chord (split/nav/close/drawers/zoom) is swallowed. Only ⌘G (toggle it off) and
-        // cross-tab/window chords — switch tab, new tab, new window — still act.
+        // cross-tab/window chords — switch tab, new tab, new window — still act. ⌘P is
+        // not in the allow-list, so the picker can't open over the float.
         if active?.isLazygitOpen == true {
             switch chord {
             case .toggleLazygit, .newTab, .newWindow, .selectTab:
@@ -216,6 +303,7 @@ final class WindowController: NSObject {
         case .toggleRightDrawer: active?.toggleRightDrawer()
         case .toggleZoom: active?.toggleZoom()
         case .toggleLazygit: active?.toggleLazygit()
+        case .toggleRepoPicker: toggleRepoPicker()
         }
     }
 
