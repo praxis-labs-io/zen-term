@@ -4,6 +4,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+if ! command -v swiftlint >/dev/null 2>&1; then
+    echo "✗ swiftlint not found — install it with: brew install swiftlint" >&2
+    exit 1
+fi
+
 if [[ "${1:-}" == "--fix" ]]; then
     echo "▸ swift format (in place)"
     swift format --in-place --recursive Sources Tests
