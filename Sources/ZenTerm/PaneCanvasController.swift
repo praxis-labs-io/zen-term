@@ -26,15 +26,30 @@ final class PaneCanvasController: NSObject {
     /// changed, or focus moved to a different pane.
     var onTitleChanged: (() -> Void)?
 
-    /// The focused pane's cwd, for new-tab / new-window inheritance.
-    var focusedCWD: URL? { cwdByLeaf[tree.focusedLeaf] }
-
-    /// The tab's display title: the focused pane's cwd basename, or "~".
-    var title: String {
-        guard let url = cwdByLeaf[tree.focusedLeaf] else { return "~" }
-        let name = url.lastPathComponent
-        return name.isEmpty || name == "/" ? "~" : name
+    /// The focused pane's cwd, for new-tab / new-window inheritance. Prefers the live
+    /// process cwd over the last OSC-reported one so inheritance works without OSC 7.
+    var focusedCWD: URL? {
+        registry.surface(for: tree.focusedLeaf)?.currentDirectory ?? cwdByLeaf[tree.focusedLeaf]
     }
+
+    /// The tab's display title: the focused pane's cwd basename (`~` for home),
+    /// resolved live from the shell process. Falls back to the terminal (OSC) title
+    /// if a cwd can't be read, then a generic label.
+    var title: String {
+        let surface = registry.surface(for: tree.focusedLeaf)
+        if let cwd = surface?.currentDirectory ?? cwdByLeaf[tree.focusedLeaf] {
+            if cwd.path == Self.homePath { return "~" }
+            let name = cwd.lastPathComponent
+            if !name.isEmpty && name != "/" { return name }
+        }
+        if let osc = surface?.title {
+            let trimmed = osc.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { return trimmed }
+        }
+        return "shell"
+    }
+
+    private static let homePath = FileManager.default.homeDirectoryForCurrentUser.path
 
     init(initialCWD: URL? = nil) {
         let firstLeaf = PaneID(1)
@@ -147,7 +162,8 @@ final class PaneCanvasController: NSObject {
 
         let source = tree.focusedLeaf
         let newLeaf = mintPaneID()
-        cwdByLeaf[newLeaf] = cwdByLeaf[source]   // inherit the focused pane's cwd
+        // inherit the focused pane's live cwd (falls back to last OSC-reported)
+        cwdByLeaf[newLeaf] = registry.surface(for: source)?.currentDirectory ?? cwdByLeaf[source]
         tree = tree.splitting(source, axis: axis, newLeaf: newLeaf, newSplit: mintSplitID())
         reconcileAndRender()
         registry.surface(for: tree.focusedLeaf)?.focus()
@@ -173,6 +189,14 @@ final class PaneCanvasController: NSObject {
         guard let text = NSPasteboard.general.string(forType: .string) else { return }
         registry.surface(for: tree.focusedLeaf)?.paste(text)
     }
+
+    /// Terminates every pane's shell and detaches its view. Called when the whole
+    /// tab is discarded (its controller is dropped), so no shell leaks as a zombie.
+    func shutdown() {
+        registry.terminateAll()
+        canvasView.subviews.forEach { $0.removeFromSuperview() }
+        hostByLeaf.removeAll()
+    }
 }
 
 extension PaneCanvasController: TerminalSurfaceDelegate {
@@ -180,6 +204,10 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
         guard let id = leafID(of: s) else { return }
         cwdByLeaf[id] = url
         if id == tree.focusedLeaf { onTitleChanged?() }
+    }
+    func surface(_ s: TerminalSurface, titleDidChange title: String) {
+        guard let id = leafID(of: s), id == tree.focusedLeaf else { return }
+        onTitleChanged?()
     }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }

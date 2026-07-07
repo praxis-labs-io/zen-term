@@ -15,6 +15,13 @@ public final class PaneSurfaceRegistry {
     public func surface(for id: PaneID) -> TerminalSurface? { surfaces[id] }
     public var ids: Set<PaneID> { Set(surfaces.keys) }
 
+    /// Terminates every surface and empties the registry. Used when a whole tab is
+    /// torn down at once (its controller is discarded), so its shells don't leak.
+    public func terminateAll() {
+        for surface in surfaces.values { surface.terminate() }
+        surfaces.removeAll()
+    }
+
     /// Applies the diff and returns the newly-created (id, surface) pairs so the
     /// caller can set their delegate and `start(...)` them with the right config.
     @discardableResult

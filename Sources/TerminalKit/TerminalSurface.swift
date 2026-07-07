@@ -75,6 +75,11 @@ public protocol TerminalSurface: AnyObject {
     var title: String { get }
     var isFocused: Bool { get }
 
+    /// The working directory of the surface's shell, resolved live (e.g. from the
+    /// child process), or nil if the backend can't determine it. Lets the chrome
+    /// label tabs and inherit cwd without depending on shell-emitted OSC sequences.
+    var currentDirectory: URL? { get }
+
     func start(_ config: TerminalSurfaceConfig)
     func focus()
     func terminate()
@@ -82,4 +87,9 @@ public protocol TerminalSurface: AnyObject {
     func paste(_ text: String)
     func copySelection() -> String?
     func scrollToBottom()
+}
+
+public extension TerminalSurface {
+    /// Backends that can't resolve a cwd get nil for free.
+    var currentDirectory: URL? { nil }
 }

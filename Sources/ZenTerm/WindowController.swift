@@ -17,11 +17,24 @@ final class WindowController: NSObject {
     private let tabBar: TabBarView
     private var mountedCanvas: NSView?
 
+    /// Re-derives tab titles from each tab's live cwd. Shells report cwd changes
+    /// without OSC 7, so there's no push event on `cd` — a light poll keeps titles
+    /// current; it only re-renders when a title actually changed.
+    private var titlePoll: Timer?
+
     /// The window's last tab closed → the window should go away.
     var onLastTabClosed: (() -> Void)?
 
     /// The active tab's focused-pane cwd, for `⌘n` new-window inheritance.
-    var focusedCWD: URL? { controllers[tabs.activeID]?.focusedCWD }
+    var focusedCWD: URL? { activeController?.focusedCWD }
+
+    /// The active tab's controller, or nil once the last tab has closed (the window
+    /// is being torn down). Reading `tabs.activeID` on an empty list traps, so every
+    /// active-tab access goes through here.
+    private var activeController: PaneCanvasController? {
+        guard !tabs.order.isEmpty else { return nil }
+        return controllers[tabs.activeID]
+    }
 
     init(contentRect: NSRect, initialCWD: URL?) {
         window = HostWindow(contentRect: contentRect)
@@ -69,10 +82,27 @@ final class WindowController: NSObject {
     func showAndStart() {
         bindFirstControllerIfNeeded()
         mountActive()
-        controllers[tabs.activeID]?.start()
+        activeController?.start()
         window.makeKeyAndOrderFront(nil)
         renderTabBar()
+        titlePoll = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            self?.refreshTitlesFromCWD()
+        }
     }
+
+    /// Recompute every tab's title from its live cwd; re-render only on change so a
+    /// hovered chip isn't rebuilt out from under the pointer each tick.
+    private func refreshTitlesFromCWD() {
+        var changed = false
+        for id in tabs.order {
+            guard let c = controllers[id] else { continue }
+            let t = c.title
+            if titles[id] != t { titles[id] = t; changed = true }
+        }
+        if changed { renderTabBar() }
+    }
+
+    deinit { titlePoll?.invalidate() }
 
     // MARK: controller factory
 
@@ -90,7 +120,7 @@ final class WindowController: NSObject {
     /// Mount the active tab's canvas above the tab bar; detach the previous one.
     /// Always restores focus to the active tab's focused pane after mounting.
     private func mountActive() {
-        guard let c = controllers[tabs.activeID] else { return }
+        guard let c = activeController else { return }
         if mountedCanvas !== c.canvasView {
             mountedCanvas?.removeFromSuperview()
             let canvas = c.canvasView
@@ -129,13 +159,19 @@ final class WindowController: NSObject {
         renderTabBar()
     }
 
-    /// Close a specific tab; cascades to closing the window when it was the last.
+    /// Close a specific tab: terminate its shells, detach its canvas, and cascade to
+    /// closing the window when it was the last tab.
     private func closeTab(_ id: TabID) {
         let survived = tabs.close(id)
-        if mountedCanvas === controllers[id]?.canvasView { mountedCanvas = nil }
+        let controller = controllers[id]
+        if mountedCanvas === controller?.canvasView {
+            controller?.canvasView.removeFromSuperview()
+            mountedCanvas = nil
+        }
+        controller?.shutdown()      // terminate the tab's shells — never leak them
         controllers[id] = nil
         titles[id] = nil
-        if !survived { onLastTabClosed?(); return }
+        if !survived { titlePoll?.invalidate(); titlePoll = nil; onLastTabClosed?(); return }
         mountActive()
         renderTabBar()
     }
@@ -143,7 +179,8 @@ final class WindowController: NSObject {
     // MARK: chord routing
 
     func handle(_ chord: KeyInterceptor.ReservedChord) {
-        let active = controllers[tabs.activeID]
+        guard !tabs.order.isEmpty else { return }   // window tearing down after last tab closed
+        let active = activeController
         switch chord {
         case .splitVertical:   active?.split(.vertical)
         case .splitHorizontal: active?.split(.horizontal)
@@ -165,15 +202,17 @@ final class WindowController: NSObject {
 
     // MARK: copy/paste — routed to the active tab's controller
 
-    @objc func copyFromSurface(_ sender: Any?) { controllers[tabs.activeID]?.copyFromSurface(sender) }
-    @objc func pasteToSurface(_ sender: Any?) { controllers[tabs.activeID]?.pasteToSurface(sender) }
+    @objc func copyFromSurface(_ sender: Any?) { activeController?.copyFromSurface(sender) }
+    @objc func pasteToSurface(_ sender: Any?) { activeController?.pasteToSurface(sender) }
 
     // MARK: wiring
 
     /// Bind a controller's title + last-pane-exit callbacks to its tab id.
     private func wire(_ c: PaneCanvasController, id: TabID) {
+        // Look the controller up by id rather than capturing `c` — capturing `c`
+        // strongly in a closure stored on `c` would retain the controller forever.
         c.onTitleChanged = { [weak self] in
-            guard let self else { return }
+            guard let self, let c = self.controllers[id] else { return }
             self.titles[id] = c.title
             self.renderTabBar()
         }
@@ -183,7 +222,7 @@ final class WindowController: NSObject {
     private func renderTabBar() {
         let items = tabs.order.enumerated().map { i, id in
             TabBarItem(id: id, index: i + 1,
-                       title: titles[id] ?? "~",
+                       title: titles[id] ?? "shell",
                        isActive: id == tabs.activeID)
         }
         tabBar.render(items)
