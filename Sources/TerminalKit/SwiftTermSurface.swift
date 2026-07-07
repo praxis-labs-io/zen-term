@@ -25,6 +25,7 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
     }
 
     public func start(_ config: TerminalSurfaceConfig) {
+        if let theme = config.theme { applyTheme(theme) }
         let base = Terminal.getEnvironmentVariables(termName: "xterm-256color", trueColor: true)
         let environment = EnvBuilder.merged(base: base, overrides: config.environment)
         let isDefaultShell = config.command == nil
@@ -48,6 +49,33 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
             execName: execName,
             currentDirectory: config.workingDirectory?.path
         )
+
+        // Remove SwiftTerm's built-in scroller entirely: terminals don't need a
+        // persistent scroll handle, and it visually doubles up with TUIs (e.g. nvim)
+        // that draw their own. It's installed at init (setup → setupScroller), so it
+        // exists here. Fully detach it — updateScroller() keeps operating on the
+        // (now off-screen) instance harmlessly.
+        for case let scroller as NSScroller in term.subviews {
+            scroller.removeFromSuperview()
+        }
+    }
+
+    /// Maps a chrome-supplied `TerminalTheme` onto the SwiftTerm view: font, the 16
+    /// ANSI colors, and the default fg/bg, cursor, and selection colors.
+    private func applyTheme(_ theme: TerminalTheme) {
+        if let font = NSFont(name: theme.fontName, size: theme.fontSize) {
+            term.font = font
+        }
+        if theme.ansi.count == 16 {
+            // SwiftTerm.Color channels are 16-bit; scale 8-bit components by 257 (0xFF→0xFFFF).
+            term.installColors(theme.ansi.map {
+                SwiftTerm.Color(red: UInt16($0.red) * 257, green: UInt16($0.green) * 257, blue: UInt16($0.blue) * 257)
+            })
+        }
+        term.nativeBackgroundColor = theme.background.nsColor
+        term.nativeForegroundColor = theme.foreground.nsColor
+        term.caretColor = theme.cursor.nsColor
+        term.selectedTextBackgroundColor = theme.selectionBackground.nsColor
     }
 
     public func focus() { term.window?.makeFirstResponder(term) }
