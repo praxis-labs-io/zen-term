@@ -12,6 +12,10 @@ final class PaneCanvasController: NSObject {
     private let registry: PaneSurfaceRegistry
     private var cwdByLeaf: [PaneID: URL] = [:]
     private var hostByLeaf: [PaneID: PanelHostView] = [:]
+    /// A one-shot startup command per leaf (the `⌘P` workspace preset seeds the first
+    /// leaf with `nvim`). Consumed when the leaf's surface is first started; splits
+    /// never inherit it, so a split of an nvim pane is a plain shell.
+    private var startupCommandByLeaf: [PaneID: String] = [:]
     private var nextID = 1
 
     /// The single leaf rendered full-canvas when zoomed, or nil when the whole tree
@@ -85,13 +89,14 @@ final class PaneCanvasController: NSObject {
 
     private static let homePath = FileManager.default.homeDirectoryForCurrentUser.path
 
-    init(initialCWD: URL? = nil) {
+    init(initialCWD: URL? = nil, initialCommand: String? = nil) {
         let firstLeaf = PaneID(1)
         self.tree = PaneTree(singleLeaf: firstLeaf)
         self.registry = PaneSurfaceRegistry(makeSurface: TerminalSurfaceFactory.make)
         super.init()
         nextID = 2
         if let initialCWD { cwdByLeaf[firstLeaf] = initialCWD }
+        if let initialCommand { startupCommandByLeaf[firstLeaf] = initialCommand }
         canvasView.wantsLayer = true
         canvasView.layer?.backgroundColor = Self.canvasColor.cgColor
     }
@@ -113,8 +118,14 @@ final class PaneCanvasController: NSObject {
         for (id, surface) in created {
             surface.delegate = self
             // Each created leaf starts with the cwd pre-seeded for it (nil → default
-            // for the first pane; a split seeds the new leaf with its parent's cwd).
-            surface.start(TerminalSurfaceConfig(workingDirectory: cwdByLeaf[id], theme: Theme.rosePineMoon))
+            // for the first pane; a split seeds the new leaf with its parent's cwd). A
+            // seeded startup command (workspace preset) runs a program that drops back to
+            // a shell; consume it so it never re-runs.
+            if let cmd = startupCommandByLeaf.removeValue(forKey: id) {
+                surface.start(ShellLaunch.program(cmd, cwd: cwdByLeaf[id]))
+            } else {
+                surface.start(ShellLaunch.shell(cwd: cwdByLeaf[id]))
+            }
         }
         for id in diff.removed { cwdByLeaf[id] = nil; hostByLeaf[id] = nil }
         rebuildViews()

@@ -69,11 +69,20 @@ final class TabController: NSObject {
         set { paneCanvas.onLastPaneClosed = newValue }
     }
 
-    var title: String { paneCanvas.title }
+    /// A pinned tab name (set when opened via the `⌘P` repo picker): overrides the
+    /// live cwd-derived title so the tab keeps the project's name no matter where the
+    /// focused pane's shell `cd`s. Nil for tabs opened any other way.
+    var pinnedTitle: String?
+    var title: String { pinnedTitle ?? paneCanvas.title }
     var focusedCWD: URL? { paneCanvas.focusedCWD }
 
-    init(initialCWD: URL?) {
-        paneCanvas = PaneCanvasController(initialCWD: initialCWD)
+    /// A startup command for the right drawer (the `⌘P` workspace preset sets `claude`).
+    /// When set, opening the right drawer launches the program-then-shell recipe instead
+    /// of a plain shell. Nil → plain shell.
+    var rightDrawerCommand: String?
+
+    init(initialCWD: URL?, initialCommand: String? = nil) {
+        paneCanvas = PaneCanvasController(initialCWD: initialCWD, initialCommand: initialCommand)
         canvas = paneCanvas.canvasView
         canvas.translatesAutoresizingMaskIntoConstraints = false
         super.init()
@@ -112,6 +121,29 @@ final class TabController: NSObject {
         return paneCanvas.closeFocused()
     }
     func focusActivePane() { paneCanvas.focusActivePane() }
+
+    /// The `⌘P` workspace layout: reveal the bottom drawer (a plain shell) and the right
+    /// drawer (running `rightDrawerCommand`, i.e. claude), then land focus on the primary
+    /// pane (nvim). Called once right after `start()` for a repo-opened tab.
+    func openWorkspaceLayout() {
+        if !isBottomOpen { toggleBottomDrawer() }
+        if !isRightOpen { toggleRightDrawer() }
+        focusActivePane()
+    }
+
+    /// Present a modal overlay filling the tab's tile region — same scoping as the
+    /// lazygit float (pinned to `content`, above the canvas and any drawers). Used by
+    /// `WindowController` to host the window-level `⌘P` repo picker over the active tab.
+    func presentTileOverlay(_ overlay: NSView) {
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(overlay)
+        NSLayoutConstraint.activate([
+            overlay.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            overlay.topAnchor.constraint(equalTo: content.topAnchor),
+            overlay.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+        ])
+    }
 
     /// Restore keyboard focus when this tab is (re)mounted: the modal lazygit float if
     /// open — it must keep first-responder, it's modal over the whole tab — otherwise
@@ -181,7 +213,7 @@ final class TabController: NSObject {
         if let existing = bottomDrawerPanel { return existing }
         let surface = TerminalSurfaceFactory.make()
         surface.delegate = self
-        surface.start(TerminalSurfaceConfig(workingDirectory: focusedCWD, theme: Theme.rosePineMoon))
+        surface.start(ShellLaunch.shell(cwd: focusedCWD))
         bottomDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .bottom, surface: surface)
         bottomDrawerPanel = panel   // relayoutPanels() attaches it to `content`
@@ -210,7 +242,10 @@ final class TabController: NSObject {
         if let existing = rightDrawerPanel { return existing }
         let surface = TerminalSurfaceFactory.make()
         surface.delegate = self
-        surface.start(TerminalSurfaceConfig(workingDirectory: focusedCWD, theme: Theme.rosePineMoon))
+        // The workspace preset runs a program here (claude) that drops back to a shell;
+        // a plain toggle-open right drawer is just a shell.
+        surface.start(rightDrawerCommand.map { ShellLaunch.program($0, cwd: focusedCWD) }
+                      ?? ShellLaunch.shell(cwd: focusedCWD))
         rightDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .right, surface: surface)
         rightDrawerPanel = panel   // relayoutPanels() attaches it to `content`
