@@ -33,7 +33,8 @@ public extension PaneTree {
     /// split of `axis` in its ancestry. The caller reads the split's rendered extent to
     /// clamp the ratio to a pixel minimum, which the pure tree can't know.
     func edgeSplitID(for leaf: PaneID, axis: SplitAxis, positive: Bool) -> SplitID? {
-        root.nearestSplit(to: leaf, axis: axis, onSideA: positive)
+        guard root.contains(leaf) else { return nil }   // `nearestSplit` assumes the leaf is present
+        return root.nearestSplit(to: leaf, axis: axis, onSideA: positive)
             ?? root.nearestSplit(to: leaf, axis: axis, onSideA: !positive)
     }
 

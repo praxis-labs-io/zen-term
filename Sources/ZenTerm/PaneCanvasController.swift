@@ -294,13 +294,15 @@ final class PaneCanvasController: NSObject {
 
     /// The smallest ratio that keeps BOTH sides of `split` at least `minSplitExtent` along
     /// `axis`, from the split's rendered extent (the max ratio is the mirror, `1 - this`).
-    /// Falls back to `minSplitRatio` before the split has been laid out, and pins to 0.5
-    /// when the split is too small to honor the floor on both sides.
+    /// Each child loses `panelGap/2` to the gutter, so that half-gutter is folded into the
+    /// floor — otherwise a pane could land ~4px under the minimum. Falls back to
+    /// `minSplitRatio` before layout, and pins to 0.5 when the split can't honor the floor.
     private func minRatioForSplit(_ split: SplitID, axis: SplitAxis) -> Double {
         guard let view = splitViewByID[split] else { return Self.minSplitRatio }
         let extent = axis == .vertical ? view.bounds.width : view.bounds.height
         guard extent > 0 else { return Self.minSplitRatio }
-        return min(0.5, Double(Self.minSplitExtent) / Double(extent))
+        let floor = Double(Self.minSplitExtent + ChromeMetrics.panelGap / 2)
+        return min(0.5, floor / Double(extent))
     }
 
     /// Close the focused pane. Returns false when it was the last pane (caller closes the window).

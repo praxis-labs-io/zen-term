@@ -554,7 +554,9 @@ final class TabController: NSObject {
         }
     }
 
-    /// Clamp a drawer extent to `[minDrawerExtent, maxDrawerFraction · working axis]`.
+    /// Clamp a drawer extent to `[minDrawerExtent, maxDrawerFraction · working axis]`, with
+    /// the ceiling floored at `minDrawerExtent` so that on a very small window the range
+    /// can't invert (the floor always wins over an even smaller fractional ceiling).
     private func clampedDrawerExtent(_ value: CGFloat, along axis: CGFloat) -> CGFloat {
         let ceiling = max(Self.minDrawerExtent, axis * Self.maxDrawerFraction)
         return min(max(value, Self.minDrawerExtent), ceiling)

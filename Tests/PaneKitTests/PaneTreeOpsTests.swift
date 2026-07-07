@@ -112,6 +112,14 @@ final class PaneTreeOpsTests: XCTestCase {
         XCTAssertNil(vertical.edgeSplitID(for: PaneID(2), axis: .horizontal, positive: true), "no horizontal split")
     }
 
+    /// A leaf absent from the tree resolves no split (rather than falling into the b-side
+    /// assumption and returning one).
+    func test_edgeSplitID_absentLeaf_returnsNil() {
+        let tree = PaneTree(singleLeaf: PaneID(1))
+            .splitting(PaneID(1), axis: .vertical, newLeaf: PaneID(2), newSplit: SplitID(1))
+        XCTAssertNil(tree.edgeSplitID(for: PaneID(99), axis: .vertical, positive: true))
+    }
+
     /// (1 / 2) stacked: j/k resolve the shared horizontal divider — the vertical-stack
     /// analog, confirming j/k are edge-aware too.
     func test_edgeSplitID_horizontalStack_resolvesSharedDivider() {
