@@ -1,12 +1,5 @@
 import AppKit
 
-/// A tab's overlay open-state, mirrored by the toggle dock's active tints.
-struct OverlayState: Equatable {
-    var isBottomOpen = false
-    var isRightOpen = false
-    var isLazygitOpen = false
-}
-
 /// The global footer toggle dock (bottom-right of the tab-bar row): a row of icon
 /// buttons — split-h, split-v │ command palette, bottom drawer, right drawer │ lazygit —
 /// grouped by thin dividers. Active toggles tint iris. Buttons fire injected closures
@@ -86,7 +79,7 @@ final class ToggleDock: NSView {
             super.init(frame: .zero)
             wantsLayer = true
             layer?.cornerRadius = 6
-            let config = NSImage.SymbolConfiguration(pointSize: 12.5, weight: .medium)
+            let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .medium)
             icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
                 .withSymbolConfiguration(config)
             icon.imageScaling = .scaleNone

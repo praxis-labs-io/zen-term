@@ -5,6 +5,14 @@ import TerminalKit
 /// Which edge a drawer panel docks to.
 enum DrawerEdge { case bottom, right }
 
+/// A tab's overlay open-state (drawers + lazygit), produced by `TabController` and
+/// mirrored by the footer toggle dock's active tints.
+struct OverlayState: Equatable {
+    var isBottomOpen = false
+    var isRightOpen = false
+    var isLazygitOpen = false
+}
+
 /// One tab: owns the pane tree (`PaneCanvasController`) and the per-tab overlay
 /// surfaces (drawers, lazygit) and zoom. `view` is the tab's container that
 /// `WindowController` mounts. `content` is the tab's tile region (inset from `view`

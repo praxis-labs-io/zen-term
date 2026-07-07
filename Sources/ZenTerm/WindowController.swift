@@ -15,7 +15,7 @@ final class WindowController: NSObject {
 
     private let container = NSView()
     private let tabBar: TabBarView
-    private var dock: ToggleDock!
+    private let dock: ToggleDock
     private var mountedCanvas: NSView?
 
     /// The `⌘P` repo picker, when open. Window-level (it opens/replaces tabs) but
@@ -52,29 +52,37 @@ final class WindowController: NSObject {
         let firstID = TabID(1)
         tabs = TabList(first: firstID)
         // tabBar needs `self` for callbacks; build with placeholders, wire after super.init.
+        // Both tabBar and dock need `self` for callbacks; build with placeholders, wire
+        // after super.init (so both can stay `let`).
         var onSelect: (TabID) -> Void = { _ in }
         var onClose: (TabID) -> Void = { _ in }
         var onNewTab: () -> Void = { }
         tabBar = TabBarView(onSelect: { onSelect($0) },
                             onClose: { onClose($0) },
                             onNewTab: { onNewTab() })
+        var onSplitH: () -> Void = {}
+        var onSplitV: () -> Void = {}
+        var onPalette: () -> Void = {}
+        var onBottom: () -> Void = {}
+        var onRight: () -> Void = {}
+        var onLazygit: () -> Void = {}
+        dock = ToggleDock(onSplitH: { onSplitH() }, onSplitV: { onSplitV() },
+                          onPalette: { onPalette() }, onBottom: { onBottom() },
+                          onRight: { onRight() }, onLazygit: { onLazygit() })
         super.init()
         nextTabID = 2
 
         onSelect = { [weak self] in self?.select($0) }
         onClose = { [weak self] in self?.closeTab($0) }
         onNewTab = { [weak self] in self?.newTab() }
-
         // Dock buttons route through `handle(_:)` (not the tab directly) so they obey the
         // same modal gates as the keyboard chords.
-        dock = ToggleDock(
-            onSplitH: { [weak self] in self?.handle(.splitHorizontal) },
-            onSplitV: { [weak self] in self?.handle(.splitVertical) },
-            onPalette: { [weak self] in self?.handle(.toggleRepoPicker) },
-            onBottom: { [weak self] in self?.handle(.toggleBottomDrawer) },
-            onRight: { [weak self] in self?.handle(.toggleRightDrawer) },
-            onLazygit: { [weak self] in self?.handle(.toggleLazygit) }
-        )
+        onSplitH = { [weak self] in self?.handle(.splitHorizontal) }
+        onSplitV = { [weak self] in self?.handle(.splitVertical) }
+        onPalette = { [weak self] in self?.handle(.toggleRepoPicker) }
+        onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
+        onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
+        onLazygit = { [weak self] in self?.handle(.toggleLazygit) }
 
         let first = makeController(initialCWD: initialCWD)
         controllers[firstID] = first
@@ -100,10 +108,12 @@ final class WindowController: NSObject {
             tabBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             tabBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             tabBar.heightAnchor.constraint(equalToConstant: TabBarView.height),
-            // Dock sits at the trailing edge of the tab-bar row; the tab strip ends before it.
+            // Dock sits at the trailing edge of the tab-bar row; the tab strip ends before
+            // it (== so the tab bar's width is unambiguous). The dock shares the chips' -6
+            // band nudge so its icons align with the tab labels, not 6pt below them.
             dock.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            dock.centerYAnchor.constraint(equalTo: tabBar.centerYAnchor),
-            tabBar.trailingAnchor.constraint(lessThanOrEqualTo: dock.leadingAnchor, constant: -8),
+            dock.centerYAnchor.constraint(equalTo: tabBar.centerYAnchor, constant: -6),
+            tabBar.trailingAnchor.constraint(equalTo: dock.leadingAnchor, constant: -8),
         ])
     }
 
