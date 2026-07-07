@@ -1,0 +1,31 @@
+# swift-format owns formatting; SwiftLint owns semantics + naming only.
+# `only_rules` keeps the two tools from fighting over whitespace/layout.
+only_rules:
+  - todo                              # ban TODO/FIXME markers (CLAUDE.md)
+  - force_cast                        # ban `as!` (currently zero — a ratchet)
+  - force_try                         # ban `try!` (currently zero — a ratchet)
+  - type_name                         # PascalCase types
+  - identifier_name                   # lowerCamelCase identifiers
+  - implicit_optional_initialization
+  - unused_optional_binding
+  - custom_rules                      # required in only_rules for the block below to run
+
+# HACK/XXX/TEMP/REMOVEME aren't covered by the built-in `todo` rule.
+custom_rules:
+  banned_markers:
+    name: "Banned marker"
+    regex: "\\b(HACK|XXX|TEMP|REMOVEME)\\b"
+    message: "Remove the marker and fix it now, or file a Linear ticket (CLAUDE.md)."
+    severity: warning
+
+identifier_name:
+  # The pane tree uses deliberate short names (a, b, id, dx, dy, v, …).
+  min_length:
+    warning: 1
+    error: 0
+  max_length:
+    warning: 50
+    error: 60
+
+excluded:
+  - .build
