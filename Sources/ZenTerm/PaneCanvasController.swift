@@ -142,6 +142,17 @@ final class PaneCanvasController: NSObject {
         registry.surface(for: tree.focusedLeaf)?.focus()
         return true
     }
+
+    @objc func copyFromSurface(_ sender: Any?) {
+        guard let text = registry.surface(for: tree.focusedLeaf)?.copySelection(), !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    @objc func pasteToSurface(_ sender: Any?) {
+        guard let text = NSPasteboard.general.string(forType: .string) else { return }
+        registry.surface(for: tree.focusedLeaf)?.paste(text)
+    }
 }
 
 extension PaneCanvasController: TerminalSurfaceDelegate {

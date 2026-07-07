@@ -16,6 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         canvas.canvasView.autoresizingMask = [.width, .height]
         content.addSubview(canvas.canvasView)
 
+        MainMenu.install(copyPaste: canvas)
+
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
