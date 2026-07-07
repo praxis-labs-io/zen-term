@@ -94,14 +94,15 @@ final class PaneCanvasController: NSObject {
             self?.hostView(for: id) ?? NSView()
         })
         // SplitContainerView.init already sets translatesAutoresizingMaskIntoConstraints=false.
-        // 12pt gutter around the canvas; a taller top inset clears the window's traffic
-        // lights (the window uses .fullSizeContentView, so they float over the top).
+        // `canvasView` fills exactly the tile `TabController` gives it — the outer
+        // 12pt gutter + 36pt top inset (clearing the window's traffic lights) live in
+        // `TabController`'s content-rect tiling, not here.
         canvasView.addSubview(root)
         NSLayoutConstraint.activate([
-            root.leadingAnchor.constraint(equalTo: canvasView.leadingAnchor, constant: 12),
-            root.trailingAnchor.constraint(equalTo: canvasView.trailingAnchor, constant: -12),
-            root.topAnchor.constraint(equalTo: canvasView.topAnchor, constant: 36),
-            root.bottomAnchor.constraint(equalTo: canvasView.bottomAnchor, constant: -12),
+            root.leadingAnchor.constraint(equalTo: canvasView.leadingAnchor),
+            root.trailingAnchor.constraint(equalTo: canvasView.trailingAnchor),
+            root.topAnchor.constraint(equalTo: canvasView.topAnchor),
+            root.bottomAnchor.constraint(equalTo: canvasView.bottomAnchor),
         ])
         updateHalo()
     }
