@@ -14,6 +14,7 @@ final class KeyInterceptor {
         case toggleBottomDrawer
         case toggleRightDrawer
         case toggleZoom
+        case toggleLazygit
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?
@@ -48,6 +49,7 @@ final class KeyInterceptor {
             case "n": chord = .newWindow
             case "b": chord = .toggleBottomDrawer
             case "f": chord = .toggleZoom
+            case "g": chord = .toggleLazygit
             case "1", "2", "3", "4", "5", "6", "7", "8", "9":
                 chord = key.flatMap { Int($0) }.map { .selectTab($0) }
             default:   chord = nil

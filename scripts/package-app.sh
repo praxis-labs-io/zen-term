@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Package ZenTerm as a standalone, ad-hoc-signed .app for daily driving.
+# Usage: scripts/package-app.sh [DEST_DIR]   (default: ~/Applications)
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+DEST="${1:-$HOME/Applications}"
+APP="$DEST/ZenTerm.app"
+BIN=".build/release/ZenTerm"
+VERSION="0.3.0"                          # Epic 3
+BUILD="$(git rev-parse --short HEAD 2>/dev/null || echo 0)"
+
+echo "▸ Building release…"
+swift build -c release
+
+echo "▸ Assembling $APP"
+rm -rf "$APP"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+cp "$BIN" "$APP/Contents/MacOS/ZenTerm"
+
+cat > "$APP/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>ZenTerm</string>
+  <key>CFBundleDisplayName</key><string>ZenTerm</string>
+  <key>CFBundleExecutable</key><string>ZenTerm</string>
+  <key>CFBundleIdentifier</key><string>com.drucial.ZenTerm</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>${VERSION}</string>
+  <key>CFBundleVersion</key><string>${BUILD}</string>
+  <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSPrincipalClass</key><string>NSApplication</string>
+  <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
+</dict>
+</plist>
+PLIST
+
+echo "▸ Ad-hoc signing"
+codesign --force --deep --sign - "$APP"
+
+echo "✓ $APP  (v${VERSION} build ${BUILD})"
