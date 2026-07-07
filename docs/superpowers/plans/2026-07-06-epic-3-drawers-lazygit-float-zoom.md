@@ -440,6 +440,255 @@ git commit -m "feat(drawers): per-tab right drawer (⌘|) with persistent shell"
 
 ---
 
+## PR 1 (rework) — Drawers as first-class panels
+
+Tasks 2–3 shipped functional-but-basic drawers (docked boxes, overlap, no pane
+parity). This rework brings them to full pane parity per the updated spec:
+tiled like splits (no overlap), same rounded chrome + iris halo, a meta header,
+unified focus, `⌘h/j/k/l` across panes+drawers, and `exit`-revive. Same PR1 branch.
+
+### Task 3b: Extract `PanelHostView` (shared pane/drawer chrome + optional meta header)
+
+Generalize the Epic-1 `PaneHostView` into a reusable `PanelHostView` used by both
+panes and drawers, adding an optional top meta header. Panes pass no meta; drawers
+pass `(label, keybind)`.
+
+**Files:**
+- Rename/rework: `Sources/ZenTerm/PaneHostView.swift` → `Sources/ZenTerm/PanelHostView.swift`
+- Modify: `Sources/ZenTerm/PaneCanvasController.swift` (use `PanelHostView`)
+
+**Interfaces:**
+- Produces: `final class PanelHostView: NSView` with
+  `init(content: NSView, background: NSColor, meta: PanelMeta?, onFocusRequest: @escaping () -> Void)`,
+  `var isFocused: Bool`, and `struct PanelMeta { let label: String; let keybind: String }`.
+
+- [ ] **Step 1: Create `PanelHostView` from `PaneHostView`**
+
+Copy the current `PaneHostView` chrome verbatim (rounded `pane` view, 12pt corner
+radius, 1pt border, iris halo shadow, inner `clip` with background, `content` inset
+by `padding`=10 all sides) into `PanelHostView`, with these changes:
+- Drop `paneID`; `onFocusRequest` becomes `() -> Void` (no id argument).
+- Add `meta: PanelMeta?`. When non-nil, add a top meta row INSIDE the clip, above the
+  content: a muted small-caps mono label (left) and the keybind (right), e.g.
+  `NSTextField` labels in an `NSStackView` pinned top/leading/trailing with ~6pt
+  inset; the terminal `content` top then pins below the meta row instead of the clip
+  top. When nil, content pins to the clip top as today (no header).
+- Keep `isFocused` → halo exactly as `PaneHostView` had it.
+
+Meta styling: label `NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)`,
+color `NSColor(white: 0.92, alpha: 0.4)`, `.uppercased()` with letter-spacing;
+keybind same font, color `NSColor(white: 0.92, alpha: 0.3)`, right-aligned.
+
+- [ ] **Step 2: Use `PanelHostView` in `PaneCanvasController`**
+
+Replace `PaneHostView` with `PanelHostView` in `hostView(for:)`, `hostByLeaf`
+(`[PaneID: PanelHostView]`), and `updateHalo()`. Panes pass `meta: nil` and
+`onFocusRequest: { [weak self] in self?.focus(id) }`. No visual change to panes.
+
+- [ ] **Step 3: Build + runbook**
+
+`swift build` clean, `swift test` 45/45. `swift run ZenTerm`: panes look and behave
+identically (rounded frame, halo, click-to-focus). Commit:
+
+```bash
+git mv Sources/ZenTerm/PaneHostView.swift Sources/ZenTerm/PanelHostView.swift  # if not already
+git add -A && git commit -m "refactor(chrome): extract PanelHostView (shared pane/drawer chrome + meta header)"
+```
+
+### Task 3c: Tile drawers as sibling panels (no overlap) + meta header
+
+Make `TabController` the tiler: the pane canvas + open drawers tile within the tab
+content rect at the 12pt split gutter — right drawer = full-height right column,
+bottom drawer = under the canvas in the left column. Drawers render in
+`PanelHostView` with a meta header. Remove the old docked `DrawerView` look.
+
+**Files:**
+- Modify: `Sources/ZenTerm/TabController.swift`
+- Modify: `Sources/ZenTerm/PaneCanvasController.swift` (drop its outer inset so its canvas fills its tile)
+- Delete: `Sources/ZenTerm/DrawerView.swift` (replaced by `PanelHostView` tiles)
+
+**Interfaces:**
+- Consumes: `PanelHostView`, `TerminalSurfaceFactory`, `TerminalSurfaceConfig`.
+- Produces: `TabController` tiling of `{canvas, bottomDrawer, rightDrawer}`; drawer surfaces wrapped in `PanelHostView(meta:)`.
+
+- [ ] **Step 1: Move the outer inset out of `PaneCanvasController`**
+
+In `PaneCanvasController.rebuildViews()`, change the root constraints from the
+`(12 / -12 / 36 / -12)` insets to zero insets (root fills `canvasView`):
+
+```swift
+        NSLayoutConstraint.activate([
+            rootView.leadingAnchor.constraint(equalTo: canvasView.leadingAnchor),
+            rootView.trailingAnchor.constraint(equalTo: canvasView.trailingAnchor),
+            rootView.topAnchor.constraint(equalTo: canvasView.topAnchor),
+            rootView.bottomAnchor.constraint(equalTo: canvasView.bottomAnchor),
+        ])
+```
+
+(The 12pt inter-pane gutter still lives in `SplitContainerView`; the outer 12/36/12
+now becomes `TabController`'s content-rect inset in Step 2.)
+
+- [ ] **Step 2: Tile in `TabController`**
+
+Replace the current bottom/right drawer docking with a content-rect tiler. Add a
+`content` container pinned to `view` with insets **leading 12, trailing 12, top 36,
+bottom 12** (36 top clears the traffic lights; matches the old pane inset). Cache the
+pane canvas and drawer `PanelHostView`s. A single `relayoutPanels()` rebuilds the
+tile constraints from `isBottomOpen`/`isRightOpen`:
+- **right drawer open:** its `PanelHostView` pins top/bottom/trailing to `content`,
+  width 360; the canvas column's trailing pins to `rightPanel.leading - 12`.
+- **bottom drawer open:** its `PanelHostView` pins leading to the canvas column
+  leading, trailing to the canvas column trailing, bottom to `content.bottom`,
+  height 240; the canvas bottom pins to `bottomPanel.top - 12`.
+- **canvas:** leading/top to `content`; trailing to (right panel leading − 12) or
+  `content.trailing`; bottom to (bottom panel top − 12) or `content.bottom`.
+
+`relayoutPanels()` deactivates the previous tile constraint set and activates the new
+one (store them in an array) so repeated toggles never accumulate constraints.
+
+Drawer creation wraps the surface in a `PanelHostView` with meta:
+
+```swift
+    private func makeDrawerPanel(edge: DrawerEdge, surface: TerminalSurface) -> PanelHostView {
+        let meta = PanelMeta(label: edge == .bottom ? "BOTTOM" : "RIGHT",
+                             keybind: edge == .bottom ? "⌘B" : "⌘|")
+        return PanelHostView(content: surface.view,
+                             background: Theme.rosePineMoon.background.nsColor,
+                             meta: meta,
+                             onFocusRequest: { [weak self] in self?.focusDrawer(edge) })
+    }
+```
+
+> **Requirement:** the result matches the prototype (Image #12) — three panels, equal
+> 12pt gutters, right drawer full-height, bottom drawer under the canvas, no overlap.
+> Toggling a drawer re-tiles cleanly. `focusDrawer(edge)` is stubbed here and fully
+> implemented in Task 3d; for this task it may just call the drawer surface's `focus()`.
+
+- [ ] **Step 3: Build + runbook**
+
+`swift build` clean, `swift test` 45/45. `swift run ZenTerm`: `⌘B`, `⌘|`, both — the
+panels tile like the demo with matching borders/gutters/corners and a meta header
+(label left, hide-keybind right). No overlap. Commit:
+
+```bash
+git rm Sources/ZenTerm/DrawerView.swift
+git add -A && git commit -m "feat(drawers): tile drawers as sibling panels with meta header (no overlap)"
+```
+
+### Task 3d: Unified focus + copy/paste routing + `exit`-revive
+
+One focused panel per tab across {panes, drawers}; click-to-focus + single halo;
+copy/paste to the focused panel; `exit` closes+clears a drawer, re-toggle revives.
+
+**Files:**
+- Modify: `Sources/ZenTerm/TabController.swift`
+- Modify: `Sources/ZenTerm/PaneCanvasController.swift`
+
+**Interfaces:**
+- Produces: `PaneCanvasController.setPanesFocused(_ Bool)` (toggles all pane halos off/on) and `var onFocusChanged: (() -> Void)?` (fired in `focus(_:)`); `TabController` focus authority over `PanelRef` = `.pane` / `.bottomDrawer` / `.rightDrawer`.
+
+- [ ] **Step 1: Let `PaneCanvasController` yield/hold focus**
+
+Add `private var panesHoldFocus = true`; in `updateHalo()`, when `!panesHoldFocus`
+force every host `isFocused = false`. Add `func setPanesFocused(_ on: Bool) { panesHoldFocus = on; updateHalo() }`. Add `var onFocusChanged: (() -> Void)?` fired at the end of `focus(_:)` (so a pane click bubbles up to `TabController`).
+
+- [ ] **Step 2: `TabController` focus authority**
+
+Track `private var focusedPanel: PanelRef = .pane`. On focusing a drawer
+(`focusDrawer(edge)`): set `focusedPanel`, call `paneCanvas.setPanesFocused(false)`,
+set that drawer `PanelHostView.isFocused = true`, the other drawer `false`, and
+`surface.focus()`. On a pane gaining focus (`paneCanvas.onFocusChanged`): set
+`focusedPanel = .pane`, `paneCanvas.setPanesFocused(true)`, both drawer panels
+`isFocused = false`. Route copy/paste:
+
+```swift
+    @objc func copyFromSurface(_ sender: Any?) { focusedSurface?.copySelectionToPasteboard() ?? paneCanvas.copyFromSurface(sender) }
+    @objc func pasteToSurface(_ sender: Any?) { focusedSurface?.pasteFromPasteboard() ?? paneCanvas.pasteToSurface(sender) }
+```
+
+> Implement `focusedSurface: TerminalSurface?` returning the bottom/right drawer
+> surface when `focusedPanel` is a drawer, else nil (→ pane routing). For the drawer
+> copy path, mirror `PaneCanvasController.copyFromSurface`/`pasteToSurface` behavior
+> on the drawer surface (`copySelection()` → pasteboard; pasteboard string → `paste`).
+> Keep it DRY if practical, but correctness is the requirement: copy/paste act on the
+> focused panel.
+
+- [ ] **Step 3: `exit`-revive via drawer surface delegate**
+
+`TabController` adopts `TerminalSurfaceDelegate`; drawer surfaces set `delegate = self`.
+On `surfaceDidExit` for a drawer surface, close+clear that drawer: remove its
+`PanelHostView`, terminate/nil the surface, set `isBottomOpen`/`isRightOpen = false`,
+`relayoutPanels()`, and if it held focus, return focus to the pane canvas. Re-toggling
+`⌘B`/`⌘|` then recreates a fresh surface (the `ensure…` path already lazily creates).
+
+- [ ] **Step 4: Build + runbook**
+
+`swift build` clean, `swift test` 45/45. `swift run ZenTerm`:
+1. Click a pane, click the bottom drawer → halo moves to the drawer, panes unfocused; click back → halo returns to the pane. Exactly one halo at a time.
+2. Select text in the focused drawer, `⌘C`; `⌘V` into it → operates on the drawer, not the pane.
+3. `exit` in a drawer → it closes+clears; `⌘B` reopens a fresh shell.
+
+Commit:
+
+```bash
+git add Sources/ZenTerm/TabController.swift Sources/ZenTerm/PaneCanvasController.swift
+git commit -m "feat(drawers): unified panel focus, focused-panel copy/paste, exit-revive (ZEN-19)"
+```
+
+### Task 3e: `⌘h/j/k/l` navigation across panes + drawers
+
+Extend spatial nav so an open drawer is just another panel in the `⌘hjkl` graph.
+
+**Files:**
+- Modify: `Sources/ZenTerm/TabController.swift`
+- Modify: `Sources/ZenTerm/PaneCanvasController.swift`
+- Modify: `Sources/ZenTerm/WindowController.swift`
+
+**Interfaces:**
+- Produces: `TabController.navigate(_ direction: Direction)` (overrides the forwarding one from Task 1) scoring panes + drawers; `PaneCanvasController.leafFrames(in:)`, `func focusLeaf(_ id: PaneID)`, `var focusedLeafID: PaneID`.
+
+- [ ] **Step 1: Expose pane frames + focus from `PaneCanvasController`**
+
+Add `func leafFrames(in target: NSView) -> [PaneID: CGRect]` (each `hostByLeaf` frame
+converted into `target` coords), `var focusedLeafID: PaneID { tree.focusedLeaf }`, and
+`func focusLeaf(_ id: PaneID) { focus(id) }` (public entry).
+
+- [ ] **Step 2: Unified nav in `TabController`**
+
+Replace `TabController.navigate(_:)` (currently forwards to `paneCanvas`) with a
+cross-panel scorer. Build `[PaneID: CGRect]` in `view` coords: the pane leaf frames
+from `paneCanvas.leafFrames(in: view)`, plus sentinel ids for open drawers
+(`bottomDrawerID = PaneID(Int.min)`, `rightDrawerID = PaneID(Int.min + 1)`) mapped to
+their `PanelHostView` frames. Determine the origin id from `focusedPanel`
+(`.pane` → `paneCanvas.focusedLeafID`; drawer → its sentinel). Call PaneKit's
+`nearestLeaf(from:frames:direction:)` (the same scorer panes already use). Map the
+result: a real `PaneID` → focus that pane (`paneCanvas.focusLeaf`, and set
+`focusedPanel = .pane` via the pane focus path); a sentinel → `focusDrawer(edge)`.
+
+> Use the existing `nearestLeaf` from `Sources/PaneKit/SpatialNav.swift` unchanged
+> (read its exact signature first). This keeps the tie-break/scoring identical to
+> pane-to-pane nav. **Requirement:** with a drawer open, `⌘j` from a bottom-edge pane
+> moves focus into the bottom drawer; `⌘k` moves back; `⌘l` reaches the right drawer;
+> the single halo follows.
+
+- [ ] **Step 3: Routing already lands in `TabController.navigate`**
+
+`WindowController.handle` already calls `active?.navigate(...)` for `.navLeft/Right/Up/Down`
+(Task 1) — no change needed; it now hits the unified nav.
+
+- [ ] **Step 4: Build + runbook**
+
+`swift build` clean, `swift test` 45/45. `swift run ZenTerm`: split panes + open both
+drawers; `⌘h/j/k/l` moves focus among all panels with one halo; click still focuses
+any panel. Commit:
+
+```bash
+git add Sources/ZenTerm/TabController.swift Sources/ZenTerm/PaneCanvasController.swift
+git commit -m "feat(drawers): ⌘hjkl navigation across panes and drawers"
+```
+
+---
+
 ## PR 2 — Zoom (`⌘F`)
 
 Ship PR1 first (merge). Branch PR2 from the ticket's Linear `gitBranchName`.

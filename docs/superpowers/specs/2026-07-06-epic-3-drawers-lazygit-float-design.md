@@ -98,9 +98,13 @@ already calls.
 ## Components (new files, `Sources/ZenTerm/`)
 
 - `TabController.swift` — the per-tab wrapper above. [PR1]
-- `DrawerView.swift` — a docked, fixed-size container hosting one drawer surface at
-  a given edge (`.bottom` / `.right`), with a subtle divider; shown/hidden by
-  toggle. Reused for both drawers. [PR1]
+- `PanelHostView.swift` — the **shared panel chrome** used by BOTH panes and drawers:
+  rounded frame, 1pt border, iris focus halo, inner padding, click-to-focus, and an
+  optional top **meta header** (left label + right hide-keybind). Extracted from the
+  Epic-1 `PaneHostView` so panes and drawers look identical. [PR1 rework]
+- `DrawerView.swift` — a drawer is just a `PanelHostView` (with a meta header) hosting
+  a terminal surface; it tiles as a sibling of the pane canvas (no separate docked
+  "container" look). [PR1 rework]
 - `LazygitOverlay.swift` — centered float + dimmed backdrop hosting the lazygit
   surface; Escape / backdrop-click / process-exit dismiss. [PR3]
 - `ToggleDock.swift` — the global bottom-right button row (split-v/-h, sidebar,
@@ -116,15 +120,43 @@ indicator is a small iris corner badge on `PaneHostView` / `DrawerView` (an
 
 ## Behavior details
 
+### Drawers are first-class panels (pane parity)
+
+Drawers must look and behave exactly like terminal panes, with one addition (a meta
+header). Concretely:
+
+- **Same chrome:** drawers render in a `PanelHostView` — identical rounded frame,
+  1pt border, inner padding, and **iris focus halo** as panes. Shared code, not a
+  look-alike.
+- **Tiled like splits, never overlapping.** `TabController` tiles the pane canvas and
+  the open drawers as siblings within the tab content rect, separated by the same
+  12pt gutter panes use. Layout (matching the prototype): the **right drawer is the
+  full-height right column**; the **bottom drawer sits under the pane canvas in the
+  remaining left column**; the pane canvas fills the top-left. No drawer ever
+  overlaps another panel.
+- **Meta header:** each drawer's `PanelHostView` shows a top line — **left** = its
+  label (`BOTTOM` / `RIGHT`, muted small-caps), **right** = the **keybind to hide it**
+  (`⌘B` / `⌘|`). (Panes have no header.)
+- **Unified focus:** exactly **one** panel is focused per tab across {pane leaves,
+  bottom drawer, right drawer}; the iris halo marks it. Focusing a drawer clears the
+  panes' halo and vice-versa.
+- **Same navigation:** `⌘h/j/k/l` navigates spatially across **panes AND drawers** —
+  an open drawer is just another panel in the nav graph. Click-to-focus works on any
+  panel too. `TabController` owns this unified focus/nav (scoring drawer frames
+  alongside pane frames); it delegates pane targets to `PaneCanvasController`.
+- **Copy/paste** operate on the focused panel (pane or drawer).
+
 ### Drawer lifecycle
-1. `⌘B` / `⌘|` with the drawer closed → create the surface (login shell, cwd =
-   focused pane's live cwd), start it, show `DrawerView` docked at its edge, focus it.
-2. Same chord with the drawer open → hide the `DrawerView`; the surface + process
-   **stay alive** (retained by `TabController`). Reopen → re-show the same surface
-   with its accumulated output.
+1. `⌘B` / `⌘|` with the drawer closed → create a login-shell surface (cwd = focused
+   pane's live cwd), start it, tile it in as a panel, focus it.
+2. Same chord with the drawer open → hide it; the surface + process **stay alive**
+   (retained by `TabController`). Reopen → re-tile the same surface with its output.
 3. Switching tabs detaches the whole `TabController.view` (retained) → drawer
    processes keep running.
-4. Closing the tab → `TabController.shutdown()` terminates the pane canvas and all
+4. **`exit` in a drawer** (its shell process exits) → the drawer **closes and clears**
+   (view + surface released); re-toggling `⌘B` / `⌘|` **revives** it with a fresh
+   shell. (A drawer surface has a delegate observing `surfaceDidExit`.)
+5. Closing the tab → `TabController.shutdown()` terminates the pane canvas and all
    auxiliary surfaces.
 
 ### lazygit float
@@ -192,9 +224,14 @@ through to the PTY. Drawers/panes/lazygit remain click-to-focus.
 
 ## Definition of done
 
-- `⌘B` / `⌘|` open a per-tab drawer hosting a live login shell in the focused
-  pane's cwd; toggling hidden keeps its process running; switching tabs preserves
-  each tab's drawers; closing a tab terminates its drawer shells (no zombies).
+- `⌘B` / `⌘|` open a per-tab drawer that looks and behaves like a terminal pane
+  (same rounded frame/border/padding/halo) plus a meta header (label + hide keybind),
+  tiled with the pane canvas at the 12pt split gutter with **no overlap**, hosting a
+  live login shell in the focused pane's cwd; toggling hidden keeps its process
+  running; `exit` closes+clears it and re-toggling revives a fresh shell; switching
+  tabs preserves each tab's drawers; closing a tab terminates its drawer shells.
+- `⌘h/j/k/l` and click navigate focus across panes **and** open drawers as one graph,
+  with a single iris halo on the focused panel; copy/paste act on the focused panel.
 - `⌘F` zooms the focused pane or drawer to fill the tab (surface retained, no
   restart) with a zoom indicator; `⌘F` again or Escape restores the prior layout.
 - `⌘G` opens a per-tab lazygit float running `lazygit` in the right cwd; Escape /
