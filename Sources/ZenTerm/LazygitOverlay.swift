@@ -4,7 +4,8 @@ import AppKit
 /// exactly the tile area (its host pins it to `content`, so it never bleeds over the
 /// window gutters or the tab bar): a dim backdrop over the panes behind, rounded to the
 /// panel corner radius, and a centered card holding the surface. A click on the backdrop
-/// dismisses; clicks inside the card reach lazygit.
+/// dismisses; clicks on the terminal reach lazygit (clicks in the card's thin padding
+/// ring are inert — they neither dismiss nor reach the terminal).
 final class LazygitOverlay: NSView {
     private let onDismiss: () -> Void
 

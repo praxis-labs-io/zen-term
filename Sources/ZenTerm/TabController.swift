@@ -11,7 +11,7 @@ enum DrawerEdge { case bottom, right }
 /// to clear the traffic lights and match the pane gutter); the pane canvas and any
 /// open drawers tile within it as sibling panels — right drawer as a full-height
 /// column, bottom drawer under the canvas in the remaining left column — separated
-/// by the same 12pt gutter panes use, never overlapping.
+/// by the same gutter panes use (`ChromeMetrics.panelGap`), never overlapping.
 final class TabController: NSObject {
     let view = NSView()
     private let content = NSView()
@@ -112,6 +112,14 @@ final class TabController: NSObject {
         return paneCanvas.closeFocused()
     }
     func focusActivePane() { paneCanvas.focusActivePane() }
+
+    /// Restore keyboard focus when this tab is (re)mounted: the modal lazygit float if
+    /// open — it must keep first-responder, it's modal over the whole tab — otherwise
+    /// the active pane. Without the float check, remounting (tab switch-back, new/close
+    /// tab) steals focus to the pane hidden behind the still-visible float.
+    func restoreKeyFocus() {
+        if isLazygitOpen { lazygitSurface?.focus() } else { paneCanvas.focusActivePane() }
+    }
 
     func shutdown() {
         paneCanvas.shutdown()
@@ -418,8 +426,8 @@ final class TabController: NSObject {
     }
 
     /// Rebuild the tile layout from `isBottomOpen`/`isRightOpen`: the canvas + any
-    /// open drawer panels as sibling panels within `content`, separated by a 12pt
-    /// gutter, never overlapping. Right drawer is a full-height column; bottom
+    /// open drawer panels as sibling panels within `content`, separated by a
+    /// `ChromeMetrics.panelGap` gutter, never overlapping. Right drawer is a full-height column; bottom
     /// drawer sits under the canvas in the remaining left column (never under the
     /// right column). Deactivates the previous tile constraint set before activating
     /// the new one so repeated toggles never accumulate constraints.
@@ -546,8 +554,12 @@ extension TabController: TerminalSurfaceDelegate {
             // `focusActivePane()` restores BOTH the pane's keyboard first-responder
             // and — via `onFocusChanged` → `paneGainedFocus()` — the unified halo/
             // routing state, so typing `exit` in a focused drawer doesn't orphan
-            // keystrokes until the next click.
-            if focusedPanel == .bottomDrawer { paneCanvas.focusActivePane() }
+            // keystrokes until the next click. But NOT while the modal float is open:
+            // it must keep focus, so only re-point `focusedPanel` to the pane (the
+            // now-gone drawer) so closing the float later restores focus correctly.
+            if focusedPanel == .bottomDrawer {
+                if isLazygitOpen { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
+            }
         } else if s === rightDrawerSurface {
             if zoomedPanel == .rightDrawer { zoomedPanel = nil }   // don't leave zoom stuck
             rightDrawerPanel?.removeFromSuperview()
@@ -556,9 +568,11 @@ extension TabController: TerminalSurfaceDelegate {
             rightDrawerPanel = nil
             isRightOpen = false
             relayoutPanels()
-            // See the bottom-drawer branch above: `focusActivePane()` restores both
-            // keyboard focus and unified halo/routing in one call.
-            if focusedPanel == .rightDrawer { paneCanvas.focusActivePane() }
+            // See the bottom-drawer branch above: keep the modal float focused if open,
+            // otherwise restore keyboard focus + unified halo/routing to the pane.
+            if focusedPanel == .rightDrawer {
+                if isLazygitOpen { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
+            }
         }
     }
 }

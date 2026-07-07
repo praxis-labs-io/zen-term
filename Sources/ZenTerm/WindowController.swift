@@ -138,7 +138,7 @@ final class WindowController: NSObject {
             ])
             mountedCanvas = canvas
         }
-        c.focusActivePane()
+        c.restoreKeyFocus()   // float-aware: keeps focus on the modal float when open
     }
 
     // MARK: tab ops
