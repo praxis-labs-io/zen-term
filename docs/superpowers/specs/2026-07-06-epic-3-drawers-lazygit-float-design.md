@@ -25,14 +25,17 @@ Drawer/lazygit contents are just more `TerminalSurface`s behind the seam.
   tab closes.
 - **Drawer sizes are static this pass** (no drag-resize): bottom ≈ 240pt tall,
   right ≈ 360pt wide. Resizing is deferred.
-- **lazygit auto-closes when its process exits**; Escape or backdrop-click also
-  dismisses.
+- **lazygit auto-closes when its process exits** (quitting lazygit with `q`);
+  a backdrop-click or `⌘G` again also dismisses. Escape is **not** bound to
+  dismiss — lazygit owns Escape for its own navigation, so Escape passes
+  straight through to it.
 - **The toggle dock is one global widget** that mirrors the **active tab's** overlay
   state and updates on tab switch.
 - **`⌘F` zooms the focused terminal** (a pane OR a drawer) to fill the tab region,
-  as if it were the only terminal in the tab, with a zoom indicator. Toggling off
-  (or Escape) restores the prior layout. Zoom and the lazygit float are mutually
-  exclusive — `⌘F` is ignored while the float is open.
+  as if it were the only terminal in the tab, with a zoom indicator. `⌘F` again
+  restores the prior layout. Escape is **not** bound to unzoom — a zoomed pane
+  often runs vim, which owns Escape — so Escape passes through untouched. Zoom and
+  the lazygit float are mutually exclusive — `⌘F` is ignored while the float is open.
 
 ## Architecture — per-tab `TabController` wrapper
 
@@ -106,7 +109,7 @@ already calls.
   a terminal surface; it tiles as a sibling of the pane canvas (no separate docked
   "container" look). [PR1 rework]
 - `LazygitOverlay.swift` — centered float + dimmed backdrop hosting the lazygit
-  surface; Escape / backdrop-click / process-exit dismiss. [PR3]
+  surface; backdrop-click / `⌘G` / process-exit dismiss (Escape stays in lazygit). [PR3]
 - `ToggleDock.swift` — the global bottom-right button row (split-v/-h, sidebar,
   bottom, right, lazygit) with active/inactive styling reflecting the active tab.
   [PR4]
@@ -164,9 +167,10 @@ header). Concretely:
   (`$SHELL -l -c lazygit`, matching Epic 0's login-shell PATH fix so a
   Homebrew-installed `lazygit` resolves), cwd = focused pane's cwd; show it centered
   over the tab with a dimmed backdrop; focus it.
-- Dismiss on **Escape**, **backdrop click**, or **process exit** (`surfaceDidExit`):
-  remove the float and terminate/clear the surface. `⌘G` again launches a fresh
-  lazygit.
+- Dismiss on **`q`/process exit** (`surfaceDidExit`), **backdrop click**, or **`⌘G`
+  again**: remove the float and terminate/clear the surface. `⌘G` afterward launches
+  a fresh lazygit. Escape is deliberately **not** a dismiss key — lazygit consumes
+  Escape for its own menu navigation, so it passes straight through to lazygit.
 - The float is per tab; switching tabs hides it with the tab (its state is the
   tab's own).
 
@@ -179,13 +183,13 @@ header). Concretely:
   drawers are hidden; for a **drawer** target, the drawer surface fills the region
   and the pane canvas + other drawer are hidden.
 - A **zoom indicator** (a small iris corner badge) marks the zoomed surface.
-- `⌘F` again **or Escape** restores the prior layout (including whichever drawers
-  were open). Zoom is per-tab transient state (not persisted); switching tabs leaves
-  each tab's zoom as it was.
+- `⌘F` again restores the prior layout (including whichever drawers were open).
+  Zoom is per-tab transient state (not persisted); switching tabs leaves each tab's
+  zoom as it was. Escape does **not** unzoom (vim in a zoomed pane owns Escape);
+  zoom is toggled only with `⌘F`.
 - Zoom and the lazygit float are **mutually exclusive**: `⌘F` is ignored while the
   float is open (you can't zoom a pane/drawer under a float), and opening the float
-  is the only full-tab overlay in play. So Escape is unambiguous — it dismisses the
-  float if open, otherwise unzooms if zoomed.
+  exits any zoom first — so the float is the only full-tab overlay in play.
 
 ### Toggle dock (global, mirrors active tab)
 - One dock in the tab-bar row: tab bar left, dock right.
@@ -233,9 +237,9 @@ through to the PTY. Drawers/panes/lazygit remain click-to-focus.
 - `⌘h/j/k/l` and click navigate focus across panes **and** open drawers as one graph,
   with a single iris halo on the focused panel; copy/paste act on the focused panel.
 - `⌘F` zooms the focused pane or drawer to fill the tab (surface retained, no
-  restart) with a zoom indicator; `⌘F` again or Escape restores the prior layout.
-- `⌘G` opens a per-tab lazygit float running `lazygit` in the right cwd; Escape /
-  backdrop / quitting lazygit all dismiss it cleanly.
+  restart) with a zoom indicator; `⌘F` again restores the prior layout.
+- `⌘G` opens a per-tab lazygit float running `lazygit` in the right cwd; backdrop
+  click / `⌘G` / quitting lazygit all dismiss it cleanly.
 - The toggle dock mirrors the active tab's overlay state and toggles each overlay.
 - `⌘E` toggles a global left sidebar.
 - Seam intact (chrome imports `TerminalKit`/`PaneKit`/`TabKit` + AppKit only; no
@@ -248,10 +252,10 @@ through to the PTY. Drawers/panes/lazygit remain click-to-focus.
    lifecycle (persistent, cwd-inherited, terminate-on-tab-close), `DrawerView`,
    fixed sizes. The load-bearing refactor.
 2. **Zoom** (`⌘F`) — `PaneCanvasController` single-leaf render + `TabController`
-   `zoomTarget` orchestration (hide siblings), focus-kind tracking, Escape-to-exit,
+   `zoomTarget` orchestration (hide siblings), focus-kind tracking, `⌘F`-only toggle,
    the zoom corner indicator.
 3. **lazygit float** (`⌘G`) — `LazygitOverlay`, per-tab, login-shell launch,
-   auto-close on exit, Escape/backdrop dismiss.
+   auto-close on exit, backdrop/`⌘G` dismiss (Escape stays in lazygit).
 4. **Toggle dock** — global bottom-right widget, mirrors active tab, split +
    toggle buttons.
 5. **Global left sidebar** (`⌘E`) — minimal per-window panel shell. Last.

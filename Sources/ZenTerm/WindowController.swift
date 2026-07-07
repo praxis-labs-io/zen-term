@@ -185,6 +185,17 @@ final class WindowController: NSObject {
     func handle(_ chord: KeyInterceptor.ReservedChord) {
         guard !tabs.order.isEmpty else { return }   // window tearing down after last tab closed
         let active = activeController
+        // The lazygit float is modal over its tab: while it's open, every tab-internal
+        // chord (split/nav/close/drawers/zoom) is swallowed. Only ⌘G (toggle it off) and
+        // cross-tab/window chords — switch tab, new tab, new window — still act.
+        if active?.isLazygitOpen == true {
+            switch chord {
+            case .toggleLazygit, .newTab, .newWindow, .selectTab:
+                break
+            default:
+                return
+            }
+        }
         switch chord {
         case .splitVertical:   active?.split(.vertical)
         case .splitHorizontal: active?.split(.horizontal)
@@ -204,6 +215,7 @@ final class WindowController: NSObject {
         case .toggleBottomDrawer: active?.toggleBottomDrawer()
         case .toggleRightDrawer: active?.toggleRightDrawer()
         case .toggleZoom: active?.toggleZoom()
+        case .toggleLazygit: active?.toggleLazygit()
         }
     }
 

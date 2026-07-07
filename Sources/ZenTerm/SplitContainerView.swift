@@ -4,7 +4,7 @@ import PaneKit
 /// Recursively lays out a PaneNode: a leaf hosts its provided view; a split places
 /// two child containers along its axis at the fixed ratio with a gutter gap.
 final class SplitContainerView: NSView {
-    init(node: PaneNode, gutter: CGFloat = 12, leafView: (PaneID) -> NSView) {
+    init(node: PaneNode, gutter: CGFloat = ChromeMetrics.panelGap, leafView: (PaneID) -> NSView) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         build(node, gutter: gutter, leafView: leafView)

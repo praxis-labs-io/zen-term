@@ -20,7 +20,6 @@ final class TabController: NSObject {
 
     private static let bottomDrawerHeight: CGFloat = 300
     private static let rightDrawerWidth: CGFloat = 480   // roomy enough for a Claude chat panel
-    private static let gutter: CGFloat = 12
 
     // Per-tab auxiliary surfaces (created lazily; kept alive when hidden — the shell
     // persists across toggles and is only terminated in `shutdown()`).
@@ -31,6 +30,12 @@ final class TabController: NSObject {
     private var rightDrawerSurface: TerminalSurface?
     private var rightDrawerPanel: PanelHostView?
     private var isRightOpen = false
+
+    // The lazygit float: a transient top-most overlay (unlike drawers, its surface is
+    // NOT persistent — it's terminated on every dismiss and re-spawned on the next ⌘G).
+    private var lazygitSurface: TerminalSurface?
+    private var lazygitOverlay: LazygitOverlay?
+    var isLazygitOpen: Bool { lazygitOverlay != nil }
 
     /// Which panel currently holds the tab's single unified focus/halo.
     private enum PanelRef: Equatable { case pane, bottomDrawer, rightDrawer }
@@ -75,14 +80,13 @@ final class TabController: NSObject {
 
         content.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(content)
-        // 12/12/36/12 content-rect inset: the 36pt top clears the window's traffic
-        // lights (the window uses .fullSizeContentView); the 12pt sides/bottom match
-        // the inter-panel gutter used below.
+        // Content-rect inset: `topInset` clears the window's traffic lights (the window
+        // uses .fullSizeContentView); the sides/bottom use `windowGutter`.
         NSLayoutConstraint.activate([
-            content.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Self.gutter),
-            content.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Self.gutter),
-            content.topAnchor.constraint(equalTo: view.topAnchor, constant: 36),
-            content.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -Self.gutter),
+            content.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: ChromeMetrics.windowGutter),
+            content.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -ChromeMetrics.windowGutter),
+            content.topAnchor.constraint(equalTo: view.topAnchor, constant: ChromeMetrics.topInset),
+            content.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -ChromeMetrics.windowGutter),
         ])
         content.addSubview(canvas)
         relayoutPanels()
@@ -115,13 +119,16 @@ final class TabController: NSObject {
         bottomDrawerSurface = nil
         rightDrawerSurface?.terminate()
         rightDrawerSurface = nil
+        lazygitSurface?.terminate()
+        lazygitSurface = nil
     }
 
     /// Copy from whichever panel holds unified focus: the pane canvas's own copy
     /// path, or — for a focused drawer — its surface's selection straight to the
     /// pasteboard (mirrors `PaneCanvasController.copyFromSurface`).
     @objc func copyFromSurface(_ sender: Any?) {
-        guard let surface = focusedDrawerSurface else {
+        // While the modal float is open, copy targets it, not the panel underneath.
+        guard let surface = lazygitSurface ?? focusedDrawerSurface else {
             paneCanvas.copyFromSurface(sender)
             return
         }
@@ -133,7 +140,8 @@ final class TabController: NSObject {
     /// Paste into whichever panel holds unified focus (mirrors
     /// `PaneCanvasController.pasteToSurface` for the drawer case).
     @objc func pasteToSurface(_ sender: Any?) {
-        guard let surface = focusedDrawerSurface else {
+        // While the modal float is open, paste targets it, not the panel underneath.
+        guard let surface = lazygitSurface ?? focusedDrawerSurface else {
             paneCanvas.pasteToSurface(sender)
             return
         }
@@ -201,6 +209,71 @@ final class TabController: NSObject {
         return panel
     }
 
+    // MARK: lazygit float (⌘G)
+
+    /// Toggle the lazygit float. Opening spawns a fresh surface running `lazygit` via
+    /// a login shell (so a Homebrew `lazygit` is on PATH — Epic 0's login-shell fix) in
+    /// the focused pane's cwd, and overlays it centered above everything. Mutually
+    /// exclusive with zoom (opening exits any zoom first). It auto-closes when lazygit
+    /// exits (`surfaceDidExit`); `⌘G` again, or a backdrop click, also dismiss it.
+    func toggleLazygit() {
+        if isLazygitOpen { closeLazygit(); return }
+        exitZoomIfNeeded()   // zoom and the float are mutually exclusive
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let surface = TerminalSurfaceFactory.make()
+        surface.delegate = self
+        // `-l -i`: a login AND interactive shell, so it sources BOTH profile files and
+        // `.zshrc` — matching how lazygit runs when typed in a pane. Without `-i`, a
+        // login-only shell skips `.zshrc`, so env it sets (e.g. XDG_CONFIG_HOME →
+        // lazygit's config path, COLORTERM) is missing and lazygit renders different colors.
+        surface.start(TerminalSurfaceConfig(command: shell, args: ["-l", "-i", "-c", "lazygit"],
+                                            workingDirectory: focusedCWD, theme: Theme.rosePineMoon))
+        lazygitSurface = surface
+        let overlay = LazygitOverlay(content: surface.view,
+                                     background: Theme.rosePineMoon.background.nsColor,
+                                     onDismiss: { [weak self] in self?.closeLazygit() })
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        // Mount in `content` (the tile region), not `view`: the modal covers only the
+        // tab's working area — never the window gutters or the tab bar — and sits above
+        // the canvas and any open drawers.
+        content.addSubview(overlay)
+        NSLayoutConstraint.activate([
+            overlay.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            overlay.topAnchor.constraint(equalTo: content.topAnchor),
+            overlay.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+        ])
+        lazygitOverlay = overlay
+        // Focus reads only on the float: clear the underlying panels' halos (keep
+        // `focusedPanel` so close can restore it).
+        paneCanvas.setPanesFocused(false)
+        bottomDrawerPanel?.isFocused = false
+        rightDrawerPanel?.isFocused = false
+        surface.focus()
+    }
+
+    private func closeLazygit() {
+        lazygitOverlay?.removeFromSuperview()
+        lazygitOverlay = nil
+        // Clear the ref BEFORE terminating: `terminate()` may synchronously re-enter
+        // `surfaceDidExit`, and a nil `lazygitSurface` makes that re-entry a no-op.
+        let surface = lazygitSurface
+        lazygitSurface = nil
+        surface?.terminate()
+        restoreUnifiedFocus()   // the float held keyboard focus; hand it back to its panel
+    }
+
+    /// Re-focus whichever panel held the tab's unified focus before the float opened
+    /// (the float focuses its own surface without changing `focusedPanel`), restoring
+    /// both the halo and keyboard first-responder.
+    private func restoreUnifiedFocus() {
+        switch focusedPanel {
+        case .pane: paneCanvas.focusActivePane()
+        case .bottomDrawer: focusDrawer(.bottom)
+        case .rightDrawer: focusDrawer(.right)
+        }
+    }
+
     // MARK: tiling
 
     private func makeDrawerPanel(edge: DrawerEdge, surface: TerminalSurface) -> PanelHostView {
@@ -257,6 +330,7 @@ final class TabController: NSObject {
     /// Zoom the focused panel to fill the tab (others hidden), or unzoom if already
     /// zoomed. For a pane, the pane canvas also renders just the focused leaf.
     func toggleZoom() {
+        guard !isLazygitOpen else { return }   // can't zoom a panel under the float
         if isZoomed { exitZoom(); return }
         switch focusedPanel {
         case .pane:
@@ -422,7 +496,7 @@ final class TabController: NSObject {
                 rightPanel.bottomAnchor.constraint(equalTo: content.bottomAnchor),
                 rightPanel.trailingAnchor.constraint(equalTo: content.trailingAnchor),
                 width,
-                canvas.trailingAnchor.constraint(equalTo: rightPanel.leadingAnchor, constant: -Self.gutter),
+                canvas.trailingAnchor.constraint(equalTo: rightPanel.leadingAnchor, constant: -ChromeMetrics.panelGap),
             ]
         } else {
             cs.append(canvas.trailingAnchor.constraint(equalTo: content.trailingAnchor))
@@ -436,12 +510,12 @@ final class TabController: NSObject {
                 bottomPanel.leadingAnchor.constraint(equalTo: content.leadingAnchor),
                 bottomPanel.bottomAnchor.constraint(equalTo: content.bottomAnchor),
                 height,
-                canvas.bottomAnchor.constraint(equalTo: bottomPanel.topAnchor, constant: -Self.gutter),
+                canvas.bottomAnchor.constraint(equalTo: bottomPanel.topAnchor, constant: -ChromeMetrics.panelGap),
             ]
             // The bottom drawer spans the canvas column only — it stops short of the
             // right drawer's column, so the two never overlap when both are open.
             if isRightOpen, let rightPanel = rightDrawerPanel {
-                cs.append(bottomPanel.trailingAnchor.constraint(equalTo: rightPanel.leadingAnchor, constant: -Self.gutter))
+                cs.append(bottomPanel.trailingAnchor.constraint(equalTo: rightPanel.leadingAnchor, constant: -ChromeMetrics.panelGap))
             } else {
                 cs.append(bottomPanel.trailingAnchor.constraint(equalTo: content.trailingAnchor))
             }
@@ -460,6 +534,7 @@ extension TabController: TerminalSurfaceDelegate {
     /// toggle lazily spawns a fresh one. Panes have their own exit handling in
     /// `PaneCanvasController`; this only reacts to the two drawer surfaces.
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
+        if s === lazygitSurface { closeLazygit(); return }   // lazygit quit (`q`) → auto-close
         if s === bottomDrawerSurface {
             if zoomedPanel == .bottomDrawer { zoomedPanel = nil }   // don't leave zoom stuck
             bottomDrawerPanel?.removeFromSuperview()
