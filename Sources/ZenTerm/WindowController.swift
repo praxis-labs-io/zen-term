@@ -201,6 +201,7 @@ final class WindowController: NSObject {
             if active?.closeFocused() == false { closeTab(tabs.activeID) }
         case .newWindow:
             break   // handled by AppDelegate (window manager); no-op here
+        case .toggleBottomDrawer: active?.toggleBottomDrawer()
         }
     }
 
