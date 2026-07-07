@@ -16,9 +16,12 @@ let package = Package(
             name: "PaneKit",
             dependencies: ["TerminalKit"]   // seam type only — NOT SwiftTerm
         ),
+        .target(
+            name: "TabKit"                   // pure — no AppKit, no SwiftTerm
+        ),
         .executableTarget(
             name: "ZenTerm",
-            dependencies: ["TerminalKit", "PaneKit"]  // still no SwiftTerm
+            dependencies: ["TerminalKit", "PaneKit", "TabKit"]  // still no SwiftTerm
         ),
         .testTarget(
             name: "TerminalKitTests",
@@ -27,6 +30,10 @@ let package = Package(
         .testTarget(
             name: "PaneKitTests",
             dependencies: ["PaneKit", "TerminalKit"]
+        ),
+        .testTarget(
+            name: "TabKitTests",
+            dependencies: ["TabKit"]
         ),
     ]
 )
