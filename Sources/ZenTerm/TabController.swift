@@ -93,7 +93,10 @@ final class TabController: NSObject {
 
     func start() { paneCanvas.start() }
     func split(_ axis: SplitAxis) { paneCanvas.split(axis) }
-    @discardableResult func closeFocused() -> Bool { paneCanvas.closeFocused() }
+    @discardableResult func closeFocused() -> Bool {
+        exitZoomIfNeeded()   // exit zoom before closing so zoom state can't desync
+        return paneCanvas.closeFocused()
+    }
     func focusActivePane() { paneCanvas.focusActivePane() }
 
     func shutdown() {
@@ -133,17 +136,16 @@ final class TabController: NSObject {
     /// Toggle the bottom drawer. First open creates a persistent login-shell surface
     /// in the tab's cwd; toggling hidden keeps it running; it dies only in `shutdown()`.
     func toggleBottomDrawer() {
+        exitZoomIfNeeded()   // any layout change exits zoom first (keeps state in sync)
         isBottomOpen.toggle()
         if isBottomOpen {
-            _ = ensureBottomDrawerPanel()   // relayoutPanels shows it (visibility follows open state)
-            relayoutPanels()
+            _ = ensureBottomDrawerPanel()
+            relayoutPanels()   // attaches + tiles it (visibility follows open state)
             focusDrawer(.bottom)
         } else {
-            if zoomedPanel == .bottomDrawer { exitZoom() }   // don't leave a hidden drawer zoomed
-            relayoutPanels()
+            relayoutPanels()   // detaches it (surface stays alive)
             // Only steal focus back to the pane canvas if the drawer being hidden was
-            // the one holding unified focus — otherwise leave the currently focused
-            // panel (e.g. the right drawer) alone. `focusActivePane()` bubbles through
+            // the one holding unified focus. `focusActivePane()` bubbles through
             // `paneCanvas.onFocusChanged` to reassert unified focus onto the canvas.
             if focusedPanel == .bottomDrawer { paneCanvas.focusActivePane() }
         }
@@ -156,8 +158,7 @@ final class TabController: NSObject {
         surface.start(TerminalSurfaceConfig(workingDirectory: focusedCWD, theme: Theme.rosePineMoon))
         bottomDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .bottom, surface: surface)
-        content.addSubview(panel)
-        bottomDrawerPanel = panel
+        bottomDrawerPanel = panel   // relayoutPanels() attaches it to `content`
         return panel
     }
 
@@ -166,13 +167,13 @@ final class TabController: NSObject {
     /// Toggle the right drawer. First open creates a persistent login-shell surface
     /// in the tab's cwd; toggling hidden keeps it running; it dies only in `shutdown()`.
     func toggleRightDrawer() {
+        exitZoomIfNeeded()
         isRightOpen.toggle()
         if isRightOpen {
-            _ = ensureRightDrawerPanel()   // relayoutPanels shows it (visibility follows open state)
+            _ = ensureRightDrawerPanel()
             relayoutPanels()
             focusDrawer(.right)
         } else {
-            if zoomedPanel == .rightDrawer { exitZoom() }   // don't leave a hidden drawer zoomed
             relayoutPanels()
             // See `toggleBottomDrawer`: only steal focus if this drawer held it.
             if focusedPanel == .rightDrawer { paneCanvas.focusActivePane() }
@@ -186,19 +187,25 @@ final class TabController: NSObject {
         surface.start(TerminalSurfaceConfig(workingDirectory: focusedCWD, theme: Theme.rosePineMoon))
         rightDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .right, surface: surface)
-        content.addSubview(panel)
-        rightDrawerPanel = panel
+        rightDrawerPanel = panel   // relayoutPanels() attaches it to `content`
         return panel
     }
 
     // MARK: tiling
 
     private func makeDrawerPanel(edge: DrawerEdge, surface: TerminalSurface) -> PanelHostView {
-        // Headers dropped for now — drawers use the bare pane chrome (meta: nil). The
-        // PanelHostView meta capability stays available for when we bring them back.
+        // Headers dropped for now — drawers use the bare pane chrome (meta: nil). A
+        // corner hide button (chevron pointing the way it collapses) toggles the drawer.
+        let hideGlyph = edge == .bottom ? "⌄" : "›"
         let panel = PanelHostView(content: surface.view,
                                   background: Theme.rosePineMoon.background.nsColor,
                                   meta: nil,
+                                  hideButton: (glyph: hideGlyph, onHide: { [weak self] in
+                                      switch edge {
+                                      case .bottom: self?.toggleBottomDrawer()
+                                      case .right: self?.toggleRightDrawer()
+                                      }
+                                  }),
                                   onFocusRequest: { [weak self] in self?.focusDrawer(edge) })
         panel.onZoomExit = { [weak self] in self?.toggleZoom() }
         panel.translatesAutoresizingMaskIntoConstraints = false
@@ -288,6 +295,7 @@ final class TabController: NSObject {
     /// by PaneKit's `nearestLeaf`, the same geometric scorer pane-to-pane nav already
     /// uses, so a drawer is just another panel in the graph.
     func navigate(_ direction: Direction) {
+        if exitZoomIfNeeded() { return }   // ⌘hjkl while zoomed just unzooms
         var frames = paneCanvas.leafFrames(in: content)
         if isBottomOpen, let panel = bottomDrawerPanel {
             frames[Self.bottomDrawerID] = flippedFrame(of: panel)
@@ -339,14 +347,43 @@ final class TabController: NSObject {
         }
     }
 
+    /// Attach a panel to `content` (visible) or detach it (hidden). Hidden panels are
+    /// DETACHED, not `isHidden` — a hidden view kept in the layout collapses to a 0×0
+    /// frame, which resizes its PTY to 0 columns and crashes size-sensitive TUIs (e.g.
+    /// a turborepo dev server). Detached, the terminal keeps its last size (process
+    /// alive), exactly like a backgrounded pane; reattaching restores a valid size.
+    private func setAttached(_ view: NSView, _ attached: Bool) {
+        if attached {
+            if view.superview !== content { content.addSubview(view) }
+        } else if view.superview === content {
+            view.removeFromSuperview()
+        }
+    }
+
     private func relayoutPanels() {
         NSLayoutConstraint.deactivate(tileConstraints)
+        tileConstraints = []
 
-        // Zoom: the zoomed panel fills `content`, the other panels are hidden.
-        if let z = zoomedPanel, let zv = zoomedView(z) {
-            canvas.isHidden = z != .pane
-            bottomDrawerPanel?.isHidden = z != .bottomDrawer
-            rightDrawerPanel?.isHidden = z != .rightDrawer
+        // The zoom target is only effective while its view exists (a zoomed drawer
+        // whose shell just exited falls back to normal tiling).
+        let effectiveZoom: PanelRef? = zoomedPanel.flatMap { zoomedView($0) != nil ? $0 : nil }
+
+        let canvasVisible: Bool, bottomVisible: Bool, rightVisible: Bool
+        if let z = effectiveZoom {
+            canvasVisible = z == .pane
+            bottomVisible = z == .bottomDrawer
+            rightVisible = z == .rightDrawer
+        } else {
+            canvasVisible = true
+            bottomVisible = isBottomOpen
+            rightVisible = isRightOpen
+        }
+        setAttached(canvas, canvasVisible)
+        if let p = bottomDrawerPanel { setAttached(p, bottomVisible) }
+        if let p = rightDrawerPanel { setAttached(p, rightVisible) }
+
+        // Zoom: the single visible panel fills `content`.
+        if let z = effectiveZoom, let zv = zoomedView(z) {
             let cs = [
                 zv.leadingAnchor.constraint(equalTo: content.leadingAnchor),
                 zv.trailingAnchor.constraint(equalTo: content.trailingAnchor),
@@ -358,11 +395,7 @@ final class TabController: NSObject {
             return
         }
 
-        // Normal tiling: panel visibility follows open state.
-        canvas.isHidden = false
-        bottomDrawerPanel?.isHidden = !isBottomOpen
-        rightDrawerPanel?.isHidden = !isRightOpen
-
+        // Normal tiling among the visible panels (canvas always visible here).
         var cs: [NSLayoutConstraint] = [
             canvas.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             canvas.topAnchor.constraint(equalTo: content.topAnchor),
@@ -418,6 +451,7 @@ extension TabController: TerminalSurfaceDelegate {
     /// `PaneCanvasController`; this only reacts to the two drawer surfaces.
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         if s === bottomDrawerSurface {
+            if zoomedPanel == .bottomDrawer { zoomedPanel = nil }   // don't leave zoom stuck
             bottomDrawerPanel?.removeFromSuperview()
             bottomDrawerSurface?.terminate()
             bottomDrawerSurface = nil
@@ -430,6 +464,7 @@ extension TabController: TerminalSurfaceDelegate {
             // keystrokes until the next click.
             if focusedPanel == .bottomDrawer { paneCanvas.focusActivePane() }
         } else if s === rightDrawerSurface {
+            if zoomedPanel == .rightDrawer { zoomedPanel = nil }   // don't leave zoom stuck
             rightDrawerPanel?.removeFromSuperview()
             rightDrawerSurface?.terminate()
             rightDrawerSurface = nil
