@@ -89,10 +89,20 @@ final class TabController: NSObject {
 
         paneCanvas.onFocusChanged = { [weak self] in self?.paneGainedFocus() }
         paneCanvas.onZoomExitRequested = { [weak self] in self?.toggleZoom() }
+        paneCanvas.onZoomEnded = { [weak self] in self?.paneZoomEndedInternally() }
+    }
+
+    /// The pane canvas ended zoom on its own (the zoomed leaf's shell exited) — clear
+    /// our matching zoom state and re-tile so hidden drawers reappear.
+    private func paneZoomEndedInternally() {
+        if zoomedPanel == .pane {
+            zoomedPanel = nil
+            relayoutPanels()
+        }
     }
 
     func start() { paneCanvas.start() }
-    func split(_ axis: SplitAxis) { paneCanvas.split(axis) }
+    func split(_ axis: SplitAxis) { exitZoomIfNeeded(); paneCanvas.split(axis) }
     @discardableResult func closeFocused() -> Bool {
         exitZoomIfNeeded()   // exit zoom before closing so zoom state can't desync
         return paneCanvas.closeFocused()

@@ -47,6 +47,19 @@ final class PaneCanvasController: NSObject {
     /// `TabController` exits zoom (keeping its `zoomedPanel` in sync).
     var onZoomExitRequested: (() -> Void)?
 
+    /// Fired when zoom ends on its own because the zoomed leaf disappeared (its shell
+    /// exited) — the owning `TabController` clears its `zoomedPanel` so zoom state and
+    /// panel visibility stay in sync.
+    var onZoomEnded: (() -> Void)?
+
+    /// Drops the zoom if the zoomed leaf is no longer in the tree, notifying the owner.
+    private func clearZoomIfLeafGone() {
+        if let z = zoomedLeaf, !tree.leafIDs.contains(z) {
+            zoomedLeaf = nil
+            onZoomEnded?()
+        }
+    }
+
     /// The focused pane's cwd, for new-tab / new-window inheritance. Prefers the live
     /// process cwd over the last OSC-reported one so inheritance works without OSC 7.
     var focusedCWD: URL? {
@@ -242,7 +255,7 @@ final class PaneCanvasController: NSObject {
     func closeFocused() -> Bool {
         guard let next = tree.closing(tree.focusedLeaf) else { return false }
         tree = next
-        if let z = zoomedLeaf, !tree.leafIDs.contains(z) { zoomedLeaf = nil }
+        clearZoomIfLeafGone()
         reconcileAndRender()
         // See `split(_:)`: `focusActivePane()` fires `onFocusChanged` so unified focus
         // re-syncs to `.pane` instead of getting stuck on a previously focused drawer.
@@ -287,7 +300,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
             return
         }
         tree = next
-        if let z = zoomedLeaf, !tree.leafIDs.contains(z) { zoomedLeaf = nil }
+        clearZoomIfLeafGone()
         reconcileAndRender()
         registry.surface(for: tree.focusedLeaf)?.focus()
     }
