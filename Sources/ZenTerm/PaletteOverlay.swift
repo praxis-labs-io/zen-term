@@ -12,6 +12,29 @@ struct PaletteHint {
     let label: String
 }
 
+/// A selectable palette row with the shared selection chrome: rounded corners, an iris
+/// highlight when selected, and click forwarding (`clickCount` distinguishes single from
+/// double click). Subclasses add their own content in `init` after calling `super.init`.
+class SelectableRowView: NSView, PaletteRowView {
+    private let onClick: (Int) -> Void
+    var isSelected = false { didSet { updateBackground() } }
+
+    init(onClick: @escaping (Int) -> Void) {
+        self.onClick = onClick
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 6
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func mouseDown(with event: NSEvent) { onClick(event.clickCount) }
+
+    private func updateBackground() {
+        layer?.backgroundColor = (isSelected ? PaletteOverlay.selectionBackground : .clear).cgColor
+    }
+}
+
 /// Shared scaffold for the modal command-style overlays over a tab's tile region: a
 /// transparent click-catching backdrop, a centered rounded card with a search field, a
 /// scrollable keyboard-driven list, and a hint footer. Fully keyboard-driven — arrows
@@ -217,11 +240,13 @@ class PaletteOverlay: NSView {
 
     /// Row click handler subclasses route their row taps to: single click selects,
     /// double click activates. Clicks on non-selectable rows (headers) are ignored.
+    /// A double-click activates with the default action (no modifiers) — modifier-qualified
+    /// activation (e.g. Shift+Enter to replace) is keyboard-only, matching the prior picker.
     func selectRow(at index: Int, clickCount: Int) {
         guard isSelectable(at: index) else { return }
         selected = index
         updateHighlight()
-        if clickCount >= 2 { activate(index: index, modifiers: NSApp.currentEvent?.modifierFlags ?? []) }
+        if clickCount >= 2 { activate(index: index, modifiers: []) }
     }
 
     private func reloadRows() {

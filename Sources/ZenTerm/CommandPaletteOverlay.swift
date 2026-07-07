@@ -131,15 +131,9 @@ final class CommandPaletteOverlay: PaletteOverlay {
     }
 
     /// One command row: the action name (left) and its shortcut keycap (right).
-    private final class RowView: NSView, PaletteRowView {
-        private let onClick: (Int) -> Void
-        var isSelected = false { didSet { updateBackground() } }
-
+    private final class RowView: SelectableRowView {
         init(command: PaletteCommand, onClick: @escaping (Int) -> Void) {
-            self.onClick = onClick
-            super.init(frame: .zero)
-            wantsLayer = true
-            layer?.cornerRadius = 6
+            super.init(onClick: onClick)
 
             let title = NSTextField(labelWithString: command.title)
             title.font = .systemFont(ofSize: 13)
@@ -161,11 +155,5 @@ final class CommandPaletteOverlay: PaletteOverlay {
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-        override func mouseDown(with event: NSEvent) { onClick(event.clickCount) }
-
-        private func updateBackground() {
-            layer?.backgroundColor = (isSelected ? PaletteOverlay.selectionBackground : .clear).cgColor
-        }
     }
 }

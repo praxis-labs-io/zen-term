@@ -64,16 +64,10 @@ final class RepoPickerOverlay: PaletteOverlay {
         onChoose(filtered[index].url, modifiers.contains(.shift))
     }
 
-    /// One directory row: name (left) and a muted git glyph (right) when it's a repo.
-    private final class RowView: NSView, PaletteRowView {
-        private let onClick: (Int) -> Void
-        var isSelected = false { didSet { updateBackground() } }
-
+    /// One directory row: name (left) and a muted git icon (right) when it's a repo.
+    private final class RowView: SelectableRowView {
         init(entry: RepoEntry, onClick: @escaping (Int) -> Void) {
-            self.onClick = onClick
-            super.init(frame: .zero)
-            wantsLayer = true
-            layer?.cornerRadius = 6
+            super.init(onClick: onClick)
 
             let name = NSTextField(labelWithString: entry.name)
             name.font = .systemFont(ofSize: 13)
@@ -100,11 +94,5 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-        override func mouseDown(with event: NSEvent) { onClick(event.clickCount) }
-
-        private func updateBackground() {
-            layer?.backgroundColor = (isSelected ? PaletteOverlay.selectionBackground : .clear).cgColor
-        }
     }
 }

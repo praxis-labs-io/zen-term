@@ -23,7 +23,7 @@ final class WindowController: NSObject {
     private let dock: ToggleDock
     private var mountedCanvas: NSView?
 
-    /// The `⌘P` repo picker, when open. Window-level (it opens/replaces tabs) but
+    /// The `⌘⇧P` repo picker, when open. Window-level (it opens/replaces tabs) but
     /// presented over the active tab's tile region. Modal while open.
     private var repoPicker: RepoPickerOverlay?
     var isRepoPickerOpen: Bool { repoPicker != nil }
@@ -180,7 +180,7 @@ final class WindowController: NSObject {
     // MARK: controller factory
 
     private func makeController(initialCWD: URL?, workspace: Bool = false) -> TabController {
-        // The ⌘P workspace preset seeds the primary pane with nvim and the right drawer
+        // The ⌘⇧P workspace preset seeds the primary pane with nvim and the right drawer
         // with claude; the caller calls `openWorkspaceLayout()` after `start()` to reveal
         // the drawers. A plain tab (⌘t / first tab) gets neither.
         // `nvim` (no path arg): opens the normal dashboard in the repo cwd, exactly like
@@ -222,7 +222,7 @@ final class WindowController: NSObject {
 
     private func newTab() { addTab(cwd: activeController?.focusedCWD, pinnedTitle: nil) }
 
-    /// Append a new tab with an explicit cwd and optional pinned title (the `⌘P` repo
+    /// Append a new tab with an explicit cwd and optional pinned title (the `⌘⇧P` repo
     /// picker passes the repo dir + its basename; plain `⌘t` passes the inherited cwd
     /// and no pin).
     private func addTab(cwd: URL?, pinnedTitle: String?, workspace: Bool = false) {
@@ -233,7 +233,7 @@ final class WindowController: NSObject {
     }
 
     /// Replace the active tab's controller in place (same tab id/slot) with a fresh
-    /// workspace session in `cwd`, pinned to `pinnedTitle`. Used by `⌘P` + Shift+Enter.
+    /// workspace session in `cwd`, pinned to `pinnedTitle`. Used by `⌘⇧P` + Shift+Enter.
     private func replaceActiveTab(cwd: URL, pinnedTitle: String?) {
         let id = tabs.activeID
         let old = controllers[id]
@@ -385,7 +385,7 @@ final class WindowController: NSObject {
     func handle(_ chord: KeyInterceptor.ReservedChord) {
         guard !tabs.order.isEmpty else { return }  // window tearing down after last tab closed
         let active = activeController
-        // The repo picker is modal over the window: while it's open only ⌘P (close it)
+        // The repo picker is modal over the window: while it's open only ⌘⇧P (close it)
         // acts; every other chord is swallowed. Its arrow/Enter/Esc keys aren't chords —
         // they go to the search field's field editor, never here.
         if isRepoPickerOpen {

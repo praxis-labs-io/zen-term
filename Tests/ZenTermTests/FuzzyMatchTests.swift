@@ -37,6 +37,12 @@ final class FuzzyMatchTests: XCTestCase {
         XCTAssertGreaterThan(early, late)
     }
 
+    func test_firstCharAtIndexZero_noSpuriousContiguityBonus() {
+        // "s" hits "Split" at index 0: word-boundary bonus (8) + 1, minus first-match (0).
+        // The contiguity bonus must NOT apply to the very first matched char.
+        XCTAssertEqual(FuzzyMatch.score("s", "Split"), 9)
+    }
+
     func test_contiguousBeatsScattered() {
         let contiguous = FuzzyMatch.score("res", "Resize Pane Left")!
         let scattered = FuzzyMatch.score("res", "Right Side Escape")!

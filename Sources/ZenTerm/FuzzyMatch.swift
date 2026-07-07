@@ -19,7 +19,7 @@ enum FuzzyMatch {
         for (ci, ch) in c.enumerated() where qi < q.count && ch == q[qi] {
             if firstMatch < 0 { firstMatch = ci }
             score += 1
-            if lastMatch == ci - 1 { score += 5 }  // contiguous with the previous match
+            if lastMatch >= 0 && lastMatch == ci - 1 { score += 5 }  // contiguous with the previous match
             if ci == 0 || isBoundary(c[ci - 1]) { score += 8 }  // start of a word
             lastMatch = ci
             qi += 1
