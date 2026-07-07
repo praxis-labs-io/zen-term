@@ -14,6 +14,11 @@ final class PaneCanvasController: NSObject {
     private var hostByLeaf: [PaneID: PanelHostView] = [:]
     private var nextID = 1
 
+    /// Whether panes may show their focus halo. `TabController` sets this to false
+    /// when a drawer holds unified focus, so exactly one panel is haloed across the
+    /// whole tab.
+    private var panesHoldFocus = true
+
     private static let canvasColor = NSColor(srgbRed: 0x23 / 255.0, green: 0x21 / 255.0, blue: 0x36 / 255.0, alpha: 1)
     private static let minSplitExtent: CGFloat = 240
 
@@ -25,6 +30,11 @@ final class PaneCanvasController: NSObject {
     /// Fired when the tab's title may have changed — the focused pane's cwd
     /// changed, or focus moved to a different pane.
     var onTitleChanged: (() -> Void)?
+
+    /// Fired at the end of `focus(_:)` — lets `TabController` know a pane has
+    /// (re)gained focus, so it can reassert unified panel focus (halo, copy/paste
+    /// routing) onto the pane canvas.
+    var onFocusChanged: (() -> Void)?
 
     /// The focused pane's cwd, for new-tab / new-window inheritance. Prefers the live
     /// process cwd over the last OSC-reported one so inheritance works without OSC 7.
@@ -120,7 +130,16 @@ final class PaneCanvasController: NSObject {
     }
 
     private func updateHalo() {
-        for (id, host) in hostByLeaf { host.isFocused = (id == tree.focusedLeaf) }
+        for (id, host) in hostByLeaf {
+            host.isFocused = panesHoldFocus && (id == tree.focusedLeaf)
+        }
+    }
+
+    /// Give panes the tab's unified focus halo (`on == true`), or yield it — used
+    /// when a drawer takes focus so at most one panel is haloed across the tab.
+    func setPanesFocused(_ on: Bool) {
+        panesHoldFocus = on
+        updateHalo()
     }
 
     // Focus routing (fleshed out in Task 10).
@@ -130,6 +149,7 @@ final class PaneCanvasController: NSObject {
         updateHalo()
         onTitleChanged?()
         registry.surface(for: id)?.focus()
+        onFocusChanged?()
     }
 
     private func focusFrontmost() { focus(tree.focusedLeaf) }

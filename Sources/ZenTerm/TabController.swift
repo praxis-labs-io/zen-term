@@ -32,6 +32,20 @@ final class TabController: NSObject {
     private var rightDrawerPanel: PanelHostView?
     private var isRightOpen = false
 
+    /// Which panel currently holds the tab's single unified focus/halo.
+    private enum PanelRef: Equatable { case pane, bottomDrawer, rightDrawer }
+    private var focusedPanel: PanelRef = .pane
+
+    /// The focused drawer's surface, or nil when the pane canvas is focused (copy/
+    /// paste then routes to `paneCanvas` as before).
+    private var focusedDrawerSurface: TerminalSurface? {
+        switch focusedPanel {
+        case .pane: return nil
+        case .bottomDrawer: return bottomDrawerSurface
+        case .rightDrawer: return rightDrawerSurface
+        }
+    }
+
     /// The currently active tile constraints (canvas + open drawer panels), rebuilt
     /// from scratch on every `relayoutPanels()` call so repeated toggles never
     /// accumulate constraints.
@@ -68,6 +82,8 @@ final class TabController: NSObject {
         ])
         content.addSubview(canvas)
         relayoutPanels()
+
+        paneCanvas.onFocusChanged = { [weak self] in self?.paneGainedFocus() }
     }
 
     func start() { paneCanvas.start() }
@@ -84,8 +100,29 @@ final class TabController: NSObject {
         rightDrawerSurface = nil
     }
 
-    @objc func copyFromSurface(_ sender: Any?) { paneCanvas.copyFromSurface(sender) }
-    @objc func pasteToSurface(_ sender: Any?) { paneCanvas.pasteToSurface(sender) }
+    /// Copy from whichever panel holds unified focus: the pane canvas's own copy
+    /// path, or — for a focused drawer — its surface's selection straight to the
+    /// pasteboard (mirrors `PaneCanvasController.copyFromSurface`).
+    @objc func copyFromSurface(_ sender: Any?) {
+        guard let surface = focusedDrawerSurface else {
+            paneCanvas.copyFromSurface(sender)
+            return
+        }
+        guard let text = surface.copySelection(), !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    /// Paste into whichever panel holds unified focus (mirrors
+    /// `PaneCanvasController.pasteToSurface` for the drawer case).
+    @objc func pasteToSurface(_ sender: Any?) {
+        guard let surface = focusedDrawerSurface else {
+            paneCanvas.pasteToSurface(sender)
+            return
+        }
+        guard let text = NSPasteboard.general.string(forType: .string) else { return }
+        surface.paste(text)
+    }
 
     // MARK: bottom drawer (⌘B)
 
@@ -101,13 +138,18 @@ final class TabController: NSObject {
         } else {
             bottomDrawerPanel?.isHidden = true
             relayoutPanels()
-            paneCanvas.focusActivePane()
+            // Only steal focus back to the pane canvas if the drawer being hidden was
+            // the one holding unified focus — otherwise leave the currently focused
+            // panel (e.g. the right drawer) alone. `focusActivePane()` bubbles through
+            // `paneCanvas.onFocusChanged` to reassert unified focus onto the canvas.
+            if focusedPanel == .bottomDrawer { paneCanvas.focusActivePane() }
         }
     }
 
     private func ensureBottomDrawerPanel() -> PanelHostView {
         if let existing = bottomDrawerPanel { return existing }
         let surface = TerminalSurfaceFactory.make()
+        surface.delegate = self
         surface.start(TerminalSurfaceConfig(workingDirectory: focusedCWD, theme: Theme.rosePineMoon))
         bottomDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .bottom, surface: surface)
@@ -130,13 +172,15 @@ final class TabController: NSObject {
         } else {
             rightDrawerPanel?.isHidden = true
             relayoutPanels()
-            paneCanvas.focusActivePane()
+            // See `toggleBottomDrawer`: only steal focus if this drawer held it.
+            if focusedPanel == .rightDrawer { paneCanvas.focusActivePane() }
         }
     }
 
     private func ensureRightDrawerPanel() -> PanelHostView {
         if let existing = rightDrawerPanel { return existing }
         let surface = TerminalSurfaceFactory.make()
+        surface.delegate = self
         surface.start(TerminalSurfaceConfig(workingDirectory: focusedCWD, theme: Theme.rosePineMoon))
         rightDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .right, surface: surface)
@@ -158,14 +202,34 @@ final class TabController: NSObject {
         return panel
     }
 
-    /// Focus the given drawer's surface. Unified panel focus (halo, click routing
-    /// across panes+drawers) lands in a later task; for now this just moves terminal
-    /// keyboard focus to the drawer's surface.
+    /// Give the given drawer the tab's single unified focus/halo: yield the pane
+    /// canvas's halo, mark this drawer's panel focused and the other unfocused, and
+    /// move terminal keyboard focus to its surface.
     private func focusDrawer(_ edge: DrawerEdge) {
+        let surface: TerminalSurface?
         switch edge {
-        case .bottom: bottomDrawerSurface?.focus()
-        case .right: rightDrawerSurface?.focus()
+        case .bottom:
+            focusedPanel = .bottomDrawer
+            bottomDrawerPanel?.isFocused = true
+            rightDrawerPanel?.isFocused = false
+            surface = bottomDrawerSurface
+        case .right:
+            focusedPanel = .rightDrawer
+            rightDrawerPanel?.isFocused = true
+            bottomDrawerPanel?.isFocused = false
+            surface = rightDrawerSurface
         }
+        paneCanvas.setPanesFocused(false)
+        surface?.focus()
+    }
+
+    /// The pane canvas (re)gained focus — reassert unified focus onto it: it holds
+    /// the tab's single halo again and both drawer panels go unfocused.
+    private func paneGainedFocus() {
+        focusedPanel = .pane
+        paneCanvas.setPanesFocused(true)
+        bottomDrawerPanel?.isFocused = false
+        rightDrawerPanel?.isFocused = false
     }
 
     /// Rebuild the tile layout from `isBottomOpen`/`isRightOpen`: the canvas + any
@@ -214,5 +278,31 @@ final class TabController: NSObject {
 
         NSLayoutConstraint.activate(cs)
         tileConstraints = cs
+    }
+}
+
+extension TabController: TerminalSurfaceDelegate {
+    /// A drawer's shell exited on its own (e.g. the user typed `exit`): close+clear
+    /// that drawer entirely — rather than leaving a dead shell docked — so the next
+    /// toggle lazily spawns a fresh one. Panes have their own exit handling in
+    /// `PaneCanvasController`; this only reacts to the two drawer surfaces.
+    func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
+        if s === bottomDrawerSurface {
+            bottomDrawerPanel?.removeFromSuperview()
+            bottomDrawerSurface?.terminate()
+            bottomDrawerSurface = nil
+            bottomDrawerPanel = nil
+            isBottomOpen = false
+            relayoutPanels()
+            if focusedPanel == .bottomDrawer { paneGainedFocus() }
+        } else if s === rightDrawerSurface {
+            rightDrawerPanel?.removeFromSuperview()
+            rightDrawerSurface?.terminate()
+            rightDrawerSurface = nil
+            rightDrawerPanel = nil
+            isRightOpen = false
+            relayoutPanels()
+            if focusedPanel == .rightDrawer { paneGainedFocus() }
+        }
     }
 }
