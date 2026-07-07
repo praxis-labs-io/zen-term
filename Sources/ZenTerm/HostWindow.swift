@@ -14,6 +14,7 @@ final class HostWindow: NSWindow {
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         isMovableByWindowBackground = true
+        tabbingMode = .disallowed   // no native macOS tabs / window merging (multi-window + yabai)
         backgroundColor = NSColor(srgbRed: 0x23 / 255.0, green: 0x21 / 255.0, blue: 0x36 / 255.0, alpha: 1)
         // Traffic lights stay visible for PoC usability. To go fully chromeless,
         // hide each: standardWindowButton(.closeButton)?.isHidden = true (etc).

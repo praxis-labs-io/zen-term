@@ -1,23 +1,57 @@
 import AppKit
 
+/// Owns every window and routes chords/Copy/Paste to whichever is key. `⌘n` opens a
+/// new window (inheriting the key window's focused-pane cwd); every other chord goes
+/// to the key window's `WindowController`. Native macOS tabbing is disallowed on
+/// `HostWindow`, so each window is an ordinary independently-tileable window.
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var controller: WindowController!
+    private var windows: [WindowController] = []
     private let keys = KeyInterceptor()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let wc = WindowController(contentRect: NSRect(x: 0, y: 0, width: 900, height: 560),
-                                  initialCWD: nil)
-        wc.window.center()
-        wc.onLastTabClosed = { [weak wc] in wc?.window.close() }
-        controller = wc
+        MainMenu.install(copyPaste: nil)   // Copy/Paste route via the responder chain
+        newWindow(initialCWD: nil, centered: true)
 
-        MainMenu.install(copyPaste: controller)
-        wc.showAndStart()
-        NSApp.activate(ignoringOtherApps: true)
-
-        keys.onReservedChord = { [weak self] chord in self?.controller.handle(chord) }
+        keys.onReservedChord = { [weak self] chord in self?.route(chord) }
         keys.start()
+        NSApp.activate(ignoringOtherApps: true)
     }
+
+    /// Route a chord: `⌘n` makes a new window; everything else goes to the key
+    /// window's controller.
+    private func route(_ chord: KeyInterceptor.ReservedChord) {
+        if case .newWindow = chord {
+            newWindow(initialCWD: keyController()?.focusedCWD, centered: false)
+            return
+        }
+        keyController()?.handle(chord)
+    }
+
+    /// The `WindowController` owning the current key window, falling back to the
+    /// first window (e.g. before any window has become key).
+    private func keyController() -> WindowController? {
+        guard let key = NSApp.keyWindow else { return windows.first }
+        return windows.first { $0.window === key }
+    }
+
+    private func newWindow(initialCWD: URL?, centered: Bool) {
+        let offset = CGFloat(windows.count) * 28
+        let rect = NSRect(x: 0, y: 0, width: 900, height: 560).offsetBy(dx: offset, dy: -offset)
+        let wc = WindowController(contentRect: rect, initialCWD: initialCWD)
+        if centered { wc.window.center() }
+        wc.onLastTabClosed = { [weak self, weak wc] in
+            guard let self, let wc else { return }
+            wc.window.close()
+            self.windows.removeAll { $0 === wc }
+        }
+        windows.append(wc)
+        wc.showAndStart()
+    }
+
+    /// Copy/Paste forwarders reached via the responder chain (menu items have a nil
+    /// target) — always act on the key window's active tab, never a stale window.
+    @objc func copyFromSurface(_ sender: Any?) { keyController()?.copyFromSurface(sender) }
+    @objc func pasteToSurface(_ sender: Any?) { keyController()?.pasteToSurface(sender) }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
