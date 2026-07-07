@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import TerminalKit
 
 final class OSC7Tests: XCTestCase {

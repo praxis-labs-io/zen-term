@@ -1,6 +1,7 @@
-import XCTest
 import AppKit
 import TerminalKit
+import XCTest
+
 @testable import PaneKit
 
 /// A seam-conforming fake with stable identity and a terminate flag.

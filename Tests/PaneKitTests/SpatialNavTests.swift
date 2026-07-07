@@ -1,14 +1,15 @@
-import XCTest
 import CoreGraphics
+import XCTest
+
 @testable import PaneKit
 
 final class SpatialNavTests: XCTestCase {
     // Layout:  A | B   (side by side), C beneath A.
     //  A = (0,0,100,100)   B = (110,0,100,100)   C = (0,110,100,100)
     private let frames: [PaneID: CGRect] = [
-        PaneID(1): CGRect(x: 0,   y: 0,   width: 100, height: 100), // A
-        PaneID(2): CGRect(x: 110, y: 0,   width: 100, height: 100), // B
-        PaneID(3): CGRect(x: 0,   y: 110, width: 100, height: 100), // C
+        PaneID(1): CGRect(x: 0, y: 0, width: 100, height: 100),  // A
+        PaneID(2): CGRect(x: 110, y: 0, width: 100, height: 100),  // B
+        PaneID(3): CGRect(x: 0, y: 110, width: 100, height: 100),  // C
     ]
 
     func test_right_fromA_findsB() {
@@ -34,9 +35,9 @@ final class SpatialNavTests: XCTestCase {
         // (dx=200, |dy|=60). The lower PaneID.raw (2) must win regardless of
         // dictionary iteration order.
         let f: [PaneID: CGRect] = [
-            PaneID(1): CGRect(x: 0,   y: 0,   width: 100, height: 100),
+            PaneID(1): CGRect(x: 0, y: 0, width: 100, height: 100),
             PaneID(2): CGRect(x: 200, y: -60, width: 100, height: 100),
-            PaneID(3): CGRect(x: 200, y: 60,  width: 100, height: 100),
+            PaneID(3): CGRect(x: 200, y: 60, width: 100, height: 100),
         ]
         XCTAssertEqual(nearestLeaf(from: PaneID(1), frames: f, direction: .right), PaneID(2))
     }

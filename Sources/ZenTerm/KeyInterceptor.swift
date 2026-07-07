@@ -10,7 +10,7 @@ final class KeyInterceptor {
         case navLeft, navRight, navUp, navDown
         case closePane
         case newTab, newWindow
-        case selectTab(Int)   // 1...9
+        case selectTab(Int)  // 1...9
         case prevTab, nextTab
         case resizeLeft, resizeRight, resizeUp, resizeDown
         case toggleBottomDrawer
@@ -24,7 +24,7 @@ final class KeyInterceptor {
     private var monitor: Any?
 
     func start() {
-        stop() // idempotent: never stack a second monitor on repeat calls
+        stop()  // idempotent: never stack a second monitor on repeat calls
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
@@ -43,25 +43,25 @@ final class KeyInterceptor {
                 case "l": chord = .resizeRight
                 case "k": chord = .resizeUp
                 case "j": chord = .resizeDown
-                default:  chord = nil
+                default: chord = nil
                 }
                 if let chord { self.onReservedChord?(chord); return nil }
                 return event
             }
 
-            guard flags == .command else { return event }   // all other reserved chords are bare-⌘
+            guard flags == .command else { return event }  // all other reserved chords are bare-⌘
 
             let chord: ReservedChord?
             switch key {
             case "\\": chord = .toggleRightDrawer
-            case "[":  chord = .prevTab
-            case "]":  chord = .nextTab
-            case "-":  chord = .splitHorizontal
-            case "h":  chord = .navLeft
-            case "l":  chord = .navRight
-            case "k":  chord = .navUp
-            case "j":  chord = .navDown
-            case "w":  chord = .closePane
+            case "[": chord = .prevTab
+            case "]": chord = .nextTab
+            case "-": chord = .splitHorizontal
+            case "h": chord = .navLeft
+            case "l": chord = .navRight
+            case "k": chord = .navUp
+            case "j": chord = .navDown
+            case "w": chord = .closePane
             case "t": chord = .newTab
             case "n": chord = .newWindow
             case "b": chord = .toggleBottomDrawer
@@ -70,13 +70,13 @@ final class KeyInterceptor {
             case "p": chord = .toggleRepoPicker
             case "1", "2", "3", "4", "5", "6", "7", "8", "9":
                 chord = key.flatMap { Int($0) }.map { .selectTab($0) }
-            default:   chord = nil
+            default: chord = nil
             }
             if let chord {
                 self.onReservedChord?(chord)
-                return nil                                   // consumed — never reaches the PTY
+                return nil  // consumed — never reaches the PTY
             }
-            return event                                     // everything else passes through
+            return event  // everything else passes through
         }
     }
 

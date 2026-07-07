@@ -14,7 +14,7 @@ final class HostWindow: NSWindow {
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         isMovableByWindowBackground = true
-        tabbingMode = .disallowed   // no native macOS tabs / window merging (multi-window + yabai)
+        tabbingMode = .disallowed  // no native macOS tabs / window merging (multi-window + yabai)
         // The WindowController owns this window with a strong reference. Without this,
         // AppKit ALSO releases the window on close (default true), underflowing the
         // retain count and crashing in the close-time CoreAnimation commit.

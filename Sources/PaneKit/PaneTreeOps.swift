@@ -2,7 +2,8 @@ import Foundation
 
 public extension PaneTree {
     func splitting(_ leaf: PaneID, axis: SplitAxis, newLeaf: PaneID, newSplit: SplitID) -> PaneTree {
-        guard let newRoot = PaneNode.splitting(node: root, at: leaf, axis: axis, newLeaf: newLeaf, newSplit: newSplit) else {
+        guard let newRoot = PaneNode.splitting(node: root, at: leaf, axis: axis, newLeaf: newLeaf, newSplit: newSplit)
+        else {
             return self
         }
         return PaneTree(root: newRoot, focusedLeaf: newLeaf)
@@ -11,7 +12,7 @@ public extension PaneTree {
     func closing(_ leaf: PaneID) -> PaneTree? {
         guard root.contains(leaf) else { return self }
         guard let result = PaneNode.close(node: root, leaf: leaf) else {
-            return nil // closed the only leaf
+            return nil  // closed the only leaf
         }
         let newFocus: PaneID
         if leaf == focusedLeaf {
@@ -33,7 +34,7 @@ public extension PaneTree {
     /// split of `axis` in its ancestry. The caller reads the split's rendered extent to
     /// clamp the ratio to a pixel minimum, which the pure tree can't know.
     func edgeSplitID(for leaf: PaneID, axis: SplitAxis, positive: Bool) -> SplitID? {
-        guard root.contains(leaf) else { return nil }   // `nearestSplit` assumes the leaf is present
+        guard root.contains(leaf) else { return nil }  // `nearestSplit` assumes the leaf is present
         return root.nearestSplit(to: leaf, axis: axis, onSideA: positive)
             ?? root.nearestSplit(to: leaf, axis: axis, onSideA: !positive)
     }
@@ -44,12 +45,14 @@ public extension PaneTree {
 
 extension PaneNode {
     /// Returns a new node with `leaf` replaced by a split of [leaf, newLeaf], or nil if `leaf` absent.
-    static func splitting(node: PaneNode, at leaf: PaneID, axis: SplitAxis, newLeaf: PaneID, newSplit: SplitID) -> PaneNode? {
+    static func splitting(node: PaneNode, at leaf: PaneID, axis: SplitAxis, newLeaf: PaneID, newSplit: SplitID)
+        -> PaneNode?
+    {
         switch node {
-        case let .leaf(id):
+        case .leaf(let id):
             guard id == leaf else { return nil }
             return .split(id: newSplit, axis: axis, ratio: 0.5, a: .leaf(id), b: .leaf(newLeaf))
-        case let .split(id, ax, ratio, a, b):
+        case .split(let id, let ax, let ratio, let a, let b):
             if let na = splitting(node: a, at: leaf, axis: axis, newLeaf: newLeaf, newSplit: newSplit) {
                 return .split(id: id, axis: ax, ratio: ratio, a: na, b: b)
             }
@@ -66,23 +69,25 @@ extension PaneNode {
 
     static func close(node: PaneNode, leaf: PaneID) -> CloseResult? {
         switch node {
-        case let .leaf(id):
+        case .leaf(let id):
             return id == leaf ? nil : CloseResult(node: node, promotedFocus: nil)
-        case let .split(id, axis, ratio, a, b):
+        case .split(let id, let axis, let ratio, let a, let b):
             if a.contains(leaf) {
                 guard let r = close(node: a, leaf: leaf) else {
                     // a collapsed entirely → promote b
                     return CloseResult(node: b, promotedFocus: b.firstLeaf)
                 }
-                return CloseResult(node: .split(id: id, axis: axis, ratio: ratio, a: r.node, b: b),
-                                   promotedFocus: r.promotedFocus)
+                return CloseResult(
+                    node: .split(id: id, axis: axis, ratio: ratio, a: r.node, b: b),
+                    promotedFocus: r.promotedFocus)
             }
             if b.contains(leaf) {
                 guard let r = close(node: b, leaf: leaf) else {
                     return CloseResult(node: a, promotedFocus: a.firstLeaf)
                 }
-                return CloseResult(node: .split(id: id, axis: axis, ratio: ratio, a: a, b: r.node),
-                                   promotedFocus: r.promotedFocus)
+                return CloseResult(
+                    node: .split(id: id, axis: axis, ratio: ratio, a: a, b: r.node),
+                    promotedFocus: r.promotedFocus)
             }
             return CloseResult(node: node, promotedFocus: nil)
         }
@@ -93,7 +98,7 @@ extension PaneNode {
     /// leaf — the one that resizes it most locally. Nil when no split on the leaf's path
     /// matches both axis and side.
     func nearestSplit(to leaf: PaneID, axis: SplitAxis, onSideA: Bool) -> SplitID? {
-        guard case let .split(id, ax, _, a, b) = self else { return nil }
+        guard case .split(let id, let ax, _, let a, let b) = self else { return nil }
         let inA = a.contains(leaf)
         let child = inA ? a : b
         if let deeper = child.nearestSplit(to: leaf, axis: axis, onSideA: onSideA) { return deeper }
@@ -104,7 +109,7 @@ extension PaneNode {
     func ratio(of id: SplitID) -> Double? {
         switch self {
         case .leaf: return nil
-        case let .split(sid, _, r, a, b):
+        case .split(let sid, _, let r, let a, let b):
             if sid == id { return r }
             return a.ratio(of: id) ?? b.ratio(of: id)
         }
@@ -113,11 +118,12 @@ extension PaneNode {
     static func setRatio(node: PaneNode, split: SplitID, ratio: Double) -> PaneNode {
         switch node {
         case .leaf: return node
-        case let .split(id, axis, r, a, b):
+        case .split(let id, let axis, let r, let a, let b):
             if id == split { return .split(id: id, axis: axis, ratio: ratio, a: a, b: b) }
-            return .split(id: id, axis: axis, ratio: r,
-                          a: setRatio(node: a, split: split, ratio: ratio),
-                          b: setRatio(node: b, split: split, ratio: ratio))
+            return .split(
+                id: id, axis: axis, ratio: r,
+                a: setRatio(node: a, split: split, ratio: ratio),
+                b: setRatio(node: b, split: split, ratio: ratio))
         }
     }
 }

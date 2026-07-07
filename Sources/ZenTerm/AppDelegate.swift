@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let keys = KeyInterceptor()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        MainMenu.install(copyPaste: nil)   // Copy/Paste route via the responder chain
+        MainMenu.install(copyPaste: nil)  // Copy/Paste route via the responder chain
         newWindow(initialCWD: nil, centered: true)
 
         keys.onReservedChord = { [weak self] chord in self?.route(chord) }
@@ -53,11 +53,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Copy/Paste forwarders reached via the responder chain (menu items have a nil
     /// target) — always act on the key window's active tab, never a stale window.
     @objc func copyFromSurface(_ sender: Any?) {
-        if isRepoPickerModal { NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.copy(_:)), with: sender); return }
+        if isRepoPickerModal {
+            NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.copy(_:)), with: sender); return
+        }
         keyController()?.copyFromSurface(sender)
     }
     @objc func pasteToSurface(_ sender: Any?) {
-        if isRepoPickerModal { NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.paste(_:)), with: sender); return }
+        if isRepoPickerModal {
+            NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.paste(_:)), with: sender); return
+        }
         keyController()?.pasteToSurface(sender)
     }
 

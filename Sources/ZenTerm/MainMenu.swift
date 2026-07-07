@@ -12,19 +12,22 @@ enum MainMenu {
         main.addItem(appItem)
         let appMenu = NSMenu()
         appItem.submenu = appMenu
-        appMenu.addItem(withTitle: "About zen-term",
-                        action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
-                        keyEquivalent: "")
+        appMenu.addItem(
+            withTitle: "About zen-term",
+            action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            keyEquivalent: "")
         appMenu.addItem(.separator())
-        let hide = NSMenuItem(title: "Hide zen-term",
-                              action: #selector(NSApplication.hide(_:)),
-                              keyEquivalent: "h")
-        hide.keyEquivalentModifierMask = [.command, .shift]   // ⌘⇧H — frees ⌘H for nav-left
+        let hide = NSMenuItem(
+            title: "Hide zen-term",
+            action: #selector(NSApplication.hide(_:)),
+            keyEquivalent: "h")
+        hide.keyEquivalentModifierMask = [.command, .shift]  // ⌘⇧H — frees ⌘H for nav-left
         appMenu.addItem(hide)
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit zen-term",
-                        action: #selector(NSApplication.terminate(_:)),
-                        keyEquivalent: "q")
+        appMenu.addItem(
+            withTitle: "Quit zen-term",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q")
 
         // Edit menu (Copy/Paste routed to the focused surface)
         let editItem = NSMenuItem()

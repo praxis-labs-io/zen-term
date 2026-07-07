@@ -18,9 +18,11 @@ final class IconButton: NSView {
 
     static let iris = NSColor(srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0, blue: 0xe7 / 255.0, alpha: 1)
 
-    init(symbol: String, size: NSSize = NSSize(width: 24, height: 24),
-         pointSize: CGFloat = 12, weight: NSFont.Weight = .medium,
-         accessibilityLabel label: String, onClick: @escaping () -> Void) {
+    init(
+        symbol: String, size: NSSize = NSSize(width: 24, height: 24),
+        pointSize: CGFloat = 12, weight: NSFont.Weight = .medium,
+        accessibilityLabel label: String, onClick: @escaping () -> Void
+    ) {
         self.onClick = onClick
         super.init(frame: .zero)
         wantsLayer = true
@@ -51,9 +53,10 @@ final class IconButton: NSView {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let trackingArea { removeTrackingArea(trackingArea) }
-        let area = NSTrackingArea(rect: bounds,
-                                 options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
-                                 owner: self)
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+            owner: self)
         addTrackingArea(area)
         trackingArea = area
     }

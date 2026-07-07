@@ -19,7 +19,9 @@ public struct TabList {
     /// The active tab's id. Requires a non-empty list — once `close` empties the
     /// list (returns `false`) the caller must discard it rather than query here.
     public var activeID: TabID {
-        precondition(!order.isEmpty, "activeID read on an empty TabList — the window should have been closed when close(_:) returned false")
+        precondition(
+            !order.isEmpty,
+            "activeID read on an empty TabList — the window should have been closed when close(_:) returned false")
         return order[activeIndex]
     }
 

@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import TabKit
 
 final class TabListTests: XCTestCase {
@@ -26,7 +27,7 @@ final class TabListTests: XCTestCase {
         list.add(TabID(2))
         list.select(TabID(1))
         XCTAssertEqual(list.activeID, TabID(1))
-        list.select(TabID(99))                 // absent → no-op
+        list.select(TabID(99))  // absent → no-op
         XCTAssertEqual(list.activeID, TabID(1))
     }
 

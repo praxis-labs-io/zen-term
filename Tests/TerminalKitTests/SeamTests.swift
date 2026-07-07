@@ -1,5 +1,6 @@
-import XCTest
 import AppKit
+import XCTest
+
 @testable import TerminalKit
 
 /// A minimal in-test surface proving the protocol is coherent and usable

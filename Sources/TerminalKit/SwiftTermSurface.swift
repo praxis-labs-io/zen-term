@@ -65,9 +65,10 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
     /// configures. Only the focused surface acts.
     private func handleShiftEnter(_ event: NSEvent) -> NSEvent? {
         guard term.window?.firstResponder === term,
-              event.keyCode == 36,                     // kVK_Return (main Return)
-              event.modifierFlags.contains(.shift) else { return event }
-        term.send([0x0A])                              // LF
+            event.keyCode == 36,  // kVK_Return (main Return)
+            event.modifierFlags.contains(.shift)
+        else { return event }
+        term.send([0x0A])  // LF
         return nil
     }
 
@@ -78,8 +79,9 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
     /// hit-tests into this surface's view — never a covered one behind an overlay.
     private func reportFocusIfClicked(_ event: NSEvent) {
         guard event.window === term.window,
-              let hit = term.window?.contentView?.hitTest(event.locationInWindow),
-              hit === term || hit.isDescendant(of: term) else { return }
+            let hit = term.window?.contentView?.hitTest(event.locationInWindow),
+            hit === term || hit.isDescendant(of: term)
+        else { return }
         delegate?.surfaceWantsFocus(self)
     }
 
@@ -88,7 +90,8 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
         let base = Terminal.getEnvironmentVariables(termName: "xterm-256color", trueColor: true)
         let environment = EnvBuilder.merged(base: base, overrides: config.environment)
         let isDefaultShell = config.command == nil
-        let shell = config.command
+        let shell =
+            config.command
             ?? ProcessInfo.processInfo.environment["SHELL"]
             ?? "/bin/zsh"
 
@@ -127,9 +130,11 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
         }
         if theme.ansi.count == 16 {
             // SwiftTerm.Color channels are 16-bit; scale 8-bit components by 257 (0xFF→0xFFFF).
-            term.installColors(theme.ansi.map {
-                SwiftTerm.Color(red: UInt16($0.red) * 257, green: UInt16($0.green) * 257, blue: UInt16($0.blue) * 257)
-            })
+            term.installColors(
+                theme.ansi.map {
+                    SwiftTerm.Color(
+                        red: UInt16($0.red) * 257, green: UInt16($0.green) * 257, blue: UInt16($0.blue) * 257)
+                })
         }
         term.nativeBackgroundColor = theme.background.nsColor
         term.nativeForegroundColor = theme.foreground.nsColor

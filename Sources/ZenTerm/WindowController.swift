@@ -61,19 +61,21 @@ final class WindowController: NSObject {
         // after super.init (so both can stay `let`).
         var onSelect: (TabID) -> Void = { _ in }
         var onClose: (TabID) -> Void = { _ in }
-        var onNewTab: () -> Void = { }
-        tabBar = TabBarView(onSelect: { onSelect($0) },
-                            onClose: { onClose($0) },
-                            onNewTab: { onNewTab() })
+        var onNewTab: () -> Void = {}
+        tabBar = TabBarView(
+            onSelect: { onSelect($0) },
+            onClose: { onClose($0) },
+            onNewTab: { onNewTab() })
         var onSplitH: () -> Void = {}
         var onSplitV: () -> Void = {}
         var onPalette: () -> Void = {}
         var onBottom: () -> Void = {}
         var onRight: () -> Void = {}
         var onLazygit: () -> Void = {}
-        dock = ToggleDock(onSplitH: { onSplitH() }, onSplitV: { onSplitV() },
-                          onPalette: { onPalette() }, onBottom: { onBottom() },
-                          onRight: { onRight() }, onLazygit: { onLazygit() })
+        dock = ToggleDock(
+            onSplitH: { onSplitH() }, onSplitV: { onSplitV() },
+            onPalette: { onPalette() }, onBottom: { onBottom() },
+            onRight: { onRight() }, onLazygit: { onLazygit() })
         super.init()
         nextTabID = 2
 
@@ -94,7 +96,7 @@ final class WindowController: NSObject {
         titles[firstID] = first.title
 
         layoutContainer()
-        window.delegate = self   // for windowWillClose teardown (native close button + cascade)
+        window.delegate = self  // for windowWillClose teardown (native close button + cascade)
     }
 
     // MARK: layout
@@ -115,7 +117,8 @@ final class WindowController: NSObject {
 
         let tint = NSView(frame: content.bounds)
         tint.wantsLayer = true
-        tint.layer?.backgroundColor = Theme.rosePineMoon.background.nsColor.withAlphaComponent(Self.backdropTintAlpha).cgColor
+        tint.layer?.backgroundColor =
+            Theme.rosePineMoon.background.nsColor.withAlphaComponent(Self.backdropTintAlpha).cgColor
         tint.autoresizingMask = [.width, .height]
         content.addSubview(tint)
 
@@ -163,7 +166,7 @@ final class WindowController: NSObject {
         if changed { renderTabBar() }
     }
 
-    deinit { titlePoll?.invalidate() }   // backstop; tearDown() normally handles it
+    deinit { titlePoll?.invalidate() }  // backstop; tearDown() normally handles it
 
     // MARK: controller factory
 
@@ -202,8 +205,8 @@ final class WindowController: NSObject {
             ])
             mountedCanvas = canvas
         }
-        c.restoreKeyFocus()   // float-aware: keeps focus on the modal float when open
-        renderDock()          // dock mirrors the newly-active tab's overlay state
+        c.restoreKeyFocus()  // float-aware: keeps focus on the modal float when open
+        renderDock()  // dock mirrors the newly-active tab's overlay state
     }
 
     // MARK: tab ops
@@ -214,7 +217,7 @@ final class WindowController: NSObject {
     /// picker passes the repo dir + its basename; plain `⌘t` passes the inherited cwd
     /// and no pin).
     private func addTab(cwd: URL?, pinnedTitle: String?, workspace: Bool = false) {
-        dismissRepoPickerIfOpen()   // the "+" button is reachable while the picker is up
+        dismissRepoPickerIfOpen()  // the "+" button is reachable while the picker is up
         let id = mintTabID()
         tabs.add(id)
         installController(id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace)
@@ -229,7 +232,7 @@ final class WindowController: NSObject {
             old?.view.removeFromSuperview()
             mountedCanvas = nil
         }
-        old?.shutdown()   // terminate the replaced tab's shells — never leak them
+        old?.shutdown()  // terminate the replaced tab's shells — never leak them
         installController(id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: true)
     }
 
@@ -248,7 +251,7 @@ final class WindowController: NSObject {
     }
 
     private func select(_ id: TabID) {
-        dismissRepoPickerIfOpen()   // a tab-bar click must not orphan the modal picker
+        dismissRepoPickerIfOpen()  // a tab-bar click must not orphan the modal picker
         guard tabs.order.contains(id), id != tabs.activeID else { return }
         tabs.select(id)
         mountActive()
@@ -266,17 +269,17 @@ final class WindowController: NSObject {
     /// Close a specific tab: terminate its shells, detach its canvas, and cascade to
     /// closing the window when it was the last tab.
     private func closeTab(_ id: TabID) {
-        dismissRepoPickerIfOpen()   // the "×" button is reachable while the picker is up
+        dismissRepoPickerIfOpen()  // the "×" button is reachable while the picker is up
         let survived = tabs.close(id)
         let controller = controllers[id]
         if mountedCanvas === controller?.view {
             controller?.view.removeFromSuperview()
             mountedCanvas = nil
         }
-        controller?.shutdown()      // terminate the tab's shells — never leak them
+        controller?.shutdown()  // terminate the tab's shells — never leak them
         controllers[id] = nil
         titles[id] = nil
-        if !survived { window.close(); return }   // last tab → close window → windowWillClose tears down
+        if !survived { window.close(); return }  // last tab → close window → windowWillClose tears down
         mountActive()
         renderTabBar()
     }
@@ -298,14 +301,14 @@ final class WindowController: NSObject {
         active.presentTileOverlay(picker)
         repoPicker = picker
         picker.focusSearchField()
-        renderDock()   // palette button now active
+        renderDock()  // palette button now active
     }
 
     private func closeRepoPicker() {
         repoPicker?.removeFromSuperview()
         repoPicker = nil
         activeController?.restoreKeyFocus()
-        renderDock()   // palette button now inactive
+        renderDock()  // palette button now inactive
     }
 
     /// Dismiss the picker if it's up — called before any tab-bar mouse op (select/new/
@@ -333,7 +336,7 @@ final class WindowController: NSObject {
     // MARK: chord routing
 
     func handle(_ chord: KeyInterceptor.ReservedChord) {
-        guard !tabs.order.isEmpty else { return }   // window tearing down after last tab closed
+        guard !tabs.order.isEmpty else { return }  // window tearing down after last tab closed
         let active = activeController
         // The repo picker is modal over the window: while it's open only ⌘P (close it)
         // acts; every other chord is swallowed. Its arrow/Enter/Esc keys aren't chords —
@@ -355,17 +358,17 @@ final class WindowController: NSObject {
             }
         }
         switch chord {
-        case .splitVertical:   active?.split(.vertical)
+        case .splitVertical: active?.split(.vertical)
         case .splitHorizontal: active?.split(.horizontal)
-        case .navLeft:  active?.navigate(.left)
+        case .navLeft: active?.navigate(.left)
         case .navRight: active?.navigate(.right)
-        case .navUp:    active?.navigate(.up)
-        case .navDown:  active?.navigate(.down)
-        case .resizeLeft:  active?.resize(.left)
+        case .navUp: active?.navigate(.up)
+        case .navDown: active?.navigate(.down)
+        case .resizeLeft: active?.resize(.left)
         case .resizeRight: active?.resize(.right)
-        case .resizeUp:    active?.resize(.up)
-        case .resizeDown:  active?.resize(.down)
-        case .newTab:   newTab()
+        case .resizeUp: active?.resize(.up)
+        case .resizeDown: active?.resize(.down)
+        case .newTab: newTab()
         case .selectTab(let n):
             let idx = n - 1
             if idx >= 0 && idx < tabs.order.count { select(tabs.order[idx]) }
@@ -375,7 +378,7 @@ final class WindowController: NSObject {
             // pane → tab → window cascade
             if active?.closeFocused() == false { closeTab(tabs.activeID) }
         case .newWindow:
-            break   // handled by AppDelegate (window manager); no-op here
+            break  // handled by AppDelegate (window manager); no-op here
         case .toggleBottomDrawer: active?.toggleBottomDrawer()
         case .toggleRightDrawer: active?.toggleRightDrawer()
         case .toggleZoom: active?.toggleZoom()
@@ -408,9 +411,10 @@ final class WindowController: NSObject {
 
     private func renderTabBar() {
         let items = tabs.order.enumerated().map { i, id in
-            TabBarItem(id: id, index: i + 1,
-                       title: titles[id] ?? "shell",
-                       isActive: id == tabs.activeID)
+            TabBarItem(
+                id: id, index: i + 1,
+                title: titles[id] ?? "shell",
+                isActive: id == tabs.activeID)
         }
         tabBar.render(items)
     }
