@@ -20,7 +20,10 @@ final class HostWindow: NSWindow {
         // retain count and crashing in the close-time CoreAnimation commit.
         isReleasedWhenClosed = false
         backgroundColor = NSColor(srgbRed: 0x23 / 255.0, green: 0x21 / 255.0, blue: 0x36 / 255.0, alpha: 1)
-        // Traffic lights stay visible for PoC usability. To go fully chromeless,
-        // hide each: standardWindowButton(.closeButton)?.isHidden = true (etc).
+        // Fully chromeless top: hide the traffic lights. Close/minimize/zoom via ⌘W /
+        // ⌘M / ⌘F-equivs and the menu; the window drags by its background.
+        standardWindowButton(.closeButton)?.isHidden = true
+        standardWindowButton(.miniaturizeButton)?.isHidden = true
+        standardWindowButton(.zoomButton)?.isHidden = true
     }
 }

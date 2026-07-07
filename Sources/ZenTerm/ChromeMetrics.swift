@@ -5,8 +5,7 @@ import CoreGraphics
 enum ChromeMetrics {
     /// Gap between tiled panes/panels — both pane splits and the canvas↔drawer seams.
     static let panelGap: CGFloat = 8
-    /// Inset from the window edge to the tile region (leading, trailing, bottom).
+    /// Inset from the window edge to the tile region — all four sides. The top matches
+    /// the others now that the traffic lights are hidden (no clearance needed).
     static let windowGutter: CGFloat = 8
-    /// Top inset clearing the window's traffic lights (`.fullSizeContentView`).
-    static let topInset: CGFloat = 36
 }

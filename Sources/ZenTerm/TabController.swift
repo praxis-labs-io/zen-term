@@ -104,12 +104,12 @@ final class TabController: NSObject {
 
         content.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(content)
-        // Content-rect inset: `topInset` clears the window's traffic lights (the window
-        // uses .fullSizeContentView); the sides/bottom use `windowGutter`.
+        // Content-rect inset: an even `windowGutter` on all four sides (the traffic
+        // lights are hidden, so the top no longer needs extra clearance).
         NSLayoutConstraint.activate([
             content.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: ChromeMetrics.windowGutter),
             content.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -ChromeMetrics.windowGutter),
-            content.topAnchor.constraint(equalTo: view.topAnchor, constant: ChromeMetrics.topInset),
+            content.topAnchor.constraint(equalTo: view.topAnchor, constant: ChromeMetrics.windowGutter),
             content.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -ChromeMetrics.windowGutter),
         ])
         content.addSubview(canvas)
