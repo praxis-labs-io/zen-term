@@ -36,6 +36,10 @@ final class TabController: NSObject {
     private enum PanelRef: Equatable { case pane, bottomDrawer, rightDrawer }
     private var focusedPanel: PanelRef = .pane
 
+    /// The zoomed panel (fills the tab, others hidden), or nil when not zoomed.
+    private var zoomedPanel: PanelRef?
+    var isZoomed: Bool { zoomedPanel != nil }
+
     /// The focused drawer's surface, or nil when the pane canvas is focused (copy/
     /// paste then routes to `paneCanvas` as before).
     private var focusedDrawerSurface: TerminalSurface? {
@@ -130,12 +134,11 @@ final class TabController: NSObject {
     func toggleBottomDrawer() {
         isBottomOpen.toggle()
         if isBottomOpen {
-            let panel = ensureBottomDrawerPanel()
-            panel.isHidden = false
+            _ = ensureBottomDrawerPanel()   // relayoutPanels shows it (visibility follows open state)
             relayoutPanels()
             focusDrawer(.bottom)
         } else {
-            bottomDrawerPanel?.isHidden = true
+            if zoomedPanel == .bottomDrawer { exitZoom() }   // don't leave a hidden drawer zoomed
             relayoutPanels()
             // Only steal focus back to the pane canvas if the drawer being hidden was
             // the one holding unified focus — otherwise leave the currently focused
@@ -164,12 +167,11 @@ final class TabController: NSObject {
     func toggleRightDrawer() {
         isRightOpen.toggle()
         if isRightOpen {
-            let panel = ensureRightDrawerPanel()
-            panel.isHidden = false
+            _ = ensureRightDrawerPanel()   // relayoutPanels shows it (visibility follows open state)
             relayoutPanels()
             focusDrawer(.right)
         } else {
-            rightDrawerPanel?.isHidden = true
+            if zoomedPanel == .rightDrawer { exitZoom() }   // don't leave a hidden drawer zoomed
             relayoutPanels()
             // See `toggleBottomDrawer`: only steal focus if this drawer held it.
             if focusedPanel == .rightDrawer { paneCanvas.focusActivePane() }
@@ -231,6 +233,46 @@ final class TabController: NSObject {
         rightDrawerPanel?.isFocused = false
     }
 
+    // MARK: zoom (⌘F)
+
+    /// Zoom the focused panel to fill the tab (others hidden), or unzoom if already
+    /// zoomed. For a pane, the pane canvas also renders just the focused leaf.
+    func toggleZoom() {
+        if isZoomed { exitZoom(); return }
+        switch focusedPanel {
+        case .pane:
+            paneCanvas.zoomFocusedLeaf()
+            zoomedPanel = .pane
+        case .bottomDrawer:
+            guard isBottomOpen, bottomDrawerPanel != nil else { return }
+            bottomDrawerPanel?.isZoomed = true
+            zoomedPanel = .bottomDrawer
+        case .rightDrawer:
+            guard isRightOpen, rightDrawerPanel != nil else { return }
+            rightDrawerPanel?.isZoomed = true
+            zoomedPanel = .rightDrawer
+        }
+        relayoutPanels()
+    }
+
+    private func exitZoom() {
+        switch zoomedPanel {
+        case .pane: paneCanvas.unzoom()
+        case .bottomDrawer, .rightDrawer:
+            bottomDrawerPanel?.isZoomed = false
+            rightDrawerPanel?.isZoomed = false
+        case nil: return
+        }
+        zoomedPanel = nil
+        relayoutPanels()
+    }
+
+    /// Unzoom if zoomed; returns true if it did. (Shared with PR3's Escape handling.)
+    @discardableResult func exitZoomIfNeeded() -> Bool {
+        if isZoomed { exitZoom(); return true }
+        return false
+    }
+
     // MARK: cross-panel spatial nav (⌘hjkl)
 
     /// Sentinel ids standing in for the drawer panels in the shared nav graph —
@@ -287,8 +329,37 @@ final class TabController: NSObject {
     /// drawer sits under the canvas in the remaining left column (never under the
     /// right column). Deactivates the previous tile constraint set before activating
     /// the new one so repeated toggles never accumulate constraints.
+    private func zoomedView(_ ref: PanelRef) -> NSView? {
+        switch ref {
+        case .pane: return canvas
+        case .bottomDrawer: return bottomDrawerPanel
+        case .rightDrawer: return rightDrawerPanel
+        }
+    }
+
     private func relayoutPanels() {
         NSLayoutConstraint.deactivate(tileConstraints)
+
+        // Zoom: the zoomed panel fills `content`, the other panels are hidden.
+        if let z = zoomedPanel, let zv = zoomedView(z) {
+            canvas.isHidden = z != .pane
+            bottomDrawerPanel?.isHidden = z != .bottomDrawer
+            rightDrawerPanel?.isHidden = z != .rightDrawer
+            let cs = [
+                zv.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+                zv.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+                zv.topAnchor.constraint(equalTo: content.topAnchor),
+                zv.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            ]
+            NSLayoutConstraint.activate(cs)
+            tileConstraints = cs
+            return
+        }
+
+        // Normal tiling: panel visibility follows open state.
+        canvas.isHidden = false
+        bottomDrawerPanel?.isHidden = !isBottomOpen
+        rightDrawerPanel?.isHidden = !isRightOpen
 
         var cs: [NSLayoutConstraint] = [
             canvas.leadingAnchor.constraint(equalTo: content.leadingAnchor),
