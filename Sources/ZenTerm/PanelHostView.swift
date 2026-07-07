@@ -16,8 +16,9 @@ struct PanelMeta {
 final class PanelHostView: NSView {
     private let onFocusRequest: () -> Void
     private let pane = NSView()
-    private let zoomButton: CornerButton
-    private let hideButton: CornerButton?
+    private let zoomButton: IconButton
+    private let hideButton: IconButton?
+    private static let cornerSize = NSSize(width: 22, height: 20)
 
     /// Invoked when the corner zoom action button is clicked — the chrome exits zoom.
     var onZoomExit: (() -> Void)?
@@ -38,14 +39,20 @@ final class PanelHostView: NSView {
     private let padding: CGFloat = 10
 
     init(content: NSView, background: NSColor, meta: PanelMeta?,
-         hideButton hideSpec: (glyph: String, onHide: () -> Void)? = nil,
+         hideButton hideSpec: (symbol: String, label: String, onHide: () -> Void)? = nil,
          onFocusRequest: @escaping () -> Void) {
         self.onFocusRequest = onFocusRequest
-        self.zoomButton = CornerButton(glyph: "⤢")
-        self.hideButton = hideSpec.map { CornerButton(glyph: $0.glyph) }
+        // Shown only while zoomed → exit-zoom (inward arrows). onClick wired post-super.
+        self.zoomButton = IconButton(symbol: "arrow.down.right.and.arrow.up.left",
+                                     size: Self.cornerSize, pointSize: 11,
+                                     accessibilityLabel: "Exit zoom", onClick: {})
+        self.hideButton = hideSpec.map {
+            IconButton(symbol: $0.symbol, size: Self.cornerSize, pointSize: 11,
+                       accessibilityLabel: $0.label, onClick: $0.onHide)
+        }
         super.init(frame: .zero)
         zoomButton.onClick = { [weak self] in self?.onZoomExit?() }
-        if let hideSpec { hideButton?.onClick = hideSpec.onHide }
+        zoomButton.isHidden = true   // only appears while zoomed
 
         wantsLayer = true
         pane.wantsLayer = true
@@ -114,13 +121,12 @@ final class PanelHostView: NSView {
         super.mouseDown(with: event)
     }
 
-    /// Top-right corner slot (22×20, 8pt inset) shared by the corner action buttons.
+    /// Top-right corner slot (8pt inset) shared by the corner action buttons; each
+    /// `IconButton` supplies its own size.
     private func cornerConstraints(for button: NSView) -> [NSLayoutConstraint] {
         [
             button.topAnchor.constraint(equalTo: pane.topAnchor, constant: 8),
             button.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -8),
-            button.widthAnchor.constraint(equalToConstant: 22),
-            button.heightAnchor.constraint(equalToConstant: 20),
         ]
     }
 
@@ -138,56 +144,6 @@ final class PanelHostView: NSView {
         } else {
             layer.borderColor = Self.idleBorder.cgColor
             layer.shadowOpacity = 0
-        }
-    }
-
-    /// A small corner action button: a white glyph with no background until hover
-    /// (matching the tab bar's "+"), pointing-hand cursor, click fires `onClick`.
-    /// Used for the unzoom control and the drawer hide controls.
-    private final class CornerButton: NSView {
-        var onClick: (() -> Void)?
-        private let glyph: NSTextField
-        private var trackingArea: NSTrackingArea?
-        private var isHovered = false { didSet { update() } }
-
-        init(glyph glyphChar: String) {
-            self.glyph = NSTextField(labelWithString: glyphChar)
-            super.init(frame: .zero)
-            isHidden = true
-            wantsLayer = true
-            layer?.cornerRadius = 5
-            glyph.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
-            glyph.alignment = .center
-            glyph.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(glyph)
-            NSLayoutConstraint.activate([
-                glyph.centerXAnchor.constraint(equalTo: centerXAnchor),
-                glyph.centerYAnchor.constraint(equalTo: centerYAnchor),
-            ])
-            translatesAutoresizingMaskIntoConstraints = false
-            update()
-        }
-
-        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-        override func updateTrackingAreas() {
-            super.updateTrackingAreas()
-            if let trackingArea { removeTrackingArea(trackingArea) }
-            let area = NSTrackingArea(rect: bounds,
-                                     options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
-                                     owner: self)
-            addTrackingArea(area)
-            trackingArea = area
-        }
-
-        override func mouseEntered(with event: NSEvent) { isHovered = true }
-        override func mouseExited(with event: NSEvent) { isHovered = false }
-        override func mouseDown(with event: NSEvent) { onClick?() }   // consumes — no focus bubble
-        override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
-
-        private func update() {
-            layer?.backgroundColor = (isHovered ? NSColor(white: 1, alpha: 0.12) : .clear).cgColor
-            glyph.textColor = NSColor(white: 0.95, alpha: isHovered ? 1.0 : 0.65)
         }
     }
 

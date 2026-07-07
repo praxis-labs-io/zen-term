@@ -339,11 +339,12 @@ final class TabController: NSObject {
     private func makeDrawerPanel(edge: DrawerEdge, surface: TerminalSurface) -> PanelHostView {
         // Headers dropped for now — drawers use the bare pane chrome (meta: nil). A
         // corner hide button (chevron pointing the way it collapses) toggles the drawer.
-        let hideGlyph = edge == .bottom ? "⌄" : "›"
+        let hideSymbol = edge == .bottom ? "chevron.down" : "chevron.right"
+        let hideLabel = edge == .bottom ? "Hide bottom drawer" : "Hide right drawer"
         let panel = PanelHostView(content: surface.view,
                                   background: Theme.rosePineMoon.background.nsColor,
                                   meta: nil,
-                                  hideButton: (glyph: hideGlyph, onHide: { [weak self] in
+                                  hideButton: (symbol: hideSymbol, label: hideLabel, onHide: { [weak self] in
                                       switch edge {
                                       case .bottom: self?.toggleBottomDrawer()
                                       case .right: self?.toggleRightDrawer()

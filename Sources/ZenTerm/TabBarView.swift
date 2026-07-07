@@ -62,9 +62,9 @@ final class TabBarView: NSView {
                             onMiddleClick: { [weak self] in self?.onClose(id) })
             stack.addArrangedSubview(chip)
         }
-        let plus = Chip(attributed: Self.plusLabel(), isActive: false, showsUnderline: false,
-                        onClick: { [weak self] in self?.onNewTab() },
-                        onMiddleClick: nil)
+        let plus = IconButton(symbol: "plus", size: NSSize(width: 22, height: 22),
+                              pointSize: 11, accessibilityLabel: "New tab",
+                              onClick: { [weak self] in self?.onNewTab() })
         stack.addArrangedSubview(plus)
     }
 
@@ -78,13 +78,6 @@ final class TabBarView: NSView {
             string: item.title,
             attributes: [.font: font, .foregroundColor: ink, .kern: 0.4]))
         return s
-    }
-
-    private static func plusLabel() -> NSAttributedString {
-        NSAttributedString(string: "+", attributes: [
-            .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular),
-            .foregroundColor: idleInk,
-        ])
     }
 
     /// A rounded box holding a centered label. The box background appears on hover
