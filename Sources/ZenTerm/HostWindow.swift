@@ -14,6 +14,11 @@ final class HostWindow: NSWindow {
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         isMovableByWindowBackground = true
+        tabbingMode = .disallowed   // no native macOS tabs / window merging (multi-window + yabai)
+        // The WindowController owns this window with a strong reference. Without this,
+        // AppKit ALSO releases the window on close (default true), underflowing the
+        // retain count and crashing in the close-time CoreAnimation commit.
+        isReleasedWhenClosed = false
         backgroundColor = NSColor(srgbRed: 0x23 / 255.0, green: 0x21 / 255.0, blue: 0x36 / 255.0, alpha: 1)
         // Traffic lights stay visible for PoC usability. To go fully chromeless,
         // hide each: standardWindowButton(.closeButton)?.isHidden = true (etc).
