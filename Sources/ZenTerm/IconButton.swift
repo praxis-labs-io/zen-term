@@ -77,7 +77,7 @@ final class IconButton: NSView {
         } else {
             bg = .clear; tint = NSColor(white: 1, alpha: 0.55)
         }
-        layer?.backgroundColor = bg.cgColor
-        icon.contentTintColor = tint
+        if let layer { Motion.ease(layer, keyPath: "backgroundColor", to: bg.cgColor) }
+        icon.contentTintColor = tint  // NSImageView tint isn't layer-animatable; the shift is barely visible
     }
 }

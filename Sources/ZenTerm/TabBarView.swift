@@ -146,7 +146,10 @@ final class TabBarView: NSView {
         }
 
         private func updateBackground() {
-            layer?.backgroundColor = (isHovered ? NSColor(white: 1, alpha: 0.08) : .clear).cgColor
+            guard let layer else { return }
+            Motion.ease(
+                layer, keyPath: "backgroundColor",
+                to: (isHovered ? NSColor(white: 1, alpha: 0.08) : .clear).cgColor)
         }
     }
 }

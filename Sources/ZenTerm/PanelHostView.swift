@@ -23,7 +23,7 @@ final class PanelHostView: NSView {
     /// Invoked when the corner zoom action button is clicked — the chrome exits zoom.
     var onZoomExit: (() -> Void)?
 
-    var isFocused: Bool = false { didSet { updateHalo() } }
+    var isFocused: Bool = false { didSet { if oldValue != isFocused { updateHalo() } } }
 
     /// Whether this panel is the sole full-canvas panel (zoomed). Shows the corner
     /// unzoom button and hides the (drawer) hide button — they share the corner.
@@ -63,6 +63,11 @@ final class PanelHostView: NSView {
         pane.layer?.cornerRadius = 12
         pane.layer?.masksToBounds = false  // glow must escape bounds; content clip is on a mask below
         pane.layer?.borderWidth = 1
+        // The focus glow is a fixed iris shadow whose opacity toggles (animated in
+        // updateHalo); its color/radius/offset never change, so set them once here.
+        pane.layer?.shadowColor = Self.iris.cgColor
+        pane.layer?.shadowRadius = 6
+        pane.layer?.shadowOffset = .zero
         addSubview(pane)
 
         content.translatesAutoresizingMaskIntoConstraints = false
@@ -139,16 +144,11 @@ final class PanelHostView: NSView {
 
     private func updateHalo() {
         guard let layer = pane.layer else { return }
-        if isFocused {
-            layer.borderColor = Self.iris.cgColor
-            layer.shadowColor = Self.iris.cgColor
-            layer.shadowOpacity = 0.2
-            layer.shadowRadius = 6
-            layer.shadowOffset = .zero
-        } else {
-            layer.borderColor = Self.idleBorder.cgColor
-            layer.shadowOpacity = 0
-        }
+        // Ease from the live (presentation) value so a focus-nav crossfade falls out — the
+        // losing host's glow eases down as the gaining host's eases up. Fast (haloDuration)
+        // so it never trails rapid ⌘hjkl nav.
+        Motion.ease(layer, keyPath: "borderColor", to: (isFocused ? Self.iris : Self.idleBorder).cgColor)
+        Motion.ease(layer, keyPath: "shadowOpacity", to: isFocused ? Float(0.2) : Float(0))
     }
 
     /// A muted small-caps mono label (left) and its keybind (right), e.g. "BOTTOM  ⌘B".
