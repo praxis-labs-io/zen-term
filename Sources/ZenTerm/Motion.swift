@@ -72,8 +72,21 @@ enum Motion {
             return
         }
 
-        let fromTransform = currentTransform(of: layer)
-        let fromOpacity = currentOpacity(of: layer)
+        // Start from the explicit opposite state (hidden when appearing, shown when
+        // disappearing) — a freshly-presented card already sits at the shown state, so
+        // reading its current value would animate from→to as a no-op. Only when a motion
+        // animation is already in flight do we pick up its mid-flight presentation value,
+        // so a rapid open→close stays smooth.
+        let interrupting = layer.animation(forKey: "motion.transform") != nil
+        let fromTransform: CATransform3D
+        let fromOpacity: Float
+        if interrupting, let p = layer.presentation() {
+            fromTransform = p.transform
+            fromOpacity = p.opacity
+        } else {
+            fromTransform = appearing ? hiddenTransform : shownTransform
+            fromOpacity = appearing ? 0 : 1
+        }
         layer.transform = targetTransform
         layer.opacity = targetOpacity
 
@@ -145,7 +158,7 @@ enum Motion {
             return
         }
 
-        let from = currentOpacity(of: layer)
+        let from = layer.opacity  // model value — callers set it before crossfading
         layer.opacity = opacity
 
         let fade = CABasicAnimation(keyPath: "opacity")
@@ -224,9 +237,5 @@ enum Motion {
 
     private static func currentTransform(of layer: CALayer) -> CATransform3D {
         layer.presentation()?.transform ?? layer.transform
-    }
-
-    private static func currentOpacity(of layer: CALayer) -> Float {
-        layer.presentation()?.opacity ?? layer.opacity
     }
 }
