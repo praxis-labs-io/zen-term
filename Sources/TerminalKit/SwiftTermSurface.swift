@@ -42,6 +42,11 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
         return path.isEmpty ? nil : URL(fileURLWithPath: path)
     }
 
+    /// Whether the shell has a running foreground command or a backgrounded job.
+    public var isBusy: Bool {
+        ProcessProbe.hasChildren(term.process?.shellPid ?? 0)
+    }
+
     public override init() {
         super.init()
         term.processDelegate = self
