@@ -10,10 +10,10 @@
 # Prereqs it can't install for you:
 #   • Xcode (full) selected: xcode-select -p → /Applications/Xcode.app/...
 #   • Metal toolchain: xcodebuild -downloadComponent MetalToolchain
-# Everything else (Zig 0.15.2, the ghostty checkout) this script fetches on demand.
+# The ghostty source is the pinned vendor/ghostty submodule (v1.3.1); Zig 0.15.2 is
+# fetched on demand. The submodule is auto-initialized below if not yet checked out.
 set -euo pipefail
 
-GHOSTTY_TAG="v1.3.1"        # pins the C API + Swift reference we ported against
 ZIG_VERSION="0.15.2"       # ghostty v1.3.1's minimum_zig_version
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VENDOR="$ROOT/vendor"
@@ -33,10 +33,11 @@ if [ ! -x "$ZIG" ]; then
   rm -f "$VENDOR/zig.tar.xz"
 fi
 
-# 2. ghostty source, pinned.
-if [ ! -d "$GHOSTTY/.git" ]; then
-  echo "▸ cloning ghostty $GHOSTTY_TAG"
-  git clone --depth 1 --branch "$GHOSTTY_TAG" https://github.com/ghostty-org/ghostty.git "$GHOSTTY"
+# 2. ghostty source, from the pinned vendor/ghostty submodule. Auto-init on a fresh
+#    checkout so the script works end to end without a manual submodule step.
+if [ ! -f "$GHOSTTY/build.zig" ]; then
+  echo "▸ initializing ghostty submodule"
+  git -C "$ROOT" submodule update --init vendor/ghostty
 fi
 
 # 3. Build the native (arm64-only) xcframework. app-runtime=none selects libghostty;

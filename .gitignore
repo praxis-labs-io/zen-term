@@ -4,7 +4,9 @@
 DerivedData/
 .DS_Store
 
-# libghostty spike (ZEN-40) — large build artifacts, rebuilt from source, never committed.
-# See docs/libghostty-spike.md for the rebuild recipe.
-/vendor/
+# libghostty spike (ZEN-40). vendor/ghostty is a pinned submodule (the ghostty
+# source); the downloaded Zig toolchain under vendor/ and the built xcframework are
+# rebuilt from source and never committed. See docs/libghostty-spike.md.
+/vendor/*
+!/vendor/ghostty
 /Frameworks/GhosttyKit.xcframework/

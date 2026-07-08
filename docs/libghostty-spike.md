@@ -12,28 +12,33 @@ unchanged — it only ever talks to the seam.
 ## Run it
 
 ```sh
-bin/build-ghosttykit                 # one-time: builds Frameworks/GhosttyKit.xcframework
-swift build
-ZENTERM_BACKEND=ghostty swift run ZenTerm   # libghostty backend
-swift run ZenTerm                            # SwiftTerm backend (default, unchanged)
+bin/build-ghosttykit    # one-time: inits the ghostty submodule + builds the xcframework
+bin/run --ghostty       # libghostty backend
+bin/run                 # SwiftTerm backend (default, unchanged)
 ```
 
-`GHOSTTY_LOG=stderr` surfaces libghostty's own logs (off by default in the embedded lib).
+`GHOSTTY_LOG=stderr bin/run --ghostty` surfaces libghostty's own logs (off by default in
+the embedded lib).
 
 ## What the build takes
 
 libghostty ships **no** reusable artifact — the released Ghostty.app statically links it
 into its main binary, with no `GhosttyKit.xcframework` or `ghostty.h` exposed. So we build
-it from source. Two hurdles, both one-time and scripted:
+it from the pinned `vendor/ghostty` submodule (v1.3.1) — the same "build from source, commit
+no binary" model ghostty's own macOS app uses (its `macos/.gitignore` ignores the
+xcframework too). Two hurdles, both one-time and scripted:
 
 - **Zig 0.15.2 exactly.** Homebrew tracks a newer Zig whose stdlib won't compile ghostty
-  v1.3.1. `build-ghosttykit.sh` fetches the pinned toolchain locally.
+  v1.3.1. `bin/build-ghosttykit` fetches the pinned toolchain locally.
 - **Metal toolchain.** Xcode 26 ships the `metal` shader compiler as a separate download:
   `xcodebuild -downloadComponent MetalToolchain` (~700 MB). Without it the xcframework
   build fails at the `Ghostty.metallib` step.
 
-Output: `Frameworks/GhosttyKit.xcframework` (~135 MB static lib, macos-arm64). Gitignored
-alongside `vendor/` — rebuilt per machine, never committed.
+Output: `Frameworks/GhosttyKit.xcframework` (~135 MB static lib, macos-arm64) — gitignored
+and rebuilt from the submodule, never committed. **CI** builds it the same way and caches
+it keyed on the ghostty pin, so only a ghostty bump pays the rebuild; every other run
+restores it in seconds. Self-contained: the source pin is a committed submodule, nothing is
+fetched as a prebuilt binary.
 
 ## How it maps to the seam
 

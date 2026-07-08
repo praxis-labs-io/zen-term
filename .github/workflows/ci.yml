@@ -17,10 +17,35 @@ jobs:
     # formatted and developed against, so swift-format can't drift vs local.
     runs-on: macos-26
     steps:
+      # No submodule content here on purpose: only the GhosttyKit cache-miss path needs
+      # the ghostty source, and bin/build-ghosttykit inits the submodule itself. This
+      # keeps the common (cache-hit) run from cloning ghostty at all.
       - uses: actions/checkout@v4
 
       - name: Toolchain
         run: swift --version
+
+      # The GhosttyKit binaryTarget is linked unconditionally (ZEN-40), so `swift build`
+      # needs the xcframework. It's gitignored and built from the pinned vendor/ghostty
+      # submodule — same model as ghostty's own CI. Cache the built artifact keyed on the
+      # ghostty pin + build script, so only a ghostty bump triggers the slow Zig/Metal
+      # rebuild; every other run restores it in seconds.
+      - name: Resolve ghostty pin
+        id: pin
+        run: echo "sha=$(git rev-parse HEAD:vendor/ghostty)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache GhosttyKit.xcframework
+        id: ghosttykit
+        uses: actions/cache@v4
+        with:
+          path: Frameworks/GhosttyKit.xcframework
+          key: ghosttykit-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('bin/build-ghosttykit') }}
+
+      - name: Build GhosttyKit (cache miss only)
+        if: steps.ghosttykit.outputs.cache-hit != 'true'
+        run: |
+          xcodebuild -downloadComponent MetalToolchain
+          bin/build-ghosttykit
 
       - name: Cache SwiftPM
         uses: actions/cache@v4
