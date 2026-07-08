@@ -78,6 +78,15 @@ final class PaneCanvasController: NSObject {
         registry.surface(for: tree.focusedLeaf)?.currentDirectory ?? cwdByLeaf[tree.focusedLeaf]
     }
 
+    /// Number of leaves (panes) in the tab's canvas. `1` means ⌘W closes the tab.
+    var paneCount: Int { tree.leafIDs.count }
+
+    /// Whether the focused pane's shell has live work (busy). False when the
+    /// surface hasn't started or the backend can't tell.
+    var focusedPaneIsBusy: Bool {
+        registry.surface(for: tree.focusedLeaf)?.isBusy ?? false
+    }
+
     /// The tab's display title: the focused pane's cwd basename (`~` for home),
     /// resolved live from the shell process. Falls back to the terminal (OSC) title
     /// if a cwd can't be read, then a generic label.

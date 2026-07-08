@@ -123,6 +123,12 @@ final class TabController: NSObject {
     var title: String { pinnedTitle ?? paneCanvas.title }
     var focusedCWD: URL? { paneCanvas.focusedCWD }
 
+    /// True when the tab has a single pane, so ⌘W on it would close the whole tab.
+    var isSinglePane: Bool { paneCanvas.paneCount == 1 }
+
+    /// Whether the focused main-canvas pane has a running process.
+    var focusedPaneIsBusy: Bool { paneCanvas.focusedPaneIsBusy }
+
     /// The tab's overlay open-state (drawers + lazygit), for the footer dock's active
     /// tints; fired via `onOverlayStateChanged` whenever one of them toggles.
     var overlayState: OverlayState {
