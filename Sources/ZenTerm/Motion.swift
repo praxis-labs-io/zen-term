@@ -1,13 +1,12 @@
 import AppKit
 
-/// One motion system for the whole chrome. All timing lives here so every window/pane
-/// movement feels like the same spring. Structural motion is a snappy spring with a
-/// slight overshoot; halo/tint eases are deliberately faster so they never lag rapid
-/// focus nav; region dissolves get a short crossfade.
+/// One motion system for the whole chrome. All timing lives here so every animation feels
+/// like the same system. Overlay cards use a snappy spring with a slight overshoot; the
+/// focus halo and button/chip tints use a smooth ease.
 ///
 /// Honors Reduce Motion globally — when on, every primitive applies its final state
-/// instantly and runs the completion **synchronously**, so callers that sequence work
-/// in the completion (mutate-then-rebuild, detach-after-close) behave identically.
+/// instantly and runs the completion **synchronously**, so callers that sequence work in
+/// the completion behave identically.
 ///
 /// Chrome-only (AppKit + Core Animation). Never touches a terminal backend.
 enum Motion {
@@ -31,13 +30,9 @@ enum Motion {
         }
     }
 
-    /// Halo / tint ease — faster than structural so it never trails ⌘hjkl focus nav.
-    static let haloDuration: CFTimeInterval = 0.12
-    /// Region crossfade — zoom / tab-switch dissolves.
-    static let crossfadeDuration: CFTimeInterval = 0.16
-    /// Drawer slide + canvas reflow — a fluid ease, no spring: a large geometric move that
-    /// carries the canvas with it reads better smooth than bouncy.
-    static let drawerSlideDuration: CFTimeInterval = 0.24
+    /// Halo / tint ease — a smooth crossfade as focus moves, still quick enough to keep up
+    /// with ⌘hjkl nav.
+    static let haloDuration: CFTimeInterval = 0.18
     /// The opacity ramp of a scale-fade entrance. Kept short and decoupled from the
     /// spring settle so the card *reads* as present fast — the dominant snappiness cue —
     /// while the scale settles under the spring behind it.
@@ -104,74 +99,6 @@ enum Motion {
 
         run(completion: completion) {
             layer.add(spring, forKey: "motion.transform")
-            layer.add(fade, forKey: "motion.opacity")
-        }
-    }
-
-    /// Slide a full-size panel by `offset` and back with a fluid ease — a layer translation,
-    /// never a size change, so an attached PTY keeps its shape (no reflow). `appearing` true
-    /// slides it from `offset` into its resting place; false slides it from rest out to
-    /// `offset` (the caller detaches it in `completion`). Honors Reduce Motion.
-    static func slide(
-        _ view: NSView,
-        offset: CGSize,
-        appearing: Bool,
-        duration: CFTimeInterval = drawerSlideDuration,
-        completion: (() -> Void)? = nil
-    ) {
-        view.wantsLayer = true
-        guard let layer = view.layer else { completion?(); return }
-
-        let resting = CATransform3DIdentity
-        let out = CATransform3DMakeTranslation(offset.width, offset.height, 0)
-        let target = appearing ? resting : out
-
-        if isReduceMotionEnabled() {
-            layer.transform = resting
-            completion?()
-            return
-        }
-
-        let from = appearing ? out : resting
-        layer.transform = target
-
-        let anim = CABasicAnimation(keyPath: "transform")
-        anim.fromValue = NSValue(caTransform3D: from)
-        anim.toValue = NSValue(caTransform3D: target)
-        anim.duration = duration
-        anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-
-        run(completion: completion) {
-            layer.add(anim, forKey: "motion.transform")
-        }
-    }
-
-    /// Opacity ramp. Zoom sibling fades, tab-switch crossfade.
-    static func fade(
-        _ view: NSView,
-        to opacity: Float,
-        duration: CFTimeInterval = crossfadeDuration,
-        completion: (() -> Void)? = nil
-    ) {
-        view.wantsLayer = true
-        guard let layer = view.layer else { completion?(); return }
-
-        if isReduceMotionEnabled() {
-            layer.opacity = opacity
-            completion?()
-            return
-        }
-
-        let from = layer.opacity  // model value — callers set it before crossfading
-        layer.opacity = opacity
-
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = from
-        fade.toValue = opacity
-        fade.duration = duration
-        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
-
-        run(completion: completion) {
             layer.add(fade, forKey: "motion.opacity")
         }
     }

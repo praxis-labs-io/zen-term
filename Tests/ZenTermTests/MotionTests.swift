@@ -34,28 +34,6 @@ final class MotionTests: XCTestCase {
         XCTAssertEqual(view.layer?.opacity, 0)
     }
 
-    func test_reduceMotion_slide_settlesInPlaceSynchronously() {
-        Motion.isReduceMotionEnabled = { true }
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: 100, height: 100))
-
-        var ran = false
-        Motion.slide(view, offset: CGSize(width: 0, height: -200), appearing: true) { ran = true }
-
-        XCTAssertTrue(ran, "completion must run synchronously under Reduce Motion")
-        XCTAssertTrue(CATransform3DIsIdentity(view.layer!.transform), "settles at rest")
-    }
-
-    func test_reduceMotion_fade_appliesTargetSynchronously() {
-        Motion.isReduceMotionEnabled = { true }
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: 10, height: 10))
-
-        var ran = false
-        Motion.fade(view, to: 0) { ran = true }
-
-        XCTAssertTrue(ran)
-        XCTAssertEqual(view.layer?.opacity, 0)
-    }
-
     func test_reduceMotion_ease_setsModelValueAndRunsCompletion() {
         Motion.isReduceMotionEnabled = { true }
         let layer = CALayer()
