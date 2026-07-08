@@ -2,9 +2,12 @@
 #
 # Loaded explicitly by GhosttyApp for the .ghostty backend — this does NOT touch
 # your real ~/.config/ghostty. Rosé Pine Moon palette on the darker #191724 base
-# (matching zen-term's own theme), JetBrainsMono Nerd Font, plus the ghostty-only
-# niceties this backend exists for: an animated cursor smear and native smooth
-# scroll. custom-shader paths resolve relative to this file.
+# (matching zen-term's own theme) and JetBrainsMono Nerd Font.
+#
+# A GPU cursor-trail shader was explored and removed: any custom shader routes
+# ghostty through an intermediate-texture pass that flashes white on TUI transitions
+# in this transparent-window embed. Revisit under ZEN-45. Native smooth scroll and
+# shell integration still apply.
 
 theme = Rose Pine Moon
 background = #191724
@@ -16,16 +19,3 @@ font-thicken = true
 cursor-style = block
 cursor-style-blink = true
 mouse-hide-while-typing = true
-
-# The payoff: a GPU cursor-trail animation SwiftTerm can't do. Lean trail that
-# borrows the coordinate math from sahaj-b/ghostty-cursor-shaders (MIT). Tunables
-# (DURATION, THRESHOLD) at the top of the .glsl.
-#
-# Cursor-trail shader — OFF. Any custom shader routes ghostty through an
-# intermediate-texture post-process pass that flashes white during TUI transitions
-# (fzf, nvim) in this transparent-window embed, regardless of animation mode. The
-# shader itself works (config/ghostty/cursor_trail.glsl); uncomment to try it, but
-# expect the flash until the transparent-window compositing is solved. See
-# docs/libghostty-spike.md.
-# custom-shader = cursor_trail.glsl
-# custom-shader-animation = true

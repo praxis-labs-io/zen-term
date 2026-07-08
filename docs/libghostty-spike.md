@@ -74,13 +74,13 @@ backend needs that a CPU one doesn't.
   own config, so the spike applies Rosé Pine Moon + JetBrainsMono via an in-repo config
   (`config/ghostty/`, pointed at Ghostty.app's resources) rather than the seam. Making the
   seam's theme/font drive libghostty is follow-up work.
-- **Cursor-trail shader works but is off by default** (`config/ghostty/cursor_trail.glsl`).
-  Verified rendering, but *any* custom shader routes ghostty through an intermediate-texture
-  post-process pass that flashes white during TUI transitions (prompt → fzf/nvim) in this
-  transparent-window embed — independent of `custom-shader-animation`. No custom shader = no
-  flash. So the GPU cursor animation and flash-free transitions are mutually exclusive until
-  the transparent-window compositing is solved (make the custom-shader screen texture opaque,
-  or run an opaque window). Left off; the effect is one uncomment away for anyone who wants it.
+- **GPU cursor shader — explored and removed.** A cursor-trail shader rendered correctly, but
+  *any* custom shader routes ghostty through an intermediate-texture post-process pass that
+  flashes white during TUI transitions (prompt → fzf/nvim) in this transparent-window embed —
+  independent of `custom-shader-animation`. No custom shader = no flash. So the GPU cursor
+  animation and flash-free transitions are mutually exclusive until the transparent-window
+  compositing is solved (opaque custom-shader screen texture, or an opaque window). Removed for
+  now; revisit under ZEN-45.
 - **Focus-on-click** is reported to the chrome, but full focus-follows and overlay
   occlusion parity with SwiftTerm isn't done.
 - **Two ImGui link warnings** (`_ImFontConfig_ImFontConfig`, `_ImGuiStyle_ImGuiStyle`) —

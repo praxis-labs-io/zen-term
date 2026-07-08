@@ -14,6 +14,8 @@ final class GhosttyApp {
     static let shared = GhosttyApp()
 
     let app: ghostty_app_t
+    // Retained for the app's (process) lifetime: libghostty keeps a reference to the
+    // config passed to ghostty_app_new; freeing it would pull it out from under the app.
     private let config: ghostty_config_t
 
     private init() {
@@ -29,8 +31,8 @@ final class GhosttyApp {
             fatalError("ghostty_init failed")
         }
 
-        // The spike config (Rosé Pine Moon, JetBrainsMono, cursor smear) loaded on top
-        // of any real user config. Kept in-repo so it never touches ~/.config/ghostty.
+        // The spike config (Rosé Pine Moon, JetBrainsMono) loaded on top of any real
+        // user config. Kept in-repo so it never touches ~/.config/ghostty.
         guard let cfg = ghostty_config_new() else { fatalError("ghostty_config_new failed") }
         ghostty_config_load_default_files(cfg)
         if let spikeConfig = Self.spikeConfigPath {
