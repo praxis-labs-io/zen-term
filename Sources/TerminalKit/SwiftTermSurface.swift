@@ -74,16 +74,23 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
         return nil
     }
 
+    /// Whether the event's location hit-tests into this surface's own content — and not
+    /// a view covering it (e.g. an overlay this surface sits behind). Shared by
+    /// focus-on-click and hover-motion suppression so both agree on "is this my view."
+    private func hitTestsIntoSurface(_ event: NSEvent) -> Bool {
+        guard event.window === term.window,
+            let hit = term.window?.contentView?.hitTest(event.locationInWindow)
+        else { return false }
+        return hit === term || hit.isDescendant(of: term)
+    }
+
     /// Report a focus intent when a click lands in this surface's content. SwiftTerm's
     /// `mouseDown` consumes the click for selection without becoming first responder or
     /// bubbling, so clicks never reached the chrome's focus routing. We only observe
     /// (never swallow the event, so selection still works) and only when the click
     /// hit-tests into this surface's view — never a covered one behind an overlay.
     private func reportFocusIfClicked(_ event: NSEvent) {
-        guard event.window === term.window,
-            let hit = term.window?.contentView?.hitTest(event.locationInWindow),
-            hit === term || hit.isDescendant(of: term)
-        else { return }
+        guard hitTestsIntoSurface(event) else { return }
         delegate?.surfaceWantsFocus(self)
     }
 
@@ -92,19 +99,16 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
     /// motion as `ESC[<32;x;ym`: the low two bits (0) read as the LEFT button and the
     /// trailing `m` as a release, so a mouse-tracking app decodes plain hover as a
     /// left-button drag and begins selecting text under the cursor — the phantom
-    /// highlight in turbo's log pane. Correct terminals report no-button motion the app
-    /// ignores; kitty shows nothing. SwiftTerm's `mouseMoved` is sealed `public` (not
+    /// highlight in turbo's log pane. Correct terminals emit no-button motion the app
+    /// ignores, so nothing highlights. SwiftTerm's `mouseMoved` is sealed `public` (not
     /// `open`), so we can't fix its encoder from a subclass — instead we drop the event
     /// before it reaches the view. Only pure hover is dropped: real drags arrive as
-    /// `.leftMouseDragged` and still report correctly, and ⌘-hover (link preview) is
-    /// left intact. Scoped by hit-test so it never affects a surface behind an overlay.
+    /// `.leftMouseDragged` and still report correctly. This suppresses rather than
+    /// re-encodes, so a TUI that legitimately drives hover UI over DEC 1003 loses it too
+    /// (tracked as a follow-up to emit correct no-button motion instead). Scoped by
+    /// hit-test so it never swallows events destined for another view.
     private func suppressHoverMotion(_ event: NSEvent) -> NSEvent? {
-        guard event.window === term.window,
-            !event.modifierFlags.contains(.command),
-            let hit = term.window?.contentView?.hitTest(event.locationInWindow),
-            hit === term || hit.isDescendant(of: term)
-        else { return event }
-        return nil
+        hitTestsIntoSurface(event) ? nil : event
     }
 
     public func start(_ config: TerminalSurfaceConfig) {
