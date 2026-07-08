@@ -14,14 +14,14 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     private let hostView = GhosttyHostView()
     var surfacePtr: ghostty_surface_t?
     private var lastTitle = ""
-    private var lastPwd: URL?
+    private var lastCwd: URL?
 
     public weak var delegate: TerminalSurfaceDelegate?
 
     public var view: NSView { hostView }
     public var title: String { lastTitle }
     public var isFocused: Bool { hostView.window?.firstResponder === hostView }
-    public var currentDirectory: URL? { lastPwd }
+    public var currentDirectory: URL? { lastCwd }
 
     public override init() {
         super.init()
@@ -155,7 +155,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             guard let cStr = action.action.pwd.pwd else { return false }
             let path = String(cString: cStr)
             let url = OSC7.fileURL(from: path) ?? URL(fileURLWithPath: path)
-            lastPwd = url
+            lastCwd = url
             delegate?.surface(self, cwdDidChange: url)
             return true
         case GHOSTTY_ACTION_RING_BELL:

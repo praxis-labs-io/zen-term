@@ -1,7 +1,10 @@
 name: CI
 
 on:
+  # Draft PRs don't run CI — only once marked ready for review (ready_for_review),
+  # plus pushes to a non-draft PR. See the per-job `if` guard below.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
 
@@ -13,6 +16,8 @@ concurrency:
 jobs:
   build-test:
     name: Build & Test
+    # Skip draft PRs; run on pushes to main and once a PR is ready for review.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     # macos-26 ships Xcode 26 / Swift 6.2 — matches the toolchain the code is
     # formatted and developed against, so swift-format can't drift vs local.
     runs-on: macos-26
@@ -69,6 +74,7 @@ jobs:
 
   lint:
     name: Lint
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
