@@ -255,10 +255,9 @@ final class TabController: NSObject {
             focusDrawer(.bottom)
         } else {
             relayoutPanels()  // detaches it (surface stays alive)
-            // Only steal focus back to the pane canvas if the drawer being hidden was
-            // the one holding unified focus. `focusActivePane()` bubbles through
-            // `paneCanvas.onFocusChanged` to reassert unified focus onto the canvas.
-            if focusedPanel == .bottomDrawer { paneCanvas.focusActivePane() }
+            // Only restore focus if the drawer being hidden held unified focus — to the
+            // other drawer if it's still open, else the pane.
+            if focusedPanel == .bottomDrawer { restoreFocusAfterClosingDrawer(otherOpen: isRightOpen, other: .right) }
         }
     }
 
@@ -286,8 +285,8 @@ final class TabController: NSObject {
             focusDrawer(.right)
         } else {
             relayoutPanels()
-            // See `toggleBottomDrawer`: only steal focus if this drawer held it.
-            if focusedPanel == .rightDrawer { paneCanvas.focusActivePane() }
+            // See `toggleBottomDrawer`: restore focus only if this drawer held it.
+            if focusedPanel == .rightDrawer { restoreFocusAfterClosingDrawer(otherOpen: isBottomOpen, other: .bottom) }
         }
     }
 
@@ -332,17 +331,9 @@ final class TabController: NSObject {
             content: surface.view,
             background: Theme.rosePineMoon.background.nsColor,
             onDismiss: { [weak self] in self?.closeLazygit() })
-        overlay.translatesAutoresizingMaskIntoConstraints = false
-        // Mount in `content` (the tile region), not `view`: the modal covers only the
-        // tab's working area — never the window gutters or the tab bar — and sits above
-        // the canvas and any open drawers.
-        content.addSubview(overlay)
-        NSLayoutConstraint.activate([
-            overlay.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            overlay.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            overlay.topAnchor.constraint(equalTo: content.topAnchor),
-            overlay.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-        ])
+        // Pin over the tile region (not `view`): covers only the tab's working area — never
+        // the window gutters or the tab bar — above the canvas and any open drawers.
+        presentTileOverlay(overlay)
         lazygitOverlay = overlay
         // Focus reads only on the float: clear the underlying panels' halos (keep
         // `focusedPanel` so close can restore it).
@@ -350,17 +341,24 @@ final class TabController: NSObject {
         bottomDrawerPanel?.isFocused = false
         rightDrawerPanel?.isFocused = false
         surface.focus()
+        overlay.animateIn()
         onOverlayStateChanged?()  // lazygit now open → refresh the dock
     }
 
     private func closeLazygit() {
-        lazygitOverlay?.removeFromSuperview()
+        guard let overlay = lazygitOverlay else { return }
+        // Clear the refs BEFORE animating out: `terminate()` may synchronously re-enter
+        // `surfaceDidExit`, and a nil `lazygitSurface` makes that re-entry a no-op; nilling
+        // `lazygitOverlay` now lifts the modal gate immediately so focus/dock update this
+        // turn. The surface is terminated only once the card has finished animating out, so
+        // it isn't torn down blank mid-animation.
         lazygitOverlay = nil
-        // Clear the ref BEFORE terminating: `terminate()` may synchronously re-enter
-        // `surfaceDidExit`, and a nil `lazygitSurface` makes that re-entry a no-op.
         let surface = lazygitSurface
         lazygitSurface = nil
-        surface?.terminate()
+        overlay.animateOut {
+            overlay.removeFromSuperview()
+            surface?.terminate()
+        }
         restoreUnifiedFocus()  // the float held keyboard focus; hand it back to its panel
         onOverlayStateChanged?()  // lazygit now closed → refresh the dock
     }
@@ -421,6 +419,14 @@ final class TabController: NSObject {
         }
         paneCanvas.setPanesFocused(false)
         surface?.focus()
+    }
+
+    /// Restore focus after closing a focused drawer: to the other drawer if it's still
+    /// open, else the pane. With only two drawers + the pane, the focus before this drawer
+    /// was opened was necessarily the pane or the other drawer — and whether that other
+    /// drawer is still open is exactly the discriminator, so this reconstructs it.
+    private func restoreFocusAfterClosingDrawer(otherOpen: Bool, other: DrawerEdge) {
+        if otherOpen { focusDrawer(other) } else { paneCanvas.focusActivePane() }
     }
 
     /// The pane canvas (re)gained focus — reassert unified focus onto it: it holds
