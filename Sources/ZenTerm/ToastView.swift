@@ -28,7 +28,8 @@ final class ToastView: NSView {
     }
 
     /// Designated init. Passive toasts pass `actions: []`; a confirm toast passes its
-    /// answer buttons, which render in a trailing row under the message.
+    /// answer buttons, which render as a full-width row (equal widths, gapped) across
+    /// the bottom of the card.
     init(content: ToastContent, tint: NSColor, actions: [ToastAction]) {
         self.hasActions = !actions.isEmpty
         super.init(frame: .zero)
@@ -79,10 +80,11 @@ final class ToastView: NSView {
         if !actions.isEmpty {
             let row = NSStackView(views: actions.map(ToastButton.init))
             row.orientation = .horizontal
-            row.alignment = .centerY
+            row.distribution = .fillEqually  // equal-width buttons across the card
             row.spacing = 8
             col.addArrangedSubview(row)
             col.setCustomSpacing(11, after: message)  // a touch more air above buttons
+            row.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true  // span full width
         }
     }
 
