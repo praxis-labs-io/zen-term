@@ -102,6 +102,12 @@ class SurfaceFloatOverlay: NSView {
         Motion.springScaleFade(card, appearing: false, completion: completion)
     }
 
+    /// Once dismissal starts, stop intercepting clicks so a tap during the exit animation
+    /// falls through to the panes instead of the still-present backdrop.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        isDismissing ? nil : super.hitTest(point)
+    }
+
     /// A transparent backdrop; a click anywhere on it (i.e. outside the card) dismisses.
     /// Clicks on the card/content land on those subviews and never reach here.
     private final class BackdropView: NSView {

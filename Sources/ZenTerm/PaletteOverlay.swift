@@ -226,6 +226,12 @@ class PaletteOverlay: NSView {
         Motion.springScaleFade(card, appearing: false, completion: completion)
     }
 
+    /// Once dismissal starts, stop intercepting clicks so a tap during the ~exit animation
+    /// falls through to the terminal instead of the still-present backdrop.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        isDismissing ? nil : super.hitTest(point)
+    }
+
     // MARK: template hooks (subclass overrides)
 
     /// Number of rows for the current (filtered) model.

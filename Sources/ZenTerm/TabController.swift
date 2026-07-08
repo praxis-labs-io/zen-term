@@ -331,17 +331,9 @@ final class TabController: NSObject {
             content: surface.view,
             background: Theme.rosePineMoon.background.nsColor,
             onDismiss: { [weak self] in self?.closeLazygit() })
-        overlay.translatesAutoresizingMaskIntoConstraints = false
-        // Mount in `content` (the tile region), not `view`: the modal covers only the
-        // tab's working area — never the window gutters or the tab bar — and sits above
-        // the canvas and any open drawers.
-        content.addSubview(overlay)
-        NSLayoutConstraint.activate([
-            overlay.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            overlay.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            overlay.topAnchor.constraint(equalTo: content.topAnchor),
-            overlay.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-        ])
+        // Pin over the tile region (not `view`): covers only the tab's working area — never
+        // the window gutters or the tab bar — above the canvas and any open drawers.
+        presentTileOverlay(overlay)
         lazygitOverlay = overlay
         // Focus reads only on the float: clear the underlying panels' halos (keep
         // `focusedPanel` so close can restore it).
@@ -437,9 +429,6 @@ final class TabController: NSObject {
         if otherOpen { focusDrawer(other) } else { paneCanvas.focusActivePane() }
     }
 
-    /// A drawer's fully-offscreen translation past its docked edge — its own extent plus
-    /// the tile gap, in the panel's (unflipped, +y up) layer space: bottom pushes down,
-    /// right pushes right.
     /// The pane canvas (re)gained focus — reassert unified focus onto it: it holds
     /// the tab's single halo again and both drawer panels go unfocused.
     private func paneGainedFocus() {

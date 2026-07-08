@@ -154,7 +154,7 @@ final class WindowController: NSObject {
 
     func showAndStart() {
         bindFirstControllerIfNeeded()
-        mountActive()
+        mount(.instant)
         activeController?.start()
         window.makeKeyAndOrderFront(nil)
         renderTabBar()
@@ -200,51 +200,64 @@ final class WindowController: NSObject {
     /// The incoming tab's canvas slides in from this edge on a switch.
     enum SlideEdge { case fromRight, fromLeft }
 
-    /// Mount the active tab's canvas above the tab bar; detach the previous one.
-    /// Always restores focus to the active tab's focused pane after mounting.
-    private func mountActive() {
-        guard let c = activeController else { return }
-        if mountedCanvas !== c.view {
-            mountedCanvas?.removeFromSuperview()
-            pinCanvas(c.view)
-            mountedCanvas = c.view
+    /// How the active tab's canvas replaces the previous one.
+    enum MountTransition {
+        case instant  // new tab's first mount, tab close
+        case slide(from: SlideEdge)  // switching between existing tabs
+        case fade  // a brand-new tab (no travel direction)
+    }
+
+    /// Mount the active tab's canvas above the tab bar, replacing the previous one with the
+    /// given transition, and restore focus to the active tab. Animated transitions defer the
+    /// previous canvas's removal to their completion, guarded so a rapid re-switch that
+    /// re-mounts it doesn't delete the now-active terminal.
+    private func mount(_ transition: MountTransition) {
+        guard let c = activeController, mountedCanvas !== c.view else {
+            activeController?.restoreKeyFocus()  // same canvas: just refresh focus/dock
+            renderDock()
+            return
         }
+        let outgoing = mountedCanvas
+        pinCanvas(c.view)
+        mountedCanvas = c.view
         c.restoreKeyFocus()  // float-aware: keeps focus on the modal float when open
         renderDock()  // dock mirrors the newly-active tab's overlay state
+
+        switch transition {
+        case .instant:
+            outgoing?.removeFromSuperview()
+        case .slide(let edge):
+            container.layoutSubtreeIfNeeded()  // resolve the canvas width before offsetting it
+            let dx = edge == .fromRight ? container.bounds.width : -container.bounds.width
+            Motion.slideSwap(incoming: c.view, outgoing: outgoing, dx: dx) { [weak self] in
+                self?.detachIfInactive(outgoing)
+            }
+        case .fade:
+            guard outgoing != nil else { break }  // first mount: appear instantly
+            c.view.layer?.opacity = 0
+            Motion.fade(c.view, to: 1) { [weak self] in self?.detachIfInactive(outgoing) }
+        }
     }
 
-    /// Mount the active tab's canvas by sliding it in from `edge` while the previous one
-    /// slides out the opposite way (a page turn). Both are full-size terminals moved by a
-    /// transform, so neither reflows.
-    private func mountActiveSliding(from edge: SlideEdge) {
-        guard let c = activeController, mountedCanvas !== c.view else { return }
-        let outgoing = mountedCanvas
-        pinCanvas(c.view)
-        mountedCanvas = c.view
-        c.restoreKeyFocus()
-        renderDock()
-        container.layoutSubtreeIfNeeded()  // resolve the canvas width before offsetting it
-        let dx = edge == .fromRight ? container.bounds.width : -container.bounds.width
-        Motion.slideSwap(incoming: c.view, outgoing: outgoing, dx: dx) { outgoing?.removeFromSuperview() }
-    }
-
-    /// Mount the active tab's canvas by fading it in over the previous one (a fresh tab
-    /// has no travel direction). The very first mount has nothing to fade from, so it just
-    /// appears.
-    private func mountActiveFading() {
-        guard let c = activeController, mountedCanvas !== c.view else { return }
-        let outgoing = mountedCanvas
-        pinCanvas(c.view)
-        mountedCanvas = c.view
-        c.restoreKeyFocus()
-        renderDock()
-        guard outgoing != nil else { return }  // first mount: appear instantly
-        c.view.wantsLayer = true
-        c.view.layer?.opacity = 0
-        Motion.fade(c.view, to: 1) { outgoing?.removeFromSuperview() }
+    /// Remove a canvas left over from a transition — unless a rapid re-switch has since
+    /// re-mounted it as the active canvas.
+    private func detachIfInactive(_ canvas: NSView?) {
+        guard let canvas, canvas !== mountedCanvas else { return }
+        canvas.removeFromSuperview()
     }
 
     private func pinCanvas(_ canvas: NSView) {
+        // Re-mounting a canvas mid-transition (rapid switch): cancel its in-flight
+        // slide/fade and reset transform/opacity so it starts clean, and reuse its existing
+        // constraints rather than stacking a second set.
+        canvas.wantsLayer = true
+        canvas.layer?.removeAllAnimations()
+        canvas.layer?.transform = CATransform3DIdentity
+        canvas.layer?.opacity = 1
+        if canvas.superview === container {
+            container.addSubview(canvas, positioned: .below, relativeTo: tabBar)  // just restack
+            return
+        }
         canvas.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(canvas, positioned: .below, relativeTo: tabBar)
         NSLayoutConstraint.activate([
@@ -290,7 +303,7 @@ final class WindowController: NSObject {
         controllers[id] = c
         titles[id] = c.title
         wire(c, id: id)
-        mountActiveFading()
+        mount(.fade)
         c.start()
         if workspace { c.openWorkspaceLayout() }
         renderTabBar()
@@ -304,7 +317,7 @@ final class WindowController: NSObject {
         let newIndex = tabs.order.firstIndex(of: id) ?? 0
         // A later tab enters from the right; an earlier one from the left. Cycling passes an
         // explicit edge so a wrap-around still slides the way the keystroke implies.
-        mountActiveSliding(from: slideFrom ?? (newIndex > oldIndex ? .fromRight : .fromLeft))
+        mount(.slide(from: slideFrom ?? (newIndex > oldIndex ? .fromRight : .fromLeft)))
         renderTabBar()
     }
 
@@ -330,7 +343,7 @@ final class WindowController: NSObject {
         controllers[id] = nil
         titles[id] = nil
         if !survived { window.close(); return }  // last tab → close window → windowWillClose tears down
-        mountActive()
+        mount(.instant)
         renderTabBar()
     }
 
@@ -530,7 +543,7 @@ final class WindowController: NSObject {
     }
 
     /// Wire the first controller once the dict is populated. Called from
-    /// `showAndStart()` before the first `mountActive()` so the initial tab gets
+    /// `showAndStart()` before the first `mount(_:)` so the initial tab gets
     /// its title + last-pane-exit callbacks exactly once.
     private func bindFirstControllerIfNeeded() {
         let firstID = tabs.order[0]
