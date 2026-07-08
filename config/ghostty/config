@@ -21,9 +21,11 @@ mouse-hide-while-typing = true
 # borrows the coordinate math from sahaj-b/ghostty-cursor-shaders (MIT). Tunables
 # (DURATION, THRESHOLD) at the top of the .glsl.
 #
-# OFF by default pending a visual check on a healthy graphics session: it's
-# glslang-validated but couldn't be verified locally (see the surface-OOM note in
-# docs/libghostty-spike.md). Uncomment both lines to try it; if the terminal fails
-# to appear, comment them back and log out/in to clear leaked WindowServer surfaces.
+# Cursor-trail shader — OFF. Any custom shader routes ghostty through an
+# intermediate-texture post-process pass that flashes white during TUI transitions
+# (fzf, nvim) in this transparent-window embed, regardless of animation mode. The
+# shader itself works (config/ghostty/cursor_trail.glsl); uncomment to try it, but
+# expect the flash until the transparent-window compositing is solved. See
+# docs/libghostty-spike.md.
 # custom-shader = cursor_trail.glsl
 # custom-shader-animation = true
