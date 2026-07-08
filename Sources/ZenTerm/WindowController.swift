@@ -41,6 +41,11 @@ final class WindowController: NSObject {
     /// chords (⌘N) and Copy/Paste routing respect the modal too, not just `handle(_:)`.
     var isModalPaletteOpen: Bool { isRepoPickerOpen || isCommandPaletteOpen }
 
+    /// A blocking close confirm (⌘W on a busy or last pane), when up. Window-level like
+    /// the palettes: modal over the active tab until answered.
+    private var confirmToast: ToastView?
+    var isConfirmOpen: Bool { confirmToast != nil }
+
     /// Re-derives tab titles from each tab's live cwd. Shells report cwd changes
     /// without OSC 7, so there's no push event on `cd` — a light poll keeps titles
     /// current; it only re-renders when a title actually changed.
@@ -431,6 +436,35 @@ final class WindowController: NSObject {
         if isCommandPaletteOpen { closeCommandPalette() }
     }
 
+    /// Present a blocking confirm: focus leaves the terminal (typing is gated) and
+    /// the modal chord-gate swallows other chords until Cancel / confirm answers.
+    func presentConfirm(
+        icon: String, title: String, message: String, tint: NSColor,
+        confirmLabel: String, onConfirm: @escaping () -> Void
+    ) {
+        guard confirmToast == nil else { return }  // one confirm at a time
+        let content = ToastContent(symbol: icon, title: title, message: message)
+        let actions = [
+            ToastAction(title: "Cancel", kind: .cancel) { [weak self] in self?.dismissConfirm() },
+            ToastAction(title: confirmLabel, kind: .destructive) { [weak self] in
+                self?.dismissConfirm()
+                onConfirm()
+            },
+        ]
+        let toast = toasts.confirm(content, tint: tint, actions: actions)
+        confirmToast = toast
+        window.makeFirstResponder(toast)  // gate terminal typing; key equivs still fire
+        renderDock()
+    }
+
+    private func dismissConfirm() {
+        guard let toast = confirmToast else { return }
+        confirmToast = nil
+        toasts.dismiss(toast)
+        activeController?.restoreKeyFocus()  // hand focus back to the pane
+        renderDock()
+    }
+
     /// Open a picked directory as a shell session: a new tab (Enter) or by replacing
     /// the current tab (Shift+Enter). Either way the tab name is pinned to the dir
     /// basename so it survives the focused pane's cwd changes.
@@ -451,6 +485,10 @@ final class WindowController: NSObject {
     func handle(_ chord: KeyInterceptor.ReservedChord) {
         guard !tabs.order.isEmpty else { return }  // window tearing down after last tab closed
         let active = activeController
+        // The close confirm is modal over the window: while it's up every chord is
+        // swallowed. Its Return/Esc/button answers go through the toast's own key
+        // equivalents, never here.
+        if isConfirmOpen { return }
         // The repo picker is modal over the window: while it's open only ⌘⇧P (close it)
         // acts; every other chord is swallowed. Its arrow/Enter/Esc keys aren't chords —
         // they go to the search field's field editor, never here.
@@ -497,9 +535,7 @@ final class WindowController: NSObject {
             if idx >= 0 && idx < tabs.order.count { select(tabs.order[idx]) }
         case .prevTab: cycleTab(-1)
         case .nextTab: cycleTab(1)
-        case .closePane:
-            // pane → tab → window cascade
-            if active?.closeFocused() == false { closeTab(tabs.activeID) }
+        case .closePane: requestClosePane()
         case .newWindow:
             break  // handled by AppDelegate (window manager); no-op here
         case .toggleBottomDrawer: active?.toggleBottomDrawer()
@@ -508,6 +544,27 @@ final class WindowController: NSObject {
         case .toggleLazygit: active?.toggleLazygit()
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
+        }
+    }
+
+    /// ⌘W: close immediately for an idle non-last pane; otherwise confirm first.
+    /// Confirm when the focused pane has running work, or it's the tab's last pane
+    /// (closing it destroys the tab). `exit`/middle-click stay out of scope.
+    private func requestClosePane() {
+        guard let active = activeController else { return }
+        let lastPane = active.isSinglePane
+        guard lastPane || active.focusedPaneIsBusy else {
+            _ = active.closeFocused()  // idle, panes remain → close now
+            return
+        }
+        let title = lastPane ? "Close tab?" : "Close pane?"
+        let message = lastPane ? "This closes the tab." : "A process is still running here."
+        presentConfirm(
+            icon: "xmark.circle.fill", title: title, message: message,
+            tint: ToastPresenter.warning, confirmLabel: "Close"
+        ) { [weak self] in
+            guard let self, let active = self.activeController else { return }
+            if active.closeFocused() == false { self.closeTab(self.tabs.activeID) }
         }
     }
 
