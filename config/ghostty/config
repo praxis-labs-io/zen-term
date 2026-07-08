@@ -17,8 +17,13 @@ cursor-style = block
 cursor-style-blink = true
 mouse-hide-while-typing = true
 
-# The payoff: a GPU cursor-trail animation SwiftTerm can't do. Fades to nothing
-# once the cursor settles, so the static view is always Ghostty's own cursor.
-# TEMPORARILY OFF while we isolate the "glitchy" report — re-enable to test.
-# custom-shader = cursor_smear.glsl
+# The payoff: a GPU cursor-trail animation SwiftTerm can't do. Lean trail that
+# borrows the coordinate math from sahaj-b/ghostty-cursor-shaders (MIT). Tunables
+# (DURATION, THRESHOLD) at the top of the .glsl.
+#
+# OFF by default pending a visual check on a healthy graphics session: it's
+# glslang-validated but couldn't be verified locally (see the surface-OOM note in
+# docs/libghostty-spike.md). Uncomment both lines to try it; if the terminal fails
+# to appear, comment them back and log out/in to clear leaked WindowServer surfaces.
+# custom-shader = cursor_trail.glsl
 # custom-shader-animation = true

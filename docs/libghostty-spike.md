@@ -70,15 +70,25 @@ backend needs that a CPU one doesn't.
 - **IME / dead-key composition** is not wired (no `NSTextInputClient`). Basic typing,
   control chars, arrows, and shortcuts work; multi-keystroke composition does not.
 - **Scroll momentum** phases are omitted (precision flag only).
-- **Theme / font from `TerminalSurfaceConfig`** are ignored — libghostty uses its own
-  config (`~/.config/ghostty`). The chrome's Rosé Pine theme isn't applied to this backend.
+- **Theme / font aren't plumbed through `TerminalSurfaceConfig`** — libghostty reads its
+  own config, so the spike applies Rosé Pine Moon + JetBrainsMono via an in-repo config
+  (`config/ghostty/`, pointed at Ghostty.app's resources) rather than the seam. Making the
+  seam's theme/font drive libghostty is follow-up work.
+- **Cursor-trail shader is present but off by default** (`config/ghostty/cursor_trail.glsl`).
+  It's glslang-validated but not visually verified — see the surface-OOM note below, which
+  blocked local testing. Enable via the two `custom-shader` lines in the config.
 - **Focus-on-click** is reported to the chrome, but full focus-follows and overlay
   occlusion parity with SwiftTerm isn't done.
 - **Two ImGui link warnings** (`_ImFontConfig_ImFontConfig`, `_ImGuiStyle_ImGuiStyle`) —
   ghostty's optional inspector, unused here; harmless.
-- **One transient `error.OutOfMemory`** from `ghostty_surface_new` was seen on a single
-  early run and did not reproduce across many subsequent runs. Not root-caused; noted here
-  in case it resurfaces (suspected first-run font/renderer warmup).
+- **`ghostty_surface_new` can fail with `error.OutOfMemory` under surface/window
+  resource pressure.** Not GPU memory (Metal allocates 2K textures fine with 18 GB free) and
+  not a specific shader — it reproduces even with no custom shader once enough short-lived
+  GUI instances have been launched and SIGKILL'd, leaving WindowServer surfaces uncollected.
+  A fresh graphics session (log out/in) clears it. This is the biggest open robustness
+  question for the backend: rapid pane create/destroy needs a clean teardown path (verify
+  `ghostty_surface_free` fully releases the hosted layer/IOSurface) before it's daily-driver
+  solid. Tracked as follow-up.
 
 None of these are seam problems — they're all below it, exactly where backend-specific work
 is supposed to live. Per Guardrail 2, this stays behind the flag with no deadline;
