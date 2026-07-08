@@ -42,6 +42,11 @@ final class TabController: NSObject {
     private var bottomDrawerHeight: CGFloat = 300
     private var rightDrawerWidth: CGFloat = 480
     private var didSeedDrawerSizes = false
+    /// The seam pinning the canvas edge to an open drawer's edge. Held so close can swap it
+    /// for a content-edge fill — reflowing the canvas to full up front, then sliding the
+    /// drawer out over it (no end-of-slide gap). Rebuilt each `relayoutPanels()`.
+    private var bottomCanvasSeam: NSLayoutConstraint?
+    private var rightCanvasSeam: NSLayoutConstraint?
     /// One ⌥-arrow nudge for a focused drawer, and the floor it can shrink to; a drawer
     /// never grows past 70% of the working area (the canvas keeps the rest).
     private static let drawerResizeStep: CGFloat = 40
@@ -251,14 +256,18 @@ final class TabController: NSObject {
         isBottomOpen.toggle()
         if isBottomOpen {
             _ = ensureBottomDrawerPanel()
-            relayoutPanels()  // attaches + tiles it (visibility follows open state)
+            relayoutPanels()  // docks the drawer full-size + tiles the canvas (one reflow)
             focusDrawer(.bottom)
+            slideDrawerOpen(bottomDrawerPanel, offscreen: bottomDrawerOffscreen)
         } else {
-            relayoutPanels()  // detaches it (surface stays alive)
-            // Only steal focus back to the pane canvas if the drawer being hidden was
-            // the one holding unified focus. `focusActivePane()` bubbles through
+            // Only steal focus back to the pane canvas if the drawer being hidden was the
+            // one holding unified focus. Do it now (not after the slide) so keys land on
+            // the canvas immediately. `focusActivePane()` bubbles through
             // `paneCanvas.onFocusChanged` to reassert unified focus onto the canvas.
             if focusedPanel == .bottomDrawer { paneCanvas.focusActivePane() }
+            slideDrawerClosed(
+                bottomDrawerPanel, offscreen: bottomDrawerOffscreen, seam: bottomCanvasSeam,
+                fill: canvas.bottomAnchor.constraint(equalTo: content.bottomAnchor))
         }
     }
 
@@ -284,10 +293,13 @@ final class TabController: NSObject {
             _ = ensureRightDrawerPanel()
             relayoutPanels()
             focusDrawer(.right)
+            slideDrawerOpen(rightDrawerPanel, offscreen: rightDrawerOffscreen)
         } else {
-            relayoutPanels()
-            // See `toggleBottomDrawer`: only steal focus if this drawer held it.
+            // See `toggleBottomDrawer`: hand focus back now, slide out, detach on landing.
             if focusedPanel == .rightDrawer { paneCanvas.focusActivePane() }
+            slideDrawerClosed(
+                rightDrawerPanel, offscreen: rightDrawerOffscreen, seam: rightCanvasSeam,
+                fill: canvas.trailingAnchor.constraint(equalTo: content.trailingAnchor))
         }
     }
 
@@ -428,6 +440,42 @@ final class TabController: NSObject {
         }
         paneCanvas.setPanesFocused(false)
         surface?.focus()
+    }
+
+    /// A drawer's fully-offscreen translation past its docked edge — its own extent plus
+    /// the tile gap, in the panel's (unflipped, +y up) layer space: bottom pushes down,
+    /// right pushes right.
+    private var bottomDrawerOffscreen: CGSize {
+        CGSize(width: 0, height: -(bottomDrawerHeight + ChromeMetrics.panelGap))
+    }
+    private var rightDrawerOffscreen: CGSize {
+        CGSize(width: rightDrawerWidth + ChromeMetrics.panelGap, height: 0)
+    }
+
+    /// Slide a just-docked drawer in from offscreen into the gap the canvas reflowed to
+    /// leave. The drawer moves by a layer transform, so its PTY never reshapes (only the
+    /// canvas reflowed, once, in `relayoutPanels`).
+    private func slideDrawerOpen(_ panel: PanelHostView?, offscreen: CGSize) {
+        guard let panel else { return }
+        content.layoutSubtreeIfNeeded()  // panel sits docked at full size before it slides in
+        Motion.slide(panel, offset: offscreen, appearing: true)
+    }
+
+    /// Slide an open drawer back out past its edge, over a canvas already reflowed to full.
+    /// Swapping the canvas's seam (pinned to the drawer) for a content-edge `fill` reflows
+    /// the canvas once, up front — so the drawer slides out over filled content with no gap
+    /// and no end pause; `relayoutPanels()` on landing just detaches the (now hidden) drawer.
+    private func slideDrawerClosed(
+        _ panel: PanelHostView?, offscreen: CGSize, seam: NSLayoutConstraint?, fill: NSLayoutConstraint
+    ) {
+        guard let panel, panel.superview === content else { relayoutPanels(); return }
+        seam?.isActive = false
+        fill.isActive = true
+        tileConstraints.append(fill)  // tracked so the landing relayout tears it down
+        content.layoutSubtreeIfNeeded()  // the one reflow: canvas full, drawer still docked on top
+        Motion.slide(panel, offset: offscreen, appearing: false) { [weak self] in
+            self?.relayoutPanels()
+        }
     }
 
     /// The pane canvas (re)gained focus — reassert unified focus onto it: it holds
@@ -660,6 +708,8 @@ final class TabController: NSObject {
         seedDrawerSizesIfNeeded()
         NSLayoutConstraint.deactivate(tileConstraints)
         tileConstraints = []
+        bottomCanvasSeam = nil
+        rightCanvasSeam = nil
 
         // The zoom target is only effective while its view exists (a zoomed drawer
         // whose shell just exited falls back to normal tiling).
@@ -706,12 +756,15 @@ final class TabController: NSObject {
             // logging a broken-constraint error — the drawer shrinks under squeeze.
             let width = rightPanel.widthAnchor.constraint(equalToConstant: rightDrawerWidth)
             width.priority = .defaultHigh
+            let seam = canvas.trailingAnchor.constraint(
+                equalTo: rightPanel.leadingAnchor, constant: -ChromeMetrics.panelGap)
+            rightCanvasSeam = seam
             cs += [
                 rightPanel.topAnchor.constraint(equalTo: content.topAnchor),
                 rightPanel.bottomAnchor.constraint(equalTo: content.bottomAnchor),
                 rightPanel.trailingAnchor.constraint(equalTo: content.trailingAnchor),
                 width,
-                canvas.trailingAnchor.constraint(equalTo: rightPanel.leadingAnchor, constant: -ChromeMetrics.panelGap),
+                seam,
             ]
         } else {
             cs.append(canvas.trailingAnchor.constraint(equalTo: content.trailingAnchor))
@@ -721,11 +774,14 @@ final class TabController: NSObject {
             // See the right-drawer width constraint above: same rationale for height.
             let height = bottomPanel.heightAnchor.constraint(equalToConstant: bottomDrawerHeight)
             height.priority = .defaultHigh
+            let seam = canvas.bottomAnchor.constraint(
+                equalTo: bottomPanel.topAnchor, constant: -ChromeMetrics.panelGap)
+            bottomCanvasSeam = seam
             cs += [
                 bottomPanel.leadingAnchor.constraint(equalTo: content.leadingAnchor),
                 bottomPanel.bottomAnchor.constraint(equalTo: content.bottomAnchor),
                 height,
-                canvas.bottomAnchor.constraint(equalTo: bottomPanel.topAnchor, constant: -ChromeMetrics.panelGap),
+                seam,
             ]
             // The bottom drawer spans the canvas column only — it stops short of the
             // right drawer's column, so the two never overlap when both are open.

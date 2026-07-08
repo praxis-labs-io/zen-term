@@ -11,15 +11,10 @@ import AppKit
 ///
 /// Chrome-only (AppKit + Core Animation). Never touches a terminal backend.
 enum Motion {
-    /// Which docked edge a panel slides from.
-    enum Edge {
-        case top, bottom, leading, trailing
-    }
-
     // MARK: - Timing
 
-    /// Structural spring — panels/cards appearing, drawer slides, new pane/tab. ~0.7
-    /// damping ratio (gentle overshoot), ~0.24s settle. Snappy over smooth.
+    /// Structural spring — panels/cards appearing, new pane/tab. ~0.7 damping ratio
+    /// (gentle overshoot), ~0.16s settle. Snappy over smooth.
     enum Spring {
         static let mass: CGFloat = 1
         static let stiffness: CGFloat = 1400
@@ -40,6 +35,9 @@ enum Motion {
     static let haloDuration: CFTimeInterval = 0.12
     /// Region crossfade — zoom / tab-switch dissolves.
     static let crossfadeDuration: CFTimeInterval = 0.16
+    /// Drawer slide + canvas reflow — a fluid ease, no spring: a large geometric move that
+    /// carries the canvas with it reads better smooth than bouncy.
+    static let drawerSlideDuration: CFTimeInterval = 0.24
     /// The opacity ramp of a scale-fade entrance. Kept short and decoupled from the
     /// spring settle so the card *reads* as present fast — the dominant snappiness cue —
     /// while the scale settles under the spring behind it.
@@ -110,39 +108,41 @@ enum Motion {
         }
     }
 
-    /// Spring-translate a full-size panel in/out from a docked edge. The panel keeps its
-    /// full size the whole time (never a size animation) so an attached PTY never sees a
-    /// degenerate frame. `appearing` false slides it back out (caller detaches in
-    /// `completion`).
+    /// Slide a full-size panel by `offset` and back with a fluid ease — a layer translation,
+    /// never a size change, so an attached PTY keeps its shape (no reflow). `appearing` true
+    /// slides it from `offset` into its resting place; false slides it from rest out to
+    /// `offset` (the caller detaches it in `completion`). Honors Reduce Motion.
     static func slide(
         _ view: NSView,
-        fromEdge edge: Edge,
-        distance: CGFloat,
+        offset: CGSize,
         appearing: Bool,
+        duration: CFTimeInterval = drawerSlideDuration,
         completion: (() -> Void)? = nil
     ) {
         view.wantsLayer = true
         guard let layer = view.layer else { completion?(); return }
 
-        let offset = slideOffset(edge: edge, distance: distance)
-        let offscreen = CATransform3DMakeTranslation(offset.width, offset.height, 0)
-        let targetTransform = appearing ? CATransform3DIdentity : offscreen
+        let resting = CATransform3DIdentity
+        let out = CATransform3DMakeTranslation(offset.width, offset.height, 0)
+        let target = appearing ? resting : out
 
         if isReduceMotionEnabled() {
-            layer.transform = CATransform3DIdentity
+            layer.transform = resting
             completion?()
             return
         }
 
-        let fromTransform = appearing ? offscreen : currentTransform(of: layer)
-        layer.transform = targetTransform
+        let from = appearing ? out : resting
+        layer.transform = target
 
-        let spring = Spring.make(keyPath: "transform")
-        spring.fromValue = NSValue(caTransform3D: fromTransform)
-        spring.toValue = NSValue(caTransform3D: targetTransform)
+        let anim = CABasicAnimation(keyPath: "transform")
+        anim.fromValue = NSValue(caTransform3D: from)
+        anim.toValue = NSValue(caTransform3D: target)
+        anim.duration = duration
+        anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
 
         run(completion: completion) {
-            layer.add(spring, forKey: "motion.transform")
+            layer.add(anim, forKey: "motion.transform")
         }
     }
 
@@ -219,17 +219,6 @@ enum Motion {
         return CATransform3DTranslate(t, -cx, -cy, 0)
     }
 
-    /// The fully-offscreen translation for a panel docked at `edge`, in the layer's
-    /// (unflipped, +y up) coordinate space: bottom pushes down, trailing pushes right.
-    static func slideOffset(edge: Edge, distance: CGFloat) -> CGSize {
-        switch edge {
-        case .top: return CGSize(width: 0, height: distance)
-        case .bottom: return CGSize(width: 0, height: -distance)
-        case .leading: return CGSize(width: -distance, height: 0)
-        case .trailing: return CGSize(width: distance, height: 0)
-        }
-    }
-
     // MARK: - Internals
 
     private static func run(completion: (() -> Void)?, _ add: () -> Void) {
@@ -237,9 +226,5 @@ enum Motion {
         CATransaction.setCompletionBlock { completion?() }
         add()
         CATransaction.commit()
-    }
-
-    private static func currentTransform(of layer: CALayer) -> CATransform3D {
-        layer.presentation()?.transform ?? layer.transform
     }
 }

@@ -39,10 +39,10 @@ final class MotionTests: XCTestCase {
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 100, height: 100))
 
         var ran = false
-        Motion.slide(view, fromEdge: .bottom, distance: 200, appearing: true) { ran = true }
+        Motion.slide(view, offset: CGSize(width: 0, height: -200), appearing: true) { ran = true }
 
-        XCTAssertTrue(ran)
-        XCTAssertTrue(CATransform3DIsIdentity(view.layer!.transform))
+        XCTAssertTrue(ran, "completion must run synchronously under Reduce Motion")
+        XCTAssertTrue(CATransform3DIsIdentity(view.layer!.transform), "settles at rest")
     }
 
     func test_reduceMotion_fade_appliesTargetSynchronously() {
@@ -78,13 +78,5 @@ final class MotionTests: XCTestCase {
 
         XCTAssertEqual(moved.x, center.x, accuracy: 0.0001)
         XCTAssertEqual(moved.y, center.y, accuracy: 0.0001)
-    }
-
-    func test_slideOffset_signsMatchDockedEdge() {
-        // Layer space is +y up: bottom pushes down (−y), trailing pushes right (+x).
-        XCTAssertEqual(Motion.slideOffset(edge: .bottom, distance: 40), CGSize(width: 0, height: -40))
-        XCTAssertEqual(Motion.slideOffset(edge: .top, distance: 40), CGSize(width: 0, height: 40))
-        XCTAssertEqual(Motion.slideOffset(edge: .leading, distance: 40), CGSize(width: -40, height: 0))
-        XCTAssertEqual(Motion.slideOffset(edge: .trailing, distance: 40), CGSize(width: 40, height: 0))
     }
 }
