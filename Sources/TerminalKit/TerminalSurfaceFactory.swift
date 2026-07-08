@@ -1,7 +1,8 @@
 /// The one swap point. Chrome only ever calls `TerminalSurfaceFactory.make()`.
 public enum TerminalBackend {
     case swiftTerm
-    // case ghostty  — added when backend B (libghostty) lands in a later epic.
+    /// libghostty (ZEN-40 spike) — GPU/Metal backend behind the same seam.
+    case ghostty
 }
 
 public enum TerminalSurfaceFactory {
@@ -11,6 +12,8 @@ public enum TerminalSurfaceFactory {
         switch backend {
         case .swiftTerm:
             return SwiftTermSurface()
+        case .ghostty:
+            return GhosttySurface()
         }
     }
 }

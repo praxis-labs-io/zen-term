@@ -3,3 +3,8 @@
 *.xcodeproj
 DerivedData/
 .DS_Store
+
+# libghostty spike (ZEN-40) — large build artifacts, rebuilt from source, never committed.
+# See docs/libghostty-spike.md for the rebuild recipe.
+/vendor/
+/Frameworks/GhosttyKit.xcframework/
