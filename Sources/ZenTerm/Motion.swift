@@ -22,8 +22,8 @@ enum Motion {
     /// damping ratio (gentle overshoot), ~0.24s settle. Snappy over smooth.
     enum Spring {
         static let mass: CGFloat = 1
-        static let stiffness: CGFloat = 1600
-        static let damping: CGFloat = 44
+        static let stiffness: CGFloat = 1400
+        static let damping: CGFloat = 48
 
         static func make(keyPath: String) -> CASpringAnimation {
             let spring = CASpringAnimation(keyPath: keyPath)
