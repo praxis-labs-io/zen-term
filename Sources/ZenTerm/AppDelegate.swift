@@ -21,11 +21,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// window's controller.
     private func route(_ chord: KeyInterceptor.ReservedChord) {
         if case .newWindow = chord {
-            // ⌘N is intercepted here before `handle(_:)`, so a palette's modal gate
-            // doesn't cover it — swallow it explicitly while either palette is open.
-            if keyController()?.isModalPaletteOpen == true || keyController()?.isConfirmOpen == true {
-                return
-            }
+            // ⌘N is intercepted here before `handle(_:)`, so a palette's / confirm's modal
+            // gate doesn't cover it — swallow it explicitly while either is open.
+            if let key = keyController(), key.isModalPaletteOpen || key.isConfirmOpen { return }
             newWindow(initialCWD: keyController()?.focusedCWD, centered: false)
             return
         }
@@ -55,14 +53,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Copy/Paste forwarders reached via the responder chain (menu items have a nil
     /// target) — always act on the key window's active tab, never a stale window.
     @objc func copyFromSurface(_ sender: Any?) {
-        if keyController()?.isConfirmOpen == true { return }  // confirm has no text field
+        if isConfirmModal { return }  // confirm has no text field
         if isPaletteModal {
             NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.copy(_:)), with: sender); return
         }
         keyController()?.copyFromSurface(sender)
     }
     @objc func pasteToSurface(_ sender: Any?) {
-        if keyController()?.isConfirmOpen == true { return }  // confirm has no text field
+        if isConfirmModal { return }  // confirm has no text field
         if isPaletteModal {
             NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.paste(_:)), with: sender); return
         }
@@ -72,6 +70,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// While either palette is modal, Copy/Paste must act on its search field, not the
     /// terminal hidden behind it (else ⌘V would inject the clipboard into that shell).
     private var isPaletteModal: Bool { keyController()?.isModalPaletteOpen == true }
+
+    /// While a confirm toast is up it's fully modal — ⌘N and Copy/Paste are swallowed
+    /// (it has no text field to act on), mirroring `isPaletteModal`.
+    private var isConfirmModal: Bool { keyController()?.isConfirmOpen == true }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
