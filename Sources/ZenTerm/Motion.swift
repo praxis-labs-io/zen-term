@@ -22,8 +22,8 @@ enum Motion {
     /// damping ratio (gentle overshoot), ~0.24s settle. Snappy over smooth.
     enum Spring {
         static let mass: CGFloat = 1
-        static let stiffness: CGFloat = 340
-        static let damping: CGFloat = 26
+        static let stiffness: CGFloat = 1600
+        static let damping: CGFloat = 44
 
         static func make(keyPath: String) -> CASpringAnimation {
             let spring = CASpringAnimation(keyPath: keyPath)
@@ -40,6 +40,10 @@ enum Motion {
     static let haloDuration: CFTimeInterval = 0.12
     /// Region crossfade — zoom / tab-switch dissolves.
     static let crossfadeDuration: CFTimeInterval = 0.16
+    /// The opacity ramp of a scale-fade entrance. Kept short and decoupled from the
+    /// spring settle so the card *reads* as present fast — the dominant snappiness cue —
+    /// while the scale settles under the spring behind it.
+    static let entranceFadeDuration: CFTimeInterval = 0.11
     /// Scale a card rests at while faded out during a scale-fade entrance.
     static let entranceScale: CGFloat = 0.97
 
@@ -97,7 +101,7 @@ enum Motion {
         let fade = CABasicAnimation(keyPath: "opacity")
         fade.fromValue = fromOpacity
         fade.toValue = targetOpacity
-        fade.duration = spring.settlingDuration
+        fade.duration = entranceFadeDuration
         fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
 
         run(completion: completion) {
