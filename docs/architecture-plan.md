@@ -201,7 +201,7 @@ content either way) · PTY spawn mechanics · VT parsing · each backend's nativ
 ```
 zen-term/
 ├── vendor/ghostty/                     # submodule → your fork, pinned (only once you add backend B)
-├── scripts/build-ghosttykit.sh         # zig build → copies xcframework out
+├── bin/build-ghosttykit                # zig build → copies xcframework out
 ├── Frameworks/GhosttyKit.xcframework    # gitignored build artifact
 ├── Packages/
 │   ├── TerminalKit/                    # the seam + both conformances

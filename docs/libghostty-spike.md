@@ -12,7 +12,7 @@ unchanged — it only ever talks to the seam.
 ## Run it
 
 ```sh
-scripts/build-ghosttykit.sh          # one-time: builds Frameworks/GhosttyKit.xcframework
+bin/build-ghosttykit                 # one-time: builds Frameworks/GhosttyKit.xcframework
 swift build
 ZENTERM_BACKEND=ghostty swift run ZenTerm   # libghostty backend
 swift run ZenTerm                            # SwiftTerm backend (default, unchanged)

@@ -9,7 +9,7 @@ let package = Package(
     ],
     targets: [
         // libghostty as a prebuilt static-library xcframework (ZEN-40 spike). Built from
-        // source via scripts/build-ghosttykit.sh; gitignored, rebuilt per machine.
+        // source via bin/build-ghosttykit; gitignored, rebuilt per machine.
         .binaryTarget(
             name: "GhosttyKit",
             path: "Frameworks/GhosttyKit.xcframework"
