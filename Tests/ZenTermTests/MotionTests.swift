@@ -32,6 +32,8 @@ final class MotionTests: XCTestCase {
 
         XCTAssertTrue(ran)
         XCTAssertEqual(view.layer?.opacity, 0)
+        // Final model state matches the animated path: scaled (hidden), not identity.
+        XCTAssertFalse(CATransform3DIsIdentity(view.layer!.transform))
     }
 
     func test_reduceMotion_ease_setsModelValueAndRunsCompletion() {

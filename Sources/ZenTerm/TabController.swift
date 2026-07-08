@@ -347,10 +347,10 @@ final class TabController: NSObject {
 
     private func closeLazygit() {
         guard let overlay = lazygitOverlay else { return }
-        // Clear the refs BEFORE the slide-out: `terminate()` may synchronously re-enter
+        // Clear the refs BEFORE animating out: `terminate()` may synchronously re-enter
         // `surfaceDidExit`, and a nil `lazygitSurface` makes that re-entry a no-op; nilling
         // `lazygitOverlay` now lifts the modal gate immediately so focus/dock update this
-        // turn. The surface is terminated only once the card has finished springing out, so
+        // turn. The surface is terminated only once the card has finished animating out, so
         // it isn't torn down blank mid-animation.
         lazygitOverlay = nil
         let surface = lazygitSurface

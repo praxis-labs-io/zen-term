@@ -67,7 +67,7 @@ enum Motion {
         let targetOpacity: Float = appearing ? 1 : 0
 
         if isReduceMotionEnabled() {
-            layer.transform = shownTransform
+            layer.transform = targetTransform  // final model state, same as the animated path
             layer.opacity = targetOpacity
             completion?()
             return
@@ -115,6 +115,7 @@ enum Motion {
         duration: CFTimeInterval = pageSlideDuration, completion: @escaping () -> Void
     ) {
         incoming.wantsLayer = true
+        outgoing?.wantsLayer = true  // both slide — don't rely on the caller having layer-backed it
         guard let inLayer = incoming.layer else {
             completion()
             return
