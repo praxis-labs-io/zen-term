@@ -23,8 +23,13 @@ final class ToastPresenter {
         ])
     }
 
-    /// Show a toast; `tint` colors the icon.
+    /// Show a toast; `tint` colors the icon. Mutates the view hierarchy, so it hops to the
+    /// main thread when a caller surfaces a notice from a background queue.
     func show(_ content: ToastContent, tint: NSColor = ToastPresenter.warning) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.show(content, tint: tint) }
+            return
+        }
         let toast = ToastView(content: content, tint: tint)
         toast.onClick = { [weak self, weak toast] in
             guard let toast else { return }

@@ -64,6 +64,10 @@ final class TabController: NSObject {
     // not the surface, tracks visibility, so `isLazygitOpen` still means "shown/modal".
     private var lazygitSurface: TerminalSurface?
     private var lazygitOverlay: LazygitOverlay?
+    /// An overlay still springing out after `hideLazygit`. It keeps Auto Layout constraints
+    /// to the shared `lazygitSurface.view` until its exit animation finishes, so a fast
+    /// re-show must snap it away first (see `showLazygit`) before reparenting that view.
+    private var lazygitDismissingOverlay: LazygitOverlay?
     /// The git repo root (or plain cwd) the live `lazygitSurface` was launched against.
     /// `⌘G` reloads the surface when the focused pane has since moved to a different
     /// repo/dir, so lazygit tracks the pane instead of showing a stale directory.
@@ -224,6 +228,8 @@ final class TabController: NSObject {
         rightDrawerSurface = nil
         lazygitOverlay?.removeFromSuperview()
         lazygitOverlay = nil
+        lazygitDismissingOverlay?.removeFromSuperview()
+        lazygitDismissingOverlay = nil
         // `discardLazygitSurface` clears the ref before terminate, so a synchronous exit
         // re-entry can't re-warm a fresh surface that this teardown would then orphan.
         discardLazygitSurface()
@@ -410,6 +416,10 @@ final class TabController: NSObject {
     /// Reveal the persisted surface: mount its overlay above the tab's tile and give
     /// it the tab's unified focus.
     private func showLazygit(_ surface: TerminalSurface) {
+        // A prior overlay springing out still constrains `surface.view`; snap it away now so
+        // reparenting into the new card doesn't leave the old card's constraints dangling.
+        lazygitDismissingOverlay?.removeFromSuperview()
+        lazygitDismissingOverlay = nil
         let overlay = LazygitOverlay(
             content: surface.view,
             background: Theme.rosePineMoon.background.nsColor,
@@ -435,7 +445,12 @@ final class TabController: NSObject {
         // Nil the ref now so the modal gate lifts immediately (focus/dock update this
         // turn); the surface stays alive — only the card animates out and is removed.
         lazygitOverlay = nil
-        overlay.animateOut { overlay.removeFromSuperview() }
+        // Hold the outgoing overlay until its exit finishes; a fast re-show snaps it early.
+        lazygitDismissingOverlay = overlay
+        overlay.animateOut { [weak self] in
+            overlay.removeFromSuperview()
+            if self?.lazygitDismissingOverlay === overlay { self?.lazygitDismissingOverlay = nil }
+        }
         restoreUnifiedFocus()  // the float held keyboard focus; hand it back to its panel
         onOverlayStateChanged?()  // lazygit now closed → refresh the dock
     }
