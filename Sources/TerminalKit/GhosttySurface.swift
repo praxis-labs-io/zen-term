@@ -109,9 +109,19 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         hostView.surfacePtr = nil
     }
 
+    deinit {
+        // Backstop for any release that skips terminate(): the surface holds a
+        // passUnretained pointer back to us, so leaving it alive past our
+        // deallocation would dangle that userdata on the next libghostty callback.
+        if let surfacePtr { ghostty_surface_free(surfacePtr) }
+    }
+
     public func paste(_ text: String) {
         guard let surfacePtr else { return }
-        text.withCString { ghostty_surface_text(surfacePtr, $0, UInt(strlen($0))) }
+        // utf8.count, not strlen: the text may contain an interior NUL and strlen
+        // would truncate the paste there.
+        let byteCount = UInt(text.utf8.count)
+        text.withCString { ghostty_surface_text(surfacePtr, $0, byteCount) }
     }
 
     public func copySelection() -> String? {
@@ -153,7 +163,14 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             return true
         case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
             let code = Int32(action.action.child_exited.exit_code)
-            delegate?.surfaceDidExit(self, code: code)
+            // Defer to the next main-loop turn: the chrome frees this surface in
+            // response, and doing that synchronously here — while libghostty is still
+            // dispatching this action inside ghostty_app_tick — is a re-entrant
+            // use-after-free. close_surface_cb defers for the same reason.
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.delegate?.surfaceDidExit(self, code: code)
+            }
             return true
         default:
             return false

@@ -47,7 +47,9 @@ final class GhosttyApp {
             wakeup_cb: { _ in GhosttyApp.wakeup() },
             action_cb: { app, target, action in GhosttyApp.action(app, target, action) },
             read_clipboard_cb: { ud, loc, state in GhosttyApp.readClipboard(ud, loc, state) },
-            confirm_read_clipboard_cb: { _, _, _, _ in },
+            confirm_read_clipboard_cb: { ud, str, state, _ in
+                GhosttyApp.confirmReadClipboard(ud, str, state)
+            },
             write_clipboard_cb: { ud, _, content, len, _ in GhosttyApp.writeClipboard(ud, content, len) },
             close_surface_cb: { ud, alive in GhosttyApp.closeSurface(ud, alive) }
         )
@@ -118,6 +120,19 @@ final class GhosttyApp {
         guard let str = NSPasteboard.general.string(forType: .string) else { return false }
         str.withCString { ghostty_surface_complete_clipboard_request(ptr, $0, state, false) }
         return true
+    }
+
+    /// libghostty asks us to confirm a clipboard read (its `clipboard-read = ask` path).
+    /// We already allow reads outright in `readClipboard`, so auto-confirm with the
+    /// content libghostty hands us — a no-op here leaves the requesting program hanging.
+    private static func confirmReadClipboard(
+        _ userdata: UnsafeMutableRawPointer?,
+        _ string: UnsafePointer<CChar>?,
+        _ state: UnsafeMutableRawPointer?
+    ) {
+        guard let surface = surface(from: userdata), let ptr = surface.surfacePtr, let string
+        else { return }
+        ghostty_surface_complete_clipboard_request(ptr, string, state, true)
     }
 
     /// A terminal app asked to write the clipboard (in-terminal copy / OSC 52). Mirror
