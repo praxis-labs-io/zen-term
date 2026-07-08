@@ -44,6 +44,14 @@ jobs:
       - name: Build GhosttyKit (cache miss only)
         if: steps.ghosttykit.outputs.cache-hit != 'true'
         run: |
+          # Zig links libSystem via the macOS SDK; the runner may default to the
+          # Command Line Tools, so select the full Xcode (as ghostty's own CI does)
+          # and pin SDKROOT so the Zig build runner links cleanly.
+          XCODE="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
+          [ -n "$XCODE" ] && sudo xcode-select -s "$XCODE"
+          echo "developer dir: $(xcode-select -p)"
+          echo "sdk: $(xcrun --sdk macosx --show-sdk-path) ($(xcrun --sdk macosx --show-sdk-version))"
+          export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
           xcodebuild -downloadComponent MetalToolchain
           bin/build-ghosttykit
 
