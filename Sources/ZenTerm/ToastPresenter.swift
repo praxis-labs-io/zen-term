@@ -43,7 +43,18 @@ final class ToastPresenter {
         }
     }
 
-    private func dismiss(_ toast: ToastView) {
+    /// Present a sticky, actionable confirm toast (no auto-dismiss). Returns the
+    /// view so the caller can gate focus and dismiss it on answer.
+    @discardableResult
+    func confirm(_ content: ToastContent, tint: NSColor, actions: [ToastAction]) -> ToastView {
+        let toast = ToastView(content: content, tint: tint, actions: actions)
+        stack.addArrangedSubview(toast)
+        toast.animateIn()
+        return toast
+    }
+
+    /// Dismiss a toast now (spring out + remove). Idempotent.
+    func dismiss(_ toast: ToastView) {
         // `animateOut` is idempotent, so a click + the auto-dismiss timer can't double-remove.
         toast.animateOut { [weak self, weak toast] in
             guard let self, let toast else { return }
