@@ -19,5 +19,6 @@ mouse-hide-while-typing = true
 
 # The payoff: a GPU cursor-trail animation SwiftTerm can't do. Fades to nothing
 # once the cursor settles, so the static view is always Ghostty's own cursor.
-custom-shader = cursor_smear.glsl
-custom-shader-animation = true
+# TEMPORARILY OFF while we isolate the "glitchy" report — re-enable to test.
+# custom-shader = cursor_smear.glsl
+# custom-shader-animation = true

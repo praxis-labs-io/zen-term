@@ -54,6 +54,17 @@ libghostty is a much heavier embedding contract than SwiftTerm's drop-in `NSView
 Only `TerminalKit` links `GhosttyKit`; the chrome (`ZenTerm`) imports `TerminalKit` only,
 so the seam holds. The backend is selected once at startup by `TerminalSurfaceFactory`.
 
+## The transparent-window compositing gotcha (fixed)
+
+Heavy TUI redraws (nvim, fzf) tore and flashed a light block. Cause: zen-term's window
+is transparent (`isOpaque = false`) for the vibrancy backdrop, so the compositor blended
+ghostty's Metal layer against that backdrop every frame and redraw gaps showed it through.
+SwiftTerm never hit this — it draws opaquely on the CPU. Fix: after `ghostty_surface_new`,
+mark the now-hosted layer opaque over the terminal background
+(`hostView.layer.isOpaque = true` + `backgroundColor`). It then composites as a solid
+surface — no per-frame blend, no flash. This is the kind of integration detail a GPU
+backend needs that a CPU one doesn't.
+
 ## Known limitations (spike scope)
 
 - **IME / dead-key composition** is not wired (no `NSTextInputClient`). Basic typing,

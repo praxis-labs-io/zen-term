@@ -52,6 +52,18 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         ) { ghostty_surface_new(GhosttyApp.shared.app, &$0) }
 
         hostView.surfacePtr = surfacePtr
+
+        // libghostty just made hostView layer-hosting (its Metal layer is now
+        // hostView.layer). The host window is transparent for the vibrancy backdrop, so
+        // by default the compositor blends this layer against that backdrop every frame —
+        // which tears under heavy TUI redraws and flashes the (light) backdrop through any
+        // redraw gap. Mark the layer opaque over the terminal background so it composites
+        // as a solid surface and gaps show the terminal bg, not the window behind it.
+        if let layer = hostView.layer {
+            layer.isOpaque = true
+            layer.backgroundColor = (config.theme?.background.nsColor ?? .black).cgColor
+        }
+
         hostView.syncSizeAndScale()
         GhosttyApp.shared.tick()
     }
