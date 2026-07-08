@@ -16,12 +16,12 @@ debugger/Instruments session).
 - `swift build` — compile
 - `swift run ZenTerm` — launch the app
 - `swift test` — unit tests (TerminalKit)
-- `scripts/check.sh` — **the full local gate** (mirrors CI): build → test →
+- `bin/check` — **the full local gate** (mirrors CI): build → test →
   `swift format lint --strict` → `swiftlint --strict`. Run this before shipping.
-  `scripts/check.sh --fix` auto-applies swift-format + swiftlint fixes.
+  `bin/check --fix` auto-applies swift-format + swiftlint fixes.
   Requires `swiftlint` (`brew install swiftlint`).
 
-**Verify before claiming done:** `scripts/check.sh` fully green (not just build +
+**Verify before claiming done:** `bin/check` fully green (not just build +
 test — format-lint and swiftlint are part of the gate and CI enforces them).
 GUI behavior that has no unit test is verified by running the app and observing
 the documented expectation (see each plan's manual runbook).

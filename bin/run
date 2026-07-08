@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Build and run ZenTerm. Default backend is SwiftTerm; pass --ghostty to run the
+# libghostty backend (ZENTERM_BACKEND=ghostty, ZEN-40 spike). Any further args pass
+# through to `swift run` (e.g. bin/run --ghostty -Xswiftc -O).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# The GhosttyKit binaryTarget is linked unconditionally (spike), so the xcframework
+# must exist to build either backend. It's gitignored — build it once.
+if [[ ! -d Frameworks/GhosttyKit.xcframework ]]; then
+    echo "✗ Frameworks/GhosttyKit.xcframework missing — build it first: bin/build-ghosttykit" >&2
+    exit 1
+fi
+
+if [[ "${1:-}" == "--ghostty" ]]; then
+    shift
+    exec env ZENTERM_BACKEND=ghostty swift run ZenTerm "$@"
+fi
+
+exec swift run ZenTerm "$@"

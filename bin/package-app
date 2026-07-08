@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Package ZenTerm as a standalone, ad-hoc-signed .app for daily driving.
-# Usage: scripts/package-app.sh [DEST_DIR]   (default: ~/Applications)
+# Usage: bin/package-app [DEST_DIR]   (default: ~/Applications)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
