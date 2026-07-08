@@ -17,6 +17,13 @@ enum RepoScanner {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("dev", isDirectory: true)
     }
 
+    /// Whether `dir` is a git repo root — it contains a `.git` entry (a dir normally, or a
+    /// file for worktrees/submodules; `fileExists` matches both). The single source of truth
+    /// for "is this a repo", shared by the picker and lazygit's git gating.
+    static func isGitRepo(_ dir: URL) -> Bool {
+        FileManager.default.fileExists(atPath: dir.appendingPathComponent(".git").path)
+    }
+
     /// Immediate subdirectories of `root`, alphabetical by name (case-insensitive).
     /// Missing/unreadable root → empty list.
     static func scan(root: URL) -> [RepoEntry] {
@@ -31,8 +38,7 @@ enum RepoScanner {
 
         return children.compactMap { url -> RepoEntry? in
             guard (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else { return nil }
-            let isGit = fm.fileExists(atPath: url.appendingPathComponent(".git").path)
-            return RepoEntry(url: url, name: url.lastPathComponent, isGitRepo: isGit)
+            return RepoEntry(url: url, name: url.lastPathComponent, isGitRepo: isGitRepo(url))
         }
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }

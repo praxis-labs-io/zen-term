@@ -19,6 +19,10 @@ final class WindowController: NSObject {
     private static let backdropTintAlpha: CGFloat = 0.82
 
     private let container = NSView()
+    /// Top-right transient notices (e.g. "not a git repository"). Lazy so its stack mounts
+    /// above the canvas on first use; window-level so it's shared by every tab.
+    private lazy var toasts = ToastPresenter(
+        host: container, topInset: ChromeMetrics.windowGutter + 12, trailingInset: ChromeMetrics.windowGutter + 12)
     private let tabBar: TabBarView
     private let dock: ToggleDock
     private var mountedCanvas: NSView?
@@ -462,11 +466,14 @@ final class WindowController: NSObject {
             return
         }
         // The lazygit float is modal over its tab: while it's open, every tab-internal
-        // chord (split/nav/close/drawers/zoom) is swallowed. Only ⌘G (toggle it off) and
+        // chord (split/nav/drawers/zoom) is swallowed. ⌘G and ⌘W both hide it; the other
         // cross-tab/window chords — switch tab, new tab, new window — still act. The
         // palettes aren't in the allow-list, so neither can open over the float.
         if active?.isLazygitOpen == true {
             switch chord {
+            case .closePane:
+                active?.toggleLazygit()  // ⌘W hides the float (doesn't close the pane/tab)
+                return
             case .toggleLazygit, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
             default:
@@ -524,6 +531,7 @@ final class WindowController: NSObject {
         // Only the active tab toggles overlays (chords route to it); re-render the dock
         // so its tints track that tab.
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
+        c.onRequestToast = { [weak self] content in self?.toasts.show(content) }
     }
 
     private func renderTabBar() {
