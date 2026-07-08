@@ -197,25 +197,62 @@ final class WindowController: NSObject {
 
     // MARK: mounting
 
+    /// The incoming tab's canvas slides in from this edge on a switch.
+    enum SlideEdge { case fromRight, fromLeft }
+
     /// Mount the active tab's canvas above the tab bar; detach the previous one.
     /// Always restores focus to the active tab's focused pane after mounting.
     private func mountActive() {
         guard let c = activeController else { return }
         if mountedCanvas !== c.view {
             mountedCanvas?.removeFromSuperview()
-            let canvas = c.view
-            canvas.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(canvas, positioned: .below, relativeTo: tabBar)
-            NSLayoutConstraint.activate([
-                canvas.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-                canvas.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-                canvas.topAnchor.constraint(equalTo: container.topAnchor),
-                canvas.bottomAnchor.constraint(equalTo: tabBar.topAnchor),
-            ])
-            mountedCanvas = canvas
+            pinCanvas(c.view)
+            mountedCanvas = c.view
         }
         c.restoreKeyFocus()  // float-aware: keeps focus on the modal float when open
         renderDock()  // dock mirrors the newly-active tab's overlay state
+    }
+
+    /// Mount the active tab's canvas by sliding it in from `edge` while the previous one
+    /// slides out the opposite way (a page turn). Both are full-size terminals moved by a
+    /// transform, so neither reflows.
+    private func mountActiveSliding(from edge: SlideEdge) {
+        guard let c = activeController, mountedCanvas !== c.view else { return }
+        let outgoing = mountedCanvas
+        pinCanvas(c.view)
+        mountedCanvas = c.view
+        c.restoreKeyFocus()
+        renderDock()
+        container.layoutSubtreeIfNeeded()  // resolve the canvas width before offsetting it
+        let dx = edge == .fromRight ? container.bounds.width : -container.bounds.width
+        Motion.slideSwap(incoming: c.view, outgoing: outgoing, dx: dx) { outgoing?.removeFromSuperview() }
+    }
+
+    /// Mount the active tab's canvas by fading it in over the previous one (a fresh tab
+    /// has no travel direction). The very first mount has nothing to fade from, so it just
+    /// appears.
+    private func mountActiveFading() {
+        guard let c = activeController, mountedCanvas !== c.view else { return }
+        let outgoing = mountedCanvas
+        pinCanvas(c.view)
+        mountedCanvas = c.view
+        c.restoreKeyFocus()
+        renderDock()
+        guard outgoing != nil else { return }  // first mount: appear instantly
+        c.view.wantsLayer = true
+        c.view.layer?.opacity = 0
+        Motion.fade(c.view, to: 1) { outgoing?.removeFromSuperview() }
+    }
+
+    private func pinCanvas(_ canvas: NSView) {
+        canvas.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(canvas, positioned: .below, relativeTo: tabBar)
+        NSLayoutConstraint.activate([
+            canvas.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            canvas.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            canvas.topAnchor.constraint(equalTo: container.topAnchor),
+            canvas.bottomAnchor.constraint(equalTo: tabBar.topAnchor),
+        ])
     }
 
     // MARK: tab ops
@@ -253,17 +290,21 @@ final class WindowController: NSObject {
         controllers[id] = c
         titles[id] = c.title
         wire(c, id: id)
-        mountActive()
+        mountActiveFading()
         c.start()
         if workspace { c.openWorkspaceLayout() }
         renderTabBar()
     }
 
-    private func select(_ id: TabID) {
+    private func select(_ id: TabID, slideFrom: SlideEdge? = nil) {
         dismissOpenPalettes()  // a tab-bar click must not orphan a modal palette
         guard tabs.order.contains(id), id != tabs.activeID else { return }
+        let oldIndex = tabs.order.firstIndex(of: tabs.activeID) ?? 0
         tabs.select(id)
-        mountActive()
+        let newIndex = tabs.order.firstIndex(of: id) ?? 0
+        // A later tab enters from the right; an earlier one from the left. Cycling passes an
+        // explicit edge so a wrap-around still slides the way the keystroke implies.
+        mountActiveSliding(from: slideFrom ?? (newIndex > oldIndex ? .fromRight : .fromLeft))
         renderTabBar()
     }
 
@@ -272,7 +313,7 @@ final class WindowController: NSObject {
     private func cycleTab(_ delta: Int) {
         guard tabs.order.count > 1, let i = tabs.order.firstIndex(of: tabs.activeID) else { return }
         let n = tabs.order.count
-        select(tabs.order[(i + delta + n) % n])
+        select(tabs.order[(i + delta + n) % n], slideFrom: delta > 0 ? .fromRight : .fromLeft)
     }
 
     /// Close a specific tab: terminate its shells, detach its canvas, and cascade to

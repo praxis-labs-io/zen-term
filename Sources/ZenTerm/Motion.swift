@@ -33,6 +33,10 @@ enum Motion {
     /// Halo / tint ease — a smooth crossfade as focus moves, still quick enough to keep up
     /// with ⌘hjkl nav.
     static let haloDuration: CFTimeInterval = 0.18
+    /// Canvas page-slide on a tab switch — quick, decelerating hard so it lands.
+    static let pageSlideDuration: CFTimeInterval = 0.24
+    /// New-tab canvas fade-in.
+    static let fadeDuration: CFTimeInterval = 0.18
     /// The opacity ramp of a scale-fade entrance. Kept short and decoupled from the
     /// spring settle so the card *reads* as present fast — the dominant snappiness cue —
     /// while the scale settles under the spring behind it.
@@ -100,6 +104,73 @@ enum Motion {
         run(completion: completion) {
             layer.add(spring, forKey: "motion.transform")
             layer.add(fade, forKey: "motion.opacity")
+        }
+    }
+
+    /// Slide `incoming` in from a horizontal offset of `dx` while `outgoing` slides out the
+    /// opposite way (a page turn), then run `completion` (the caller removes the outgoing).
+    /// Transform-based, so neither terminal reflows. Honors Reduce Motion.
+    static func slideSwap(
+        incoming: NSView, outgoing: NSView?, dx: CGFloat,
+        duration: CFTimeInterval = pageSlideDuration, completion: @escaping () -> Void
+    ) {
+        incoming.wantsLayer = true
+        guard let inLayer = incoming.layer else {
+            completion()
+            return
+        }
+        if isReduceMotionEnabled() {
+            inLayer.transform = CATransform3DIdentity
+            completion()
+            return
+        }
+        // A hard-decelerating ease-out so the page lands/locks in rather than drifting.
+        let landing = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
+        inLayer.transform = CATransform3DIdentity  // model rests on-screen
+        let slideIn = CABasicAnimation(keyPath: "transform.translation.x")
+        slideIn.fromValue = dx
+        slideIn.toValue = 0
+        slideIn.duration = duration
+        slideIn.timingFunction = landing
+
+        let outLayer = outgoing?.layer
+        outLayer?.transform = CATransform3DMakeTranslation(-dx, 0, 0)  // model ends off-screen
+        let slideOut = CABasicAnimation(keyPath: "transform.translation.x")
+        slideOut.fromValue = 0
+        slideOut.toValue = -dx
+        slideOut.duration = duration
+        slideOut.timingFunction = landing
+
+        run(completion: completion) {
+            inLayer.add(slideIn, forKey: "motion.slide")
+            outLayer?.add(slideOut, forKey: "motion.slide")
+        }
+    }
+
+    /// Opacity ramp — a new-tab canvas fading in. Honors Reduce Motion.
+    static func fade(
+        _ view: NSView, to opacity: Float,
+        duration: CFTimeInterval = fadeDuration, completion: (() -> Void)? = nil
+    ) {
+        view.wantsLayer = true
+        guard let layer = view.layer else {
+            completion?()
+            return
+        }
+        if isReduceMotionEnabled() {
+            layer.opacity = opacity
+            completion?()
+            return
+        }
+        let from = layer.opacity  // model value — callers set it before fading
+        layer.opacity = opacity
+        let anim = CABasicAnimation(keyPath: "opacity")
+        anim.fromValue = from
+        anim.toValue = opacity
+        anim.duration = duration
+        anim.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        run(completion: completion) {
+            layer.add(anim, forKey: "motion.opacity")
         }
     }
 
