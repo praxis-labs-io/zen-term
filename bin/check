@@ -14,7 +14,7 @@ if [[ "${1:-}" == "--fix" ]]; then
     swift format --in-place --recursive Sources Tests
     echo "▸ swiftlint --fix"
     swiftlint lint --fix --quiet Sources Tests
-    echo "✓ fixes applied — re-run scripts/check.sh to verify"
+    echo "✓ fixes applied — re-run bin/check to verify"
     exit 0
 fi
 
