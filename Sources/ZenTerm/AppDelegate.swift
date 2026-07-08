@@ -23,7 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if case .newWindow = chord {
             // ⌘N is intercepted here before `handle(_:)`, so a palette's modal gate
             // doesn't cover it — swallow it explicitly while either palette is open.
-            if keyController()?.isModalPaletteOpen == true { return }
+            if keyController()?.isModalPaletteOpen == true || keyController()?.isConfirmOpen == true {
+                return
+            }
             newWindow(initialCWD: keyController()?.focusedCWD, centered: false)
             return
         }
@@ -53,12 +55,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Copy/Paste forwarders reached via the responder chain (menu items have a nil
     /// target) — always act on the key window's active tab, never a stale window.
     @objc func copyFromSurface(_ sender: Any?) {
+        if keyController()?.isConfirmOpen == true { return }  // confirm has no text field
         if isPaletteModal {
             NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.copy(_:)), with: sender); return
         }
         keyController()?.copyFromSurface(sender)
     }
     @objc func pasteToSurface(_ sender: Any?) {
+        if keyController()?.isConfirmOpen == true { return }  // confirm has no text field
         if isPaletteModal {
             NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.paste(_:)), with: sender); return
         }
@@ -70,4 +74,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isPaletteModal: Bool { keyController()?.isModalPaletteOpen == true }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    /// ⌘Q always confirms: tally tabs across every window and gate on the key window's
+    /// confirm toast. `.terminateLater` requires exactly one matching
+    /// `reply(toApplicationShouldTerminate:)` — Quit replies `true`, Cancel replies
+    /// `false` (via `presentQuitConfirm`'s `onCancel`), so the pending request never leaks.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let key = keyController() else { return .terminateNow }
+        if key.isConfirmOpen { return .terminateCancel }  // a confirm is already pending
+        let tabCount = windows.reduce(0) { $0 + $1.tabCount }
+        key.presentQuitConfirm(
+            tabCount: tabCount, windowCount: windows.count,
+            onQuit: { NSApp.reply(toApplicationShouldTerminate: true) },
+            onCancel: { NSApp.reply(toApplicationShouldTerminate: false) })
+        return .terminateLater
+    }
 }

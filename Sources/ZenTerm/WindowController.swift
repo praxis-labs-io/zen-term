@@ -438,14 +438,19 @@ final class WindowController: NSObject {
 
     /// Present a blocking confirm: focus leaves the terminal (typing is gated) and
     /// the modal chord-gate swallows other chords until Cancel / confirm answers.
+    /// `onCancel` runs after Cancel dismisses the toast — needed by callers (e.g. app
+    /// quit) that must resolve a pending request of their own on the cancel path too.
     func presentConfirm(
         icon: String, title: String, message: String, tint: NSColor,
-        confirmLabel: String, onConfirm: @escaping () -> Void
+        confirmLabel: String, onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil
     ) {
         guard confirmToast == nil else { return }  // one confirm at a time
         let content = ToastContent(symbol: icon, title: title, message: message)
         let actions = [
-            ToastAction(title: "Cancel", kind: .cancel) { [weak self] in self?.dismissConfirm() },
+            ToastAction(title: "Cancel", kind: .cancel) { [weak self] in
+                self?.dismissConfirm()
+                onCancel?()
+            },
             ToastAction(title: confirmLabel, kind: .destructive) { [weak self] in
                 self?.dismissConfirm()
                 onConfirm()
@@ -545,6 +550,25 @@ final class WindowController: NSObject {
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
         }
+    }
+
+    /// Number of open tabs in this window (for the quit tally).
+    var tabCount: Int { tabs.order.count }
+
+    /// Present the app-quit confirm on this (key) window. `onQuit` resolves the pending
+    /// `.terminateLater` reply with `true`; Cancel resolves it with `false` via the
+    /// `onCancel` hook on `presentConfirm` so the app never leaks a pending request.
+    func presentQuitConfirm(
+        tabCount: Int, windowCount: Int, onQuit: @escaping () -> Void, onCancel: @escaping () -> Void
+    ) {
+        let tabs = "\(tabCount) tab\(tabCount == 1 ? "" : "s")"
+        let message =
+            windowCount == 1
+            ? "\(tabs) will close."
+            : "\(tabs) in \(windowCount) windows will close."
+        presentConfirm(
+            icon: "power", title: "Quit ZenTerm?", message: message,
+            tint: ToastPresenter.warning, confirmLabel: "Quit", onConfirm: onQuit, onCancel: onCancel)
     }
 
     /// ⌘W: close immediately for an idle non-last pane; otherwise confirm first.
