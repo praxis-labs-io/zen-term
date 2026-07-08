@@ -17,16 +17,25 @@ final class GhosttyApp {
     private let config: ghostty_config_t
 
     private init() {
+        // Point the embedded lib at the installed Ghostty.app's resources (themes,
+        // shell integration) so `theme = …`, custom shaders, and shell integration
+        // resolve — libghostty ships none of these itself. Best-effort; must be set
+        // before ghostty_init. See docs/libghostty-spike.md.
+        Self.useGhosttyResourcesIfAvailable()
+
         // Global init once per process. argc/argv are libghostty's CLI entry (for
         // `ghostty +action` subcommands we never invoke) but the call is required.
         guard ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) == GHOSTTY_SUCCESS else {
             fatalError("ghostty_init failed")
         }
 
-        // Defaults plus the user's own ghostty config files (font, theme, etc.) if
-        // present. App-level keybinds we don't handle surface as ignored actions.
+        // The spike config (Rosé Pine Moon, JetBrainsMono, cursor smear) loaded on top
+        // of any real user config. Kept in-repo so it never touches ~/.config/ghostty.
         guard let cfg = ghostty_config_new() else { fatalError("ghostty_config_new failed") }
         ghostty_config_load_default_files(cfg)
+        if let spikeConfig = Self.spikeConfigPath {
+            ghostty_config_load_file(cfg, spikeConfig)
+        }
         ghostty_config_finalize(cfg)
         config = cfg
 
@@ -49,6 +58,26 @@ final class GhosttyApp {
     }
 
     func tick() { ghostty_app_tick(app) }
+
+    /// Absolute path to the in-repo spike config, resolved from this source file's
+    /// location (`#filePath`) — the spike runs on the same machine it's built on, so
+    /// this is robust regardless of the launch working directory. Nil if missing.
+    private static var spikeConfigPath: String? {
+        let root = URL(fileURLWithPath: #filePath)  // Sources/TerminalKit/GhosttyApp.swift
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let path = root.appendingPathComponent("config/ghostty/config").path
+        return FileManager.default.fileExists(atPath: path) ? path : nil
+    }
+
+    /// Set `GHOSTTY_RESOURCES_DIR` to the installed Ghostty.app's resources if present,
+    /// unless the user already set it. This gives the embedded lib themes + shell
+    /// integration it otherwise can't find.
+    private static func useGhosttyResourcesIfAvailable() {
+        guard ProcessInfo.processInfo.environment["GHOSTTY_RESOURCES_DIR"] == nil else { return }
+        let dir = "/Applications/Ghostty.app/Contents/Resources/ghostty"
+        guard FileManager.default.fileExists(atPath: dir) else { return }
+        setenv("GHOSTTY_RESOURCES_DIR", dir, 1)
+    }
 
     // MARK: - C callbacks
 

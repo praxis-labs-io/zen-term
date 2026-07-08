@@ -1,0 +1,23 @@
+# zen-term libghostty spike (ZEN-40) config.
+#
+# Loaded explicitly by GhosttyApp for the .ghostty backend — this does NOT touch
+# your real ~/.config/ghostty. Rosé Pine Moon palette on the darker #191724 base
+# (matching zen-term's own theme), JetBrainsMono Nerd Font, plus the ghostty-only
+# niceties this backend exists for: an animated cursor smear and native smooth
+# scroll. custom-shader paths resolve relative to this file.
+
+theme = Rose Pine Moon
+background = #191724
+
+font-family = JetBrainsMono Nerd Font Mono
+font-size = 14
+font-thicken = true
+
+cursor-style = block
+cursor-style-blink = true
+mouse-hide-while-typing = true
+
+# The payoff: a GPU cursor-trail animation SwiftTerm can't do. Fades to nothing
+# once the cursor settles, so the static view is always Ghostty's own cursor.
+custom-shader = cursor_smear.glsl
+custom-shader-animation = true
