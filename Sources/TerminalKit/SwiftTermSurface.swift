@@ -49,11 +49,13 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
             guard let self else { return }
             self.delegate?.surfaceDidRingBell(self)
         }
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { [weak self] event in
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .mouseMoved]) {
+            [weak self] event in
             guard let self else { return event }
             switch event.type {
             case .keyDown: return self.handleShiftEnter(event)
             case .leftMouseDown: self.reportFocusIfClicked(event); return event
+            case .mouseMoved: return self.suppressHoverMotion(event)
             default: return event
             }
         }
@@ -83,6 +85,26 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
             hit === term || hit.isDescendant(of: term)
         else { return }
         delegate?.surfaceWantsFocus(self)
+    }
+
+    /// Drop no-button hover motion over this surface. Under any-event mouse tracking
+    /// (DEC 1003, which turborepo's dev TUI enables) SwiftTerm encodes a no-button
+    /// motion as `ESC[<32;x;ym`: the low two bits (0) read as the LEFT button and the
+    /// trailing `m` as a release, so a mouse-tracking app decodes plain hover as a
+    /// left-button drag and begins selecting text under the cursor — the phantom
+    /// highlight in turbo's log pane. Correct terminals report no-button motion the app
+    /// ignores; kitty shows nothing. SwiftTerm's `mouseMoved` is sealed `public` (not
+    /// `open`), so we can't fix its encoder from a subclass — instead we drop the event
+    /// before it reaches the view. Only pure hover is dropped: real drags arrive as
+    /// `.leftMouseDragged` and still report correctly, and ⌘-hover (link preview) is
+    /// left intact. Scoped by hit-test so it never affects a surface behind an overlay.
+    private func suppressHoverMotion(_ event: NSEvent) -> NSEvent? {
+        guard event.window === term.window,
+            !event.modifierFlags.contains(.command),
+            let hit = term.window?.contentView?.hitTest(event.locationInWindow),
+            hit === term || hit.isDescendant(of: term)
+        else { return event }
+        return nil
     }
 
     public func start(_ config: TerminalSurfaceConfig) {
