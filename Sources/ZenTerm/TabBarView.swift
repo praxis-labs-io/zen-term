@@ -33,8 +33,9 @@ final class TabBarView: NSView {
     /// toward the target rather than growing symmetrically about the center.
     private let tracer = CALayer()
     private var activeTabID: TabID?
-    /// How long the tracer takes to reach the newly-selected tab.
-    private static let tracerDuration: CFTimeInterval = 0.34
+    /// How long the tracer takes to reach the newly-selected tab — matched to the canvas
+    /// page-slide (0.28s) so the two land together.
+    private static let tracerDuration: CFTimeInterval = 0.28
 
     init(
         onSelect: @escaping (TabID) -> Void,
