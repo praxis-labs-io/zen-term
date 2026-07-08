@@ -83,7 +83,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `false` (via `presentQuitConfirm`'s `onCancel`), so the pending request never leaks.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let key = keyController() else { return .terminateNow }
-        if key.isConfirmOpen { return .terminateCancel }  // a confirm is already pending
+        // A quit confirm may stand on any window — guard app-wide so ⌘Q can't stack two.
+        if windows.contains(where: { $0.isConfirmOpen }) { return .terminateCancel }
         let tabCount = windows.reduce(0) { $0 + $1.tabCount }
         key.presentQuitConfirm(
             tabCount: tabCount, windowCount: windows.count,

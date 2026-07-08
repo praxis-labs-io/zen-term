@@ -141,6 +141,10 @@ final class TabController: NSObject {
     /// Request a transient top-right toast (e.g. `⌘G` blocked outside a git repo).
     var onRequestToast: ((ToastContent) -> Void)?
 
+    /// The focused main-canvas pane changed (a click or spatial nav landed on a leaf).
+    /// Lets a host void a pending close confirm whose target just moved out from under it.
+    var onPaneFocusChanged: (() -> Void)?
+
     /// A startup command for the right drawer (the `⌘P` workspace preset sets `claude`).
     /// When set, opening the right drawer launches the program-then-shell recipe instead
     /// of a plain shell. Nil → plain shell.
@@ -534,6 +538,7 @@ final class TabController: NSObject {
         paneCanvas.setPanesFocused(true)
         bottomDrawerPanel?.isFocused = false
         rightDrawerPanel?.isFocused = false
+        onPaneFocusChanged?()
     }
 
     // MARK: zoom (⌘F)

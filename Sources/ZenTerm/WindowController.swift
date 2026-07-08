@@ -44,6 +44,7 @@ final class WindowController: NSObject {
     /// A blocking close confirm (⌘W on a busy or last pane), when up. Window-level like
     /// the palettes: modal over the active tab until answered.
     private var confirmToast: ToastView?
+    private var confirmOnCancel: (() -> Void)?
     var isConfirmOpen: Bool { confirmToast != nil }
 
     /// Re-derives tab titles from each tab's live cwd. Shells report cwd changes
@@ -279,7 +280,10 @@ final class WindowController: NSObject {
 
     // MARK: tab ops
 
-    private func newTab() { addTab(cwd: activeController?.focusedCWD, pinnedTitle: nil) }
+    private func newTab() {
+        cancelConfirm()  // the tab-bar "+" is reachable by mouse while a confirm is up
+        addTab(cwd: activeController?.focusedCWD, pinnedTitle: nil)
+    }
 
     /// Append a new tab with an explicit cwd and optional pinned title (the `⌘⇧P` repo
     /// picker passes the repo dir + its basename; plain `⌘t` passes the inherited cwd
@@ -321,6 +325,7 @@ final class WindowController: NSObject {
     private func select(_ id: TabID, slideFrom: SlideEdge? = nil) {
         dismissOpenPalettes()  // a tab-bar click must not orphan a modal palette
         guard tabs.order.contains(id), id != tabs.activeID else { return }
+        cancelConfirm()  // switching tabs voids a pending close confirm (its target moved)
         let oldIndex = tabs.order.firstIndex(of: tabs.activeID) ?? 0
         tabs.select(id)
         let newIndex = tabs.order.firstIndex(of: id) ?? 0
@@ -342,6 +347,7 @@ final class WindowController: NSObject {
     /// closing the window when it was the last tab.
     private func closeTab(_ id: TabID) {
         dismissOpenPalettes()  // the "×" button is reachable while a palette is up
+        cancelConfirm()  // a middle-click close voids a pending confirm on another tab
         let survived = tabs.close(id)
         let controller = controllers[id]
         if mountedCanvas === controller?.view {
@@ -445,14 +451,12 @@ final class WindowController: NSObject {
         confirmLabel: String, onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil
     ) {
         guard confirmToast == nil else { return }  // one confirm at a time
+        confirmOnCancel = onCancel
         let content = ToastContent(symbol: icon, title: title, message: message)
         let actions = [
-            ToastAction(title: "Cancel", kind: .cancel) { [weak self] in
-                self?.dismissConfirm()
-                onCancel?()
-            },
+            ToastAction(title: "Cancel", kind: .cancel) { [weak self] in self?.cancelConfirm() },
             ToastAction(title: confirmLabel, kind: .destructive) { [weak self] in
-                self?.dismissConfirm()
+                self?.tearDownConfirm()  // resolves via onConfirm, not onCancel
                 onConfirm()
             },
         ]
@@ -462,9 +466,23 @@ final class WindowController: NSObject {
         renderDock()
     }
 
-    private func dismissConfirm() {
+    /// Void a pending confirm as if Cancel was pressed — the Cancel button, and any
+    /// context change that moves the confirm's target (a tab switch/close/new, or a
+    /// pane-focus change), route here. Runs the caller's `onCancel` so an owner (e.g.
+    /// app quit) can resolve its own pending state. No-op when no confirm is open.
+    private func cancelConfirm() {
+        guard confirmToast != nil else { return }
+        let onCancel = confirmOnCancel
+        tearDownConfirm()
+        onCancel?()
+    }
+
+    /// Remove the confirm toast and hand focus back to the pane, WITHOUT running
+    /// `onCancel` — the confirm (destructive) path resolves through `onConfirm` instead.
+    private func tearDownConfirm() {
         guard let toast = confirmToast else { return }
         confirmToast = nil
+        confirmOnCancel = nil
         toasts.dismiss(toast)
         activeController?.restoreKeyFocus()  // hand focus back to the pane
         renderDock()
@@ -613,6 +631,8 @@ final class WindowController: NSObject {
         // so its tints track that tab.
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
         c.onRequestToast = { [weak self] content in self?.toasts.show(content) }
+        // A pane click while a close confirm is up moves the confirm's target — void it.
+        c.onPaneFocusChanged = { [weak self] in self?.cancelConfirm() }
     }
 
     private func renderTabBar() {
