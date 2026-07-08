@@ -33,8 +33,8 @@ enum Motion {
     /// Halo / tint ease — a smooth crossfade as focus moves, still quick enough to keep up
     /// with ⌘hjkl nav.
     static let haloDuration: CFTimeInterval = 0.18
-    /// Canvas page-slide on a tab switch — quick, decelerating hard so it lands.
-    static let pageSlideDuration: CFTimeInterval = 0.24
+    /// Canvas page-slide on a tab switch — decelerating hard so it lands.
+    static let pageSlideDuration: CFTimeInterval = 0.28
     /// New-tab canvas fade-in.
     static let fadeDuration: CFTimeInterval = 0.18
     /// The opacity ramp of a scale-fade entrance. Kept short and decoupled from the
