@@ -268,7 +268,7 @@ final class TabController: NSObject {
             // one holding unified focus. Do it now (not after the slide) so keys land on
             // the canvas immediately. `focusActivePane()` bubbles through
             // `paneCanvas.onFocusChanged` to reassert unified focus onto the canvas.
-            if focusedPanel == .bottomDrawer { paneCanvas.focusActivePane() }
+            if focusedPanel == .bottomDrawer { restoreFocusAfterClosingDrawer(otherOpen: isRightOpen, other: .right) }
             slideDrawerClosed(
                 bottomDrawerPanel, offscreen: bottomDrawerOffscreen,
                 reflow: [(bottomCanvasSeam, canvas.bottomAnchor.constraint(equalTo: content.bottomAnchor))])
@@ -300,7 +300,7 @@ final class TabController: NSObject {
             slideDrawerOpen(rightDrawerPanel, offscreen: rightDrawerOffscreen)
         } else {
             // See `toggleBottomDrawer`: hand focus back now, slide out, detach on landing.
-            if focusedPanel == .rightDrawer { paneCanvas.focusActivePane() }
+            if focusedPanel == .rightDrawer { restoreFocusAfterClosingDrawer(otherOpen: isBottomOpen, other: .bottom) }
             // The canvas fills up front; so does the bottom drawer when it's open, since its
             // trailing is pinned to the right drawer too — otherwise it would snap late.
             var reflow: [(seam: NSLayoutConstraint?, fill: NSLayoutConstraint)] = [
@@ -451,6 +451,14 @@ final class TabController: NSObject {
         }
         paneCanvas.setPanesFocused(false)
         surface?.focus()
+    }
+
+    /// Restore focus after closing a focused drawer: to the other drawer if it's still
+    /// open, else the pane. With only two drawers + the pane, the focus before this drawer
+    /// was opened was necessarily the pane or the other drawer — and whether that other
+    /// drawer is still open is exactly the discriminator, so this reconstructs it.
+    private func restoreFocusAfterClosingDrawer(otherOpen: Bool, other: DrawerEdge) {
+        if otherOpen { focusDrawer(other) } else { paneCanvas.focusActivePane() }
     }
 
     /// A drawer's fully-offscreen translation past its docked edge — its own extent plus
