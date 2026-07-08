@@ -350,17 +350,24 @@ final class TabController: NSObject {
         bottomDrawerPanel?.isFocused = false
         rightDrawerPanel?.isFocused = false
         surface.focus()
+        overlay.animateIn()
         onOverlayStateChanged?()  // lazygit now open → refresh the dock
     }
 
     private func closeLazygit() {
-        lazygitOverlay?.removeFromSuperview()
+        guard let overlay = lazygitOverlay else { return }
+        // Clear the refs BEFORE the slide-out: `terminate()` may synchronously re-enter
+        // `surfaceDidExit`, and a nil `lazygitSurface` makes that re-entry a no-op; nilling
+        // `lazygitOverlay` now lifts the modal gate immediately so focus/dock update this
+        // turn. The surface is terminated only once the card has finished springing out, so
+        // it isn't torn down blank mid-animation.
         lazygitOverlay = nil
-        // Clear the ref BEFORE terminating: `terminate()` may synchronously re-enter
-        // `surfaceDidExit`, and a nil `lazygitSurface` makes that re-entry a no-op.
         let surface = lazygitSurface
         lazygitSurface = nil
-        surface?.terminate()
+        overlay.animateOut {
+            overlay.removeFromSuperview()
+            surface?.terminate()
+        }
         restoreUnifiedFocus()  // the float held keyboard focus; hand it back to its panel
         onOverlayStateChanged?()  // lazygit now closed → refresh the dock
     }

@@ -310,12 +310,16 @@ final class WindowController: NSObject {
         active.presentTileOverlay(picker)
         repoPicker = picker
         picker.focusSearchField()
+        picker.animateIn()
         renderDock()  // palette button now active
     }
 
     private func closeRepoPicker() {
-        repoPicker?.removeFromSuperview()
+        guard let picker = repoPicker else { return }
+        // Clear the ref now so the modal gate lifts immediately (focus/dock update this
+        // turn, a second Esc/toggle is a no-op); the card finishes springing out after.
         repoPicker = nil
+        picker.animateOut { picker.removeFromSuperview() }
         activeController?.restoreKeyFocus()
         renderDock()  // palette button now inactive
     }
@@ -337,12 +341,16 @@ final class WindowController: NSObject {
         active.presentTileOverlay(palette)
         commandPalette = palette
         palette.focusSearchField()
+        palette.animateIn()
         renderDock()  // command button now active
     }
 
     private func closeCommandPalette() {
-        commandPalette?.removeFromSuperview()
+        guard let palette = commandPalette else { return }
+        // Clear the ref now so the modal gate lifts immediately (focus/dock update this
+        // turn, a second Esc/toggle is a no-op); the card finishes springing out after.
         commandPalette = nil
+        palette.animateOut { palette.removeFromSuperview() }
         activeController?.restoreKeyFocus()
         renderDock()  // command button now inactive
     }

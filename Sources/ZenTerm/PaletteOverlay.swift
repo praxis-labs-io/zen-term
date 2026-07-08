@@ -46,6 +46,8 @@ class SelectableRowView: NSView, PaletteRowView {
 class PaletteOverlay: NSView {
     private let onDismiss: () -> Void
 
+    private let card = CardView()
+    private var isDismissing = false
     private let searchField = NSTextField()
     private let rowsStack = NSStackView()
     private let scrollView = NSScrollView()
@@ -81,7 +83,6 @@ class PaletteOverlay: NSView {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        let card = CardView()
         card.wantsLayer = true
         card.layer?.cornerRadius = 12
         card.layer?.backgroundColor = background.cgColor
@@ -210,6 +211,20 @@ class PaletteOverlay: NSView {
 
     /// Make the search field first responder — called by the host after presenting.
     func focusSearchField() { window?.makeFirstResponder(searchField) }
+
+    /// Spring the card in (fade + subtle scale about its center). Call after presenting.
+    func animateIn() {
+        superview?.layoutSubtreeIfNeeded()  // resolve the card's frame before scaling about its center
+        Motion.springScaleFade(card, appearing: true)
+    }
+
+    /// Spring the card back out, then run `completion` (the host removes the overlay).
+    /// Idempotent — a second call while already dismissing is ignored.
+    func animateOut(completion: @escaping () -> Void) {
+        guard !isDismissing else { return }
+        isDismissing = true
+        Motion.springScaleFade(card, appearing: false, completion: completion)
+    }
 
     // MARK: template hooks (subclass overrides)
 
