@@ -34,10 +34,12 @@ enum MainMenu {
         main.addItem(editItem)
         let editMenu = NSMenu(title: "Edit")
         editItem.submenu = editMenu
-        let copy = NSMenuItem(title: "Copy", action: Selector(("copyFromSurface:")), keyEquivalent: "c")
+        let copy = NSMenuItem(
+            title: "Copy", action: #selector(PaneCanvasController.copyFromSurface(_:)), keyEquivalent: "c")
         copy.target = target
         editMenu.addItem(copy)
-        let paste = NSMenuItem(title: "Paste", action: Selector(("pasteToSurface:")), keyEquivalent: "v")
+        let paste = NSMenuItem(
+            title: "Paste", action: #selector(PaneCanvasController.pasteToSurface(_:)), keyEquivalent: "v")
         paste.target = target
         editMenu.addItem(paste)
 
