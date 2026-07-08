@@ -26,6 +26,15 @@ final class TabBarView: NSView {
     fileprivate static let numberInk = NSColor(white: 0.92, alpha: 0.35)
 
     private let stack = NSStackView()
+    /// A single iris underline that slides along the bar to the active tab (a tracer),
+    /// rather than a per-chip underline snapping on/off.
+    /// Owned (not an NSView backing layer) so its anchor point is ours: a left-edge anchor
+    /// lets us keyframe the left edge and width directly, for a stretch that only reaches
+    /// toward the target rather than growing symmetrically about the center.
+    private let tracer = CALayer()
+    private var activeTabID: TabID?
+    /// How long the tracer takes to reach the newly-selected tab.
+    private static let tracerDuration: CFTimeInterval = 0.34
 
     init(
         onSelect: @escaping (TabID) -> Void,
@@ -42,6 +51,13 @@ final class TabBarView: NSView {
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
+
+        tracer.backgroundColor = TabBarView.iris.cgColor
+        tracer.cornerRadius = 1
+        tracer.anchorPoint = CGPoint(x: 0, y: 0.5)  // position.x is the left edge
+        tracer.zPosition = 1  // above the chips regardless of sublayer order
+        tracer.isHidden = true  // placed under the active chip on the first render
+        layer?.addSublayer(tracer)
         // Nudge up by half the pane canvas's 12pt bottom gutter so the chips read as
         // centered in the whole band between the terminal content and the window edge,
         // not just within this bar's own height. (This view's superview is flipped, so
@@ -57,19 +73,87 @@ final class TabBarView: NSView {
 
     func render(_ items: [TabBarItem]) {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        var activeChip: Chip?
         for item in items {
             let id = item.id
             let chip = Chip(
-                attributed: Self.tabLabel(item), isActive: item.isActive, showsUnderline: true,
+                attributed: Self.tabLabel(item),
                 onClick: { [weak self] in self?.onSelect(id) },
                 onMiddleClick: { [weak self] in self?.onClose(id) })
             stack.addArrangedSubview(chip)
+            if item.isActive { activeChip = chip }
         }
         let plus = IconButton(
             symbol: "plus", size: NSSize(width: 22, height: 22),
             pointSize: 11, accessibilityLabel: "New tab",
             onClick: { [weak self] in self?.onNewTab() })
         stack.addArrangedSubview(plus)
+
+        // Slide the tracer to the active tab. Animate only when the active tab actually
+        // changed (not on the first render, nor a re-render of the same selection).
+        let newActive = items.first(where: \.isActive)?.id
+        layoutSubtreeIfNeeded()  // resolve chip frames before measuring the underline
+        if let activeChip {
+            let shouldAnimate = activeTabID != nil && activeTabID != newActive
+            moveTracer(to: tracerFrame(for: activeChip), animated: shouldAnimate)
+            tracer.isHidden = false
+        } else {
+            tracer.isHidden = true
+        }
+        activeTabID = newActive
+    }
+
+    /// The 2pt underline frame under `chip`, spanning its label (inset 9pt each side),
+    /// in this view's coordinates.
+    private func tracerFrame(for chip: NSView) -> CGRect {
+        let f = chip.convert(chip.bounds, to: self)
+        return CGRect(x: f.minX + 9, y: f.minY, width: f.width - 18, height: 2)
+    }
+
+    /// Set the tracer's frame with no implicit animation (an owned layer would otherwise
+    /// animate every property change on its own default 0.25s curve).
+    private func setTracerFrame(_ frame: CGRect) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        tracer.frame = frame
+        CATransaction.commit()
+    }
+
+    private func moveTracer(to target: CGRect, animated: Bool) {
+        guard animated, !Motion.isReduceMotionEnabled() else {
+            setTracerFrame(target)
+            return
+        }
+        let start = tracer.presentation()?.frame ?? tracer.frame  // live frame, mid-slide if interrupted
+        setTracerFrame(target)  // model = final resting frame
+
+        // The stretch, expressed as the left edge (position.x, since the anchor's x is 0)
+        // and the width: the leading edge reaches the target while the trailing edge holds,
+        // then the trailing edge eases in and the width closes — so it only reaches toward
+        // the target, never growing symmetrically about the center.
+        let movingRight = target.midX >= start.midX
+        let leftValues: [CGFloat] =
+            movingRight
+            ? [start.minX, start.minX, target.minX] : [start.minX, target.minX, target.minX]
+        let widthValues: [CGFloat] =
+            movingRight
+            ? [start.width, target.maxX - start.minX, target.width]
+            : [start.width, start.maxX - target.minX, target.width]
+
+        let left = CAKeyframeAnimation(keyPath: "position.x")
+        left.values = leftValues.map { $0 as NSNumber }
+        let width = CAKeyframeAnimation(keyPath: "bounds.size.width")
+        width.values = widthValues.map { $0 as NSNumber }
+        for anim in [left, width] {
+            anim.keyTimes = [0, 0.5, 1]
+            anim.duration = Self.tracerDuration
+            anim.timingFunctions = [
+                CAMediaTimingFunction(name: .easeOut),  // leading edge darts toward the target
+                CAMediaTimingFunction(name: .easeInEaseOut),  // trailing edge eases in
+            ]
+        }
+        tracer.add(left, forKey: "tracer.left")
+        tracer.add(width, forKey: "tracer.width")
     }
 
     private static func tabLabel(_ item: TabBarItem) -> NSAttributedString {
@@ -86,16 +170,15 @@ final class TabBarView: NSView {
     }
 
     /// A rounded box holding a centered label. The box background appears on hover
-    /// only; an active tab is marked by an iris underline instead. Used for both tabs
+    /// only; the active tab is marked by the shared tracer underline. Used for both tabs
     /// and the "+" affordance so they share hover feel and stay vertically aligned.
     private final class Chip: NSView {
         private let onClick: () -> Void
         private let onMiddleClick: (() -> Void)?
         private var isHovered = false
-        private let underline = NSView()
 
         init(
-            attributed: NSAttributedString, isActive: Bool, showsUnderline: Bool,
+            attributed: NSAttributedString,
             onClick: @escaping () -> Void, onMiddleClick: (() -> Void)?
         ) {
             self.onClick = onClick
@@ -108,21 +191,11 @@ final class TabBarView: NSView {
             label.translatesAutoresizingMaskIntoConstraints = false
             addSubview(label)
 
-            underline.wantsLayer = true
-            underline.layer?.backgroundColor = TabBarView.iris.cgColor
-            underline.isHidden = !(isActive && showsUnderline)
-            underline.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(underline)
-
             NSLayoutConstraint.activate([
                 label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
                 label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
                 label.centerYAnchor.constraint(equalTo: centerYAnchor),
                 heightAnchor.constraint(equalToConstant: 22),
-                underline.leadingAnchor.constraint(equalTo: label.leadingAnchor),
-                underline.trailingAnchor.constraint(equalTo: label.trailingAnchor),
-                underline.bottomAnchor.constraint(equalTo: bottomAnchor),
-                underline.heightAnchor.constraint(equalToConstant: 2),
             ])
         }
 
