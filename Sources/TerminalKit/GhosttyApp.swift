@@ -1,24 +1,43 @@
 import AppKit
 import GhosttyKit
 
-/// The process-global libghostty runtime (ZEN-40 spike).
+/// The process-global libghostty runtime.
 ///
 /// libghostty has exactly one `ghostty_app_t` per process; every `GhosttySurface`
-/// shares it. Created lazily on first surface. The app is event-driven: libghostty
-/// calls `wakeup_cb` from any thread when it has work, and we hop to the main thread
-/// to `ghostty_app_tick`. Because there is only ever one instance, the C callbacks
-/// reach it through `GhosttyApp.shared` rather than the runtime `userdata` pointer,
-/// which sidesteps the init-ordering problem of handing `self` to `ghostty_app_new`
-/// before `self` is fully constructed.
+/// shares it. Created on first surface, with that surface's theme — configuration is
+/// app-level in libghostty, and every zen-term pane shares one theme. The app is
+/// event-driven: libghostty calls `wakeup_cb` from any thread when it has work, and we
+/// hop to the main thread to `ghostty_app_tick`. Because there is only ever one
+/// instance, the C callbacks reach it through `GhosttyApp.shared` rather than the
+/// runtime `userdata` pointer, which sidesteps the init-ordering problem of handing
+/// `self` to `ghostty_app_new` before `self` is fully constructed.
 final class GhosttyApp {
-    static let shared = GhosttyApp()
+    private static var _shared: GhosttyApp?
+
+    /// The shared runtime, created on first call with the first surface's theme.
+    /// Later calls return the existing instance — a different theme would not apply.
+    static func shared(theme: TerminalTheme?) -> GhosttyApp {
+        if let existing = _shared { return existing }
+        let created = GhosttyApp(theme: theme)
+        _shared = created
+        return created
+    }
+
+    /// The already-created runtime — for the C callbacks and the event-loop pump,
+    /// which can only fire after the first surface (and therefore the app) exists.
+    static var shared: GhosttyApp {
+        guard let shared = _shared else {
+            fatalError("GhosttyApp accessed before the first GhosttySurface created it")
+        }
+        return shared
+    }
 
     let app: ghostty_app_t
     // Retained for the app's (process) lifetime: libghostty keeps a reference to the
     // config passed to ghostty_app_new; freeing it would pull it out from under the app.
     private let config: ghostty_config_t
 
-    private init() {
+    private init(theme: TerminalTheme?) {
         // Point the embedded lib at the resources staged from the pinned vendor/ghostty
         // build (shell integration, themes, terminfo) — libghostty resolves none of
         // these itself when embedded. Must be set before ghostty_init.
@@ -30,12 +49,12 @@ final class GhosttyApp {
             fatalError("ghostty_init failed")
         }
 
-        // The spike config (Rosé Pine Moon, JetBrainsMono) loaded on top of any real
-        // user config. Kept in-repo so it never touches ~/.config/ghostty.
+        // The chrome's theme, translated to ghostty config text and loaded as the ONLY
+        // config source — deliberately not ghostty_config_load_default_files, so a
+        // user's ~/.config/ghostty can't skew zen-term's appearance or behavior.
         guard let cfg = ghostty_config_new() else { fatalError("ghostty_config_new failed") }
-        ghostty_config_load_default_files(cfg)
-        if let spikeConfig = Self.spikeConfigPath {
-            ghostty_config_load_file(cfg, spikeConfig)
+        if let generated = GhosttyConfigWriter.writeConfig(for: theme) {
+            ghostty_config_load_file(cfg, generated)
         }
         ghostty_config_finalize(cfg)
         config = cfg
@@ -61,16 +80,6 @@ final class GhosttyApp {
     }
 
     func tick() { ghostty_app_tick(app) }
-
-    /// Absolute path to the in-repo spike config, resolved from this source file's
-    /// location (`#filePath`) — the spike runs on the same machine it's built on, so
-    /// this is robust regardless of the launch working directory. Nil if missing.
-    private static var spikeConfigPath: String? {
-        let root = URL(fileURLWithPath: #filePath)  // Sources/TerminalKit/GhosttyApp.swift
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let path = root.appendingPathComponent("config/ghostty/config").path
-        return FileManager.default.fileExists(atPath: path) ? path : nil
-    }
 
     /// Set `GHOSTTY_RESOURCES_DIR` to the resources bin/build-ghosttykit staged into
     /// TerminalKit's bundle, unless the user already set it. The env var points at the

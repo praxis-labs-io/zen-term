@@ -49,7 +49,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             workingDirectory: config.workingDirectory?.path,
             command: command,
             environment: config.environment
-        ) { ghostty_surface_new(GhosttyApp.shared.app, &$0) }
+        ) { ghostty_surface_new(GhosttyApp.shared(theme: config.theme).app, &$0) }
 
         hostView.surfacePtr = surfacePtr
 
