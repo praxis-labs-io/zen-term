@@ -108,7 +108,8 @@ final class GhosttyApp {
     }
 
     /// Route a surface-targeted action (title / pwd / bell / child-exit) to its
-    /// `GhosttySurface`. App-level actions are ignored for the spike. The surface is
+    /// `GhosttySurface`. App-level actions are ignored — the chrome owns app-level
+    /// behavior (tabs, splits, palette), not the terminal backend. The surface is
     /// recovered from the `userdata` we set on its config at creation.
     private static func action(
         _ app: ghostty_app_t?, _ target: ghostty_target_s, _ action: ghostty_action_s

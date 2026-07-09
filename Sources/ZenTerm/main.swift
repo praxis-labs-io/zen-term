@@ -1,10 +1,10 @@
 import AppKit
 import TerminalKit
 
-// Backend swap point (ZEN-40 spike). SwiftTerm is the default shipping core;
-// `ZENTERM_BACKEND=ghostty` selects the libghostty backend to try it out.
-if ProcessInfo.processInfo.environment["ZENTERM_BACKEND"] == "ghostty" {
-    TerminalSurfaceFactory.backend = .ghostty
+// Backend swap point. libghostty is the default (ZEN-45);
+// `ZENTERM_BACKEND=swiftterm` is the escape hatch back to the SwiftTerm backend.
+if ProcessInfo.processInfo.environment["ZENTERM_BACKEND"] == "swiftterm" {
+    TerminalSurfaceFactory.backend = .swiftTerm
 }
 
 let app = NSApplication.shared

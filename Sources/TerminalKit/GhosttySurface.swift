@@ -1,15 +1,14 @@
 import AppKit
 import GhosttyKit
 
-/// libghostty-backed terminal surface (ZEN-40 spike).
+/// libghostty-backed terminal surface — the default backend (ZEN-45).
 ///
 /// The counterpart to `SwiftTermSurface` behind the same `TerminalSurface` seam, so
 /// the chrome is identical either way. Unlike SwiftTerm's drop-in `NSView`, libghostty
 /// renders into a Metal layer it attaches to a host view we own, and the host must
 /// forward every input (key / mouse / focus / size / scale) and pump the shared app's
-/// event loop. This is a spike: basic typing, mouse, scroll, resize, title/cwd/bell,
-/// and clipboard work; IME/dead-key composition and full keybind coverage are out of
-/// scope (see ZEN-40).
+/// event loop. IME/dead-key composition is not wired yet (no `NSTextInputClient`);
+/// tracked as a ZEN-45 follow-up.
 public final class GhosttySurface: NSObject, TerminalSurface {
     private let hostView = GhosttyHostView()
     var surfacePtr: ghostty_surface_t?

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build GhosttyKit.xcframework from source for the libghostty backend (ZEN-40 spike).
+# Build GhosttyKit.xcframework from source for the libghostty backend (the default).
 #
 # libghostty ships no prebuilt embeddable artifact — the released Ghostty.app statically
 # links it into its main binary. So we build it ourselves: pin the ghostty source, drive

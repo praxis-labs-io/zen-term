@@ -2,7 +2,7 @@ import AppKit
 import GhosttyKit
 
 /// The `NSView` libghostty renders into and that forwards input to a `GhosttySurface`'s
-/// surface (ZEN-40 spike). libghostty attaches its own Metal layer to this view (making
+/// surface. libghostty attaches its own Metal layer to this view (making
 /// it layer-hosting), so this view must NOT set `wantsLayer` itself. Coordinates handed
 /// to libghostty use a top-left origin, so mouse `y` is flipped from AppKit's.
 final class GhosttyHostView: NSView {
@@ -152,7 +152,7 @@ final class GhosttyHostView: NSView {
             x *= 2  // subjective feel multiplier, matching Ghostty's own app
             y *= 2
         }
-        // Packed scroll mods: bit 0 = high-precision. Momentum phases are omitted for the spike.
+        // Packed scroll mods: bit 0 = high-precision. Momentum phases are a ZEN-45 follow-up.
         let mods: ghostty_input_scroll_mods_t = precise ? 1 : 0
         ghostty_surface_mouse_scroll(surfacePtr, x, y, mods)
     }

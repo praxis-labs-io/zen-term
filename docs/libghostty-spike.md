@@ -1,23 +1,25 @@
-# libghostty backend spike (ZEN-40)
+# libghostty backend (ZEN-40 spike → ZEN-45 default)
 
-Stands up one `GhosttySurface` on the existing `TerminalSurface` seam: a live shell in a
-borderless pane rendered by libghostty's Metal renderer, behind a backend flag, with
-SwiftTerm untouched as the default. This is the "backend B" proof from
-`architecture-plan.md` — a leaf swap, not a rewrite.
+Stands up `GhosttySurface` on the existing `TerminalSurface` seam: live shells in every
+pane type rendered by libghostty's Metal renderer. This started as the "backend B" proof
+from `architecture-plan.md` (ZEN-40) — a leaf swap, not a rewrite.
 
-**Status:** works. `ghostty_surface_new` succeeds, the Metal renderer initializes, and a
-real `login → zsh` PTY spawns and renders. The chrome (panes, tabs, drawers, palette) is
-unchanged — it only ever talks to the seam.
+**Status:** the default backend (ZEN-45). The spike's load-bearing hacks are unwound:
+resources are staged from the pinned submodule build (no Ghostty.app dependency), the
+chrome's `TerminalTheme` drives a generated ghostty config (no in-repo config file, no
+`~/.config/ghostty`), spawn args are shell-quoted, and the SwiftTerm backend's parity
+features (isBusy close-confirm, Shift+Enter soft newline, desktop notifications, OSC 9;4
+progress) are wired. SwiftTerm remains the escape hatch.
 
 ## Run it
 
 ```sh
-bin/build-ghosttykit    # one-time: inits the ghostty submodule + builds the xcframework
-bin/run --ghostty       # libghostty backend
-bin/run                 # SwiftTerm backend (default, unchanged)
+bin/build-ghosttykit    # one-time: inits the ghostty submodule + builds xcframework + resources
+bin/run                 # libghostty backend (default)
+bin/run --swiftterm     # SwiftTerm backend (escape hatch)
 ```
 
-`GHOSTTY_LOG=stderr bin/run --ghostty` surfaces libghostty's own logs (off by default in
+`GHOSTTY_LOG=stderr bin/run` surfaces libghostty's own logs (off by default in
 the embedded lib).
 
 ## What the build takes
@@ -34,11 +36,13 @@ xcframework too). Two hurdles, both one-time and scripted:
   `xcodebuild -downloadComponent MetalToolchain` (~700 MB). Without it the xcframework
   build fails at the `Ghostty.metallib` step.
 
-Output: `Frameworks/GhosttyKit.xcframework` (~135 MB static lib, macos-arm64) — gitignored
-and rebuilt from the submodule, never committed. **CI** builds it the same way and caches
-it keyed on the ghostty pin, so only a ghostty bump pays the rebuild; every other run
-restores it in seconds. Self-contained: the source pin is a committed submodule, nothing is
-fetched as a prebuilt binary.
+Output: `Frameworks/GhosttyKit.xcframework` (~135 MB static lib, macos-arm64) plus the
+staged runtime resources (`Sources/TerminalKit/Resources/ghostty-resources/` —
+shell-integration, themes, terminfo, bundled via SwiftPM) — both gitignored and rebuilt
+from the submodule, never committed. **CI** builds them the same way and caches them
+keyed on the ghostty pin, so only a ghostty bump pays the rebuild; every other run
+restores them in seconds. Self-contained: the source pin is a committed submodule,
+nothing is fetched as a prebuilt binary.
 
 ## How it maps to the seam
 
@@ -70,15 +74,11 @@ mark the now-hosted layer opaque over the terminal background
 surface — no per-frame blend, no flash. This is the kind of integration detail a GPU
 backend needs that a CPU one doesn't.
 
-## Known limitations (spike scope)
+## Known limitations
 
 - **IME / dead-key composition** is not wired (no `NSTextInputClient`). Basic typing,
   control chars, arrows, and shortcuts work; multi-keystroke composition does not.
 - **Scroll momentum** phases are omitted (precision flag only).
-- **Theme / font aren't plumbed through `TerminalSurfaceConfig`** — libghostty reads its
-  own config, so the spike applies Rosé Pine Moon + JetBrainsMono via an in-repo config
-  (`config/ghostty/`, pointed at Ghostty.app's resources) rather than the seam. Making the
-  seam's theme/font drive libghostty is follow-up work.
 - **GPU cursor shader — explored and removed.** A cursor-trail shader rendered correctly, but
   *any* custom shader routes ghostty through an intermediate-texture post-process pass that
   flashes white during TUI transitions (prompt → fzf/nvim) in this transparent-window embed —
