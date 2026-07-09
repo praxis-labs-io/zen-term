@@ -39,10 +39,14 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             hostView.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0)
         cfg.font_size = config.fontSize.map { Float($0) } ?? 0
 
-        // libghostty's `command` is a single shell-parsed string, not argv; join the
-        // chrome's command + args. `command == nil` lets libghostty launch the user's
-        // login shell itself (it handles login/PATH natively — no argv[0] rewrite needed).
-        let command: String? = config.command.map { ([$0] + config.args).joined(separator: " ") }
+        // libghostty's `command` is a single string it runs via a POSIX shell (sh -c),
+        // not argv — so each word is quoted to survive the round-trip (the chrome
+        // spawns lazygit/floats with args like `-c "lazygit; exec zsh -l -i"`).
+        // `command == nil` lets libghostty launch the user's login shell itself (it
+        // handles login/PATH natively — no argv[0] rewrite needed).
+        let command: String? = config.command.map { cmd in
+            ([cmd] + config.args).map(Self.shellWordQuote).joined(separator: " ")
+        }
 
         surfacePtr = Self.withConfigStrings(
             &cfg,
@@ -66,6 +70,13 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
         hostView.syncSizeAndScale()
         GhosttyApp.shared.tick()
+    }
+
+    /// Quote one word for a POSIX shell: wrapped in single quotes, embedded single
+    /// quotes spliced as `'\''`. Reconstructs the chrome's argv exactly when
+    /// libghostty hands the joined command to `sh -c`.
+    static func shellWordQuote(_ word: String) -> String {
+        "'" + word.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     /// Fills the config's C-string pointers (working dir, command, env) with buffers that
