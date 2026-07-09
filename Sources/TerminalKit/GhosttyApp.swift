@@ -19,11 +19,10 @@ final class GhosttyApp {
     private let config: ghostty_config_t
 
     private init() {
-        // Point the embedded lib at the installed Ghostty.app's resources (themes,
-        // shell integration) so `theme = …`, custom shaders, and shell integration
-        // resolve — libghostty ships none of these itself. Best-effort; must be set
-        // before ghostty_init. See docs/libghostty-spike.md.
-        Self.useGhosttyResourcesIfAvailable()
+        // Point the embedded lib at the resources staged from the pinned vendor/ghostty
+        // build (shell integration, themes, terminfo) — libghostty resolves none of
+        // these itself when embedded. Must be set before ghostty_init.
+        Self.useBundledResources()
 
         // Global init once per process. argc/argv are libghostty's CLI entry (for
         // `ghostty +action` subcommands we never invoke) but the call is required.
@@ -73,13 +72,22 @@ final class GhosttyApp {
         return FileManager.default.fileExists(atPath: path) ? path : nil
     }
 
-    /// Set `GHOSTTY_RESOURCES_DIR` to the installed Ghostty.app's resources if present,
-    /// unless the user already set it. This gives the embedded lib themes + shell
-    /// integration it otherwise can't find.
-    private static func useGhosttyResourcesIfAvailable() {
+    /// Set `GHOSTTY_RESOURCES_DIR` to the resources bin/build-ghosttykit staged into
+    /// TerminalKit's bundle, unless the user already set it. The env var points at the
+    /// `ghostty/` dir; libghostty derives `TERMINFO` from its *sibling* `terminfo/` —
+    /// the same layout as Ghostty.app's `Resources/{ghostty,terminfo}` pair.
+    private static func useBundledResources() {
         guard ProcessInfo.processInfo.environment["GHOSTTY_RESOURCES_DIR"] == nil else { return }
-        let dir = "/Applications/Ghostty.app/Contents/Resources/ghostty"
-        guard FileManager.default.fileExists(atPath: dir) else { return }
+        guard
+            let dir = Bundle.module.resourceURL?
+                .appendingPathComponent("ghostty-resources/ghostty").path,
+            FileManager.default.fileExists(atPath: dir)
+        else {
+            NSLog(
+                "GhosttyApp: staged ghostty resources missing — shell integration and "
+                    + "terminfo degraded. Re-run bin/build-ghosttykit.")
+            return
+        }
         setenv("GHOSTTY_RESOURCES_DIR", dir, 1)
     }
 

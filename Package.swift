@@ -20,6 +20,10 @@ let package = Package(
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
                 "GhosttyKit",
             ],
+            // libghostty's runtime resources (shell-integration, themes, terminfo),
+            // staged from the pinned vendor/ghostty build by bin/build-ghosttykit.
+            // Gitignored like the xcframework — both come from the same script run.
+            resources: [.copy("Resources/ghostty-resources")],
             // A static-library xcframework carries no link metadata, so the frameworks
             // libghostty's objects reference must be linked by the consumer. This set is
             // what Ghostty's own macOS app links; over-linking is harmless.

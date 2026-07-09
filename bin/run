@@ -5,10 +5,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# The GhosttyKit binaryTarget is linked unconditionally (spike), so the xcframework
-# must exist to build either backend. It's gitignored — build it once.
-if [[ ! -d Frameworks/GhosttyKit.xcframework ]]; then
-    echo "✗ Frameworks/GhosttyKit.xcframework missing — build it first: bin/build-ghosttykit" >&2
+# The GhosttyKit binaryTarget is linked unconditionally and its runtime resources are
+# a declared SwiftPM resource, so both must exist to build either backend. They're
+# gitignored — bin/build-ghosttykit produces both in one run.
+if [[ ! -d Frameworks/GhosttyKit.xcframework ]] \
+    || [[ ! -d Sources/TerminalKit/Resources/ghostty-resources ]]; then
+    echo "✗ GhosttyKit artifacts missing — build them first: bin/build-ghosttykit" >&2
     exit 1
 fi
 

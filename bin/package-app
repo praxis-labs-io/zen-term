@@ -19,6 +19,13 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/ZenTerm"
 cp icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
+# SwiftPM resource bundles (brand SVGs, ghostty runtime resources). Bundle.module
+# resolves them via Bundle.main.resourceURL, so they must ride along in the .app —
+# a bare executable copy would fatalError on first Bundle.module access.
+for bundle in .build/release/*.bundle; do
+    cp -R "$bundle" "$APP/Contents/Resources/"
+done
+
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
