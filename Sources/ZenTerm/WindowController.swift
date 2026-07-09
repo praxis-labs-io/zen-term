@@ -515,44 +515,69 @@ final class WindowController: NSObject {
         // swallowed. Its Return/Esc/button answers go through the toast's own key
         // equivalents, never here.
         if isConfirmOpen { return }
-        // The repo picker is modal over the window: while it's open only ⌘⇧P (close it)
-        // acts; every other chord is swallowed. Its arrow/Enter/Esc keys aren't chords —
-        // they go to the search field's field editor, never here.
+        // The repo picker is modal over the window: ⌘⇧P closes it, another surface's toggle
+        // (command palette, lazygit, a tool float) closes it and opens that instead — a live
+        // switch between all the modal cards; every other chord is swallowed. Its arrow/Enter/
+        // Esc keys aren't chords — they go to the search field's field editor, never here.
         if isRepoPickerOpen {
-            if case .toggleRepoPicker = chord { toggleRepoPicker() }
-            return
+            switch chord {
+            case .toggleRepoPicker:
+                closeRepoPicker()
+                return
+            case .toggleCommandPalette, .toggleLazygit, .toggleToolFloat:
+                closeRepoPicker()  // close the picker, then open the requested surface below
+            default:
+                return
+            }
         }
-        // The command palette is modal the same way: while it's open only ⌘P (close it)
-        // acts; every other chord is swallowed. Running a command closes the palette first,
-        // so the dispatched chord arrives here with the gate already clear.
+        // The command palette is modal the same way: ⌘P closes it, another surface's toggle
+        // switches to it; every other chord is swallowed.
         if isCommandPaletteOpen {
-            if case .toggleCommandPalette = chord { toggleCommandPalette() }
-            return
+            switch chord {
+            case .toggleCommandPalette:
+                closeCommandPalette()
+                return
+            case .toggleRepoPicker, .toggleLazygit, .toggleToolFloat:
+                closeCommandPalette()  // close the palette, then open the requested surface below
+            default:
+                return
+            }
         }
-        // The lazygit float is modal over its tab: while it's open, every tab-internal
-        // chord (split/nav/drawers/zoom) is swallowed. ⌘G and ⌘W both hide it; the other
-        // cross-tab/window chords — switch tab, new tab, new window — still act. The
-        // palettes aren't in the allow-list, so neither can open over the float.
+        // The lazygit float is modal over its tab. ⌘G closes it; another surface's toggle
+        // (a tool float, either palette) closes it and opens that instead — a live switch.
+        // ⌘W is guarded with a brief note (it never reaches the pane behind the float);
+        // split/nav/drawer/zoom are swallowed; cross-tab/window chords still act.
         if active?.isLazygitOpen == true {
             switch chord {
             case .closePane:
-                active?.toggleLazygit()  // ⌘W hides the float (doesn't close the pane/tab)
+                toasts.show(
+                    ToastContent(
+                        variant: .info, title: "Close Pane",
+                        message: "Close lazygit first to close a pane."))
                 return
+            case .toggleToolFloat, .toggleCommandPalette, .toggleRepoPicker:
+                active?.toggleLazygit()  // close lazygit, then fall through to open the other
             case .toggleLazygit, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
             default:
                 return
             }
         }
-        // Tool floats (diffnav, …) are modal over the tab, like lazygit. ⌘W and the
-        // float's own toggle close it; cross-tab/window chords still act. The lazygit
-        // gate above doesn't allow .toggleToolFloat and this doesn't allow
-        // .toggleLazygit, so the two float families are mutually exclusive.
+        // Tool floats are modal like lazygit: their own toggle closes them, another surface's
+        // toggle switches to it, ⌘W is guarded, cross-tab/window chords still act.
         if active?.isToolFloatOpen == true {
             switch chord {
             case .closePane:
-                active?.closeToolFloat()  // ⌘W closes the float (doesn't close the pane/tab)
+                let name =
+                    active?.activeToolFloatID.flatMap(ToolFloatCatalog.byID)
+                    .map { $0.title.replacingOccurrences(of: "Open ", with: "") } ?? "the tool"
+                toasts.show(
+                    ToastContent(
+                        variant: .info, title: "Close Pane",
+                        message: "Close \(name) first to close a pane."))
                 return
+            case .toggleLazygit, .toggleCommandPalette, .toggleRepoPicker:
+                active?.closeToolFloat()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
             default:
