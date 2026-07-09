@@ -744,13 +744,15 @@ final class WindowController: NSObject {
         if let old = waitingToasts[id] { toasts.dismiss(old) }  // replace any prior toast for this tab
         let content = ToastContent(
             variant: .info, title: titles[id] ?? "shell", message: message, icon: "bell.fill")
+        // Match the confirm-dialog convention: muted secondary action on the left, primary on
+        // the right (Dismiss, then Switch).
         let actions = [
-            ToastAction(title: "Switch", kind: .destructive) { [weak self] in self?.select(id) },
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
                 guard let self else { return }
                 self.clearWaiting(id)
                 self.renderTabBar()  // "Dismiss" also drops the rose flag
             },
+            ToastAction(title: "Switch", kind: .destructive) { [weak self] in self?.select(id) },
         ]
         waitingToasts[id] = toasts.showSticky(content, actions: actions)
     }
