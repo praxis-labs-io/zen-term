@@ -1,9 +1,9 @@
 import AppKit
 
-/// A small, flat button on a confirm toast: muted `cancel`, or a subtle-filled `primary` /
-/// `destructive` whose text carries the tone (the toast's `accent` for primary, love for
-/// destructive). Carries its `ToastAction.run`, and — unless `keyEquivalents` is off (a
-/// non-modal toast that must not hijack Return / Esc window-wide) — the Return / Esc keys.
+/// A small, flat button on a confirm toast: a muted `cancel`, or a subtle-filled
+/// `destructive` whose love-tinted text carries the tone. Carries its `ToastAction.run`, and —
+/// unless `keyEquivalents` is off (a non-modal toast that must not hijack Return / Esc
+/// window-wide) — the Return / Esc keys.
 final class ToastButton: NSButton {
     private let run: () -> Void
     private let restBg: NSColor

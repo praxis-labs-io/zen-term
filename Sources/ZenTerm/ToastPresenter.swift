@@ -47,6 +47,7 @@ final class ToastPresenter {
     /// stops being relevant. Call on the main thread.
     @discardableResult
     func showSticky(_ content: ToastContent, actions: [ToastAction]) -> ToastView {
+        dispatchPrecondition(condition: .onQueue(.main))  // fail fast on an accidental off-main call
         let toast = ToastView(content: content, actions: actions, keyEquivalents: false)
         stack.addArrangedSubview(toast)
         toast.animateIn()
