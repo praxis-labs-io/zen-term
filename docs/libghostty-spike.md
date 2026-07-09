@@ -90,14 +90,16 @@ backend needs that a CPU one doesn't.
   occlusion parity with SwiftTerm isn't done.
 - **Two ImGui link warnings** (`_ImFontConfig_ImFontConfig`, `_ImGuiStyle_ImGuiStyle`) —
   ghostty's optional inspector, unused here; harmless.
-- **`ghostty_surface_new` can fail with `error.OutOfMemory` under surface/window
-  resource pressure.** Not GPU memory (Metal allocates 2K textures fine with 18 GB free) and
-  not a specific shader — it reproduces even with no custom shader once enough short-lived
-  GUI instances have been launched and SIGKILL'd, leaving WindowServer surfaces uncollected.
-  A fresh graphics session (log out/in) clears it. This is the biggest open robustness
-  question for the backend: rapid pane create/destroy needs a clean teardown path (verify
-  `ghostty_surface_free` fully releases the hosted layer/IOSurface) before it's daily-driver
-  solid. Tracked as follow-up.
+- **`ghostty_surface_new` can fail with `error.OutOfMemory` under cross-process
+  WindowServer pressure.** Not GPU memory (Metal allocates 2K textures fine with 18 GB free)
+  and not a specific shader — it reproduces once enough short-lived GUI instances have been
+  launched and SIGKILL'd, leaving WindowServer surfaces uncollected. A fresh graphics
+  session (log out/in) clears it. **In-app churn is verified clean (ZEN-45):** the
+  `GhosttySurfaceChurnTests` stress harness (`ZENTERM_CHURN_STRESS=1`) ran 500
+  create/attach/destroy cycles in one process with zero surface-creation failures and a
+  plateauing footprint (+55 MB @ 150 → +64 MB @ 500 — caches, not a per-surface leak).
+  `ghostty_surface_free` releases the hosted layer/IOSurface correctly; the failure mode
+  is a dev-loop artifact (killed processes), not something zen-term's pane churn can hit.
 
 None of these are seam problems — they're all below it, exactly where backend-specific work
 is supposed to live. Per Guardrail 2, this stays behind the flag with no deadline;
