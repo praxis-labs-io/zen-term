@@ -1,15 +1,20 @@
 import Darwin
 
-/// Kernel probe for "does this process have children" — used to tell a shell
-/// running a foreground command (or a backgrounded job) from an idle prompt.
-/// Backend-agnostic and pid-only, so it stays below the terminal seam.
+/// Kernel probe for "is a foreground command running in this terminal" — used to tell an
+/// idle prompt from a shell running something, so the chrome only warns before closing real
+/// work. Backend-agnostic (pty fd + pid only), so it stays below the terminal seam.
 public enum ProcessProbe {
-    /// True when `pid` has at least one child process. `pid <= 0` → false.
-    public static func hasChildren(_ pid: pid_t) -> Bool {
-        guard pid > 0 else { return false }
-        var slot = pid_t(0)
-        let size = Int32(MemoryLayout<pid_t>.size)
-        let filled = proc_listchildpids(pid, &slot, size)
-        return filled > 0
+    /// True when the pty's foreground process group is NOT the shell itself — i.e. the shell
+    /// has handed the terminal to a foreground command (vim, a server, a pipeline). An idle
+    /// prompt keeps the shell in the foreground (`group == shellPid`), and a *backgrounded*
+    /// job (`cmd &`, an async-prompt helper) never becomes the foreground group — so unlike a
+    /// "has any child" check, this doesn't over-report either.
+    ///
+    /// `masterFd` is the pty master (SwiftTerm's `LocalProcess.childfd`); `shellPid` is the
+    /// shell, which is its own process-group leader (so its pgid equals its pid).
+    public static func hasForegroundJob(masterFd: Int32, shellPid: pid_t) -> Bool {
+        guard masterFd >= 0, shellPid > 0 else { return false }
+        let group = tcgetpgrp(masterFd)
+        return group > 0 && group != shellPid
     }
 }

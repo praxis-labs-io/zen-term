@@ -15,8 +15,11 @@ struct ToolFloat: Equatable {
     let emptyGuard: EmptyGuard?
 }
 
-/// A pre-open probe: run `probe` at the focused cwd; if it exits 0 (nothing to
-/// show), skip opening the float and surface `toast` instead.
+/// A pre-open probe: `probe` runs at the focused cwd; if it exits 0 (nothing to show), the
+/// float doesn't open and `toast` is surfaced instead. The probe runs in a plain,
+/// **non-login/non-interactive** shell (`$SHELL -c`) so it doesn't pay rc-sourcing latency —
+/// so its command must be on the default `PATH`, not only wired up by a login/`.zshrc` — and
+/// is bounded by a short timeout, failing open (the float opens) on timeout or error.
 struct EmptyGuard: Equatable {
     let probe: String
     let toast: ToastContent
