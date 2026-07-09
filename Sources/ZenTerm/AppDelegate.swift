@@ -7,6 +7,9 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windows: [WindowController] = []
     private let keys = KeyInterceptor()
+    /// True between a ⌘Q that raised the quit confirm and its reply, so a second ⌘Q can't
+    /// stack a second quit dialog — while a non-quit (close-pane) confirm never blocks ⌘Q.
+    private var quitConfirmPending = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenu.install(copyPaste: nil)  // Copy/Paste route via the responder chain
@@ -83,13 +86,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `false` (via `presentQuitConfirm`'s `onCancel`), so the pending request never leaks.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let key = keyController() else { return .terminateNow }
-        // A quit confirm may stand on any window — guard app-wide so ⌘Q can't stack two.
-        if windows.contains(where: { $0.isConfirmOpen }) { return .terminateCancel }
+        if quitConfirmPending { return .terminateCancel }  // a quit dialog is already up
+        quitConfirmPending = true
         let tabCount = windows.reduce(0) { $0 + $1.tabCount }
         key.presentQuitConfirm(
             tabCount: tabCount, windowCount: windows.count,
-            onQuit: { NSApp.reply(toApplicationShouldTerminate: true) },
-            onCancel: { NSApp.reply(toApplicationShouldTerminate: false) })
+            onQuit: { [weak self] in
+                self?.quitConfirmPending = false
+                NSApp.reply(toApplicationShouldTerminate: true)
+            },
+            onCancel: { [weak self] in
+                self?.quitConfirmPending = false
+                NSApp.reply(toApplicationShouldTerminate: false)
+            })
         return .terminateLater
     }
 }

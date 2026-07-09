@@ -15,14 +15,12 @@ final class ToastButton: NSButton {
     private static let subtle = NSColor(white: 1, alpha: 0.07)
     private static let subtleHover = NSColor(white: 1, alpha: 0.12)
 
-    init(_ action: ToastAction, accent: NSColor) {
+    init(_ action: ToastAction) {
         self.run = action.run
         let text: NSColor
         switch action.kind {
         case .cancel:
             (restBg, hoverBg, text) = (.clear, Self.subtle, Self.muted)
-        case .primary:
-            (restBg, hoverBg, text) = (Self.subtle, Self.subtleHover, accent)
         case .destructive:
             (restBg, hoverBg, text) = (Self.subtle, Self.subtleHover, Self.love)
         }
@@ -43,7 +41,7 @@ final class ToastButton: NSButton {
             ])
 
         switch action.kind {
-        case .destructive, .primary: keyEquivalent = "\r"  // Return answers
+        case .destructive: keyEquivalent = "\r"  // Return answers
         case .cancel: keyEquivalent = "\u{1b}"  // Esc cancels
         }
 

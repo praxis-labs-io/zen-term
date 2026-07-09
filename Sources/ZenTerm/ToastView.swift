@@ -85,7 +85,7 @@ final class ToastView: NSView {
             // Small buttons hugging the leading edge (a trailing spacer absorbs the slack).
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            let row = NSStackView(views: actions.map { ToastButton($0, accent: accent) } + [spacer])
+            let row = NSStackView(views: actions.map { ToastButton($0) } + [spacer])
             row.orientation = .horizontal
             row.alignment = .centerY
             row.spacing = 6

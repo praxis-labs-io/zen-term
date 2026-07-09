@@ -453,12 +453,15 @@ final class WindowController: NSObject {
         variant: ToastVariant, title: String, message: String,
         confirmLabel: String, onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil
     ) {
-        guard confirmToast == nil else { return }  // one confirm at a time
+        cancelConfirm()  // supersede any confirm already up (e.g. ⌘Q over a ⌘W confirm)
+        dismissOpenPalettes()  // never stack over an open palette
         confirmOnCancel = onCancel
         let content = ToastContent(variant: variant, title: title, message: message)
         let actions = [
             ToastAction(title: "Cancel", kind: .cancel) { [weak self] in self?.cancelConfirm() },
             ToastAction(title: confirmLabel, kind: .destructive) { [weak self] in
+                // The button stays key-live during its spring-out; ignore a repeat/held Return.
+                guard self?.confirmToast != nil else { return }
                 self?.tearDownConfirm()  // resolves via onConfirm, not onCancel
                 onConfirm()
             },
@@ -648,9 +651,9 @@ final class WindowController: NSObject {
         guard let active = activeController else { return }
         let lastPane = active.isSinglePane
         let busy = active.focusedPaneIsBusy
-        let busyDrawer = active.hasBusyDrawer
-        let running = busy || busyDrawer
 
+        // Only the last-pane path consults drawers, so probe them lazily (2 syscalls).
+        let running = lastPane ? (busy || active.hasBusyDrawer) : busy
         let needsConfirm: Bool
         if lastPane {
             let closesWindow = tabs.order.count == 1
@@ -704,7 +707,7 @@ final class WindowController: NSObject {
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
         c.onRequestToast = { [weak self] content in self?.toasts.show(content) }
         // A pane click while a close confirm is up moves the confirm's target — void it.
-        c.onPaneFocusChanged = { [weak self] in self?.cancelConfirm() }
+        c.onFocusChanged = { [weak self] in self?.cancelConfirm() }
     }
 
     private func renderTabBar() {
@@ -737,6 +740,9 @@ final class WindowController: NSObject {
     private func tearDown() {
         guard !didTearDown else { return }
         didTearDown = true
+        // Closing the window with a confirm still up must resolve its owner's pending state —
+        // e.g. a quit confirm's `.terminateLater` reply — or the app hangs mid-quit.
+        cancelConfirm()
         titlePoll?.invalidate()
         titlePoll = nil
         for c in controllers.values { c.shutdown() }
