@@ -1,16 +1,18 @@
 import AppKit
 
 /// The global footer toggle dock (bottom-right of the tab-bar row): a row of `IconButton`s
-/// — split-h, split-v │ bottom drawer, right drawer, zoom │ repo picker, lazygit —
-/// grouped by thin dividers. Active toggles tint iris. Buttons fire injected closures (routed
-/// through the window's chord handler, so they respect the modals). `render` mirrors the
-/// active tab's overlay state plus the window's repo-picker state.
+/// — split-h, split-v │ bottom drawer, right drawer, zoom │ repo picker, lazygit, one per
+/// `ToolFloatCatalog` entry — grouped by thin dividers. Active toggles tint iris. Buttons
+/// fire injected closures (routed through the window's chord handler, so they respect the
+/// modals). `render` mirrors the active tab's overlay state plus the window's repo-picker
+/// state.
 final class ToggleDock: NSView {
     private let paletteBtn: IconButton
     private let bottomBtn: IconButton
     private let rightBtn: IconButton
     private let zoomBtn: IconButton
     private let lazygitBtn: IconButton
+    private var toolFloatBtns: [String: IconButton] = [:]
 
     private static let iconPointSize: CGFloat = 11
 
@@ -18,7 +20,8 @@ final class ToggleDock: NSView {
         onSplitH: @escaping () -> Void, onSplitV: @escaping () -> Void,
         onPalette: @escaping () -> Void, onBottom: @escaping () -> Void,
         onRight: @escaping () -> Void, onZoom: @escaping () -> Void,
-        onLazygit: @escaping () -> Void
+        onLazygit: @escaping () -> Void,
+        toolFloats: [ToolFloat], onToolFloat: @escaping (ToolFloat) -> Void
     ) {
         func button(_ symbol: String, _ label: String, _ onClick: @escaping () -> Void) -> IconButton {
             IconButton(symbol: symbol, pointSize: Self.iconPointSize, accessibilityLabel: label, onClick: onClick)
@@ -29,15 +32,22 @@ final class ToggleDock: NSView {
         bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", onBottom)  // ⌘B
         rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", onRight)  // ⌘\
         zoomBtn = button("arrow.up.left.and.arrow.down.right", "Toggle zoom", onZoom)  // ⌘F
-        lazygitBtn = button("arrow.triangle.branch", "Toggle lazygit", onLazygit)  // ⌘G
+        lazygitBtn = button("git", "Toggle lazygit", onLazygit)  // ⌘G — bundled git mark
+        // Local pairs — `button` is a local func, but the `toolFloatBtns` stored
+        // property can't be touched until after super.init.
+        let toolButtonPairs: [(String, IconButton)] = toolFloats.map { spec in
+            (spec.id, button(spec.icon, spec.title, { onToolFloat(spec) }))
+        }
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
+        for (id, btn) in toolButtonPairs { toolFloatBtns[id] = btn }
 
-        let stack = NSStackView(views: [
-            splitH, splitV, Self.divider(),
-            bottomBtn, rightBtn, zoomBtn, Self.divider(),
-            paletteBtn, lazygitBtn,
-        ])
+        let stack = NSStackView(
+            views: [
+                splitH, splitV, Self.divider(),
+                bottomBtn, rightBtn, zoomBtn, Self.divider(),
+                paletteBtn, lazygitBtn,
+            ] + toolButtonPairs.map(\.1))
         stack.orientation = .horizontal
         stack.alignment = .centerY
         stack.spacing = 4
@@ -60,6 +70,7 @@ final class ToggleDock: NSView {
     func render(overlay: OverlayState, paletteOpen: Bool) {
         paletteBtn.isActive = paletteOpen
         lazygitBtn.isActive = overlay.isLazygitOpen
+        for (id, btn) in toolFloatBtns { btn.isActive = overlay.activeToolFloatID == id }
         zoomBtn.isActive = overlay.zoomed != nil
         switch overlay.zoomed {
         case nil:

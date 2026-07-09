@@ -17,6 +17,7 @@ final class KeyInterceptor {
         case toggleRightDrawer
         case toggleZoom
         case toggleLazygit
+        case toggleToolFloat(String)  // associated value = ToolFloat.id
         case toggleRepoPicker
         case toggleCommandPalette
     }
@@ -46,6 +47,7 @@ final class KeyInterceptor {
                 case "k": chord = .resizeUp
                 case "j": chord = .resizeDown
                 case "p": chord = .toggleRepoPicker
+                case "g": chord = .toggleToolFloat("gitdash")  // ⌘⇧G — per-float keybinding
                 default: chord = nil
                 }
                 if let chord { self.onReservedChord?(chord); return nil }

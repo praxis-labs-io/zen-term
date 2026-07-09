@@ -84,10 +84,12 @@ final class WindowController: NSObject {
         var onRight: () -> Void = {}
         var onZoom: () -> Void = {}
         var onLazygit: () -> Void = {}
+        var onToolFloat: (ToolFloat) -> Void = { _ in }
         dock = ToggleDock(
             onSplitH: { onSplitH() }, onSplitV: { onSplitV() },
             onPalette: { onPalette() }, onBottom: { onBottom() },
-            onRight: { onRight() }, onZoom: { onZoom() }, onLazygit: { onLazygit() })
+            onRight: { onRight() }, onZoom: { onZoom() }, onLazygit: { onLazygit() },
+            toolFloats: ToolFloatCatalog.all, onToolFloat: { onToolFloat($0) })
         super.init()
         nextTabID = 2
 
@@ -103,6 +105,7 @@ final class WindowController: NSObject {
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
         onZoom = { [weak self] in self?.handle(.toggleZoom) }
         onLazygit = { [weak self] in self?.handle(.toggleLazygit) }
+        onToolFloat = { [weak self] spec in self?.handle(.toggleToolFloat(spec.id)) }
 
         let first = makeController(initialCWD: initialCWD)
         controllers[firstID] = first
@@ -480,6 +483,21 @@ final class WindowController: NSObject {
                 return
             }
         }
+        // Tool floats (diffnav, …) are modal over the tab, like lazygit. ⌘W and the
+        // float's own toggle close it; cross-tab/window chords still act. The lazygit
+        // gate above doesn't allow .toggleToolFloat and this doesn't allow
+        // .toggleLazygit, so the two float families are mutually exclusive.
+        if active?.isToolFloatOpen == true {
+            switch chord {
+            case .closePane:
+                active?.closeToolFloat()  // ⌘W closes the float (doesn't close the pane/tab)
+                return
+            case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
+                break
+            default:
+                return
+            }
+        }
         switch chord {
         case .splitVertical: active?.split(.vertical)
         case .splitHorizontal: active?.split(.horizontal)
@@ -506,6 +524,8 @@ final class WindowController: NSObject {
         case .toggleRightDrawer: active?.toggleRightDrawer()
         case .toggleZoom: active?.toggleZoom()
         case .toggleLazygit: active?.toggleLazygit()
+        case .toggleToolFloat(let id):
+            if let spec = ToolFloatCatalog.byID(id) { active?.toggleToolFloat(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
         }

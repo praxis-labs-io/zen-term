@@ -50,7 +50,8 @@ let package = Package(
         ),
         .executableTarget(
             name: "ZenTerm",
-            dependencies: ["TerminalKit", "PaneKit", "TabKit"]  // still no SwiftTerm
+            dependencies: ["TerminalKit", "PaneKit", "TabKit"],  // still no SwiftTerm
+            resources: [.copy("Resources")]  // brand marks (GitHub, git) SVGs for the dock
         ),
         .testTarget(
             name: "TerminalKitTests",
