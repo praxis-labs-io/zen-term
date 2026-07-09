@@ -42,9 +42,11 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
         return path.isEmpty ? nil : URL(fileURLWithPath: path)
     }
 
-    /// Whether the shell has a running foreground command or a backgrounded job.
+    /// Whether a foreground command is running in the shell (an idle prompt or a backgrounded
+    /// job reads as not busy — the pty's foreground process group is the shell itself).
     public var isBusy: Bool {
-        ProcessProbe.hasChildren(term.process?.shellPid ?? 0)
+        guard let process = term.process else { return false }
+        return ProcessProbe.hasForegroundJob(masterFd: process.childfd, shellPid: process.shellPid)
     }
 
     public override init() {

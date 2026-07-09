@@ -569,8 +569,13 @@ final class TabController: NSObject {
         onOverlayStateChanged?()
     }
 
-    /// Run `probe` as a plain (non-login) shell at the focused cwd; exit 0 ⇒ nothing to
-    /// show. Used by a float's `emptyGuard` to toast instead of opening an empty float.
+    /// The empty-guard probe's timeout — the toggle path blocks on it, so a pathological
+    /// probe can't freeze the UI. On timeout we fail open (show the float).
+    private static let probeTimeout: TimeInterval = 2
+
+    /// Run `probe` as a plain (non-login) shell at the focused cwd; exit 0 ⇒ nothing to show.
+    /// Used by a float's `emptyGuard` to toast instead of opening an empty float. Bounded by
+    /// `probeTimeout` and fail-open on any error/timeout so it never blocks or wrongly guards.
     private func probeIsEmpty(_ probe: String) -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: ShellLaunch.userShell)
@@ -578,11 +583,16 @@ final class TabController: NSObject {
         process.currentDirectoryURL = focusedCWD ?? ShellLaunch.defaultCWD
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
+        let finished = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in finished.signal() }
         do {
             try process.run()
-            process.waitUntilExit()
         } catch {
             return false  // couldn't probe → don't block opening the float
+        }
+        if finished.wait(timeout: .now() + Self.probeTimeout) == .timedOut {
+            process.terminate()  // fail open rather than hang the toggle
+            return false
         }
         return process.terminationStatus == 0
     }
