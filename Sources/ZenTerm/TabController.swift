@@ -163,6 +163,10 @@ final class TabController: NSObject {
     /// "needs attention" (waiting) signal the `WindowController` latches onto the tab.
     var onBellRang: (() -> Void)?
 
+    /// Any of the tab's surfaces posted a desktop notification (OSC 777) — a richer,
+    /// message-bearing attention signal the `WindowController` latches with the message.
+    var onNotification: ((TerminalNotification) -> Void)?
+
     /// A startup command for the right drawer (the `⌘P` workspace preset sets `claude`).
     /// When set, opening the right drawer launches the program-then-shell recipe instead
     /// of a plain shell. Nil → plain shell.
@@ -195,6 +199,7 @@ final class TabController: NSObject {
         paneCanvas.onZoomExitRequested = { [weak self] in self?.toggleZoom() }
         paneCanvas.onZoomEnded = { [weak self] in self?.paneZoomEndedInternally() }
         paneCanvas.onBellRang = { [weak self] in self?.onBellRang?() }
+        paneCanvas.onNotification = { [weak self] n in self?.onNotification?(n) }
     }
 
     /// The pane canvas ended zoom on its own (the zoomed leaf's shell exited) — clear
@@ -989,6 +994,11 @@ extension TabController: TerminalSurfaceDelegate {
     /// `claude` in the right drawer) — relay it as the tab's waiting signal, same as a pane.
     func surfaceDidRingBell(_ s: TerminalSurface) {
         onBellRang?()
+    }
+    /// A drawer surface posted a desktop notification (the workspace `claude` drawer) — relay
+    /// it as the tab's attention signal, same as a pane.
+    func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
+        onNotification?(n)
     }
     /// A drawer's shell exited on its own (e.g. the user typed `exit`): close+clear
     /// that drawer entirely — rather than leaving a dead shell docked — so the next

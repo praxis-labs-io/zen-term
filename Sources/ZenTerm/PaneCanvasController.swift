@@ -59,6 +59,10 @@ final class PaneCanvasController: NSObject {
     /// "needs attention" (waiting) signal. `TabController` relays it up.
     var onBellRang: (() -> Void)?
 
+    /// Fired when any pane's surface posts a desktop notification (OSC 777) — a richer,
+    /// message-bearing "needs attention" signal (e.g. an agent asking permission).
+    var onNotification: ((TerminalNotification) -> Void)?
+
     /// Fired when a zoomed pane's corner unzoom button is clicked — the owning
     /// `TabController` exits zoom (keeping its `zoomedPanel` in sync).
     var onZoomExitRequested: (() -> Void)?
@@ -370,6 +374,9 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     }
     func surfaceDidRingBell(_ s: TerminalSurface) {
         onBellRang?()
+    }
+    func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
+        onNotification?(n)
     }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }

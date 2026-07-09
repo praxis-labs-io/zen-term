@@ -1,5 +1,6 @@
 import AppKit
 import TabKit
+import TerminalKit
 
 /// Owns one window and its independent set of tabs. Each tab is a
 /// `TabController` (wrapping Epic 1's pane tree + registry + focus). Only the active
@@ -11,11 +12,12 @@ final class WindowController: NSObject {
     private var tabs: TabList
     private var controllers: [TabID: TabController] = [:]
     private var titles: [TabID: String] = [:]
-    /// Tabs that rang the bell while in the background — their number shows rose ("waiting").
-    /// Latched on a bell from a non-active tab; cleared when the tab is shown. Each also owns a
-    /// persistent bell toast in `bellToasts`, dismissed together in `clearWaiting`.
+    /// Tabs wanting attention while in the background (a terminal bell or an OSC 777 agent
+    /// notification) — their number shows rose ("waiting"). Latched from a non-active tab;
+    /// cleared when the tab is shown. Each also owns a persistent toast in `waitingToasts`,
+    /// dismissed together in `clearWaiting`.
     private var waitingTabs: Set<TabID> = []
-    private var bellToasts: [TabID: ToastView] = [:]
+    private var waitingToasts: [TabID: ToastView] = [:]
     private var nextTabID = 1
 
     /// Opacity of the base-color tint laid over the behind-window blur. 1 = solid shell,
@@ -716,33 +718,43 @@ final class WindowController: NSObject {
         // A pane click while a close confirm is up moves the confirm's target — void it.
         c.onFocusChanged = { [weak self] in self?.cancelConfirm() }
         c.onBellRang = { [weak self] in self?.agentBellRang(id: id) }
+        c.onNotification = { [weak self] n in self?.agentNotified(id: id, notification: n) }
     }
 
     /// A background tab rang the terminal bell → flag it as wanting attention (its number
-    /// shows rose), unless it's the tab you're already looking at. On the transition (not
-    /// repeat bells) also raise a toast on the active tab that switches to that tab when
-    /// clicked. Selecting the tab clears both. We only know *which* tab rang, not what in it
-    /// (any program can emit a bell, and it's often gone before we could probe), so the copy
-    /// stays generic.
+    /// shows rose), unless it's the tab you're already looking at. Repeat bells are ignored.
+    /// We only know *which* tab rang, not what in it (any program can emit a bell, and it's
+    /// often gone before we could probe), so the copy stays generic.
     private func agentBellRang(id: TabID) {
         // The bell may arrive on SwiftTerm's read path; only touch the UI on main.
         DispatchQueue.main.async { [weak self] in
             guard let self, self.tabs.order.contains(id), id != self.tabs.activeID else { return }
             guard self.waitingTabs.insert(id).inserted else { return }  // ignore repeat bells
             self.renderTabBar()
-            self.showBellToast(for: id)
+            self.presentWaitingToast(for: id, message: "Rang the terminal bell")
         }
     }
 
-    /// Notify the active tab that a background tab rang the bell. The toast persists (no
-    /// auto-dismiss) and answers only through its buttons: "Switch" jumps to the tab,
-    /// "Dismiss" clears the notice. Visiting the tab any other way clears it too.
-    private func showBellToast(for id: TabID) {
-        guard let index = tabs.order.firstIndex(of: id) else { return }
+    /// A background tab posted an OSC 777 desktop notification (e.g. an agent asking for
+    /// permission or waiting for input) → flag it and show the notification's own message.
+    /// Unlike a bell, a repeat refreshes the toast in place, so "needs permission" updates to
+    /// "waiting for input" without stacking.
+    private func agentNotified(id: TabID, notification: TerminalNotification) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.tabs.order.contains(id), id != self.tabs.activeID else { return }
+            if self.waitingTabs.insert(id).inserted { self.renderTabBar() }
+            let message = notification.body.isEmpty ? notification.title : notification.body
+            self.presentWaitingToast(for: id, message: message)
+        }
+    }
+
+    /// Show (or replace) the persistent, non-modal attention toast for a background tab. The
+    /// title is the tab's name. It answers only through its buttons — "Switch" jumps to the
+    /// tab, "Dismiss" clears the notice — and visiting the tab any other way clears it too.
+    private func presentWaitingToast(for id: TabID, message: String) {
+        if let old = waitingToasts[id] { toasts.dismiss(old) }  // replace any prior toast for this tab
         let content = ToastContent(
-            variant: .info, title: "Background bell",
-            message: "Tab \(index + 1) (\(titles[id] ?? "shell")) rang the terminal bell.",
-            icon: "bell.fill")
+            variant: .info, title: titles[id] ?? "shell", message: message, icon: "bell.fill")
         let actions = [
             ToastAction(title: "Switch", kind: .destructive) { [weak self] in self?.select(id) },
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
@@ -751,14 +763,14 @@ final class WindowController: NSObject {
                 self.renderTabBar()  // "Dismiss" also drops the rose flag
             },
         ]
-        bellToasts[id] = toasts.showSticky(content, actions: actions)
+        waitingToasts[id] = toasts.showSticky(content, actions: actions)
     }
 
-    /// Clear a tab's waiting state: drop the rose flag and dismiss its bell toast. Called when
-    /// the tab is shown or closed. Re-render is left to the caller (all callers already do).
+    /// Clear a tab's waiting state: drop the rose flag and dismiss its toast. Called when the
+    /// tab is shown or closed. Re-render is left to the caller (all callers already do).
     private func clearWaiting(_ id: TabID) {
         waitingTabs.remove(id)
-        if let toast = bellToasts.removeValue(forKey: id) { toasts.dismiss(toast) }
+        if let toast = waitingToasts.removeValue(forKey: id) { toasts.dismiss(toast) }
     }
 
     private func renderTabBar() {
