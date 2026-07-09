@@ -136,6 +136,12 @@ final class TabController: NSObject {
     /// Whether the focused main-canvas pane has a running process.
     var focusedPaneIsBusy: Bool { paneCanvas.focusedPaneIsBusy }
 
+    /// Whether either drawer has a running process — closing the tab would stop it. (An idle
+    /// drawer isn't worth a confirm; only a busy one is.)
+    var hasBusyDrawer: Bool {
+        bottomDrawerSurface?.isBusy == true || rightDrawerSurface?.isBusy == true
+    }
+
     /// The tab's overlay open-state (drawers + lazygit), for the footer dock's active
     /// tints; fired via `onOverlayStateChanged` whenever one of them toggles.
     var overlayState: OverlayState {
@@ -370,9 +376,10 @@ final class TabController: NSObject {
             // prompt, so block it and say why instead.
             onRequestToast?(
                 ToastContent(
-                    symbol: "exclamationmark.triangle.fill",
-                    title: "Not a Git repository",
-                    message: "Open a repo or run `git init` here to use lazygit."))
+                    variant: .info,
+                    title: "Open Lazygit",
+                    message: "lazygit needs a Git repository. Run `git init` here, "
+                        + "or open a folder that has one."))
             return
         }
         exitZoomIfNeeded()  // zoom and the float are mutually exclusive
@@ -506,9 +513,10 @@ final class TabController: NSObject {
         if spec.requiresGitRepo, gitRepoRoot(for: focusedCWD) == nil {
             onRequestToast?(
                 ToastContent(
-                    symbol: "exclamationmark.triangle.fill",
-                    title: "Not a Git repository",
-                    message: "Open a repo or run `git init` here."))
+                    variant: .info,
+                    title: spec.title,
+                    message: "This needs a Git repository. Run `git init` here, "
+                        + "or open a folder that has one."))
             return
         }
         if let guardSpec = spec.emptyGuard, probeIsEmpty(guardSpec.probe) {

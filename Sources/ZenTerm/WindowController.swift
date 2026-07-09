@@ -450,12 +450,12 @@ final class WindowController: NSObject {
     /// `onCancel` runs after Cancel dismisses the toast — needed by callers (e.g. app
     /// quit) that must resolve a pending request of their own on the cancel path too.
     func presentConfirm(
-        icon: String, title: String, message: String, tint: NSColor,
+        variant: ToastVariant, title: String, message: String,
         confirmLabel: String, onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil
     ) {
         guard confirmToast == nil else { return }  // one confirm at a time
         confirmOnCancel = onCancel
-        let content = ToastContent(symbol: icon, title: title, message: message)
+        let content = ToastContent(variant: variant, title: title, message: message)
         let actions = [
             ToastAction(title: "Cancel", kind: .cancel) { [weak self] in self?.cancelConfirm() },
             ToastAction(title: confirmLabel, kind: .destructive) { [weak self] in
@@ -463,7 +463,7 @@ final class WindowController: NSObject {
                 onConfirm()
             },
         ]
-        let toast = toasts.confirm(content, tint: tint, actions: actions)
+        let toast = toasts.confirm(content, actions: actions)
         confirmToast = toast
         window.makeFirstResponder(toast)  // gate terminal typing; key equivs still fire
         renderDock()
@@ -599,31 +599,58 @@ final class WindowController: NSObject {
     func presentQuitConfirm(
         tabCount: Int, windowCount: Int, onQuit: @escaping () -> Void, onCancel: @escaping () -> Void
     ) {
-        let tabs = "\(tabCount) tab\(tabCount == 1 ? "" : "s")"
-        let message =
-            windowCount == 1
-            ? "\(tabs) will close."
-            : "\(tabs) in \(windowCount) windows will close."
+        let message: String
+        if windowCount > 1 {
+            message =
+                "Quitting will close \(tabCount) tabs in \(windowCount) windows "
+                + "and stop everything running in them."
+        } else if tabCount == 1 {
+            message = "Quitting will close your tab and stop everything running in it."
+        } else {
+            message = "Quitting will close all \(tabCount) tabs and stop everything running in them."
+        }
         presentConfirm(
-            icon: "power", title: "Quit ZenTerm?", message: message,
-            tint: ToastPresenter.warning, confirmLabel: "Quit", onConfirm: onQuit, onCancel: onCancel)
+            variant: .warning, title: "Quit ZenTerm", message: message,
+            confirmLabel: "Quit", onConfirm: onQuit, onCancel: onCancel)
     }
 
-    /// ⌘W: close immediately for an idle non-last pane; otherwise confirm first.
-    /// Confirm when the focused pane has running work, or it's the tab's last pane
-    /// (closing it destroys the tab). `exit`/middle-click stay out of scope.
+    /// ⌘W: close silently when there's nothing to lose; otherwise confirm first.
+    /// - A non-last pane confirms only if it's busy (mid-tab work).
+    /// - The last pane closes the tab: if it's the only tab (so ⌘W closes the window), it
+    ///   confirms only when a pane or drawer is busy; if other tabs remain, closing this tab
+    ///   is itself worth a confirm even when idle. `exit`/middle-click stay out of scope.
     private func requestClosePane() {
         guard let active = activeController else { return }
         let lastPane = active.isSinglePane
-        guard lastPane || active.focusedPaneIsBusy else {
-            _ = active.closeFocused()  // idle, panes remain → close now
+        let busy = active.focusedPaneIsBusy
+        let busyDrawer = active.hasBusyDrawer
+        let running = busy || busyDrawer
+
+        let needsConfirm: Bool
+        if lastPane {
+            let closesWindow = tabs.order.count == 1
+            needsConfirm = closesWindow ? running : true
+        } else {
+            needsConfirm = busy
+        }
+        guard needsConfirm else {
+            // Nothing to lose → close now, cascading to the tab when it was the last pane.
+            if active.closeFocused() == false { closeTab(tabs.activeID) }
             return
         }
-        let title = lastPane ? "Close tab?" : "Close pane?"
-        let message = lastPane ? "This closes the tab." : "A process is still running here."
+
+        // The action is always "Close Pane" — closing the tab is a side effect stated in the body.
+        let title = "Close Pane"
+        let message: String
+        if !lastPane {
+            message = "Closing this pane will stop the process running in it."
+        } else if running {
+            message = "Closing this pane will also close the tab and stop everything running in it."
+        } else {
+            message = "Closing this pane will also close the tab."
+        }
         presentConfirm(
-            icon: "xmark.circle.fill", title: title, message: message,
-            tint: ToastPresenter.warning, confirmLabel: "Close"
+            variant: .warning, title: title, message: message, confirmLabel: "Close"
         ) { [weak self] in
             guard let self, let active = self.activeController else { return }
             if active.closeFocused() == false { self.closeTab(self.tabs.activeID) }

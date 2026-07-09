@@ -15,7 +15,7 @@ final class ToolFloatCatalogTests: XCTestCase {
         XCTAssertEqual(f?.shortcut, "⌘⇧G")
         XCTAssertEqual(f?.widthFraction, 0.85)
         XCTAssertEqual(f?.heightFraction, 0.85)
-        XCTAssertTrue(f?.requiresGitRepo == true)
+        XCTAssertEqual(f?.requiresGitRepo, false)  // gh dash works outside a repo
         XCTAssertNil(f?.emptyGuard)  // a GitHub dashboard isn't diff-state-gated
     }
 
