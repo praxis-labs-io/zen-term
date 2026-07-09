@@ -514,7 +514,7 @@ final class TabController: NSObject {
     /// and give it the tab's unified focus. When the command exits, `surfaceDidExit`
     /// tears the float down.
     private func showToolFloat(_ spec: ToolFloat) {
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let shell = ShellLaunch.userShell
         let surface = TerminalSurfaceFactory.make()
         surface.delegate = self
         surface.start(
