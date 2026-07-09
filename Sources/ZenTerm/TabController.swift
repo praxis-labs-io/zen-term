@@ -14,6 +14,7 @@ struct OverlayState: Equatable {
     var isBottomOpen = false
     var isRightOpen = false
     var isLazygitOpen = false
+    var activeToolFloatID: String?
     var zoomed: ZoomedPanel?
 }
 
@@ -74,6 +75,12 @@ final class TabController: NSObject {
     private var lazygitLaunchAnchor: URL?
     var isLazygitOpen: Bool { lazygitOverlay != nil }
 
+    /// The single live ephemeral tool float (diffnav, …). Tool floats are modal and
+    /// mutually exclusive, so one slot suffices. Terminated on close (not persisted).
+    private var activeToolFloat: (spec: ToolFloat, surface: TerminalSurface, overlay: SurfaceFloatOverlay)?
+    var isToolFloatOpen: Bool { activeToolFloat != nil }
+    var activeToolFloatID: String? { activeToolFloat?.spec.id }
+
     /// Which panel currently holds the tab's single unified focus/halo.
     private enum PanelRef: Equatable {
         case pane, bottomDrawer, rightDrawer
@@ -128,7 +135,8 @@ final class TabController: NSObject {
     var overlayState: OverlayState {
         OverlayState(
             isBottomOpen: isBottomOpen, isRightOpen: isRightOpen,
-            isLazygitOpen: isLazygitOpen, zoomed: zoomedPanel.map(\.asZoomed))
+            isLazygitOpen: isLazygitOpen, activeToolFloatID: activeToolFloatID,
+            zoomed: zoomedPanel.map(\.asZoomed))
     }
     var onOverlayStateChanged: (() -> Void)?
 
@@ -217,6 +225,7 @@ final class TabController: NSObject {
     /// drawer wrongly drops focus onto the central pane.
     func restoreKeyFocus() {
         if isLazygitOpen { lazygitSurface?.focus(); return }
+        if let active = activeToolFloat { active.surface.focus(); return }
         restoreUnifiedFocus()
     }
 
@@ -233,6 +242,9 @@ final class TabController: NSObject {
         // `discardLazygitSurface` clears the ref before terminate, so a synchronous exit
         // re-entry can't re-warm a fresh surface that this teardown would then orphan.
         discardLazygitSurface()
+        activeToolFloat?.overlay.removeFromSuperview()
+        activeToolFloat?.surface.terminate()
+        activeToolFloat = nil
     }
 
     /// Copy from whichever panel holds unified focus: the pane canvas's own copy
@@ -241,7 +253,11 @@ final class TabController: NSObject {
     @objc func copyFromSurface(_ sender: Any?) {
         // While the modal float is open, copy targets it, not the panel underneath.
         // The surface persists while hidden, so gate on visibility (`isLazygitOpen`).
-        guard let surface = (isLazygitOpen ? lazygitSurface : nil) ?? focusedDrawerSurface else {
+        guard
+            let surface = (isLazygitOpen ? lazygitSurface : nil)
+                ?? (isToolFloatOpen ? activeToolFloat?.surface : nil)
+                ?? focusedDrawerSurface
+        else {
             paneCanvas.copyFromSurface(sender)
             return
         }
@@ -255,7 +271,11 @@ final class TabController: NSObject {
     @objc func pasteToSurface(_ sender: Any?) {
         // While the modal float is open, paste targets it, not the panel underneath.
         // The surface persists while hidden, so gate on visibility (`isLazygitOpen`).
-        guard let surface = (isLazygitOpen ? lazygitSurface : nil) ?? focusedDrawerSurface else {
+        guard
+            let surface = (isLazygitOpen ? lazygitSurface : nil)
+                ?? (isToolFloatOpen ? activeToolFloat?.surface : nil)
+                ?? focusedDrawerSurface
+        else {
             paneCanvas.pasteToSurface(sender)
             return
         }
@@ -464,6 +484,89 @@ final class TabController: NSObject {
         case .bottomDrawer: focusDrawer(.bottom)
         case .rightDrawer: focusDrawer(.right)
         }
+    }
+
+    // MARK: tool floats (ephemeral command floats — diffnav, …)
+
+    /// Toggle a tool float: same id open → close; otherwise run the guards and open a
+    /// fresh surface. Mirrors `toggleLazygit`'s plumbing but spawns fresh each time.
+    func toggleToolFloat(_ spec: ToolFloat) {
+        if activeToolFloat?.spec.id == spec.id { closeToolFloat(); return }
+        if activeToolFloat != nil { closeToolFloat() }  // switch floats
+        if spec.requiresGitRepo, gitRepoRoot(for: focusedCWD) == nil {
+            onRequestToast?(
+                ToastContent(
+                    symbol: "exclamationmark.triangle.fill",
+                    title: "Not a Git repository",
+                    message: "Open a repo or run `git init` here."))
+            return
+        }
+        if let guardSpec = spec.emptyGuard, probeIsEmpty(guardSpec.probe) {
+            onRequestToast?(guardSpec.toast)
+            return
+        }
+        exitZoomIfNeeded()  // zoom and the float are mutually exclusive
+        showToolFloat(spec)
+    }
+
+    /// Spawn `spec.command` in a fresh login+interactive shell at the focused cwd (so
+    /// the user's git pager / PATH match a pane), present it in a `SurfaceFloatOverlay`,
+    /// and give it the tab's unified focus. When the command exits, `surfaceDidExit`
+    /// tears the float down.
+    private func showToolFloat(_ spec: ToolFloat) {
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let surface = TerminalSurfaceFactory.make()
+        surface.delegate = self
+        surface.start(
+            TerminalSurfaceConfig(
+                command: shell, args: ["-l", "-i", "-c", spec.command],
+                workingDirectory: focusedCWD, theme: Theme.rosePineMoon))
+        let overlay = SurfaceFloatOverlay(
+            content: surface.view,
+            background: Theme.rosePineMoon.background.nsColor,
+            widthFraction: spec.widthFraction,
+            heightFraction: spec.heightFraction,
+            contentInset: 10,
+            cornerRadius: 14,
+            onDismiss: { [weak self] in self?.closeToolFloat() })
+        presentTileOverlay(overlay)
+        activeToolFloat = (spec, surface, overlay)
+        paneCanvas.setPanesFocused(false)
+        bottomDrawerPanel?.isFocused = false
+        rightDrawerPanel?.isFocused = false
+        surface.focus()
+        overlay.animateIn()
+        onOverlayStateChanged?()
+    }
+
+    /// Close the float and TERMINATE its surface (ephemeral — no persistence). Clears
+    /// the slot before terminate so a synchronous `surfaceDidExit` re-entry no-ops.
+    func closeToolFloat() {
+        guard let active = activeToolFloat else { return }
+        activeToolFloat = nil
+        let overlay = active.overlay
+        overlay.animateOut { overlay.removeFromSuperview() }
+        active.surface.terminate()
+        restoreUnifiedFocus()
+        onOverlayStateChanged?()
+    }
+
+    /// Run `probe` as a plain (non-login) shell at the focused cwd; exit 0 ⇒ nothing to
+    /// show. Used by a float's `emptyGuard` to toast instead of opening an empty float.
+    private func probeIsEmpty(_ probe: String) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: ShellLaunch.userShell)
+        process.arguments = ["-c", probe]
+        process.currentDirectoryURL = focusedCWD ?? ShellLaunch.defaultCWD
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return false  // couldn't probe → don't block opening the float
+        }
+        return process.terminationStatus == 0
     }
 
     // MARK: tiling
@@ -847,6 +950,15 @@ extension TabController: TerminalSurfaceDelegate {
     /// toggle lazily spawns a fresh one. Panes have their own exit handling in
     /// `PaneCanvasController`; this only reacts to the two drawer surfaces.
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
+        if let active = activeToolFloat, s === active.surface {
+            // The tool ran to completion / quit (`q` in diffnav) → close the float.
+            activeToolFloat = nil
+            active.overlay.animateOut { active.overlay.removeFromSuperview() }
+            active.surface.terminate()
+            restoreUnifiedFocus()
+            onOverlayStateChanged?()
+            return
+        }
         if s === lazygitSurface {
             // lazygit quit (`q`): the process is gone. Animate the card out (matching a
             // ⌘G hide) and drop the surface.
