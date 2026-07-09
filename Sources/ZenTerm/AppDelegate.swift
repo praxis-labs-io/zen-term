@@ -7,6 +7,9 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windows: [WindowController] = []
     private let keys = KeyInterceptor()
+    /// True between a ⌘Q that raised the quit confirm and its reply, so a second ⌘Q can't
+    /// stack a second quit dialog — while a non-quit (close-pane) confirm never blocks ⌘Q.
+    private var quitConfirmPending = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenu.install(copyPaste: nil)  // Copy/Paste route via the responder chain
@@ -21,9 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// window's controller.
     private func route(_ chord: KeyInterceptor.ReservedChord) {
         if case .newWindow = chord {
-            // ⌘N is intercepted here before `handle(_:)`, so a palette's modal gate
-            // doesn't cover it — swallow it explicitly while either palette is open.
-            if keyController()?.isModalPaletteOpen == true { return }
+            // ⌘N is intercepted here before `handle(_:)`, so a palette's / confirm's modal
+            // gate doesn't cover it — swallow it explicitly while either is open.
+            if let key = keyController(), key.isModalPaletteOpen || key.isConfirmOpen { return }
             newWindow(initialCWD: keyController()?.focusedCWD, centered: false)
             return
         }
@@ -53,12 +56,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Copy/Paste forwarders reached via the responder chain (menu items have a nil
     /// target) — always act on the key window's active tab, never a stale window.
     @objc func copyFromSurface(_ sender: Any?) {
+        if isConfirmModal { return }  // confirm has no text field
         if isPaletteModal {
             NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.copy(_:)), with: sender); return
         }
         keyController()?.copyFromSurface(sender)
     }
     @objc func pasteToSurface(_ sender: Any?) {
+        if isConfirmModal { return }  // confirm has no text field
         if isPaletteModal {
             NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.paste(_:)), with: sender); return
         }
@@ -69,5 +74,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// terminal hidden behind it (else ⌘V would inject the clipboard into that shell).
     private var isPaletteModal: Bool { keyController()?.isModalPaletteOpen == true }
 
+    /// While a confirm toast is up it's fully modal — ⌘N and Copy/Paste are swallowed
+    /// (it has no text field to act on), mirroring `isPaletteModal`.
+    private var isConfirmModal: Bool { keyController()?.isConfirmOpen == true }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    /// ⌘Q always confirms: tally tabs across every window and gate on the key window's
+    /// confirm toast. `.terminateLater` requires exactly one matching
+    /// `reply(toApplicationShouldTerminate:)` — Quit replies `true`, Cancel replies
+    /// `false` (via `presentQuitConfirm`'s `onCancel`), so the pending request never leaks.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let key = keyController() else { return .terminateNow }
+        if quitConfirmPending { return .terminateCancel }  // a quit dialog is already up
+        quitConfirmPending = true
+        let tabCount = windows.reduce(0) { $0 + $1.tabCount }
+        key.presentQuitConfirm(
+            tabCount: tabCount, windowCount: windows.count,
+            onQuit: { [weak self] in
+                self?.quitConfirmPending = false
+                NSApp.reply(toApplicationShouldTerminate: true)
+            },
+            onCancel: { [weak self] in
+                self?.quitConfirmPending = false
+                NSApp.reply(toApplicationShouldTerminate: false)
+            })
+        return .terminateLater
+    }
 }

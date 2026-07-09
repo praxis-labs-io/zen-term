@@ -85,6 +85,10 @@ public protocol TerminalSurface: AnyObject {
     /// label tabs and inherit cwd without depending on shell-emitted OSC sequences.
     var currentDirectory: URL? { get }
 
+    /// Whether the surface's shell has a running foreground command or a
+    /// backgrounded job. Lets the chrome warn before closing live work.
+    var isBusy: Bool { get }
+
     func start(_ config: TerminalSurfaceConfig)
     func focus()
     func terminate()
@@ -97,4 +101,7 @@ public protocol TerminalSurface: AnyObject {
 public extension TerminalSurface {
     /// Backends that can't resolve a cwd get nil for free.
     var currentDirectory: URL? { nil }
+
+    /// Backends that can't inspect the child process report "not busy".
+    var isBusy: Bool { false }
 }

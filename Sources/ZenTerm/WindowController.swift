@@ -41,6 +41,12 @@ final class WindowController: NSObject {
     /// chords (⌘N) and Copy/Paste routing respect the modal too, not just `handle(_:)`.
     var isModalPaletteOpen: Bool { isRepoPickerOpen || isCommandPaletteOpen }
 
+    /// A blocking close confirm (⌘W on a busy or last pane), when up. Window-level like
+    /// the palettes: modal over the active tab until answered.
+    private var confirmToast: ToastView?
+    private var confirmOnCancel: (() -> Void)?
+    var isConfirmOpen: Bool { confirmToast != nil }
+
     /// Re-derives tab titles from each tab's live cwd. Shells report cwd changes
     /// without OSC 7, so there's no push event on `cd` — a light poll keeps titles
     /// current; it only re-renders when a title actually changed.
@@ -277,7 +283,10 @@ final class WindowController: NSObject {
 
     // MARK: tab ops
 
-    private func newTab() { addTab(cwd: activeController?.focusedCWD, pinnedTitle: nil) }
+    private func newTab() {
+        cancelConfirm()  // the tab-bar "+" is reachable by mouse while a confirm is up
+        addTab(cwd: activeController?.focusedCWD, pinnedTitle: nil)
+    }
 
     /// Append a new tab with an explicit cwd and optional pinned title (the `⌘⇧P` repo
     /// picker passes the repo dir + its basename; plain `⌘t` passes the inherited cwd
@@ -319,6 +328,7 @@ final class WindowController: NSObject {
     private func select(_ id: TabID, slideFrom: SlideEdge? = nil) {
         dismissOpenPalettes()  // a tab-bar click must not orphan a modal palette
         guard tabs.order.contains(id), id != tabs.activeID else { return }
+        cancelConfirm()  // switching tabs voids a pending close confirm (its target moved)
         let oldIndex = tabs.order.firstIndex(of: tabs.activeID) ?? 0
         tabs.select(id)
         let newIndex = tabs.order.firstIndex(of: id) ?? 0
@@ -340,6 +350,7 @@ final class WindowController: NSObject {
     /// closing the window when it was the last tab.
     private func closeTab(_ id: TabID) {
         dismissOpenPalettes()  // the "×" button is reachable while a palette is up
+        cancelConfirm()  // a middle-click close voids a pending confirm on another tab
         let survived = tabs.close(id)
         let controller = controllers[id]
         if mountedCanvas === controller?.view {
@@ -434,6 +445,55 @@ final class WindowController: NSObject {
         if isCommandPaletteOpen { closeCommandPalette() }
     }
 
+    /// Present a blocking confirm: focus leaves the terminal (typing is gated) and
+    /// the modal chord-gate swallows other chords until Cancel / confirm answers.
+    /// `onCancel` runs after Cancel dismisses the toast — needed by callers (e.g. app
+    /// quit) that must resolve a pending request of their own on the cancel path too.
+    func presentConfirm(
+        variant: ToastVariant, title: String, message: String,
+        confirmLabel: String, onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil
+    ) {
+        cancelConfirm()  // supersede any confirm already up (e.g. ⌘Q over a ⌘W confirm)
+        dismissOpenPalettes()  // never stack over an open palette
+        confirmOnCancel = onCancel
+        let content = ToastContent(variant: variant, title: title, message: message)
+        let actions = [
+            ToastAction(title: "Cancel", kind: .cancel) { [weak self] in self?.cancelConfirm() },
+            ToastAction(title: confirmLabel, kind: .destructive) { [weak self] in
+                // The button stays key-live during its spring-out; ignore a repeat/held Return.
+                guard self?.confirmToast != nil else { return }
+                self?.tearDownConfirm()  // resolves via onConfirm, not onCancel
+                onConfirm()
+            },
+        ]
+        let toast = toasts.confirm(content, actions: actions)
+        confirmToast = toast
+        window.makeFirstResponder(toast)  // gate terminal typing; key equivs still fire
+        renderDock()
+    }
+
+    /// Void a pending confirm as if Cancel was pressed — the Cancel button, and any
+    /// context change that moves the confirm's target (a tab switch/close/new, or a
+    /// pane-focus change), route here. Runs the caller's `onCancel` so an owner (e.g.
+    /// app quit) can resolve its own pending state. No-op when no confirm is open.
+    private func cancelConfirm() {
+        guard confirmToast != nil else { return }
+        let onCancel = confirmOnCancel
+        tearDownConfirm()
+        onCancel?()
+    }
+
+    /// Remove the confirm toast and hand focus back to the pane, WITHOUT running
+    /// `onCancel` — the confirm (destructive) path resolves through `onConfirm` instead.
+    private func tearDownConfirm() {
+        guard let toast = confirmToast else { return }
+        confirmToast = nil
+        confirmOnCancel = nil
+        toasts.dismiss(toast)
+        activeController?.restoreKeyFocus()  // hand focus back to the pane
+        renderDock()
+    }
+
     /// Open a picked directory as a shell session: a new tab (Enter) or by replacing
     /// the current tab (Shift+Enter). Either way the tab name is pinned to the dir
     /// basename so it survives the focused pane's cwd changes.
@@ -454,44 +514,73 @@ final class WindowController: NSObject {
     func handle(_ chord: KeyInterceptor.ReservedChord) {
         guard !tabs.order.isEmpty else { return }  // window tearing down after last tab closed
         let active = activeController
-        // The repo picker is modal over the window: while it's open only ⌘⇧P (close it)
-        // acts; every other chord is swallowed. Its arrow/Enter/Esc keys aren't chords —
-        // they go to the search field's field editor, never here.
+        // The close confirm is modal over the window: while it's up every chord is
+        // swallowed. Its Return/Esc/button answers go through the toast's own key
+        // equivalents, never here.
+        if isConfirmOpen { return }
+        // The repo picker is modal over the window: ⌘⇧P closes it, another surface's toggle
+        // (command palette, lazygit, a tool float) closes it and opens that instead — a live
+        // switch between all the modal cards; every other chord is swallowed. Its arrow/Enter/
+        // Esc keys aren't chords — they go to the search field's field editor, never here.
         if isRepoPickerOpen {
-            if case .toggleRepoPicker = chord { toggleRepoPicker() }
-            return
+            switch chord {
+            case .toggleRepoPicker:
+                closeRepoPicker()
+                return
+            case .toggleCommandPalette, .toggleLazygit, .toggleToolFloat:
+                closeRepoPicker()  // close the picker, then open the requested surface below
+            default:
+                return
+            }
         }
-        // The command palette is modal the same way: while it's open only ⌘P (close it)
-        // acts; every other chord is swallowed. Running a command closes the palette first,
-        // so the dispatched chord arrives here with the gate already clear.
+        // The command palette is modal the same way: ⌘P closes it, another surface's toggle
+        // switches to it; every other chord is swallowed.
         if isCommandPaletteOpen {
-            if case .toggleCommandPalette = chord { toggleCommandPalette() }
-            return
+            switch chord {
+            case .toggleCommandPalette:
+                closeCommandPalette()
+                return
+            case .toggleRepoPicker, .toggleLazygit, .toggleToolFloat:
+                closeCommandPalette()  // close the palette, then open the requested surface below
+            default:
+                return
+            }
         }
-        // The lazygit float is modal over its tab: while it's open, every tab-internal
-        // chord (split/nav/drawers/zoom) is swallowed. ⌘G and ⌘W both hide it; the other
-        // cross-tab/window chords — switch tab, new tab, new window — still act. The
-        // palettes aren't in the allow-list, so neither can open over the float.
+        // The lazygit float is modal over its tab. ⌘G closes it; another surface's toggle
+        // (a tool float, either palette) closes it and opens that instead — a live switch.
+        // ⌘W is guarded with a brief note (it never reaches the pane behind the float);
+        // split/nav/drawer/zoom are swallowed; cross-tab/window chords still act.
         if active?.isLazygitOpen == true {
             switch chord {
             case .closePane:
-                active?.toggleLazygit()  // ⌘W hides the float (doesn't close the pane/tab)
+                toasts.show(
+                    ToastContent(
+                        variant: .info, title: "Close Pane",
+                        message: "Close lazygit first to close a pane."))
                 return
+            case .toggleToolFloat, .toggleCommandPalette, .toggleRepoPicker:
+                active?.toggleLazygit()  // close lazygit, then fall through to open the other
             case .toggleLazygit, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
             default:
                 return
             }
         }
-        // Tool floats (diffnav, …) are modal over the tab, like lazygit. ⌘W and the
-        // float's own toggle close it; cross-tab/window chords still act. The lazygit
-        // gate above doesn't allow .toggleToolFloat and this doesn't allow
-        // .toggleLazygit, so the two float families are mutually exclusive.
+        // Tool floats are modal like lazygit: their own toggle closes them, another surface's
+        // toggle switches to it, ⌘W is guarded, cross-tab/window chords still act.
         if active?.isToolFloatOpen == true {
             switch chord {
             case .closePane:
-                active?.closeToolFloat()  // ⌘W closes the float (doesn't close the pane/tab)
+                let name =
+                    active?.activeToolFloatID.flatMap(ToolFloatCatalog.byID)
+                    .map { $0.title.replacingOccurrences(of: "Open ", with: "") } ?? "the tool"
+                toasts.show(
+                    ToastContent(
+                        variant: .info, title: "Close Pane",
+                        message: "Close \(name) first to close a pane."))
                 return
+            case .toggleLazygit, .toggleCommandPalette, .toggleRepoPicker:
+                active?.closeToolFloat()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
             default:
@@ -515,9 +604,7 @@ final class WindowController: NSObject {
             if idx >= 0 && idx < tabs.order.count { select(tabs.order[idx]) }
         case .prevTab: cycleTab(-1)
         case .nextTab: cycleTab(1)
-        case .closePane:
-            // pane → tab → window cascade
-            if active?.closeFocused() == false { closeTab(tabs.activeID) }
+        case .closePane: requestClosePane()
         case .newWindow:
             break  // handled by AppDelegate (window manager); no-op here
         case .toggleBottomDrawer: active?.toggleBottomDrawer()
@@ -528,6 +615,73 @@ final class WindowController: NSObject {
             if let spec = ToolFloatCatalog.byID(id) { active?.toggleToolFloat(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
+        }
+    }
+
+    /// Number of open tabs in this window (for the quit tally).
+    var tabCount: Int { tabs.order.count }
+
+    /// Present the app-quit confirm on this (key) window. `onQuit` resolves the pending
+    /// `.terminateLater` reply with `true`; Cancel resolves it with `false` via the
+    /// `onCancel` hook on `presentConfirm` so the app never leaks a pending request.
+    func presentQuitConfirm(
+        tabCount: Int, windowCount: Int, onQuit: @escaping () -> Void, onCancel: @escaping () -> Void
+    ) {
+        let message: String
+        if windowCount > 1 {
+            message =
+                "Quitting will close \(tabCount) tabs in \(windowCount) windows "
+                + "and stop everything running in them."
+        } else if tabCount == 1 {
+            message = "Quitting will close your tab and stop everything running in it."
+        } else {
+            message = "Quitting will close all \(tabCount) tabs and stop everything running in them."
+        }
+        presentConfirm(
+            variant: .warning, title: "Quit ZenTerm", message: message,
+            confirmLabel: "Quit", onConfirm: onQuit, onCancel: onCancel)
+    }
+
+    /// ⌘W: close silently when there's nothing to lose; otherwise confirm first.
+    /// - A non-last pane confirms only if it's busy (mid-tab work).
+    /// - The last pane closes the tab: if it's the only tab (so ⌘W closes the window), it
+    ///   confirms only when a pane or drawer is busy; if other tabs remain, closing this tab
+    ///   is itself worth a confirm even when idle. `exit`/middle-click stay out of scope.
+    private func requestClosePane() {
+        guard let active = activeController else { return }
+        let lastPane = active.isSinglePane
+        let busy = active.focusedPaneIsBusy
+
+        // Only the last-pane path consults drawers, so probe them lazily (2 syscalls).
+        let running = lastPane ? (busy || active.hasBusyDrawer) : busy
+        let needsConfirm: Bool
+        if lastPane {
+            let closesWindow = tabs.order.count == 1
+            needsConfirm = closesWindow ? running : true
+        } else {
+            needsConfirm = busy
+        }
+        guard needsConfirm else {
+            // Nothing to lose → close now, cascading to the tab when it was the last pane.
+            if active.closeFocused() == false { closeTab(tabs.activeID) }
+            return
+        }
+
+        // The action is always "Close Pane" — closing the tab is a side effect stated in the body.
+        let title = "Close Pane"
+        let message: String
+        if !lastPane {
+            message = "Closing this pane will stop the process running in it."
+        } else if running {
+            message = "Closing this pane will also close the tab and stop everything running in it."
+        } else {
+            message = "Closing this pane will also close the tab."
+        }
+        presentConfirm(
+            variant: .warning, title: title, message: message, confirmLabel: "Close"
+        ) { [weak self] in
+            guard let self, let active = self.activeController else { return }
+            if active.closeFocused() == false { self.closeTab(self.tabs.activeID) }
         }
     }
 
@@ -552,6 +706,8 @@ final class WindowController: NSObject {
         // so its tints track that tab.
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
         c.onRequestToast = { [weak self] content in self?.toasts.show(content) }
+        // A pane click while a close confirm is up moves the confirm's target — void it.
+        c.onFocusChanged = { [weak self] in self?.cancelConfirm() }
     }
 
     private func renderTabBar() {
@@ -584,6 +740,9 @@ final class WindowController: NSObject {
     private func tearDown() {
         guard !didTearDown else { return }
         didTearDown = true
+        // Closing the window with a confirm still up must resolve its owner's pending state —
+        // e.g. a quit confirm's `.terminateLater` reply — or the app hangs mid-quit.
+        cancelConfirm()
         titlePoll?.invalidate()
         titlePoll = nil
         for c in controllers.values { c.shutdown() }

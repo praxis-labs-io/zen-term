@@ -4,9 +4,6 @@ import AppKit
 /// auto-dismisses after a delay (or on click), and springs out. Window-level and content-
 /// agnostic, so anything that needs to surface a brief notice can reuse it.
 final class ToastPresenter {
-    /// Rosé Pine Moon gold — the default icon tint for an advisory/warning toast.
-    static let warning = NSColor(srgbRed: 0xf6 / 255, green: 0xc1 / 255, blue: 0x77 / 255, alpha: 1)
-
     private let stack = NSStackView()
     private let dismissAfter: TimeInterval
 
@@ -23,15 +20,15 @@ final class ToastPresenter {
         ])
     }
 
-    /// Show a toast; `tint` colors the icon. Mutates the view hierarchy, so it hops to the
-    /// main thread when a caller surfaces a notice from a background queue.
-    func show(_ content: ToastContent, tint: NSColor = ToastPresenter.warning) {
+    /// Show a passive toast (the variant colors the icon/badge). Mutates the view hierarchy,
+    /// so it hops to the main thread when a caller surfaces a notice from a background queue.
+    func show(_ content: ToastContent) {
         guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in self?.show(content, tint: tint) }
+            DispatchQueue.main.async { [weak self] in self?.show(content) }
             return
         }
-        let toast = ToastView(content: content, tint: tint)
-        toast.onClick = { [weak self, weak toast] in
+        let toast = ToastView(content: content)
+        toast.onClose = { [weak self, weak toast] in
             guard let toast else { return }
             self?.dismiss(toast)
         }
@@ -43,7 +40,18 @@ final class ToastPresenter {
         }
     }
 
-    private func dismiss(_ toast: ToastView) {
+    /// Present a sticky, actionable confirm toast (no auto-dismiss). Returns the view so the
+    /// caller can gate focus, wire its "×" to cancel, and dismiss it on answer.
+    @discardableResult
+    func confirm(_ content: ToastContent, actions: [ToastAction]) -> ToastView {
+        let toast = ToastView(content: content, actions: actions)
+        stack.addArrangedSubview(toast)
+        toast.animateIn()
+        return toast
+    }
+
+    /// Dismiss a toast now (spring out + remove). Idempotent.
+    func dismiss(_ toast: ToastView) {
         // `animateOut` is idempotent, so a click + the auto-dismiss timer can't double-remove.
         toast.animateOut { [weak self, weak toast] in
             guard let self, let toast else { return }

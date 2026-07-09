@@ -35,7 +35,7 @@ enum ToolFloatCatalog {
             command: "gd",  // `gh dash` — the GitHub PRs/issues TUI (resolved via the login shell)
             widthFraction: 0.85,
             heightFraction: 0.85,
-            requiresGitRepo: true,
+            requiresGitRepo: false,  // gh dash spans all of GitHub — works outside a repo
             emptyGuard: nil)  // a GitHub dashboard isn't diff-state-gated
     ]
 

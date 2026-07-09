@@ -130,6 +130,18 @@ final class TabController: NSObject {
     var title: String { pinnedTitle ?? paneCanvas.title }
     var focusedCWD: URL? { paneCanvas.focusedCWD }
 
+    /// True when the tab has a single pane, so ⌘W on it would close the whole tab.
+    var isSinglePane: Bool { paneCanvas.paneCount == 1 }
+
+    /// Whether the focused main-canvas pane has a running process.
+    var focusedPaneIsBusy: Bool { paneCanvas.focusedPaneIsBusy }
+
+    /// Whether either drawer has a running process — closing the tab would stop it. (An idle
+    /// drawer isn't worth a confirm; only a busy one is.)
+    var hasBusyDrawer: Bool {
+        bottomDrawerSurface?.isBusy == true || rightDrawerSurface?.isBusy == true
+    }
+
     /// The tab's overlay open-state (drawers + lazygit), for the footer dock's active
     /// tints; fired via `onOverlayStateChanged` whenever one of them toggles.
     var overlayState: OverlayState {
@@ -142,6 +154,10 @@ final class TabController: NSObject {
 
     /// Request a transient top-right toast (e.g. `⌘G` blocked outside a git repo).
     var onRequestToast: ((ToastContent) -> Void)?
+
+    /// The tab's focused surface changed (a pane or drawer click, or spatial nav). Lets a
+    /// host void a pending close confirm whose target/modality just moved out from under it.
+    var onFocusChanged: (() -> Void)?
 
     /// A startup command for the right drawer (the `⌘P` workspace preset sets `claude`).
     /// When set, opening the right drawer launches the program-then-shell recipe instead
@@ -360,9 +376,10 @@ final class TabController: NSObject {
             // prompt, so block it and say why instead.
             onRequestToast?(
                 ToastContent(
-                    symbol: "exclamationmark.triangle.fill",
-                    title: "Not a Git repository",
-                    message: "Open a repo or run `git init` here to use lazygit."))
+                    variant: .info,
+                    title: "Open Lazygit",
+                    message: "lazygit needs a Git repository. Run `git init` here, "
+                        + "or open a folder that has one."))
             return
         }
         exitZoomIfNeeded()  // zoom and the float are mutually exclusive
@@ -496,9 +513,10 @@ final class TabController: NSObject {
         if spec.requiresGitRepo, gitRepoRoot(for: focusedCWD) == nil {
             onRequestToast?(
                 ToastContent(
-                    symbol: "exclamationmark.triangle.fill",
-                    title: "Not a Git repository",
-                    message: "Open a repo or run `git init` here."))
+                    variant: .info,
+                    title: spec.title,
+                    message: "This needs a Git repository. Run `git init` here, "
+                        + "or open a folder that has one."))
             return
         }
         if let guardSpec = spec.emptyGuard, probeIsEmpty(guardSpec.probe) {
@@ -614,6 +632,7 @@ final class TabController: NSObject {
         }
         paneCanvas.setPanesFocused(false)
         surface?.focus()
+        onFocusChanged?()  // a drawer click also steals focus from a confirm — void it
     }
 
     /// Restore focus after closing a focused drawer: to the other drawer if it's still
@@ -631,6 +650,7 @@ final class TabController: NSObject {
         paneCanvas.setPanesFocused(true)
         bottomDrawerPanel?.isFocused = false
         rightDrawerPanel?.isFocused = false
+        onFocusChanged?()
     }
 
     // MARK: zoom (⌘F)
