@@ -159,6 +159,10 @@ final class TabController: NSObject {
     /// host void a pending close confirm whose target/modality just moved out from under it.
     var onFocusChanged: (() -> Void)?
 
+    /// Any of the tab's surfaces (a pane or a drawer) rang the terminal bell — the
+    /// "needs attention" (waiting) signal the `WindowController` latches onto the tab.
+    var onBellRang: (() -> Void)?
+
     /// A startup command for the right drawer (the `⌘P` workspace preset sets `claude`).
     /// When set, opening the right drawer launches the program-then-shell recipe instead
     /// of a plain shell. Nil → plain shell.
@@ -190,6 +194,7 @@ final class TabController: NSObject {
         paneCanvas.onFocusChanged = { [weak self] in self?.paneGainedFocus() }
         paneCanvas.onZoomExitRequested = { [weak self] in self?.toggleZoom() }
         paneCanvas.onZoomEnded = { [weak self] in self?.paneZoomEndedInternally() }
+        paneCanvas.onBellRang = { [weak self] in self?.onBellRang?() }
     }
 
     /// The pane canvas ended zoom on its own (the zoomed leaf's shell exited) — clear
@@ -979,6 +984,11 @@ extension TabController: TerminalSurfaceDelegate {
     /// focus. The lazygit float is modal and already holds focus, so it's ignored.
     func surfaceWantsFocus(_ s: TerminalSurface) {
         if s === bottomDrawerSurface { focusDrawer(.bottom) } else if s === rightDrawerSurface { focusDrawer(.right) }
+    }
+    /// A drawer / lazygit / tool-float surface rang the bell (the workspace preset runs
+    /// `claude` in the right drawer) — relay it as the tab's waiting signal, same as a pane.
+    func surfaceDidRingBell(_ s: TerminalSurface) {
+        onBellRang?()
     }
     /// A drawer's shell exited on its own (e.g. the user typed `exit`): close+clear
     /// that drawer entirely — rather than leaving a dead shell docked — so the next

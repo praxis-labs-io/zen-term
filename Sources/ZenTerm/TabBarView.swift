@@ -1,11 +1,19 @@
 import AppKit
 import TabKit
 
+/// The agent activity a tab's number signals. `idle` is the default muted color;
+/// `waiting` (needs feedback/permission) is rose. `working` (iris) is reserved for a
+/// later step — v1 only ever produces `idle`/`waiting`.
+enum TabAgentState {
+    case idle, working, waiting
+}
+
 struct TabBarItem {
     let id: TabID
     let index: Int  // 1-based number shown before the title
     let title: String
     let isActive: Bool
+    let agentState: TabAgentState
 }
 
 /// The bottom-left numbered tab bar. Stateless beyond its last rendered snapshot;
@@ -21,6 +29,7 @@ final class TabBarView: NSView {
     static let height: CGFloat = 30
 
     fileprivate static let iris = NSColor(srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0, blue: 0xe7 / 255.0, alpha: 1)
+    fileprivate static let rose = NSColor(srgbRed: 0xea / 255.0, green: 0x9a / 255.0, blue: 0x97 / 255.0, alpha: 1)
     fileprivate static let activeInk = NSColor(white: 0.95, alpha: 1)
     fileprivate static let idleInk = NSColor(white: 0.92, alpha: 0.55)
     fileprivate static let numberInk = NSColor(white: 0.92, alpha: 0.35)
@@ -160,9 +169,15 @@ final class TabBarView: NSView {
     private static func tabLabel(_ item: TabBarItem) -> NSAttributedString {
         let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
         let ink = item.isActive ? activeInk : idleInk
+        let numberColor: NSColor
+        switch item.agentState {
+        case .idle: numberColor = numberInk
+        case .working: numberColor = iris
+        case .waiting: numberColor = rose
+        }
         let s = NSMutableAttributedString(
             string: "\(item.index) ",
-            attributes: [.font: font, .foregroundColor: numberInk])
+            attributes: [.font: font, .foregroundColor: numberColor])
         s.append(
             NSAttributedString(
                 string: item.title,

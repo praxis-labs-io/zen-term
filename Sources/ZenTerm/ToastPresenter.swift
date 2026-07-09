@@ -40,6 +40,19 @@ final class ToastPresenter {
         }
     }
 
+    /// A sticky, non-modal actionable toast: it persists (no auto-dismiss), answers only
+    /// through its buttons (the body isn't clickable), and — unlike `confirm` — neither gates
+    /// keyboard focus nor arms its buttons' Return / Esc key equivalents, so it never steals
+    /// input from the terminal. Returns the view so the caller can dismiss it when the notice
+    /// stops being relevant. Call on the main thread.
+    @discardableResult
+    func showSticky(_ content: ToastContent, actions: [ToastAction]) -> ToastView {
+        let toast = ToastView(content: content, actions: actions, keyEquivalents: false)
+        stack.addArrangedSubview(toast)
+        toast.animateIn()
+        return toast
+    }
+
     /// Present a sticky, actionable confirm toast (no auto-dismiss). Returns the view so the
     /// caller can gate focus, wire its "×" to cancel, and dismiss it on answer.
     @discardableResult

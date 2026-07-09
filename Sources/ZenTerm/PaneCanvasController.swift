@@ -55,6 +55,10 @@ final class PaneCanvasController: NSObject {
     /// routing) onto the pane canvas.
     var onFocusChanged: (() -> Void)?
 
+    /// Fired when any pane's surface rings the terminal bell — the tab-level
+    /// "needs attention" (waiting) signal. `TabController` relays it up.
+    var onBellRang: (() -> Void)?
+
     /// Fired when a zoomed pane's corner unzoom button is clicked — the owning
     /// `TabController` exits zoom (keeping its `zoomedPanel` in sync).
     var onZoomExitRequested: (() -> Void)?
@@ -363,6 +367,9 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     func surfaceWantsFocus(_ s: TerminalSurface) {
         guard let id = leafID(of: s) else { return }
         focus(id)
+    }
+    func surfaceDidRingBell(_ s: TerminalSurface) {
+        onBellRang?()
     }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }

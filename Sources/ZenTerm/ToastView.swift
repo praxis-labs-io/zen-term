@@ -36,7 +36,7 @@ final class ToastView: NSView {
         self.init(content: content, actions: [])
     }
 
-    init(content: ToastContent, actions: [ToastAction]) {
+    init(content: ToastContent, actions: [ToastAction], keyEquivalents: Bool = true) {
         self.hasActions = !actions.isEmpty
         super.init(frame: .zero)
         let accent = content.variant.accent
@@ -85,7 +85,7 @@ final class ToastView: NSView {
             // Small buttons hugging the leading edge (a trailing spacer absorbs the slack).
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            let row = NSStackView(views: actions.map { ToastButton($0) } + [spacer])
+            let row = NSStackView(views: actions.map { ToastButton($0, keyEquivalents: keyEquivalents) } + [spacer])
             row.orientation = .horizontal
             row.alignment = .centerY
             row.spacing = 6

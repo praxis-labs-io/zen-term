@@ -11,6 +11,11 @@ final class WindowController: NSObject {
     private var tabs: TabList
     private var controllers: [TabID: TabController] = [:]
     private var titles: [TabID: String] = [:]
+    /// Tabs that rang the bell while in the background — their number shows rose ("waiting").
+    /// Latched on a bell from a non-active tab; cleared when the tab is shown. Each also owns a
+    /// persistent bell toast in `bellToasts`, dismissed together in `clearWaiting`.
+    private var waitingTabs: Set<TabID> = []
+    private var bellToasts: [TabID: ToastView] = [:]
     private var nextTabID = 1
 
     /// Opacity of the base-color tint laid over the behind-window blur. 1 = solid shell,
@@ -328,6 +333,7 @@ final class WindowController: NSObject {
     private func select(_ id: TabID, slideFrom: SlideEdge? = nil) {
         dismissOpenPalettes()  // a tab-bar click must not orphan a modal palette
         guard tabs.order.contains(id), id != tabs.activeID else { return }
+        clearWaiting(id)  // seeing the tab clears its rose flag + dismisses its bell toast
         cancelConfirm()  // switching tabs voids a pending close confirm (its target moved)
         let oldIndex = tabs.order.firstIndex(of: tabs.activeID) ?? 0
         tabs.select(id)
@@ -360,6 +366,7 @@ final class WindowController: NSObject {
         controller?.shutdown()  // terminate the tab's shells — never leak them
         controllers[id] = nil
         titles[id] = nil
+        clearWaiting(id)
         if !survived { window.close(); return }  // last tab → close window → windowWillClose tears down
         mount(.instant)
         renderTabBar()
@@ -708,6 +715,50 @@ final class WindowController: NSObject {
         c.onRequestToast = { [weak self] content in self?.toasts.show(content) }
         // A pane click while a close confirm is up moves the confirm's target — void it.
         c.onFocusChanged = { [weak self] in self?.cancelConfirm() }
+        c.onBellRang = { [weak self] in self?.agentBellRang(id: id) }
+    }
+
+    /// A background tab rang the terminal bell → flag it as wanting attention (its number
+    /// shows rose), unless it's the tab you're already looking at. On the transition (not
+    /// repeat bells) also raise a toast on the active tab that switches to that tab when
+    /// clicked. Selecting the tab clears both. We only know *which* tab rang, not what in it
+    /// (any program can emit a bell, and it's often gone before we could probe), so the copy
+    /// stays generic.
+    private func agentBellRang(id: TabID) {
+        // The bell may arrive on SwiftTerm's read path; only touch the UI on main.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.tabs.order.contains(id), id != self.tabs.activeID else { return }
+            guard self.waitingTabs.insert(id).inserted else { return }  // ignore repeat bells
+            self.renderTabBar()
+            self.showBellToast(for: id)
+        }
+    }
+
+    /// Notify the active tab that a background tab rang the bell. The toast persists (no
+    /// auto-dismiss) and answers only through its buttons: "Switch" jumps to the tab,
+    /// "Dismiss" clears the notice. Visiting the tab any other way clears it too.
+    private func showBellToast(for id: TabID) {
+        guard let index = tabs.order.firstIndex(of: id) else { return }
+        let content = ToastContent(
+            variant: .info, title: "Background bell",
+            message: "Tab \(index + 1) (\(titles[id] ?? "shell")) rang the terminal bell.",
+            icon: "bell.fill")
+        let actions = [
+            ToastAction(title: "Switch", kind: .destructive) { [weak self] in self?.select(id) },
+            ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
+                guard let self else { return }
+                self.clearWaiting(id)
+                self.renderTabBar()  // "Dismiss" also drops the rose flag
+            },
+        ]
+        bellToasts[id] = toasts.showSticky(content, actions: actions)
+    }
+
+    /// Clear a tab's waiting state: drop the rose flag and dismiss its bell toast. Called when
+    /// the tab is shown or closed. Re-render is left to the caller (all callers already do).
+    private func clearWaiting(_ id: TabID) {
+        waitingTabs.remove(id)
+        if let toast = bellToasts.removeValue(forKey: id) { toasts.dismiss(toast) }
     }
 
     private func renderTabBar() {
@@ -715,7 +766,8 @@ final class WindowController: NSObject {
             TabBarItem(
                 id: id, index: i + 1,
                 title: titles[id] ?? "shell",
-                isActive: id == tabs.activeID)
+                isActive: id == tabs.activeID,
+                agentState: waitingTabs.contains(id) ? .waiting : .idle)
         }
         tabBar.render(items)
     }
