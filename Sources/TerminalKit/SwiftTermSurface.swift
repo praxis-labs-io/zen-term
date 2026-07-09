@@ -134,8 +134,13 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
         // desktop notifications (intercepted in `init`). `TERM` stays `xterm-256color`, so
         // terminfo-based rendering is unchanged; only the app-level identity advertises Ghostty.
         var overrides = config.environment
-        overrides["TERM_PROGRAM"] = "ghostty"
-        overrides["TERM_PROGRAM_VERSION"] = "1.0.0"
+        // Only when the caller hasn't set its own identity (an explicit override still wins).
+        // The version is a current Ghostty release — high enough to clear an agent's minimum-
+        // version gate for OSC 777, without implying capabilities the SwiftTerm backend lacks.
+        if overrides["TERM_PROGRAM"] == nil {
+            overrides["TERM_PROGRAM"] = "ghostty"
+            overrides["TERM_PROGRAM_VERSION"] = "1.1.3"
+        }
         let environment = EnvBuilder.merged(base: base, overrides: overrides)
         let isDefaultShell = config.command == nil
         let shell =

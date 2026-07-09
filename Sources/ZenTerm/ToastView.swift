@@ -26,6 +26,9 @@ final class ToastView: NSView {
     var onClose: (() -> Void)?
     private var isDismissing = false
     private let hasActions: Bool
+    /// Only a modal confirm (actionable AND arming Return/Esc) should take first responder;
+    /// a non-modal sticky toast must not, or it would steal input from the terminal.
+    private let gatesFocus: Bool
 
     /// Fixed card width — toasts read as a consistent column rather than sizing to their text.
     private static let width: CGFloat = 300
@@ -38,6 +41,7 @@ final class ToastView: NSView {
 
     init(content: ToastContent, actions: [ToastAction], keyEquivalents: Bool = true) {
         self.hasActions = !actions.isEmpty
+        self.gatesFocus = keyEquivalents && !actions.isEmpty
         super.init(frame: .zero)
         let accent = content.variant.accent
 
@@ -117,12 +121,19 @@ final class ToastView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// A confirm toast takes keyboard focus so terminal input is gated while it's up.
-    override var acceptsFirstResponder: Bool { hasActions }
+    /// A modal confirm takes keyboard focus so terminal input is gated while it's up; a
+    /// non-modal sticky toast never does (its buttons are click-only).
+    override var acceptsFirstResponder: Bool { gatesFocus }
 
     /// A body click dismisses a passive toast; a confirm ignores it (only "×"/buttons answer).
     override func mouseDown(with event: NSEvent) {
         if !hasActions { onClose?() }
+    }
+
+    /// A toast animating out ignores clicks, so a fast replace (a refreshed notification whose
+    /// old card is still fading) can't have the outgoing card's Dismiss fire against the new one.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        isDismissing ? nil : super.hitTest(point)
     }
 
     /// Spring the card in (fade + subtle scale about its center). Call after adding it.

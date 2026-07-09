@@ -159,12 +159,8 @@ final class TabController: NSObject {
     /// host void a pending close confirm whose target/modality just moved out from under it.
     var onFocusChanged: (() -> Void)?
 
-    /// Any of the tab's surfaces (a pane or a drawer) rang the terminal bell — the
-    /// "needs attention" (waiting) signal the `WindowController` latches onto the tab.
-    var onBellRang: (() -> Void)?
-
-    /// Any of the tab's surfaces posted a desktop notification (OSC 777) — a richer,
-    /// message-bearing attention signal the `WindowController` latches with the message.
+    /// Any of the tab's surfaces posted a desktop notification (OSC 777) — the
+    /// message-bearing "needs attention" signal the `WindowController` latches onto the tab.
     var onNotification: ((TerminalNotification) -> Void)?
 
     /// A startup command for the right drawer (the `⌘P` workspace preset sets `claude`).
@@ -198,7 +194,6 @@ final class TabController: NSObject {
         paneCanvas.onFocusChanged = { [weak self] in self?.paneGainedFocus() }
         paneCanvas.onZoomExitRequested = { [weak self] in self?.toggleZoom() }
         paneCanvas.onZoomEnded = { [weak self] in self?.paneZoomEndedInternally() }
-        paneCanvas.onBellRang = { [weak self] in self?.onBellRang?() }
         paneCanvas.onNotification = { [weak self] n in self?.onNotification?(n) }
     }
 
@@ -989,11 +984,6 @@ extension TabController: TerminalSurfaceDelegate {
     /// focus. The lazygit float is modal and already holds focus, so it's ignored.
     func surfaceWantsFocus(_ s: TerminalSurface) {
         if s === bottomDrawerSurface { focusDrawer(.bottom) } else if s === rightDrawerSurface { focusDrawer(.right) }
-    }
-    /// A drawer / lazygit / tool-float surface rang the bell (the workspace preset runs
-    /// `claude` in the right drawer) — relay it as the tab's waiting signal, same as a pane.
-    func surfaceDidRingBell(_ s: TerminalSurface) {
-        onBellRang?()
     }
     /// A drawer surface posted a desktop notification (the workspace `claude` drawer) — relay
     /// it as the tab's attention signal, same as a pane.

@@ -1,11 +1,10 @@
 import AppKit
 import TabKit
 
-/// The agent activity a tab's number signals. `idle` is the default muted color;
-/// `waiting` (needs feedback/permission) is rose. `working` (iris) is reserved for a
-/// later step — v1 only ever produces `idle`/`waiting`.
+/// The agent activity a tab's number signals: `idle` is the default muted color; `waiting`
+/// (an agent needs feedback/permission) is rose.
 enum TabAgentState {
-    case idle, working, waiting
+    case idle, waiting
 }
 
 struct TabBarItem {
@@ -172,7 +171,6 @@ final class TabBarView: NSView {
         let numberColor: NSColor
         switch item.agentState {
         case .idle: numberColor = numberInk
-        case .working: numberColor = iris
         case .waiting: numberColor = rose
         }
         let s = NSMutableAttributedString(

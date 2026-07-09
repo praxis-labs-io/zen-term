@@ -55,12 +55,9 @@ final class PaneCanvasController: NSObject {
     /// routing) onto the pane canvas.
     var onFocusChanged: (() -> Void)?
 
-    /// Fired when any pane's surface rings the terminal bell — the tab-level
-    /// "needs attention" (waiting) signal. `TabController` relays it up.
-    var onBellRang: (() -> Void)?
-
-    /// Fired when any pane's surface posts a desktop notification (OSC 777) — a richer,
-    /// message-bearing "needs attention" signal (e.g. an agent asking permission).
+    /// Fired when any pane's surface posts a desktop notification (OSC 777) — the tab-level,
+    /// message-bearing "needs attention" signal (e.g. an agent asking permission). `TabController`
+    /// relays it up.
     var onNotification: ((TerminalNotification) -> Void)?
 
     /// Fired when a zoomed pane's corner unzoom button is clicked — the owning
@@ -371,9 +368,6 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     func surfaceWantsFocus(_ s: TerminalSurface) {
         guard let id = leafID(of: s) else { return }
         focus(id)
-    }
-    func surfaceDidRingBell(_ s: TerminalSurface) {
-        onBellRang?()
     }
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
         onNotification?(n)

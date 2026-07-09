@@ -12,11 +12,10 @@ final class WindowController: NSObject {
     private var tabs: TabList
     private var controllers: [TabID: TabController] = [:]
     private var titles: [TabID: String] = [:]
-    /// Tabs wanting attention while in the background (a terminal bell or an OSC 777 agent
-    /// notification) — their number shows rose ("waiting"). Latched from a non-active tab;
-    /// cleared when the tab is shown. Each also owns a persistent toast in `waitingToasts`,
-    /// dismissed together in `clearWaiting`.
-    private var waitingTabs: Set<TabID> = []
+    /// Background tabs wanting attention (an OSC 777 agent notification) — each owns a
+    /// persistent toast keyed by tab. A tab's rose "waiting" number is derived from this being
+    /// present (`waitingToasts[id] != nil`); the toast is the single source of truth. Latched
+    /// from a non-active tab; cleared when the tab is shown or closed.
     private var waitingToasts: [TabID: ToastView] = [:]
     private var nextTabID = 1
 
@@ -370,6 +369,9 @@ final class WindowController: NSObject {
         titles[id] = nil
         clearWaiting(id)
         if !survived { window.close(); return }  // last tab → close window → windowWillClose tears down
+        // Closing the active tab promotes a neighbor to active; if it was flagged waiting, clear
+        // it now — a foreground tab is never "waiting" (and its toast's Switch would be a no-op).
+        clearWaiting(tabs.activeID)
         mount(.instant)
         renderTabBar()
     }
@@ -717,34 +719,21 @@ final class WindowController: NSObject {
         c.onRequestToast = { [weak self] content in self?.toasts.show(content) }
         // A pane click while a close confirm is up moves the confirm's target — void it.
         c.onFocusChanged = { [weak self] in self?.cancelConfirm() }
-        c.onBellRang = { [weak self] in self?.agentBellRang(id: id) }
         c.onNotification = { [weak self] n in self?.agentNotified(id: id, notification: n) }
     }
 
-    /// A background tab rang the terminal bell → flag it as wanting attention (its number
-    /// shows rose), unless it's the tab you're already looking at. Repeat bells are ignored.
-    /// We only know *which* tab rang, not what in it (any program can emit a bell, and it's
-    /// often gone before we could probe), so the copy stays generic.
-    private func agentBellRang(id: TabID) {
-        // The bell may arrive on SwiftTerm's read path; only touch the UI on main.
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.tabs.order.contains(id), id != self.tabs.activeID else { return }
-            guard self.waitingTabs.insert(id).inserted else { return }  // ignore repeat bells
-            self.renderTabBar()
-            self.presentWaitingToast(for: id, message: "Rang the terminal bell")
-        }
-    }
-
     /// A background tab posted an OSC 777 desktop notification (e.g. an agent asking for
-    /// permission or waiting for input) → flag it and show the notification's own message.
-    /// Unlike a bell, a repeat refreshes the toast in place, so "needs permission" updates to
-    /// "waiting for input" without stacking.
+    /// permission or waiting for input) → flag its number rose and show the notification's own
+    /// message, unless it's the tab you're already looking at. A repeat refreshes the toast in
+    /// place, so "needs permission" updates to "waiting for input" without stacking.
     private func agentNotified(id: TabID, notification: TerminalNotification) {
+        // The notification arrives on SwiftTerm's read path; only touch the UI on main.
         DispatchQueue.main.async { [weak self] in
             guard let self, self.tabs.order.contains(id), id != self.tabs.activeID else { return }
-            if self.waitingTabs.insert(id).inserted { self.renderTabBar() }
+            let wasWaiting = self.waitingToasts[id] != nil
             let message = notification.body.isEmpty ? notification.title : notification.body
             self.presentWaitingToast(for: id, message: message)
+            if !wasWaiting { self.renderTabBar() }  // first flag → recolor the number
         }
     }
 
@@ -766,10 +755,10 @@ final class WindowController: NSObject {
         waitingToasts[id] = toasts.showSticky(content, actions: actions)
     }
 
-    /// Clear a tab's waiting state: drop the rose flag and dismiss its toast. Called when the
-    /// tab is shown or closed. Re-render is left to the caller (all callers already do).
+    /// Clear a tab's waiting state: dismiss its toast — which also drops the rose flag, since
+    /// the flag is derived from the toast's presence (`waitingToasts[id] != nil`). Called when
+    /// the tab is shown or closed. Re-render is left to the caller (all callers already do).
     private func clearWaiting(_ id: TabID) {
-        waitingTabs.remove(id)
         if let toast = waitingToasts.removeValue(forKey: id) { toasts.dismiss(toast) }
     }
 
@@ -779,7 +768,7 @@ final class WindowController: NSObject {
                 id: id, index: i + 1,
                 title: titles[id] ?? "shell",
                 isActive: id == tabs.activeID,
-                agentState: waitingTabs.contains(id) ? .waiting : .idle)
+                agentState: waitingToasts[id] != nil ? .waiting : .idle)
         }
         tabBar.render(items)
     }
