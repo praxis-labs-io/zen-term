@@ -16,7 +16,7 @@ final class GhosttyHostView: NSView {
     /// The whole preedit (marked) text — what the input method is still composing, shown
     /// underlined at the cursor. libghostty tracks no internal caret sub-range, so this
     /// attributed string is the entire model. Read by the `NSTextInputClient` conformance
-    /// in GhosttyHostView+IME.swift.
+    /// in GhosttyHostViewIME.swift.
     var markedText = NSMutableAttributedString()
 
     /// Non-nil only for the duration of a `keyDown`: it flags `insertText`/`setMarkedText`
@@ -89,17 +89,25 @@ final class GhosttyHostView: NSView {
         // plain Enter (CR) still submits — the convention `claude /terminal-setup`
         // writes, and what the SwiftTerm backend implements. keyCode 36 = kVK_Return.
         // MUST stay ahead of the interpretKeyEvents hand-off so the IME can't swallow it.
-        if event.isSoftNewline {
+        // Guarded on not-composing: mid-preedit, Enter must reach the input system to
+        // commit the composition, not shortcut out and strand a stale underline.
+        if markedText.length == 0, event.isSoftNewline {
             ghostty_surface_text(surfacePtr, "\n", 1)
             return
         }
 
-        // Translate the modifiers through libghostty (handles configs like option-as-alt)
-        // and, only if that changes them, rebuild the event with the translated mods.
-        // Reusing the ORIGINAL event object when nothing changed is load-bearing: AppKit's
-        // input system keys off object identity and CJK IMEs (e.g. Korean) break otherwise.
-        let translationMods = NSEvent.eventModifierFlags(
+        // Ask libghostty which modifiers it consumed for text translation (handles configs
+        // like option-as-alt), then apply ONLY those four named flags on top of the event's
+        // own modifierFlags. Deriving the whole set from the ghostty bitmask instead would
+        // drop capsLock and the hidden device/keypad bits AppKit carries — bits that matter
+        // for dead keys, and whose loss forces an identity-breaking event rebuild that
+        // breaks CJK composition (AppKit's input system keys off NSEvent object identity).
+        let translated = NSEvent.eventModifierFlags(
             mods: ghostty_surface_key_translation_mods(surfacePtr, event.ghosttyMods))
+        var translationMods = event.modifierFlags
+        for flag: NSEvent.ModifierFlags in [.shift, .control, .option, .command] {
+            if translated.contains(flag) { translationMods.insert(flag) } else { translationMods.remove(flag) }
+        }
         let translationEvent: NSEvent
         if translationMods == event.modifierFlags {
             translationEvent = event

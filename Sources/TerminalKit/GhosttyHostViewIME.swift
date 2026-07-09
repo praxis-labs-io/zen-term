@@ -1,5 +1,4 @@
 import AppKit
-import Carbon
 import GhosttyKit
 
 /// IME / dead-key composition for `GhosttyHostView`, ported from ghostty's own
@@ -73,6 +72,9 @@ extension GhosttyHostView: NSTextInputClient {
         var width = 0.0
         var height = 0.0
         ghostty_surface_ime_point(surfacePtr, &x, &y, &width, &height)
+        // Dictation queries with an empty range; a positive width there mis-anchors the
+        // microphone indicator, so zero it (matches ghostty's own firstRect).
+        if range.length == 0 { width = 0 }
         // Two conversions the OS requires: ghostty's top-left origin → AppKit's
         // bottom-left, then view → window → screen coordinates.
         let viewRect = NSRect(x: x, y: frame.size.height - y, width: width, height: height)
@@ -122,21 +124,5 @@ extension GhosttyHostView: NSTextInputClient {
         } else if clearIfNeeded {
             ghostty_surface_preedit(surfacePtr, nil, 0)
         }
-    }
-}
-
-/// The current keyboard input-source id (e.g. `com.apple.keylayout.US`). `keyDown` snaps
-/// this before and after handing a key to the input system: if it changed while we weren't
-/// composing, an input method claimed the key and it must not also reach the terminal.
-/// Minimal port of ghostty's own `KeyboardLayout` helper.
-enum KeyboardLayout {
-    static var id: String? {
-        guard
-            let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
-            let pointer = TISGetInputSourceProperty(source, kTISPropertyInputSourceID)
-        else { return nil }
-        // TIS hands back an unmanaged raw pointer to a CFString property; bit-casting it is
-        // the documented (Carbon) way to read it.
-        return unsafeBitCast(pointer, to: CFString.self) as String
     }
 }
