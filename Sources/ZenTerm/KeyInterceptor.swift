@@ -47,7 +47,7 @@ final class KeyInterceptor {
                 case "k": chord = .resizeUp
                 case "j": chord = .resizeDown
                 case "p": chord = .toggleRepoPicker
-                case "g": chord = .toggleToolFloat("diffnav")  // ⌘⇧G — per-float keybinding
+                case "g": chord = .toggleToolFloat("gitdash")  // ⌘⇧G — per-float keybinding
                 default: chord = nil
                 }
                 if let chord { self.onReservedChord?(chord); return nil }

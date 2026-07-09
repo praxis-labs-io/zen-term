@@ -4,10 +4,10 @@ import AppKit
 /// here; the tool-float engine on `TabController` does the rest. Add a float by
 /// adding a value to `ToolFloatCatalog.all` and one keybinding in `KeyInterceptor`.
 struct ToolFloat: Equatable {
-    let id: String  // stable id, e.g. "diffnav"
-    let title: String  // command-palette title, e.g. "Open Diff Nav"
+    let id: String  // stable id, e.g. "gitdash"
+    let title: String  // command-palette title, e.g. "Open GitDash"
     let shortcut: String  // palette glyph string, e.g. "⌘⇧G" (display only)
-    let icon: String  // dock SF Symbol, e.g. "plus.forwardslash.minus"
+    let icon: String  // dock SF Symbol, e.g. "square.grid.2x2"
     let command: String  // runs as `$SHELL -l -i -c command` at the focused pane's cwd
     let widthFraction: CGFloat
     let heightFraction: CGFloat
@@ -28,20 +28,15 @@ struct EmptyGuard: Equatable {
 enum ToolFloatCatalog {
     static let all: [ToolFloat] = [
         ToolFloat(
-            id: "diffnav",
-            title: "Open Diff Nav",
+            id: "gitdash",
+            title: "Open GitDash",
             shortcut: "⌘⇧G",
-            icon: "plus.forwardslash.minus",
-            command: "git diff main",
+            icon: "square.grid.2x2",
+            command: "gd",  // `gh dash` — the GitHub PRs/issues TUI (resolved via the login shell)
             widthFraction: 0.85,
             heightFraction: 0.85,
             requiresGitRepo: true,
-            emptyGuard: EmptyGuard(
-                probe: "git diff main --quiet",
-                toast: ToastContent(
-                    symbol: "checkmark.circle.fill",
-                    title: "No changes vs main",
-                    message: "Your branch matches main — nothing to diff.")))
+            emptyGuard: nil)  // a GitHub dashboard isn't diff-state-gated
     ]
 
     static func byID(_ id: String) -> ToolFloat? { all.first { $0.id == id } }

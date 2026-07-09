@@ -8,15 +8,15 @@ final class ToolFloatCatalogTests: XCTestCase {
         XCTAssertEqual(ids.count, Set(ids).count, "ToolFloat ids must be unique")
     }
 
-    func test_diffnav_isPresentWithExpectedSpec() {
-        let f = ToolFloatCatalog.byID("diffnav")
+    func test_gitdash_isPresentWithExpectedSpec() {
+        let f = ToolFloatCatalog.byID("gitdash")
         XCTAssertNotNil(f)
-        XCTAssertEqual(f?.command, "git diff main")
+        XCTAssertEqual(f?.command, "gd")
         XCTAssertEqual(f?.shortcut, "⌘⇧G")
         XCTAssertEqual(f?.widthFraction, 0.85)
         XCTAssertEqual(f?.heightFraction, 0.85)
         XCTAssertTrue(f?.requiresGitRepo == true)
-        XCTAssertEqual(f?.emptyGuard?.probe, "git diff main --quiet")
+        XCTAssertNil(f?.emptyGuard)  // a GitHub dashboard isn't diff-state-gated
     }
 
     func test_byID_unknown_isNil() {

@@ -9,6 +9,15 @@ Design decisions (confirmed): tool = `diffnav` (the user's default git-diff
 pager); range = `git diff main`; toggle = `⌘⇧G`; scope = the **ephemeral** float
 family only (lazygit stays on its bespoke persistent path, untouched).
 
+> **Update (2026-07-09) — first instance shipped as `gitdash`, not diffnav.** The
+> engine below is unchanged; only the concrete instance differs. The first tool
+> float is **gitdash** (`command: "gd"` = `gh dash`, a GitHub PRs/issues TUI), a
+> full TUI rather than a diff pager — so there is **no empty-guard** (a dashboard
+> isn't diff-state-gated), the icon is `square.grid.2x2`, and the title is "Open
+> GitDash". `⌘⇧G` and the 85%×85% size are unchanged. Treat the diffnav
+> references below as the original exploration; the shipped catalog entry is the
+> gitdash one shown in "The spec".
+
 ## Why an engine, not a mirror
 
 `SurfaceFloatOverlay` already generalizes the float *chrome* (both `LazygitOverlay`
@@ -51,14 +60,10 @@ struct EmptyGuard: Equatable { let probe: String; let toast: ToastContent }
 enum ToolFloatCatalog {
     static let all: [ToolFloat] = [
         ToolFloat(
-            id: "diffnav", title: "Open Diff Nav", shortcut: "⌘⇧G",
-            icon: "plus.forwardslash.minus", command: "git diff main",
+            id: "gitdash", title: "Open GitDash", shortcut: "⌘⇧G",
+            icon: "square.grid.2x2", command: "gd",   // `gh dash` — GitHub PRs/issues TUI
             widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: true,
-            emptyGuard: EmptyGuard(
-                probe: "git diff main --quiet",   // exit 0 ⇒ no changes
-                toast: ToastContent(
-                    symbol: "checkmark.circle.fill", title: "No changes vs main",
-                    message: "Your branch matches main — nothing to diff."))),
+            emptyGuard: nil),                          // a dashboard isn't diff-state-gated
     ]
     static func byID(_ id: String) -> ToolFloat? { all.first { $0.id == id } }
 }
