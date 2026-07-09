@@ -37,9 +37,12 @@ final class GhosttySurfaceChurnTests: XCTestCase {
             // paying 150 login-shell startups — the churn under test is the surface
             // (Metal layer / IOSurface) lifecycle, not the shell's.
             surface.start(TerminalSurfaceConfig(command: "/bin/sleep", args: ["100"]))
-            XCTAssertNotNil(
-                surface.surfacePtr,
-                "ghostty_surface_new failed at iteration \(iteration) — teardown is leaking")
+            // Stop at the first failure: continuing would spew cascading assertions and
+            // churn 100+ more surfaces past the point the harness already proved its point.
+            guard surface.surfacePtr != nil else {
+                XCTFail("ghostty_surface_new failed at iteration \(iteration) — teardown is leaking")
+                return
+            }
             // Let libghostty tick (wakeup_cb hops to the main queue) and render a frame.
             RunLoop.current.run(until: Date().addingTimeInterval(0.02))
             surface.view.removeFromSuperview()

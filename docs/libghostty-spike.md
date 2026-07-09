@@ -85,7 +85,7 @@ backend needs that a CPU one doesn't.
   independent of `custom-shader-animation`. No custom shader = no flash. So the GPU cursor
   animation and flash-free transitions are mutually exclusive until the transparent-window
   compositing is solved (opaque custom-shader screen texture, or an opaque window). Removed for
-  now; revisit under ZEN-45.
+  now; tracked in ZEN-67.
 - **Focus-on-click** is reported to the chrome, but full focus-follows and overlay
   occlusion parity with SwiftTerm isn't done.
 - **Two ImGui link warnings** (`_ImFontConfig_ImFontConfig`, `_ImGuiStyle_ImGuiStyle`) —
@@ -102,5 +102,5 @@ backend needs that a CPU one doesn't.
   is a dev-loop artifact (killed processes), not something zen-term's pane churn can hit.
 
 None of these are seam problems — they're all below it, exactly where backend-specific work
-is supposed to live. Per Guardrail 2, this stays behind the flag with no deadline;
-SwiftTerm remains the shipping core.
+is supposed to live. libghostty is now the default backend (ZEN-45); SwiftTerm remains the
+escape hatch (`ZENTERM_BACKEND=swiftterm`). The remaining gaps above are tracked in ZEN-67.

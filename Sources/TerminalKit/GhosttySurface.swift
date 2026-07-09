@@ -8,7 +8,7 @@ import GhosttyKit
 /// renders into a Metal layer it attaches to a host view we own, and the host must
 /// forward every input (key / mouse / focus / size / scale) and pump the shared app's
 /// event loop. IME/dead-key composition is not wired yet (no `NSTextInputClient`);
-/// tracked as a ZEN-45 follow-up.
+/// tracked in ZEN-67.
 public final class GhosttySurface: NSObject, TerminalSurface {
     private let hostView = GhosttyHostView()
     var surfacePtr: ghostty_surface_t?
@@ -22,10 +22,14 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public var isFocused: Bool { hostView.window?.firstResponder === hostView }
     public var currentDirectory: URL? { lastCwd }
 
-    /// Whether the shell has a running foreground command, via ghostty's own
-    /// needs-confirm-quit signal: with our config it reports "cursor is not at a
-    /// prompt" from shell integration. An idle prompt or a backgrounded job reads
-    /// as not busy — the same semantics as the SwiftTerm backend's ProcessProbe.
+    /// Whether the shell has a running foreground command, via ghostty's
+    /// needs-confirm-quit signal — which, with our default `confirm-close-surface`,
+    /// reports "cursor is not at a prompt" from shell integration (OSC 133 marks).
+    /// For an integration-capable shell (zsh, the macOS default) an idle prompt reads
+    /// as not busy and a running command as busy. A shell ghostty can't integrate
+    /// (Apple's /bin/bash) has no prompt marks, so this conservatively reads busy —
+    /// erring toward an extra close confirmation, never toward losing live work.
+    /// True process-group parity with the SwiftTerm ProcessProbe is a follow-up.
     public var isBusy: Bool {
         guard let surfacePtr else { return false }
         return ghostty_surface_needs_confirm_quit(surfacePtr)
@@ -47,11 +51,14 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             hostView.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0)
         cfg.font_size = config.fontSize.map { Float($0) } ?? 0
 
-        // libghostty's `command` is a single string it runs via a POSIX shell (sh -c),
-        // not argv — so each word is quoted to survive the round-trip (the chrome
-        // spawns lazygit/floats with args like `-c "lazygit; exec zsh -l -i"`).
-        // `command == nil` lets libghostty launch the user's login shell itself (it
-        // handles login/PATH natively — no argv[0] rewrite needed).
+        // libghostty's `command` is a single string, not argv: it runs the string via a
+        // login shell (`bash -c "<string>"`) AND tokenizes the same string with Zig's
+        // ArgIteratorGeneral to detect the shell for integration. That tokenizer strips
+        // DOUBLE quotes only — single quotes would survive into arg0 (`'zsh'` != `zsh`)
+        // and silently disable shell integration (cwd tracking, prompt marks → isBusy).
+        // So each word is double-quoted; both the exec and the detector agree. The chrome
+        // spawns lazygit/floats as `-c "cmd; exec zsh -l -i"`, so this is load-bearing.
+        // `command == nil` lets libghostty launch the user's login shell itself.
         let command: String? = config.command.map { cmd in
             ([cmd] + config.args).map(Self.shellWordQuote).joined(separator: " ")
         }
@@ -80,11 +87,20 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         GhosttyApp.shared.tick()
     }
 
-    /// Quote one word for a POSIX shell: wrapped in single quotes, embedded single
-    /// quotes spliced as `'\''`. Reconstructs the chrome's argv exactly when
-    /// libghostty hands the joined command to `sh -c`.
+    /// Quote one word in DOUBLE quotes, backslash-escaping the four characters special
+    /// inside a POSIX double-quoted string (`\`, `"`, `$`, `` ` ``). Double quotes, not
+    /// single, because libghostty's shell-integration detector (Zig ArgIteratorGeneral)
+    /// strips only double quotes — single-quoted words would defeat shell detection.
+    /// `bash -c` honors the same double-quote rules, so the exec re-splits correctly too.
     static func shellWordQuote(_ word: String) -> String {
-        "'" + word.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        var escaped = ""
+        for character in word {
+            if character == "\\" || character == "\"" || character == "$" || character == "`" {
+                escaped.append("\\")
+            }
+            escaped.append(character)
+        }
+        return "\"" + escaped + "\""
     }
 
     /// Fills the config's C-string pointers (working dir, command, env) with buffers that
@@ -132,7 +148,13 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // Backstop for any release that skips terminate(): the surface holds a
         // passUnretained pointer back to us, so leaving it alive past our
         // deallocation would dangle that userdata on the next libghostty callback.
-        if let surfacePtr { ghostty_surface_free(surfacePtr) }
+        // Nil the host view's pointer too (it can outlive us — its superview holds a
+        // strong ref, our `owner` back-ref is weak) so a stray event after free doesn't
+        // call ghostty_surface_* on freed memory. Mirrors terminate().
+        if let surfacePtr {
+            ghostty_surface_free(surfacePtr)
+            hostView.surfacePtr = nil
+        }
     }
 
     public func paste(_ text: String) {

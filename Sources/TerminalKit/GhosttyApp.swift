@@ -15,7 +15,9 @@ final class GhosttyApp {
     private static var _shared: GhosttyApp?
 
     /// The shared runtime, created on first call with the first surface's theme.
-    /// Later calls return the existing instance — a different theme would not apply.
+    /// Later calls return the existing instance — libghostty config is app-global, so a
+    /// later surface's differing theme would not apply. No live bug today (all panes
+    /// share one theme); per-surface theming via ghostty_surface_update_config is ZEN-67.
     static func shared(theme: TerminalTheme?) -> GhosttyApp {
         if let existing = _shared { return existing }
         let created = GhosttyApp(theme: theme)
@@ -81,12 +83,15 @@ final class GhosttyApp {
 
     func tick() { ghostty_app_tick(app) }
 
-    /// Set `GHOSTTY_RESOURCES_DIR` to the resources bin/build-ghosttykit staged into
-    /// TerminalKit's bundle, unless the user already set it. The env var points at the
-    /// `ghostty/` dir; libghostty derives `TERMINFO` from its *sibling* `terminfo/` —
-    /// the same layout as Ghostty.app's `Resources/{ghostty,terminfo}` pair.
+    /// Point `GHOSTTY_RESOURCES_DIR` at the resources bin/build-ghosttykit staged into
+    /// TerminalKit's bundle, always overriding any inherited value. The env var points
+    /// at the `ghostty/` dir; libghostty derives `TERMINFO` from its *sibling*
+    /// `terminfo/` — the same layout as Ghostty.app's `Resources/{ghostty,terminfo}`
+    /// pair. We override rather than defer to an inherited value because launching
+    /// zen-term from inside Ghostty would otherwise inherit that Ghostty's
+    /// `GHOSTTY_RESOURCES_DIR` — a possibly different version than our pinned libghostty,
+    /// silently mismatching shell-integration scripts and terminfo.
     private static func useBundledResources() {
-        guard ProcessInfo.processInfo.environment["GHOSTTY_RESOURCES_DIR"] == nil else { return }
         guard
             let dir = Bundle.module.resourceURL?
                 .appendingPathComponent("ghostty-resources/ghostty").path,

@@ -4,20 +4,28 @@ import XCTest
 
 final class GhosttyShellQuoteTests: XCTestCase {
     func test_plainWordRoundTrips() {
-        XCTAssertEqual(GhosttySurface.shellWordQuote("lazygit"), "'lazygit'")
+        XCTAssertEqual(GhosttySurface.shellWordQuote("lazygit"), "\"lazygit\"")
     }
 
     func test_spacesAndMetacharactersStayOneWord() {
         // The chrome's real spawn shape: zsh -l -i -c "lazygit; exec /bin/zsh -l -i"
         XCTAssertEqual(
             GhosttySurface.shellWordQuote("lazygit; exec /bin/zsh -l -i"),
-            "'lazygit; exec /bin/zsh -l -i'")
+            "\"lazygit; exec /bin/zsh -l -i\"")
     }
 
-    func test_embeddedSingleQuoteEscapes() {
+    func test_doubleQuoteSpecialsAreEscaped() {
         XCTAssertEqual(
-            GhosttySurface.shellWordQuote("echo 'hi'"),
-            #"'echo '\''hi'\'''"#)
+            GhosttySurface.shellWordQuote(#"say "$USER" `id` \n"#),
+            #""say \"\$USER\" \`id\` \\n""#)
+    }
+
+    /// The whole reason for double quotes over single: ghostty's shell-integration
+    /// detector (Zig ArgIteratorGeneral, double-quote-only) must recover a bare `zsh`
+    /// from arg0 or integration silently disables. Single quotes would leave `'zsh'`.
+    func test_quotedArg0StripsToBareShellName() {
+        XCTAssertEqual(GhosttySurface.shellWordQuote("zsh"), "\"zsh\"")
+        XCTAssertFalse(GhosttySurface.shellWordQuote("zsh").contains("'"))
     }
 
     /// End-to-end: sh -c on the quoted join must reproduce the original argv.
