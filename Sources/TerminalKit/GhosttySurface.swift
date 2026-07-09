@@ -23,6 +23,15 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public var isFocused: Bool { hostView.window?.firstResponder === hostView }
     public var currentDirectory: URL? { lastCwd }
 
+    /// Whether the shell has a running foreground command, via ghostty's own
+    /// needs-confirm-quit signal: with our config it reports "cursor is not at a
+    /// prompt" from shell integration. An idle prompt or a backgrounded job reads
+    /// as not busy — the same semantics as the SwiftTerm backend's ProcessProbe.
+    public var isBusy: Bool {
+        guard let surfacePtr else { return false }
+        return ghostty_surface_needs_confirm_quit(surfacePtr)
+    }
+
     public override init() {
         super.init()
         hostView.owner = self
@@ -172,6 +181,18 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         case GHOSTTY_ACTION_RING_BELL:
             delegate?.surfaceDidRingBell(self)
             return true
+        case GHOSTTY_ACTION_DESKTOP_NOTIFICATION:
+            // OSC 777 / OSC 9 from a terminal app (e.g. Claude Code wanting the user) —
+            // ghostty parses it and hands us title + body; the chrome toasts it.
+            let notification = action.action.desktop_notification
+            let title = notification.title.map { String(cString: $0) } ?? ""
+            let body = notification.body.map { String(cString: $0) } ?? ""
+            delegate?.surface(
+                self, didPostNotification: TerminalNotification(title: title, body: body))
+            return true
+        case GHOSTTY_ACTION_PROGRESS_REPORT:
+            delegate?.surface(self, progressDidChange: Self.progress(action.action.progress_report))
+            return true
         case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
             let code = Int32(action.action.child_exited.exit_code)
             // Defer to the next main-loop turn: the chrome frees this surface in
@@ -185,6 +206,19 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             return true
         default:
             return false
+        }
+    }
+
+    /// Map an OSC 9;4 progress report onto the seam's `TerminalProgress`.
+    /// REMOVE clears the indicator (nil); `progress` is -1 when unreported.
+    private static func progress(_ report: ghostty_action_progress_report_s) -> TerminalProgress? {
+        let fraction = report.progress >= 0 ? Double(report.progress) / 100.0 : nil
+        switch report.state {
+        case GHOSTTY_PROGRESS_STATE_REMOVE: return nil
+        case GHOSTTY_PROGRESS_STATE_SET: return TerminalProgress(state: .running, fraction: fraction)
+        case GHOSTTY_PROGRESS_STATE_ERROR: return TerminalProgress(state: .error, fraction: fraction)
+        case GHOSTTY_PROGRESS_STATE_PAUSE: return TerminalProgress(state: .paused, fraction: fraction)
+        default: return TerminalProgress(state: .indeterminate)
         }
     }
 }

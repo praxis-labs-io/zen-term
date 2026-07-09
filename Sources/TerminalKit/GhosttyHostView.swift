@@ -72,6 +72,13 @@ final class GhosttyHostView: NSView {
 
     override func keyDown(with event: NSEvent) {
         guard let surfacePtr else { return }
+        // Shift+Enter → LF so multiline-aware CLIs treat it as a soft newline while
+        // plain Enter (CR) still submits — the convention `claude /terminal-setup`
+        // writes, and what the SwiftTerm backend implements. keyCode 36 = kVK_Return.
+        if event.keyCode == 36, event.modifierFlags.contains(.shift) {
+            ghostty_surface_text(surfacePtr, "\n", 1)
+            return
+        }
         let action: ghostty_input_action_e = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
         sendKey(surfacePtr, action, event, text: event.ghosttyCharacters)
     }
