@@ -583,15 +583,20 @@ final class TabController: NSObject {
         process.currentDirectoryURL = focusedCWD ?? ShellLaunch.defaultCWD
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
-        let finished = DispatchSemaphore(value: 0)
-        process.terminationHandler = { _ in finished.signal() }
         do {
             try process.run()
         } catch {
             return false  // couldn't probe → don't block opening the float
         }
+        // Wait on a background queue (it keeps `process` alive and reaps the child even on the
+        // timeout path); the main thread blocks only up to `probeTimeout`.
+        let finished = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            process.waitUntilExit()
+            finished.signal()
+        }
         if finished.wait(timeout: .now() + Self.probeTimeout) == .timedOut {
-            process.terminate()  // fail open rather than hang the toggle
+            process.terminate()  // fail open; the background wait then reaps it
             return false
         }
         return process.terminationStatus == 0
