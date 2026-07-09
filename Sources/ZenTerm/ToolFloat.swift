@@ -7,7 +7,7 @@ struct ToolFloat: Equatable {
     let id: String  // stable id, e.g. "gitdash"
     let title: String  // command-palette title, e.g. "Open GitDash"
     let shortcut: String  // palette glyph string, e.g. "⌘⇧G" (display only)
-    let icon: String  // dock SF Symbol, e.g. "square.grid.2x2"
+    let icon: String  // dock icon: an SF Symbol name, or a bundled brand mark ("github", "git")
     let command: String  // runs as `$SHELL -l -i -c command` at the focused pane's cwd
     let widthFraction: CGFloat
     let heightFraction: CGFloat
@@ -31,7 +31,7 @@ enum ToolFloatCatalog {
             id: "gitdash",
             title: "Open GitDash",
             shortcut: "⌘⇧G",
-            icon: "square.grid.2x2",
+            icon: "github",
             command: "gd",  // `gh dash` — the GitHub PRs/issues TUI (resolved via the login shell)
             widthFraction: 0.85,
             heightFraction: 0.85,

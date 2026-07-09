@@ -32,7 +32,7 @@ final class ToggleDock: NSView {
         bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", onBottom)  // ⌘B
         rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", onRight)  // ⌘\
         zoomBtn = button("arrow.up.left.and.arrow.down.right", "Toggle zoom", onZoom)  // ⌘F
-        lazygitBtn = button("arrow.triangle.branch", "Toggle lazygit", onLazygit)  // ⌘G
+        lazygitBtn = button("git", "Toggle lazygit", onLazygit)  // ⌘G — bundled git mark
         // Local pairs — `button` is a local func, but the `toolFloatBtns` stored
         // property can't be touched until after super.init.
         let toolButtonPairs: [(String, IconButton)] = toolFloats.map { spec in
