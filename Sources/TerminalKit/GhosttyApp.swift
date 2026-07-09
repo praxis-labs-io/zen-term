@@ -17,7 +17,7 @@ final class GhosttyApp {
     /// The shared runtime, created on first call with the first surface's theme.
     /// Later calls return the existing instance — libghostty config is app-global, so a
     /// later surface's differing theme would not apply. No live bug today (all panes
-    /// share one theme); per-surface theming via ghostty_surface_update_config is ZEN-67.
+    /// share one theme); per-surface theming via ghostty_surface_update_config is ZEN-27.
     static func shared(theme: TerminalTheme?) -> GhosttyApp {
         if let existing = _shared { return existing }
         let created = GhosttyApp(theme: theme)
