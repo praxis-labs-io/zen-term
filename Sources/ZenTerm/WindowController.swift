@@ -506,6 +506,8 @@ final class WindowController: NSObject {
         case .toggleRightDrawer: active?.toggleRightDrawer()
         case .toggleZoom: active?.toggleZoom()
         case .toggleLazygit: active?.toggleLazygit()
+        case .toggleToolFloat(let id):
+            if let spec = ToolFloatCatalog.byID(id) { active?.toggleToolFloat(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
         }

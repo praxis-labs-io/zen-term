@@ -42,6 +42,9 @@ enum CommandCatalog {
         case .toggleBottomDrawer: return drawer("Toggle Bottom Drawer", "⌘B", chord)
         case .toggleRightDrawer: return drawer("Toggle Right Drawer", "⌘\\", chord)
         case .toggleLazygit: return tool("Open Lazygit", "⌘G", chord)
+        case .toggleToolFloat(let id):
+            let f = ToolFloatCatalog.byID(id)
+            return tool(f?.title ?? id, f?.shortcut ?? "", chord)
         case .toggleRepoPicker: return tool("Open Project Picker", "⌘⇧P", chord)
         // Present for exhaustiveness; both are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", "⌘N", chord)
@@ -55,6 +58,9 @@ enum CommandCatalog {
     static func commands(tabCount: Int) -> [PaletteCommand] {
         var chords: [KeyInterceptor.ReservedChord] = [
             .toggleRepoPicker, .toggleLazygit,
+        ]
+        chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
+        chords += [
             .toggleBottomDrawer, .toggleRightDrawer,
             .newTab, .prevTab, .nextTab,
         ]
