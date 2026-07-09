@@ -1,0 +1,48 @@
+import AppKit
+
+/// A declarative ephemeral command float. Everything variable about a float lives
+/// here; the tool-float engine on `TabController` does the rest. Add a float by
+/// adding a value to `ToolFloatCatalog.all` and one keybinding in `KeyInterceptor`.
+struct ToolFloat: Equatable {
+    let id: String  // stable id, e.g. "diffnav"
+    let title: String  // command-palette title, e.g. "Open Diff Nav"
+    let shortcut: String  // palette glyph string, e.g. "⌘⇧G" (display only)
+    let icon: String  // dock SF Symbol, e.g. "plus.forwardslash.minus"
+    let command: String  // runs as `$SHELL -l -i -c command` at the focused pane's cwd
+    let widthFraction: CGFloat
+    let heightFraction: CGFloat
+    let requiresGitRepo: Bool
+    let emptyGuard: EmptyGuard?
+}
+
+/// A pre-open probe: run `probe` at the focused cwd; if it exits 0 (nothing to
+/// show), skip opening the float and surface `toast` instead.
+struct EmptyGuard: Equatable {
+    let probe: String
+    let toast: ToastContent
+}
+
+/// The registered ephemeral tool floats. Adding an entry here (plus one
+/// `KeyInterceptor` mapping) is all it takes to add a float — the dock button,
+/// palette entry, git guard, and toggle behavior all derive from the spec.
+enum ToolFloatCatalog {
+    static let all: [ToolFloat] = [
+        ToolFloat(
+            id: "diffnav",
+            title: "Open Diff Nav",
+            shortcut: "⌘⇧G",
+            icon: "plus.forwardslash.minus",
+            command: "git diff main",
+            widthFraction: 0.85,
+            heightFraction: 0.85,
+            requiresGitRepo: true,
+            emptyGuard: EmptyGuard(
+                probe: "git diff main --quiet",
+                toast: ToastContent(
+                    symbol: "checkmark.circle.fill",
+                    title: "No changes vs main",
+                    message: "Your branch matches main — nothing to diff.")))
+    ]
+
+    static func byID(_ id: String) -> ToolFloat? { all.first { $0.id == id } }
+}
