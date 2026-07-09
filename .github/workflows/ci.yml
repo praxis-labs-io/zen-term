@@ -31,19 +31,22 @@ jobs:
         run: swift --version
 
       # The GhosttyKit binaryTarget is linked unconditionally (ZEN-40), so `swift build`
-      # needs the xcframework. It's gitignored and built from the pinned vendor/ghostty
-      # submodule — same model as ghostty's own CI. Cache the built artifact keyed on the
-      # ghostty pin + build script, so only a ghostty bump triggers the slow Zig/Metal
-      # rebuild; every other run restores it in seconds.
+      # needs the xcframework — and the staged runtime resources are a declared SwiftPM
+      # resource (ZEN-45). Both are gitignored and built from the pinned vendor/ghostty
+      # submodule — same model as ghostty's own CI. Cache the built artifacts keyed on
+      # the ghostty pin + build script, so only a ghostty bump triggers the slow
+      # Zig/Metal rebuild; every other run restores them in seconds.
       - name: Resolve ghostty pin
         id: pin
         run: echo "sha=$(git rev-parse HEAD:vendor/ghostty)" >> "$GITHUB_OUTPUT"
 
-      - name: Cache GhosttyKit.xcframework
+      - name: Cache GhosttyKit artifacts
         id: ghosttykit
         uses: actions/cache@v4
         with:
-          path: Frameworks/GhosttyKit.xcframework
+          path: |
+            Frameworks/GhosttyKit.xcframework
+            Sources/TerminalKit/Resources/ghostty-resources
           key: ghosttykit-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('bin/build-ghosttykit') }}
 
       - name: Build GhosttyKit (cache miss only)

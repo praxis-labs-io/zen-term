@@ -1,29 +1,49 @@
 import AppKit
 import GhosttyKit
 
-/// The process-global libghostty runtime (ZEN-40 spike).
+/// The process-global libghostty runtime.
 ///
 /// libghostty has exactly one `ghostty_app_t` per process; every `GhosttySurface`
-/// shares it. Created lazily on first surface. The app is event-driven: libghostty
-/// calls `wakeup_cb` from any thread when it has work, and we hop to the main thread
-/// to `ghostty_app_tick`. Because there is only ever one instance, the C callbacks
-/// reach it through `GhosttyApp.shared` rather than the runtime `userdata` pointer,
-/// which sidesteps the init-ordering problem of handing `self` to `ghostty_app_new`
-/// before `self` is fully constructed.
+/// shares it. Created on first surface, with that surface's theme — configuration is
+/// app-level in libghostty, and every zen-term pane shares one theme. The app is
+/// event-driven: libghostty calls `wakeup_cb` from any thread when it has work, and we
+/// hop to the main thread to `ghostty_app_tick`. Because there is only ever one
+/// instance, the C callbacks reach it through `GhosttyApp.shared` rather than the
+/// runtime `userdata` pointer, which sidesteps the init-ordering problem of handing
+/// `self` to `ghostty_app_new` before `self` is fully constructed.
 final class GhosttyApp {
-    static let shared = GhosttyApp()
+    private static var _shared: GhosttyApp?
+
+    /// The shared runtime, created on first call with the first surface's theme.
+    /// Later calls return the existing instance — libghostty config is app-global, so a
+    /// later surface's differing theme would not apply. No live bug today (all panes
+    /// share one theme); per-surface theming via ghostty_surface_update_config is ZEN-67.
+    static func shared(theme: TerminalTheme?) -> GhosttyApp {
+        if let existing = _shared { return existing }
+        let created = GhosttyApp(theme: theme)
+        _shared = created
+        return created
+    }
+
+    /// The already-created runtime — for the C callbacks and the event-loop pump,
+    /// which can only fire after the first surface (and therefore the app) exists.
+    static var shared: GhosttyApp {
+        guard let shared = _shared else {
+            fatalError("GhosttyApp accessed before the first GhosttySurface created it")
+        }
+        return shared
+    }
 
     let app: ghostty_app_t
     // Retained for the app's (process) lifetime: libghostty keeps a reference to the
     // config passed to ghostty_app_new; freeing it would pull it out from under the app.
     private let config: ghostty_config_t
 
-    private init() {
-        // Point the embedded lib at the installed Ghostty.app's resources (themes,
-        // shell integration) so `theme = …`, custom shaders, and shell integration
-        // resolve — libghostty ships none of these itself. Best-effort; must be set
-        // before ghostty_init. See docs/libghostty-spike.md.
-        Self.useGhosttyResourcesIfAvailable()
+    private init(theme: TerminalTheme?) {
+        // Point the embedded lib at the resources staged from the pinned vendor/ghostty
+        // build (shell integration, themes, terminfo) — libghostty resolves none of
+        // these itself when embedded. Must be set before ghostty_init.
+        Self.useBundledResources()
 
         // Global init once per process. argc/argv are libghostty's CLI entry (for
         // `ghostty +action` subcommands we never invoke) but the call is required.
@@ -31,12 +51,12 @@ final class GhosttyApp {
             fatalError("ghostty_init failed")
         }
 
-        // The spike config (Rosé Pine Moon, JetBrainsMono) loaded on top of any real
-        // user config. Kept in-repo so it never touches ~/.config/ghostty.
+        // The chrome's theme, translated to ghostty config text and loaded as the ONLY
+        // config source — deliberately not ghostty_config_load_default_files, so a
+        // user's ~/.config/ghostty can't skew zen-term's appearance or behavior.
         guard let cfg = ghostty_config_new() else { fatalError("ghostty_config_new failed") }
-        ghostty_config_load_default_files(cfg)
-        if let spikeConfig = Self.spikeConfigPath {
-            ghostty_config_load_file(cfg, spikeConfig)
+        if let generated = GhosttyConfigWriter.writeConfig(for: theme) {
+            ghostty_config_load_file(cfg, generated)
         }
         ghostty_config_finalize(cfg)
         config = cfg
@@ -63,23 +83,25 @@ final class GhosttyApp {
 
     func tick() { ghostty_app_tick(app) }
 
-    /// Absolute path to the in-repo spike config, resolved from this source file's
-    /// location (`#filePath`) — the spike runs on the same machine it's built on, so
-    /// this is robust regardless of the launch working directory. Nil if missing.
-    private static var spikeConfigPath: String? {
-        let root = URL(fileURLWithPath: #filePath)  // Sources/TerminalKit/GhosttyApp.swift
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let path = root.appendingPathComponent("config/ghostty/config").path
-        return FileManager.default.fileExists(atPath: path) ? path : nil
-    }
-
-    /// Set `GHOSTTY_RESOURCES_DIR` to the installed Ghostty.app's resources if present,
-    /// unless the user already set it. This gives the embedded lib themes + shell
-    /// integration it otherwise can't find.
-    private static func useGhosttyResourcesIfAvailable() {
-        guard ProcessInfo.processInfo.environment["GHOSTTY_RESOURCES_DIR"] == nil else { return }
-        let dir = "/Applications/Ghostty.app/Contents/Resources/ghostty"
-        guard FileManager.default.fileExists(atPath: dir) else { return }
+    /// Point `GHOSTTY_RESOURCES_DIR` at the resources bin/build-ghosttykit staged into
+    /// TerminalKit's bundle, always overriding any inherited value. The env var points
+    /// at the `ghostty/` dir; libghostty derives `TERMINFO` from its *sibling*
+    /// `terminfo/` — the same layout as Ghostty.app's `Resources/{ghostty,terminfo}`
+    /// pair. We override rather than defer to an inherited value because launching
+    /// zen-term from inside Ghostty would otherwise inherit that Ghostty's
+    /// `GHOSTTY_RESOURCES_DIR` — a possibly different version than our pinned libghostty,
+    /// silently mismatching shell-integration scripts and terminfo.
+    private static func useBundledResources() {
+        guard
+            let dir = Bundle.module.resourceURL?
+                .appendingPathComponent("ghostty-resources/ghostty").path,
+            FileManager.default.fileExists(atPath: dir)
+        else {
+            NSLog(
+                "GhosttyApp: staged ghostty resources missing — shell integration and "
+                    + "terminfo degraded. Re-run bin/build-ghosttykit.")
+            return
+        }
         setenv("GHOSTTY_RESOURCES_DIR", dir, 1)
     }
 
@@ -91,7 +113,8 @@ final class GhosttyApp {
     }
 
     /// Route a surface-targeted action (title / pwd / bell / child-exit) to its
-    /// `GhosttySurface`. App-level actions are ignored for the spike. The surface is
+    /// `GhosttySurface`. App-level actions are ignored — the chrome owns app-level
+    /// behavior (tabs, splits, palette), not the terminal backend. The surface is
     /// recovered from the `userdata` we set on its config at creation.
     private static func action(
         _ app: ghostty_app_t?, _ target: ghostty_target_s, _ action: ghostty_action_s

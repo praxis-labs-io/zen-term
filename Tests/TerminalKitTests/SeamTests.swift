@@ -49,10 +49,16 @@ final class SeamTests: XCTestCase {
         XCTAssertTrue(config.environment.isEmpty)
     }
 
-    func test_factoryMakesASwiftTermSurfaceView() {
-        let surface = TerminalSurfaceFactory.make()
-        // The factory returns the SwiftTerm-backed surface whose view the chrome
-        // can place. We construct only — starting a process is out of unit scope.
-        XCTAssertTrue(surface is SwiftTermSurface)
+    func test_factoryDefaultsToGhosttyAndSwapsPerBackend() {
+        // We construct only — starting a process is out of unit scope. The factory's
+        // static backend is process-global, so restore it for other tests.
+        let original = TerminalSurfaceFactory.backend
+        defer { TerminalSurfaceFactory.backend = original }
+
+        XCTAssertEqual(original, .ghostty, "libghostty is the default backend (ZEN-45)")
+        XCTAssertTrue(TerminalSurfaceFactory.make() is GhosttySurface)
+
+        TerminalSurfaceFactory.backend = .swiftTerm
+        XCTAssertTrue(TerminalSurfaceFactory.make() is SwiftTermSurface)
     }
 }

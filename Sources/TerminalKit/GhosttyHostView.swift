@@ -2,7 +2,7 @@ import AppKit
 import GhosttyKit
 
 /// The `NSView` libghostty renders into and that forwards input to a `GhosttySurface`'s
-/// surface (ZEN-40 spike). libghostty attaches its own Metal layer to this view (making
+/// surface. libghostty attaches its own Metal layer to this view (making
 /// it layer-hosting), so this view must NOT set `wantsLayer` itself. Coordinates handed
 /// to libghostty use a top-left origin, so mouse `y` is flipped from AppKit's.
 final class GhosttyHostView: NSView {
@@ -72,12 +72,22 @@ final class GhosttyHostView: NSView {
 
     override func keyDown(with event: NSEvent) {
         guard let surfacePtr else { return }
+        // Shift+Enter → LF so multiline-aware CLIs treat it as a soft newline while
+        // plain Enter (CR) still submits — the convention `claude /terminal-setup`
+        // writes, and what the SwiftTerm backend implements. keyCode 36 = kVK_Return.
+        if event.isSoftNewline {
+            ghostty_surface_text(surfacePtr, "\n", 1)
+            return
+        }
         let action: ghostty_input_action_e = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
         sendKey(surfacePtr, action, event, text: event.ghosttyCharacters)
     }
 
     override func keyUp(with event: NSEvent) {
         guard let surfacePtr else { return }
+        // Swallow the release for the soft-newline chord we consumed in keyDown; a bare
+        // RELEASE for a PRESS the terminal never saw confuses key-protocol-aware TUIs.
+        if event.isSoftNewline { return }
         sendKey(surfacePtr, GHOSTTY_ACTION_RELEASE, event, text: nil)
     }
 
@@ -145,13 +155,23 @@ final class GhosttyHostView: NSView {
             x *= 2  // subjective feel multiplier, matching Ghostty's own app
             y *= 2
         }
-        // Packed scroll mods: bit 0 = high-precision. Momentum phases are omitted for the spike.
+        // Packed scroll mods: bit 0 = high-precision. Momentum phases are tracked in ZEN-67.
         let mods: ghostty_input_scroll_mods_t = precise ? 1 : 0
         ghostty_surface_mouse_scroll(surfacePtr, x, y, mods)
     }
 }
 
 extension NSEvent {
+    /// The Shift+Enter soft-newline chord: Return (keyCode 36) with Shift and no other
+    /// modifier. Requiring shift *exclusively* leaves Ctrl/Cmd/Opt+Shift+Enter to reach
+    /// libghostty's key encoder as real chords (kitty-protocol CSI-u, ghostty binds)
+    /// rather than collapsing them all to a bare LF.
+    var isSoftNewline: Bool {
+        guard keyCode == 36 else { return false }
+        let active = modifierFlags.intersection([.shift, .control, .option, .command])
+        return active == .shift
+    }
+
     /// Ghostty modifier bitmask from AppKit modifier flags.
     var ghosttyMods: ghostty_input_mods_e {
         var mods = GHOSTTY_MODS_NONE.rawValue

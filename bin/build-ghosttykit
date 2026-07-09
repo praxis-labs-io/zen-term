@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build GhosttyKit.xcframework from source for the libghostty backend (ZEN-40 spike).
+# Build GhosttyKit.xcframework from source for the libghostty backend (the default).
 #
 # libghostty ships no prebuilt embeddable artifact — the released Ghostty.app statically
 # links it into its main binary. So we build it ourselves: pin the ghostty source, drive
@@ -55,4 +55,16 @@ rm -rf "$ROOT/Frameworks/GhosttyKit.xcframework"
 mkdir -p "$ROOT/Frameworks"
 cp -R "$GHOSTTY/macos/GhosttyKit.xcframework" "$ROOT/Frameworks/"
 
-echo "✓ done — build with: swift build; run libghostty with: ZENTERM_BACKEND=ghostty swift run ZenTerm"
+# 5. Stage libghostty's runtime resources (shell-integration, themes, terminfo) from the
+#    same build, as a TerminalKit SwiftPM resource so Bundle.module resolves them at
+#    runtime. The ghostty/ + terminfo/ sibling layout mirrors Ghostty.app's
+#    Resources/{ghostty,terminfo} pair — libghostty derives TERMINFO from the sibling of
+#    GHOSTTY_RESOURCES_DIR. Gitignored, like the xcframework: version-matched to the pin.
+echo "▸ staging Sources/TerminalKit/Resources/ghostty-resources"
+RES="$ROOT/Sources/TerminalKit/Resources/ghostty-resources"
+rm -rf "$RES"
+mkdir -p "$RES"
+cp -R "$GHOSTTY/zig-out/share/ghostty" "$RES/ghostty"
+cp -R "$GHOSTTY/zig-out/share/terminfo" "$RES/terminfo"
+
+echo "✓ done — build with: swift build; run with: swift run ZenTerm"
