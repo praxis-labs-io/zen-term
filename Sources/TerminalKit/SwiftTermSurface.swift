@@ -56,6 +56,14 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
             guard let self else { return }
             self.delegate?.surfaceDidRingBell(self)
         }
+        // Intercept OSC 777 `notify;<title>;<body>` — the desktop-notification convention an
+        // agent (e.g. Claude Code's Ghostty mode) emits when it wants the user. A registered
+        // handler takes priority over SwiftTerm's built-in (a Mac no-op), so this is the one
+        // place the payload is reachable. The sequence's trailing BEL is its terminator, not a
+        // bell ring, so this never overlaps the `onBell` path.
+        term.getTerminal().registerOscHandler(code: 777) { [weak self] data in
+            self?.handleNotifyOSC(data)
+        }
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .mouseMoved]) {
             [weak self] event in
             guard let self else { return event }
@@ -121,7 +129,19 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
     public func start(_ config: TerminalSurfaceConfig) {
         if let theme = config.theme { applyTheme(theme) }
         let base = Terminal.getEnvironmentVariables(termName: "xterm-256color", trueColor: true)
-        let environment = EnvBuilder.merged(base: base, overrides: config.environment)
+        // Present as Ghostty so terminal-aware tools that auto-detect the host — notably
+        // Claude Code's "auto" notification mode — pick a channel we actually handle: OSC 777
+        // desktop notifications (intercepted in `init`). `TERM` stays `xterm-256color`, so
+        // terminfo-based rendering is unchanged; only the app-level identity advertises Ghostty.
+        var overrides = config.environment
+        // Only when the caller hasn't set its own identity (an explicit override still wins).
+        // The version is a current Ghostty release — high enough to clear an agent's minimum-
+        // version gate for OSC 777, without implying capabilities the SwiftTerm backend lacks.
+        if overrides["TERM_PROGRAM"] == nil {
+            overrides["TERM_PROGRAM"] = "ghostty"
+            overrides["TERM_PROGRAM_VERSION"] = "1.1.3"
+        }
+        let environment = EnvBuilder.merged(base: base, overrides: overrides)
         let isDefaultShell = config.command == nil
         let shell =
             config.command
@@ -173,6 +193,17 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
         term.nativeForegroundColor = theme.foreground.nsColor
         term.caretColor = theme.cursor.nsColor
         term.selectedTextBackgroundColor = theme.selectionBackground.nsColor
+    }
+
+    /// Parse an OSC 777 `notify;<title>;<body>` payload and surface it as a
+    /// `TerminalNotification`. The body may itself contain `;`, so everything past the title
+    /// is rejoined. Non-`notify` OSC 777 subcommands are ignored.
+    private func handleNotifyOSC(_ data: ArraySlice<UInt8>) {
+        let parts = String(decoding: data, as: UTF8.self).components(separatedBy: ";")
+        guard parts.first == "notify", parts.count >= 2 else { return }
+        let title = parts[1]
+        let body = parts.count >= 3 ? parts[2...].joined(separator: ";") : ""
+        delegate?.surface(self, didPostNotification: TerminalNotification(title: title, body: body))
     }
 
     public func focus() { term.window?.makeFirstResponder(term) }

@@ -55,6 +55,11 @@ final class PaneCanvasController: NSObject {
     /// routing) onto the pane canvas.
     var onFocusChanged: (() -> Void)?
 
+    /// Fired when any pane's surface posts a desktop notification (OSC 777) — the tab-level,
+    /// message-bearing "needs attention" signal (e.g. an agent asking permission). `TabController`
+    /// relays it up.
+    var onNotification: ((TerminalNotification) -> Void)?
+
     /// Fired when a zoomed pane's corner unzoom button is clicked — the owning
     /// `TabController` exits zoom (keeping its `zoomedPanel` in sync).
     var onZoomExitRequested: (() -> Void)?
@@ -363,6 +368,9 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     func surfaceWantsFocus(_ s: TerminalSurface) {
         guard let id = leafID(of: s) else { return }
         focus(id)
+    }
+    func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
+        onNotification?(n)
     }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }

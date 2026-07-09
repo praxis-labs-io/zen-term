@@ -1,8 +1,9 @@
 import AppKit
 
-/// A small, flat button on a confirm toast: muted `cancel`, or a subtle-filled `primary` /
-/// `destructive` whose text carries the tone (the toast's `accent` for primary, love for
-/// destructive). Carries its `ToastAction.run` and the Return / Esc key equivalents.
+/// A small, flat button on a confirm toast: a muted `cancel`, or a subtle-filled
+/// `destructive` whose love-tinted text carries the tone. Carries its `ToastAction.run`, and —
+/// unless `keyEquivalents` is off (a non-modal toast that must not hijack Return / Esc
+/// window-wide) — the Return / Esc keys.
 final class ToastButton: NSButton {
     private let run: () -> Void
     private let restBg: NSColor
@@ -15,7 +16,7 @@ final class ToastButton: NSButton {
     private static let subtle = NSColor(white: 1, alpha: 0.07)
     private static let subtleHover = NSColor(white: 1, alpha: 0.12)
 
-    init(_ action: ToastAction) {
+    init(_ action: ToastAction, keyEquivalents: Bool = true) {
         self.run = action.run
         let text: NSColor
         switch action.kind {
@@ -40,9 +41,11 @@ final class ToastButton: NSButton {
                 .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
             ])
 
-        switch action.kind {
-        case .destructive: keyEquivalent = "\r"  // Return answers
-        case .cancel: keyEquivalent = "\u{1b}"  // Esc cancels
+        if keyEquivalents {
+            switch action.kind {
+            case .destructive: keyEquivalent = "\r"  // Return answers
+            case .cancel: keyEquivalent = "\u{1b}"  // Esc cancels
+            }
         }
 
         updateBackground()
