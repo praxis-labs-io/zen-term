@@ -40,4 +40,27 @@ final class ChordTests: XCTestCase {
             XCTAssertFalse(chord.displayGlyph.isEmpty)
         }
     }
+
+    func test_configToken_roundTripsWithParse() {
+        let chords = [
+            Chord(command: true, shift: true, key: "p"),
+            Chord(command: true, key: ","),
+            Chord(command: true, shift: true, key: "\\"),
+            Chord(command: true, shift: true, key: "|"),
+            Chord(option: true, control: true, key: "5"),
+        ]
+        for chord in chords {
+            XCTAssertEqual(chord.configToken, expectedToken(chord))
+            XCTAssertEqual(Chord.parse(chord.configToken), chord)
+        }
+    }
+
+    private func expectedToken(_ c: Chord) -> String {
+        var t = ""
+        if c.command { t += "cmd+" }
+        if c.shift { t += "shift+" }
+        if c.option { t += "opt+" }
+        if c.control { t += "ctrl+" }
+        return t + c.key
+    }
 }

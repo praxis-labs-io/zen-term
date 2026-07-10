@@ -67,6 +67,18 @@ struct Chord: Hashable {
         return glyph
     }
 
+    /// The config-file word form the writer emits (`cmd+shift+g`) — modifiers in the
+    /// repo's order (cmd, shift, opt, ctrl) then the key. The inverse of `parse`, mirroring
+    /// `displayGlyph`'s glyph form.
+    var configToken: String {
+        var token = ""
+        if command { token += "cmd+" }
+        if shift { token += "shift+" }
+        if option { token += "opt+" }
+        if control { token += "ctrl+" }
+        return token + key
+    }
+
     /// Build the chord an `NSEvent` represents, for keymap lookup. Mirrors the modifier +
     /// `charactersIgnoringModifiers` reading `KeyInterceptor` used before it went data-driven.
     init?(event: NSEvent) {
