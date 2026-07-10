@@ -8,11 +8,12 @@ public enum DevicePreset: CaseIterable, Sendable {
     case tablet
     case phone
 
-    /// The CSS-point width to constrain the web view to, or nil for full width.
+    /// The CSS-point width the web view lays out at (drives responsive reflow). Desktop
+    /// is a real desktop canvas so the zoom control can scale it down to fit a pane.
     /// Widths are spike constants; configurability is future work.
-    public var width: CGFloat? {
+    public var width: CGFloat {
         switch self {
-        case .desktop: return nil
+        case .desktop: return 1280
         case .tablet: return 820
         case .phone: return 390
         }

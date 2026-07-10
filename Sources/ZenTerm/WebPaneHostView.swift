@@ -16,6 +16,7 @@ final class WebPaneHostView: NSView, PaneHost {
     private let forwardButton: IconButton
     private let reloadButton: IconButton
     private let urlField = NSTextField()
+    private let zoomPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let zoomButton: IconButton
     private var deviceButtons: [(preset: DevicePreset, button: IconButton)] = []
 
@@ -109,7 +110,13 @@ final class WebPaneHostView: NSView, PaneHost {
         deviceStack.orientation = .horizontal
         deviceStack.spacing = 2
 
-        let rightStack = NSStackView(views: [deviceStack, zoomButton])
+        zoomPopup.controlSize = .small
+        zoomPopup.font = .systemFont(ofSize: 11)
+        zoomPopup.target = self
+        zoomPopup.action = #selector(zoomChanged)
+        zoomPopup.addItems(withTitles: WebZoom.presets.map(\.label))
+
+        let rightStack = NSStackView(views: [zoomPopup, deviceStack, zoomButton])
         rightStack.orientation = .horizontal
         rightStack.spacing = 8
         navStack.translatesAutoresizingMaskIntoConstraints = false
@@ -164,6 +171,12 @@ final class WebPaneHostView: NSView, PaneHost {
 
     @objc private func urlSubmitted() { surface.navigate(to: urlField.stringValue) }
 
+    @objc private func zoomChanged() {
+        let index = zoomPopup.indexOfSelectedItem
+        guard WebZoom.presets.indices.contains(index) else { return }
+        surface.setZoom(WebZoom.presets[index])
+    }
+
     private func selectDevice(_ preset: DevicePreset) {
         surface.setDevice(preset)
         refresh()
@@ -176,6 +189,7 @@ final class WebPaneHostView: NSView, PaneHost {
         backButton.alphaValue = surface.canGoBack ? 1 : 0.35
         forwardButton.alphaValue = surface.canGoForward ? 1 : 0.35
         for (preset, button) in deviceButtons { button.isActive = (surface.device == preset) }
+        if let index = WebZoom.presets.firstIndex(of: surface.zoom) { zoomPopup.selectItem(at: index) }
     }
 
     private static let idleBorder = Theme.current.chrome.ink(alpha: 0.12)
