@@ -11,7 +11,7 @@ final class KeyboardFocusTests: XCTestCase {
     }
 
     func test_step_noAnchor_jumpsToEnd() {
-        XCTAssertEqual(KeyboardFocus.step(from: nil, delta: 1, count: 3), 0)   // first
+        XCTAssertEqual(KeyboardFocus.step(from: nil, delta: 1, count: 3), 0)  // first
         XCTAssertEqual(KeyboardFocus.step(from: nil, delta: -1, count: 3), 2)  // last
     }
 
