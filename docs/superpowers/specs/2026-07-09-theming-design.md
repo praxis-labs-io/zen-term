@@ -6,7 +6,16 @@
 
 Make zen-term's appearance config-driven. Point it at a **ghostty-format theme
 file** and it colors **both** the terminal and the chrome. With no file present,
-the bundled Rosé Pine Moon default renders exactly as today (zero visual change).
+the bundled Rosé Pine Moon default renders essentially as today.
+
+> **Note (revised during implementation):** the original goal was a *byte-identical*
+> default. During the light-theme GUI pass we deliberately relaxed that: chrome inks
+> now derive from the theme foreground with a ×1.3 readability boost (a small, uniform
+> lift that also helps dark-mode secondary text), a few base alphas were retuned (tab
+> number, panel/palette header floor → 0.4, focus-halo glow 0.2 → 0.3), and `muted`
+> is a fg/bg blend rather than the exact old literal. So the default is *visually very
+> close* to before with an intentional legibility lift — not pixel-identical. This was
+> an approved usability tradeoff, not a regression.
 
 ## Current state
 
@@ -110,7 +119,8 @@ All new types live in `ZenTerm/` (above the seam); `TerminalTheme` stays in
 **`Theme`** (existing enum, `ZenTerm`)
 - Gains `static let current: AppTheme` (loaded once at launch via `ConfigLoader`).
 - Keeps the Rosé Pine Moon values as the built-in **default** `AppTheme` (so no-file
-  output is byte-identical to today).
+  output is essentially today's look — see the revised-goal note about the chrome-ink
+  readability lift).
 - The ~14 call sites migrate, each classified:
   - a **chrome** use → `Theme.current.chrome.<role>.nsColor`
   - a **terminal-surface** use → `Theme.current.terminal`
@@ -152,8 +162,8 @@ an app restart in v1.
   `GhosttyThemeParser.parse` → equal terminal colors (format symmetry).
 
 **Manual runbook:**
-1. No `~/.config/zen-term/` → launch → identical to today (Rosé Pine Moon), terminal
-   + chrome.
+1. No `~/.config/zen-term/` → launch → essentially today's look (Rosé Pine Moon),
+   terminal + chrome (chrome inks carry the intentional readability lift).
 2. Drop a *different* ghostty theme (e.g. a light one from ghostty's theme repo) at
    `~/.config/zen-term/theme` → launch → terminal **and** chrome recolor (backdrop
    tint, toast accents, tab colors all follow).

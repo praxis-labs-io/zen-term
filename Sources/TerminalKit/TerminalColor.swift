@@ -17,8 +17,10 @@ public struct TerminalColor: Sendable, Equatable {
     /// whitespace tolerated). The inverse of `hex`; `nil` for any other form.
     public init?(hex: String) {
         var text = hex.trimmingCharacters(in: .whitespaces)
-        guard text.hasPrefix("#") else { return nil }
-        text.removeFirst()
+        // Leading `#` is optional: ghostty's own config parser accepts bare hex
+        // (`background = 1d1f21`) as well as `#`-prefixed, so a theme written either way
+        // applies. (Named X11 colors — `foreground = white` — are not supported.)
+        if text.hasPrefix("#") { text.removeFirst() }
         let sixDigit: String
         switch text.count {
         case 3: sixDigit = text.map { "\($0)\($0)" }.joined()
