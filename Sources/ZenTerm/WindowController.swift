@@ -635,6 +635,7 @@ final class WindowController: NSObject {
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
         case .addWorkspace: openAddWorkspaceForm()
+        case .openSettings: break
         }
     }
 

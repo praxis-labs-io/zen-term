@@ -29,6 +29,7 @@ extension KeyInterceptor.ReservedChord {
         case .toggleRepoPicker: return "toggle_repo_picker"
         case .toggleCommandPalette: return "toggle_command_palette"
         case .addWorkspace: return "add_workspace"
+        case .openSettings: return "open_settings"
         }
     }
 
@@ -58,6 +59,7 @@ extension KeyInterceptor.ReservedChord {
         case "toggle_repo_picker": self = .toggleRepoPicker
         case "toggle_command_palette": self = .toggleCommandPalette
         case "add_workspace": self = .addWorkspace
+        case "open_settings": self = .openSettings
         default:
             if let rest = token.dropPrefixIfPresent("select_tab_"), let n = Int(rest), (1...9).contains(n) {
                 self = .selectTab(n)
@@ -104,6 +106,7 @@ enum KeymapDefaults {
         map[Chord(command: true, key: "f")] = .toggleZoom
         map[Chord(command: true, key: "g")] = .toggleLazygit
         map[Chord(command: true, key: "p")] = .toggleCommandPalette
+        map[Chord(command: true, key: ",")] = .openSettings
         for n in 1...9 { map[Chord(command: true, key: "\(n)")] = .selectTab(n) }
 
         return map
