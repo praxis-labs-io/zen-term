@@ -1,8 +1,8 @@
 import TerminalKit
 
-/// zen-term's built-in terminal theme — Rosé Pine Moon, matching the user's kitty
-/// `rose-pine-moon.conf` (JetBrainsMono Nerd Font Mono, faithful bg/fg/palette).
-/// (A later epic can parse a live theme file; this is the hardcoded default.)
+/// zen-term's built-in terminal theme — Rosé Pine Moon (JetBrainsMono Nerd Font Mono,
+/// faithful bg/fg/palette) — and `current`, the resolved appearance loaded from
+/// `~/.config/zen-term/theme` when present (ZEN-27).
 enum Theme {
     static let rosePineMoon = TerminalTheme(
         fontName: "JetBrainsMono Nerd Font Mono",
@@ -18,6 +18,11 @@ enum Theme {
             rgb(0x9ccfd8), rgb(0xc4a7e7), rgb(0xea9a97), rgb(0xe0def4),  // 12–15 (bright)
         ]
     )
+
+    /// The resolved appearance for this launch — a user theme from
+    /// `~/.config/zen-term/theme`, or the built-in Rosé Pine Moon default. Resolved once,
+    /// lazily on first access (before the first window is built). Launch-only in v1.
+    static let current: AppTheme = ConfigLoader.loadAppTheme()
 
     private static func rgb(_ hex: UInt32) -> TerminalColor {
         TerminalColor(red: UInt8((hex >> 16) & 0xFF), green: UInt8((hex >> 8) & 0xFF), blue: UInt8(hex & 0xFF))
