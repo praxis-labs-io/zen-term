@@ -70,10 +70,51 @@ enum ConfigWriter {
 
     // MARK: keybinds (implemented in Task 3)
 
+    /// Regenerate the reserved `keybind =` block from the desired keymap. Emits a line only for a
+    /// binding that differs from `KeymapDefaults.map` (a default needs no line); preserves existing
+    /// `keybind = toggle_float:…` lines (float-owned, edited only via `float =`); and drops every
+    /// other existing `keybind =` line. The block lands where the first `keybind =` line was; if
+    /// there were none, after the `Keybinds` header comment, else appended.
     private static func applyKeybinds(
         _ keybinds: [Chord: KeyInterceptor.ReservedChord], to lines: inout [String]
     ) {
-        // Task 3 fills this in.
+        let floatBinds = lines.filter(isFloatKeybindLine)
+        let overrides =
+            keybinds
+            .filter { chord, action in KeymapDefaults.map[chord] != action }
+            .map { chord, action in "keybind = \(action.actionToken)=\(chord.configToken)" }
+            .sorted()
+        let block = floatBinds + overrides
+
+        var result: [String] = []
+        var inserted = false
+        for line in lines {
+            if isKeybindLine(line) {
+                if !inserted {
+                    result.append(contentsOf: block)
+                    inserted = true
+                }
+                continue  // drop every existing keybind line (block re-adds the ones we keep)
+            }
+            result.append(line)
+        }
+        if !inserted, !block.isEmpty {
+            if let headerIndex = result.firstIndex(where: { $0.contains("─── Keybinds") }) {
+                result.insert(contentsOf: block, at: headerIndex + 1)
+            } else {
+                if let last = result.last, !last.isEmpty { result.append("") }
+                result.append(contentsOf: block)
+            }
+        }
+        lines = result
+    }
+
+    private static func isKeybindLine(_ line: String) -> Bool { activeAssignmentKey(line) == "keybind" }
+
+    private static func isFloatKeybindLine(_ line: String) -> Bool {
+        guard isKeybindLine(line), let equals = line.firstIndex(of: "=") else { return false }
+        let value = line[line.index(after: equals)...].trimmingCharacters(in: .whitespaces)
+        return value.hasPrefix("toggle_float:")
     }
 
     // MARK: line classification

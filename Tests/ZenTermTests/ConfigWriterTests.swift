@@ -96,4 +96,56 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(attrs[.type] as? FileAttributeType, .typeSymbolicLink)  // link intact
         XCTAssertEqual(try String(contentsOf: realFile, encoding: .utf8), "theme = new\n")  // wrote target
     }
+
+    func test_keybind_emitsOnlyNonDefaultOverrides() throws {
+        let dir = try makeTempDir()
+        try seed("# ─── Keybinds ───\n", in: dir)
+        // Move the command palette to cmd+shift+o; keep everything else at its default.
+        var desired = KeymapDefaults.map
+        desired = desired.filter { $0.value != .toggleCommandPalette }  // drop its default chord
+        desired[Chord(command: true, shift: true, key: "o")] = .toggleCommandPalette
+        try ConfigWriter.apply(keybinds: desired, configRoot: dir)
+        let text = try read(dir)
+        XCTAssertTrue(text.contains("keybind = toggle_command_palette=cmd+shift+o"), text)
+        // No other action changed → exactly one keybind line.
+        XCTAssertEqual(text.components(separatedBy: "\n").filter { $0.hasPrefix("keybind = ") }.count, 1)
+    }
+
+    func test_keybind_resetAll_removesReservedKeybindLines() throws {
+        let dir = try makeTempDir()
+        try seed("theme = x\nkeybind = toggle_zoom=cmd+shift+z\n", in: dir)
+        try ConfigWriter.apply(keybinds: KeymapDefaults.map, configRoot: dir)  // all defaults → no overrides
+        let text = try read(dir)
+        XCTAssertFalse(text.contains("keybind = "), text)
+        XCTAssertTrue(text.contains("theme = x"), text)
+    }
+
+    func test_keybind_preservesFloatKeybindLines() throws {
+        let dir = try makeTempDir()
+        try seed("keybind = toggle_float:dev=cmd+shift+d\nkeybind = toggle_zoom=cmd+shift+z\n", in: dir)
+        try ConfigWriter.apply(keybinds: KeymapDefaults.map, configRoot: dir)  // reset reserved to defaults
+        let text = try read(dir)
+        XCTAssertTrue(text.contains("keybind = toggle_float:dev=cmd+shift+d"), text)  // float bind kept
+        XCTAssertFalse(text.contains("toggle_zoom"), text)  // reserved override dropped
+    }
+
+    func test_keybind_leavesFloatDefinitionLinesUntouched() throws {
+        let dir = try makeTempDir()
+        try seed("float = id:dev command:\"npm run dev\" key:cmd+shift+d\n", in: dir)
+        var desired = KeymapDefaults.map.filter { $0.value != .toggleZoom }
+        desired[Chord(command: true, shift: true, key: "z")] = .toggleZoom
+        try ConfigWriter.apply(keybinds: desired, configRoot: dir)
+        let text = try read(dir)
+        XCTAssertTrue(text.contains("float = id:dev command:\"npm run dev\" key:cmd+shift+d"), text)
+    }
+
+    func test_keybind_roundTripsThroughAssembler() throws {
+        let dir = try makeTempDir()
+        var desired = KeymapDefaults.map.filter { $0.value != .toggleZoom }
+        desired[Chord(command: true, shift: true, key: "z")] = .toggleZoom
+        try ConfigWriter.apply(keybinds: desired, configRoot: dir)
+        let keymap = ConfigLoader.loadGeneralConfig(configRoot: dir).keymap
+        XCTAssertEqual(keymap[Chord(command: true, shift: true, key: "z")], .toggleZoom)
+        XCTAssertNil(keymap[Chord(command: true, key: "f")])  // old ⌘F default was dropped
+    }
 }
