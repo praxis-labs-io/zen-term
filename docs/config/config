@@ -8,7 +8,7 @@
 # lines are ignored. Unknown keys are ignored. A malformed value falls back to
 # the default; an out-of-range number is clamped. Nothing here can crash the app
 # (bad lines are logged and skipped). Config is read once at launch — restart to
-# apply changes.
+# apply hand-edits. Changes made in the in-app Settings card (⌘,) apply live.
 
 # ─── Theme ───────────────────────────────────────────────────────────────────
 
@@ -113,7 +113,7 @@
 #   resize_left  resize_right  resize_up  resize_down
 #   new_tab  new_window  prev_tab  next_tab  select_tab_1 … select_tab_9
 #   toggle_bottom_drawer  toggle_right_drawer  toggle_zoom
-#   toggle_lazygit  toggle_repo_picker  toggle_command_palette
+#   toggle_lazygit  toggle_repo_picker  toggle_command_palette  open_settings
 #   toggle_float:<id>   (bind a second chord to one of your floats)
 #
 # Defaults (uncomment to change; these are what ships):
@@ -138,3 +138,4 @@
 # keybind = toggle_lazygit=cmd+g
 # keybind = toggle_repo_picker=cmd+shift+p
 # keybind = toggle_command_palette=cmd+p
+# keybind = open_settings=cmd+,
