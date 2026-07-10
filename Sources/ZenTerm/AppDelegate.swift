@@ -65,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let offset = CGFloat(windows.count) * 28
         let rect = NSRect(x: 0, y: 0, width: 900, height: 560).offsetBy(dx: offset, dy: -offset)
         let wc = WindowController(contentRect: rect, initialCWD: initialCWD)
+        wc.keybindCapturer = keys
         if centered { wc.window.center() }
         wc.onClosed = { [weak self, weak wc] in
             guard let self, let wc else { return }

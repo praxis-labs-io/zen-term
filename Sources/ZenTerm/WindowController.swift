@@ -39,7 +39,7 @@ final class WindowController: NSObject {
     /// a kind discriminator rather than parallel per-overlay stacks. Window-level (they open/
     /// switch tabs) but presented over the active tab's tile region. Modal while open.
     private enum ModalKind {
-        case repoPicker, commandPalette, addWorkspace
+        case repoPicker, commandPalette, addWorkspace, settings
 
         /// The chord that closes this same modal when pressed again (its own toggle).
         var selfToggle: KeyInterceptor.ReservedChord {
@@ -47,10 +47,14 @@ final class WindowController: NSObject {
             case .repoPicker: return .toggleRepoPicker
             case .commandPalette: return .toggleCommandPalette
             case .addWorkspace: return .addWorkspace
+            case .settings: return .openSettings
             }
         }
     }
     private var modal: (overlay: ModalOverlay, kind: ModalKind)?
+
+    /// The app's key interceptor, injected so the Settings Keybinds section can capture chords.
+    weak var keybindCapturer: KeybindCapturing?
 
     /// Whether a modal card is up right now. Read by `AppDelegate` so window-level chords (⌘N)
     /// and Copy/Paste routing respect the modal too, not just `handle(_:)`.
@@ -452,6 +456,18 @@ final class WindowController: NSObject {
         presentModal(form, kind: .addWorkspace)
     }
 
+    /// Open the Settings card. Built fresh each open so every section reads live config values.
+    private func openSettings() {
+        if modal?.kind == .settings { closeModal(); return }
+        let overlay = SettingsOverlay(
+            sections: [SettingsKeybindsSection()],
+            capturer: keybindCapturer,
+            background: Theme.current.chrome.background.nsColor,
+            onClose: { [weak self] in self?.closeModal() }
+        )
+        presentModal(overlay, kind: .settings)
+    }
+
     /// Persist a freshly-built workspace, then open it. On a write failure the form stays up and
     /// a toast explains why; on success the form closes and the workspace opens in a new tab
     /// (the value-based `openWorkspace` seam — no relaunch, no dependence on a launch-time store).
@@ -559,7 +575,8 @@ final class WindowController: NSObject {
             case modal.kind.selfToggle:
                 closeModal()
                 return
-            case .toggleRepoPicker, .toggleCommandPalette, .addWorkspace, .toggleLazygit, .toggleToolFloat:
+            case .toggleRepoPicker, .toggleCommandPalette, .addWorkspace, .openSettings,
+                .toggleLazygit, .toggleToolFloat:
                 closeModal()  // close the current card, then open the requested surface below
             default:
                 return
@@ -577,7 +594,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Close Pane",
                         message: "Close lazygit first to close a pane."))
                 return
-            case .toggleToolFloat, .toggleCommandPalette, .toggleRepoPicker, .addWorkspace:
+            case .toggleToolFloat, .toggleCommandPalette, .toggleRepoPicker, .addWorkspace, .openSettings:
                 active?.toggleLazygit()  // close lazygit, then fall through to open the other
             case .toggleLazygit, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
@@ -598,7 +615,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Close Pane",
                         message: "Close \(name) first to close a pane."))
                 return
-            case .toggleLazygit, .toggleCommandPalette, .toggleRepoPicker, .addWorkspace:
+            case .toggleLazygit, .toggleCommandPalette, .toggleRepoPicker, .addWorkspace, .openSettings:
                 active?.closeToolFloat()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
@@ -635,7 +652,7 @@ final class WindowController: NSObject {
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
         case .addWorkspace: openAddWorkspaceForm()
-        case .openSettings: break
+        case .openSettings: openSettings()
         }
     }
 
