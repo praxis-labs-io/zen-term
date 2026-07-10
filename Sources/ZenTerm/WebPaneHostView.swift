@@ -60,7 +60,7 @@ final class WebPaneHostView: NSView, PaneHost {
         toolbar.wantsLayer = true
         toolbar.layer?.cornerRadius = 8
         toolbar.layer?.borderWidth = 1
-        toolbar.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.04).cgColor
+        toolbar.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         toolbar.translatesAutoresizingMaskIntoConstraints = false
         addSubview(toolbar)
 
@@ -72,10 +72,29 @@ final class WebPaneHostView: NSView, PaneHost {
         urlField.action = #selector(urlSubmitted)
         urlField.placeholderString = "Open URL…"
         urlField.font = .systemFont(ofSize: 11)
-        urlField.bezelStyle = .roundedBezel
+        urlField.textColor = Theme.current.chrome.foreground.nsColor
+        urlField.isBezeled = false
+        urlField.isBordered = false
+        urlField.drawsBackground = false
         urlField.focusRingType = .none
         urlField.lineBreakMode = .byTruncatingTail
-        urlField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        urlField.translatesAutoresizingMaskIntoConstraints = false
+
+        // The address field's pill matches the IconButton hover fill so the toolbar reads
+        // as one system.
+        let fieldWrap = NSView()
+        fieldWrap.wantsLayer = true
+        fieldWrap.layer?.cornerRadius = 6
+        fieldWrap.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.10).cgColor
+        fieldWrap.translatesAutoresizingMaskIntoConstraints = false
+        fieldWrap.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        fieldWrap.addSubview(urlField)
+        NSLayoutConstraint.activate([
+            fieldWrap.heightAnchor.constraint(equalToConstant: 24),
+            urlField.leadingAnchor.constraint(equalTo: fieldWrap.leadingAnchor, constant: 8),
+            urlField.trailingAnchor.constraint(equalTo: fieldWrap.trailingAnchor, constant: -8),
+            urlField.centerYAnchor.constraint(equalTo: fieldWrap.centerYAnchor),
+        ])
 
         zoomButton.isHidden = true
         let deviceStack = NSStackView(
@@ -89,7 +108,7 @@ final class WebPaneHostView: NSView, PaneHost {
         deviceStack.orientation = .horizontal
         deviceStack.spacing = 2
 
-        let row = NSStackView(views: [navStack, urlField, deviceStack, zoomButton])
+        let row = NSStackView(views: [navStack, fieldWrap, deviceStack, zoomButton])
         row.orientation = .horizontal
         row.spacing = 8
         row.translatesAutoresizingMaskIntoConstraints = false
