@@ -48,12 +48,18 @@ final class SettingsKeybindsSection: SettingsSection {
             if let previous { rowsStack.setCustomSpacing(18, after: previous) }  // gap between groups
             for action in actions {
                 let row = KeybindRow(action: action, title: CommandCatalog.spec(for: action).title)
-                row.onArrowUp = { [weak self] in self?.moveFocus(from: row.recordButton, delta: -1) }
-                row.onArrowDown = { [weak self] in self?.moveFocus(from: row.recordButton, delta: 1) }
+                // `weak row`: these closures live *on* the row, so capturing it strongly would be a
+                // retain cycle — every row (and its subtree) would leak on each Settings open.
+                row.onArrowUp = { [weak self, weak row] in
+                    row.map { self?.moveFocus(from: $0.recordButton, delta: -1) }
+                }
+                row.onArrowDown = { [weak self, weak row] in
+                    row.map { self?.moveFocus(from: $0.recordButton, delta: 1) }
+                }
                 row.onExitToNav = { [weak self] in self?.onExitToNav?() }
                 row.onEsc = { [weak self] in self?.onClose?() }
-                row.onRecordTapped = { [weak self] in self?.beginCapture(for: row) }
-                row.onReset = { [weak self] in self?.reset(row) }
+                row.onRecordTapped = { [weak self, weak row] in row.map { self?.beginCapture(for: $0) } }
+                row.onReset = { [weak self, weak row] in row.map { self?.reset($0) } }
                 rows.append(row)
                 rowsStack.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalTo: rowsStack.widthAnchor).isActive = true
@@ -107,9 +113,15 @@ final class SettingsKeybindsSection: SettingsSection {
     /// Record the next chord through the interceptor (so an already-bound chord isn't pre-empted),
     /// then rebind. Esc cancels; capture is one-shot (the handler ends it on the first event).
     private func beginCapture(for row: KeybindRow) {
+        // No interceptor means capture could never complete — bail before arming the row so it
+        // doesn't stick on "Press keys…" with no way out. (Always wired in-app; a guard, not a path.)
+        guard let capturer else {
+            row.showMessage("Keybind capture is unavailable.")
+            return
+        }
         row.setCapturing(true)
         row.showMessage(nil)
-        capturer?.beginCapture { [weak self, weak row] event in
+        capturer.beginCapture { [weak self, weak row] event in
             guard let self, let row else { return }
             self.capturer?.endCapture()
             row.setCapturing(false)
@@ -155,6 +167,11 @@ final class SettingsKeybindsSection: SettingsSection {
             try ConfigWriter.apply(keybinds: desired)
         } catch {
             (reportingRow ?? rows.first)?.showMessage("Couldn't write config: \(error.localizedDescription)")
+            // Roll the failed edit out of the in-memory map, back to what's on disk — otherwise it
+            // rides along on the next successful write, silently applying an edit the user was told
+            // failed. (`refreshRows` restores keycaps/reset-icons; it leaves the error message set.)
+            desired = reservedEntries(of: GeneralConfig.current.keymap)
+            refreshRows()
             return
         }
         AppConfig.reload()

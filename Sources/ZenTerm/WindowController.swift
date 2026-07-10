@@ -827,6 +827,10 @@ final class WindowController: NSObject {
         // Closing the window with a confirm still up must resolve its owner's pending state —
         // e.g. a quit confirm's `.terminateLater` reply — or the app hangs mid-quit.
         cancelConfirm()
+        // The keybind interceptor is shared app-wide. Closing this window while a Settings capture
+        // is armed (a native red-button close is a mouse event the capture can't intercept) would
+        // otherwise strand it in capture mode — swallowing every keystroke in every other window.
+        keybindCapturer?.endCapture()
         titlePoll?.invalidate()
         titlePoll = nil
         for c in controllers.values { c.shutdown() }

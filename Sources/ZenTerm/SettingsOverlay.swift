@@ -1,9 +1,9 @@
 import AppKit
 
 /// The Settings card — a `ModalOverlay` like the palettes (shared card + backdrop + spring), with
-/// a left nav of sections and a right detail pane. Fully keyboard-driven: Up/Down move within the
-/// nav, Right/Tab enter the detail pane, Left/Shift-Tab off the first detail stop return to the
-/// nav, Esc closes. Config edits in each section apply live (no restart).
+/// a left nav of sections and a right detail pane. Keyboard-driven, arrows primary: Up/Down move
+/// within the nav (and Tab/Shift-Tab advance/retreat rows in the detail pane), Right/Tab enter the
+/// detail pane, Left returns to the nav, Esc closes. Config edits in each section apply live.
 final class SettingsOverlay: NSView, ModalOverlay {
     private let sections: [SettingsSection]
     private let capturer: KeybindCapturing?

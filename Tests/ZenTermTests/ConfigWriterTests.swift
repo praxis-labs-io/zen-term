@@ -148,4 +148,19 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(keymap[Chord(command: true, shift: true, key: "z")], .toggleZoom)
         XCTAssertNil(keymap[Chord(command: true, key: "f")])  // old ⌘F default was dropped
     }
+
+    func test_keybind_narrowingMultiDefaultAction_persistsAndRoundTrips() throws {
+        let dir = try makeTempDir()
+        // splitVertical ships bound to BOTH ⌘⇧| and ⌘⇧\. Narrow it to just ⌘⇧\ — a chord that
+        // happens to be one of its own defaults. A per-chord diff emits no line and lets the
+        // assembler restore both; the per-action diff must write the one surviving chord.
+        var desired = KeymapDefaults.map.filter { $0.value != .splitVertical }
+        desired[Chord(command: true, shift: true, key: "\\")] = .splitVertical
+        try ConfigWriter.apply(keybinds: desired, configRoot: dir)
+        let text = try read(dir)
+        XCTAssertTrue(text.contains("keybind = split_vertical=cmd+shift+\\"), text)
+        let keymap = ConfigLoader.loadGeneralConfig(configRoot: dir).keymap
+        XCTAssertEqual(keymap[Chord(command: true, shift: true, key: "\\")], .splitVertical)
+        XCTAssertNil(keymap[Chord(command: true, shift: true, key: "|")])  // the dropped default is gone
+    }
 }

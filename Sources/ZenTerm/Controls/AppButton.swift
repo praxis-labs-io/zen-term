@@ -114,6 +114,9 @@ final class AppButton: NSButton {
         case 125: onArrowDown?()  // down
         case 123 where onArrowLeft != nil: onArrowLeft?()  // left
         case 124 where onArrowRight != nil: onArrowRight?()  // right
+        // Tab / Shift-Tab advance and retreat like Down / Up — and stay consumed here so focus
+        // can't jump the key-view loop out of the card's 2D model.
+        case 48: event.modifierFlags.contains(.shift) ? onArrowUp?() : onArrowDown?()
         case 53 where onEsc != nil: onEsc?()  // esc
         case 36, 76, 49: fire()  // return / enter / space → activate
         default: super.keyDown(with: event)
