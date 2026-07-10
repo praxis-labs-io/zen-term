@@ -208,7 +208,7 @@ final class TabController: NSObject {
 
     func start() { paneCanvas.start() }
     func split(_ axis: SplitAxis) {
-        if isZoomed { return }  // zoom is a strict focus mode — no splitting until you exit
+        if isZoomed { toastZoomBlocked("split"); return }  // strict focus mode — exit zoom first
         paneCanvas.split(axis)
     }
     @discardableResult func closeFocused() -> Bool {
@@ -312,7 +312,7 @@ final class TabController: NSObject {
     /// Toggle the bottom drawer. First open creates a persistent login-shell surface
     /// in the tab's cwd; toggling hidden keeps it running; it dies only in `shutdown()`.
     func toggleBottomDrawer() {
-        if zoomedPanel == .pane { return }  // a zoomed pane is a strict focus mode — no drawers
+        if zoomedPanel == .pane { toastZoomBlocked("open a drawer"); return }  // strict focus mode
         if zoomedPanel == .rightDrawer {
             switchZoomedDrawer(to: .bottom)  // jump the zoom to the other drawer
             return
@@ -347,7 +347,7 @@ final class TabController: NSObject {
     /// Toggle the right drawer. First open creates a persistent login-shell surface
     /// in the tab's cwd; toggling hidden keeps it running; it dies only in `shutdown()`.
     func toggleRightDrawer() {
-        if zoomedPanel == .pane { return }  // a zoomed pane is a strict focus mode — no drawers
+        if zoomedPanel == .pane { toastZoomBlocked("open a drawer"); return }  // strict focus mode
         if zoomedPanel == .bottomDrawer {
             switchZoomedDrawer(to: .right)  // jump the zoom to the other drawer
             return
@@ -749,6 +749,25 @@ final class TabController: NSObject {
         return false
     }
 
+    /// When the last "disabled while zoomed" toast fired — held ⌘-chords auto-repeat, so
+    /// coalesce rapid repeats into one notice instead of stacking a card per keypress.
+    private var lastZoomBlockToastAt: Date?
+    private static let zoomBlockToastThrottle: TimeInterval = 3
+
+    /// A grid command (split / navigate / resize / drawers) was invoked while zoomed. Zoom is
+    /// a strict focus mode, so instead of silently doing nothing, point the user at ⌘F.
+    private func toastZoomBlocked(_ verb: String) {
+        let now = Date()
+        if let last = lastZoomBlockToastAt, now.timeIntervalSince(last) < Self.zoomBlockToastThrottle {
+            return
+        }
+        lastZoomBlockToastAt = now
+        onRequestToast?(
+            ToastContent(
+                variant: .info, title: "Zoom mode",
+                message: "Exit zoom (⌘F) to \(verb)."))
+    }
+
     // MARK: cross-panel spatial nav (⌘hjkl)
 
     /// Sentinel ids standing in for the drawer panels in the shared nav graph —
@@ -769,7 +788,7 @@ final class TabController: NSObject {
     /// by PaneKit's `nearestLeaf`, the same geometric scorer pane-to-pane nav already
     /// uses, so a drawer is just another panel in the graph.
     func navigate(_ direction: Direction) {
-        if isZoomed { return }  // zoom is a strict focus mode — no cross-panel nav until you exit
+        if isZoomed { toastZoomBlocked("navigate"); return }  // strict focus mode — exit zoom first
         var frames = paneCanvas.leafFrames(in: content)
         if isBottomOpen, let panel = bottomDrawerPanel {
             frames[Self.bottomDrawerID] = flippedFrame(of: panel)
@@ -841,7 +860,7 @@ final class TabController: NSObject {
     /// right (⌘⇧L) — the same feel as an edge pane on that side. The cross axis beeps. A
     /// resize chord while zoomed just unzooms, matching `navigate`.
     func resize(_ direction: Direction) {
-        if isZoomed { return }  // zoom is a strict focus mode — no resizing until you exit
+        if isZoomed { toastZoomBlocked("resize"); return }  // strict focus mode — exit zoom first
         switch focusedPanel {
         case .pane:
             paneCanvas.resize(direction)
