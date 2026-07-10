@@ -12,8 +12,8 @@ final class ToastButton: NSButton {
     private var trackingAreaRef: NSTrackingArea?
     private var isHovered = false { didSet { updateBackground() } }
 
-    private static let subtle = NSColor(white: 1, alpha: 0.07)
-    private static let subtleHover = NSColor(white: 1, alpha: 0.12)
+    private static let subtle = Theme.current.chrome.ink(1, alpha: 0.07)
+    private static let subtleHover = Theme.current.chrome.ink(1, alpha: 0.12)
 
     init(_ action: ToastAction, keyEquivalents: Bool = true) {
         self.run = action.run

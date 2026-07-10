@@ -85,7 +85,7 @@ final class RepoPickerOverlay: PaletteOverlay {
                 git.image = NSImage(
                     systemSymbolName: "arrow.triangle.branch", accessibilityDescription: "git repository")?
                     .withSymbolConfiguration(config)
-                git.contentTintColor = NSColor(white: 1, alpha: 0.35)
+                git.contentTintColor = Theme.current.chrome.ink(1, alpha: 0.35)
                 git.translatesAutoresizingMaskIntoConstraints = false
                 addSubview(git)
                 git.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14).isActive = true

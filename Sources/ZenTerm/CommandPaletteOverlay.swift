@@ -114,7 +114,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
                     string: title.uppercased(),
                     attributes: [
                         .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
-                        .foregroundColor: NSColor(white: 1, alpha: 0.3),
+                        .foregroundColor: Theme.current.chrome.ink(1, alpha: 0.3),
                         .kern: 0.6,
                     ]))
             label.translatesAutoresizingMaskIntoConstraints = false

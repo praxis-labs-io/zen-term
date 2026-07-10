@@ -1,3 +1,4 @@
+import AppKit
 import TerminalKit
 import XCTest
 
@@ -19,5 +20,37 @@ final class ChromeThemeDeriverTests: XCTestCase {
         //   G: 222*0.55 + 23*0.45 = 122.1 + 10.35 = 132.45 -> 132
         //   B: 244*0.55 + 36*0.45 = 134.2 + 16.2  = 150.4  -> 150
         XCTAssertEqual(chrome.muted, TerminalColor(red: 134, green: 132, blue: 150))
+    }
+
+    func test_darkTheme_isDarkTrue_andInkIsByteIdenticalToHardcodedWhite() {
+        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
+        XCTAssertTrue(chrome.isDark)
+        assertEqualGray(chrome.ink(1, alpha: 0.55), NSColor(white: 1, alpha: 0.55))
+    }
+
+    func test_lightTheme_isDarkFalse_andInkFlipsToDarkOnLight() {
+        var light = Theme.rosePineMoon
+        light.background = TerminalColor(hex: "#faf4ed")!
+        let chrome = ChromeThemeDeriver.derive(from: light)
+        XCTAssertFalse(chrome.isDark)
+        assertEqualGray(chrome.ink(1, alpha: 0.5), NSColor(white: 0, alpha: 0.5))
+    }
+
+    /// Compares two grayscale `NSColor`s by their white/alpha components, converting both
+    /// through `.genericGray` first since `NSColor(white:alpha:)` isn't guaranteed to already
+    /// be in that color space.
+    private func assertEqualGray(
+        _ lhs: NSColor, _ rhs: NSColor, file: StaticString = #filePath, line: UInt = #line
+    ) {
+        guard let lhsGray = lhs.usingColorSpace(.genericGray),
+            let rhsGray = rhs.usingColorSpace(.genericGray)
+        else {
+            XCTFail("could not convert colors to genericGray", file: file, line: line)
+            return
+        }
+        XCTAssertEqual(
+            lhsGray.whiteComponent, rhsGray.whiteComponent, accuracy: 0.001, file: file, line: line)
+        XCTAssertEqual(
+            lhsGray.alphaComponent, rhsGray.alphaComponent, accuracy: 0.001, file: file, line: line)
     }
 }
