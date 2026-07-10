@@ -71,7 +71,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             let name = NSTextField(labelWithString: entry.name)
             name.font = .systemFont(ofSize: 13)
-            name.textColor = .white
+            name.textColor = Theme.current.chrome.foreground.nsColor
             name.translatesAutoresizingMaskIntoConstraints = false
             addSubview(name)
             NSLayoutConstraint.activate([

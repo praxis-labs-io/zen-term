@@ -102,7 +102,7 @@ class PaletteOverlay: NSView {
         searchField.isBordered = false
         searchField.drawsBackground = false
         searchField.focusRingType = .none
-        searchField.textColor = .white
+        searchField.textColor = Theme.current.chrome.foreground.nsColor
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
         let searchRow = NSStackView(views: [glyph, searchField])

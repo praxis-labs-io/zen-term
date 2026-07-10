@@ -137,7 +137,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
 
             let title = NSTextField(labelWithString: command.title)
             title.font = .systemFont(ofSize: 13)
-            title.textColor = .white
+            title.textColor = Theme.current.chrome.foreground.nsColor
             title.translatesAutoresizingMaskIntoConstraints = false
             addSubview(title)
 
