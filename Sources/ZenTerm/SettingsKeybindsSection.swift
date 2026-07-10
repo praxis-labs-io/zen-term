@@ -10,7 +10,7 @@ final class SettingsKeybindsSection: SettingsSection {
 
     /// Editable actions grouped by category (float toggles are excluded — they're file-only).
     private static let groups: [(String, [KeyInterceptor.ReservedChord])] = [
-        ("Splits", [.splitHorizontal, .splitVertical]),
+        ("Panes", [.splitHorizontal, .splitVertical, .closePane]),
         ("Navigation", [.navLeft, .navDown, .navUp, .navRight]),
         ("Resize", [.resizeLeft, .resizeDown, .resizeUp, .resizeRight]),
         ("Tabs", [.newTab, .newWindow, .prevTab, .nextTab] + (1...9).map { .selectTab($0) }),
@@ -127,28 +127,30 @@ final class SettingsKeybindsSection: SettingsSection {
         row.showMessage(nil)
         desired = desired.filter { $0.value != row.action }  // drop this action's old chord(s)
         desired[chord] = row.action  // the chord is free — a conflict would have been blocked above
-        persist()
+        persist(reportingRow: row)
     }
 
     private func reset(_ row: KeybindRow) {
         desired = desired.filter { $0.value != row.action }
         for (chord, action) in KeymapDefaults.map where action == row.action { desired[chord] = action }
         row.showMessage(nil)
-        persist()
+        persist(reportingRow: row)
     }
 
     private func resetAll() {
         desired = reservedEntries(of: KeymapDefaults.map)
         rows.forEach { $0.showMessage(nil) }
-        persist()
+        persist(reportingRow: rows.last)  // Reset-all lives at the bottom — report near it, not the top
     }
 
-    /// Write the override set, reload the live config, then refresh every row from the new keymap.
-    private func persist() {
+    /// Write the override set, reload the live config, then refresh every row from the new keymap. A
+    /// write failure reports on `reportingRow` (the row the user was editing, kept in view by the
+    /// focus scroll) so the message isn't stranded off-screen at the top of a long list.
+    private func persist(reportingRow: KeybindRow?) {
         do {
             try ConfigWriter.apply(keybinds: desired)
         } catch {
-            rows.first?.showMessage("Couldn't write config: \(error.localizedDescription)")
+            (reportingRow ?? rows.first)?.showMessage("Couldn't write config: \(error.localizedDescription)")
             return
         }
         AppConfig.reload()
