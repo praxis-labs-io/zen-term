@@ -67,9 +67,12 @@ struct GeneralConfig: Equatable {
         floats: [],
         keymap: KeymapDefaults.map)
 
-    /// The resolved config for this launch. Immutable after load — changing it requires a
-    /// restart (launch-only in v1, same model as `Theme.current`).
-    static let current: GeneralConfig = ConfigLoader.loadGeneralConfig()
+    /// The resolved config for this launch, re-resolvable via `reloadCurrent()` when the Settings
+    /// card writes the file (see `AppConfig.reload()`). External hand-edits still need a relaunch.
+    static private(set) var current: GeneralConfig = ConfigLoader.loadGeneralConfig()
+
+    /// Re-read `config` from disk and swap `current`. Called by `AppConfig.reload()` after a write.
+    static func reloadCurrent() { current = ConfigLoader.loadGeneralConfig() }
 
     /// The subset that crosses the seam to the terminal backends.
     var terminalBehavior: TerminalBehavior {
