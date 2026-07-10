@@ -16,8 +16,6 @@ final class IconButton: NSView {
     /// show their overlay is open. Momentary buttons (corner controls, "+") leave it false.
     var isActive = false { didSet { update() } }
 
-    static let iris = NSColor(srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0, blue: 0xe7 / 255.0, alpha: 1)
-
     init(
         symbol: String, size: NSSize = NSSize(width: 24, height: 24),
         pointSize: CGFloat = 12, weight: NSFont.Weight = .medium,
@@ -77,7 +75,8 @@ final class IconButton: NSView {
         let bg: NSColor
         let tint: NSColor
         if isActive {
-            bg = Self.iris.withAlphaComponent(0.15); tint = Self.iris
+            let accent = Theme.current.chrome.accent.nsColor
+            bg = accent.withAlphaComponent(0.15); tint = accent
         } else if isHovered {
             bg = NSColor(white: 1, alpha: 0.10); tint = NSColor(white: 1, alpha: 0.95)
         } else {

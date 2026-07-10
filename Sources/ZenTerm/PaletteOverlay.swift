@@ -59,9 +59,8 @@ class PaletteOverlay: NSView {
     private var rowViews: [PaletteRowView] = []
     private var selected = 0
 
-    /// The selection highlight shared by every palette row (iris @ 18%).
-    static let selectionBackground = NSColor(
-        srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0, blue: 0xe7 / 255.0, alpha: 0.18)
+    /// The selection highlight shared by every palette row (accent @ 18%).
+    static let selectionBackground = Theme.current.chrome.accent.nsColor.withAlphaComponent(0.18)
 
     init(
         background: NSColor, placeholder: String, emptyText: String, footerHints: [PaletteHint],

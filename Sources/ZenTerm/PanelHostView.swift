@@ -65,7 +65,7 @@ final class PanelHostView: NSView {
         pane.layer?.borderWidth = 1
         // The focus glow is a fixed iris shadow whose opacity toggles (animated in
         // updateHalo); its color/radius/offset never change, so set them once here.
-        pane.layer?.shadowColor = Self.iris.cgColor
+        pane.layer?.shadowColor = Theme.current.chrome.accent.nsColor.cgColor
         pane.layer?.shadowRadius = 6
         pane.layer?.shadowOffset = .zero
         addSubview(pane)
@@ -139,7 +139,6 @@ final class PanelHostView: NSView {
         ]
     }
 
-    private static let iris = NSColor(srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0, blue: 0xe7 / 255.0, alpha: 1)
     private static let idleBorder = NSColor(white: 1, alpha: 0.08)
 
     private func updateHalo() {
@@ -147,7 +146,9 @@ final class PanelHostView: NSView {
         // Ease from the live (presentation) value so a focus-nav crossfade falls out — the
         // losing host's glow eases down as the gaining host's eases up. Fast (haloDuration)
         // so it never trails rapid ⌘hjkl nav.
-        Motion.ease(layer, keyPath: "borderColor", to: (isFocused ? Self.iris : Self.idleBorder).cgColor)
+        Motion.ease(
+            layer, keyPath: "borderColor",
+            to: (isFocused ? Theme.current.chrome.accent.nsColor : Self.idleBorder).cgColor)
         Motion.ease(layer, keyPath: "shadowOpacity", to: isFocused ? Float(0.2) : Float(0))
     }
 
