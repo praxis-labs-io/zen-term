@@ -1,18 +1,20 @@
 import AppKit
 
 /// One Keybinds row: the action label, its current chord as a `KeycapView`, a record button, and
-/// a reset-to-default button shown only when overridden. The record button is the row's single
-/// vertical focus stop; tapping it asks the section to begin capture (through the interceptor).
+/// a reset-to-default icon shown only when overridden. Two horizontal focus stops (record · reset)
+/// stepped with Left/Right; Up/Down move between rows; tapping record begins capture, tapping reset
+/// restores the default. Esc closes the card.
 final class KeybindRow: NSView {
     let action: KeyInterceptor.ReservedChord
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
-    var onArrowLeft: (() -> Void)?
+    var onExitToNav: (() -> Void)?
+    var onEsc: (() -> Void)?
     var onRecordTapped: (() -> Void)?
     var onReset: (() -> Void)?
 
     let recordButton = AppButton(title: "Set", variant: .secondary)
-    private let resetButton = AppButton(title: "⤺", variant: .muted)
+    private let resetButton = AppButton(variant: .muted, symbol: "arrow.uturn.backward")
     private let keycapHost = NSView()
     private let messageLabel = NSTextField(labelWithString: "")
     private var hasBinding = false
@@ -30,12 +32,22 @@ final class KeybindRow: NSView {
 
         keycapHost.translatesAutoresizingMaskIntoConstraints = false
 
+        // Record is the row's left stop: Left exits to the nav, Right steps to the reset icon.
         recordButton.isKeyboardFocusable = true
         recordButton.onArrowUp = { [weak self] in self?.onArrowUp?() }
         recordButton.onArrowDown = { [weak self] in self?.onArrowDown?() }
-        recordButton.onArrowLeft = { [weak self] in self?.onArrowLeft?() }
+        recordButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+        recordButton.onArrowRight = { [weak self] in self?.focusReset() }
+        recordButton.onEsc = { [weak self] in self?.onEsc?() }
         recordButton.onTap = { [weak self] in self?.onRecordTapped?() }
 
+        // Reset is the row's right stop (only when overridden): Left steps back to record.
+        resetButton.isKeyboardFocusable = true
+        resetButton.setAccessibilityLabel("Reset to default")
+        resetButton.onArrowUp = { [weak self] in self?.onArrowUp?() }
+        resetButton.onArrowDown = { [weak self] in self?.onArrowDown?() }
+        resetButton.onArrowLeft = { [weak self] in self?.focusRecord() }
+        resetButton.onEsc = { [weak self] in self?.onEsc?() }
         resetButton.onTap = { [weak self] in self?.onReset?() }
 
         let spacer = NSView()
@@ -94,6 +106,15 @@ final class KeybindRow: NSView {
     func showMessage(_ text: String?) {
         messageLabel.stringValue = text ?? ""
         messageLabel.isHidden = (text == nil)
+    }
+
+    /// Move focus to the record button (its Left stop) — also used after a reset hides the icon.
+    func focusRecord() { window?.makeFirstResponder(recordButton) }
+
+    /// Step Right to the reset icon, but only when it's shown (a non-overridden row has none).
+    private func focusReset() {
+        guard !resetButton.isHidden else { return }
+        window?.makeFirstResponder(resetButton)
     }
 
     private var recordLabel: String {

@@ -94,6 +94,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
         navStack.edgeInsets = NSEdgeInsets(top: 18, left: 12, bottom: 16, right: 12)
         for (index, section) in sections.enumerated() {
             section.onExitToNav = { [weak self] in self?.focusNav() }
+            section.onClose = { [weak self] in self?.onClose() }
             let row = SettingsNavRow(title: section.navTitle) { [weak self] in self?.selectSection(index) }
             row.onArrowUp = { [weak self] in self?.moveNav(-1) }
             row.onArrowDown = { [weak self] in self?.moveNav(1) }

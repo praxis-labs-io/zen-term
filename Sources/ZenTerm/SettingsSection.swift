@@ -8,6 +8,8 @@ protocol SettingsSection: AnyObject {
     /// Set by the card: the section calls this when focus should leave the detail pane's first
     /// stop and return to the nav (Left / Shift-Tab), completing the 2D nav ↔ detail model.
     var onExitToNav: (() -> Void)? { get set }
+    /// Set by the card: the section calls this to dismiss the whole card (Esc from a detail control).
+    var onClose: (() -> Void)? { get set }
     func makeDetailView() -> NSView
     /// The detail pane's vertical focus stops, top to bottom (for the shared 2D keyboard model).
     func detailStops() -> [NSView]

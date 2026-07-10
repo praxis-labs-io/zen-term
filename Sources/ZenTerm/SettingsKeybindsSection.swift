@@ -7,6 +7,7 @@ import AppKit
 final class SettingsKeybindsSection: SettingsSection {
     var navTitle: String { "Keybinds" }
     var onExitToNav: (() -> Void)?
+    var onClose: (() -> Void)?
 
     /// Editable actions grouped by category (float toggles are excluded — they're file-only).
     private static let groups: [(String, [KeyInterceptor.ReservedChord])] = [
@@ -49,7 +50,8 @@ final class SettingsKeybindsSection: SettingsSection {
                 let row = KeybindRow(action: action, title: CommandCatalog.spec(for: action).title)
                 row.onArrowUp = { [weak self] in self?.moveFocus(from: row.recordButton, delta: -1) }
                 row.onArrowDown = { [weak self] in self?.moveFocus(from: row.recordButton, delta: 1) }
-                row.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+                row.onExitToNav = { [weak self] in self?.onExitToNav?() }
+                row.onEsc = { [weak self] in self?.onClose?() }
                 row.onRecordTapped = { [weak self] in self?.beginCapture(for: row) }
                 row.onReset = { [weak self] in self?.reset(row) }
                 rows.append(row)
@@ -66,6 +68,7 @@ final class SettingsKeybindsSection: SettingsSection {
             self.moveFocus(from: self.resetAllButton, delta: -1)
         }
         resetAllButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+        resetAllButton.onEsc = { [weak self] in self?.onClose?() }
         resetAllButton.onTap = { [weak self] in self?.resetAll() }
         rowsStack.addArrangedSubview(resetAllButton)
         if let previous { rowsStack.setCustomSpacing(18, after: previous) }  // gap before Reset all
@@ -135,6 +138,7 @@ final class SettingsKeybindsSection: SettingsSection {
         for (chord, action) in KeymapDefaults.map where action == row.action { desired[chord] = action }
         row.showMessage(nil)
         persist(reportingRow: row)
+        row.focusRecord()  // the reset icon just hid (no longer overridden) — keep focus on the row
     }
 
     private func resetAll() {
