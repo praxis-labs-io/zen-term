@@ -89,7 +89,8 @@ final class ToastView: NSView {
             // Small buttons hugging the leading edge (a trailing spacer absorbs the slack).
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            let row = NSStackView(views: actions.map { ToastButton($0, keyEquivalents: keyEquivalents) } + [spacer])
+            let row = NSStackView(
+                views: actions.map { Self.button(for: $0, keyEquivalents: keyEquivalents) } + [spacer])
             row.orientation = .horizontal
             row.alignment = .centerY
             row.spacing = 6
@@ -120,6 +121,16 @@ final class ToastView: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Build a toast action button on the shared `AppButton`: `cancel` → a muted `secondary`,
+    /// `destructive` → the destructive-tinted `destructive`. Return / Esc key equivalents mirror
+    /// the action kind, unless `keyEquivalents` is off (a non-modal toast that must not hijack
+    /// those keys window-wide).
+    private static func button(for action: ToastAction, keyEquivalents: Bool) -> AppButton {
+        let variant: AppButton.Variant = action.kind == .destructive ? .destructive : .secondary
+        let keyEquivalent = keyEquivalents ? (action.kind == .destructive ? "\r" : "\u{1b}") : ""
+        return AppButton(title: action.title, variant: variant, keyEquivalent: keyEquivalent, onTap: action.run)
+    }
 
     /// A modal confirm takes keyboard focus so terminal input is gated while it's up; a
     /// non-modal sticky toast never does (its buttons are click-only).

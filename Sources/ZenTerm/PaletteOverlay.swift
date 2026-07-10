@@ -43,7 +43,7 @@ class SelectableRowView: NSView, PaletteRowView {
 /// Subclasses supply the model + row content via the template hooks (`numberOfRows`,
 /// `makeRow`, `applyFilter`, `activate`); the base owns all the chrome and navigation.
 /// `RepoPickerOverlay` (⌘⇧P) and `CommandPaletteOverlay` (⌘P) are the two consumers.
-class PaletteOverlay: NSView {
+class PaletteOverlay: NSView, ModalOverlay {
     private let onDismiss: () -> Void
 
     private let card = CardView()
@@ -212,7 +212,7 @@ class PaletteOverlay: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Make the search field first responder — called by the host after presenting.
-    func focusSearchField() { window?.makeFirstResponder(searchField) }
+    func focusInitialResponder() { window?.makeFirstResponder(searchField) }
 
     /// Spring the card in (fade + subtle scale about its center). Call after presenting.
     func animateIn() {
@@ -357,18 +357,6 @@ class PaletteOverlay: NSView {
             get { .overlay }
             set {}
         }
-    }
-
-    /// Swallows clicks so a click on the card's empty area doesn't fall through to the
-    /// backdrop (which would dismiss).
-    private final class CardView: NSView { override func mouseDown(with event: NSEvent) {} }
-
-    /// A transparent backdrop; a click anywhere on it (outside the card) dismisses.
-    private final class BackdropView: NSView {
-        private let onClick: () -> Void
-        init(onClick: @escaping () -> Void) { self.onClick = onClick; super.init(frame: .zero) }
-        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-        override func mouseDown(with event: NSEvent) { onClick() }
     }
 }
 

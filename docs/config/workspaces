@@ -8,7 +8,9 @@
 # configure that workspace until the next header. Lines starting with `#` and blank
 # lines are ignored; unknown keys are ignored. A section with no `path` is skipped, a
 # malformed `env` line is dropped, and nothing here can crash the app (bad lines are
-# logged and skipped). The file is read once at launch — restart to apply changes.
+# logged and skipped). Add a project from inside the app too — ⌘P → "Add Project…", or the
+# ＋ row in the ⌘⇧P picker — which appends a section here and opens it immediately. Hand-edits
+# to this file are picked up the next time you open the ⌘⇧P picker (or on restart).
 #
 # The section header is the title: it's shown in the picker and pinned as the tab name,
 # so it's independent of the folder name (`[ZenTerm]` can point at ~/Dev/zen-term).

@@ -141,12 +141,17 @@ final class CommandPaletteOverlay: PaletteOverlay {
             title.translatesAutoresizingMaskIntoConstraints = false
             addSubview(title)
 
-            let keycap = KeycapView(shortcut: command.shortcut)
-            addSubview(keycap)
-
             NSLayoutConstraint.activate([
                 title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
                 title.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+
+            // An unbound command (e.g. Add Project…) has no shortcut — skip the keycap rather
+            // than render an empty pill.
+            guard !command.shortcut.isEmpty else { return }
+            let keycap = KeycapView(shortcut: command.shortcut)
+            addSubview(keycap)
+            NSLayoutConstraint.activate([
                 keycap.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
                 keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
                 // Keep the title from colliding with the keycap on a narrow card.

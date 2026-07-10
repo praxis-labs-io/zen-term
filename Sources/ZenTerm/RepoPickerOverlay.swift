@@ -1,30 +1,40 @@
 import AppKit
 
 /// The `⌘⇧P` project picker: a modal palette over the tab's tile region listing the
-/// workspaces configured in `~/.config/zen-term/workspaces`. Enter opens the selected
-/// workspace in a new tab, Shift+Enter replaces the current tab, Esc / backdrop click
-/// dismiss. Built on `PaletteOverlay`, which owns the card/list/keyboard scaffolding;
-/// this supplies the workspace rows + filter.
+/// workspaces configured in `~/.config/zen-term/workspaces`, led by a persistent
+/// "＋ New Project…" row that opens the Add-Project form. Enter opens the selected workspace in
+/// a new tab, Shift+Enter replaces the current tab, Esc / backdrop click dismiss. Built on
+/// `PaletteOverlay`, which owns the card/list/keyboard scaffolding; this supplies the rows + filter.
 final class RepoPickerOverlay: PaletteOverlay {
+    /// A leading action row, then one row per configured workspace.
+    private enum Row {
+        case add
+        case workspace(Workspace)
+    }
+
     /// (selected workspace, replaceCurrentTab). `replaceCurrentTab` is Shift+Enter.
     private let onChoose: (Workspace, Bool) -> Void
+    /// Open the Add-Project form (the ＋ row, and the empty state when there are no workspaces).
+    private let onAddProject: () -> Void
 
     private let entries: [Workspace]
-    private var filtered: [Workspace]
+    private var rows: [Row]
 
     init(
         entries: [Workspace], background: NSColor,
-        onChoose: @escaping (Workspace, Bool) -> Void, onDismiss: @escaping () -> Void
+        onChoose: @escaping (Workspace, Bool) -> Void, onAddProject: @escaping () -> Void,
+        onDismiss: @escaping () -> Void
     ) {
         self.entries = entries
-        self.filtered = entries
+        self.rows = Self.rows(for: entries)
         self.onChoose = onChoose
+        self.onAddProject = onAddProject
         super.init(
             background: background,
             placeholder: "Search projects…",
-            emptyText: "No projects yet — add one in \(Self.workspacesPathForDisplay)",
+            emptyText: "",  // never shown — the ＋ row is always present, so the list is never empty
             footerHints: [
-                PaletteHint(keys: "⏎", label: "new tab"),
+                PaletteHint(keys: "⏎", label: "open"),
                 PaletteHint(keys: "⇧⏎", label: "replace"),
                 PaletteHint(keys: "↑↓", label: "move"),
                 PaletteHint(keys: "⎋", label: "close"),
@@ -35,28 +45,31 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// The resolved `workspaces` file path for the empty state, home abbreviated to `~` — honors
-    /// `$XDG_CONFIG_HOME` rather than hardcoding `~/.config`.
-    private static var workspacesPathForDisplay: String {
-        let path = ConfigLoader.defaultRoot.appendingPathComponent("workspaces").path
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+    /// The ＋ row first, then a workspace row per entry.
+    private static func rows(for workspaces: [Workspace]) -> [Row] {
+        [.add] + workspaces.map(Row.workspace)
     }
 
-    override func numberOfRows() -> Int { filtered.count }
+    override func numberOfRows() -> Int { rows.count }
 
     override func makeRow(at index: Int) -> PaletteRowView {
-        RowView(workspace: filtered[index]) { [weak self] clickCount in
-            self?.selectRow(at: index, clickCount: clickCount)
+        switch rows[index] {
+        case .add:
+            return AddRowView { [weak self] clickCount in self?.selectRow(at: index, clickCount: clickCount) }
+        case .workspace(let workspace):
+            return RowView(workspace: workspace) { [weak self] clickCount in
+                self?.selectRow(at: index, clickCount: clickCount)
+            }
         }
     }
 
     override func applyFilter(query: String) {
         let q = query.lowercased()
+        let matches: [Workspace]
         if q.isEmpty {
-            filtered = entries
+            matches = entries
         } else {
-            filtered =
+            matches =
                 entries
                 .filter { $0.title.lowercased().contains(q) }
                 .sorted { a, b in
@@ -66,11 +79,46 @@ final class RepoPickerOverlay: PaletteOverlay {
                     return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
                 }
         }
+        rows = Self.rows(for: matches)  // the ＋ row stays pinned at the top through any filter
     }
 
     override func activate(index: Int, modifiers: NSEvent.ModifierFlags) {
-        guard filtered.indices.contains(index) else { return }
-        onChoose(filtered[index], modifiers.contains(.shift))
+        guard rows.indices.contains(index) else { return }
+        switch rows[index] {
+        case .add: onAddProject()
+        case .workspace(let workspace): onChoose(workspace, modifiers.contains(.shift))
+        }
+    }
+
+    /// The persistent "＋ New Project…" action row, tinted with the accent so it reads as an
+    /// affordance distinct from the workspace list below it.
+    private final class AddRowView: SelectableRowView {
+        override init(onClick: @escaping (Int) -> Void) {
+            super.init(onClick: onClick)
+
+            let icon = NSImageView()
+            let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
+            icon.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "add project")?
+                .withSymbolConfiguration(config)
+            icon.contentTintColor = Theme.current.chrome.accent.nsColor
+            icon.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(icon)
+
+            let label = NSTextField(labelWithString: "New Project…")
+            label.font = .systemFont(ofSize: 13, weight: .medium)
+            label.textColor = Theme.current.chrome.accent.nsColor
+            label.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(label)
+
+            NSLayoutConstraint.activate([
+                icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 11),
+                icon.centerYAnchor.constraint(equalTo: centerYAnchor),
+                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
+                label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
     }
 
     /// One workspace row: title (left) and a muted git icon (right) when its dir is a repo.

@@ -12,7 +12,7 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(
             names,
             [
-                "Open Project Picker", "Open Lazygit",
+                "Open Project Picker", "Add Project…", "Open Lazygit",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab",
                 "Split Horizontally", "Split Vertically",
@@ -58,10 +58,14 @@ final class CommandCatalogTests: XCTestCase {
         if case .toggleRepoPicker = entry!.chord {} else { XCTFail("expected .toggleRepoPicker") }
     }
 
-    func test_everyEntry_hasTitleAndShortcut() {
+    func test_everyEntry_hasTitle_andBoundEntriesHaveShortcut() {
         for command in CommandCatalog.commands(tabCount: 9) {
             XCTAssertFalse(command.title.isEmpty)
-            XCTAssertFalse(command.shortcut.isEmpty)
+            // "Add Project…" is deliberately unbound (opened from the palette/picker, no default
+            // key), so its shortcut glyph is empty; every bound command shows its glyph.
+            if command.title != "Add Project…" {
+                XCTAssertFalse(command.shortcut.isEmpty, "\(command.title) should show a shortcut")
+            }
         }
     }
 }

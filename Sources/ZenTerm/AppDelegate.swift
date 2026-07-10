@@ -38,7 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if case .newWindow = chord {
             // ⌘N is intercepted here before `handle(_:)`, so a palette's / confirm's modal
             // gate doesn't cover it — swallow it explicitly while either is open.
-            if let key = keyController(), key.isModalPaletteOpen || key.isConfirmOpen { return }
+            if let key = keyController(), key.isModalOverlayOpen || key.isConfirmOpen { return }
             newWindow(initialCWD: keyController()?.focusedCWD, centered: false)
             return
         }
@@ -84,7 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// While either palette is modal, Copy/Paste must act on its search field, not the
     /// terminal hidden behind it (else ⌘V would inject the clipboard into that shell).
-    private var isPaletteModal: Bool { keyController()?.isModalPaletteOpen == true }
+    private var isPaletteModal: Bool { keyController()?.isModalOverlayOpen == true }
 
     /// While a confirm toast is up it's fully modal — ⌘N and Copy/Paste are swallowed
     /// (it has no text field to act on), mirroring `isPaletteModal`.

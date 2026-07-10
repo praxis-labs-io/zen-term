@@ -34,19 +34,27 @@ final class WindowController: NSObject {
     private let dock: ToggleDock
     private var mountedCanvas: NSView?
 
-    /// The `⌘⇧P` repo picker, when open. Window-level (it opens/replaces tabs) but
-    /// presented over the active tab's tile region. Modal while open.
-    private var repoPicker: RepoPickerOverlay?
-    var isRepoPickerOpen: Bool { repoPicker != nil }
+    /// Which modal card is open. The repo picker (⌘⇧P), command palette (⌘P), and Add-Project
+    /// form are mutually exclusive — only one is up at a time — so they share a single slot with
+    /// a kind discriminator rather than parallel per-overlay stacks. Window-level (they open/
+    /// switch tabs) but presented over the active tab's tile region. Modal while open.
+    private enum ModalKind {
+        case repoPicker, commandPalette, addProject
 
-    /// The `⌘P` command palette, when open. Window-level like the repo picker (it can
-    /// open/switch tabs) but presented over the active tab's tile region. Modal while open.
-    private var commandPalette: CommandPaletteOverlay?
-    var isCommandPaletteOpen: Bool { commandPalette != nil }
+        /// The chord that closes this same modal when pressed again (its own toggle).
+        var selfToggle: KeyInterceptor.ReservedChord {
+            switch self {
+            case .repoPicker: return .toggleRepoPicker
+            case .commandPalette: return .toggleCommandPalette
+            case .addProject: return .addProject
+            }
+        }
+    }
+    private var modal: (overlay: ModalOverlay, kind: ModalKind)?
 
-    /// Whether either palette is modal right now. Read by `AppDelegate` so window-level
-    /// chords (⌘N) and Copy/Paste routing respect the modal too, not just `handle(_:)`.
-    var isModalPaletteOpen: Bool { isRepoPickerOpen || isCommandPaletteOpen }
+    /// Whether a modal card is up right now. Read by `AppDelegate` so window-level chords (⌘N)
+    /// and Copy/Paste routing respect the modal too, not just `handle(_:)`.
+    var isModalOverlayOpen: Bool { modal != nil }
 
     /// A blocking close confirm (⌘W on a busy or last pane), when up. Window-level like
     /// the palettes: modal over the active tab until answered.
@@ -299,7 +307,7 @@ final class WindowController: NSObject {
     /// passes a `Workspace` (its path + title + open recipe); plain `⌘t` passes the inherited
     /// cwd, no pin, and no workspace (a bare shell).
     private func addTab(cwd: URL?, pinnedTitle: String?, workspace: Workspace? = nil) {
-        dismissOpenPalettes()  // the "+" button is reachable while a palette is up
+        closeModal()  // the "+" button is reachable while a palette is up
         let id = mintTabID()
         tabs.add(id)
         installController(id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace)
@@ -333,7 +341,7 @@ final class WindowController: NSObject {
     }
 
     private func select(_ id: TabID, slideFrom: SlideEdge? = nil) {
-        dismissOpenPalettes()  // a tab-bar click must not orphan a modal palette
+        closeModal()  // a tab-bar click must not orphan a modal palette
         guard tabs.order.contains(id), id != tabs.activeID else { return }
         clearWaiting(id)  // seeing the tab clears its rose flag + dismisses its bell toast
         cancelConfirm()  // switching tabs voids a pending close confirm (its target moved)
@@ -357,7 +365,7 @@ final class WindowController: NSObject {
     /// Close a specific tab: terminate its shells, detach its canvas, and cascade to
     /// closing the window when it was the last tab.
     private func closeTab(_ id: TabID) {
-        dismissOpenPalettes()  // the "×" button is reachable while a palette is up
+        closeModal()  // the "×" button is reachable while a palette is up
         cancelConfirm()  // a middle-click close voids a pending confirm on another tab
         let survived = tabs.close(id)
         let controller = controllers[id]
@@ -377,84 +385,96 @@ final class WindowController: NSObject {
         renderTabBar()
     }
 
-    // MARK: repo picker (⌘⇧P)
+    // MARK: modal cards (⌘⇧P picker / ⌘P palette / Add-Project form)
 
-    /// Toggle the project picker over the active tab. Reads the `workspaces` file fresh on each
-    /// open (so hand-edits appear without a relaunch) and focuses its search field. Closing (⌘⇧P
-    /// again, Esc, backdrop, or after a choice) restores keyboard focus to the active tab.
-    private func toggleRepoPicker() {
-        if isRepoPickerOpen { closeRepoPicker(); return }
+    /// Present a modal card over the active tab: mount it, store it in the single slot, focus its
+    /// input, and spring it in. One path for all three cards. No-op if there's no active tab.
+    private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
         guard let active = activeController else { return }
+        active.presentTileOverlay(overlay)
+        modal = (overlay, kind)
+        overlay.focusInitialResponder()
+        overlay.animateIn()
+        renderDock()  // dock mirrors the new modal state
+    }
+
+    /// Close whichever modal card is up: spring it out, clear the slot now (so the modal gate
+    /// lifts this turn and a second Esc/toggle is a no-op), and restore keyboard focus to the
+    /// tab. No-op when nothing is open. Also called before any tab-bar mouse op (select/new/
+    /// close), which would otherwise unmount the card's host tab and leave the gate stuck on.
+    private func closeModal() {
+        guard let overlay = modal?.overlay else { return }
+        modal = nil
+        overlay.animateOut { overlay.removeFromSuperview() }
+        activeController?.restoreKeyFocus()
+        renderDock()
+    }
+
+    /// Toggle the project picker (⌘⇧P). Reads the `workspaces` file fresh on each open (so
+    /// hand-edits appear without a relaunch). Pressing ⌘⇧P while it's up closes it.
+    private func toggleRepoPicker() {
+        if modal?.kind == .repoPicker { closeModal(); return }
         let picker = RepoPickerOverlay(
             entries: ConfigLoader.loadWorkspaces(),
             background: Theme.current.chrome.background.nsColor,
             onChoose: { [weak self] ws, replace in self?.openWorkspace(ws, replaceCurrentTab: replace) },
-            onDismiss: { [weak self] in self?.closeRepoPicker() }
+            onAddProject: { [weak self] in self?.openAddProjectForm() },
+            onDismiss: { [weak self] in self?.closeModal() }
         )
-        active.presentTileOverlay(picker)
-        repoPicker = picker
-        picker.focusSearchField()
-        picker.animateIn()
-        renderDock()  // palette button now active
+        presentModal(picker, kind: .repoPicker)
     }
 
-    private func closeRepoPicker() {
-        guard let picker = repoPicker else { return }
-        // Clear the ref now so the modal gate lifts immediately (focus/dock update this
-        // turn, a second Esc/toggle is a no-op); the card finishes springing out after.
-        repoPicker = nil
-        picker.animateOut { picker.removeFromSuperview() }
-        activeController?.restoreKeyFocus()
-        renderDock()  // palette button now inactive
-    }
-
-    // MARK: command palette (⌘P)
-
-    /// Toggle the command palette over the active tab. Builds the catalog fresh (its
-    /// tab-select entries track the live tab count) and focuses its search field. Closing
-    /// (⌘P again, Esc, backdrop, or after running a command) restores focus to the tab.
+    /// Toggle the command palette (⌘P). Builds the catalog fresh (its tab-select entries track
+    /// the live tab count). Pressing ⌘P while it's up closes it.
     private func toggleCommandPalette() {
-        if isCommandPaletteOpen { closeCommandPalette(); return }
-        guard let active = activeController else { return }
+        if modal?.kind == .commandPalette { closeModal(); return }
         let palette = CommandPaletteOverlay(
             commands: CommandCatalog.commands(tabCount: tabs.order.count),
             background: Theme.current.chrome.background.nsColor,
             onRun: { [weak self] chord in self?.runCommand(chord) },
-            onDismiss: { [weak self] in self?.closeCommandPalette() }
+            onDismiss: { [weak self] in self?.closeModal() }
         )
-        active.presentTileOverlay(palette)
-        commandPalette = palette
-        palette.focusSearchField()
-        palette.animateIn()
-        renderDock()  // command button now active
+        presentModal(palette, kind: .commandPalette)
     }
 
-    private func closeCommandPalette() {
-        guard let palette = commandPalette else { return }
-        // Clear the ref now so the modal gate lifts immediately (focus/dock update this
-        // turn, a second Esc/toggle is a no-op); the card finishes springing out after.
-        commandPalette = nil
-        palette.animateOut { palette.removeFromSuperview() }
-        activeController?.restoreKeyFocus()
-        renderDock()  // command button now inactive
+    /// Open the Add-Project form. Seeds it with the current titles for inline collision checks;
+    /// submitting writes the section and opens it. Reached from ⌘P and the picker's ＋ row — the
+    /// latter calls in while the picker is still up, so close it first (the ⌘P path is already
+    /// closed by `runCommand`, making this a no-op there).
+    private func openAddProjectForm() {
+        closeModal()
+        let form = AddProjectOverlay(
+            existingTitles: Set(ConfigLoader.loadWorkspaces().map(\.title)),
+            background: Theme.current.chrome.background.nsColor,
+            onSubmit: { [weak self] ws in self?.submitNewProject(ws) },
+            onCancel: { [weak self] in self?.closeModal() }
+        )
+        presentModal(form, kind: .addProject)
+    }
+
+    /// Persist a freshly-built workspace, then open it. On a write failure the form stays up and
+    /// a toast explains why; on success the form closes and the workspace opens in a new tab
+    /// (the value-based `openWorkspace` seam — no relaunch, no dependence on a launch-time store).
+    private func submitNewProject(_ ws: Workspace) {
+        do {
+            try WorkspacesWriter.append(ws)
+        } catch {
+            toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Couldn't Save Project",
+                    message: "Failed to write \(ws.title) to the workspaces file: \(error.localizedDescription)"))
+            return
+        }
+        closeModal()
+        openWorkspace(ws, replaceCurrentTab: false)
     }
 
     /// Run a chosen command: close the palette first (clears its modal gate), then dispatch
     /// the chord through the normal `handle(_:)` path — including `.toggleRepoPicker`, which
     /// opens the repo picker once the palette is gone.
     private func runCommand(_ chord: KeyInterceptor.ReservedChord) {
-        closeCommandPalette()
+        closeModal()
         handle(chord)
-    }
-
-    // MARK: modal dismissal
-
-    /// Dismiss whichever palette is up — called before any tab-bar mouse op (select/new/
-    /// close), which would otherwise unmount the palette's host tab and leave its modal
-    /// flag stuck on, soft-locking every keyboard chord.
-    private func dismissOpenPalettes() {
-        if isRepoPickerOpen { closeRepoPicker() }
-        if isCommandPaletteOpen { closeCommandPalette() }
     }
 
     /// Present a blocking confirm: focus leaves the terminal (typing is gated) and
@@ -466,7 +486,7 @@ final class WindowController: NSObject {
         confirmLabel: String, onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil
     ) {
         cancelConfirm()  // supersede any confirm already up (e.g. ⌘Q over a ⌘W confirm)
-        dismissOpenPalettes()  // never stack over an open palette
+        closeModal()  // never stack over an open palette
         confirmOnCancel = onCancel
         let content = ToastContent(variant: variant, title: title, message: message)
         let actions = [
@@ -512,7 +532,7 @@ final class WindowController: NSObject {
     /// `Workspace` value, not a store lookup — so a freshly-built one (a future in-app "Add
     /// Project" form) can open immediately without a relaunch; that form will widen access then.
     private func openWorkspace(_ ws: Workspace, replaceCurrentTab: Bool) {
-        closeRepoPicker()
+        closeModal()
         if replaceCurrentTab {
             replaceActiveTab(cwd: ws.path, pinnedTitle: ws.title, workspace: ws)
         } else {
@@ -529,30 +549,18 @@ final class WindowController: NSObject {
         // swallowed. Its Return/Esc/button answers go through the toast's own key
         // equivalents, never here.
         if isConfirmOpen { return }
-        // The repo picker is modal over the window: ⌘⇧P closes it, another surface's toggle
-        // (command palette, lazygit, a tool float) closes it and opens that instead — a live
-        // switch between all the modal cards; every other chord is swallowed. Its arrow/Enter/
-        // Esc keys aren't chords — they go to the search field's field editor, never here.
-        if isRepoPickerOpen {
+        // A modal card (repo picker / command palette / Add-Project form) is modal over the
+        // window: its own toggle closes it, another surface's toggle (another card, lazygit, a
+        // tool float) closes it and opens that instead — a live switch between all the modal
+        // cards; every other chord is swallowed. Its arrow/Enter/Esc keys aren't chords — they
+        // go to the card's field editor, never here.
+        if let modal {
             switch chord {
-            case .toggleRepoPicker:
-                closeRepoPicker()
+            case modal.kind.selfToggle:
+                closeModal()
                 return
-            case .toggleCommandPalette, .toggleLazygit, .toggleToolFloat:
-                closeRepoPicker()  // close the picker, then open the requested surface below
-            default:
-                return
-            }
-        }
-        // The command palette is modal the same way: ⌘P closes it, another surface's toggle
-        // switches to it; every other chord is swallowed.
-        if isCommandPaletteOpen {
-            switch chord {
-            case .toggleCommandPalette:
-                closeCommandPalette()
-                return
-            case .toggleRepoPicker, .toggleLazygit, .toggleToolFloat:
-                closeCommandPalette()  // close the palette, then open the requested surface below
+            case .toggleRepoPicker, .toggleCommandPalette, .addProject, .toggleLazygit, .toggleToolFloat:
+                closeModal()  // close the current card, then open the requested surface below
             default:
                 return
             }
@@ -569,7 +577,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Close Pane",
                         message: "Close lazygit first to close a pane."))
                 return
-            case .toggleToolFloat, .toggleCommandPalette, .toggleRepoPicker:
+            case .toggleToolFloat, .toggleCommandPalette, .toggleRepoPicker, .addProject:
                 active?.toggleLazygit()  // close lazygit, then fall through to open the other
             case .toggleLazygit, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
@@ -590,7 +598,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Close Pane",
                         message: "Close \(name) first to close a pane."))
                 return
-            case .toggleLazygit, .toggleCommandPalette, .toggleRepoPicker:
+            case .toggleLazygit, .toggleCommandPalette, .toggleRepoPicker, .addProject:
                 active?.closeToolFloat()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
@@ -626,6 +634,7 @@ final class WindowController: NSObject {
             if let spec = ToolFloatCatalog.byID(id) { active?.toggleToolFloat(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
+        case .addProject: openAddProjectForm()
         }
     }
 
@@ -778,7 +787,9 @@ final class WindowController: NSObject {
     /// Mirror the active tab's overlay state + the window's command-palette state onto the
     /// dock's active tints. Called on tab switch, overlay toggles, and palette open/close.
     private func renderDock() {
-        dock.render(overlay: activeController?.overlayState ?? OverlayState(), paletteOpen: isCommandPaletteOpen)
+        dock.render(
+            overlay: activeController?.overlayState ?? OverlayState(),
+            paletteOpen: modal?.kind == .commandPalette)
     }
 
     /// Wire the first controller once the dict is populated. Called from

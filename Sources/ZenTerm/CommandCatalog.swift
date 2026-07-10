@@ -47,6 +47,7 @@ enum CommandCatalog {
         case .toggleLazygit: return tool("Open Lazygit", glyph, chord)
         case .toggleToolFloat(let id): return tool(ToolFloatCatalog.byID(id)?.title ?? id, glyph, chord)
         case .toggleRepoPicker: return tool("Open Project Picker", glyph, chord)
+        case .addProject: return tool("Add Project…", glyph, chord)
         // Present for exhaustiveness; both are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
@@ -63,7 +64,7 @@ enum CommandCatalog {
     /// (capped at the bound ⌘1–⌘9). The command palette itself and New Window aren't shown.
     static func commands(tabCount: Int) -> [PaletteCommand] {
         var chords: [KeyInterceptor.ReservedChord] = [
-            .toggleRepoPicker, .toggleLazygit,
+            .toggleRepoPicker, .addProject, .toggleLazygit,
         ]
         chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
         chords += [
