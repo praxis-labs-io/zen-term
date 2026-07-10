@@ -26,6 +26,15 @@ final class GhosttyHostView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
 
+    // The host window is chromeless and drags by its background
+    // (`isMovableByWindowBackground`). AppKit converts any click-drag over a subview whose
+    // `mouseDownCanMoveWindow` is true into a window move before the view sees the event —
+    // and NSView defaults to true — so drags over terminal content moved the window instead
+    // of reaching libghostty's selection. Opt out so click-drag here selects text; the
+    // window still drags by the gutters, window inset, and chrome around the panes. (The
+    // SwiftTerm backend's ProbeTerminalView does the same.)
+    override var mouseDownCanMoveWindow: Bool { false }
+
     // MARK: Size / scale
 
     /// Push the current backing size and content scale into libghostty. Called on every
