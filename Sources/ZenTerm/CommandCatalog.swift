@@ -20,36 +20,42 @@ enum CommandCatalog {
         static let tools = "Tools"
     }
 
-    /// Title, display shortcut, and group for a chord. Exhaustive over `ReservedChord`.
+    /// Title, display shortcut, and group for a chord. Exhaustive over `ReservedChord`. The
+    /// glyph is read from the live keymap (`displayGlyph`), so it tracks user rebinds instead
+    /// of showing a stale default.
     static func spec(for chord: KeyInterceptor.ReservedChord) -> PaletteCommand {
+        let glyph = displayGlyph(for: chord)
         switch chord {
-        case .splitHorizontal: return pane("Split Horizontally", "⌘-", chord)
-        case .splitVertical: return pane("Split Vertically", "⌘|", chord)
-        case .navLeft: return pane("Focus Pane Left", "⌘H", chord)
-        case .navDown: return pane("Focus Pane Down", "⌘J", chord)
-        case .navUp: return pane("Focus Pane Up", "⌘K", chord)
-        case .navRight: return pane("Focus Pane Right", "⌘L", chord)
-        case .resizeLeft: return pane("Resize Pane Left", "⌘⇧H", chord)
-        case .resizeDown: return pane("Resize Pane Down", "⌘⇧J", chord)
-        case .resizeUp: return pane("Resize Pane Up", "⌘⇧K", chord)
-        case .resizeRight: return pane("Resize Pane Right", "⌘⇧L", chord)
-        case .toggleZoom: return pane("Toggle Zoom", "⌘F", chord)
-        case .closePane: return pane("Close Pane", "⌘W", chord)
-        case .newTab: return tab("New Tab", "⌘T", chord)
-        case .prevTab: return tab("Previous Tab", "⌘[", chord)
-        case .nextTab: return tab("Next Tab", "⌘]", chord)
-        case .selectTab(let n): return tab("Select Tab \(n)", "⌘\(n)", chord)
-        case .toggleBottomDrawer: return drawer("Toggle Bottom Drawer", "⌘B", chord)
-        case .toggleRightDrawer: return drawer("Toggle Right Drawer", "⌘\\", chord)
-        case .toggleLazygit: return tool("Open Lazygit", "⌘G", chord)
-        case .toggleToolFloat(let id):
-            let f = ToolFloatCatalog.byID(id)
-            return tool(f?.title ?? id, f?.shortcut ?? "", chord)
-        case .toggleRepoPicker: return tool("Open Project Picker", "⌘⇧P", chord)
+        case .splitHorizontal: return pane("Split Horizontally", glyph, chord)
+        case .splitVertical: return pane("Split Vertically", glyph, chord)
+        case .navLeft: return pane("Focus Pane Left", glyph, chord)
+        case .navDown: return pane("Focus Pane Down", glyph, chord)
+        case .navUp: return pane("Focus Pane Up", glyph, chord)
+        case .navRight: return pane("Focus Pane Right", glyph, chord)
+        case .resizeLeft: return pane("Resize Pane Left", glyph, chord)
+        case .resizeDown: return pane("Resize Pane Down", glyph, chord)
+        case .resizeUp: return pane("Resize Pane Up", glyph, chord)
+        case .resizeRight: return pane("Resize Pane Right", glyph, chord)
+        case .toggleZoom: return pane("Toggle Zoom", glyph, chord)
+        case .closePane: return pane("Close Pane", glyph, chord)
+        case .newTab: return tab("New Tab", glyph, chord)
+        case .prevTab: return tab("Previous Tab", glyph, chord)
+        case .nextTab: return tab("Next Tab", glyph, chord)
+        case .selectTab(let n): return tab("Select Tab \(n)", glyph, chord)
+        case .toggleBottomDrawer: return drawer("Toggle Bottom Drawer", glyph, chord)
+        case .toggleRightDrawer: return drawer("Toggle Right Drawer", glyph, chord)
+        case .toggleLazygit: return tool("Open Lazygit", glyph, chord)
+        case .toggleToolFloat(let id): return tool(ToolFloatCatalog.byID(id)?.title ?? id, glyph, chord)
+        case .toggleRepoPicker: return tool("Open Project Picker", glyph, chord)
         // Present for exhaustiveness; both are omitted from `commands(tabCount:)`.
-        case .newWindow: return tab("New Window", "⌘N", chord)
-        case .toggleCommandPalette: return tool("Command Palette", "⌘P", chord)
+        case .newWindow: return tab("New Window", glyph, chord)
+        case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
         }
+    }
+
+    /// The glyph currently bound to an action, from the live keymap — empty if unbound.
+    private static func displayGlyph(for chord: KeyInterceptor.ReservedChord) -> String {
+        GeneralConfig.current.keymap.first { $0.value == chord }?.key.displayGlyph ?? ""
     }
 
     /// The ordered commands shown for a window with `tabCount` tabs, grouped by category

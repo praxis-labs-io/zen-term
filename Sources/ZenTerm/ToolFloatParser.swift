@@ -34,11 +34,18 @@ enum ToolFloatParser {
             title: fields["title"] ?? "Open \(id)",
             icon: fields["icon"] ?? "square.on.square",
             command: command,
-            widthFraction: fields["width"].flatMap { Double($0) }.map { CGFloat($0) } ?? 0.85,
-            heightFraction: fields["height"].flatMap { Double($0) }.map { CGFloat($0) } ?? 0.85,
-            requiresGitRepo: fields["git"] == "true",
+            widthFraction: fraction(fields["width"]) ?? 0.85,
+            heightFraction: fraction(fields["height"]) ?? 0.85,
+            requiresGitRepo: fields["git"]?.lowercased() == "true",
             emptyGuard: nil,
             toggle: toggle)
+    }
+
+    /// A width/height fraction clamped to a sane 0.2…1.0 — an unclamped 0 collapses the float
+    /// (invalid Auto Layout multiplier) and a value > 1 overflows the window.
+    private static func fraction(_ raw: String?) -> CGFloat? {
+        guard let value = raw.flatMap({ Double($0) }), value.isFinite else { return nil }
+        return CGFloat(min(max(value, 0.2), 1.0))
     }
 
     /// Split on whitespace, but keep runs inside double quotes intact so a quoted value can

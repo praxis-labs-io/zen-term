@@ -94,6 +94,14 @@ public protocol TerminalSurface: AnyObject {
 
     func start(_ config: TerminalSurfaceConfig)
     func focus()
+
+    /// Explicitly set whether this surface renders as focused (active/blinking cursor) or
+    /// unfocused (hollow). The chrome drives this from its own single-focus model instead of
+    /// trusting the AppKit responder chain, which doesn't propagate reliably while many pane
+    /// views are reparented in one pass (rapid splits). Distinct from `focus()`, which also
+    /// routes keyboard first-responder to the surface.
+    func setFocused(_ focused: Bool)
+
     func terminate()
 
     func paste(_ text: String)
@@ -102,6 +110,10 @@ public protocol TerminalSurface: AnyObject {
 }
 
 public extension TerminalSurface {
+    /// Default no-op: a backend whose cursor already follows the AppKit first responder
+    /// (SwiftTerm) needs nothing here.
+    func setFocused(_ focused: Bool) {}
+
     /// Backends that can't resolve a cwd get nil for free.
     var currentDirectory: URL? { nil }
 

@@ -43,8 +43,9 @@ final class TabController: NSObject {
         TabController.bottomDrawerFraction, TabController.maxDrawerFraction)
     private var rightDrawerRatio = min(
         TabController.rightDrawerFraction, TabController.maxDrawerFraction)
-    /// One ⌥-arrow nudge for a focused drawer, and the floor it can shrink to; a drawer
-    /// never grows past 70% of the working area (the canvas keeps the rest).
+    /// One ⌥-arrow nudge for a focused drawer, and the floor it can shrink to. A drawer is
+    /// capped at `maxDrawerFraction` of the working axis (default 0.7) — except on a very
+    /// small window, where the `minDrawerExtent` px floor wins and can exceed that fraction.
     private static var drawerResizeStep: CGFloat { GeneralConfig.current.drawerResizeStep }
     private static let minDrawerExtent: CGFloat = 160
     private static var maxDrawerFraction: CGFloat { GeneralConfig.current.maxDrawerFraction }
@@ -673,8 +674,17 @@ final class TabController: NSObject {
             surface = rightDrawerSurface
         }
         paneCanvas.setPanesFocused(false)
+        syncDrawerFocus()
         surface?.focus()
         onFocusChanged?()  // a drawer click also steals focus from a confirm — void it
+    }
+
+    /// Push each drawer surface's cursor-focus to match `focusedPanel` — the explicit
+    /// counterpart to `PaneCanvasController.updateHalo`, so a drawer never keeps a blinking
+    /// cursor once focus moves off it.
+    private func syncDrawerFocus() {
+        bottomDrawerSurface?.setFocused(focusedPanel == .bottomDrawer)
+        rightDrawerSurface?.setFocused(focusedPanel == .rightDrawer)
     }
 
     /// Restore focus after closing a focused drawer: to the other drawer if it's still
@@ -692,6 +702,7 @@ final class TabController: NSObject {
         paneCanvas.setPanesFocused(true)
         bottomDrawerPanel?.isFocused = false
         rightDrawerPanel?.isFocused = false
+        syncDrawerFocus()
         onFocusChanged?()
     }
 

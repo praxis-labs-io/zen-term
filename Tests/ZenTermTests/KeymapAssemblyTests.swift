@@ -33,6 +33,16 @@ final class KeymapAssemblyTests: XCTestCase {
         XCTAssertEqual(map[Chord(command: true, shift: true, key: "l")], .toggleZoom)
     }
 
+    func test_rebind_freesActionsDefaultChord() {
+        // Rebinding new_tab to ⌘Y must release its default ⌘T, not leave both bound.
+        let keybinds: [(Chord, KeyInterceptor.ReservedChord)] = [
+            (Chord(command: true, key: "y"), .newTab)
+        ]
+        let map = KeymapAssembler.assemble(floats: [], keybinds: keybinds)
+        XCTAssertEqual(map[Chord(command: true, key: "y")], .newTab)
+        XCTAssertNil(map[Chord(command: true, key: "t")])  // old default freed
+    }
+
     func test_lastKeybindWins() {
         let chord = Chord(command: true, key: "f")
         let keybinds: [(Chord, KeyInterceptor.ReservedChord)] = [

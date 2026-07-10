@@ -45,6 +45,12 @@ struct Chord: Hashable {
             }
         }
         guard let key else { return nil }
+        // A live event's key is a single `charactersIgnoringModifiers` character, so a
+        // multi-char token (e.g. "space") could never match — reject it as a dead bind.
+        guard key.count == 1 else { return nil }
+        // A modifier-less chord would swallow that plain keystroke from the terminal for
+        // every keypress — reserved chords must carry at least one modifier.
+        guard command || shift || option || control else { return nil }
         return Chord(command: command, shift: shift, option: option, control: control, key: key)
     }
 

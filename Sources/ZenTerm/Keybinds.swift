@@ -135,6 +135,11 @@ enum KeymapAssembler {
         var map = KeymapDefaults.map
         let floatIDs = Set(floats.map(\.id))
 
+        // A user keybind MOVES its action: drop the action's default chord(s) first, so the
+        // old key is freed instead of both the default and the new chord firing it.
+        let reboundActions = keybinds.map(\.1)
+        map = map.filter { entry in !reboundActions.contains(entry.value) }
+
         func set(_ chord: Chord, _ action: KeyInterceptor.ReservedChord) {
             if let existing = map[chord], existing != action {
                 NSLog(

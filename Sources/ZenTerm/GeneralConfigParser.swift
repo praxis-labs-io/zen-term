@@ -108,8 +108,10 @@ enum GeneralConfigParser {
     }
 
     private static func parseDouble(_ value: String, _ key: String) -> Double? {
-        guard let n = Double(value) else {
-            NSLog("GeneralConfig: `\(key)` expected a number, got `\(value)` — using default")
+        // `Double("nan")`/`"inf"` parse successfully but poison clamp() (min/max propagate NaN)
+        // and would trap in `Int(nan)` — reject non-finite so nothing can crash the load.
+        guard let n = Double(value), n.isFinite else {
+            NSLog("GeneralConfig: `\(key)` expected a finite number, got `\(value)` — using default")
             return nil
         }
         return n

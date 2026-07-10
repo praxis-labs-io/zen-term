@@ -78,6 +78,14 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.maxDrawerFraction, 0.95)  // clamped to [0.3, 0.95]
     }
 
+    func test_nonFiniteValues_fallBackWithoutCrashing() {
+        // `Double("nan")`/`"inf"` parse but must not reach Int(NaN)/clamp — regression guard.
+        let config = parse("cursor-thickness = nan\nscroll-multiplier = inf\nfont-size = 20\n")
+        XCTAssertEqual(config.cursorThickness, GeneralConfig.builtIn.cursorThickness)
+        XCTAssertEqual(config.scrollMultiplier, GeneralConfig.builtIn.scrollMultiplier)
+        XCTAssertEqual(config.fontSize, 20)  // the finite line still applies
+    }
+
     func test_cursorThickness_parsesAndClamps() {
         XCTAssertEqual(parse("cursor-thickness = 4\n").cursorThickness, 4)
         XCTAssertEqual(parse("cursor-thickness = 99\n").cursorThickness, 12)  // clamped to [1, 12]

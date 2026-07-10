@@ -20,6 +20,12 @@ final class ChordTests: XCTestCase {
         XCTAssertNil(Chord.parse("cmd++g"))  // empty token
     }
 
+    func test_parse_rejectsModifierlessAndMultiChar() {
+        XCTAssertNil(Chord.parse("k"))  // no modifier — would swallow the plain keystroke
+        XCTAssertNil(Chord.parse("cmd+space"))  // multi-char key never matches a live event
+        XCTAssertNotNil(Chord.parse("cmd+k"))  // control: a valid single-char modified chord
+    }
+
     func test_displayGlyph_orderAndSymbols() {
         XCTAssertEqual(Chord(command: true, shift: true, key: "g").displayGlyph, "⌘⇧G")
         XCTAssertEqual(Chord(command: true, shift: true, option: true, control: true, key: "a").displayGlyph, "⌘⇧⌥⌃A")

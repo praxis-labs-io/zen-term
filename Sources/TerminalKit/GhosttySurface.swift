@@ -146,6 +146,10 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
     public func focus() { hostView.window?.makeFirstResponder(hostView) }
 
+    public func setFocused(_ focused: Bool) {
+        if let surfacePtr { ghostty_surface_set_focus(surfacePtr, focused) }
+    }
+
     public func terminate() {
         guard let surfacePtr else { return }
         ghostty_surface_free(surfacePtr)

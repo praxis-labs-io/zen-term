@@ -35,6 +35,17 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertEqual(float?.command, "npm run dev")
     }
 
+    func test_widthHeight_clampedToSaneRange() {
+        let float = ToolFloatParser.parse("id:x command:c key:cmd+shift+j width:5 height:0")
+        XCTAssertEqual(float?.widthFraction, 1.0)  // 5 → clamped to 1.0
+        XCTAssertEqual(float?.heightFraction, 0.2)  // 0 → clamped to 0.2 (never an invalid multiplier)
+    }
+
+    func test_git_caseInsensitive() {
+        XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j git:True")?.requiresGitRepo, true)
+        XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j git:TRUE")?.requiresGitRepo, true)
+    }
+
     func test_missingRequiredFields_returnNil() {
         XCTAssertNil(ToolFloatParser.parse("command:foo key:cmd+shift+j"))  // no id
         XCTAssertNil(ToolFloatParser.parse("id:x key:cmd+shift+j"))  // no command
