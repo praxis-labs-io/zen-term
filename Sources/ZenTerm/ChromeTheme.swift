@@ -16,10 +16,16 @@ struct ChromeTheme: Equatable {
     let attention: TerminalColor
     let muted: TerminalColor
 
+    /// Readability multiplier applied to every ink opacity. The chrome's per-site opacities
+    /// were tuned for light-on-dark; a dark ink at the same opacity on a light theme reads
+    /// fainter, so we lift them all. Applied in both modes (a small lift helps dark's faint
+    /// secondary text too). Tune here — it's the single knob for chrome ink contrast.
+    static let inkBoost: CGFloat = 1.3
+
     /// A foreground-toned chrome ink at a given opacity — icon tints, text, hairlines, and
-    /// hover fills. Sourced from the theme's foreground so it adapts automatically: light on a
-    /// dark theme, dark on a light one. `alpha` is the site's existing opacity, kept 1-for-1.
+    /// hover fills. Sourced from the theme's foreground so it adapts automatically (light on a
+    /// dark theme, dark on a light one), lifted by `inkBoost` for readability.
     func ink(alpha: CGFloat) -> NSColor {
-        foreground.nsColor.withAlphaComponent(alpha)
+        foreground.nsColor.withAlphaComponent(min(1, alpha * Self.inkBoost))
     }
 }

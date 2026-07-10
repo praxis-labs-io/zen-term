@@ -29,7 +29,7 @@ final class TabBarView: NSView {
 
     fileprivate static let activeInk = Theme.current.chrome.ink(alpha: 1)
     fileprivate static let idleInk = Theme.current.chrome.ink(alpha: 0.55)
-    fileprivate static let numberInk = Theme.current.chrome.ink(alpha: 0.35)
+    fileprivate static let numberInk = Theme.current.chrome.ink(alpha: 0.5)
 
     private let stack = NSStackView()
     /// A single iris underline that slides along the bar to the active tab (a tracer),

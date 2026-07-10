@@ -149,7 +149,7 @@ final class PanelHostView: NSView {
         Motion.ease(
             layer, keyPath: "borderColor",
             to: (isFocused ? Theme.current.chrome.accent.nsColor : Self.idleBorder).cgColor)
-        Motion.ease(layer, keyPath: "shadowOpacity", to: isFocused ? Float(0.2) : Float(0))
+        Motion.ease(layer, keyPath: "shadowOpacity", to: isFocused ? Float(0.3) : Float(0))
     }
 
     /// A muted small-caps mono label (left) and its keybind (right), e.g. "BOTTOM  ⌘B".
@@ -164,7 +164,7 @@ final class PanelHostView: NSView {
 
         let keybindField = NSTextField(labelWithString: meta.keybind)
         keybindField.font = font
-        keybindField.textColor = Theme.current.chrome.ink(alpha: 0.3)
+        keybindField.textColor = Theme.current.chrome.ink(alpha: 0.4)
         keybindField.alignment = .right
 
         let stack = NSStackView(views: [labelField, keybindField])

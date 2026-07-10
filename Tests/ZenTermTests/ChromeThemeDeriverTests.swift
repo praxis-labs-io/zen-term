@@ -22,11 +22,12 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(chrome.muted, TerminalColor(red: 134, green: 132, blue: 150))
     }
 
-    func test_inkIsThemeForegroundAtTheGivenAlpha() {
+    func test_inkIsThemeForegroundAtBoostedAlpha() {
         let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
+        let expected = min(1, 0.55 * ChromeTheme.inkBoost)
         assertEqualRGBA(
             chrome.ink(alpha: 0.55),
-            Theme.rosePineMoon.foreground.nsColor.withAlphaComponent(0.55))
+            Theme.rosePineMoon.foreground.nsColor.withAlphaComponent(expected))
     }
 
     /// Compares two `NSColor`s by their RGBA components, converting both through `.sRGB`
