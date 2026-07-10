@@ -19,7 +19,7 @@ final class PaneCanvasController: NSObject {
     /// A leaf's kind: present → a web pane pointed at this URL; absent → a terminal.
     /// The pure `PaneTree` stays kind-agnostic; the kind lives here on the controller.
     private var webURLByLeaf: [PaneID: URL] = [:]
-    private var hostByLeaf: [PaneID: PanelHostView] = [:]
+    private var hostByLeaf: [PaneID: PaneHost] = [:]
     /// A one-shot startup command per leaf (the `⌘P` workspace preset seeds the first
     /// leaf with `nvim`). Consumed when the leaf's surface is first started; splits
     /// never inherit it, so a split of an nvim pane is a plain shell.
@@ -203,13 +203,16 @@ final class PaneCanvasController: NSObject {
 
     private func hostView(for id: PaneID) -> NSView {
         guard let surface = registry.surface(for: id) else { return NSView() }
-        let host = PanelHostView(
-            content: surface.view,
-            background: Theme.current.chrome.background.nsColor,
-            meta: nil,
-            onFocusRequest: { [weak self] in
-                self?.focus(id)
-            })
+        let host: PaneHost
+        if let web = surface as? WebPaneSurface {
+            host = WebPaneHostView(surface: web, onFocusRequest: { [weak self] in self?.focus(id) })
+        } else {
+            host = PanelHostView(
+                content: surface.view,
+                background: Theme.current.chrome.background.nsColor,
+                meta: nil,
+                onFocusRequest: { [weak self] in self?.focus(id) })
+        }
         host.onZoomExit = { [weak self] in self?.onZoomExitRequested?() }
         hostByLeaf[id] = host
         return host

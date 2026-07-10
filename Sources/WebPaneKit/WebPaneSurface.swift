@@ -3,29 +3,24 @@ import TerminalKit
 import WebKit
 
 /// A `TerminalSurface` backed by a `WKWebView` — a pinned web pane that tiles in the
-/// pane tree like any terminal. Carries its own toolbar (back / forward / reload /
-/// editable URL field / device switch); the device switch constrains the web view's
-/// real width (no zoom) so responsive CSS reflows as it would on the device.
-///
-/// Spike scope: system colors (brand tokens come later), native `WKWebView` history
-/// for back/forward, http for localhost hosts and https elsewhere.
+/// pane tree like any terminal. The surface owns only the letterboxed web content and
+/// a control API (`goBack` / `goForward` / `reload` / `navigate` / `setDevice`); the
+/// chrome builds the toolbar above it and drives that API. The device switch constrains
+/// the web view's real width (no zoom) so responsive CSS reflows as it would on device.
 public final class WebPaneSurface: NSObject, TerminalSurface {
     public weak var delegate: TerminalSurfaceDelegate?
+
+    /// Fired when navigation state the toolbar reflects changes (address, back/forward
+    /// availability). The chrome host sets this to refresh its header.
+    public var onStateChange: (() -> Void)?
 
     private let container: FocusReportingView
     private let webView: WKWebView
     private let webHost = NSView()
-    private let backButton = WebPaneSurface.iconButton("chevron.left", "Back")
-    private let forwardButton = WebPaneSurface.iconButton("chevron.right", "Forward")
-    private let reloadButton = WebPaneSurface.iconButton("arrow.clockwise", "Reload")
-    private let urlField = NSTextField()
-    private let deviceControl = NSSegmentedControl()
     private let errorLabel = NSTextField(labelWithString: "")
-    private var toolbar: NSStackView!
 
-    private var device: DevicePreset
+    public private(set) var device: DevicePreset
     private var pendingURL: URL
-    private var focused = false
 
     /// Letterbox width constraints, swapped on device change. `fullWidth` pins the web
     /// view to the host (desktop); `fixedWidth` clamps it to a device width, centered,
@@ -42,7 +37,6 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
         self.webView = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
         super.init()
 
-        buildToolbar()
         buildWebArea()
         observe()
         container.onFocusRequest = { [weak self] in self?.requestFocus() }
@@ -54,7 +48,7 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
     // MARK: TerminalSurface
 
     public var view: NSView { container }
-    public var isFocused: Bool { focused }
+    public var isFocused: Bool { container.window?.firstResponder === webView }
     public var isBusy: Bool { webView.isLoading }
     public var title: String {
         if let t = webView.title, !t.isEmpty { return t }
@@ -63,10 +57,7 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
 
     public func start(_ config: TerminalSurfaceConfig) {}  // URL is injected at construction
 
-    public func focus() {
-        focused = true
-        container.window?.makeFirstResponder(webView)
-    }
+    public func focus() { container.window?.makeFirstResponder(webView) }
 
     public func terminate() {
         webView.stopLoading()
@@ -78,28 +69,23 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
     public func copySelection() -> String? { nil }
     public func scrollToBottom() {}
 
-    // MARK: Web-only API (reached by resolving the surface as WebPaneSurface)
+    // MARK: Control API (driven by the chrome toolbar)
 
+    public var canGoBack: Bool { webView.canGoBack }
+    public var canGoForward: Bool { webView.canGoForward }
+    public var addressText: String { webView.url?.absoluteString ?? pendingURL.absoluteString }
+
+    public func goBack() { webView.goBack() }
+    public func goForward() { webView.goForward() }
     public func reload() {
         if webView.url == nil { load(pendingURL) } else { webView.reload() }
     }
 
     public func setDevice(_ device: DevicePreset) { applyDevice(device, animated: true) }
 
-    public var currentURL: URL? { webView.url ?? pendingURL }
-
-    // MARK: Navigation
-
-    private func load(_ url: URL) {
-        pendingURL = url
-        errorLabel.isHidden = true
-        webView.load(URLRequest(url: url))
-        urlField.stringValue = url.absoluteString
-    }
-
     /// Turn free text into a URL — scheme-less input gets http for loopback hosts and
     /// https otherwise, matching how you'd type `localhost:3000` vs `linear.app`.
-    private func navigate(to text: String) {
+    public func navigate(to text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let normalized: String
@@ -116,26 +102,19 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
         load(url)
     }
 
-    private func requestFocus() {
-        focused = true
-        delegate?.surfaceWantsFocus(self)
+    // MARK: Internals
+
+    private func load(_ url: URL) {
+        pendingURL = url
+        errorLabel.isHidden = true
+        webView.load(URLRequest(url: url))
+        onStateChange?()
     }
 
-    // MARK: Actions
-
-    @objc private func goBack() { webView.goBack() }
-    @objc private func goForward() { webView.goForward() }
-    @objc private func didTapReload() { reload() }
-    @objc private func urlSubmitted() { navigate(to: urlField.stringValue) }
-    @objc private func deviceChanged() {
-        applyDevice(DevicePreset.allCases[deviceControl.selectedSegment], animated: true)
-    }
-
-    // MARK: Layout
+    private func requestFocus() { delegate?.surfaceWantsFocus(self) }
 
     private func applyDevice(_ device: DevicePreset, animated: Bool) {
         self.device = device
-        deviceControl.selectedSegment = DevicePreset.allCases.firstIndex(of: device) ?? 0
         if let width = device.width {
             fullWidth.isActive = false
             fixedWidth.constant = width
@@ -144,6 +123,7 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
             fixedWidth.isActive = false
             fullWidth.isActive = true
         }
+        onStateChange?()
         guard animated else { return }
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.2
@@ -152,63 +132,15 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
         }
     }
 
-    private func updateNavButtons() {
-        backButton.isEnabled = webView.canGoBack
-        forwardButton.isEnabled = webView.canGoForward
-    }
-
-    // MARK: Build
-
-    private func buildToolbar() {
+    private func buildWebArea() {
         container.translatesAutoresizingMaskIntoConstraints = false
 
-        backButton.target = self; backButton.action = #selector(goBack)
-        forwardButton.target = self; forwardButton.action = #selector(goForward)
-        reloadButton.target = self; reloadButton.action = #selector(didTapReload)
-        let navStack = NSStackView(views: [backButton, forwardButton, reloadButton])
-        navStack.orientation = .horizontal
-        navStack.spacing = 2
-
-        urlField.target = self
-        urlField.action = #selector(urlSubmitted)
-        urlField.placeholderString = "Enter URL"
-        urlField.font = .systemFont(ofSize: 11)
-        urlField.bezelStyle = .roundedBezel
-        urlField.focusRingType = .none
-        urlField.lineBreakMode = .byTruncatingTail
-        urlField.setContentHuggingPriority(.defaultLow, for: .horizontal)
-
-        for (i, preset) in DevicePreset.allCases.enumerated() {
-            deviceControl.segmentCount = DevicePreset.allCases.count
-            deviceControl.setImage(
-                NSImage(systemSymbolName: preset.symbol, accessibilityDescription: preset.label), forSegment: i)
-            deviceControl.setWidth(30, forSegment: i)
-        }
-        deviceControl.trackingMode = .selectOne
-        deviceControl.target = self
-        deviceControl.action = #selector(deviceChanged)
-
-        toolbar = NSStackView(views: [navStack, urlField, deviceControl])
-        toolbar.orientation = .horizontal
-        toolbar.spacing = 8
-        toolbar.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(toolbar)
-
-        NSLayoutConstraint.activate([
-            toolbar.topAnchor.constraint(equalTo: container.topAnchor),
-            toolbar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            toolbar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            toolbar.heightAnchor.constraint(equalToConstant: 28),
-        ])
-    }
-
-    private func buildWebArea() {
         webHost.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(webHost)
 
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.wantsLayer = true
-        webView.layer?.cornerRadius = 8
+        webView.layer?.cornerRadius = 12
         webView.layer?.masksToBounds = true
         webView.layer?.borderWidth = 1
         webView.layer?.borderColor = NSColor.separatorColor.cgColor
@@ -225,10 +157,10 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
         fixedWidth = webView.widthAnchor.constraint(equalToConstant: 390)
         fixedWidth.priority = .defaultHigh
 
-        // Toolbar sits above; the web area fills the rest. The web view is centered and
-        // never exceeds the host so a narrow pane clamps a device preset (maxWidth 100%).
+        // The web view is centered and never exceeds the host so a narrow pane clamps a
+        // device preset (maxWidth 100%); the letterbox gutters stay transparent.
         NSLayoutConstraint.activate([
-            webHost.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 6),
+            webHost.topAnchor.constraint(equalTo: container.topAnchor),
             webHost.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             webHost.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             webHost.bottomAnchor.constraint(equalTo: container.bottomAnchor),
@@ -248,32 +180,17 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
                 guard let self else { return }
                 self.delegate?.surface(self, titleDidChange: self.title)
             },
-            webView.observe(\.url, options: [.new]) { [weak self] webView, _ in
-                guard let self else { return }
-                if let url = webView.url { self.urlField.stringValue = url.absoluteString }
-                self.updateNavButtons()
-            },
-            webView.observe(\.canGoBack) { [weak self] _, _ in self?.updateNavButtons() },
-            webView.observe(\.canGoForward) { [weak self] _, _ in self?.updateNavButtons() },
+            webView.observe(\.url) { [weak self] _, _ in self?.onStateChange?() },
+            webView.observe(\.canGoBack) { [weak self] _, _ in self?.onStateChange?() },
+            webView.observe(\.canGoForward) { [weak self] _, _ in self?.onStateChange?() },
         ]
-    }
-
-    private static func iconButton(_ symbol: String, _ label: String) -> NSButton {
-        let button = NSButton()
-        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
-        button.bezelStyle = .texturedRounded
-        button.isBordered = false
-        button.imageScaling = .scaleProportionallyDown
-        button.setButtonType(.momentaryPushIn)
-        button.toolTip = label
-        return button
     }
 }
 
 extension WebPaneSurface: WKNavigationDelegate {
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         errorLabel.isHidden = true
-        updateNavButtons()
+        onStateChange?()
     }
 
     public func webView(
@@ -299,30 +216,11 @@ extension WebPaneSurface: WKNavigationDelegate {
 }
 
 /// A backing view that reports focus intent on click so the chrome routes unified
-/// focus. Clicks inside the web view are consumed by WebKit; toolbar / gutter clicks
-/// land here.
+/// focus. Clicks inside the web view are consumed by WebKit; gutter clicks land here.
 private final class FocusReportingView: NSView {
     var onFocusRequest: (() -> Void)?
     override func mouseDown(with event: NSEvent) {
         onFocusRequest?()
         super.mouseDown(with: event)
-    }
-}
-
-private extension DevicePreset {
-    var symbol: String {
-        switch self {
-        case .desktop: return "display"
-        case .tablet: return "ipad"
-        case .phone: return "iphone"
-        }
-    }
-
-    var label: String {
-        switch self {
-        case .desktop: return "Desktop"
-        case .tablet: return "Tablet"
-        case .phone: return "Phone"
-        }
     }
 }

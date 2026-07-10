@@ -17,4 +17,21 @@ public enum DevicePreset: CaseIterable, Sendable {
         case .phone: return 390
         }
     }
+
+    /// SF Symbol for the chrome's device switch.
+    public var symbol: String {
+        switch self {
+        case .desktop: return "display"
+        case .tablet: return "ipad"
+        case .phone: return "iphone"
+        }
+    }
+
+    public var label: String {
+        switch self {
+        case .desktop: return "Desktop"
+        case .tablet: return "Tablet"
+        case .phone: return "Phone"
+        }
+    }
 }
