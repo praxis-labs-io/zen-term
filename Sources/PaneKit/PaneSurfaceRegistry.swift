@@ -15,6 +15,14 @@ public final class PaneSurfaceRegistry {
     public func surface(for id: PaneID) -> TerminalSurface? { surfaces[id] }
     public var ids: Set<PaneID> { Set(surfaces.keys) }
 
+    /// Terminates and forgets one leaf's surface so the next `apply` recreates it. Used
+    /// when a leaf's kind changes (e.g. terminal → web) and its surface must respawn —
+    /// the tree keeps the same `PaneID`, so the diff alone would treat it as retained.
+    public func discard(_ id: PaneID) {
+        surfaces[id]?.terminate()
+        surfaces[id] = nil
+    }
+
     /// Terminates every surface and empties the registry. Used when a whole tab is
     /// torn down at once (its controller is discarded), so its shells don't leak.
     public func terminateAll() {

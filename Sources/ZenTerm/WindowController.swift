@@ -43,9 +43,14 @@ final class WindowController: NSObject {
     private var commandPalette: CommandPaletteOverlay?
     var isCommandPaletteOpen: Bool { commandPalette != nil }
 
-    /// Whether either palette is modal right now. Read by `AppDelegate` so window-level
+    /// The `⌘⇧B` web-pane picker, when open. Tab-scoped (it splits/replaces a pane in the
+    /// active tab) but presented over the tile region like the others. Modal while open.
+    private var webPanePicker: WebPanePickerOverlay?
+    var isWebPanePickerOpen: Bool { webPanePicker != nil }
+
+    /// Whether any palette is modal right now. Read by `AppDelegate` so window-level
     /// chords (⌘N) and Copy/Paste routing respect the modal too, not just `handle(_:)`.
-    var isModalPaletteOpen: Bool { isRepoPickerOpen || isCommandPaletteOpen }
+    var isModalPaletteOpen: Bool { isRepoPickerOpen || isCommandPaletteOpen || isWebPanePickerOpen }
 
     /// A blocking close confirm (⌘W on a busy or last pane), when up. Window-level like
     /// the palettes: modal over the active tab until answered.
@@ -446,6 +451,37 @@ final class WindowController: NSObject {
         handle(chord)
     }
 
+    // MARK: web-pane picker (⌘⇧B)
+
+    /// Toggle the web-pane picker over the active tab. Enter splits a web pane from the
+    /// focused pane; Shift+Enter replaces it. Closing restores focus to the active tab.
+    private func toggleWebPanePicker() {
+        if isWebPanePickerOpen { closeWebPanePicker(); return }
+        guard let active = activeController else { return }
+        let picker = WebPanePickerOverlay(
+            presets: WebPanePickerOverlay.defaultPresets,
+            background: Theme.current.chrome.background.nsColor,
+            onChoose: { [weak self] url, replace in
+                self?.closeWebPanePicker()
+                self?.activeController?.newWebPane(url: url, replace: replace)
+            },
+            onDismiss: { [weak self] in self?.closeWebPanePicker() }
+        )
+        active.presentTileOverlay(picker)
+        webPanePicker = picker
+        picker.focusSearchField()
+        picker.animateIn()
+        renderDock()
+    }
+
+    private func closeWebPanePicker() {
+        guard let picker = webPanePicker else { return }
+        webPanePicker = nil
+        picker.animateOut { picker.removeFromSuperview() }
+        activeController?.restoreKeyFocus()
+        renderDock()
+    }
+
     // MARK: modal dismissal
 
     /// Dismiss whichever palette is up — called before any tab-bar mouse op (select/new/
@@ -454,6 +490,7 @@ final class WindowController: NSObject {
     private func dismissOpenPalettes() {
         if isRepoPickerOpen { closeRepoPicker() }
         if isCommandPaletteOpen { closeCommandPalette() }
+        if isWebPanePickerOpen { closeWebPanePicker() }
     }
 
     /// Present a blocking confirm: focus leaves the terminal (typing is gated) and
@@ -538,7 +575,7 @@ final class WindowController: NSObject {
             case .toggleRepoPicker:
                 closeRepoPicker()
                 return
-            case .toggleCommandPalette, .toggleLazygit, .toggleToolFloat:
+            case .toggleCommandPalette, .toggleWebPanePicker, .toggleLazygit, .toggleToolFloat:
                 closeRepoPicker()  // close the picker, then open the requested surface below
             default:
                 return
@@ -551,8 +588,21 @@ final class WindowController: NSObject {
             case .toggleCommandPalette:
                 closeCommandPalette()
                 return
-            case .toggleRepoPicker, .toggleLazygit, .toggleToolFloat:
+            case .toggleRepoPicker, .toggleWebPanePicker, .toggleLazygit, .toggleToolFloat:
                 closeCommandPalette()  // close the palette, then open the requested surface below
+            default:
+                return
+            }
+        }
+        // The web-pane picker is modal the same way: ⌘⇧B closes it, another surface's toggle
+        // switches to it; every other chord is swallowed.
+        if isWebPanePickerOpen {
+            switch chord {
+            case .toggleWebPanePicker:
+                closeWebPanePicker()
+                return
+            case .toggleRepoPicker, .toggleCommandPalette, .toggleLazygit, .toggleToolFloat:
+                closeWebPanePicker()  // close the picker, then open the requested surface below
             default:
                 return
             }
@@ -569,7 +619,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Close Pane",
                         message: "Close lazygit first to close a pane."))
                 return
-            case .toggleToolFloat, .toggleCommandPalette, .toggleRepoPicker:
+            case .toggleToolFloat, .toggleCommandPalette, .toggleRepoPicker, .toggleWebPanePicker:
                 active?.toggleLazygit()  // close lazygit, then fall through to open the other
             case .toggleLazygit, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
@@ -590,7 +640,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Close Pane",
                         message: "Close \(name) first to close a pane."))
                 return
-            case .toggleLazygit, .toggleCommandPalette, .toggleRepoPicker:
+            case .toggleLazygit, .toggleCommandPalette, .toggleRepoPicker, .toggleWebPanePicker:
                 active?.closeToolFloat()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
@@ -626,7 +676,7 @@ final class WindowController: NSObject {
             if let spec = ToolFloatCatalog.byID(id) { active?.toggleToolFloat(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
-        case .newWebPane: active?.newWebPane()
+        case .toggleWebPanePicker: toggleWebPanePicker()
         }
     }
 

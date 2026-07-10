@@ -8,10 +8,10 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(
             names,
             [
-                "Open Project Picker", "Open Lazygit", "Open GitDash",
+                "Open Project Picker", "Open Web Pane", "Open Lazygit", "Open GitDash",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab",
-                "Split Horizontally", "Split Vertically", "Open Web Pane",
+                "Split Horizontally", "Split Vertically",
                 "Focus Pane Left", "Focus Pane Down", "Focus Pane Up", "Focus Pane Right",
                 "Resize Pane Left", "Resize Pane Down", "Resize Pane Up", "Resize Pane Right",
                 "Toggle Zoom", "Close Pane",

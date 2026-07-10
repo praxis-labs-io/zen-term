@@ -321,6 +321,18 @@ final class PaneCanvasController: NSObject {
         focus(newLeaf)
     }
 
+    /// Replace the focused pane in place with a web pane pointed at `url`. The tree shape
+    /// is unchanged; only the focused leaf's surface is respawned (terminal → web). The
+    /// leaf's `discard` forces reconcile to recreate it, since the diff sees it retained.
+    func replaceFocusedWithWebPane(url: URL) {
+        let leaf = tree.focusedLeaf
+        webURLByLeaf[leaf] = url
+        cwdByLeaf[leaf] = nil
+        registry.discard(leaf)
+        reconcileAndRender()
+        focus(leaf)
+    }
+
     /// Resize the focused pane by moving its edge in `direction`: it grows into a neighbor
     /// that way, or shrinks (moving the opposite divider) when it's flush to that edge.
     /// `.right`/`.down` push positive, `.left`/`.up` negative. The nudge is clamped so both

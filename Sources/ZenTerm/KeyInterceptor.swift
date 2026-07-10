@@ -20,7 +20,7 @@ final class KeyInterceptor {
         case toggleToolFloat(String)  // associated value = ToolFloat.id
         case toggleRepoPicker
         case toggleCommandPalette
-        case newWebPane
+        case toggleWebPanePicker
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?
@@ -48,7 +48,7 @@ final class KeyInterceptor {
                 case "k": chord = .resizeUp
                 case "j": chord = .resizeDown
                 case "p": chord = .toggleRepoPicker
-                case "b": chord = .newWebPane  // ⌘⇧B — split a web pane in (spike)
+                case "b": chord = .toggleWebPanePicker  // ⌘⇧B — web pane picker (spike)
                 case "g": chord = .toggleToolFloat("gitdash")  // ⌘⇧G — per-float keybinding
                 default: chord = nil
                 }

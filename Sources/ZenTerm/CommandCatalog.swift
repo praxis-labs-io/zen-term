@@ -46,7 +46,7 @@ enum CommandCatalog {
             let f = ToolFloatCatalog.byID(id)
             return tool(f?.title ?? id, f?.shortcut ?? "", chord)
         case .toggleRepoPicker: return tool("Open Project Picker", "⌘⇧P", chord)
-        case .newWebPane: return pane("Open Web Pane", "⌘⇧B", chord)
+        case .toggleWebPanePicker: return tool("Open Web Pane", "⌘⇧B", chord)
         // Present for exhaustiveness; both are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", "⌘N", chord)
         case .toggleCommandPalette: return tool("Command Palette", "⌘P", chord)
@@ -58,7 +58,7 @@ enum CommandCatalog {
     /// (capped at the bound ⌘1–⌘9). The command palette itself and New Window aren't shown.
     static func commands(tabCount: Int) -> [PaletteCommand] {
         var chords: [KeyInterceptor.ReservedChord] = [
-            .toggleRepoPicker, .toggleLazygit,
+            .toggleRepoPicker, .toggleWebPanePicker, .toggleLazygit,
         ]
         chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
         chords += [
@@ -69,7 +69,7 @@ enum CommandCatalog {
             chords += (1...min(tabCount, 9)).map { .selectTab($0) }
         }
         chords += [
-            .splitHorizontal, .splitVertical, .newWebPane,
+            .splitHorizontal, .splitVertical,
             .navLeft, .navDown, .navUp, .navRight,
             .resizeLeft, .resizeDown, .resizeUp, .resizeRight,
             .toggleZoom, .closePane,
