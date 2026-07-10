@@ -287,7 +287,9 @@ class PaletteOverlay: NSView {
         emptyLabel.isHidden = count != 0
         // Empty → keep a small fixed height so the "no results" label isn't clipped by a
         // zero-height scroll view.
-        listHeight.constant = count == 0 ? emptyListHeight : min(total + 2 * listVerticalInset, maxListHeight)
+        // Add the insets outside the cap so the visible row viewport still gets the full
+        // `maxListHeight` (the inset doesn't eat into it) when the list overflows.
+        listHeight.constant = count == 0 ? emptyListHeight : min(total, maxListHeight) + 2 * listVerticalInset
         selected = firstSelectableIndex()
         updateHighlight()
         scrollSelectedToVisible()

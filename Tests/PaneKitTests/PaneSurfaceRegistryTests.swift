@@ -43,6 +43,26 @@ final class PaneSurfaceRegistryTests: XCTestCase {
         XCTAssertEqual(registry.ids, [PaneID(1)])
     }
 
+    func test_discard_terminatesLeafAndForcesFreshRecreateOnNextApply() {
+        let registry = PaneSurfaceRegistry(makeSurface: { _ in FakeSurface() })
+        registry.apply(paneDiff(from: [], to: [PaneID(1)]))
+        let first = registry.surface(for: PaneID(1)) as? FakeSurface
+        XCTAssertNotNil(first)
+
+        // Discard forgets + terminates the surface, so the tree keeping PaneID(1) alone
+        // isn't enough — the next apply must recreate it as a fresh instance.
+        registry.discard(PaneID(1))
+        XCTAssertNil(registry.surface(for: PaneID(1)))
+        XCTAssertEqual(first?.terminated, true)
+        XCTAssertTrue(registry.ids.isEmpty)
+
+        let created = registry.apply(paneDiff(from: [], to: [PaneID(1)]))
+        XCTAssertEqual(created.map(\.id), [PaneID(1)])
+        let second = registry.surface(for: PaneID(1)) as? FakeSurface
+        XCTAssertNotNil(second)
+        XCTAssertFalse(second === first, "discard should force a fresh surface, not reuse the old one")
+    }
+
     func test_terminateAll_terminatesEverySurfaceAndEmpties() {
         let registry = PaneSurfaceRegistry(makeSurface: { _ in FakeSurface() })
         registry.apply(paneDiff(from: [], to: [PaneID(1), PaneID(2), PaneID(3)]))

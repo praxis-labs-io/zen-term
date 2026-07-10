@@ -53,7 +53,9 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
 
     public var view: NSView { container }
     public var isFocused: Bool { container.window?.firstResponder === webView }
-    public var isBusy: Bool { webView.isLoading }
+    /// A web pane has no shell process, so it's never "busy work" — the ⌘W close path
+    /// must not treat a still-loading page as a running process to confirm before closing.
+    public var isBusy: Bool { false }
     public var title: String {
         if let t = webView.title, !t.isEmpty { return t }
         return webView.url?.host ?? pendingURL.host ?? "web"
@@ -108,10 +110,13 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
         if trimmed.contains("://") {
             normalized = trimmed
         } else {
-            let host = trimmed.split(separator: "/").first.map(String.init) ?? trimmed
+            // Host = the authority with any path and `:port` stripped, lowercased — so
+            // `team.localhost:3000` resolves to `team.localhost`, not `team.localhost:3000`.
+            let authority = trimmed.split(separator: "/").first.map(String.init) ?? trimmed
+            let host = (authority.split(separator: ":").first.map(String.init) ?? authority).lowercased()
             let isLocal =
-                host.hasPrefix("localhost") || host.hasPrefix("127.0.0.1")
-                || host.hasSuffix(".localhost")
+                host == "localhost" || host.hasSuffix(".localhost")
+                || host == "127.0.0.1" || host == "0.0.0.0"
             normalized = (isLocal ? "http://" : "https://") + trimmed
         }
         guard let url = URL(string: normalized) else { NSSound.beep(); return }
