@@ -8,14 +8,14 @@ public enum DevicePreset: CaseIterable, Sendable {
     case tablet
     case phone
 
-    /// The CSS-point width the web view window is constrained to (drives responsive
-    /// reflow), or nil for full pane width. Widths are spike constants; configurability
-    /// is future work.
-    public var width: CGFloat? {
+    /// The CSS-point size the web view window is constrained to (portrait), or nil for
+    /// full pane. Tablet/phone use real device dimensions so the window shows the correct
+    /// aspect ratio, centered and scaled to fit. Constants are spike values.
+    public var size: CGSize? {
         switch self {
         case .desktop: return nil
-        case .tablet: return 820
-        case .phone: return 390
+        case .tablet: return CGSize(width: 820, height: 1180)  // iPad (10.9")
+        case .phone: return CGSize(width: 390, height: 844)  // iPhone (12–14)
         }
     }
 

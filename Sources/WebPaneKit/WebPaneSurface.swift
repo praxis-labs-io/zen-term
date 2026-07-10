@@ -24,11 +24,14 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
     public private(set) var pageZoom: CGFloat = 1
     private var pendingURL: URL
 
-    /// Letterbox width constraints, swapped on device change. `fullWidth` pins the web
-    /// view to the host (desktop); `fixedWidth` clamps it to a device width, centered,
-    /// while an always-on `<= host` cap keeps it inside a narrow pane (maxWidth 100%).
-    private var fullWidth: NSLayoutConstraint!
+    /// Constraint groups swapped on device change. Desktop fills the pane; a device
+    /// preset sizes the window to its real dimensions (aspect-locked), centered and
+    /// scaled to fit via always-on `<= host` caps.
+    private var desktopConstraints: [NSLayoutConstraint] = []
+    private var deviceConstraints: [NSLayoutConstraint] = []
     private var fixedWidth: NSLayoutConstraint!
+    private var fixedHeight: NSLayoutConstraint!
+    private var aspect: NSLayoutConstraint?
 
     private var observations: [NSKeyValueObservation] = []
 
@@ -84,7 +87,7 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
 
     public func setDevice(_ device: DevicePreset) {
         self.device = device
-        applyDeviceWidth()
+        applyDevice()
         onStateChange?()
     }
 
@@ -126,16 +129,20 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
 
     private func requestFocus() { delegate?.surfaceWantsFocus(self) }
 
-    /// Swap the letterbox width constraint for the current device — full pane width for
-    /// desktop, a fixed device width (centered, clamped to the pane) otherwise.
-    private func applyDeviceWidth() {
-        if let width = device.width {
-            fullWidth.isActive = false
-            fixedWidth.constant = width
-            fixedWidth.isActive = true
+    /// Swap constraint groups for the current device — desktop fills the pane; a device
+    /// preset locks the window to its aspect ratio at native size, scaled down to fit.
+    private func applyDevice() {
+        NSLayoutConstraint.deactivate(desktopConstraints + deviceConstraints)
+        aspect?.isActive = false
+        if let size = device.size {
+            fixedWidth.constant = size.width
+            fixedHeight.constant = size.height
+            let ratio = webView.widthAnchor.constraint(
+                equalTo: webView.heightAnchor, multiplier: size.width / size.height)
+            aspect = ratio
+            NSLayoutConstraint.activate(deviceConstraints + [ratio])
         } else {
-            fixedWidth.isActive = false
-            fullWidth.isActive = true
+            NSLayoutConstraint.activate(desktopConstraints)
         }
     }
 
@@ -160,25 +167,35 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
         errorLabel.translatesAutoresizingMaskIntoConstraints = false
         webHost.addSubview(errorLabel)
 
-        fullWidth = webView.widthAnchor.constraint(equalTo: webHost.widthAnchor)
+        // Desktop: fill the pane. Device: native size at high priority, aspect-locked and
+        // centered, scaled down by the always-on `<= host` caps when the pane is smaller.
+        let fullWidth = webView.widthAnchor.constraint(equalTo: webHost.widthAnchor)
+        desktopConstraints = [
+            fullWidth,
+            webView.topAnchor.constraint(equalTo: webHost.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: webHost.bottomAnchor),
+        ]
         fixedWidth = webView.widthAnchor.constraint(equalToConstant: 390)
         fixedWidth.priority = .defaultHigh
+        fixedHeight = webView.heightAnchor.constraint(equalToConstant: 844)
+        fixedHeight.priority = .defaultHigh
+        deviceConstraints = [
+            fixedWidth, fixedHeight,
+            webView.centerYAnchor.constraint(equalTo: webHost.centerYAnchor),
+        ]
 
-        // The web view window is centered and never exceeds the host so a narrow pane
-        // clamps a device preset (maxWidth 100%); the letterbox gutters stay transparent.
         NSLayoutConstraint.activate([
             webHost.topAnchor.constraint(equalTo: container.topAnchor),
             webHost.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             webHost.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             webHost.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            webView.topAnchor.constraint(equalTo: webHost.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: webHost.bottomAnchor),
             webView.centerXAnchor.constraint(equalTo: webHost.centerXAnchor),
             webView.widthAnchor.constraint(lessThanOrEqualTo: webHost.widthAnchor),
+            webView.heightAnchor.constraint(lessThanOrEqualTo: webHost.heightAnchor),
             errorLabel.centerXAnchor.constraint(equalTo: webHost.centerXAnchor),
             errorLabel.centerYAnchor.constraint(equalTo: webHost.centerYAnchor),
         ])
-        applyDeviceWidth()
+        applyDevice()
     }
 
     private func observe() {
