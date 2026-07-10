@@ -13,6 +13,25 @@ public struct TerminalColor: Sendable, Equatable {
         self.blue = blue
     }
 
+    /// Parse a `#rrggbb` or `#rgb` hex string (case-insensitive, surrounding
+    /// whitespace tolerated). The inverse of `hex`; `nil` for any other form.
+    public init?(hex: String) {
+        var text = hex.trimmingCharacters(in: .whitespaces)
+        guard text.hasPrefix("#") else { return nil }
+        text.removeFirst()
+        let sixDigit: String
+        switch text.count {
+        case 3: sixDigit = text.map { "\($0)\($0)" }.joined()
+        case 6: sixDigit = text
+        default: return nil
+        }
+        guard let value = UInt32(sixDigit, radix: 16) else { return nil }
+        self.init(
+            red: UInt8((value >> 16) & 0xFF),
+            green: UInt8((value >> 8) & 0xFF),
+            blue: UInt8(value & 0xFF))
+    }
+
     public var nsColor: NSColor {
         NSColor(srgbRed: CGFloat(red) / 255.0, green: CGFloat(green) / 255.0, blue: CGFloat(blue) / 255.0, alpha: 1)
     }
