@@ -214,7 +214,24 @@ final class TabController: NSObject {
             zoomRevealedDrawer = nil  // the peek belonged to this zoom session
             zoomedPanel = nil
             relayoutPanels()
+            reclaimFocusIfHidden()  // the peek may have held focus; it's hidden now
         }
+    }
+
+    /// After a relayout that may have hidden the focused drawer (a peek dismissed, or zoom
+    /// exited), hand unified focus back to the pane if the focused drawer is no longer
+    /// visible — otherwise copy/paste and ⌘hjkl would target an off-screen surface.
+    /// `focusActivePane` restores both keyboard first-responder and, via `onFocusChanged`
+    /// → `paneGainedFocus`, the halo/routing. Callers must have cleared zoom state first, so
+    /// a drawer's visibility is just its open flag here.
+    private func reclaimFocusIfHidden() {
+        let hidden: Bool
+        switch focusedPanel {
+        case .pane: return
+        case .bottomDrawer: hidden = !isBottomOpen
+        case .rightDrawer: hidden = !isRightOpen
+        }
+        if hidden { paneCanvas.focusActivePane() }
     }
 
     func start() { paneCanvas.start() }
@@ -733,6 +750,7 @@ final class TabController: NSObject {
         zoomRevealedDrawer = nil  // drop any peek; normal tiling restores the real drawers
         zoomedPanel = nil
         relayoutPanels()
+        reclaimFocusIfHidden()  // a dismissed peek must not keep focus on a now-hidden drawer
     }
 
     /// Peek one drawer over the zoomed pane (or hide it), keeping zoom. Only one drawer
