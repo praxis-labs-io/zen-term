@@ -68,14 +68,14 @@ final class SettingsKeybindsSection: SettingsSection {
         resetAllButton.onTap = { [weak self] in self?.resetAll() }
         stack.addArrangedSubview(resetAllButton)
 
-        // A scroll view keeps the long list inside the fixed card, with top/bottom breathing room so
-        // the first and last stops never sit flush against the card edges.
+        // The scroll view fills the detail area edge-to-edge; all the padding lives inside as content
+        // insets, so the list scrolls right up to the card edges with breathing room around the rows.
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
         scroll.scrollerStyle = .overlay  // thin, auto-hiding — not the wide legacy scroller
         scroll.drawsBackground = false
         scroll.automaticallyAdjustsContentInsets = false
-        scroll.contentInsets = NSEdgeInsets(top: 12, left: 0, bottom: 12, right: 0)
+        scroll.contentInsets = NSEdgeInsets(top: 16, left: 20, bottom: 16, right: 20)
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.documentView = stack
         NSLayoutConstraint.activate([

@@ -146,11 +146,13 @@ final class SettingsOverlay: NSView, ModalOverlay {
         let detail = sections[index].makeDetailView()
         detail.translatesAutoresizingMaskIntoConstraints = false
         detailContainer.addSubview(detail)
+        // The section fills the detail area edge-to-edge (no outer gap); a scrolling section owns its
+        // own inner padding via content insets, so its list can scroll right up to the card edges.
         NSLayoutConstraint.activate([
-            detail.leadingAnchor.constraint(equalTo: detailContainer.leadingAnchor, constant: 20),
-            detail.trailingAnchor.constraint(equalTo: detailContainer.trailingAnchor, constant: -20),
-            detail.topAnchor.constraint(equalTo: detailContainer.topAnchor, constant: 18),
-            detail.bottomAnchor.constraint(lessThanOrEqualTo: detailContainer.bottomAnchor, constant: -16),
+            detail.leadingAnchor.constraint(equalTo: detailContainer.leadingAnchor),
+            detail.trailingAnchor.constraint(equalTo: detailContainer.trailingAnchor),
+            detail.topAnchor.constraint(equalTo: detailContainer.topAnchor),
+            detail.bottomAnchor.constraint(equalTo: detailContainer.bottomAnchor),
         ])
         window?.makeFirstResponder(navRows[index])
     }
