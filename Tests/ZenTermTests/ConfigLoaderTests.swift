@@ -71,6 +71,30 @@ final class ConfigLoaderTests: XCTestCase {
         XCTAssertEqual(app.terminal.fontSize, 18)
     }
 
+    // MARK: - Workspaces (ZEN-70)
+
+    func test_loadWorkspaces_missingFileYieldsEmpty() throws {
+        let root = try makeTempDir()  // no `workspaces` file
+        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root), [])
+    }
+
+    func test_loadWorkspaces_parsesPresentFile() throws {
+        let root = try makeTempDir()
+        try "[ZenTerm]\npath = ~/Dev/zen-term\nmain = nvim\n"
+            .write(to: root.appendingPathComponent("workspaces"), atomically: true, encoding: .utf8)
+        let workspaces = ConfigLoader.loadWorkspaces(configRoot: root)
+        XCTAssertEqual(workspaces.map(\.title), ["ZenTerm"])
+        XCTAssertEqual(workspaces.first?.main, "nvim")
+    }
+
+    func test_loadWorkspaces_unreadableFallsBackWithoutCrashing() throws {
+        let root = try makeTempDir()
+        // Make `workspaces` a directory so reading it as a file throws.
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("workspaces"), withIntermediateDirectories: true)
+        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root), [])
+    }
+
     // MARK: - Named theme selection (themes/<name>)
 
     private func writeTheme(_ name: String, background: String, in root: URL) throws {

@@ -1,27 +1,28 @@
 import AppKit
 
-/// The `⌘⇧P` repo picker: a modal palette over the tab's tile region listing the
-/// directories under `~/dev`. Enter opens the selected repo in a new tab, Shift+Enter
-/// replaces the current tab, Esc / backdrop click dismiss. Built on `PaletteOverlay`,
-/// which owns the card/list/keyboard scaffolding; this supplies the repo rows + filter.
+/// The `⌘⇧P` project picker: a modal palette over the tab's tile region listing the
+/// workspaces configured in `~/.config/zen-term/workspaces`. Enter opens the selected
+/// workspace in a new tab, Shift+Enter replaces the current tab, Esc / backdrop click
+/// dismiss. Built on `PaletteOverlay`, which owns the card/list/keyboard scaffolding;
+/// this supplies the workspace rows + filter.
 final class RepoPickerOverlay: PaletteOverlay {
-    /// (selected directory, replaceCurrentTab). `replaceCurrentTab` is Shift+Enter.
-    private let onChoose: (URL, Bool) -> Void
+    /// (selected workspace, replaceCurrentTab). `replaceCurrentTab` is Shift+Enter.
+    private let onChoose: (Workspace, Bool) -> Void
 
-    private let entries: [RepoEntry]
-    private var filtered: [RepoEntry]
+    private let entries: [Workspace]
+    private var filtered: [Workspace]
 
     init(
-        entries: [RepoEntry], background: NSColor,
-        onChoose: @escaping (URL, Bool) -> Void, onDismiss: @escaping () -> Void
+        entries: [Workspace], background: NSColor,
+        onChoose: @escaping (Workspace, Bool) -> Void, onDismiss: @escaping () -> Void
     ) {
         self.entries = entries
         self.filtered = entries
         self.onChoose = onChoose
         super.init(
             background: background,
-            placeholder: "Search ~/dev…",
-            emptyText: "No directories in ~/dev",
+            placeholder: "Search projects…",
+            emptyText: "No projects yet — add one in \(Self.workspacesPathForDisplay)",
             footerHints: [
                 PaletteHint(keys: "⏎", label: "new tab"),
                 PaletteHint(keys: "⇧⏎", label: "replace"),
@@ -34,10 +35,18 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// The resolved `workspaces` file path for the empty state, home abbreviated to `~` — honors
+    /// `$XDG_CONFIG_HOME` rather than hardcoding `~/.config`.
+    private static var workspacesPathForDisplay: String {
+        let path = ConfigLoader.defaultRoot.appendingPathComponent("workspaces").path
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+    }
+
     override func numberOfRows() -> Int { filtered.count }
 
     override func makeRow(at index: Int) -> PaletteRowView {
-        RowView(entry: filtered[index]) { [weak self] clickCount in
+        RowView(workspace: filtered[index]) { [weak self] clickCount in
             self?.selectRow(at: index, clickCount: clickCount)
         }
     }
@@ -49,27 +58,27 @@ final class RepoPickerOverlay: PaletteOverlay {
         } else {
             filtered =
                 entries
-                .filter { $0.name.lowercased().contains(q) }
+                .filter { $0.title.lowercased().contains(q) }
                 .sorted { a, b in
-                    let ap = a.name.lowercased().hasPrefix(q)
-                    let bp = b.name.lowercased().hasPrefix(q)
+                    let ap = a.title.lowercased().hasPrefix(q)
+                    let bp = b.title.lowercased().hasPrefix(q)
                     if ap != bp { return ap }  // prefix matches rank first
-                    return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+                    return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
                 }
         }
     }
 
     override func activate(index: Int, modifiers: NSEvent.ModifierFlags) {
         guard filtered.indices.contains(index) else { return }
-        onChoose(filtered[index].url, modifiers.contains(.shift))
+        onChoose(filtered[index], modifiers.contains(.shift))
     }
 
-    /// One directory row: name (left) and a muted git icon (right) when it's a repo.
+    /// One workspace row: title (left) and a muted git icon (right) when its dir is a repo.
     private final class RowView: SelectableRowView {
-        init(entry: RepoEntry, onClick: @escaping (Int) -> Void) {
+        init(workspace: Workspace, onClick: @escaping (Int) -> Void) {
             super.init(onClick: onClick)
 
-            let name = NSTextField(labelWithString: entry.name)
+            let name = NSTextField(labelWithString: workspace.title)
             name.font = .systemFont(ofSize: 13)
             name.textColor = Theme.current.chrome.foreground.nsColor
             name.translatesAutoresizingMaskIntoConstraints = false
@@ -79,7 +88,7 @@ final class RepoPickerOverlay: PaletteOverlay {
                 name.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
 
-            if entry.isGitRepo {
+            if GitRepo.isGitRepo(workspace.path) {
                 let git = NSImageView()
                 let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .medium)
                 git.image = NSImage(

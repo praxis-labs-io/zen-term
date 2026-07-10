@@ -73,4 +73,29 @@ enum ConfigLoader {
             return .builtIn
         }
     }
+
+    /// Load the hand-curated `workspaces` file (the `⌘⇧P` picker) from the config root. Absent
+    /// or unreadable → an empty list; the parser drops any malformed section rather than throw. A
+    /// workspace whose `path` doesn't resolve to a directory is kept (the dir may appear later)
+    /// but logged, so a typo surfaces instead of silently opening a shell at a bad cwd.
+    static func loadWorkspaces(configRoot: URL = defaultRoot) -> [Workspace] {
+        let url = configRoot.appendingPathComponent("workspaces")
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+        let workspaces: [Workspace]
+        do {
+            workspaces = WorkspacesParser.parse(try String(contentsOf: url, encoding: .utf8))
+        } catch {
+            NSLog("ConfigLoader: could not read \(url.path): \(error) — no workspaces loaded")
+            return []
+        }
+        for workspace in workspaces where !directoryExists(workspace.path) {
+            NSLog("ConfigLoader: workspace `\(workspace.title)` path \(workspace.path.path) isn't a directory")
+        }
+        return workspaces
+    }
+
+    private static func directoryExists(_ url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+    }
 }

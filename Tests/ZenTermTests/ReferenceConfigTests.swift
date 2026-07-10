@@ -21,6 +21,12 @@ final class ReferenceConfigTests: XCTestCase {
         XCTAssertEqual(ConfigLoader.loadGeneralConfig(configRoot: docsConfig), .builtIn)
     }
 
+    func test_referenceWorkspaces_isAllCommented_yieldingEmpty() {
+        // The shipped reference is inert — copying it is a clean slate (empty picker) until
+        // the user uncomments a section. Proves no example line is accidentally live.
+        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: docsConfig), [])
+    }
+
     func test_referenceTheme_matchesBuiltInDefault() {
         var general = GeneralConfig.builtIn
         general.themeName = "rose-pine-moon"  // resolves docs/config/themes/rose-pine-moon
