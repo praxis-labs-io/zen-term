@@ -22,35 +22,28 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(chrome.muted, TerminalColor(red: 134, green: 132, blue: 150))
     }
 
-    func test_darkTheme_isDarkTrue_andInkIsByteIdenticalToHardcodedWhite() {
+    func test_inkIsThemeForegroundAtTheGivenAlpha() {
         let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
-        XCTAssertTrue(chrome.isDark)
-        assertEqualGray(chrome.ink(1, alpha: 0.55), NSColor(white: 1, alpha: 0.55))
+        assertEqualRGBA(
+            chrome.ink(alpha: 0.55),
+            Theme.rosePineMoon.foreground.nsColor.withAlphaComponent(0.55))
     }
 
-    func test_lightTheme_isDarkFalse_andInkFlipsToDarkOnLight() {
-        var light = Theme.rosePineMoon
-        light.background = TerminalColor(hex: "#faf4ed")!
-        let chrome = ChromeThemeDeriver.derive(from: light)
-        XCTAssertFalse(chrome.isDark)
-        assertEqualGray(chrome.ink(1, alpha: 0.5), NSColor(white: 0, alpha: 0.5))
-    }
-
-    /// Compares two grayscale `NSColor`s by their white/alpha components, converting both
-    /// through `.genericGray` first since `NSColor(white:alpha:)` isn't guaranteed to already
-    /// be in that color space.
-    private func assertEqualGray(
+    /// Compares two `NSColor`s by their RGBA components, converting both through `.sRGB`
+    /// first since the source colors aren't guaranteed to already be in that color space.
+    private func assertEqualRGBA(
         _ lhs: NSColor, _ rhs: NSColor, file: StaticString = #filePath, line: UInt = #line
     ) {
-        guard let lhsGray = lhs.usingColorSpace(.genericGray),
-            let rhsGray = rhs.usingColorSpace(.genericGray)
+        guard let lhsRGB = lhs.usingColorSpace(.sRGB), let rhsRGB = rhs.usingColorSpace(.sRGB)
         else {
-            XCTFail("could not convert colors to genericGray", file: file, line: line)
+            XCTFail("could not convert colors to sRGB", file: file, line: line)
             return
         }
+        XCTAssertEqual(lhsRGB.redComponent, rhsRGB.redComponent, accuracy: 0.001, file: file, line: line)
         XCTAssertEqual(
-            lhsGray.whiteComponent, rhsGray.whiteComponent, accuracy: 0.001, file: file, line: line)
+            lhsRGB.greenComponent, rhsRGB.greenComponent, accuracy: 0.001, file: file, line: line)
+        XCTAssertEqual(lhsRGB.blueComponent, rhsRGB.blueComponent, accuracy: 0.001, file: file, line: line)
         XCTAssertEqual(
-            lhsGray.alphaComponent, rhsGray.alphaComponent, accuracy: 0.001, file: file, line: line)
+            lhsRGB.alphaComponent, rhsRGB.alphaComponent, accuracy: 0.001, file: file, line: line)
     }
 }

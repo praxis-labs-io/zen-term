@@ -16,8 +16,7 @@ enum ChromeThemeDeriver {
             destructive: slot(1),
             accent: slot(5),
             attention: slot(6),
-            muted: blend(terminal.foreground, terminal.background, 0.55),
-            isDark: isDark(terminal.background))
+            muted: blend(terminal.foreground, terminal.background, 0.55))
     }
 
     /// A per-channel weighted average of `a` and `b` at `t` (`t` = 1 keeps `a`, `t` = 0 keeps
@@ -31,11 +30,5 @@ enum ChromeThemeDeriver {
             red: mix(a.red, b.red),
             green: mix(a.green, b.green),
             blue: mix(a.blue, b.blue))
-    }
-
-    private static func isDark(_ color: TerminalColor) -> Bool {
-        // Rec. 601 luma, 0…1. Below 0.5 → treat the theme as dark.
-        let luma = (0.299 * Double(color.red) + 0.587 * Double(color.green) + 0.114 * Double(color.blue)) / 255
-        return luma < 0.5
     }
 }

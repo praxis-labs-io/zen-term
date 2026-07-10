@@ -13,13 +13,13 @@ final class KeycapView: NSView {
         "⏎": "return", "↵": "return", "⎋": "escape",
         "↑": "arrow.up", "↓": "arrow.down", "←": "arrow.left", "→": "arrow.right",
     ]
-    private static let ink = Theme.current.chrome.ink(1, alpha: 0.55)
+    private static let ink = Theme.current.chrome.ink(alpha: 0.55)
 
     init(shortcut: String) {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
-        layer?.backgroundColor = Theme.current.chrome.ink(1, alpha: 0.08).cgColor
+        layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         translatesAutoresizingMaskIntoConstraints = false
 
         // A horizontal run of icon/text tokens; the spacing keeps the glyphs from crowding.

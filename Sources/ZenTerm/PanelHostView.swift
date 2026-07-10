@@ -139,7 +139,7 @@ final class PanelHostView: NSView {
         ]
     }
 
-    private static let idleBorder = Theme.current.chrome.ink(1, alpha: 0.08)
+    private static let idleBorder = Theme.current.chrome.ink(alpha: 0.08)
 
     private func updateHalo() {
         guard let layer = pane.layer else { return }
@@ -159,12 +159,12 @@ final class PanelHostView: NSView {
         let labelField = NSTextField(labelWithString: "")
         labelField.attributedStringValue = NSAttributedString(
             string: meta.label.uppercased(),
-            attributes: [.font: font, .foregroundColor: Theme.current.chrome.ink(0.92, alpha: 0.4), .kern: 1.2]
+            attributes: [.font: font, .foregroundColor: Theme.current.chrome.ink(alpha: 0.4), .kern: 1.2]
         )
 
         let keybindField = NSTextField(labelWithString: meta.keybind)
         keybindField.font = font
-        keybindField.textColor = Theme.current.chrome.ink(0.92, alpha: 0.3)
+        keybindField.textColor = Theme.current.chrome.ink(alpha: 0.3)
         keybindField.alignment = .right
 
         let stack = NSStackView(views: [labelField, keybindField])

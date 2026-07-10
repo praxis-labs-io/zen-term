@@ -4,7 +4,7 @@ import AppKit
 /// elevation shadow and a subtle neutral edge, in place of a colored ring.
 enum FloatShadow {
     /// Subtle neutral hairline on the card edge (no color), for crispness over the shadow.
-    static let edge = Theme.current.chrome.ink(1, alpha: 0.08)
+    static let edge = Theme.current.chrome.ink(alpha: 0.08)
 
     /// Cast a dark drop shadow from the card itself — the same pattern as the pane focus
     /// glow, which works: shadow on the rounded, layer-backed view with `masksToBounds =

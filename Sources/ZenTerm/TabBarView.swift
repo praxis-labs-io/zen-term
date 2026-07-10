@@ -27,9 +27,9 @@ final class TabBarView: NSView {
 
     static let height: CGFloat = 30
 
-    fileprivate static let activeInk = Theme.current.chrome.ink(0.95, alpha: 1)
-    fileprivate static let idleInk = Theme.current.chrome.ink(0.92, alpha: 0.55)
-    fileprivate static let numberInk = Theme.current.chrome.ink(0.92, alpha: 0.35)
+    fileprivate static let activeInk = Theme.current.chrome.ink(alpha: 1)
+    fileprivate static let idleInk = Theme.current.chrome.ink(alpha: 0.55)
+    fileprivate static let numberInk = Theme.current.chrome.ink(alpha: 0.35)
 
     private let stack = NSStackView()
     /// A single iris underline that slides along the bar to the active tab (a tracer),
@@ -234,7 +234,7 @@ final class TabBarView: NSView {
             guard let layer else { return }
             Motion.ease(
                 layer, keyPath: "backgroundColor",
-                to: (isHovered ? Theme.current.chrome.ink(1, alpha: 0.08) : .clear).cgColor)
+                to: (isHovered ? Theme.current.chrome.ink(alpha: 0.08) : .clear).cgColor)
         }
     }
 }

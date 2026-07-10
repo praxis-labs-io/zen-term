@@ -15,12 +15,11 @@ struct ChromeTheme: Equatable {
     let accent: TerminalColor
     let attention: TerminalColor
     let muted: TerminalColor
-    let isDark: Bool
 
-    /// A luminance-adaptive grayscale ink. On a dark theme it returns exactly
-    /// NSColor(white:alpha:) as before (so dark themes are unchanged); on a light theme it
-    /// flips the grayscale value (1 - white) so the same element reads dark-on-light.
-    func ink(_ white: CGFloat, alpha: CGFloat) -> NSColor {
-        NSColor(white: isDark ? white : 1 - white, alpha: alpha)
+    /// A foreground-toned chrome ink at a given opacity — icon tints, text, hairlines, and
+    /// hover fills. Sourced from the theme's foreground so it adapts automatically: light on a
+    /// dark theme, dark on a light one. `alpha` is the site's existing opacity, kept 1-for-1.
+    func ink(alpha: CGFloat) -> NSColor {
+        foreground.nsColor.withAlphaComponent(alpha)
     }
 }
