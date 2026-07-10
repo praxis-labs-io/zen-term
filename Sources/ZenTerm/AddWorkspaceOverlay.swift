@@ -429,6 +429,8 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         var folderMessage: String?
         if includeRequired, folderText.isEmpty {
             folderMessage = "Choose or type a workspace folder."
+        } else if folderText.contains("\"") {
+            folderMessage = "The path can’t contain a \" character."  // the format has no escaping
         } else if !folderText.isEmpty, let folder = resolvedFolder(), !directoryExists(folder) {
             folderMessage = "That folder doesn’t exist."
         }
@@ -443,10 +445,16 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             for group in [mainGroup, rightGroup, bottomGroup] { group?.setMessage(nil) }
         }
 
-        let badEnvRow = envRows.first { $0.key.contains("\"") || $0.value.contains("\"") }
-        envError.stringValue = badEnvRow == nil ? "" : "Variables can’t contain a \" character."
+        // A `=` or `"` in a name, or a `"` in a value, can't round-trip (the parser splits env on
+        // the first `=` and the format has no escaping) — so reject them.
+        func keyIsBad(_ row: EnvRow) -> Bool { row.key.contains("=") || row.key.contains("\"") }
+        let badEnvRow = envRows.first { keyIsBad($0) || $0.value.contains("\"") }
+        envError.stringValue =
+            badEnvRow == nil ? "" : "Names can’t use = or \" and values can’t use \"."
         envError.isHidden = (badEnvRow == nil)
-        if let badEnvRow, firstInvalid == nil { firstInvalid = badEnvRow.keyBox.field }
+        if let badEnvRow, firstInvalid == nil {
+            firstInvalid = keyIsBad(badEnvRow) ? badEnvRow.keyBox.field : badEnvRow.valueBox.field
+        }
 
         return firstInvalid
     }

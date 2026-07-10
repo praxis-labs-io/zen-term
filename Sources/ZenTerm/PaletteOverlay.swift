@@ -288,10 +288,15 @@ class PaletteOverlay: NSView, ModalOverlay {
         // Empty → keep a small fixed height so the "no results" label isn't clipped by a
         // zero-height scroll view.
         listHeight.constant = count == 0 ? emptyListHeight : min(total + 2 * listVerticalInset, maxListHeight)
-        selected = firstSelectableIndex()
+        selected = defaultSelectionIndex()
         updateHighlight()
         scrollSelectedToVisible()
     }
+
+    /// The row highlighted after a (re)load — the first selectable row by default. A subclass
+    /// overrides to prefer a different default (e.g. the repo picker highlights the first
+    /// workspace, not its pinned ＋ row, so Enter opens a workspace).
+    func defaultSelectionIndex() -> Int { firstSelectableIndex() }
 
     private func moveSelection(_ delta: Int) {
         let step = delta < 0 ? -1 : 1

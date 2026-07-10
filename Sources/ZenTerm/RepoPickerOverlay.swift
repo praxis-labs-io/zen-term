@@ -52,6 +52,12 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     override func numberOfRows() -> Int { rows.count }
 
+    /// Highlight the first workspace (so Enter opens it), not the pinned ＋ row; fall back to the
+    /// ＋ row when there are no workspaces (or no filter matches).
+    override func defaultSelectionIndex() -> Int {
+        rows.firstIndex { if case .workspace = $0 { return true } else { return false } } ?? 0
+    }
+
     override func makeRow(at index: Int) -> PaletteRowView {
         switch rows[index] {
         case .add:

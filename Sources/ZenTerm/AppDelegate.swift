@@ -69,25 +69,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// target) — always act on the key window's active tab, never a stale window.
     @objc func copyFromSurface(_ sender: Any?) {
         if isConfirmModal { return }  // confirm has no text field
-        if isPaletteModal {
+        if isModalUp {
             NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.copy(_:)), with: sender); return
         }
         keyController()?.copyFromSurface(sender)
     }
     @objc func pasteToSurface(_ sender: Any?) {
         if isConfirmModal { return }  // confirm has no text field
-        if isPaletteModal {
+        if isModalUp {
             NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.paste(_:)), with: sender); return
         }
         keyController()?.pasteToSurface(sender)
     }
 
-    /// While either palette is modal, Copy/Paste must act on its search field, not the
-    /// terminal hidden behind it (else ⌘V would inject the clipboard into that shell).
-    private var isPaletteModal: Bool { keyController()?.isModalOverlayOpen == true }
+    /// While a modal overlay (a palette or the Add-Workspace form) is up, Copy/Paste must act on
+    /// its focused text field, not the terminal hidden behind it (else ⌘V would inject the
+    /// clipboard into that shell).
+    private var isModalUp: Bool { keyController()?.isModalOverlayOpen == true }
 
     /// While a confirm toast is up it's fully modal — ⌘N and Copy/Paste are swallowed
-    /// (it has no text field to act on), mirroring `isPaletteModal`.
+    /// (it has no text field to act on), mirroring `isModalUp`.
     private var isConfirmModal: Bool { keyController()?.isConfirmOpen == true }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

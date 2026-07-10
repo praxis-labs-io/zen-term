@@ -61,9 +61,10 @@ final class CommandCatalogTests: XCTestCase {
     func test_everyEntry_hasTitle_andBoundEntriesHaveShortcut() {
         for command in CommandCatalog.commands(tabCount: 9) {
             XCTAssertFalse(command.title.isEmpty)
-            // "Add Workspace…" is deliberately unbound (opened from the palette/picker, no default
-            // key), so its shortcut glyph is empty; every bound command shows its glyph.
-            if command.title != "Add Workspace…" {
+            // `.addWorkspace` is deliberately unbound (opened from the palette/picker, no default
+            // key), so its shortcut glyph is empty; every bound command shows its glyph. Keyed on
+            // the chord, not the title, so a copy tweak can't quietly disable the check.
+            if command.chord != .addWorkspace {
                 XCTAssertFalse(command.shortcut.isEmpty, "\(command.title) should show a shortcut")
             }
         }
