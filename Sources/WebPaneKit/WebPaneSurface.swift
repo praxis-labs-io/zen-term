@@ -4,9 +4,10 @@ import WebKit
 
 /// A `TerminalSurface` backed by a `WKWebView` — a pinned web pane that tiles in the
 /// pane tree like any terminal. The surface owns only the letterboxed web content and
-/// a control API (`goBack` / `goForward` / `reload` / `navigate` / `setDevice`); the
-/// chrome builds the toolbar above it and drives that API. The device switch constrains
-/// the web view's real width (no zoom) so responsive CSS reflows as it would on device.
+/// a control API (`goBack` / `goForward` / `reload` / `navigate` / `setDevice` /
+/// `setPageZoom`); the chrome builds the toolbar above it and drives that API. The
+/// device switch constrains the web view window's width (reflow); page zoom scales the
+/// rendered content inside that window without resizing it.
 public final class WebPaneSurface: NSObject, TerminalSurface {
     public weak var delegate: TerminalSurfaceDelegate?
 
@@ -16,12 +17,18 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
 
     private let container: FocusReportingView
     private let webView: WKWebView
-    private let stageHost = WebStageHost()
+    private let webHost = NSView()
     private let errorLabel = NSTextField(labelWithString: "")
 
     public private(set) var device: DevicePreset
-    public private(set) var zoom: WebZoom = .fit
+    public private(set) var pageZoom: CGFloat = 1
     private var pendingURL: URL
+
+    /// Letterbox width constraints, swapped on device change. `fullWidth` pins the web
+    /// view to the host (desktop); `fixedWidth` clamps it to a device width, centered,
+    /// while an always-on `<= host` cap keeps it inside a narrow pane (maxWidth 100%).
+    private var fullWidth: NSLayoutConstraint!
+    private var fixedWidth: NSLayoutConstraint!
 
     private var observations: [NSKeyValueObservation] = []
 
@@ -77,13 +84,15 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
 
     public func setDevice(_ device: DevicePreset) {
         self.device = device
-        stageHost.contentWidth = device.width
+        applyDeviceWidth()
         onStateChange?()
     }
 
-    public func setZoom(_ zoom: WebZoom) {
-        self.zoom = zoom
-        stageHost.zoom = zoom
+    /// Scale the rendered page inside the fixed web view window (browser-style zoom) —
+    /// the window is untouched, only the content resolution changes.
+    public func setPageZoom(_ factor: CGFloat) {
+        pageZoom = factor
+        webView.pageZoom = factor
         onStateChange?()
     }
 
@@ -117,13 +126,24 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
 
     private func requestFocus() { delegate?.surfaceWantsFocus(self) }
 
+    /// Swap the letterbox width constraint for the current device — full pane width for
+    /// desktop, a fixed device width (centered, clamped to the pane) otherwise.
+    private func applyDeviceWidth() {
+        if let width = device.width {
+            fullWidth.isActive = false
+            fixedWidth.constant = width
+            fixedWidth.isActive = true
+        } else {
+            fixedWidth.isActive = false
+            fullWidth.isActive = true
+        }
+    }
+
     private func buildWebArea() {
         container.translatesAutoresizingMaskIntoConstraints = false
 
-        stageHost.translatesAutoresizingMaskIntoConstraints = false
-        stageHost.contentWidth = device.width
-        stageHost.zoom = zoom
-        container.addSubview(stageHost)
+        webHost.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(webHost)
 
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.wantsLayer = true
@@ -131,29 +151,34 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
         webView.layer?.masksToBounds = true
         webView.layer?.borderWidth = 1
         webView.layer?.borderColor = NSColor.separatorColor.cgColor
-        stageHost.stage.addSubview(webView)
+        webHost.addSubview(webView)
 
         errorLabel.font = .systemFont(ofSize: 12)
         errorLabel.textColor = .secondaryLabelColor
         errorLabel.alignment = .center
         errorLabel.isHidden = true
         errorLabel.translatesAutoresizingMaskIntoConstraints = false
-        stageHost.addSubview(errorLabel)
+        webHost.addSubview(errorLabel)
 
-        // The web view fills the stage (laid out at the device width); WebStageHost scales
-        // the stage down to the pane. The error label stays unscaled, centered on the pane.
+        fullWidth = webView.widthAnchor.constraint(equalTo: webHost.widthAnchor)
+        fixedWidth = webView.widthAnchor.constraint(equalToConstant: 390)
+        fixedWidth.priority = .defaultHigh
+
+        // The web view window is centered and never exceeds the host so a narrow pane
+        // clamps a device preset (maxWidth 100%); the letterbox gutters stay transparent.
         NSLayoutConstraint.activate([
-            stageHost.topAnchor.constraint(equalTo: container.topAnchor),
-            stageHost.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            stageHost.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            stageHost.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            webView.topAnchor.constraint(equalTo: stageHost.stage.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: stageHost.stage.bottomAnchor),
-            webView.leadingAnchor.constraint(equalTo: stageHost.stage.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: stageHost.stage.trailingAnchor),
-            errorLabel.centerXAnchor.constraint(equalTo: stageHost.centerXAnchor),
-            errorLabel.centerYAnchor.constraint(equalTo: stageHost.centerYAnchor),
+            webHost.topAnchor.constraint(equalTo: container.topAnchor),
+            webHost.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            webHost.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            webHost.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            webView.topAnchor.constraint(equalTo: webHost.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: webHost.bottomAnchor),
+            webView.centerXAnchor.constraint(equalTo: webHost.centerXAnchor),
+            webView.widthAnchor.constraint(lessThanOrEqualTo: webHost.widthAnchor),
+            errorLabel.centerXAnchor.constraint(equalTo: webHost.centerXAnchor),
+            errorLabel.centerYAnchor.constraint(equalTo: webHost.centerYAnchor),
         ])
+        applyDeviceWidth()
     }
 
     private func observe() {

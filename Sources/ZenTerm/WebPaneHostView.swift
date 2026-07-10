@@ -114,7 +114,7 @@ final class WebPaneHostView: NSView, PaneHost {
         zoomPopup.font = .systemFont(ofSize: 11)
         zoomPopup.target = self
         zoomPopup.action = #selector(zoomChanged)
-        zoomPopup.addItems(withTitles: WebZoom.presets.map(\.label))
+        zoomPopup.addItems(withTitles: Self.zoomPercents.map { "\($0)%" })
 
         let rightStack = NSStackView(views: [zoomPopup, deviceStack, zoomButton])
         rightStack.orientation = .horizontal
@@ -171,10 +171,14 @@ final class WebPaneHostView: NSView, PaneHost {
 
     @objc private func urlSubmitted() { surface.navigate(to: urlField.stringValue) }
 
+    /// Page-zoom steps (percent), low → high; lower packs more content in (a desktop
+    /// layout can fit a narrow pane), higher magnifies. The window never resizes.
+    private static let zoomPercents = [25, 33, 50, 67, 75, 100, 125, 150]
+
     @objc private func zoomChanged() {
         let index = zoomPopup.indexOfSelectedItem
-        guard WebZoom.presets.indices.contains(index) else { return }
-        surface.setZoom(WebZoom.presets[index])
+        guard Self.zoomPercents.indices.contains(index) else { return }
+        surface.setPageZoom(CGFloat(Self.zoomPercents[index]) / 100)
     }
 
     private func selectDevice(_ preset: DevicePreset) {
@@ -189,7 +193,8 @@ final class WebPaneHostView: NSView, PaneHost {
         backButton.alphaValue = surface.canGoBack ? 1 : 0.35
         forwardButton.alphaValue = surface.canGoForward ? 1 : 0.35
         for (preset, button) in deviceButtons { button.isActive = (surface.device == preset) }
-        if let index = WebZoom.presets.firstIndex(of: surface.zoom) { zoomPopup.selectItem(at: index) }
+        let percent = Int((surface.pageZoom * 100).rounded())
+        if let index = Self.zoomPercents.firstIndex(of: percent) { zoomPopup.selectItem(at: index) }
     }
 
     private static let idleBorder = Theme.current.chrome.ink(alpha: 0.12)
