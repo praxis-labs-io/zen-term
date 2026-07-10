@@ -379,14 +379,14 @@ final class WindowController: NSObject {
 
     // MARK: repo picker (⌘⇧P)
 
-    /// Toggle the repo picker over the active tab. Scans `~/dev` fresh on open and
-    /// focuses its search field. Closing (⌘⇧P again, Esc, backdrop, or after a choice)
-    /// restores keyboard focus to the active tab.
+    /// Toggle the project picker over the active tab. Reads the `workspaces` file fresh on each
+    /// open (so hand-edits appear without a relaunch) and focuses its search field. Closing (⌘⇧P
+    /// again, Esc, backdrop, or after a choice) restores keyboard focus to the active tab.
     private func toggleRepoPicker() {
         if isRepoPickerOpen { closeRepoPicker(); return }
         guard let active = activeController else { return }
         let picker = RepoPickerOverlay(
-            entries: WorkspaceStore.all,
+            entries: ConfigLoader.loadWorkspaces(),
             background: Theme.current.chrome.background.nsColor,
             onChoose: { [weak self] ws, replace in self?.openWorkspace(ws, replaceCurrentTab: replace) },
             onDismiss: { [weak self] in self?.closeRepoPicker() }
@@ -510,8 +510,8 @@ final class WindowController: NSObject {
     /// tab is pinned to the workspace title so it survives the focused pane's cwd changes, and
     /// its open recipe (drawers + focus + env) is applied by `installController`. Takes a
     /// `Workspace` value, not a store lookup — so a freshly-built one (a future in-app "Add
-    /// Project" form) can open immediately without a relaunch.
-    func openWorkspace(_ ws: Workspace, replaceCurrentTab: Bool) {
+    /// Project" form) can open immediately without a relaunch; that form will widen access then.
+    private func openWorkspace(_ ws: Workspace, replaceCurrentTab: Bool) {
         closeRepoPicker()
         if replaceCurrentTab {
             replaceActiveTab(cwd: ws.path, pinnedTitle: ws.title, workspace: ws)

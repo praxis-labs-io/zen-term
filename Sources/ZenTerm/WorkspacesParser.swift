@@ -56,6 +56,7 @@ enum WorkspacesParser {
         var env: [(key: String, value: String)] = []
 
         mutating func set(key: String, value: String) {
+            if key != "env", value.isEmpty { return }  // `right =` (empty) → absent, not a "" command
             switch key {
             case "path": path = value
             case "main": main = value
@@ -72,7 +73,10 @@ enum WorkspacesParser {
                     NSLog("Workspaces: `\(title)` env entry `\(value)` has an empty key — skipped")
                     return
                 }
-                env.append((name, String(value[value.index(after: equals)...])))
+                // Trim + unquote the value so `env = KEY= v` and `env = KEY="a b"` behave like the
+                // rest of the parser (whitespace-trimmed, quotes optional) instead of keeping them literal.
+                let raw = String(value[value.index(after: equals)...]).trimmingCharacters(in: .whitespaces)
+                env.append((name, WorkspacesParser.unquote(raw)))
             default:
                 break  // unknown key — ignored
             }

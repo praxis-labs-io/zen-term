@@ -77,6 +77,27 @@ final class WorkspacesParserTests: XCTestCase {
         XCTAssertEqual(ws?.env["DSN"], "a=b=c")  // only the first `=` splits key from value
     }
 
+    func test_envValue_isTrimmedAndUnquoted() {
+        let ws = WorkspacesParser.parse(
+            """
+            [X]
+            path = ~/x
+            env  = SPACED=  value
+            env  = QUOTED="hello world"
+            """
+        ).first
+        XCTAssertEqual(ws?.env["SPACED"], "value")  // leading whitespace after `=` trimmed
+        XCTAssertEqual(ws?.env["QUOTED"], "hello world")  // surrounding quotes stripped
+    }
+
+    func test_emptyValue_treatedAsAbsent() {
+        // `right =` with no value must not become a "" command that launches an empty program.
+        let ws = WorkspacesParser.parse("[X]\npath = ~/x\nmain =\nright =\nfocus =\n").first
+        XCTAssertNil(ws?.main)
+        XCTAssertNil(ws?.right)
+        XCTAssertEqual(ws?.focus, .main)  // empty focus → default, not a parse of ""
+    }
+
     func test_inlineComments_andHashInsideQuotes() {
         let ws = WorkspacesParser.parse(
             """

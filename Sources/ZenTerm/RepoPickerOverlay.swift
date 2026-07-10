@@ -22,7 +22,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         super.init(
             background: background,
             placeholder: "Search projects…",
-            emptyText: "No projects yet — add one in ~/.config/zen-term/workspaces",
+            emptyText: "No projects yet — add one in \(Self.workspacesPathForDisplay)",
             footerHints: [
                 PaletteHint(keys: "⏎", label: "new tab"),
                 PaletteHint(keys: "⇧⏎", label: "replace"),
@@ -34,6 +34,14 @@ final class RepoPickerOverlay: PaletteOverlay {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// The resolved `workspaces` file path for the empty state, home abbreviated to `~` — honors
+    /// `$XDG_CONFIG_HOME` rather than hardcoding `~/.config`.
+    private static var workspacesPathForDisplay: String {
+        let path = ConfigLoader.defaultRoot.appendingPathComponent("workspaces").path
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+    }
 
     override func numberOfRows() -> Int { filtered.count }
 
