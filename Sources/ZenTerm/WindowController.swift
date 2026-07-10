@@ -21,8 +21,9 @@ final class WindowController: NSObject {
 
     /// Opacity of the base-color tint laid over the behind-window blur. 1 = solid shell,
     /// 0 = raw system blur. Tuned for a cohesive shell that still shows depth through the
-    /// gutters; the single knob for the whole transparent look.
-    private static let backdropTintAlpha: CGFloat = 0.82
+    /// gutters; the single knob for the whole transparent look. User-overridable via
+    /// `backdrop-alpha` in `~/.config/zen-term/config`.
+    private static var backdropTintAlpha: CGFloat { GeneralConfig.current.backdropAlpha }
 
     private let container = NSView()
     /// Top-right transient notices (e.g. "not a git repository"). Lazy so its stack mounts

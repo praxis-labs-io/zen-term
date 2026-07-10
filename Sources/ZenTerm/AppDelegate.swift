@@ -18,10 +18,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // so a held key auto-repeats. Must be registered before the first surface exists.
         UserDefaults.standard.register(defaults: ["ApplePressAndHoldEnabled": false])
 
+        // Resolve the general config before any window builds — installing the reduce-motion
+        // override and deterministically forcing GeneralConfig.current to load (so the first
+        // window's Theme font, drawer sizes, and dock floats are already settled).
+        MotionConfig.apply(GeneralConfig.current.reduceMotion)
+
         MainMenu.install(copyPaste: nil)  // Copy/Paste route via the responder chain
         newWindow(initialCWD: nil, centered: true)
 
         keys.onReservedChord = { [weak self] chord in self?.route(chord) }
+        keys.setKeymap(GeneralConfig.current.keymap)
         keys.start()
         NSApp.activate(ignoringOtherApps: true)
     }

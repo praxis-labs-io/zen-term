@@ -31,23 +31,23 @@ final class TabController: NSObject {
     private let paneCanvas: PaneCanvasController
     private let canvas: NSView  // paneCanvas.canvasView, cached
 
-    // Drawer sizes are seeded proportionally from the tab's working area the first time
-    // `content` has a real size — a bit under a third each, which lands near the ~300/480
-    // that felt right on a MacBook Air, while the caps keep drawers from ballooning on large
-    // displays. The stored vars start at those values as a fallback for the (unreachable in
-    // practice) case of a drawer opening before `content` is laid out.
-    private static let bottomDrawerFraction: CGFloat = 0.28
-    private static let rightDrawerFraction: CGFloat = 0.30
-    private static let bottomDrawerMax: CGFloat = 360
-    private static let rightDrawerMax: CGFloat = 560
-    private var bottomDrawerHeight: CGFloat = 300
-    private var rightDrawerWidth: CGFloat = 480
-    private var didSeedDrawerSizes = false
+    // Drawer sizes are stored as a FRACTION of the tab's working area — not absolute pixels —
+    // and applied as a multiplier constraint, so a drawer stays proportional through window
+    // resizes exactly like a pane. Seeded from the config default; manual ⌥-resize updates the
+    // fraction from then on. These knobs are user-overridable via `~/.config/zen-term/config`
+    // (`bottom-drawer-fraction`, `right-drawer-fraction`, `drawer-resize-step`,
+    // `max-drawer-fraction`).
+    private static var bottomDrawerFraction: CGFloat { GeneralConfig.current.bottomDrawerFraction }
+    private static var rightDrawerFraction: CGFloat { GeneralConfig.current.rightDrawerFraction }
+    private var bottomDrawerRatio = min(
+        TabController.bottomDrawerFraction, TabController.maxDrawerFraction)
+    private var rightDrawerRatio = min(
+        TabController.rightDrawerFraction, TabController.maxDrawerFraction)
     /// One ⌥-arrow nudge for a focused drawer, and the floor it can shrink to; a drawer
     /// never grows past 70% of the working area (the canvas keeps the rest).
-    private static let drawerResizeStep: CGFloat = 40
+    private static var drawerResizeStep: CGFloat { GeneralConfig.current.drawerResizeStep }
     private static let minDrawerExtent: CGFloat = 160
-    private static let maxDrawerFraction: CGFloat = 0.7
+    private static var maxDrawerFraction: CGFloat { GeneralConfig.current.maxDrawerFraction }
 
     // Per-tab auxiliary surfaces (created lazily; kept alive when hidden — the shell
     // persists across toggles and is only terminated in `shutdown()`).
@@ -450,7 +450,7 @@ final class TabController: NSObject {
     /// focused pane's cwd. Mirrors `ensureBottomDrawerPanel()`.
     private func ensureLazygitSurface() -> TerminalSurface {
         if let existing = lazygitSurface { return existing }
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let shell = ShellLaunch.userShell
         let surface = TerminalSurfaceFactory.make()
         surface.delegate = self
         // `-l -i`: a login AND interactive shell, so it sources BOTH profile files and
@@ -460,7 +460,8 @@ final class TabController: NSObject {
         surface.start(
             TerminalSurfaceConfig(
                 command: shell, args: ["-l", "-i", "-c", "lazygit"],
-                workingDirectory: focusedCWD, theme: Theme.current.terminal))
+                workingDirectory: focusedCWD, theme: Theme.current.terminal,
+                behavior: GeneralConfig.current.terminalBehavior))
         lazygitSurface = surface
         lazygitLaunchAnchor = lazygitAnchor(for: focusedCWD)
         return surface
@@ -563,7 +564,8 @@ final class TabController: NSObject {
         surface.start(
             TerminalSurfaceConfig(
                 command: shell, args: ["-l", "-i", "-c", spec.command],
-                workingDirectory: focusedCWD, theme: Theme.current.terminal))
+                workingDirectory: focusedCWD, theme: Theme.current.terminal,
+                behavior: GeneralConfig.current.terminalBehavior))
         let overlay = SurfaceFloatOverlay(
             content: surface.view,
             background: Theme.current.chrome.background.nsColor,
@@ -876,36 +878,33 @@ final class TabController: NSObject {
         case .pane:
             paneCanvas.resize(direction)
         case .bottomDrawer:
+            let axis = content.bounds.height
             switch direction {
-            case .up:
-                bottomDrawerHeight = clampedDrawerExtent(
-                    bottomDrawerHeight + Self.drawerResizeStep, along: content.bounds.height)
+            case .up: bottomDrawerRatio = nudgedDrawerRatio(bottomDrawerRatio, by: Self.drawerResizeStep, along: axis)
             case .down:
-                bottomDrawerHeight = clampedDrawerExtent(
-                    bottomDrawerHeight - Self.drawerResizeStep, along: content.bounds.height)
+                bottomDrawerRatio = nudgedDrawerRatio(bottomDrawerRatio, by: -Self.drawerResizeStep, along: axis)
             case .left, .right: NSSound.beep(); return
             }
             relayoutPanels()
         case .rightDrawer:
+            let axis = content.bounds.width
             switch direction {
-            case .left:
-                rightDrawerWidth = clampedDrawerExtent(
-                    rightDrawerWidth + Self.drawerResizeStep, along: content.bounds.width)
-            case .right:
-                rightDrawerWidth = clampedDrawerExtent(
-                    rightDrawerWidth - Self.drawerResizeStep, along: content.bounds.width)
+            case .left: rightDrawerRatio = nudgedDrawerRatio(rightDrawerRatio, by: Self.drawerResizeStep, along: axis)
+            case .right: rightDrawerRatio = nudgedDrawerRatio(rightDrawerRatio, by: -Self.drawerResizeStep, along: axis)
             case .up, .down: NSSound.beep(); return
             }
             relayoutPanels()
         }
     }
 
-    /// Clamp a drawer extent to `[minDrawerExtent, maxDrawerFraction · working axis]`, with
-    /// the ceiling floored at `minDrawerExtent` so that on a very small window the range
-    /// can't invert (the floor always wins over an even smaller fractional ceiling).
-    private func clampedDrawerExtent(_ value: CGFloat, along axis: CGFloat) -> CGFloat {
+    /// Nudge a drawer's fraction by a pixel step (so ⌥-arrows keep their fixed feel), clamped
+    /// to `[minDrawerExtent, maxDrawerFraction · axis]` in pixels and converted back to a
+    /// fraction. Returns the fraction unchanged if the axis hasn't been laid out yet.
+    private func nudgedDrawerRatio(_ ratio: CGFloat, by deltaPixels: CGFloat, along axis: CGFloat) -> CGFloat {
+        guard axis > 0 else { return ratio }
         let ceiling = max(Self.minDrawerExtent, axis * Self.maxDrawerFraction)
-        return min(max(value, Self.minDrawerExtent), ceiling)
+        let extent = min(max(ratio * axis + deltaPixels, Self.minDrawerExtent), ceiling)
+        return extent / axis
     }
 
     /// A drawer panel's frame converted into `content` coords and flipped the same
@@ -945,18 +944,7 @@ final class TabController: NSObject {
         }
     }
 
-    /// Seed the drawer sizes from the working area the first time `content` has a real
-    /// size — a third of it, capped. Runs once; later manual resizes (⌥-arrows) own the
-    /// value from then on.
-    private func seedDrawerSizesIfNeeded() {
-        guard !didSeedDrawerSizes, content.bounds.height > 0, content.bounds.width > 0 else { return }
-        didSeedDrawerSizes = true
-        bottomDrawerHeight = min(content.bounds.height * Self.bottomDrawerFraction, Self.bottomDrawerMax)
-        rightDrawerWidth = min(content.bounds.width * Self.rightDrawerFraction, Self.rightDrawerMax)
-    }
-
     private func relayoutPanels() {
-        seedDrawerSizesIfNeeded()
         NSLayoutConstraint.deactivate(tileConstraints)
         tileConstraints = []
 
@@ -1003,7 +991,8 @@ final class TabController: NSObject {
             // `.defaultHigh` (not required) so on an extremely small window this
             // constraint relaxes instead of forcing the canvas to a negative size and
             // logging a broken-constraint error — the drawer shrinks under squeeze.
-            let width = rightPanel.widthAnchor.constraint(equalToConstant: rightDrawerWidth)
+            let width = rightPanel.widthAnchor.constraint(
+                equalTo: content.widthAnchor, multiplier: rightDrawerRatio)
             width.priority = .defaultHigh
             cs += [
                 rightPanel.topAnchor.constraint(equalTo: content.topAnchor),
@@ -1018,7 +1007,8 @@ final class TabController: NSObject {
 
         if isBottomOpen, let bottomPanel = bottomDrawerPanel {
             // See the right-drawer width constraint above: same rationale for height.
-            let height = bottomPanel.heightAnchor.constraint(equalToConstant: bottomDrawerHeight)
+            let height = bottomPanel.heightAnchor.constraint(
+                equalTo: content.heightAnchor, multiplier: bottomDrawerRatio)
             height.priority = .defaultHigh
             cs += [
                 bottomPanel.leadingAnchor.constraint(equalTo: content.leadingAnchor),

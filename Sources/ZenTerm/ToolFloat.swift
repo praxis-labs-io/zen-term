@@ -1,18 +1,22 @@
 import AppKit
 
-/// A declarative ephemeral command float. Everything variable about a float lives
-/// here; the tool-float engine on `TabController` does the rest. Add a float by
-/// adding a value to `ToolFloatCatalog.all` and one keybinding in `KeyInterceptor`.
+/// A declarative ephemeral command float. Everything variable about a float lives here;
+/// the tool-float engine on `TabController` does the rest. Floats are user-defined in
+/// `~/.config/zen-term/config` (`float = …` lines); the `toggle` chord is their single
+/// source of truth, driving both the keybinding and the palette glyph.
 struct ToolFloat: Equatable {
     let id: String  // stable id, e.g. "gitdash"
     let title: String  // command-palette title, e.g. "Open GitDash"
-    let shortcut: String  // palette glyph string, e.g. "⌘⇧G" (display only)
     let icon: String  // dock icon: an SF Symbol name, or a bundled brand mark ("github", "git")
     let command: String  // runs as `$SHELL -l -i -c command` at the focused pane's cwd
     let widthFraction: CGFloat
     let heightFraction: CGFloat
     let requiresGitRepo: Bool
     let emptyGuard: EmptyGuard?
+    let toggle: Chord  // the config `key:` — binds the chord AND renders the palette glyph
+
+    /// Palette glyph string, e.g. "⌘⇧G" — derived from `toggle`, never authored separately.
+    var shortcut: String { toggle.displayGlyph }
 }
 
 /// A pre-open probe: `probe` runs at the focused cwd; if it exits 0 (nothing to show), the
@@ -25,22 +29,11 @@ struct EmptyGuard: Equatable {
     let toast: ToastContent
 }
 
-/// The registered ephemeral tool floats. Adding an entry here (plus one
-/// `KeyInterceptor` mapping) is all it takes to add a float — the dock button,
-/// palette entry, git guard, and toggle behavior all derive from the spec.
+/// The active tool floats — the ones the user declared in their config. There are no
+/// built-in floats: with no config the list is empty and the dock shows no float buttons.
+/// The dock button, palette entry, git guard, and toggle behavior all derive from a spec.
 enum ToolFloatCatalog {
-    static let all: [ToolFloat] = [
-        ToolFloat(
-            id: "gitdash",
-            title: "Open GitDash",
-            shortcut: "⌘⇧G",
-            icon: "github",
-            command: "gd",  // `gh dash` — the GitHub PRs/issues TUI (resolved via the login shell)
-            widthFraction: 0.85,
-            heightFraction: 0.85,
-            requiresGitRepo: false,  // gh dash spans all of GitHub — works outside a repo
-            emptyGuard: nil)  // a GitHub dashboard isn't diff-state-gated
-    ]
+    static var all: [ToolFloat] { GeneralConfig.current.floats }
 
     static func byID(_ id: String) -> ToolFloat? { all.first { $0.id == id } }
 }

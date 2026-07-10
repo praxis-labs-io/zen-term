@@ -5,7 +5,7 @@ import AppKit
 /// the "don't steal Ctrl+hjkl from nvim" rule — un-reserved chords are returned
 /// untouched so the terminal (and the program inside it) receives them.
 final class KeyInterceptor {
-    enum ReservedChord {
+    enum ReservedChord: Equatable {
         case splitVertical, splitHorizontal
         case navLeft, navRight, navUp, navDown
         case closePane
@@ -25,63 +25,24 @@ final class KeyInterceptor {
     var onReservedChord: ((ReservedChord) -> Void)?
     private var monitor: Any?
 
+    /// The chord → action lookup. Defaults to the built-in map; `AppDelegate` overlays the
+    /// user's config via `setKeymap` before `start()`. The interceptor stays a pure mechanism
+    /// — it never reads `GeneralConfig` itself, so it's trivially unit-testable.
+    private var keymap: [Chord: ReservedChord] = KeymapDefaults.map
+
+    func setKeymap(_ map: [Chord: ReservedChord]) { keymap = map }
+
     func start() {
         stop()  // idempotent: never stack a second monitor on repeat calls
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            let key = event.charactersIgnoringModifiers?.lowercased()
-
-            // ⌘⇧ family: vertical split (⌘⇧\ → "|"; also "\\" defensively), pane/drawer
-            // resize on ⌘⇧HJKL — the same HJKL directions as ⌘-nav, Shift meaning "push the
-            // divider" instead of "hop to the neighbor" — and ⌘⇧P for the repo picker (bare
-            // ⌘P now opens the command palette instead). With Shift held,
-            // charactersIgnoringModifiers is the shifted glyph, so `.lowercased()` normalizes
-            // "H" → "h". Unmatched ⌘⇧ chords fall through to the terminal.
-            if flags == [.command, .shift] {
-                let chord: ReservedChord?
-                switch key {
-                case "|", "\\": chord = .splitVertical
-                case "h": chord = .resizeLeft
-                case "l": chord = .resizeRight
-                case "k": chord = .resizeUp
-                case "j": chord = .resizeDown
-                case "p": chord = .toggleRepoPicker
-                case "g": chord = .toggleToolFloat("gitdash")  // ⌘⇧G — per-float keybinding
-                default: chord = nil
-                }
-                if let chord { self.onReservedChord?(chord); return nil }
-                return event
-            }
-
-            guard flags == .command else { return event }  // all other reserved chords are bare-⌘
-
-            let chord: ReservedChord?
-            switch key {
-            case "\\": chord = .toggleRightDrawer
-            case "[": chord = .prevTab
-            case "]": chord = .nextTab
-            case "-": chord = .splitHorizontal
-            case "h": chord = .navLeft
-            case "l": chord = .navRight
-            case "k": chord = .navUp
-            case "j": chord = .navDown
-            case "w": chord = .closePane
-            case "t": chord = .newTab
-            case "n": chord = .newWindow
-            case "b": chord = .toggleBottomDrawer
-            case "f": chord = .toggleZoom
-            case "g": chord = .toggleLazygit
-            case "p": chord = .toggleCommandPalette
-            case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-                chord = key.flatMap { Int($0) }.map { .selectTab($0) }
-            default: chord = nil
-            }
-            if let chord {
-                self.onReservedChord?(chord)
-                return nil  // consumed — never reaches the PTY
-            }
-            return event  // everything else passes through
+            // Build the chord this event represents and look it up. A hit is consumed (never
+            // reaches the PTY); a miss — including every un-reserved chord like Ctrl+hjkl —
+            // passes straight through to the terminal. The ⌘⇧\ → "|" shifted-symbol quirk is
+            // covered by the map holding both "|" and "\\" entries, so this stays pure lookup.
+            guard let chord = Chord(event: event), let action = self.keymap[chord] else { return event }
+            self.onReservedChord?(action)
+            return nil
         }
     }
 

@@ -4,11 +4,15 @@ import XCTest
 
 final class CommandCatalogTests: XCTestCase {
     func test_baseCommands_orderAndCount() {
-        let names = CommandCatalog.commands(tabCount: 0).map(\.title)
+        // User-defined tool floats are config-driven and vary by machine, so filter them out
+        // and assert the fixed structural commands.
+        let names = CommandCatalog.commands(tabCount: 0)
+            .filter { if case .toggleToolFloat = $0.chord { return false } else { return true } }
+            .map(\.title)
         XCTAssertEqual(
             names,
             [
-                "Open Project Picker", "Open Lazygit", "Open GitDash",
+                "Open Project Picker", "Open Lazygit",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab",
                 "Split Horizontally", "Split Vertically",

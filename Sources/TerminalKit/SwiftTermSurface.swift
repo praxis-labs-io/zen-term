@@ -128,6 +128,7 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
 
     public func start(_ config: TerminalSurfaceConfig) {
         if let theme = config.theme { applyTheme(theme) }
+        if let behavior = config.behavior { applyBehavior(behavior) }
         let base = Terminal.getEnvironmentVariables(termName: "xterm-256color", trueColor: true)
         // Present as Ghostty so terminal-aware tools that auto-detect the host — notably
         // Claude Code's "auto" notification mode — pick a channel we actually handle: OSC 777
@@ -193,6 +194,23 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
         term.nativeForegroundColor = theme.foreground.nsColor
         term.caretColor = theme.cursor.nsColor
         term.selectedTextBackgroundColor = theme.selectionBackground.nsColor
+    }
+
+    /// Applies the subset of `TerminalBehavior` SwiftTerm can honor: Option-as-Meta and the
+    /// cursor style/blink. The scroll multiplier has no hook here — SwiftTerm owns its own
+    /// scroll handling — so it's intentionally ignored (the ghostty backend honors it).
+    private func applyBehavior(_ behavior: TerminalBehavior) {
+        term.optionAsMetaKey = behavior.optionAsAlt
+        let style: SwiftTerm.CursorStyle
+        switch (behavior.cursorStyle, behavior.cursorBlink) {
+        case (.block, true): style = .blinkBlock
+        case (.block, false): style = .steadyBlock
+        case (.bar, true): style = .blinkBar
+        case (.bar, false): style = .steadyBar
+        case (.underline, true): style = .blinkUnderline
+        case (.underline, false): style = .steadyUnderline
+        }
+        term.getTerminal().setCursorStyle(style)
     }
 
     /// Parse an OSC 777 `notify;<title>;<body>` payload and surface it as a

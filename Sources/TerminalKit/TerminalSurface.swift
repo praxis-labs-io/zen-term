@@ -8,6 +8,7 @@ public struct TerminalSurfaceConfig {
     public var environment: [String: String]
     public var fontSize: CGFloat?
     public var theme: TerminalTheme?
+    public var behavior: TerminalBehavior?
 
     public init(
         command: String? = nil,
@@ -15,7 +16,8 @@ public struct TerminalSurfaceConfig {
         workingDirectory: URL? = nil,
         environment: [String: String] = [:],
         fontSize: CGFloat? = nil,
-        theme: TerminalTheme? = nil
+        theme: TerminalTheme? = nil,
+        behavior: TerminalBehavior? = nil
     ) {
         self.command = command
         self.args = args
@@ -23,6 +25,7 @@ public struct TerminalSurfaceConfig {
         self.environment = environment
         self.fontSize = fontSize
         self.theme = theme
+        self.behavior = behavior
     }
 }
 

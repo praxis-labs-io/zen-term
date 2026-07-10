@@ -5,8 +5,10 @@ import TerminalKit
 /// `~/.config/zen-term/theme` when present (ZEN-27).
 enum Theme {
     static let rosePineMoon = TerminalTheme(
-        fontName: "JetBrainsMono Nerd Font Mono",
-        fontSize: 14,
+        // Font is single-sourced on GeneralConfig.builtIn (it's a general-config knob, not a
+        // theme key). Safe reference: GeneralConfig.builtIn never touches Theme.
+        fontName: GeneralConfig.builtIn.fontName,
+        fontSize: GeneralConfig.builtIn.fontSize,
         background: rgb(0x191724),
         foreground: rgb(0xe0def4),
         cursor: rgb(0x6b6790),

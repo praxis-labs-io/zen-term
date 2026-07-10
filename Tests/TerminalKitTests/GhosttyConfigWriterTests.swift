@@ -46,4 +46,40 @@ final class GhosttyConfigWriterTests: XCTestCase {
         let written = try String(contentsOfFile: path, encoding: .utf8)
         XCTAssertEqual(written, GhosttyConfigWriter.configText(for: theme))
     }
+
+    func test_nilBehaviorEmitsHistoricalBaseline() {
+        // The pre-ZEN-71 defaults, so an absent config is byte-identical to before.
+        let text = GhosttyConfigWriter.configText(for: theme, behavior: nil)
+        XCTAssertTrue(text.contains("cursor-style = block\n"))
+        XCTAssertTrue(text.contains("cursor-style-blink = true\n"))
+        XCTAssertTrue(text.contains("macos-option-as-alt = true\n"))
+    }
+
+    func test_customBehaviorEmitted() {
+        let behavior = TerminalBehavior(
+            cursorStyle: .bar, cursorBlink: false, cursorThickness: 4, optionAsAlt: false)
+        let text = GhosttyConfigWriter.configText(for: theme, behavior: behavior)
+        XCTAssertTrue(text.contains("cursor-style = bar\n"))
+        XCTAssertTrue(text.contains("cursor-style-blink = false\n"))
+        XCTAssertTrue(text.contains("macos-option-as-alt = false\n"))
+        XCTAssertTrue(text.contains("adjust-cursor-thickness = 3\n"))  // 4px = base 1 + delta 3
+    }
+
+    func test_cursorThickness_ofOne_emitsNoAdjustment() {
+        let text = GhosttyConfigWriter.configText(for: theme, behavior: TerminalBehavior(cursorThickness: 1))
+        XCTAssertFalse(text.contains("adjust-cursor-thickness"))
+    }
+
+    func test_defaultBehavior() {
+        let behavior = TerminalBehavior()
+        XCTAssertEqual(behavior.cursorStyle, .block)
+        XCTAssertTrue(behavior.cursorBlink)
+        XCTAssertEqual(behavior.cursorThickness, 2)
+        XCTAssertTrue(behavior.optionAsAlt)
+        XCTAssertEqual(behavior.scrollMultiplier, 1.5)
+        XCTAssertEqual(behavior.ghosttyCursorStyle, "block")
+        XCTAssertEqual(behavior.ghosttyCursorThicknessDelta, 1)  // 2px = base 1 + delta 1
+        XCTAssertEqual(TerminalBehavior(cursorStyle: .bar).ghosttyCursorStyle, "bar")
+        XCTAssertEqual(TerminalBehavior(cursorStyle: .underline).ghosttyCursorStyle, "underline")
+    }
 }

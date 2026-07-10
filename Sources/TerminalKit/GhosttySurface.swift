@@ -68,9 +68,10 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             workingDirectory: config.workingDirectory?.path,
             command: command,
             environment: config.environment
-        ) { ghostty_surface_new(GhosttyApp.shared(theme: config.theme).app, &$0) }
+        ) { ghostty_surface_new(GhosttyApp.shared(theme: config.theme, behavior: config.behavior).app, &$0) }
 
         hostView.surfacePtr = surfacePtr
+        hostView.scrollMultiplier = (config.behavior ?? .default).scrollMultiplier
 
         // libghostty just made hostView layer-hosting (its Metal layer is now
         // hostView.layer). The host window is transparent for the vibrancy backdrop, so
