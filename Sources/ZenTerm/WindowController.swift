@@ -34,19 +34,19 @@ final class WindowController: NSObject {
     private let dock: ToggleDock
     private var mountedCanvas: NSView?
 
-    /// Which modal card is open. The repo picker (⌘⇧P), command palette (⌘P), and Add-Project
+    /// Which modal card is open. The repo picker (⌘⇧P), command palette (⌘P), and Add-Workspace
     /// form are mutually exclusive — only one is up at a time — so they share a single slot with
     /// a kind discriminator rather than parallel per-overlay stacks. Window-level (they open/
     /// switch tabs) but presented over the active tab's tile region. Modal while open.
     private enum ModalKind {
-        case repoPicker, commandPalette, addProject
+        case repoPicker, commandPalette, addWorkspace
 
         /// The chord that closes this same modal when pressed again (its own toggle).
         var selfToggle: KeyInterceptor.ReservedChord {
             switch self {
             case .repoPicker: return .toggleRepoPicker
             case .commandPalette: return .toggleCommandPalette
-            case .addProject: return .addProject
+            case .addWorkspace: return .addWorkspace
             }
         }
     }
@@ -385,7 +385,7 @@ final class WindowController: NSObject {
         renderTabBar()
     }
 
-    // MARK: modal cards (⌘⇧P picker / ⌘P palette / Add-Project form)
+    // MARK: modal cards (⌘⇧P picker / ⌘P palette / Add-Workspace form)
 
     /// Present a modal card over the active tab: mount it, store it in the single slot, focus its
     /// input, and spring it in. One path for all three cards. No-op if there's no active tab.
@@ -410,7 +410,7 @@ final class WindowController: NSObject {
         renderDock()
     }
 
-    /// Toggle the project picker (⌘⇧P). Reads the `workspaces` file fresh on each open (so
+    /// Toggle the workspace picker (⌘⇧P). Reads the `workspaces` file fresh on each open (so
     /// hand-edits appear without a relaunch). Pressing ⌘⇧P while it's up closes it.
     private func toggleRepoPicker() {
         if modal?.kind == .repoPicker { closeModal(); return }
@@ -418,7 +418,7 @@ final class WindowController: NSObject {
             entries: ConfigLoader.loadWorkspaces(),
             background: Theme.current.chrome.background.nsColor,
             onChoose: { [weak self] ws, replace in self?.openWorkspace(ws, replaceCurrentTab: replace) },
-            onAddProject: { [weak self] in self?.openAddProjectForm() },
+            onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
             onDismiss: { [weak self] in self?.closeModal() }
         )
         presentModal(picker, kind: .repoPicker)
@@ -437,31 +437,31 @@ final class WindowController: NSObject {
         presentModal(palette, kind: .commandPalette)
     }
 
-    /// Open the Add-Project form. Seeds it with the current titles for inline collision checks;
+    /// Open the Add-Workspace form. Seeds it with the current titles for inline collision checks;
     /// submitting writes the section and opens it. Reached from ⌘P and the picker's ＋ row — the
     /// latter calls in while the picker is still up, so close it first (the ⌘P path is already
     /// closed by `runCommand`, making this a no-op there).
-    private func openAddProjectForm() {
+    private func openAddWorkspaceForm() {
         closeModal()
-        let form = AddProjectOverlay(
+        let form = AddWorkspaceOverlay(
             existingTitles: Set(ConfigLoader.loadWorkspaces().map(\.title)),
             background: Theme.current.chrome.background.nsColor,
-            onSubmit: { [weak self] ws in self?.submitNewProject(ws) },
+            onSubmit: { [weak self] ws in self?.submitNewWorkspace(ws) },
             onCancel: { [weak self] in self?.closeModal() }
         )
-        presentModal(form, kind: .addProject)
+        presentModal(form, kind: .addWorkspace)
     }
 
     /// Persist a freshly-built workspace, then open it. On a write failure the form stays up and
     /// a toast explains why; on success the form closes and the workspace opens in a new tab
     /// (the value-based `openWorkspace` seam — no relaunch, no dependence on a launch-time store).
-    private func submitNewProject(_ ws: Workspace) {
+    private func submitNewWorkspace(_ ws: Workspace) {
         do {
             try WorkspacesWriter.append(ws)
         } catch {
             toasts.show(
                 ToastContent(
-                    variant: .warning, title: "Couldn't Save Project",
+                    variant: .warning, title: "Couldn't Save Workspace",
                     message: "Failed to write \(ws.title) to the workspaces file: \(error.localizedDescription)"))
             return
         }
@@ -530,7 +530,7 @@ final class WindowController: NSObject {
     /// tab is pinned to the workspace title so it survives the focused pane's cwd changes, and
     /// its open recipe (drawers + focus + env) is applied by `installController`. Takes a
     /// `Workspace` value, not a store lookup — so a freshly-built one (a future in-app "Add
-    /// Project" form) can open immediately without a relaunch; that form will widen access then.
+    /// Workspace" form) can open immediately without a relaunch; that form will widen access then.
     private func openWorkspace(_ ws: Workspace, replaceCurrentTab: Bool) {
         closeModal()
         if replaceCurrentTab {
@@ -549,7 +549,7 @@ final class WindowController: NSObject {
         // swallowed. Its Return/Esc/button answers go through the toast's own key
         // equivalents, never here.
         if isConfirmOpen { return }
-        // A modal card (repo picker / command palette / Add-Project form) is modal over the
+        // A modal card (repo picker / command palette / Add-Workspace form) is modal over the
         // window: its own toggle closes it, another surface's toggle (another card, lazygit, a
         // tool float) closes it and opens that instead — a live switch between all the modal
         // cards; every other chord is swallowed. Its arrow/Enter/Esc keys aren't chords — they
@@ -559,7 +559,7 @@ final class WindowController: NSObject {
             case modal.kind.selfToggle:
                 closeModal()
                 return
-            case .toggleRepoPicker, .toggleCommandPalette, .addProject, .toggleLazygit, .toggleToolFloat:
+            case .toggleRepoPicker, .toggleCommandPalette, .addWorkspace, .toggleLazygit, .toggleToolFloat:
                 closeModal()  // close the current card, then open the requested surface below
             default:
                 return
@@ -577,7 +577,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Close Pane",
                         message: "Close lazygit first to close a pane."))
                 return
-            case .toggleToolFloat, .toggleCommandPalette, .toggleRepoPicker, .addProject:
+            case .toggleToolFloat, .toggleCommandPalette, .toggleRepoPicker, .addWorkspace:
                 active?.toggleLazygit()  // close lazygit, then fall through to open the other
             case .toggleLazygit, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
@@ -598,7 +598,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Close Pane",
                         message: "Close \(name) first to close a pane."))
                 return
-            case .toggleLazygit, .toggleCommandPalette, .toggleRepoPicker, .addProject:
+            case .toggleLazygit, .toggleCommandPalette, .toggleRepoPicker, .addWorkspace:
                 active?.closeToolFloat()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
@@ -634,7 +634,7 @@ final class WindowController: NSObject {
             if let spec = ToolFloatCatalog.byID(id) { active?.toggleToolFloat(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
-        case .addProject: openAddProjectForm()
+        case .addWorkspace: openAddWorkspaceForm()
         }
     }
 

@@ -125,7 +125,7 @@ final class TabController: NSObject {
     }
 
     /// A pinned tab name (set when opened via the `⌘P` repo picker): overrides the
-    /// live cwd-derived title so the tab keeps the project's name no matter where the
+    /// live cwd-derived title so the tab keeps the workspace's name no matter where the
     /// focused pane's shell `cd`s. Nil for tabs opened any other way.
     var pinnedTitle: String?
     var title: String { pinnedTitle ?? paneCanvas.title }

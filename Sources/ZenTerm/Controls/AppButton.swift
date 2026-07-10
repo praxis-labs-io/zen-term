@@ -2,7 +2,7 @@ import AppKit
 
 /// The shared labeled button across the chrome (the text-button counterpart to `IconButton`):
 /// a flat, rounded-6 pill that's theme-tinted, lifts a faint background on hover, and grows with
-/// its title. Used by the Add-Project form and the confirm toasts.
+/// its title. Used by the Add-Workspace form and the confirm toasts.
 ///
 /// Variants:
 /// - `primary` — accent text; dims when disabled (a form's Add).

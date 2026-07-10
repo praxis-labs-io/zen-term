@@ -1,8 +1,8 @@
 import AppKit
 
-/// The `⌘⇧P` project picker: a modal palette over the tab's tile region listing the
+/// The `⌘⇧P` workspace picker: a modal palette over the tab's tile region listing the
 /// workspaces configured in `~/.config/zen-term/workspaces`, led by a persistent
-/// "＋ New Project…" row that opens the Add-Project form. Enter opens the selected workspace in
+/// "＋ New Workspace…" row that opens the Add-Workspace form. Enter opens the selected workspace in
 /// a new tab, Shift+Enter replaces the current tab, Esc / backdrop click dismiss. Built on
 /// `PaletteOverlay`, which owns the card/list/keyboard scaffolding; this supplies the rows + filter.
 final class RepoPickerOverlay: PaletteOverlay {
@@ -14,24 +14,24 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     /// (selected workspace, replaceCurrentTab). `replaceCurrentTab` is Shift+Enter.
     private let onChoose: (Workspace, Bool) -> Void
-    /// Open the Add-Project form (the ＋ row, and the empty state when there are no workspaces).
-    private let onAddProject: () -> Void
+    /// Open the Add-Workspace form (the ＋ row, and the empty state when there are no workspaces).
+    private let onAddWorkspace: () -> Void
 
     private let entries: [Workspace]
     private var rows: [Row]
 
     init(
         entries: [Workspace], background: NSColor,
-        onChoose: @escaping (Workspace, Bool) -> Void, onAddProject: @escaping () -> Void,
+        onChoose: @escaping (Workspace, Bool) -> Void, onAddWorkspace: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) {
         self.entries = entries
         self.rows = Self.rows(for: entries)
         self.onChoose = onChoose
-        self.onAddProject = onAddProject
+        self.onAddWorkspace = onAddWorkspace
         super.init(
             background: background,
-            placeholder: "Search projects…",
+            placeholder: "Search workspaces…",
             emptyText: "",  // never shown — the ＋ row is always present, so the list is never empty
             footerHints: [
                 PaletteHint(keys: "⏎", label: "open"),
@@ -85,12 +85,12 @@ final class RepoPickerOverlay: PaletteOverlay {
     override func activate(index: Int, modifiers: NSEvent.ModifierFlags) {
         guard rows.indices.contains(index) else { return }
         switch rows[index] {
-        case .add: onAddProject()
+        case .add: onAddWorkspace()
         case .workspace(let workspace): onChoose(workspace, modifiers.contains(.shift))
         }
     }
 
-    /// The persistent "＋ New Project…" action row, tinted with the accent so it reads as an
+    /// The persistent "＋ New Workspace…" action row, tinted with the accent so it reads as an
     /// affordance distinct from the workspace list below it.
     private final class AddRowView: SelectableRowView {
         override init(onClick: @escaping (Int) -> Void) {
@@ -98,13 +98,13 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             let icon = NSImageView()
             let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
-            icon.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "add project")?
+            icon.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "add workspace")?
                 .withSymbolConfiguration(config)
             icon.contentTintColor = Theme.current.chrome.accent.nsColor
             icon.translatesAutoresizingMaskIntoConstraints = false
             addSubview(icon)
 
-            let label = NSTextField(labelWithString: "New Project…")
+            let label = NSTextField(labelWithString: "New Workspace…")
             label.font = .systemFont(ofSize: 13, weight: .medium)
             label.textColor = Theme.current.chrome.accent.nsColor
             label.translatesAutoresizingMaskIntoConstraints = false

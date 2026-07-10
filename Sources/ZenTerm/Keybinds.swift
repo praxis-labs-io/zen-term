@@ -28,7 +28,7 @@ extension KeyInterceptor.ReservedChord {
         case .toggleToolFloat(let id): return "toggle_float:\(id)"
         case .toggleRepoPicker: return "toggle_repo_picker"
         case .toggleCommandPalette: return "toggle_command_palette"
-        case .addProject: return "add_project"
+        case .addWorkspace: return "add_workspace"
         }
     }
 
@@ -57,7 +57,7 @@ extension KeyInterceptor.ReservedChord {
         case "toggle_lazygit": self = .toggleLazygit
         case "toggle_repo_picker": self = .toggleRepoPicker
         case "toggle_command_palette": self = .toggleCommandPalette
-        case "add_project": self = .addProject
+        case "add_workspace": self = .addWorkspace
         default:
             if let rest = token.dropPrefixIfPresent("select_tab_"), let n = Int(rest), (1...9).contains(n) {
                 self = .selectTab(n)

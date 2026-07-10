@@ -2,7 +2,7 @@ import Foundation
 import TerminalKit
 
 /// The `~/.config/zen-term/` config layer. For ZEN-27 it loads only the theme file; later
-/// tickets (projects, general config) extend it. Never throws to callers and never crashes:
+/// tickets (workspaces, general config) extend it. Never throws to callers and never crashes:
 /// a missing file yields the built-in default, an unreadable one logs and falls back, and a
 /// partial/typo'd file falls back per-key inside `GhosttyThemeParser`.
 enum ConfigLoader {

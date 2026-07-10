@@ -2,7 +2,7 @@ import AppKit
 
 /// A modal card overlay presented over a tab's tile region: a centered card with a
 /// transparent click-catching backdrop, sprung in and out about its center. `WindowController`
-/// stores exactly one at a time (`PaletteOverlay`'s pickers and `AddProjectOverlay`) and drives
+/// stores exactly one at a time (`PaletteOverlay`'s pickers and `AddWorkspaceOverlay`) and drives
 /// it through this protocol, so the present/close machinery is shared rather than duplicated per
 /// overlay type.
 protocol ModalOverlay: NSView {

@@ -1,6 +1,6 @@
 import AppKit
 
-/// The "Add Project" form card, opened from the ⌘P command and the ⌘⇧P picker's ＋ row. It
+/// The "Add Workspace" form card, opened from the ⌘P command and the ⌘⇧P picker's ＋ row. It
 /// collects a folder, title, layout recipe, and env vars, builds a `Workspace`, and hands it to
 /// `onSubmit` — the host writes it to the `workspaces` file and opens it. A `ModalOverlay` like
 /// the palettes (shared card + backdrop + spring), but a multi-field form.
@@ -9,7 +9,7 @@ import AppKit
 /// Return advances to the next field (opens the folder panel when the empty folder field is
 /// focused), ⌘Return submits, Esc cancels. Every input is full width, the focused field/control
 /// reads as a muted fill, and each field shows its own validation message beneath it.
-final class AddProjectOverlay: NSView, ModalOverlay {
+final class AddWorkspaceOverlay: NSView, ModalOverlay {
     /// A layout preset; `custom` reveals the raw recipe fields.
     private enum LayoutChoice { case minimal, editorAIShell, custom }
 
@@ -24,7 +24,7 @@ final class AddProjectOverlay: NSView, ModalOverlay {
     private let card = CardView()
     private var isDismissing = false
 
-    private let titleField = FieldBox(placeholder: "Project name")
+    private let titleField = FieldBox(placeholder: "Workspace name")
     private let folderField = FieldBox(placeholder: "Click to choose, or type a path")
     private var titleGroup: LabeledField?
     private var folderGroup: LabeledField?
@@ -49,7 +49,7 @@ final class AddProjectOverlay: NSView, ModalOverlay {
     private let addVarButton = AppButton(title: "＋ Add variable", variant: .muted)
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary, keyEquivalent: "\u{1b}")
     private let addButton = AppButton(
-        title: "Add Project", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
+        title: "Add Workspace", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
 
     init(
         existingTitles: Set<String>, background: NSColor,
@@ -125,7 +125,7 @@ final class AddProjectOverlay: NSView, ModalOverlay {
     // MARK: content
 
     private func buildContent() -> NSStackView {
-        let header = NSTextField(labelWithString: "New Project")
+        let header = NSTextField(labelWithString: "New Workspace")
         header.font = .systemFont(ofSize: 15, weight: .semibold)
         header.textColor = Theme.current.chrome.foreground.nsColor
 
@@ -134,7 +134,7 @@ final class AddProjectOverlay: NSView, ModalOverlay {
             self?.titleEditedByUser = true
             self?.refreshValidity()
         }
-        let titleGroup = LabeledField(caption: Self.caption("PROJECT NAME", required: true), control: titleField)
+        let titleGroup = LabeledField(caption: Self.caption("WORKSPACE NAME", required: true), control: titleField)
         self.titleGroup = titleGroup
 
         wireField(folderField)
@@ -419,16 +419,16 @@ final class AddProjectOverlay: NSView, ModalOverlay {
         if !title.isEmpty, title.contains(where: { "[]#\"".contains($0) }) {
             titleMessage = "Can’t contain [ ] # or \"."
         } else if !title.isEmpty, existingTitles.contains(title) {
-            titleMessage = "A project with this name already exists."
+            titleMessage = "A workspace with this name already exists."
         } else if includeRequired, title.isEmpty {
-            titleMessage = "Enter a project name."
+            titleMessage = "Enter a workspace name."
         }
         flag(titleGroup, field: titleField.field, titleMessage)
 
         let folderText = folderField.text.trimmingCharacters(in: .whitespaces)
         var folderMessage: String?
         if includeRequired, folderText.isEmpty {
-            folderMessage = "Choose or type a project folder."
+            folderMessage = "Choose or type a workspace folder."
         } else if !folderText.isEmpty, let folder = resolvedFolder(), !directoryExists(folder) {
             folderMessage = "That folder doesn’t exist."
         }

@@ -10,7 +10,7 @@ enum WorkspacesWriter {
 
         var errorDescription: String? {
             switch self {
-            case .titleExists(let title): return "A project named “\(title)” already exists."
+            case .titleExists(let title): return "A workspace named “\(title)” already exists."
             }
         }
     }
