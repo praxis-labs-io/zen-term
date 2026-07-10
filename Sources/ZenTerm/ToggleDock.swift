@@ -64,13 +64,24 @@ final class ToggleDock: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Mirror the active tab's overlay state (drawers, lazygit, zoom) and the window's
-    /// repo picker; split buttons are momentary and have no active state. While zoomed,
-    /// the drawer tints reflect only what's actually visible: a zoomed pane hides both
-    /// drawers (neither lit), a zoomed drawer hides its sibling (only its own lit).
+    /// repo picker; split buttons are momentary and have no active state. A modal float
+    /// (lazygit / tool float) covers the whole tab, so while one is open the zoom and drawer
+    /// pips dim — their state is hidden behind it and returns when it closes. Otherwise the
+    /// drawer tints reflect what's visible: a zoomed pane hides both drawers (neither lit), a
+    /// zoomed drawer hides its sibling (only its own lit).
     func render(overlay: OverlayState, paletteOpen: Bool) {
         paletteBtn.isActive = paletteOpen
         lazygitBtn.isActive = overlay.isLazygitOpen
         for (id, btn) in toolFloatBtns { btn.isActive = overlay.activeToolFloatID == id }
+
+        // A float covers the tab, so zoom/drawer state beneath it would read as lit-but-hidden.
+        if overlay.isLazygitOpen || overlay.activeToolFloatID != nil {
+            zoomBtn.isActive = false
+            bottomBtn.isActive = false
+            rightBtn.isActive = false
+            return
+        }
+
         zoomBtn.isActive = overlay.zoomed != nil
         switch overlay.zoomed {
         case nil:
