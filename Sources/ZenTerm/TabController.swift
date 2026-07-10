@@ -3,7 +3,7 @@ import PaneKit
 import TerminalKit
 
 /// Which edge a drawer panel docks to.
-enum DrawerEdge: Equatable { case bottom, right }
+enum DrawerEdge { case bottom, right }
 
 /// Which panel is filling the tab (zoomed), for the footer dock's zoom tint.
 enum ZoomedPanel: Equatable { case pane, bottomDrawer, rightDrawer }
@@ -16,9 +16,6 @@ struct OverlayState: Equatable {
     var isLazygitOpen = false
     var activeToolFloatID: String?
     var zoomed: ZoomedPanel?
-    /// While a pane is zoomed, the one drawer peeked over it (⌘B/⌘\ summon it); nil
-    /// otherwise. Lets the footer dock light the peeked drawer.
-    var zoomRevealedDrawer: DrawerEdge?
 }
 
 /// One tab: owns the pane tree (`PaneCanvasController`) and the per-tab overlay
@@ -102,13 +99,6 @@ final class TabController: NSObject {
     private var zoomedPanel: PanelRef? { didSet { onOverlayStateChanged?() } }
     var isZoomed: Bool { zoomedPanel != nil }
 
-    /// While a pane is zoomed, the single drawer temporarily peeked over it — ⌘B/⌘\
-    /// summon it, toggling again hides it, and only one shows at a time. Cleared on
-    /// exit-zoom. `isBottomOpen`/`isRightOpen` are left untouched by zoom, so the real
-    /// drawer layout returns automatically on exit; a peek that wasn't already open
-    /// vanishes. Only ever non-nil while `zoomedPanel == .pane`.
-    private var zoomRevealedDrawer: DrawerEdge? { didSet { onOverlayStateChanged?() } }
-
     /// The focused drawer's surface, or nil when the pane canvas is focused (copy/
     /// paste then routes to `paneCanvas` as before).
     private var focusedDrawerSurface: TerminalSurface? {
@@ -158,7 +148,7 @@ final class TabController: NSObject {
         OverlayState(
             isBottomOpen: isBottomOpen, isRightOpen: isRightOpen,
             isLazygitOpen: isLazygitOpen, activeToolFloatID: activeToolFloatID,
-            zoomed: zoomedPanel.map(\.asZoomed), zoomRevealedDrawer: zoomRevealedDrawer)
+            zoomed: zoomedPanel.map(\.asZoomed))
     }
     var onOverlayStateChanged: (() -> Void)?
 
@@ -211,27 +201,9 @@ final class TabController: NSObject {
     /// our matching zoom state and re-tile so hidden drawers reappear.
     private func paneZoomEndedInternally() {
         if zoomedPanel == .pane {
-            zoomRevealedDrawer = nil  // the peek belonged to this zoom session
             zoomedPanel = nil
             relayoutPanels()
-            reclaimFocusIfHidden()  // the peek may have held focus; it's hidden now
         }
-    }
-
-    /// After a relayout that may have hidden the focused drawer (a peek dismissed, or zoom
-    /// exited), hand unified focus back to the pane if the focused drawer is no longer
-    /// visible — otherwise copy/paste and ⌘hjkl would target an off-screen surface.
-    /// `focusActivePane` restores both keyboard first-responder and, via `onFocusChanged`
-    /// → `paneGainedFocus`, the halo/routing. Callers must have cleared zoom state first, so
-    /// a drawer's visibility is just its open flag here.
-    private func reclaimFocusIfHidden() {
-        let hidden: Bool
-        switch focusedPanel {
-        case .pane: return
-        case .bottomDrawer: hidden = !isBottomOpen
-        case .rightDrawer: hidden = !isRightOpen
-        }
-        if hidden { paneCanvas.focusActivePane() }
     }
 
     func start() { paneCanvas.start() }
@@ -337,10 +309,7 @@ final class TabController: NSObject {
     /// Toggle the bottom drawer. First open creates a persistent login-shell surface
     /// in the tab's cwd; toggling hidden keeps it running; it dies only in `shutdown()`.
     func toggleBottomDrawer() {
-        if zoomedPanel == .pane {
-            toggleZoomDrawer(.bottom)  // peek the drawer over the zoomed pane, keeping zoom
-            return
-        }
+        if zoomedPanel == .pane { return }  // a zoomed pane is a strict focus mode — no drawers
         if zoomedPanel == .rightDrawer {
             switchZoomedDrawer(to: .bottom)  // jump the zoom to the other drawer
             return
@@ -375,10 +344,7 @@ final class TabController: NSObject {
     /// Toggle the right drawer. First open creates a persistent login-shell surface
     /// in the tab's cwd; toggling hidden keeps it running; it dies only in `shutdown()`.
     func toggleRightDrawer() {
-        if zoomedPanel == .pane {
-            toggleZoomDrawer(.right)  // peek the drawer over the zoomed pane, keeping zoom
-            return
-        }
+        if zoomedPanel == .pane { return }  // a zoomed pane is a strict focus mode — no drawers
         if zoomedPanel == .bottomDrawer {
             switchZoomedDrawer(to: .right)  // jump the zoom to the other drawer
             return
@@ -747,30 +713,8 @@ final class TabController: NSObject {
             rightDrawerPanel?.isZoomed = false
         case nil: return
         }
-        zoomRevealedDrawer = nil  // drop any peek; normal tiling restores the real drawers
         zoomedPanel = nil
         relayoutPanels()
-        reclaimFocusIfHidden()  // a dismissed peek must not keep focus on a now-hidden drawer
-    }
-
-    /// Peek one drawer over the zoomed pane (or hide it), keeping zoom. Only one drawer
-    /// shows at a time; toggling the peeked edge hides it (back to the full-screen pane),
-    /// and asking for the other edge switches the peek. Leaves `isBottomOpen`/`isRightOpen`
-    /// untouched, so the pre-zoom drawer layout returns when zoom exits.
-    private func toggleZoomDrawer(_ edge: DrawerEdge) {
-        if zoomRevealedDrawer == edge {
-            zoomRevealedDrawer = nil
-            relayoutPanels()
-            paneCanvas.focusActivePane()  // focus returns to the zoomed pane
-            return
-        }
-        switch edge {
-        case .bottom: _ = ensureBottomDrawerPanel()
-        case .right: _ = ensureRightDrawerPanel()
-        }
-        zoomRevealedDrawer = edge
-        relayoutPanels()
-        focusDrawer(edge)
     }
 
     /// Jump a drawer zoom from one edge to the other (⌘B/⌘\ while the *other* drawer is
@@ -822,14 +766,7 @@ final class TabController: NSObject {
     /// by PaneKit's `nearestLeaf`, the same geometric scorer pane-to-pane nav already
     /// uses, so a drawer is just another panel in the graph.
     func navigate(_ direction: Direction) {
-        // Zoomed on a pane with a drawer peeked over it: ⌘hjkl moves between just those two
-        // visible panels (the zoomed leaf and the peek) instead of exiting zoom. Nowhere to
-        // go in a direction ⇒ no-op, so nav never drops you out of the peek.
-        if zoomedPanel == .pane, let edge = zoomRevealedDrawer {
-            navigateZoomPeek(direction, edge: edge)
-            return
-        }
-        if exitZoomIfNeeded() { return }  // ⌘hjkl while otherwise zoomed just unzooms
+        if isZoomed { return }  // zoom is a strict focus mode — no cross-panel nav until you exit
         var frames = paneCanvas.leafFrames(in: content)
         if isBottomOpen, let panel = bottomDrawerPanel {
             frames[Self.bottomDrawerID] = flippedFrame(of: panel)
@@ -851,23 +788,6 @@ final class TabController: NSObject {
         guard let target else { return }
 
         navReturn[target, default: [:]][direction.opposite] = origin  // enable the return hop
-        focusPanel(target)
-    }
-
-    /// Navigate between the zoomed pane and the single drawer peeked over it — the only two
-    /// panels visible under pane-zoom. Scores just those two frames (the canvas standing in
-    /// for the zoomed leaf, plus the peek), so a hidden split sibling is never a target.
-    private func navigateZoomPeek(_ direction: Direction, edge: DrawerEdge) {
-        let drawerPanel = edge == .bottom ? bottomDrawerPanel : rightDrawerPanel
-        guard let drawerPanel else { return }
-        let paneID = paneCanvas.focusedLeafID  // the zoomed leaf
-        let drawerID = edge == .bottom ? Self.bottomDrawerID : Self.rightDrawerID
-        let frames: [PaneID: CGRect] = [
-            paneID: flippedFrame(of: canvas),
-            drawerID: flippedFrame(of: drawerPanel),
-        ]
-        guard let target = nearestLeaf(from: currentPanelID, frames: frames, direction: direction)
-        else { return }
         focusPanel(target)
     }
 
@@ -918,7 +838,7 @@ final class TabController: NSObject {
     /// right (⌘⇧L) — the same feel as an edge pane on that side. The cross axis beeps. A
     /// resize chord while zoomed just unzooms, matching `navigate`.
     func resize(_ direction: Direction) {
-        if exitZoomIfNeeded() { return }
+        if isZoomed { return }  // zoom is a strict focus mode — no resizing until you exit
         switch focusedPanel {
         case .pane:
             paneCanvas.resize(direction)
@@ -1010,22 +930,14 @@ final class TabController: NSObject {
         // The zoom target is only effective while its view exists (a zoomed drawer
         // whose shell just exited falls back to normal tiling).
         let effectiveZoom: PanelRef? = zoomedPanel.flatMap { zoomedView($0) != nil ? $0 : nil }
-        // A zoomed DRAWER fills the tab (below); a zoomed PANE tiles normally with only a
-        // peeked drawer visible, letting the canvas (rendering just the zoomed leaf) share
-        // the region — so pane-zoom drops through to the tiling section like the no-zoom case.
-        let drawerZoom: PanelRef? = (effectiveZoom == .pane) ? nil : effectiveZoom
 
         let canvasVisible: Bool
         let bottomVisible: Bool
         let rightVisible: Bool
-        if let z = drawerZoom {
-            canvasVisible = false
+        if let z = effectiveZoom {
+            canvasVisible = z == .pane
             bottomVisible = z == .bottomDrawer
             rightVisible = z == .rightDrawer
-        } else if effectiveZoom == .pane {
-            canvasVisible = true
-            bottomVisible = zoomRevealedDrawer == .bottom
-            rightVisible = zoomRevealedDrawer == .right
         } else {
             canvasVisible = true
             bottomVisible = isBottomOpen
@@ -1035,8 +947,8 @@ final class TabController: NSObject {
         if let p = bottomDrawerPanel { setAttached(p, bottomVisible) }
         if let p = rightDrawerPanel { setAttached(p, rightVisible) }
 
-        // Drawer zoom: the single visible drawer fills `content`.
-        if let z = drawerZoom, let zv = zoomedView(z) {
+        // Zoom: the single visible panel fills `content`.
+        if let z = effectiveZoom, let zv = zoomedView(z) {
             let cs = [
                 zv.leadingAnchor.constraint(equalTo: content.leadingAnchor),
                 zv.trailingAnchor.constraint(equalTo: content.trailingAnchor),
@@ -1048,15 +960,13 @@ final class TabController: NSObject {
             return
         }
 
-        // Normal tiling among the visible panels (canvas always visible here). Under
-        // pane-zoom `bottomVisible`/`rightVisible` reflect the single peeked drawer; otherwise
-        // they reflect `isBottomOpen`/`isRightOpen`.
+        // Normal tiling among the visible panels (canvas always visible here).
         var cs: [NSLayoutConstraint] = [
             canvas.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             canvas.topAnchor.constraint(equalTo: content.topAnchor),
         ]
 
-        if rightVisible, let rightPanel = rightDrawerPanel {
+        if isRightOpen, let rightPanel = rightDrawerPanel {
             // `.defaultHigh` (not required) so on an extremely small window this
             // constraint relaxes instead of forcing the canvas to a negative size and
             // logging a broken-constraint error — the drawer shrinks under squeeze.
@@ -1073,7 +983,7 @@ final class TabController: NSObject {
             cs.append(canvas.trailingAnchor.constraint(equalTo: content.trailingAnchor))
         }
 
-        if bottomVisible, let bottomPanel = bottomDrawerPanel {
+        if isBottomOpen, let bottomPanel = bottomDrawerPanel {
             // See the right-drawer width constraint above: same rationale for height.
             let height = bottomPanel.heightAnchor.constraint(equalToConstant: bottomDrawerHeight)
             height.priority = .defaultHigh
@@ -1085,7 +995,7 @@ final class TabController: NSObject {
             ]
             // The bottom drawer spans the canvas column only — it stops short of the
             // right drawer's column, so the two never overlap when both are open.
-            if rightVisible, let rightPanel = rightDrawerPanel {
+            if isRightOpen, let rightPanel = rightDrawerPanel {
                 cs.append(
                     bottomPanel.trailingAnchor.constraint(
                         equalTo: rightPanel.leadingAnchor, constant: -ChromeMetrics.panelGap))
@@ -1148,7 +1058,6 @@ extension TabController: TerminalSurfaceDelegate {
         }
         if s === bottomDrawerSurface {
             if zoomedPanel == .bottomDrawer { zoomedPanel = nil }  // don't leave zoom stuck
-            if zoomRevealedDrawer == .bottom { zoomRevealedDrawer = nil }  // peeked drawer died
             bottomDrawerPanel?.removeFromSuperview()
             bottomDrawerSurface?.terminate()
             bottomDrawerSurface = nil
@@ -1166,7 +1075,6 @@ extension TabController: TerminalSurfaceDelegate {
             }
         } else if s === rightDrawerSurface {
             if zoomedPanel == .rightDrawer { zoomedPanel = nil }  // don't leave zoom stuck
-            if zoomRevealedDrawer == .right { zoomRevealedDrawer = nil }  // peeked drawer died
             rightDrawerPanel?.removeFromSuperview()
             rightDrawerSurface?.terminate()
             rightDrawerSurface = nil
