@@ -236,14 +236,8 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
 
     private func moveVertical(_ delta: Int) {
         let stops = verticalStops()
-        guard !stops.isEmpty else { return }
-        let next: Int
-        if let anchor = currentVerticalAnchor(in: stops), let current = stops.firstIndex(where: { $0 === anchor }) {
-            next = current + delta
-        } else {
-            next = delta > 0 ? 0 : stops.count - 1
-        }
-        guard stops.indices.contains(next) else { return }  // clamp at the ends
+        let anchor = currentVerticalAnchor(in: stops).flatMap { anchor in stops.firstIndex { $0 === anchor } }
+        guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: stops.count) else { return }
         window?.makeFirstResponder(stops[next])
     }
 
@@ -258,15 +252,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         return nil
     }
 
-    /// Whether `view` currently holds first responder — resolving a text field's field editor
-    /// (the actual responder while editing) back to the field itself.
-    private func isFocused(_ view: NSView) -> Bool {
-        guard let responder = window?.firstResponder else { return false }
-        if let editor = responder as? NSTextView, let field = editor.delegate as? NSTextField {
-            return field === view
-        }
-        return responder === view
-    }
+    private func isFocused(_ view: NSView) -> Bool { KeyboardFocus.isFocused(view, in: window) }
 
     private func wireField(_ box: FieldBox) {
         box.onChange = { [weak self] in self?.refreshValidity() }
