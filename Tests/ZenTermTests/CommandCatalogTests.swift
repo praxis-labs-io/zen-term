@@ -12,7 +12,7 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(
             names,
             [
-                "Open Project Picker", "Open Lazygit",
+                "Open Workspace Picker", "Add Workspace…", "Open Lazygit",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab",
                 "Split Horizontally", "Split Vertically",
@@ -52,16 +52,21 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertFalse(titles.contains("New Window"))
     }
 
-    func test_openProjectPicker_mapsToRepoPickerChord() {
-        let entry = CommandCatalog.commands(tabCount: 0).first { $0.title == "Open Project Picker" }
+    func test_openWorkspacePicker_mapsToRepoPickerChord() {
+        let entry = CommandCatalog.commands(tabCount: 0).first { $0.title == "Open Workspace Picker" }
         XCTAssertNotNil(entry)
         if case .toggleRepoPicker = entry!.chord {} else { XCTFail("expected .toggleRepoPicker") }
     }
 
-    func test_everyEntry_hasTitleAndShortcut() {
+    func test_everyEntry_hasTitle_andBoundEntriesHaveShortcut() {
         for command in CommandCatalog.commands(tabCount: 9) {
             XCTAssertFalse(command.title.isEmpty)
-            XCTAssertFalse(command.shortcut.isEmpty)
+            // `.addWorkspace` is deliberately unbound (opened from the palette/picker, no default
+            // key), so its shortcut glyph is empty; every bound command shows its glyph. Keyed on
+            // the chord, not the title, so a copy tweak can't quietly disable the check.
+            if command.chord != .addWorkspace {
+                XCTAssertFalse(command.shortcut.isEmpty, "\(command.title) should show a shortcut")
+            }
         }
     }
 }

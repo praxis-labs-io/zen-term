@@ -1,14 +1,16 @@
 # zen-term — workspaces reference
 #
 # Copy to ~/.config/zen-term/workspaces (or $XDG_CONFIG_HOME/zen-term/workspaces) and
-# add a section per project. This list is deliberate and hand-curated — zen-term does
+# add a section per workspace. This list is deliberate and hand-curated — zen-term does
 # NOT scan any directory. Each section becomes an entry in the ⌘⇧P picker.
 #
 # Format: INI-style. A `[Title]` line opens a section; `key = value` lines below it
 # configure that workspace until the next header. Lines starting with `#` and blank
 # lines are ignored; unknown keys are ignored. A section with no `path` is skipped, a
 # malformed `env` line is dropped, and nothing here can crash the app (bad lines are
-# logged and skipped). The file is read once at launch — restart to apply changes.
+# logged and skipped). Add a workspace from inside the app too — ⌘P → "Add Workspace…", or the
+# ＋ row in the ⌘⇧P picker — which appends a section here and opens it immediately. Hand-edits
+# to this file are picked up the next time you open the ⌘⇧P picker (or on restart).
 #
 # The section header is the title: it's shown in the picker and pinned as the tab name,
 # so it's independent of the folder name (`[ZenTerm]` can point at ~/Dev/zen-term).
@@ -16,7 +18,7 @@
 # Opening a workspace applies its "recipe": the first pane runs `main`, the drawers named
 # by `right`/`bottom` open running their commands, focus lands on `focus`, and `env` is
 # injected into every pane and drawer. A section with only a `path` is the minimal
-# default: one shell pane, both drawers collapsed, cwd = the project dir.
+# default: one shell pane, both drawers collapsed, cwd = the workspace dir.
 #
 # Fields:
 #   [Title]  (required)  section header → picker label + pinned tab name

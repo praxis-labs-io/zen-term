@@ -20,6 +20,7 @@ final class KeyInterceptor {
         case toggleToolFloat(String)  // associated value = ToolFloat.id
         case toggleRepoPicker
         case toggleCommandPalette
+        case addWorkspace
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?
