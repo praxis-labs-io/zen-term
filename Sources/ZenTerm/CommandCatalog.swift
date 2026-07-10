@@ -46,6 +46,7 @@ enum CommandCatalog {
             let f = ToolFloatCatalog.byID(id)
             return tool(f?.title ?? id, f?.shortcut ?? "", chord)
         case .toggleRepoPicker: return tool("Open Project Picker", "⌘⇧P", chord)
+        case .newWebPane: return pane("Open Web Pane", "⌘⇧B", chord)
         // Present for exhaustiveness; both are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", "⌘N", chord)
         case .toggleCommandPalette: return tool("Command Palette", "⌘P", chord)
@@ -68,7 +69,7 @@ enum CommandCatalog {
             chords += (1...min(tabCount, 9)).map { .selectTab($0) }
         }
         chords += [
-            .splitHorizontal, .splitVertical,
+            .splitHorizontal, .splitVertical, .newWebPane,
             .navLeft, .navDown, .navUp, .navRight,
             .resizeLeft, .resizeDown, .resizeUp, .resizeRight,
             .toggleZoom, .closePane,

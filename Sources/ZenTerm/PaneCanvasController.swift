@@ -1,6 +1,7 @@
 import AppKit
 import PaneKit
 import TerminalKit
+import WebPaneKit
 
 /// Owns the pane tree, the surface registry, and per-leaf cwd. Renders the tree
 /// into `canvasView`, reusing each leaf's surface across restructures. Acts as the
@@ -9,8 +10,15 @@ final class PaneCanvasController: NSObject {
     let canvasView = NSView()
 
     private var tree: PaneTree
-    private let registry: PaneSurfaceRegistry
+    /// Lazy so the factory closure can capture `self` — the per-leaf kind lives in
+    /// `webURLByLeaf`, consulted when a created leaf's surface is minted.
+    private lazy var registry = PaneSurfaceRegistry(makeSurface: { [weak self] id in
+        self?.makeSurface(for: id) ?? TerminalSurfaceFactory.make()
+    })
     private var cwdByLeaf: [PaneID: URL] = [:]
+    /// A leaf's kind: present → a web pane pointed at this URL; absent → a terminal.
+    /// The pure `PaneTree` stays kind-agnostic; the kind lives here on the controller.
+    private var webURLByLeaf: [PaneID: URL] = [:]
     private var hostByLeaf: [PaneID: PanelHostView] = [:]
     /// A one-shot startup command per leaf (the `⌘P` workspace preset seeds the first
     /// leaf with `nvim`). Consumed when the leaf's surface is first started; splits
@@ -114,7 +122,6 @@ final class PaneCanvasController: NSObject {
     init(initialCWD: URL? = nil, initialCommand: String? = nil) {
         let firstLeaf = PaneID(1)
         self.tree = PaneTree(singleLeaf: firstLeaf)
-        self.registry = PaneSurfaceRegistry(makeSurface: TerminalSurfaceFactory.make)
         super.init()
         nextID = 2
         if let initialCWD { cwdByLeaf[firstLeaf] = initialCWD }
@@ -127,6 +134,13 @@ final class PaneCanvasController: NSObject {
 
     private func mintPaneID() -> PaneID { defer { nextID += 1 }; return PaneID(nextID) }
     private func mintSplitID() -> SplitID { defer { nextID += 1 }; return SplitID(nextID) }
+
+    /// Vends the surface for a newly-created leaf: a web pane when the leaf carries a
+    /// URL, otherwise the default terminal backend.
+    private func makeSurface(for id: PaneID) -> TerminalSurface {
+        if let url = webURLByLeaf[id] { return WebPaneSurface(url: url) }
+        return TerminalSurfaceFactory.make()
+    }
 
     /// Boots the first pane and renders.
     func start() {
@@ -151,7 +165,7 @@ final class PaneCanvasController: NSObject {
                 surface.start(ShellLaunch.shell(cwd: cwdByLeaf[id]))
             }
         }
-        for id in diff.removed { cwdByLeaf[id] = nil; hostByLeaf[id] = nil }
+        for id in diff.removed { cwdByLeaf[id] = nil; hostByLeaf[id] = nil; webURLByLeaf[id] = nil }
         rebuildViews()
     }
 
@@ -288,6 +302,23 @@ final class PaneCanvasController: NSObject {
         // unified focus re-syncs `TabController.focusedPanel` back to `.pane` instead
         // of leaving the halo stuck on the drawer.
         focusActivePane()
+    }
+
+    /// Split the focused pane along `axis` and make the new leaf a web pane pointed at
+    /// `url`. Mirrors `split(_:)`, but tags the new leaf as web before reconcile so its
+    /// surface is minted as a `WebPaneSurface`.
+    func splitIntoWebPane(url: URL, axis: SplitAxis = .vertical) {
+        guard let host = hostByLeaf[tree.focusedLeaf] else { return }
+        let size = host.bounds.size
+        let extent = (axis == .vertical) ? size.width : size.height
+        guard extent >= Self.minSplitExtent else { NSSound.beep(); return }
+
+        let source = tree.focusedLeaf
+        let newLeaf = mintPaneID()
+        webURLByLeaf[newLeaf] = url
+        tree = tree.splitting(source, axis: axis, newLeaf: newLeaf, newSplit: mintSplitID())
+        reconcileAndRender()
+        focus(newLeaf)
     }
 
     /// Resize the focused pane by moving its edge in `direction`: it grows into a neighbor

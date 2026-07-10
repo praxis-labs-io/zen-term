@@ -208,6 +208,14 @@ final class TabController: NSObject {
 
     func start() { paneCanvas.start() }
     func split(_ axis: SplitAxis) { exitZoomIfNeeded(); paneCanvas.split(axis) }
+
+    /// Spike: split a web pane in, pointed at the default dev URL. The pane's own
+    /// toolbar re-navigates from there.
+    func newWebPane() {
+        exitZoomIfNeeded()
+        guard let url = URL(string: "http://localhost:3000") else { return }
+        paneCanvas.splitIntoWebPane(url: url)
+    }
     @discardableResult func closeFocused() -> Bool {
         exitZoomIfNeeded()  // exit zoom before closing so zoom state can't desync
         return paneCanvas.closeFocused()

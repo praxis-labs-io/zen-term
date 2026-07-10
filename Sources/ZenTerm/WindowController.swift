@@ -626,6 +626,7 @@ final class WindowController: NSObject {
             if let spec = ToolFloatCatalog.byID(id) { active?.toggleToolFloat(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
+        case .newWebPane: active?.newWebPane()
         }
     }
 

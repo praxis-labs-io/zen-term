@@ -6,9 +6,9 @@ import TerminalKit
 /// shell, scrollback, and first-responder state across any tree restructure.
 public final class PaneSurfaceRegistry {
     private var surfaces: [PaneID: TerminalSurface] = [:]
-    private let makeSurface: () -> TerminalSurface
+    private let makeSurface: (PaneID) -> TerminalSurface
 
-    public init(makeSurface: @escaping () -> TerminalSurface) {
+    public init(makeSurface: @escaping (PaneID) -> TerminalSurface) {
         self.makeSurface = makeSurface
     }
 
@@ -32,7 +32,7 @@ public final class PaneSurfaceRegistry {
         }
         var created: [(id: PaneID, surface: TerminalSurface)] = []
         for id in diff.created {
-            let surface = makeSurface()
+            let surface = makeSurface(id)
             surfaces[id] = surface
             created.append((id, surface))
         }

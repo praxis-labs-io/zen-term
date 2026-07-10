@@ -52,9 +52,16 @@ let package = Package(
         .target(
             name: "TabKit"                   // pure — no AppKit, no SwiftTerm
         ),
+        // A second TerminalSurface backend: a WKWebView pane. Depends on TerminalKit
+        // for the seam type only (like PaneKit) — NOT SwiftTerm — and links WebKit.
+        .target(
+            name: "WebPaneKit",
+            dependencies: ["TerminalKit"],
+            linkerSettings: [.linkedFramework("WebKit")]
+        ),
         .executableTarget(
             name: "ZenTerm",
-            dependencies: ["TerminalKit", "PaneKit", "TabKit"],  // still no SwiftTerm
+            dependencies: ["TerminalKit", "PaneKit", "TabKit", "WebPaneKit"],  // still no SwiftTerm
             resources: [.copy("Resources")]  // brand marks (GitHub, git) SVGs for the dock
         ),
         .testTarget(
