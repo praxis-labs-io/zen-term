@@ -324,6 +324,10 @@ final class TabController: NSObject {
             toggleZoomDrawer(.bottom)  // peek the drawer over the zoomed pane, keeping zoom
             return
         }
+        if zoomedPanel == .rightDrawer {
+            switchZoomedDrawer(to: .bottom)  // jump the zoom to the other drawer
+            return
+        }
         exitZoomIfNeeded()  // any layout change exits zoom first (keeps state in sync)
         isBottomOpen.toggle()
         if isBottomOpen {
@@ -356,6 +360,10 @@ final class TabController: NSObject {
     func toggleRightDrawer() {
         if zoomedPanel == .pane {
             toggleZoomDrawer(.right)  // peek the drawer over the zoomed pane, keeping zoom
+            return
+        }
+        if zoomedPanel == .bottomDrawer {
+            switchZoomedDrawer(to: .right)  // jump the zoom to the other drawer
             return
         }
         exitZoomIfNeeded()
@@ -743,6 +751,29 @@ final class TabController: NSObject {
         case .right: _ = ensureRightDrawerPanel()
         }
         zoomRevealedDrawer = edge
+        relayoutPanels()
+        focusDrawer(edge)
+    }
+
+    /// Jump a drawer zoom from one edge to the other (⌘B/⌘\ while the *other* drawer is
+    /// zoomed) — full-screen the target instead of exiting zoom. Opens the target if it
+    /// wasn't already; the drawer we jump from stays open (just hidden under the new zoom),
+    /// so exiting zoom later tiles both.
+    private func switchZoomedDrawer(to edge: DrawerEdge) {
+        switch edge {
+        case .bottom:
+            isBottomOpen = true
+            _ = ensureBottomDrawerPanel()
+            rightDrawerPanel?.isZoomed = false
+            bottomDrawerPanel?.isZoomed = true
+            zoomedPanel = .bottomDrawer
+        case .right:
+            isRightOpen = true
+            _ = ensureRightDrawerPanel()
+            bottomDrawerPanel?.isZoomed = false
+            rightDrawerPanel?.isZoomed = true
+            zoomedPanel = .rightDrawer
+        }
         relayoutPanels()
         focusDrawer(edge)
     }
