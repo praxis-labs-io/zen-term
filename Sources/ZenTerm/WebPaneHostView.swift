@@ -72,6 +72,7 @@ final class WebPaneHostView: NSView, PaneHost {
         urlField.action = #selector(urlSubmitted)
         urlField.placeholderString = "Open URL…"
         urlField.font = .systemFont(ofSize: 11)
+        urlField.alignment = .center
         urlField.textColor = Theme.current.chrome.foreground.nsColor
         urlField.isBezeled = false
         urlField.isBordered = false
@@ -108,20 +109,34 @@ final class WebPaneHostView: NSView, PaneHost {
         deviceStack.orientation = .horizontal
         deviceStack.spacing = 2
 
-        let row = NSStackView(views: [navStack, fieldWrap, deviceStack, zoomButton])
-        row.orientation = .horizontal
-        row.spacing = 8
-        row.translatesAutoresizingMaskIntoConstraints = false
-        toolbar.addSubview(row)
+        let rightStack = NSStackView(views: [deviceStack, zoomButton])
+        rightStack.orientation = .horizontal
+        rightStack.spacing = 8
+        navStack.translatesAutoresizingMaskIntoConstraints = false
+        rightStack.translatesAutoresizingMaskIntoConstraints = false
+        toolbar.addSubview(navStack)
+        toolbar.addSubview(fieldWrap)
+        toolbar.addSubview(rightStack)
+
+        // The address pill floats centered with a capped width; nav pins left, the device
+        // switch pins right. The `>=`/`<=` gaps let it shrink before it would collide.
+        let preferredFieldWidth = fieldWrap.widthAnchor.constraint(equalToConstant: 360)
+        preferredFieldWidth.priority = .defaultHigh
 
         NSLayoutConstraint.activate([
             toolbar.topAnchor.constraint(equalTo: topAnchor, constant: outerInset),
             toolbar.leadingAnchor.constraint(equalTo: leadingAnchor, constant: outerInset),
             toolbar.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -outerInset),
             toolbar.heightAnchor.constraint(equalToConstant: toolbarHeight),
-            row.leadingAnchor.constraint(equalTo: toolbar.leadingAnchor, constant: 8),
-            row.trailingAnchor.constraint(equalTo: toolbar.trailingAnchor, constant: -8),
-            row.centerYAnchor.constraint(equalTo: toolbar.centerYAnchor),
+            navStack.leadingAnchor.constraint(equalTo: toolbar.leadingAnchor, constant: 8),
+            navStack.centerYAnchor.constraint(equalTo: toolbar.centerYAnchor),
+            rightStack.trailingAnchor.constraint(equalTo: toolbar.trailingAnchor, constant: -8),
+            rightStack.centerYAnchor.constraint(equalTo: toolbar.centerYAnchor),
+            fieldWrap.centerXAnchor.constraint(equalTo: toolbar.centerXAnchor),
+            fieldWrap.centerYAnchor.constraint(equalTo: toolbar.centerYAnchor),
+            fieldWrap.leadingAnchor.constraint(greaterThanOrEqualTo: navStack.trailingAnchor, constant: 8),
+            fieldWrap.trailingAnchor.constraint(lessThanOrEqualTo: rightStack.leadingAnchor, constant: -8),
+            preferredFieldWidth,
         ])
     }
 
