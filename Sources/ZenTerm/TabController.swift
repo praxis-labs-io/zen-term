@@ -804,7 +804,14 @@ final class TabController: NSObject {
     /// by PaneKit's `nearestLeaf`, the same geometric scorer pane-to-pane nav already
     /// uses, so a drawer is just another panel in the graph.
     func navigate(_ direction: Direction) {
-        if exitZoomIfNeeded() { return }  // ⌘hjkl while zoomed just unzooms
+        // Zoomed on a pane with a drawer peeked over it: ⌘hjkl moves between just those two
+        // visible panels (the zoomed leaf and the peek) instead of exiting zoom. Nowhere to
+        // go in a direction ⇒ no-op, so nav never drops you out of the peek.
+        if zoomedPanel == .pane, let edge = zoomRevealedDrawer {
+            navigateZoomPeek(direction, edge: edge)
+            return
+        }
+        if exitZoomIfNeeded() { return }  // ⌘hjkl while otherwise zoomed just unzooms
         var frames = paneCanvas.leafFrames(in: content)
         if isBottomOpen, let panel = bottomDrawerPanel {
             frames[Self.bottomDrawerID] = flippedFrame(of: panel)
@@ -826,6 +833,23 @@ final class TabController: NSObject {
         guard let target else { return }
 
         navReturn[target, default: [:]][direction.opposite] = origin  // enable the return hop
+        focusPanel(target)
+    }
+
+    /// Navigate between the zoomed pane and the single drawer peeked over it — the only two
+    /// panels visible under pane-zoom. Scores just those two frames (the canvas standing in
+    /// for the zoomed leaf, plus the peek), so a hidden split sibling is never a target.
+    private func navigateZoomPeek(_ direction: Direction, edge: DrawerEdge) {
+        let drawerPanel = edge == .bottom ? bottomDrawerPanel : rightDrawerPanel
+        guard let drawerPanel else { return }
+        let paneID = paneCanvas.focusedLeafID  // the zoomed leaf
+        let drawerID = edge == .bottom ? Self.bottomDrawerID : Self.rightDrawerID
+        let frames: [PaneID: CGRect] = [
+            paneID: flippedFrame(of: canvas),
+            drawerID: flippedFrame(of: drawerPanel),
+        ]
+        guard let target = nearestLeaf(from: currentPanelID, frames: frames, direction: direction)
+        else { return }
         focusPanel(target)
     }
 
