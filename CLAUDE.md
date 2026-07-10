@@ -45,6 +45,26 @@ the documented expectation (see each plan's manual runbook).
 - Per global rules: no `TODO`/`FIXME`/`HACK` markers — fix it now, or file a
   Linear ticket for genuinely out-of-scope work.
 
+## Colors — always theme-driven (ZEN-27)
+
+The chrome must **never hardcode a color**. A hardcoded color won't follow a
+bring-your-own theme and washes out on light themes. Every color resolves from
+`Theme.current`:
+
+- **Terminal surfaces:** build `TerminalSurfaceConfig(theme: Theme.current.terminal)`.
+- **Chrome UI (`Sources/ZenTerm/`):** use `Theme.current.chrome` roles —
+  `background`, `foreground`, `info`, `warning`, `destructive`, `accent`,
+  `attention`, `muted` — and `chrome.ink(alpha:)` for foreground-toned inks,
+  hairlines, and hover fills (it applies the readability boost; pass the site's
+  opacity, not a raw `NSColor`).
+
+**Banned in the chrome:** `NSColor(white:…)`, `.white` / `.black`, raw hex, and
+literal palette values (`0xc4a7e7`, `NSColor(srgbRed:…)`). The only exception is a
+genuinely theme-independent value (e.g. the black drop shadow in `FloatShadow`),
+and it must be commented as such. If a chrome element needs a role `ChromeTheme`
+doesn't expose, add the role and derive it from the terminal palette in
+`ChromeThemeDeriver` — never reach for a literal.
+
 ## Linear — praxis-labs workspace
 
 The Linear MCP is already connected to the **praxis-labs** workspace
