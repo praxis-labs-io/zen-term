@@ -16,7 +16,7 @@ enum ShellLaunch {
     /// A plain login+interactive shell (`command: nil` → the backend rewrites argv[0] to
     /// a login shell), the default pane/drawer session.
     static func shell(cwd: URL?) -> TerminalSurfaceConfig {
-        TerminalSurfaceConfig(workingDirectory: cwd ?? defaultCWD, theme: Theme.rosePineMoon)
+        TerminalSurfaceConfig(workingDirectory: cwd ?? defaultCWD, theme: Theme.current.terminal)
     }
 
     /// Run `command` in a login+interactive shell, then `exec` a fresh one so the session
@@ -28,7 +28,7 @@ enum ShellLaunch {
             command: sh,
             args: ["-l", "-i", "-c", "\(command); exec \(sh) -l -i"],
             workingDirectory: cwd ?? defaultCWD,
-            theme: Theme.rosePineMoon
+            theme: Theme.current.terminal
         )
     }
 }

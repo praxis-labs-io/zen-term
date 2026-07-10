@@ -2,16 +2,18 @@ import AppKit
 
 /// A toast's tone. Drives only the icon badge + accent color; the card's background,
 /// hairline border, and drop shadow stay the shared overlay-card chrome (`FloatShadow`),
-/// identical across variants. Rosé Pine Moon: foam (info), gold (warning), love (destructive).
+/// identical across variants. Accents come from the chrome theme (foam/gold/love under the
+/// Rosé Pine default).
 enum ToastVariant: Equatable {
     case info, warning, destructive
 
-    /// The accent — tints the icon and (at 15% alpha) the badge fill.
+    /// The accent — tints the icon and (at 15% alpha) the badge fill. Sourced from the
+    /// chrome theme so accents follow the active theme (foam/gold/love under Rosé Pine).
     var accent: NSColor {
         switch self {
-        case .info: return NSColor(srgbRed: 0x9c / 255, green: 0xcf / 255, blue: 0xd8 / 255, alpha: 1)
-        case .warning: return NSColor(srgbRed: 0xf6 / 255, green: 0xc1 / 255, blue: 0x77 / 255, alpha: 1)
-        case .destructive: return NSColor(srgbRed: 0xeb / 255, green: 0x6f / 255, blue: 0x92 / 255, alpha: 1)
+        case .info: return Theme.current.chrome.info.nsColor
+        case .warning: return Theme.current.chrome.warning.nsColor
+        case .destructive: return Theme.current.chrome.destructive.nsColor
         }
     }
 

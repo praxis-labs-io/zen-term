@@ -191,7 +191,7 @@ final class PaneCanvasController: NSObject {
         guard let surface = registry.surface(for: id) else { return NSView() }
         let host = PanelHostView(
             content: surface.view,
-            background: Theme.rosePineMoon.background.nsColor,
+            background: Theme.current.chrome.background.nsColor,
             meta: nil,
             onFocusRequest: { [weak self] in
                 self?.focus(id)
