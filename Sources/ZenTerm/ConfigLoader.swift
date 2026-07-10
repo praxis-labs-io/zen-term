@@ -20,12 +20,11 @@ enum ConfigLoader {
         return base.appendingPathComponent("zen-term", isDirectory: true)
     }
 
-    static func loadAppTheme(configRoot: URL = defaultRoot) -> AppTheme {
+    static func loadAppTheme(configRoot: URL = defaultRoot, general: GeneralConfig = .current) -> AppTheme {
         let builtIn = Theme.rosePineMoon
-        let themeURL = configRoot.appendingPathComponent("theme")
 
-        let terminal: TerminalTheme
-        if FileManager.default.fileExists(atPath: themeURL.path) {
+        var terminal: TerminalTheme
+        if let themeURL = resolveThemeURL(configRoot: configRoot, general: general) {
             do {
                 let text = try String(contentsOf: themeURL, encoding: .utf8)
                 terminal = GhosttyThemeParser.parse(
@@ -38,6 +37,40 @@ enum ConfigLoader {
             terminal = builtIn
         }
 
+        // Font is a general-config knob, not a theme key (ghostty themes carry no font). Inject
+        // it uniformly here so a custom font applies even with no theme file present.
+        terminal.fontName = general.fontName
+        terminal.fontSize = general.fontSize
+
         return AppTheme(terminal: terminal, chrome: ChromeThemeDeriver.derive(from: terminal))
+    }
+
+    /// Locate the active theme file, or nil to use the built-in default. A `theme = <name>`
+    /// config key selects `themes/<name>`; with no key we fall back to a legacy single `theme`
+    /// file. A named theme that doesn't exist warns and falls back to the built-in.
+    private static func resolveThemeURL(configRoot: URL, general: GeneralConfig) -> URL? {
+        if let name = general.themeName {
+            let url = configRoot.appendingPathComponent("themes").appendingPathComponent(name)
+            if FileManager.default.fileExists(atPath: url.path) { return url }
+            let dir = url.deletingLastPathComponent().path
+            NSLog("ConfigLoader: theme `\(name)` not found in \(dir) — using built-in theme")
+            return nil
+        }
+        let legacy = configRoot.appendingPathComponent("theme")
+        return FileManager.default.fileExists(atPath: legacy.path) ? legacy : nil
+    }
+
+    static func loadGeneralConfig(configRoot: URL = defaultRoot) -> GeneralConfig {
+        let configURL = configRoot.appendingPathComponent("config")
+        guard FileManager.default.fileExists(atPath: configURL.path) else {
+            return .builtIn
+        }
+        do {
+            let text = try String(contentsOf: configURL, encoding: .utf8)
+            return GeneralConfigParser.parse(text, fallback: .builtIn)
+        } catch {
+            NSLog("ConfigLoader: could not read \(configURL.path): \(error) — using built-in config")
+            return .builtIn
+        }
     }
 }

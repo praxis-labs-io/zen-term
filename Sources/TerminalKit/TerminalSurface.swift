@@ -8,6 +8,7 @@ public struct TerminalSurfaceConfig {
     public var environment: [String: String]
     public var fontSize: CGFloat?
     public var theme: TerminalTheme?
+    public var behavior: TerminalBehavior?
 
     public init(
         command: String? = nil,
@@ -15,7 +16,8 @@ public struct TerminalSurfaceConfig {
         workingDirectory: URL? = nil,
         environment: [String: String] = [:],
         fontSize: CGFloat? = nil,
-        theme: TerminalTheme? = nil
+        theme: TerminalTheme? = nil,
+        behavior: TerminalBehavior? = nil
     ) {
         self.command = command
         self.args = args
@@ -23,6 +25,7 @@ public struct TerminalSurfaceConfig {
         self.environment = environment
         self.fontSize = fontSize
         self.theme = theme
+        self.behavior = behavior
     }
 }
 
@@ -91,6 +94,14 @@ public protocol TerminalSurface: AnyObject {
 
     func start(_ config: TerminalSurfaceConfig)
     func focus()
+
+    /// Explicitly set whether this surface renders as focused (active/blinking cursor) or
+    /// unfocused (hollow). The chrome drives this from its own single-focus model instead of
+    /// trusting the AppKit responder chain, which doesn't propagate reliably while many pane
+    /// views are reparented in one pass (rapid splits). Distinct from `focus()`, which also
+    /// routes keyboard first-responder to the surface.
+    func setFocused(_ focused: Bool)
+
     func terminate()
 
     func paste(_ text: String)
@@ -99,6 +110,10 @@ public protocol TerminalSurface: AnyObject {
 }
 
 public extension TerminalSurface {
+    /// Default no-op: a backend whose cursor already follows the AppKit first responder
+    /// (SwiftTerm) needs nothing here.
+    func setFocused(_ focused: Bool) {}
+
     /// Backends that can't resolve a cwd get nil for free.
     var currentDirectory: URL? { nil }
 

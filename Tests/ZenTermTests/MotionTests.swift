@@ -48,6 +48,21 @@ final class MotionTests: XCTestCase {
         XCTAssertEqual(layer.opacity, 1)
     }
 
+    // MARK: - Config override (ZEN-71)
+
+    func test_motionConfig_forcesOnAndOff() {
+        MotionConfig.apply(.on)
+        XCTAssertTrue(Motion.isReduceMotionEnabled())
+        MotionConfig.apply(.off)
+        XCTAssertFalse(Motion.isReduceMotionEnabled())
+    }
+
+    func test_motionConfig_systemLeavesClosureUntouched() {
+        Motion.isReduceMotionEnabled = { true }  // stand in for "system says yes"
+        MotionConfig.apply(.system)
+        XCTAssertTrue(Motion.isReduceMotionEnabled(), "`.system` must not override the existing closure")
+    }
+
     // MARK: - Pure geometry
 
     func test_centeredScale_holdsTheCenterFixed() {

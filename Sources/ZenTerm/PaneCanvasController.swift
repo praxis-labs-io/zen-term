@@ -203,8 +203,12 @@ final class PaneCanvasController: NSObject {
 
     private func updateHalo() {
         for (id, host) in hostByLeaf {
-            host.isFocused = panesHoldFocus && (id == tree.focusedLeaf)
+            let focused = panesHoldFocus && (id == tree.focusedLeaf)
+            host.isFocused = focused
             host.isZoomed = (id == zoomedLeaf)
+            // Drive the surface's cursor focus explicitly — the AppKit responder chain alone
+            // leaves stale blinking cursors on background panes after rapid splits.
+            registry.surface(for: id)?.setFocused(focused)
         }
     }
 

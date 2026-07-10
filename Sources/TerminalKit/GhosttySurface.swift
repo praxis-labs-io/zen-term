@@ -68,9 +68,18 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             workingDirectory: config.workingDirectory?.path,
             command: command,
             environment: config.environment
-        ) { ghostty_surface_new(GhosttyApp.shared(theme: config.theme).app, &$0) }
+        ) { ghostty_surface_new(GhosttyApp.shared(theme: config.theme, behavior: config.behavior).app, &$0) }
 
         hostView.surfacePtr = surfacePtr
+        hostView.scrollMultiplier = (config.behavior ?? .default).scrollMultiplier
+
+        // A fresh libghostty surface defaults to focused=true, and only `resignFirstResponder`
+        // ever flips it false — so a surface that never becomes first responder (a pre-warmed
+        // drawer, a background pane) would keep an active/blinking cursor. Sync focus to the
+        // real first-responder state now that the surface exists. This also covers a view that
+        // became first responder before `surfacePtr` was set (the `becomeFirstResponder` true
+        // was skipped under its `if let surfacePtr` guard).
+        ghostty_surface_set_focus(surfacePtr, hostView.window?.firstResponder === hostView)
 
         // libghostty just made hostView layer-hosting (its Metal layer is now
         // hostView.layer). The host window is transparent for the vibrancy backdrop, so
@@ -136,6 +145,10 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     }
 
     public func focus() { hostView.window?.makeFirstResponder(hostView) }
+
+    public func setFocused(_ focused: Bool) {
+        if let surfacePtr { ghostty_surface_set_focus(surfacePtr, focused) }
+    }
 
     public func terminate() {
         guard let surfacePtr else { return }

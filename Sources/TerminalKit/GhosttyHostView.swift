@@ -9,6 +9,10 @@ final class GhosttyHostView: NSView {
     weak var owner: GhosttySurface?
     var surfacePtr: ghostty_surface_t?
 
+    /// Precise-scroll feel multiplier, dialed from `scroll-multiplier` in the user config
+    /// (default 1.5×). Set by `GhosttySurface.start`.
+    var scrollMultiplier: Double = 1.5
+
     private var trackingArea: NSTrackingArea?
 
     // MARK: IME / dead-key composition state
@@ -244,8 +248,8 @@ final class GhosttyHostView: NSView {
         var y = event.scrollingDeltaY
         let precise = event.hasPreciseScrollingDeltas
         if precise {
-            x *= 2  // subjective feel multiplier, matching Ghostty's own app
-            y *= 2
+            x *= scrollMultiplier  // subjective feel multiplier, matching Ghostty's own app
+            y *= scrollMultiplier
         }
         // Packed scroll mods: bit 0 = high-precision. Momentum phases are tracked in ZEN-68.
         let mods: ghostty_input_scroll_mods_t = precise ? 1 : 0

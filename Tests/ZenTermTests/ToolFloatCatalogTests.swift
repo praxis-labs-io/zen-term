@@ -8,15 +8,10 @@ final class ToolFloatCatalogTests: XCTestCase {
         XCTAssertEqual(ids.count, Set(ids).count, "ToolFloat ids must be unique")
     }
 
-    func test_gitdash_isPresentWithExpectedSpec() {
-        let f = ToolFloatCatalog.byID("gitdash")
-        XCTAssertNotNil(f)
-        XCTAssertEqual(f?.command, "gd")
-        XCTAssertEqual(f?.shortcut, "⌘⇧G")
-        XCTAssertEqual(f?.widthFraction, 0.85)
-        XCTAssertEqual(f?.heightFraction, 0.85)
-        XCTAssertEqual(f?.requiresGitRepo, false)  // gh dash works outside a repo
-        XCTAssertNil(f?.emptyGuard)  // a GitHub dashboard isn't diff-state-gated
+    func test_noBuiltInFloats() {
+        // Floats are entirely config-driven; with no config there are none (gitdash was
+        // dropped as a built-in in ZEN-71 — it lives in the user's personal config now).
+        XCTAssertTrue(GeneralConfig.builtIn.floats.isEmpty)
     }
 
     func test_byID_unknown_isNil() {

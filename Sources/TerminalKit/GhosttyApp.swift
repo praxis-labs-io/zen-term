@@ -18,9 +18,9 @@ final class GhosttyApp {
     /// Later calls return the existing instance — libghostty config is app-global, so a
     /// later surface's differing theme would not apply. No live bug today (all panes
     /// share one theme); per-surface theming via ghostty_surface_update_config is ZEN-27.
-    static func shared(theme: TerminalTheme?) -> GhosttyApp {
+    static func shared(theme: TerminalTheme?, behavior: TerminalBehavior?) -> GhosttyApp {
         if let existing = _shared { return existing }
-        let created = GhosttyApp(theme: theme)
+        let created = GhosttyApp(theme: theme, behavior: behavior)
         _shared = created
         return created
     }
@@ -39,7 +39,7 @@ final class GhosttyApp {
     // config passed to ghostty_app_new; freeing it would pull it out from under the app.
     private let config: ghostty_config_t
 
-    private init(theme: TerminalTheme?) {
+    private init(theme: TerminalTheme?, behavior: TerminalBehavior?) {
         // Point the embedded lib at the resources staged from the pinned vendor/ghostty
         // build (shell integration, themes, terminfo) — libghostty resolves none of
         // these itself when embedded. Must be set before ghostty_init.
@@ -55,7 +55,7 @@ final class GhosttyApp {
         // config source — deliberately not ghostty_config_load_default_files, so a
         // user's ~/.config/ghostty can't skew zen-term's appearance or behavior.
         guard let cfg = ghostty_config_new() else { fatalError("ghostty_config_new failed") }
-        if let generated = GhosttyConfigWriter.writeConfig(for: theme) {
+        if let generated = GhosttyConfigWriter.writeConfig(for: theme, behavior: behavior) {
             ghostty_config_load_file(cfg, generated)
         }
         ghostty_config_finalize(cfg)
