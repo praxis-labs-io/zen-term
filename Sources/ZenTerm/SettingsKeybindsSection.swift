@@ -165,6 +165,10 @@ final class SettingsKeybindsSection: SettingsSection {
     private func moveRow(from row: KeybindRow, delta: Int) {
         guard let index = rows.firstIndex(where: { $0 === row }) else { return }
         guard let next = KeyboardFocus.step(from: index, delta: delta, count: rows.count) else { return }
-        rows[next].window?.makeFirstResponder(rows[next].recordButton)
+        let target = rows[next]
+        target.window?.makeFirstResponder(target.recordButton)
+        // AppKit doesn't scroll to a newly-focused responder — keep the focused row in view (with a
+        // little padding so it isn't flush against the clip edge) as keyboard focus walks the list.
+        target.scrollToVisible(target.bounds.insetBy(dx: 0, dy: -12))
     }
 }
