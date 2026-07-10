@@ -207,7 +207,10 @@ final class TabController: NSObject {
     }
 
     func start() { paneCanvas.start() }
-    func split(_ axis: SplitAxis) { exitZoomIfNeeded(); paneCanvas.split(axis) }
+    func split(_ axis: SplitAxis) {
+        if isZoomed { toastZoomBlocked("split"); return }
+        paneCanvas.split(axis)
+    }
     @discardableResult func closeFocused() -> Bool {
         exitZoomIfNeeded()  // exit zoom before closing so zoom state can't desync
         return paneCanvas.closeFocused()
@@ -309,7 +312,16 @@ final class TabController: NSObject {
     /// Toggle the bottom drawer. First open creates a persistent login-shell surface
     /// in the tab's cwd; toggling hidden keeps it running; it dies only in `shutdown()`.
     func toggleBottomDrawer() {
-        exitZoomIfNeeded()  // any layout change exits zoom first (keeps state in sync)
+        switch zoomedPanel {
+        case .pane, .bottomDrawer:
+            toastZoomBlocked("toggle a drawer")  // zoom is strict — only ⌘F exits
+            return
+        case .rightDrawer:
+            switchZoomedDrawer(to: .bottom)  // jump the zoom to the other drawer
+            return
+        case nil:
+            break  // not zoomed — fall through to the normal toggle
+        }
         isBottomOpen.toggle()
         if isBottomOpen {
             _ = ensureBottomDrawerPanel()
@@ -339,7 +351,16 @@ final class TabController: NSObject {
     /// Toggle the right drawer. First open creates a persistent login-shell surface
     /// in the tab's cwd; toggling hidden keeps it running; it dies only in `shutdown()`.
     func toggleRightDrawer() {
-        exitZoomIfNeeded()
+        switch zoomedPanel {
+        case .pane, .rightDrawer:
+            toastZoomBlocked("toggle a drawer")  // zoom is strict — only ⌘F exits
+            return
+        case .bottomDrawer:
+            switchZoomedDrawer(to: .right)  // jump the zoom to the other drawer
+            return
+        case nil:
+            break  // not zoomed — fall through to the normal toggle
+        }
         isRightOpen.toggle()
         if isRightOpen {
             _ = ensureRightDrawerPanel()
@@ -373,7 +394,8 @@ final class TabController: NSObject {
     /// hide it — the surface stays alive, so reopening is instant and preserves
     /// lazygit's view-state. When closed, it reveals the surface, first reloading it
     /// if the focused pane has moved to a different repo/dir since it was launched (so
-    /// lazygit tracks the pane, never a stale directory). Mutually exclusive with zoom.
+    /// lazygit tracks the pane, never a stale directory). Overlays zoom without exiting
+    /// it — closing the float leaves the panel underneath still zoomed.
     func toggleLazygit() {
         if isLazygitOpen { hideLazygit(); return }
         guard gitRepoRoot(for: focusedCWD) != nil else {
@@ -387,7 +409,6 @@ final class TabController: NSObject {
                         + "or open a folder that has one."))
             return
         }
-        exitZoomIfNeeded()  // zoom and the float are mutually exclusive
         if lazygitSurface != nil, lazygitAnchor(for: focusedCWD)?.path != lazygitLaunchAnchor?.path {
             discardLazygitSurface()  // focused pane moved repos → respawn at the current cwd
         }
@@ -528,7 +549,6 @@ final class TabController: NSObject {
             onRequestToast?(guardSpec.toast)
             return
         }
-        exitZoomIfNeeded()  // zoom and the float are mutually exclusive
         showToolFloat(spec)
     }
 
@@ -708,10 +728,55 @@ final class TabController: NSObject {
         relayoutPanels()
     }
 
+    /// Jump a drawer zoom from one edge to the other (⌘B/⌘\ while the *other* drawer is
+    /// zoomed) — full-screen the target instead of exiting zoom. Opens the target if it
+    /// wasn't already; the drawer we jump from stays open (just hidden under the new zoom),
+    /// so exiting zoom later tiles both.
+    private func switchZoomedDrawer(to edge: DrawerEdge) {
+        switch edge {
+        case .bottom:
+            isBottomOpen = true
+            _ = ensureBottomDrawerPanel()
+            rightDrawerPanel?.isZoomed = false
+            bottomDrawerPanel?.isZoomed = true
+            zoomedPanel = .bottomDrawer
+        case .right:
+            isRightOpen = true
+            _ = ensureRightDrawerPanel()
+            bottomDrawerPanel?.isZoomed = false
+            rightDrawerPanel?.isZoomed = true
+            zoomedPanel = .rightDrawer
+        }
+        relayoutPanels()
+        focusDrawer(edge)
+    }
+
     /// Unzoom if zoomed; returns true if it did. (Shared with PR3's Escape handling.)
     @discardableResult func exitZoomIfNeeded() -> Bool {
         if isZoomed { exitZoom(); return true }
         return false
+    }
+
+    /// The last "disabled while zoomed" toast (verb + when) — held ⌘-chords auto-repeat, so
+    /// coalesce repeats of the SAME verb into one card; a distinct blocked command always
+    /// speaks, so nothing is ever a silent no-op.
+    private var lastZoomBlockToast: (verb: String, at: Date)?
+    private static let zoomBlockToastThrottle: TimeInterval = 3
+
+    /// A grid command (split / navigate / resize / drawers) was invoked while zoomed. Zoom is
+    /// a strict focus mode, so instead of silently doing nothing, point the user at ⌘F.
+    private func toastZoomBlocked(_ verb: String) {
+        let now = Date()
+        if let last = lastZoomBlockToast, last.verb == verb,
+            now.timeIntervalSince(last.at) < Self.zoomBlockToastThrottle
+        {
+            return
+        }
+        lastZoomBlockToast = (verb, now)
+        onRequestToast?(
+            ToastContent(
+                variant: .info, title: "Zoom mode",
+                message: "Exit zoom (⌘F) to \(verb)."))
     }
 
     // MARK: cross-panel spatial nav (⌘hjkl)
@@ -734,7 +799,7 @@ final class TabController: NSObject {
     /// by PaneKit's `nearestLeaf`, the same geometric scorer pane-to-pane nav already
     /// uses, so a drawer is just another panel in the graph.
     func navigate(_ direction: Direction) {
-        if exitZoomIfNeeded() { return }  // ⌘hjkl while zoomed just unzooms
+        if isZoomed { toastZoomBlocked("navigate"); return }
         var frames = paneCanvas.leafFrames(in: content)
         if isBottomOpen, let panel = bottomDrawerPanel {
             frames[Self.bottomDrawerID] = flippedFrame(of: panel)
@@ -806,7 +871,7 @@ final class TabController: NSObject {
     /// right (⌘⇧L) — the same feel as an edge pane on that side. The cross axis beeps. A
     /// resize chord while zoomed just unzooms, matching `navigate`.
     func resize(_ direction: Direction) {
-        if exitZoomIfNeeded() { return }
+        if isZoomed { toastZoomBlocked("resize"); return }
         switch focusedPanel {
         case .pane:
             paneCanvas.resize(direction)
