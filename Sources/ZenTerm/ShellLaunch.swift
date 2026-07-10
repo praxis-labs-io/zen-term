@@ -19,27 +19,30 @@ enum ShellLaunch {
     /// login+interactive shell (`command: nil` → the backend rewrites argv[0] to a login
     /// shell). A configured `shell` is launched explicitly, login+interactive by default
     /// (or with the user's `shell-args`), preserving login semantics on both backends.
-    static func shell(cwd: URL?) -> TerminalSurfaceConfig {
+    static func shell(cwd: URL?, env: [String: String] = [:]) -> TerminalSurfaceConfig {
         let behavior = GeneralConfig.current.terminalBehavior
         if let custom = GeneralConfig.current.shell {
             let args = GeneralConfig.current.shellArgs.isEmpty ? ["-l", "-i"] : GeneralConfig.current.shellArgs
             return TerminalSurfaceConfig(
                 command: custom, args: args, workingDirectory: cwd ?? defaultCWD,
-                theme: Theme.current.terminal, behavior: behavior)
+                environment: env, theme: Theme.current.terminal, behavior: behavior)
         }
         return TerminalSurfaceConfig(
-            workingDirectory: cwd ?? defaultCWD, theme: Theme.current.terminal, behavior: behavior)
+            workingDirectory: cwd ?? defaultCWD, environment: env,
+            theme: Theme.current.terminal, behavior: behavior)
     }
 
     /// Run `command` in a login+interactive shell, then `exec` a fresh one so the session
     /// survives the program exiting. `-l -i` matches how a program run from a pane sees
-    /// the environment (sources profile files and `.zshrc`).
-    static func program(_ command: String, cwd: URL?) -> TerminalSurfaceConfig {
+    /// the environment (sources profile files and `.zshrc`). A workspace recipe's `env`
+    /// is injected on top, so it's visible to the launched program and the shell it leaves.
+    static func program(_ command: String, cwd: URL?, env: [String: String] = [:]) -> TerminalSurfaceConfig {
         let sh = userShell
         return TerminalSurfaceConfig(
             command: sh,
             args: ["-l", "-i", "-c", "\(command); exec \(sh) -l -i"],
             workingDirectory: cwd ?? defaultCWD,
+            environment: env,
             theme: Theme.current.terminal,
             behavior: GeneralConfig.current.terminalBehavior
         )

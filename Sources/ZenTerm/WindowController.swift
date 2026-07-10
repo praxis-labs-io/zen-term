@@ -120,7 +120,7 @@ final class WindowController: NSObject {
         onLazygit = { [weak self] in self?.handle(.toggleLazygit) }
         onToolFloat = { [weak self] spec in self?.handle(.toggleToolFloat(spec.id)) }
 
-        let first = makeController(initialCWD: initialCWD)
+        let first = makeController(cwd: initialCWD)
         controllers[firstID] = first
         titles[firstID] = first.title
 
@@ -199,15 +199,15 @@ final class WindowController: NSObject {
 
     // MARK: controller factory
 
-    private func makeController(initialCWD: URL?, workspace: Bool = false) -> TabController {
-        // The ⌘⇧P workspace preset seeds the primary pane with nvim and the right drawer
-        // with claude; the caller calls `openWorkspaceLayout()` after `start()` to reveal
-        // the drawers. A plain tab (⌘t / first tab) gets neither.
-        // `nvim` (no path arg): opens the normal dashboard in the repo cwd, exactly like
-        // typing `nvim` at a prompt. `nvim .` would open the directory and expand the file
-        // explorer, which isn't what a bare launch does.
-        let c = TabController(initialCWD: initialCWD, initialCommand: workspace ? "nvim" : nil)
-        if workspace { c.rightDrawerCommand = "claude" }
+    private func makeController(cwd: URL?, workspace ws: Workspace? = nil) -> TabController {
+        // A workspace recipe drives the layout: `main` seeds the primary pane (the sentinel
+        // `shell`, like an absent value, means a plain shell), `right`/`bottom` become the
+        // drawer commands `applyRecipe` reveals after `start()`, and `env` is injected into
+        // every surface. A plain tab (⌘t / first tab) passes no workspace → a bare shell.
+        let mainCommand = ws?.main.flatMap { $0 == "shell" ? nil : $0 }
+        let c = TabController(initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:])
+        c.rightDrawerCommand = ws?.right
+        c.bottomDrawerCommand = ws?.bottom
         // Bind title + last-pane-exit to this controller's id at call sites that
         // know the id (newTab / init assign into the dict first, then wire).
         return c
@@ -295,19 +295,19 @@ final class WindowController: NSObject {
         addTab(cwd: activeController?.focusedCWD, pinnedTitle: nil)
     }
 
-    /// Append a new tab with an explicit cwd and optional pinned title (the `⌘⇧P` repo
-    /// picker passes the repo dir + its basename; plain `⌘t` passes the inherited cwd
-    /// and no pin).
-    private func addTab(cwd: URL?, pinnedTitle: String?, workspace: Bool = false) {
+    /// Append a new tab with an explicit cwd and optional pinned title. The `⌘⇧P` picker
+    /// passes a `Workspace` (its path + title + open recipe); plain `⌘t` passes the inherited
+    /// cwd, no pin, and no workspace (a bare shell).
+    private func addTab(cwd: URL?, pinnedTitle: String?, workspace: Workspace? = nil) {
         dismissOpenPalettes()  // the "+" button is reachable while a palette is up
         let id = mintTabID()
         tabs.add(id)
         installController(id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace)
     }
 
-    /// Replace the active tab's controller in place (same tab id/slot) with a fresh
-    /// workspace session in `cwd`, pinned to `pinnedTitle`. Used by `⌘⇧P` + Shift+Enter.
-    private func replaceActiveTab(cwd: URL, pinnedTitle: String?) {
+    /// Replace the active tab's controller in place (same tab id/slot) with a fresh session in
+    /// `cwd`, pinned to `pinnedTitle` and running `workspace`'s recipe. Used by `⌘⇧P` + Shift+Enter.
+    private func replaceActiveTab(cwd: URL, pinnedTitle: String?, workspace: Workspace?) {
         let id = tabs.activeID
         let old = controllers[id]
         if mountedCanvas === old?.view {
@@ -315,20 +315,20 @@ final class WindowController: NSObject {
             mountedCanvas = nil
         }
         old?.shutdown()  // terminate the replaced tab's shells — never leak them
-        installController(id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: true)
+        installController(id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace)
     }
 
-    /// Build, wire, mount, and start a controller for `id` (already in `tabs`), applying
-    /// the workspace preset when requested. Shared by new-tab and replace-tab.
-    private func installController(id: TabID, cwd: URL?, pinnedTitle: String?, workspace: Bool) {
-        let c = makeController(initialCWD: cwd, workspace: workspace)
+    /// Build, wire, mount, and start a controller for `id` (already in `tabs`), applying the
+    /// workspace's open recipe when one is given. Shared by new-tab and replace-tab.
+    private func installController(id: TabID, cwd: URL?, pinnedTitle: String?, workspace: Workspace?) {
+        let c = makeController(cwd: cwd, workspace: workspace)
         c.pinnedTitle = pinnedTitle
         controllers[id] = c
         titles[id] = c.title
         wire(c, id: id)
         mount(.fade)
         c.start()
-        if workspace { c.openWorkspaceLayout() }
+        if let workspace { c.applyRecipe(workspace) }
         renderTabBar()
     }
 
@@ -386,9 +386,9 @@ final class WindowController: NSObject {
         if isRepoPickerOpen { closeRepoPicker(); return }
         guard let active = activeController else { return }
         let picker = RepoPickerOverlay(
-            entries: RepoScanner.scan(root: RepoScanner.defaultRoot),
+            entries: WorkspaceStore.all,
             background: Theme.current.chrome.background.nsColor,
-            onChoose: { [weak self] dir, replace in self?.openRepo(dir, replaceCurrentTab: replace) },
+            onChoose: { [weak self] ws, replace in self?.openWorkspace(ws, replaceCurrentTab: replace) },
             onDismiss: { [weak self] in self?.closeRepoPicker() }
         )
         active.presentTileOverlay(picker)
@@ -506,18 +506,17 @@ final class WindowController: NSObject {
         renderDock()
     }
 
-    /// Open a picked directory as a shell session: a new tab (Enter) or by replacing
-    /// the current tab (Shift+Enter). Either way the tab name is pinned to the dir
-    /// basename so it survives the focused pane's cwd changes.
-    private func openRepo(_ dir: URL, replaceCurrentTab: Bool) {
+    /// Open a workspace: a new tab (Enter) or by replacing the current tab (Shift+Enter). The
+    /// tab is pinned to the workspace title so it survives the focused pane's cwd changes, and
+    /// its open recipe (drawers + focus + env) is applied by `installController`. Takes a
+    /// `Workspace` value, not a store lookup — so a freshly-built one (a future in-app "Add
+    /// Project" form) can open immediately without a relaunch.
+    func openWorkspace(_ ws: Workspace, replaceCurrentTab: Bool) {
         closeRepoPicker()
-        let name = dir.lastPathComponent
-        // A repo open builds the workspace layout: nvim in the primary pane, claude in
-        // the right drawer, a shell in the bottom drawer.
         if replaceCurrentTab {
-            replaceActiveTab(cwd: dir, pinnedTitle: name)
+            replaceActiveTab(cwd: ws.path, pinnedTitle: ws.title, workspace: ws)
         } else {
-            addTab(cwd: dir, pinnedTitle: name, workspace: true)
+            addTab(cwd: ws.path, pinnedTitle: ws.title, workspace: ws)
         }
     }
 

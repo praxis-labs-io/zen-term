@@ -164,13 +164,21 @@ final class TabController: NSObject {
     /// message-bearing "needs attention" signal the `WindowController` latches onto the tab.
     var onNotification: ((TerminalNotification) -> Void)?
 
-    /// A startup command for the right drawer (the `⌘P` workspace preset sets `claude`).
-    /// When set, opening the right drawer launches the program-then-shell recipe instead
-    /// of a plain shell. Nil → plain shell.
+    /// A startup command for the right drawer (a workspace recipe's `right`, e.g. `claude`).
+    /// When set, opening the right drawer launches the program-then-shell recipe instead of a
+    /// plain shell. Nil → plain shell. The sentinel `"shell"` also means a plain shell.
     var rightDrawerCommand: String?
 
-    init(initialCWD: URL?, initialCommand: String? = nil) {
-        paneCanvas = PaneCanvasController(initialCWD: initialCWD, initialCommand: initialCommand)
+    /// A startup command for the bottom drawer (a workspace recipe's `bottom`). Same semantics
+    /// as `rightDrawerCommand`: a command runs program-then-shell; nil or `"shell"` → plain shell.
+    var bottomDrawerCommand: String?
+
+    /// A workspace recipe's environment, injected into every pane and drawer of this tab.
+    private let workspaceEnv: [String: String]
+
+    init(initialCWD: URL?, initialCommand: String? = nil, env: [String: String] = [:]) {
+        workspaceEnv = env
+        paneCanvas = PaneCanvasController(initialCWD: initialCWD, initialCommand: initialCommand, env: env)
         canvas = paneCanvas.canvasView
         canvas.translatesAutoresizingMaskIntoConstraints = false
         super.init()
@@ -218,14 +226,20 @@ final class TabController: NSObject {
     }
     func focusActivePane() { paneCanvas.focusActivePane() }
 
-    /// The `⌘P` workspace layout: reveal the bottom drawer (a plain shell) and the right
-    /// drawer (running `rightDrawerCommand`, i.e. claude), then land focus on the primary
-    /// pane (nvim). Called once right after `start()` for a repo-opened tab.
-    func openWorkspaceLayout() {
-        if !isBottomOpen { toggleBottomDrawer() }
-        if !isRightOpen { toggleRightDrawer() }
-        focusActivePane()
-        prewarmLazygit()  // repo tab has a stable cwd → pre-warm so the first ⌘G is instant
+    /// Apply a workspace's open recipe: reveal only the drawers the recipe names (each running
+    /// its configured command, via `rightDrawerCommand`/`bottomDrawerCommand` set before this),
+    /// land focus on the requested region, and pre-warm lazygit for the stable cwd. Called once
+    /// right after `start()` for a workspace-opened tab. A recipe naming no drawers leaves a
+    /// single pane with both drawers collapsed — the minimal default.
+    func applyRecipe(_ ws: Workspace) {
+        if ws.right != nil, !isRightOpen { toggleRightDrawer() }
+        if ws.bottom != nil, !isBottomOpen { toggleBottomDrawer() }
+        switch ws.focus {
+        case .right where isRightOpen: focusDrawer(.right)
+        case .bottom where isBottomOpen: focusDrawer(.bottom)
+        default: focusActivePane()  // main, or a named drawer the recipe didn't open
+        }
+        prewarmLazygit()  // workspace tab has a stable cwd → pre-warm so the first ⌘G is instant
     }
 
     /// Present a modal overlay filling the tab's tile region — same scoping as the
@@ -340,11 +354,20 @@ final class TabController: NSObject {
         if let existing = bottomDrawerPanel { return existing }
         let surface = TerminalSurfaceFactory.make()
         surface.delegate = self
-        surface.start(ShellLaunch.shell(cwd: focusedCWD))
+        surface.start(drawerConfig(command: bottomDrawerCommand))
         bottomDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .bottom, surface: surface)
         bottomDrawerPanel = panel  // relayoutPanels() attaches it to `content`
         return panel
+    }
+
+    /// A drawer's launch config: a workspace recipe command runs program-then-shell; nil or the
+    /// sentinel `"shell"` opens a plain shell. The workspace env is injected either way.
+    private func drawerConfig(command: String?) -> TerminalSurfaceConfig {
+        if let command, command != "shell" {
+            return ShellLaunch.program(command, cwd: focusedCWD, env: workspaceEnv)
+        }
+        return ShellLaunch.shell(cwd: focusedCWD, env: workspaceEnv)
     }
 
     // MARK: right drawer (⌘|)
@@ -378,11 +401,9 @@ final class TabController: NSObject {
         if let existing = rightDrawerPanel { return existing }
         let surface = TerminalSurfaceFactory.make()
         surface.delegate = self
-        // The workspace preset runs a program here (claude) that drops back to a shell;
+        // A workspace recipe runs a program here (e.g. claude) that drops back to a shell;
         // a plain toggle-open right drawer is just a shell.
-        surface.start(
-            rightDrawerCommand.map { ShellLaunch.program($0, cwd: focusedCWD) }
-                ?? ShellLaunch.shell(cwd: focusedCWD))
+        surface.start(drawerConfig(command: rightDrawerCommand))
         rightDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .right, surface: surface)
         rightDrawerPanel = panel  // relayoutPanels() attaches it to `content`
@@ -428,12 +449,12 @@ final class TabController: NSObject {
     /// repo path worth keeping lazygit warm for. A plain `⌘t` tab does not.
     private var hasStablePath: Bool { pinnedTitle != nil }
 
-    /// The enclosing git repo root for `cwd` — walks up looking for `RepoScanner.isGitRepo`
-    /// — or nil when `cwd` isn't inside a repo.
+    /// The enclosing git repo root for `cwd` — walks up looking for `GitRepo.isGitRepo` — or
+    /// nil when `cwd` isn't inside a repo.
     private func gitRepoRoot(for cwd: URL?) -> URL? {
         guard var dir = cwd?.standardizedFileURL else { return nil }
         while true {
-            if RepoScanner.isGitRepo(dir) { return dir }
+            if GitRepo.isGitRepo(dir) { return dir }
             let parent = dir.deletingLastPathComponent()
             if parent.path == dir.path { return nil }  // reached the filesystem root
             dir = parent

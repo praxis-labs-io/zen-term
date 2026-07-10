@@ -16,6 +16,9 @@ final class PaneCanvasController: NSObject {
     /// leaf with `nvim`). Consumed when the leaf's surface is first started; splits
     /// never inherit it, so a split of an nvim pane is a plain shell.
     private var startupCommandByLeaf: [PaneID: String] = [:]
+    /// A workspace recipe's environment, injected into every pane of this tab (the first pane
+    /// and its splits). Empty for a plain `⌘t` tab.
+    private let workspaceEnv: [String: String]
     private var nextID = 1
 
     /// The single leaf rendered full-canvas when zoomed, or nil when the whole tree
@@ -111,10 +114,11 @@ final class PaneCanvasController: NSObject {
 
     private static let homePath = FileManager.default.homeDirectoryForCurrentUser.path
 
-    init(initialCWD: URL? = nil, initialCommand: String? = nil) {
+    init(initialCWD: URL? = nil, initialCommand: String? = nil, env: [String: String] = [:]) {
         let firstLeaf = PaneID(1)
         self.tree = PaneTree(singleLeaf: firstLeaf)
         self.registry = PaneSurfaceRegistry(makeSurface: TerminalSurfaceFactory.make)
+        self.workspaceEnv = env
         super.init()
         nextID = 2
         if let initialCWD { cwdByLeaf[firstLeaf] = initialCWD }
@@ -146,9 +150,9 @@ final class PaneCanvasController: NSObject {
             // seeded startup command (workspace preset) runs a program that drops back to
             // a shell; consume it so it never re-runs.
             if let cmd = startupCommandByLeaf.removeValue(forKey: id) {
-                surface.start(ShellLaunch.program(cmd, cwd: cwdByLeaf[id]))
+                surface.start(ShellLaunch.program(cmd, cwd: cwdByLeaf[id], env: workspaceEnv))
             } else {
-                surface.start(ShellLaunch.shell(cwd: cwdByLeaf[id]))
+                surface.start(ShellLaunch.shell(cwd: cwdByLeaf[id], env: workspaceEnv))
             }
         }
         for id in diff.removed { cwdByLeaf[id] = nil; hostByLeaf[id] = nil }

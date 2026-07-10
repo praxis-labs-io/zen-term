@@ -73,4 +73,18 @@ enum ConfigLoader {
             return .builtIn
         }
     }
+
+    /// Load the hand-curated `~/.config/zen-term/workspaces` list (the `⌘⇧P` picker). Absent
+    /// or unreadable → an empty list; the parser drops any malformed section rather than throw.
+    static func loadWorkspaces(configRoot: URL = defaultRoot) -> [Workspace] {
+        let url = configRoot.appendingPathComponent("workspaces")
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+        do {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            return WorkspacesParser.parse(text)
+        } catch {
+            NSLog("ConfigLoader: could not read \(url.path): \(error) — no workspaces loaded")
+            return []
+        }
+    }
 }

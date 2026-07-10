@@ -1,0 +1,41 @@
+# zen-term — workspaces reference
+#
+# Copy to ~/.config/zen-term/workspaces (or $XDG_CONFIG_HOME/zen-term/workspaces) and
+# add a section per project. This list is deliberate and hand-curated — zen-term does
+# NOT scan any directory. Each section becomes an entry in the ⌘⇧P picker.
+#
+# Format: INI-style. A `[Title]` line opens a section; `key = value` lines below it
+# configure that workspace until the next header. Lines starting with `#` and blank
+# lines are ignored; unknown keys are ignored. A section with no `path` is skipped, a
+# malformed `env` line is dropped, and nothing here can crash the app (bad lines are
+# logged and skipped). The file is read once at launch — restart to apply changes.
+#
+# The section header is the title: it's shown in the picker and pinned as the tab name,
+# so it's independent of the folder name (`[ZenTerm]` can point at ~/Dev/zen-term).
+#
+# Opening a workspace applies its "recipe": the first pane runs `main`, the drawers named
+# by `right`/`bottom` open running their commands, focus lands on `focus`, and `env` is
+# injected into every pane and drawer. A section with only a `path` is the minimal
+# default: one shell pane, both drawers collapsed, cwd = the project dir.
+#
+# Fields:
+#   [Title]  (required)  section header → picker label + pinned tab name
+#   path     (required)  working directory (`~` is expanded)
+#   main     (optional)  first-pane program; absent or `shell` → a plain shell
+#   right    (optional)  right-drawer command; absent → closed; `shell` → a plain shell
+#   bottom   (optional)  bottom-drawer command; absent → closed; `shell` → a plain shell
+#   focus    (optional)  main | right | bottom                       (default main)
+#   env      (optional)  KEY=VALUE, repeatable; injected into every surface
+#
+# A value with spaces may be quoted: bottom = "npm run dev".
+#
+# Example — an editor + AI + dev-server workspace (uncomment and edit, or write your own):
+#
+# [ZenTerm]
+# path   = ~/Dev/zen-term
+# main   = nvim
+# right  = claude
+# bottom = shell
+# focus  = main
+# env    = NODE_ENV=development
+# env    = PORT=3000
