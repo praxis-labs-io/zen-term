@@ -348,21 +348,6 @@ class PaletteOverlay: NSView, ModalOverlay {
         return stack
     }
 
-    // MARK: subviews
-
-    /// A flipped document view so scroll offsets and `scrollToVisible` are top-down.
-    private final class FlippedView: NSView { override var isFlipped: Bool { true } }
-
-    /// A scroller pinned to the slim overlay style. Overriding the getter keeps it slim
-    /// even when the system "Show scroll bars: Always" setting would force the wide legacy
-    /// track once the list overflows.
-    private final class SlimScroller: NSScroller {
-        override class var isCompatibleWithOverlayScrollers: Bool { true }
-        override var scrollerStyle: NSScroller.Style {
-            get { .overlay }
-            set {}
-        }
-    }
 }
 
 extension PaletteOverlay: NSTextFieldDelegate {

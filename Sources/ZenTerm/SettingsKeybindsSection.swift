@@ -29,22 +29,22 @@ final class SettingsKeybindsSection: SettingsSection {
         desired = reservedEntries(of: GeneralConfig.current.keymap)
         rows = []
 
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 4
-        stack.translatesAutoresizingMaskIntoConstraints = false
+        // The rows list, built like the command palette: a flipped document view (top-down scroll
+        // coords, so it opens at the top — not mid-scroll) holding a vertical stack, in a slim-overlay
+        // scroll view. No redundant title here; the left nav already names the section.
+        let rowsStack = NSStackView()
+        rowsStack.orientation = .vertical
+        rowsStack.alignment = .leading
+        rowsStack.spacing = 3
+        rowsStack.translatesAutoresizingMaskIntoConstraints = false
 
-        let header = NSTextField(labelWithString: "Keybinds")
-        header.font = .systemFont(ofSize: 15, weight: .semibold)
-        header.textColor = Theme.current.chrome.foreground.nsColor
-        stack.addArrangedSubview(header)
-
+        var previous: NSView?
         for (category, actions) in Self.groups {
             let caption = NSTextField(labelWithString: category.uppercased())
             caption.font = .systemFont(ofSize: 10, weight: .semibold)
             caption.textColor = Theme.current.chrome.ink(alpha: 0.4)
-            stack.addArrangedSubview(caption)
+            rowsStack.addArrangedSubview(caption)
+            if let previous { rowsStack.setCustomSpacing(18, after: previous) }  // gap between groups
             for action in actions {
                 let row = KeybindRow(action: action, title: CommandCatalog.spec(for: action).title)
                 row.onArrowUp = { [weak self] in self?.moveFocus(from: row.recordButton, delta: -1) }
@@ -53,8 +53,9 @@ final class SettingsKeybindsSection: SettingsSection {
                 row.onRecordTapped = { [weak self] in self?.beginCapture(for: row) }
                 row.onReset = { [weak self] in self?.reset(row) }
                 rows.append(row)
-                stack.addArrangedSubview(row)
-                row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+                rowsStack.addArrangedSubview(row)
+                row.widthAnchor.constraint(equalTo: rowsStack.widthAnchor).isActive = true
+                previous = row
             }
         }
 
@@ -66,24 +67,31 @@ final class SettingsKeybindsSection: SettingsSection {
         }
         resetAllButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
         resetAllButton.onTap = { [weak self] in self?.resetAll() }
-        stack.addArrangedSubview(resetAllButton)
+        rowsStack.addArrangedSubview(resetAllButton)
+        if let previous { rowsStack.setCustomSpacing(18, after: previous) }  // gap before Reset all
 
-        // The scroll view fills the detail area edge-to-edge (no outer gap). Vertical padding is a
-        // content inset (top/bottom breathing room that scrolls with the extremes); horizontal
-        // padding is baked into the document's leading/trailing so the rows inset without breaking
-        // the clip view — horizontal `contentInsets` corrupt NSScrollView clipping, so avoid them.
+        let doc = FlippedView()
+        doc.translatesAutoresizingMaskIntoConstraints = false
+        doc.addSubview(rowsStack)
+
         let scroll = NSScrollView()
-        scroll.hasVerticalScroller = true
-        scroll.scrollerStyle = .overlay  // thin, auto-hiding — not the wide legacy scroller
         scroll.drawsBackground = false
-        scroll.automaticallyAdjustsContentInsets = false
-        scroll.contentInsets = NSEdgeInsets(top: 16, left: 0, bottom: 16, right: 0)
+        scroll.hasVerticalScroller = true
+        scroll.verticalScroller = SlimScroller()
+        scroll.scrollerStyle = .overlay
+        scroll.autohidesScrollers = true
+        scroll.documentView = doc
         scroll.translatesAutoresizingMaskIntoConstraints = false
-        scroll.documentView = stack
+
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor, constant: -20),
-            stack.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
+            doc.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
+            doc.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
+            doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
+            // Inset the rows within the flipped document — padding on all four sides.
+            rowsStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: 18),
+            rowsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 20),
+            rowsStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -20),
+            rowsStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -18),
         ])
         refreshRows()
         return scroll
