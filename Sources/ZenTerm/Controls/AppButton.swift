@@ -30,7 +30,7 @@ final class AppButton: NSButton {
     var showsFocusOutline = false { didSet { restyle() } }
 
     private let variant: Variant
-    private let labelText: String
+    private var labelText: String
     private var isHovered = false { didSet { restyle() } }
     private var isFocusedStop = false { didSet { restyle() } }
     private var trackingAreaRef: NSTrackingArea?
@@ -70,6 +70,13 @@ final class AppButton: NSButton {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Change the button's label after init (e.g. "Set" → "Change" as a keybind row's recorded
+    /// state changes) and restyle so the new title picks up the current variant/state colors.
+    func setTitle(_ title: String) {
+        labelText = title
+        restyle()
+    }
 
     // MARK: keyboard focus (form flow)
 
