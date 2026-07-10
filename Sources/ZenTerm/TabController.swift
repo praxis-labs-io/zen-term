@@ -207,7 +207,10 @@ final class TabController: NSObject {
     }
 
     func start() { paneCanvas.start() }
-    func split(_ axis: SplitAxis) { exitZoomIfNeeded(); paneCanvas.split(axis) }
+    func split(_ axis: SplitAxis) {
+        if isZoomed { return }  // zoom is a strict focus mode — no splitting until you exit
+        paneCanvas.split(axis)
+    }
     @discardableResult func closeFocused() -> Bool {
         exitZoomIfNeeded()  // exit zoom before closing so zoom state can't desync
         return paneCanvas.closeFocused()
