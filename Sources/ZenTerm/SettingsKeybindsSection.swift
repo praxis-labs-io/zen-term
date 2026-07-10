@@ -21,6 +21,7 @@ final class SettingsKeybindsSection: SettingsSection {
     private let capturer: KeybindCapturing?
     private var desired: [Chord: KeyInterceptor.ReservedChord] = [:]
     private var rows: [KeybindRow] = []
+    private let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
 
     init(capturer: KeybindCapturing?) { self.capturer = capturer }
 
@@ -46,8 +47,8 @@ final class SettingsKeybindsSection: SettingsSection {
             stack.addArrangedSubview(caption)
             for action in actions {
                 let row = KeybindRow(action: action, title: CommandCatalog.spec(for: action).title)
-                row.onArrowUp = { [weak self] in self?.moveRow(from: row, delta: -1) }
-                row.onArrowDown = { [weak self] in self?.moveRow(from: row, delta: 1) }
+                row.onArrowUp = { [weak self] in self?.moveFocus(from: row.recordButton, delta: -1) }
+                row.onArrowDown = { [weak self] in self?.moveFocus(from: row.recordButton, delta: 1) }
                 row.onArrowLeft = { [weak self] in self?.onExitToNav?() }
                 row.onRecordTapped = { [weak self] in self?.beginCapture(for: row) }
                 row.onReset = { [weak self] in self?.reset(row) }
@@ -57,14 +58,24 @@ final class SettingsKeybindsSection: SettingsSection {
             }
         }
 
-        let resetAll = AppButton(title: "Reset all to defaults", variant: .muted)
-        resetAll.onTap = { [weak self] in self?.resetAll() }
-        stack.addArrangedSubview(resetAll)
+        // "Reset all" is the final vertical focus stop after the rows (reachable by arrowing down).
+        resetAllButton.isKeyboardFocusable = true
+        resetAllButton.onArrowUp = { [weak self] in
+            guard let self else { return }
+            self.moveFocus(from: self.resetAllButton, delta: -1)
+        }
+        resetAllButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+        resetAllButton.onTap = { [weak self] in self?.resetAll() }
+        stack.addArrangedSubview(resetAllButton)
 
-        // A scroll view keeps the long list inside the fixed card.
+        // A scroll view keeps the long list inside the fixed card, with top/bottom breathing room so
+        // the first and last stops never sit flush against the card edges.
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
+        scroll.scrollerStyle = .overlay  // thin, auto-hiding — not the wide legacy scroller
         scroll.drawsBackground = false
+        scroll.automaticallyAdjustsContentInsets = false
+        scroll.contentInsets = NSEdgeInsets(top: 12, left: 0, bottom: 12, right: 0)
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.documentView = stack
         NSLayoutConstraint.activate([
@@ -76,7 +87,7 @@ final class SettingsKeybindsSection: SettingsSection {
         return scroll
     }
 
-    func detailStops() -> [NSView] { rows.map(\.recordButton) }
+    func detailStops() -> [NSView] { rows.map(\.recordButton) + [resetAllButton] }
 
     // MARK: edits
 
@@ -162,13 +173,17 @@ final class SettingsKeybindsSection: SettingsSection {
         return current != defaults
     }
 
-    private func moveRow(from row: KeybindRow, delta: Int) {
-        guard let index = rows.firstIndex(where: { $0 === row }) else { return }
-        guard let next = KeyboardFocus.step(from: index, delta: delta, count: rows.count) else { return }
-        let target = rows[next]
-        target.window?.makeFirstResponder(target.recordButton)
-        // AppKit doesn't scroll to a newly-focused responder — keep the focused row in view (with a
-        // little padding so it isn't flush against the clip edge) as keyboard focus walks the list.
-        target.scrollToVisible(target.bounds.insetBy(dx: 0, dy: -12))
+    /// Move keyboard focus between the vertical stops (each row's record button, then "Reset all").
+    private func moveFocus(from view: NSView, delta: Int) {
+        let stops = rows.map(\.recordButton) + [resetAllButton]
+        guard let index = stops.firstIndex(where: { $0 === view }) else { return }
+        guard let next = KeyboardFocus.step(from: index, delta: delta, count: stops.count) else { return }
+        let target = stops[next]
+        target.window?.makeFirstResponder(target)
+        // AppKit doesn't scroll to a newly-focused responder — keep it in view. Scroll the whole row
+        // when the stop is a row's record button so the row's inline message shows too; else the stop
+        // itself. A little padding keeps it off the clip edge.
+        let scrollTarget: NSView = rows.first { $0.recordButton === target } ?? target
+        scrollTarget.scrollToVisible(scrollTarget.bounds.insetBy(dx: 0, dy: -12))
     }
 }
