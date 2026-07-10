@@ -19,6 +19,10 @@ enum GhosttyConfigWriter {
             "shell-integration-features = no-cursor",
             "mouse-hide-while-typing = true",
             "font-thicken = true",
+            // Option acts as Alt/Meta — ⌥f/⌥b word-nav in readline, Meta chords in
+            // vim/emacs — the terminal convention, chosen over macOS accent composing.
+            // User-overridable later (ZEN-71).
+            "macos-option-as-alt = true",
         ]
         if let theme {
             lines.append("font-family = \(theme.fontName)")

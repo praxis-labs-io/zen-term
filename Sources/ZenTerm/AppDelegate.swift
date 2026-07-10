@@ -12,6 +12,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var quitConfirmPending = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Terminals repeat a held key rather than popping macOS's press-and-hold accent
+        // palette — the palette otherwise leaks the auto-repeats and the selection number
+        // key straight into the shell. Match ghostty and every other terminal: disable it
+        // so a held key auto-repeats. Must be registered before the first surface exists.
+        UserDefaults.standard.register(defaults: ["ApplePressAndHoldEnabled": false])
+
         MainMenu.install(copyPaste: nil)  // Copy/Paste route via the responder chain
         newWindow(initialCWD: nil, centered: true)
 
