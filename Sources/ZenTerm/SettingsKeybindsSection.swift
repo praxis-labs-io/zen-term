@@ -68,19 +68,21 @@ final class SettingsKeybindsSection: SettingsSection {
         resetAllButton.onTap = { [weak self] in self?.resetAll() }
         stack.addArrangedSubview(resetAllButton)
 
-        // The scroll view fills the detail area edge-to-edge; all the padding lives inside as content
-        // insets, so the list scrolls right up to the card edges with breathing room around the rows.
+        // The scroll view fills the detail area edge-to-edge (no outer gap). Vertical padding is a
+        // content inset (top/bottom breathing room that scrolls with the extremes); horizontal
+        // padding is baked into the document's leading/trailing so the rows inset without breaking
+        // the clip view — horizontal `contentInsets` corrupt NSScrollView clipping, so avoid them.
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
         scroll.scrollerStyle = .overlay  // thin, auto-hiding — not the wide legacy scroller
         scroll.drawsBackground = false
         scroll.automaticallyAdjustsContentInsets = false
-        scroll.contentInsets = NSEdgeInsets(top: 16, left: 20, bottom: 16, right: 20)
+        scroll.contentInsets = NSEdgeInsets(top: 16, left: 0, bottom: 16, right: 0)
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.documentView = stack
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
+            stack.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor, constant: -20),
             stack.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
         ])
         refreshRows()
