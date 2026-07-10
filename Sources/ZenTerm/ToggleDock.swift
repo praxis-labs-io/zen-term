@@ -65,8 +65,8 @@ final class ToggleDock: NSView {
 
     /// Mirror the active tab's overlay state (drawers, lazygit, zoom) and the window's
     /// repo picker; split buttons are momentary and have no active state. While zoomed,
-    /// the drawer tints reflect only what's actually visible: a zoomed pane hides both
-    /// drawers (neither lit), a zoomed drawer hides its sibling (only its own lit).
+    /// the drawer tints reflect only what's actually visible: a zoomed pane lights the one
+    /// drawer peeked over it (if any), a zoomed drawer hides its sibling (only its own lit).
     func render(overlay: OverlayState, paletteOpen: Bool) {
         paletteBtn.isActive = paletteOpen
         lazygitBtn.isActive = overlay.isLazygitOpen
@@ -77,8 +77,8 @@ final class ToggleDock: NSView {
             bottomBtn.isActive = overlay.isBottomOpen
             rightBtn.isActive = overlay.isRightOpen
         case .pane:
-            bottomBtn.isActive = false
-            rightBtn.isActive = false
+            bottomBtn.isActive = overlay.zoomRevealedDrawer == .bottom
+            rightBtn.isActive = overlay.zoomRevealedDrawer == .right
         case .bottomDrawer:
             bottomBtn.isActive = true
             rightBtn.isActive = false
