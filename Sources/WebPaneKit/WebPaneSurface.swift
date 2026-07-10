@@ -35,7 +35,7 @@ public final class WebPaneSurface: NSObject, TerminalSurface {
 
     private var observations: [NSKeyValueObservation] = []
 
-    public init(url: URL, device: DevicePreset = .desktop) {
+    public init(url: URL, device: DevicePreset = .fill) {
         self.pendingURL = url
         self.device = device
         self.container = FocusReportingView()
