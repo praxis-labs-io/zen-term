@@ -55,6 +55,9 @@ class PaletteOverlay: NSView {
     private let defaultRowHeight: CGFloat
     private let maxListHeight: CGFloat
     private let emptyListHeight: CGFloat
+    /// Breathing room between the search divider (and footer) and the row highlights, so a
+    /// selected row never touches the search field's bottom border.
+    private let listVerticalInset: CGFloat = 8
     private var listHeight: NSLayoutConstraint!
     private var rowViews: [PaletteRowView] = []
     private var selected = 0
@@ -192,12 +195,12 @@ class PaletteOverlay: NSView {
             doc.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
             doc.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
             doc.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
-            rowsStack.topAnchor.constraint(equalTo: doc.topAnchor),
+            rowsStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: listVerticalInset),
             // Inset the rows so a selected row's highlight keeps a margin from the list
             // edges (and the overlay scroller) instead of touching them.
             rowsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 8),
             rowsStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -8),
-            rowsStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
+            rowsStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -listVerticalInset),
 
             emptyLabel.centerXAnchor.constraint(equalTo: scrollView.contentView.centerXAnchor),
             emptyLabel.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor, constant: 24),
@@ -284,7 +287,7 @@ class PaletteOverlay: NSView {
         emptyLabel.isHidden = count != 0
         // Empty → keep a small fixed height so the "no results" label isn't clipped by a
         // zero-height scroll view.
-        listHeight.constant = count == 0 ? emptyListHeight : min(total, maxListHeight)
+        listHeight.constant = count == 0 ? emptyListHeight : min(total + 2 * listVerticalInset, maxListHeight)
         selected = firstSelectableIndex()
         updateHighlight()
         scrollSelectedToVisible()
@@ -316,7 +319,7 @@ class PaletteOverlay: NSView {
 
     private func scrollSelectedToVisible() {
         guard rowViews.indices.contains(selected) else { return }
-        let y = (0..<selected).reduce(CGFloat(0)) { $0 + rowHeight(at: $1) }
+        let y = (0..<selected).reduce(listVerticalInset) { $0 + rowHeight(at: $1) }
         (scrollView.documentView as? FlippedView)?
             .scrollToVisible(CGRect(x: 0, y: y, width: 1, height: rowHeight(at: selected)))
     }
