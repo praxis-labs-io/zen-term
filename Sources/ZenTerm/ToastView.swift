@@ -32,8 +32,8 @@ final class ToastView: NSView {
 
     /// Fixed card width — toasts read as a consistent column rather than sizing to their text.
     private static let width: CGFloat = 300
-    private static let titleColor = Theme.rosePineMoon.foreground.nsColor
-    private static let messageColor = NSColor(srgbRed: 0x90 / 255, green: 0x8c / 255, blue: 0xaa / 255, alpha: 1)
+    private static let titleColor = Theme.current.chrome.foreground.nsColor
+    private static let messageColor = Theme.current.chrome.muted.nsColor
 
     convenience init(content: ToastContent) {
         self.init(content: content, actions: [])
@@ -48,7 +48,7 @@ final class ToastView: NSView {
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
         layer?.cornerRadius = 12
-        layer?.backgroundColor = Theme.rosePineMoon.background.nsColor.cgColor
+        layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         layer?.borderWidth = 1
         layer?.borderColor = content.variant.border.cgColor  // neutral for info; tinted for warning/destructive
         FloatShadow.applyShadow(to: self)

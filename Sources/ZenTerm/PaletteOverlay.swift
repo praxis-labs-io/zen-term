@@ -59,9 +59,8 @@ class PaletteOverlay: NSView {
     private var rowViews: [PaletteRowView] = []
     private var selected = 0
 
-    /// The selection highlight shared by every palette row (iris @ 18%).
-    static let selectionBackground = NSColor(
-        srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0, blue: 0xe7 / 255.0, alpha: 0.18)
+    /// The selection highlight shared by every palette row (accent @ 18%).
+    static let selectionBackground = Theme.current.chrome.accent.nsColor.withAlphaComponent(0.18)
 
     init(
         background: NSColor, placeholder: String, emptyText: String, footerHints: [PaletteHint],
@@ -97,13 +96,13 @@ class PaletteOverlay: NSView {
         // Search row: a magnifier glyph + a borderless field.
         let glyph = NSTextField(labelWithString: "⌕")
         glyph.font = .systemFont(ofSize: 16)
-        glyph.textColor = NSColor(white: 1, alpha: 0.4)
+        glyph.textColor = Theme.current.chrome.ink(alpha: 0.4)
         searchField.placeholderString = placeholder
         searchField.font = .systemFont(ofSize: 15)
         searchField.isBordered = false
         searchField.drawsBackground = false
         searchField.focusRingType = .none
-        searchField.textColor = .white
+        searchField.textColor = Theme.current.chrome.foreground.nsColor
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
         let searchRow = NSStackView(views: [glyph, searchField])
@@ -113,7 +112,7 @@ class PaletteOverlay: NSView {
 
         let divider = NSView()
         divider.wantsLayer = true
-        divider.layer?.backgroundColor = NSColor(white: 1, alpha: 0.08).cgColor
+        divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         divider.translatesAutoresizingMaskIntoConstraints = false
         divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
 
@@ -137,7 +136,7 @@ class PaletteOverlay: NSView {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
         emptyLabel.font = .systemFont(ofSize: 13)
-        emptyLabel.textColor = NSColor(white: 1, alpha: 0.4)
+        emptyLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
         emptyLabel.alignment = .center
         emptyLabel.translatesAutoresizingMaskIntoConstraints = false
         emptyLabel.isHidden = true
@@ -327,7 +326,7 @@ class PaletteOverlay: NSView {
         let items = hints.map { hint -> NSView in
             let label = NSTextField(labelWithString: hint.label)
             label.font = .systemFont(ofSize: 11, weight: .medium)
-            label.textColor = NSColor(white: 1, alpha: 0.5)
+            label.textColor = Theme.current.chrome.ink(alpha: 0.5)
             let item = NSStackView(views: [KeycapView(shortcut: hint.keys), label])
             item.orientation = .horizontal
             item.spacing = 5

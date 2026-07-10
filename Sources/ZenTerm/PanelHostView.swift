@@ -65,7 +65,7 @@ final class PanelHostView: NSView {
         pane.layer?.borderWidth = 1
         // The focus glow is a fixed iris shadow whose opacity toggles (animated in
         // updateHalo); its color/radius/offset never change, so set them once here.
-        pane.layer?.shadowColor = Self.iris.cgColor
+        pane.layer?.shadowColor = Theme.current.chrome.accent.nsColor.cgColor
         pane.layer?.shadowRadius = 6
         pane.layer?.shadowOffset = .zero
         addSubview(pane)
@@ -139,16 +139,17 @@ final class PanelHostView: NSView {
         ]
     }
 
-    private static let iris = NSColor(srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0, blue: 0xe7 / 255.0, alpha: 1)
-    private static let idleBorder = NSColor(white: 1, alpha: 0.08)
+    private static let idleBorder = Theme.current.chrome.ink(alpha: 0.08)
 
     private func updateHalo() {
         guard let layer = pane.layer else { return }
         // Ease from the live (presentation) value so a focus-nav crossfade falls out — the
         // losing host's glow eases down as the gaining host's eases up. Fast (haloDuration)
         // so it never trails rapid ⌘hjkl nav.
-        Motion.ease(layer, keyPath: "borderColor", to: (isFocused ? Self.iris : Self.idleBorder).cgColor)
-        Motion.ease(layer, keyPath: "shadowOpacity", to: isFocused ? Float(0.2) : Float(0))
+        Motion.ease(
+            layer, keyPath: "borderColor",
+            to: (isFocused ? Theme.current.chrome.accent.nsColor : Self.idleBorder).cgColor)
+        Motion.ease(layer, keyPath: "shadowOpacity", to: isFocused ? Float(0.3) : Float(0))
     }
 
     /// A muted small-caps mono label (left) and its keybind (right), e.g. "BOTTOM  ⌘B".
@@ -158,12 +159,12 @@ final class PanelHostView: NSView {
         let labelField = NSTextField(labelWithString: "")
         labelField.attributedStringValue = NSAttributedString(
             string: meta.label.uppercased(),
-            attributes: [.font: font, .foregroundColor: NSColor(white: 0.92, alpha: 0.4), .kern: 1.2]
+            attributes: [.font: font, .foregroundColor: Theme.current.chrome.ink(alpha: 0.4), .kern: 1.2]
         )
 
         let keybindField = NSTextField(labelWithString: meta.keybind)
         keybindField.font = font
-        keybindField.textColor = NSColor(white: 0.92, alpha: 0.3)
+        keybindField.textColor = Theme.current.chrome.ink(alpha: 0.4)
         keybindField.alignment = .right
 
         let stack = NSStackView(views: [labelField, keybindField])

@@ -439,7 +439,7 @@ final class TabController: NSObject {
         surface.start(
             TerminalSurfaceConfig(
                 command: shell, args: ["-l", "-i", "-c", "lazygit"],
-                workingDirectory: focusedCWD, theme: Theme.rosePineMoon))
+                workingDirectory: focusedCWD, theme: Theme.current.terminal))
         lazygitSurface = surface
         lazygitLaunchAnchor = lazygitAnchor(for: focusedCWD)
         return surface
@@ -464,7 +464,7 @@ final class TabController: NSObject {
         lazygitDismissingOverlay = nil
         let overlay = LazygitOverlay(
             content: surface.view,
-            background: Theme.rosePineMoon.background.nsColor,
+            background: Theme.current.chrome.background.nsColor,
             onDismiss: { [weak self] in self?.hideLazygit() })
         // Pin over the tile region (not `view`): covers only the tab's working area — never
         // the window gutters or the tab bar — above the canvas and any open drawers.
@@ -543,10 +543,10 @@ final class TabController: NSObject {
         surface.start(
             TerminalSurfaceConfig(
                 command: shell, args: ["-l", "-i", "-c", spec.command],
-                workingDirectory: focusedCWD, theme: Theme.rosePineMoon))
+                workingDirectory: focusedCWD, theme: Theme.current.terminal))
         let overlay = SurfaceFloatOverlay(
             content: surface.view,
-            background: Theme.rosePineMoon.background.nsColor,
+            background: Theme.current.chrome.background.nsColor,
             widthFraction: spec.widthFraction,
             heightFraction: spec.heightFraction,
             contentInset: 10,
@@ -616,7 +616,7 @@ final class TabController: NSObject {
         let hideLabel = edge == .bottom ? "Hide bottom drawer" : "Hide right drawer"
         let panel = PanelHostView(
             content: surface.view,
-            background: Theme.rosePineMoon.background.nsColor,
+            background: Theme.current.chrome.background.nsColor,
             meta: nil,
             hideButton: (
                 symbol: hideSymbol, label: hideLabel,

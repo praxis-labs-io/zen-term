@@ -1,7 +1,8 @@
 import AppKit
 
 /// A small, flat button on a confirm toast: a muted `cancel`, or a subtle-filled
-/// `destructive` whose love-tinted text carries the tone. Carries its `ToastAction.run`, and —
+/// `destructive` whose destructive-tinted text carries the tone. Carries its
+/// `ToastAction.run`, and —
 /// unless `keyEquivalents` is off (a non-modal toast that must not hijack Return / Esc
 /// window-wide) — the Return / Esc keys.
 final class ToastButton: NSButton {
@@ -11,19 +12,17 @@ final class ToastButton: NSButton {
     private var trackingAreaRef: NSTrackingArea?
     private var isHovered = false { didSet { updateBackground() } }
 
-    private static let love = NSColor(srgbRed: 0xeb / 255, green: 0x6f / 255, blue: 0x92 / 255, alpha: 1)
-    private static let muted = NSColor(srgbRed: 0x90 / 255, green: 0x8c / 255, blue: 0xaa / 255, alpha: 1)
-    private static let subtle = NSColor(white: 1, alpha: 0.07)
-    private static let subtleHover = NSColor(white: 1, alpha: 0.12)
+    private static let subtle = Theme.current.chrome.ink(alpha: 0.07)
+    private static let subtleHover = Theme.current.chrome.ink(alpha: 0.12)
 
     init(_ action: ToastAction, keyEquivalents: Bool = true) {
         self.run = action.run
         let text: NSColor
         switch action.kind {
         case .cancel:
-            (restBg, hoverBg, text) = (.clear, Self.subtle, Self.muted)
+            (restBg, hoverBg, text) = (.clear, Self.subtle, Theme.current.chrome.muted.nsColor)
         case .destructive:
-            (restBg, hoverBg, text) = (Self.subtle, Self.subtleHover, Self.love)
+            (restBg, hoverBg, text) = (Self.subtle, Self.subtleHover, Theme.current.chrome.destructive.nsColor)
         }
 
         super.init(frame: .zero)

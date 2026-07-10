@@ -146,7 +146,7 @@ final class WindowController: NSObject {
         let tint = NSView(frame: content.bounds)
         tint.wantsLayer = true
         tint.layer?.backgroundColor =
-            Theme.rosePineMoon.background.nsColor.withAlphaComponent(Self.backdropTintAlpha).cgColor
+            Theme.current.chrome.background.nsColor.withAlphaComponent(Self.backdropTintAlpha).cgColor
         tint.autoresizingMask = [.width, .height]
         content.addSubview(tint)
 
@@ -386,7 +386,7 @@ final class WindowController: NSObject {
         guard let active = activeController else { return }
         let picker = RepoPickerOverlay(
             entries: RepoScanner.scan(root: RepoScanner.defaultRoot),
-            background: Theme.rosePineMoon.background.nsColor,
+            background: Theme.current.chrome.background.nsColor,
             onChoose: { [weak self] dir, replace in self?.openRepo(dir, replaceCurrentTab: replace) },
             onDismiss: { [weak self] in self?.closeRepoPicker() }
         )
@@ -417,7 +417,7 @@ final class WindowController: NSObject {
         guard let active = activeController else { return }
         let palette = CommandPaletteOverlay(
             commands: CommandCatalog.commands(tabCount: tabs.order.count),
-            background: Theme.rosePineMoon.background.nsColor,
+            background: Theme.current.chrome.background.nsColor,
             onRun: { [weak self] chord in self?.runCommand(chord) },
             onDismiss: { [weak self] in self?.closeCommandPalette() }
         )

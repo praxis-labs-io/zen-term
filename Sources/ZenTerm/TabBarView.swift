@@ -27,11 +27,9 @@ final class TabBarView: NSView {
 
     static let height: CGFloat = 30
 
-    fileprivate static let iris = NSColor(srgbRed: 0xc4 / 255.0, green: 0xa7 / 255.0, blue: 0xe7 / 255.0, alpha: 1)
-    fileprivate static let rose = NSColor(srgbRed: 0xea / 255.0, green: 0x9a / 255.0, blue: 0x97 / 255.0, alpha: 1)
-    fileprivate static let activeInk = NSColor(white: 0.95, alpha: 1)
-    fileprivate static let idleInk = NSColor(white: 0.92, alpha: 0.55)
-    fileprivate static let numberInk = NSColor(white: 0.92, alpha: 0.35)
+    fileprivate static let activeInk = Theme.current.chrome.ink(alpha: 1)
+    fileprivate static let idleInk = Theme.current.chrome.ink(alpha: 0.55)
+    fileprivate static let numberInk = Theme.current.chrome.ink(alpha: 0.5)
 
     private let stack = NSStackView()
     /// A single iris underline that slides along the bar to the active tab (a tracer),
@@ -61,7 +59,7 @@ final class TabBarView: NSView {
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
 
-        tracer.backgroundColor = TabBarView.iris.cgColor
+        tracer.backgroundColor = Theme.current.chrome.accent.nsColor.cgColor
         tracer.cornerRadius = 1
         tracer.anchorPoint = CGPoint(x: 0, y: 0.5)  // position.x is the left edge
         tracer.zPosition = 1  // above the chips regardless of sublayer order
@@ -171,7 +169,7 @@ final class TabBarView: NSView {
         let numberColor: NSColor
         switch item.agentState {
         case .idle: numberColor = numberInk
-        case .waiting: numberColor = rose
+        case .waiting: numberColor = Theme.current.chrome.attention.nsColor
         }
         let s = NSMutableAttributedString(
             string: "\(item.index) ",
@@ -236,7 +234,7 @@ final class TabBarView: NSView {
             guard let layer else { return }
             Motion.ease(
                 layer, keyPath: "backgroundColor",
-                to: (isHovered ? NSColor(white: 1, alpha: 0.08) : .clear).cgColor)
+                to: (isHovered ? Theme.current.chrome.ink(alpha: 0.08) : .clear).cgColor)
         }
     }
 }
