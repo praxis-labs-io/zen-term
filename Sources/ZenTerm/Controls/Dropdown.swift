@@ -40,6 +40,12 @@ final class Dropdown: NSView {
     /// Test hook: the button's current title.
     var buttonTitleForTesting: String { titleLabel.stringValue }
 
+    /// Test hooks: open the floating list and inspect it (there is no other public list API). The
+    /// list open-path has no GUI test seam otherwise, and shipped once rendering at zero size.
+    func openListForTesting() { openList() }
+    var isListOpenForTesting: Bool { listCard != nil }
+    var listCardSizeForTesting: NSSize { listCard?.frame.size ?? .zero }
+
     init(items: [DropdownItem], selectedIndex: Int, onChange: @escaping (Int) -> Void) {
         self.items = items
         self.selectedIndex = selectedIndex
@@ -141,6 +147,13 @@ final class Dropdown: NSView {
         listCard == nil ? openList() : closeList()
     }
 
+    /// The whole control is one click target. Without this the title label and chevron subviews
+    /// swallow the click (they are `NSControl`/`NSImageView`), so `mouseDown` would only fire in the
+    /// padding gaps and clicking the visible text would do nothing.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        bounds.contains(convert(point, from: superview)) ? self : nil
+    }
+
     // MARK: list
 
     private func openList() {
@@ -205,9 +218,11 @@ final class Dropdown: NSView {
                 self?.highlighted = i
                 self?.commitHighlight()
             }
+            // Add to the stack BEFORE relating row.width to stack.width — the cross-view constraint
+            // needs a common ancestor, and activating it first throws (aborting the whole list build).
+            stack.addArrangedSubview(row)
             row.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
             row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-            stack.addArrangedSubview(row)
             rowViews.append(row)
             contentHeight += Self.rowHeight
         }
@@ -231,7 +246,10 @@ final class Dropdown: NSView {
         card.layer?.backgroundColor = chrome.background.nsColor.cgColor
         card.layer?.borderWidth = 1
         card.layer?.borderColor = FloatShadow.edge.cgColor
-        card.translatesAutoresizingMaskIntoConstraints = true
+        // Self-sizing via the width/height constraints below; positioned by frame in positionList
+        // (the KeybindHintBubble pattern). Leaving this `true` conflicts with those constraints and
+        // collapses fittingSize to ~zero, so the list opens invisibly.
+        card.translatesAutoresizingMaskIntoConstraints = false
         FloatShadow.applyShadow(to: card)
         card.addSubview(scroll)
 
