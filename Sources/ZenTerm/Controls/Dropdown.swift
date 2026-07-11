@@ -288,6 +288,7 @@ final class Dropdown: NSView {
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 8),
             label.centerYAnchor.constraint(equalTo: host.centerYAnchor),
+            host.heightAnchor.constraint(equalToConstant: Self.headerHeight),
         ])
         return host
     }
