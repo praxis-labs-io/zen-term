@@ -197,7 +197,7 @@ final class SettingsLayoutSection: SettingsSection {
             key: "shell", caption: "Shell", description: "new tabs", control: shellBox, focusStop: shellBox.field,
             controlNote: nil, width: 200, to: stack)
 
-        let argsBox = FieldBox(placeholder: "—")
+        let argsBox = FieldBox(placeholder: "optional")
         argsBox.setText(LayoutFormat.joinArgs(GeneralConfig.current.shellArgs))
         argsBox.onChange = { [weak self, weak argsBox] in
             guard let self, let argsBox else { return }

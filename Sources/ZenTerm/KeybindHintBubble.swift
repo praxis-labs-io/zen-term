@@ -6,7 +6,7 @@ import AppKit
 /// status line (the cancel/remove keys, replaced by a success message on save). Shown by the section
 /// beside a capturing keybind chip.
 final class KeybindHintBubble: NSView {
-    private static let width: CGFloat = 240
+    private static let width: CGFloat = 220
 
     private let previewHost = NSView()
     private let statusHost = NSView()
@@ -55,7 +55,7 @@ final class KeybindHintBubble: NSView {
         previewBox.addSubview(previewHost)
 
         // Small red validation line, tucked just under the preview; collapsed until there's an error.
-        errorLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        errorLabel.font = .systemFont(ofSize: 10, weight: .medium)
         errorLabel.textColor = Theme.current.chrome.destructive.nsColor
         errorLabel.preferredMaxLayoutWidth = Self.width - 28
         errorLabel.isHidden = true
@@ -131,13 +131,14 @@ final class KeybindHintBubble: NSView {
 
     /// The default status line: the cancel / remove keys.
     func showInstructions() {
+        let cancel = Self.muted("to cancel")
         let row = NSStackView(views: [
-            Self.keyCap("esc"), Self.muted("to cancel"), Self.muted("·"),
-            Self.keyCap("del"), Self.muted("to remove"),
+            Self.keyCap("esc"), cancel, Self.keyCap("del"), Self.muted("to remove"),
         ])
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 5
+        row.setCustomSpacing(12, after: cancel)  // gap between the two groups, no dot separator
         setStatus(row)
     }
 

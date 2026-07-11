@@ -145,7 +145,7 @@ final class SettingsKeybindsSection: SettingsSection {
         hintBubble?.setPreview(chord.displayGlyph)
         hintBubble?.clearError()
         guard chord.command || chord.shift || chord.option || chord.control else {
-            hintBubble?.showError("Shortcuts need at least one modifier — ⌘ ⇧ ⌥ ⌃.")
+            hintBubble?.showError("Add at least one modifier (⌘ ⇧ ⌥ ⌃).")
             positionBubble(for: row)
             return  // stay armed
         }
