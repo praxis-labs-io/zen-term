@@ -1,24 +1,23 @@
 import AppKit
 
-/// The Layout & Motion settings section: sliders/fields/segmented editors for the chrome layout
-/// knobs, motion preference, and shell fields. Writes each edit via `ConfigWriter` scalars (a reset
-/// removes the key → falls back to `builtIn`), reloads via `AppConfig`, and refreshes every row.
-/// Live-appliable knobs update running windows through the `configDidChange` seam (Task 4); the
-/// rest apply to new tabs, labeled as such.
+/// The Layout & Motion settings section: number-field / segmented / text editors for the chrome
+/// layout knobs, motion preference, and shell fields. Each edit applies live via a `ConfigWriter`
+/// scalar write + `AppConfig.reload()`, debounced so rapid typing coalesces into one write. A blank
+/// field removes the key so the value falls back to `builtIn` — the placeholder shows that default,
+/// and a field renders blank while it's at the default. Live-appliable knobs update running windows
+/// through the `configDidChange` seam; the rest apply to new tabs, labeled as such.
 final class SettingsLayoutSection: SettingsSection {
     var navTitle: String { "Layout & Motion" }
     var onExitToNav: (() -> Void)?
     var onClose: (() -> Void)?
 
-    /// A numeric (CGFloat) knob: config key, caption, valid range, control style, and how to read
-    /// its value from a resolved config. `builtIn = read(GeneralConfig.builtIn)`; overridden =
-    /// `read(.current) != builtIn`. `note` labels new-tab-only knobs.
+    /// A numeric (CGFloat) knob: config key, caption, valid range, and how to read its value from a
+    /// resolved config. `read(GeneralConfig.builtIn)` is the placeholder + blank-state default;
+    /// `note` labels units / new-tab-only knobs.
     private struct NumericKnob {
-        enum Style { case slider(step: CGFloat), field }
         let key: String
         let caption: String
         let range: ClosedRange<CGFloat>
-        let style: Style
         let note: String?
         let read: (GeneralConfig) -> CGFloat
     }
@@ -28,26 +27,26 @@ final class SettingsLayoutSection: SettingsSection {
             "Layout",
             [
                 NumericKnob(
-                    key: "backdrop-alpha", caption: "Backdrop alpha", range: 0...1,
-                    style: .slider(step: 0.02), note: nil, read: { $0.backdropAlpha }),
+                    key: "backdrop-alpha", caption: "Backdrop alpha", range: 0...1, note: nil,
+                    read: { $0.backdropAlpha }),
                 NumericKnob(
-                    key: "window-gutter", caption: "Window gutter", range: 0...64,
-                    style: .field, note: "px", read: { $0.windowGutter }),
+                    key: "window-gutter", caption: "Window gutter", range: 0...64, note: "px",
+                    read: { $0.windowGutter }),
                 NumericKnob(
-                    key: "pane-gap", caption: "Pane gap", range: 0...64,
-                    style: .field, note: "px", read: { $0.panelGap }),
+                    key: "pane-gap", caption: "Pane gap", range: 0...64, note: "px",
+                    read: { $0.panelGap }),
                 NumericKnob(
-                    key: "bottom-drawer-fraction", caption: "Bottom drawer", range: 0.1...0.9,
-                    style: .slider(step: 0.01), note: "new tabs", read: { $0.bottomDrawerFraction }),
+                    key: "bottom-drawer-fraction", caption: "Bottom drawer", range: 0.1...0.9, note: "new tabs",
+                    read: { $0.bottomDrawerFraction }),
                 NumericKnob(
-                    key: "right-drawer-fraction", caption: "Right drawer", range: 0.1...0.9,
-                    style: .slider(step: 0.01), note: "new tabs", read: { $0.rightDrawerFraction }),
+                    key: "right-drawer-fraction", caption: "Right drawer", range: 0.1...0.9, note: "new tabs",
+                    read: { $0.rightDrawerFraction }),
                 NumericKnob(
-                    key: "drawer-resize-step", caption: "Drawer resize step", range: 4...400,
-                    style: .field, note: "px", read: { $0.drawerResizeStep }),
+                    key: "drawer-resize-step", caption: "Drawer resize step", range: 4...400, note: "px",
+                    read: { $0.drawerResizeStep }),
                 NumericKnob(
-                    key: "max-drawer-fraction", caption: "Max drawer", range: 0.3...0.95,
-                    style: .slider(step: 0.01), note: nil, read: { $0.maxDrawerFraction }),
+                    key: "max-drawer-fraction", caption: "Max drawer", range: 0.3...0.95, note: nil,
+                    read: { $0.maxDrawerFraction }),
             ]
         )
     ]
@@ -58,6 +57,12 @@ final class SettingsLayoutSection: SettingsSection {
     private var controlForKey: [String: NSView] = [:]
     private var scalarKeys: [String] = []  // every key this section owns (for Reset-all)
 
+    /// Live-apply debounce: a field edit schedules its write ~`applyDelay` later; rapid typing
+    /// coalesces into one write + reload + relayout. Blur/Return flush it immediately.
+    private var pendingApply: (() -> Void)?
+    private var applyTimer: DispatchWorkItem?
+    private let applyDelay: TimeInterval = 0.18
+
     func makeDetailView() -> NSView {
         rows = []
         stops = []
@@ -67,7 +72,7 @@ final class SettingsLayoutSection: SettingsSection {
         let rowsStack = NSStackView()
         rowsStack.orientation = .vertical
         rowsStack.alignment = .leading
-        rowsStack.spacing = 3
+        rowsStack.spacing = 10  // rows don't touch vertically
         rowsStack.translatesAutoresizingMaskIntoConstraints = false
 
         var previous: NSView?
@@ -76,20 +81,15 @@ final class SettingsLayoutSection: SettingsSection {
             caption.font = .systemFont(ofSize: 10, weight: .semibold)
             caption.textColor = Theme.current.chrome.ink(alpha: 0.4)
             rowsStack.addArrangedSubview(caption)
-            if let previous { rowsStack.setCustomSpacing(18, after: previous) }
+            if let previous { rowsStack.setCustomSpacing(20, after: previous) }  // gap between groups
             build(rowsStack)
             previous = rowsStack.arrangedSubviews.last
         }
 
-        // Layout group (numeric knobs).
         for (groupTitle, knobs) in Self.numericKnobs {
-            addGroup(groupTitle) { stack in
-                for knob in knobs { self.addNumericRow(knob, to: stack) }
-            }
+            addGroup(groupTitle) { stack in for knob in knobs { self.addNumericRow(knob, to: stack) } }
         }
-        // Motion group (reduce-motion segmented).
         addGroup("Motion") { stack in self.addReduceMotionRow(to: stack) }
-        // Shell group (new-tab text fields).
         addGroup("Shell") { stack in self.addShellRows(to: stack) }
 
         resetAllButton.isKeyboardFocusable = true
@@ -101,7 +101,7 @@ final class SettingsLayoutSection: SettingsSection {
         resetAllButton.onEsc = { [weak self] in self?.onClose?() }
         resetAllButton.onTap = { [weak self] in self?.resetAll() }
         rowsStack.addArrangedSubview(resetAllButton)
-        if let previous { rowsStack.setCustomSpacing(18, after: previous) }
+        if let previous { rowsStack.setCustomSpacing(20, after: previous) }  // gap before Reset all
         stops.append(resetAllButton)
 
         let doc = FlippedView()
@@ -135,118 +135,94 @@ final class SettingsLayoutSection: SettingsSection {
 
     private func addNumericRow(_ knob: NumericKnob, to stack: NSStackView) {
         scalarKeys.append(knob.key)
-        let current = knob.read(GeneralConfig.current)
-        let control: NSView
-        switch knob.style {
-        case .slider(let step):
-            let slider = Slider(value: current, range: knob.range, step: step) { [weak self] value in
-                self?.write(knob.key, LayoutFormat.number(value), row: knob.key)
+        let box = FieldBox(placeholder: LayoutFormat.number(knob.read(GeneralConfig.builtIn)))
+        box.setText(fieldText(for: knob))
+        box.onChange = { [weak self, weak box] in
+            guard let self, let box else { return }
+            let text = box.text.trimmingCharacters(in: .whitespaces)
+            let isValid = text.isEmpty || LayoutFormat.parseNumber(text, in: knob.range) != nil
+            self.rowFor(knob.key)?.showMessage(isValid ? nil : self.rangeMessage(knob))
+            if isValid {
+                self.scheduleApply { [weak self, weak box] in
+                    guard let self, let box else { return }
+                    self.commitNumeric(knob, box: box)
+                }
+            } else {
+                self.applyTimer?.cancel()  // never apply an invalid value
             }
-            control = slider
-        case .field:
-            let box = FieldBox(placeholder: LayoutFormat.number(knob.read(GeneralConfig.builtIn)))
-            box.setText(LayoutFormat.number(current))
-            // Validate live (inline error), but only write on Return/blur — so typing "16" doesn't
-            // apply "1" then "16" and re-tile every window on each keystroke.
-            box.onChange = { [weak self, weak box] in
-                guard let self, let box else { return }
-                self.showNumericValidity(knob, box: box)
-            }
-            box.onEndEditing = { [weak self, weak box] in
-                guard let self, let box else { return }
-                self.commitNumeric(knob, box: box)
-            }
-            control = box
         }
-        let row = makeRow(key: knob.key, caption: knob.caption, control: control, note: knob.note)
-        wireControlKeyboard(control, row: row)
-        stack.addArrangedSubview(row)
-        row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        box.onEndEditing = { [weak self] in self?.flushApply() }
+        addRow(key: knob.key, caption: knob.caption, control: box, note: knob.note, to: stack)
     }
 
     private func addReduceMotionRow(to stack: NSStackView) {
         scalarKeys.append("reduce-motion")
         let index = LayoutFormat.reduceMotionIndex(GeneralConfig.current.reduceMotion)
         let segmented = SegmentedControl(options: ["System", "On", "Off"], selectedIndex: index) { [weak self] i in
-            self?.write(
-                "reduce-motion", LayoutFormat.reduceMotionToken(LayoutFormat.reduceMotion(fromIndex: i)),
+            let motion = LayoutFormat.reduceMotion(fromIndex: i)
+            // System is the default → remove the key (blank-is-default); On/Off write it.
+            self?.writeOrRemove(
+                "reduce-motion", motion == .system ? nil : LayoutFormat.reduceMotionToken(motion),
                 row: "reduce-motion")
         }
-        let row = makeRow(key: "reduce-motion", caption: "Reduce motion", control: segmented, note: nil)
-        wireControlKeyboard(segmented, row: row)
-        stack.addArrangedSubview(row)
-        row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        addRow(key: "reduce-motion", caption: "Reduce motion", control: segmented, note: nil, to: stack)
     }
 
     private func addShellRows(to stack: NSStackView) {
         scalarKeys.append(contentsOf: ["shell", "shell-args"])
         let shellBox = FieldBox(placeholder: "login shell")
         shellBox.setText(GeneralConfig.current.shell ?? "")
-        shellBox.onEndEditing = { [weak self, weak shellBox] in
+        shellBox.onChange = { [weak self, weak shellBox] in
             guard let self, let shellBox else { return }
-            let text = shellBox.text.trimmingCharacters(in: .whitespaces)
-            self.writeOrRemove("shell", text.isEmpty ? nil : text, row: "shell")
+            self.scheduleApply { [weak self, weak shellBox] in
+                guard let self, let shellBox else { return }
+                let text = shellBox.text.trimmingCharacters(in: .whitespaces)
+                self.writeOrRemove("shell", text.isEmpty ? nil : text, row: "shell")
+            }
         }
-        let shellRow = makeRow(key: "shell", caption: "Shell", control: shellBox, note: "new tabs")
-        wireControlKeyboard(shellBox, row: shellRow)
-        stack.addArrangedSubview(shellRow)
-        shellRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        shellBox.onEndEditing = { [weak self] in self?.flushApply() }
+        addRow(key: "shell", caption: "Shell", control: shellBox, note: "new tabs", to: stack)
 
         let argsBox = FieldBox(placeholder: "—")
         argsBox.setText(LayoutFormat.joinArgs(GeneralConfig.current.shellArgs))
-        argsBox.onEndEditing = { [weak self, weak argsBox] in
+        argsBox.onChange = { [weak self, weak argsBox] in
             guard let self, let argsBox else { return }
-            let joined = LayoutFormat.joinArgs(LayoutFormat.splitArgs(argsBox.text))
-            self.writeOrRemove("shell-args", joined.isEmpty ? nil : joined, row: "shell-args")
+            self.scheduleApply { [weak self, weak argsBox] in
+                guard let self, let argsBox else { return }
+                let joined = LayoutFormat.joinArgs(LayoutFormat.splitArgs(argsBox.text))
+                self.writeOrRemove("shell-args", joined.isEmpty ? nil : joined, row: "shell-args")
+            }
         }
-        let argsRow = makeRow(key: "shell-args", caption: "Shell args", control: argsBox, note: "new tabs")
-        wireControlKeyboard(argsBox, row: argsRow)
-        stack.addArrangedSubview(argsRow)
-        argsRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        argsBox.onEndEditing = { [weak self] in self?.flushApply() }
+        addRow(key: "shell-args", caption: "Shell args", control: argsBox, note: "new tabs", to: stack)
     }
 
-    private func makeRow(key: String, caption: String, control: NSView, note: String?) -> LayoutRow {
+    private func addRow(key: String, caption: String, control: NSView, note: String?, to stack: NSStackView) {
         let row = LayoutRow(caption: caption, control: control, note: note)
-        // `weak row`: this closure lives *on* the row, so capturing it strongly would be a retain
-        // cycle — every row (and its subtree) would leak on each Settings open.
-        row.onReset = { [weak self, weak row] in row.map { self?.reset(key: key, row: $0) } }
-        row.onArrowUp = { [weak self, weak control] in control.map { self?.moveFocus(from: $0, delta: -1) } }
-        row.onArrowDown = { [weak self, weak control] in control.map { self?.moveFocus(from: $0, delta: 1) } }
-        row.onEsc = { [weak self] in self?.onClose?() }
-        row.onFocusControl = { [weak control] in control?.window?.makeFirstResponder(control) }
+        wireControlKeyboard(control)
         rows.append(row)
         stops.append(control)
         controlForKey[key] = control
-        return row
+        stack.addArrangedSubview(row)
+        row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
 
-    /// Wire a control's Up/Down (move rows), Tab (→ this row's reset), Left-at-boundary/⇧Tab
-    /// (→ nav or prev), and Esc through the row/section. Handles the three control types.
-    private func wireControlKeyboard(_ control: NSView, row: LayoutRow) {
-        // Tab reaches the reset icon; when the row is at its default (no reset icon), Tab advances
-        // to the next control instead of being a dead keystroke.
-        let toReset: () -> Void = { [weak self, weak row, weak control] in
-            guard let row else { return }
-            if !row.focusReset(), let self, let control { self.moveFocus(from: control, delta: 1) }
-        }
+    /// Wire a control's Up/Down (move rows), Tab/⇧Tab (advance / return to nav), Left-at-boundary
+    /// (nav), and Esc (close) through the section. There's no per-row reset stop — a blank field is
+    /// the default — so Tab simply advances to the next control.
+    private func wireControlKeyboard(_ control: NSView) {
         switch control {
-        case let slider as Slider:
-            slider.onArrowUp = { [weak self, weak slider] in slider.map { self?.moveFocus(from: $0, delta: -1) } }
-            slider.onArrowDown = { [weak self, weak slider] in slider.map { self?.moveFocus(from: $0, delta: 1) } }
-            slider.onTab = toReset
-            slider.onBacktab = { [weak self] in self?.onExitToNav?() }
-            slider.onEsc = { [weak self] in self?.onClose?() }
         case let box as FieldBox:
             box.onArrowUp = { [weak self, weak box] in box.map { self?.moveFocus(from: $0, delta: -1) } }
             box.onArrowDown = { [weak self, weak box] in box.map { self?.moveFocus(from: $0, delta: 1) } }
             box.onArrowLeft = { [weak self] in self?.onExitToNav?() }  // Left at cursor-start → nav
-            box.onTab = toReset
+            box.onTab = { [weak self, weak box] in box.map { self?.moveFocus(from: $0, delta: 1) } }
             box.onBacktab = { [weak self] in self?.onExitToNav?() }
             box.onEsc = { [weak self] in self?.onClose?() }
         case let seg as SegmentedControl:
             seg.onArrowUp = { [weak self, weak seg] in seg.map { self?.moveFocus(from: $0, delta: -1) } }
             seg.onArrowDown = { [weak self, weak seg] in seg.map { self?.moveFocus(from: $0, delta: 1) } }
-            seg.onTab = toReset
+            seg.onTab = { [weak self, weak seg] in seg.map { self?.moveFocus(from: $0, delta: 1) } }
             seg.onBacktab = { [weak self] in self?.onExitToNav?() }
             seg.onEsc = { [weak self] in self?.onClose?() }
         default:
@@ -256,27 +232,16 @@ final class SettingsLayoutSection: SettingsSection {
 
     // MARK: writes
 
-    /// Live feedback while typing: show the range error when the current text is invalid, clear it
-    /// when valid. Does not write — that happens on commit (Return/blur).
-    private func showNumericValidity(_ knob: NumericKnob, box: FieldBox) {
-        let message = LayoutFormat.parseNumber(box.text, in: knob.range) == nil ? rangeMessage(knob) : nil
-        rowFor(knob.key)?.showMessage(message)
-    }
-
-    /// Commit on Return/blur: write a valid value; on an invalid one, revert the field to the current
-    /// config value and clear the error (the live message already explained the range while typing).
+    /// Commit a numeric field's value: write the canonical form, or remove the key when it's blank
+    /// (blank = default). Invalid text never reaches here (the debounce is skipped while invalid).
     private func commitNumeric(_ knob: NumericKnob, box: FieldBox) {
-        guard let value = LayoutFormat.parseNumber(box.text, in: knob.range) else {
-            box.setText(LayoutFormat.number(knob.read(GeneralConfig.current)))
-            rowFor(knob.key)?.showMessage(nil)
+        let text = box.text.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else {
+            writeOrRemove(knob.key, nil, row: knob.key)
             return
         }
-        rowFor(knob.key)?.showMessage(nil)
+        guard let value = LayoutFormat.parseNumber(text, in: knob.range) else { return }
         write(knob.key, LayoutFormat.number(value), row: knob.key)
-    }
-
-    private func rangeMessage(_ knob: NumericKnob) -> String {
-        "Enter a number in \(LayoutFormat.number(knob.range.lowerBound))–\(LayoutFormat.number(knob.range.upperBound))."
     }
 
     private func write(_ key: String, _ value: String, row: String) {
@@ -289,15 +254,10 @@ final class SettingsLayoutSection: SettingsSection {
             persist({ try ConfigWriter.apply(removals: [key]) }, reportKey: row)
         }
     }
-    private func reset(key: String, row: LayoutRow) {
-        persist({ try ConfigWriter.apply(removals: [key]) }, reportKey: key)
-        row.onFocusControl?()  // the reset icon just hid (no longer overridden) — keep focus on the row
-    }
     private func resetAll() { persist({ try ConfigWriter.apply(removals: Set(self.scalarKeys)) }, reportKey: nil) }
 
     /// Run a write, reload, and refresh every row from the new config. On failure, report on the
-    /// edited row and return — there's no staged `desired` state here (unlike keybinds) to roll
-    /// back or go stale, so nothing needs re-rendering.
+    /// edited row and return — there's no staged state here (unlike keybinds) to roll back.
     private func persist(_ write: () throws -> Void, reportKey: String?) {
         do {
             try write()
@@ -310,24 +270,62 @@ final class SettingsLayoutSection: SettingsSection {
         refreshRows()
     }
 
+    /// Sync every control to the reloaded config: a numeric field shows the value only when it's
+    /// overridden (blank at default). Skip a field that's currently being edited so a live-apply
+    /// write doesn't clobber the caret.
     private func refreshRows() {
         for (_, knobs) in Self.numericKnobs {
             for knob in knobs {
-                let overridden = knob.read(GeneralConfig.current) != knob.read(GeneralConfig.builtIn)
-                rowFor(knob.key)?.render(isOverridden: overridden)
-                if let slider = controlForKey[knob.key] as? Slider { slider.setValue(knob.read(GeneralConfig.current)) }
-                if let box = controlForKey[knob.key] as? FieldBox {
-                    box.setText(LayoutFormat.number(knob.read(GeneralConfig.current)))
-                }
+                guard let box = controlForKey[knob.key] as? FieldBox, box.field.currentEditor() == nil else { continue }
+                box.setText(fieldText(for: knob))
             }
         }
-        let motion = GeneralConfig.current.reduceMotion
-        rowFor("reduce-motion")?.render(isOverridden: motion != GeneralConfig.builtIn.reduceMotion)
-        rowFor("shell")?.render(isOverridden: GeneralConfig.current.shell != GeneralConfig.builtIn.shell)
-        rowFor("shell-args")?.render(isOverridden: GeneralConfig.current.shellArgs != GeneralConfig.builtIn.shellArgs)
+        if let seg = controlForKey["reduce-motion"] as? SegmentedControl {
+            seg.setSelection(LayoutFormat.reduceMotionIndex(GeneralConfig.current.reduceMotion))
+        }
+        if let shellBox = controlForKey["shell"] as? FieldBox, shellBox.field.currentEditor() == nil {
+            shellBox.setText(GeneralConfig.current.shell ?? "")
+        }
+        if let argsBox = controlForKey["shell-args"] as? FieldBox, argsBox.field.currentEditor() == nil {
+            argsBox.setText(LayoutFormat.joinArgs(GeneralConfig.current.shellArgs))
+        }
     }
 
-    // MARK: focus
+    // MARK: debounce
+
+    private func scheduleApply(_ block: @escaping () -> Void) {
+        pendingApply = block
+        applyTimer?.cancel()
+        let token = DispatchWorkItem { [weak self] in self?.runPending() }
+        applyTimer = token
+        DispatchQueue.main.asyncAfter(deadline: .now() + applyDelay, execute: token)
+    }
+
+    /// Apply a pending edit immediately (Return/blur) instead of waiting out the debounce.
+    private func flushApply() {
+        applyTimer?.cancel()
+        runPending()
+    }
+
+    private func runPending() {
+        applyTimer = nil
+        let block = pendingApply
+        pendingApply = nil
+        block?()
+    }
+
+    // MARK: helpers
+
+    /// A numeric field's text: the value when it differs from the default, else blank (the
+    /// placeholder shows the default, and blank means "use the default").
+    private func fieldText(for knob: NumericKnob) -> String {
+        let current = knob.read(GeneralConfig.current)
+        return current != knob.read(GeneralConfig.builtIn) ? LayoutFormat.number(current) : ""
+    }
+
+    private func rangeMessage(_ knob: NumericKnob) -> String {
+        "Enter a number in \(LayoutFormat.number(knob.range.lowerBound))–\(LayoutFormat.number(knob.range.upperBound))."
+    }
 
     private func moveFocus(from view: NSView, delta: Int) {
         guard let index = stops.firstIndex(where: { $0 === view }) else { return }
@@ -344,10 +342,10 @@ final class SettingsLayoutSection: SettingsSection {
     }
 }
 
-private extension NSView {
+extension NSView {
     /// True if `view` is this view or nested anywhere beneath it — used to map a focused control
     /// back to its row for scroll-into-view and messaging.
-    func subviews(recursively view: NSView) -> Bool {
+    fileprivate func subviews(recursively view: NSView) -> Bool {
         if view === self { return true }
         return subviews.contains { $0.subviews(recursively: view) }
     }

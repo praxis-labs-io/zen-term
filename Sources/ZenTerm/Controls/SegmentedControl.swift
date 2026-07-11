@@ -57,6 +57,13 @@ final class SegmentedControl: NSView {
         onChange(clamped)
     }
 
+    /// Set the selection WITHOUT firing `onChange` — for programmatic sync (e.g. after a config
+    /// reload) where the change didn't originate from the user.
+    func setSelection(_ index: Int) {
+        selectedIndex = min(max(index, 0), segments.count - 1)
+        updateSelection()
+    }
+
     private var isControlFocused = false
 
     private func updateSelection() {
