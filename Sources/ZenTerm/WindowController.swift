@@ -481,7 +481,7 @@ final class WindowController: NSObject {
         let overlay = SettingsOverlay(
             sections: [
                 SettingsKeybindsSection(capturer: keybindCapturer),
-                SettingsLayoutSection(),
+                SettingsAppearanceSection(),
             ],
             capturer: keybindCapturer,
             background: Theme.current.chrome.background.nsColor,
