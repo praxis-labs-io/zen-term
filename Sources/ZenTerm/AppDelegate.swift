@@ -36,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             forName: .configDidChange, object: nil, queue: .main
         ) { [weak self] _ in
             self?.keys.setKeymap(GeneralConfig.current.keymap)
+            MotionConfig.apply(GeneralConfig.current.reduceMotion)  // re-install the reduce-motion override
         }
 
         NSApp.activate(ignoringOtherApps: true)

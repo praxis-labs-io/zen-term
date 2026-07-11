@@ -26,6 +26,9 @@ final class WindowController: NSObject {
     private static var backdropTintAlpha: CGFloat { GeneralConfig.current.backdropAlpha }
 
     private let container = NSView()
+    /// The base-color tint over the behind-window blur; stored so a `backdrop-alpha` change can
+    /// re-tint the running window (see the `configDidChange` observer).
+    private let tint = NSView()
     /// Top-right transient notices (e.g. "not a git repository"). Lazy so its stack mounts
     /// above the canvas on first use; window-level so it's shared by every tab.
     private lazy var toasts = ToastPresenter(
@@ -70,6 +73,11 @@ final class WindowController: NSObject {
     /// without OSC 7, so there's no push event on `cd` — a light poll keeps titles
     /// current; it only re-renders when a title actually changed.
     private var titlePoll: Timer?
+
+    /// Live re-apply for the Layout & Motion settings (backdrop tint + gutter/gap): re-tints and
+    /// re-lays-out every tab when a Settings-card edit posts `.configDidChange`. Torn down in
+    /// `tearDown()`.
+    private var configObserver: NSObjectProtocol?
 
     /// The window has closed (via the last-tab cascade OR the native close button) →
     /// the manager should forget this controller. Fired once, from `windowWillClose`.
@@ -138,6 +146,17 @@ final class WindowController: NSObject {
 
         layoutContainer()
         window.delegate = self  // for windowWillClose teardown (native close button + cascade)
+
+        // Layout & Motion knobs (backdrop tint, window gutter, pane gap) re-apply live: a
+        // Settings-card edit re-tints the backdrop and re-lays-out every built tab, no relaunch.
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .configDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.tint.layer?.backgroundColor =
+                Theme.current.chrome.background.nsColor.withAlphaComponent(Self.backdropTintAlpha).cgColor
+            for controller in self.controllers.values { controller.reapplyChromeLayout() }
+        }
     }
 
     // MARK: layout
@@ -156,7 +175,7 @@ final class WindowController: NSObject {
         backdrop.autoresizingMask = [.width, .height]
         content.addSubview(backdrop)
 
-        let tint = NSView(frame: content.bounds)
+        tint.frame = content.bounds
         tint.wantsLayer = true
         tint.layer?.backgroundColor =
             Theme.current.chrome.background.nsColor.withAlphaComponent(Self.backdropTintAlpha).cgColor
@@ -836,6 +855,8 @@ final class WindowController: NSObject {
         keybindCapturer?.endCapture()
         titlePoll?.invalidate()
         titlePoll = nil
+        if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
+        configObserver = nil
         for c in controllers.values { c.shutdown() }
         controllers.removeAll()
         onClosed?()
