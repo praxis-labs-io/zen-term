@@ -82,7 +82,7 @@ final class KeybindHintBubble: NSView {
             icon.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
             previewGroup.widthAnchor.constraint(equalTo: col.widthAnchor),
             previewBox.heightAnchor.constraint(equalToConstant: 34),
-            previewBox.widthAnchor.constraint(equalTo: previewGroup.widthAnchor),
+            previewBox.widthAnchor.constraint(equalToConstant: 130),  // just wide enough for a chord
             previewHost.centerXAnchor.constraint(equalTo: previewBox.centerXAnchor),
             previewHost.centerYAnchor.constraint(equalTo: previewBox.centerYAnchor),
             previewHost.leadingAnchor.constraint(greaterThanOrEqualTo: previewBox.leadingAnchor, constant: 10),

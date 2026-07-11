@@ -145,12 +145,13 @@ final class SettingsKeybindsSection: SettingsSection {
         hintBubble?.setPreview(chord.displayGlyph)
         hintBubble?.clearError()
         guard chord.command || chord.shift || chord.option || chord.control else {
-            hintBubble?.showError("Needs at least one modifier.")
+            hintBubble?.showError("Shortcuts need at least one modifier — ⌘ ⇧ ⌥ ⌃.")
             positionBubble(for: row)
             return  // stay armed
         }
         if let owner = GeneralConfig.current.keymap[chord], owner != row.action {
-            hintBubble?.showError("Already bound to \(CommandCatalog.spec(for: owner).title).")
+            hintBubble?.showError(
+                "\(chord.displayGlyph) is already bound to \(CommandCatalog.spec(for: owner).title).")
             positionBubble(for: row)
             return  // stay armed
         }
