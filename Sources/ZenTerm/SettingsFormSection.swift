@@ -189,6 +189,13 @@ class SettingsFormSection: SettingsSection {
             controlNote: controlNote, width: width, refresh: refresh)
     }
 
+    /// Append an arranged subview to the rows stack directly, without registering it as a focus stop
+    /// (e.g. the restart button tucked under the Theme row).
+    func appendTrailing(_ view: NSView) {
+        guard let stack = rowsStack else { return }
+        stack.addArrangedSubview(view)
+    }
+
     /// Register a row. `focusStop` is the actual first-responder-focusable view (a `FieldBox`'s inner
     /// `field`, or the control itself for a `SegmentedControl`) — the wrapper `FieldBox` isn't
     /// focusable, so the stop must be its text field. `description` sits under the caption;
@@ -247,10 +254,10 @@ class SettingsFormSection: SettingsSection {
         write(key, LayoutFormat.number(value), row: key)
     }
 
-    private func write(_ key: String, _ value: String, row: String) {
+    func write(_ key: String, _ value: String, row: String) {
         persist({ try ConfigWriter.apply(scalars: [key: value]) }, reportKey: row)
     }
-    private func writeOrRemove(_ key: String, _ value: String?, row: String) {
+    func writeOrRemove(_ key: String, _ value: String?, row: String) {
         if let value {
             write(key, value, row: row)
         } else {
