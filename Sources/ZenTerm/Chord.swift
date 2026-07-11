@@ -87,14 +87,34 @@ struct Chord: Hashable {
     /// `charactersIgnoringModifiers` reading `KeyInterceptor` used before it went data-driven.
     init?(event: NSEvent) {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard let characters = event.charactersIgnoringModifiers?.lowercased(), !characters.isEmpty else {
-            return nil
+        let key: String
+        if let special = Chord.glyphForSpecialKey(event.keyCode) {
+            key = special  // arrow / return keys carry a non-printing character — use a glyph token
+        } else {
+            guard let characters = event.charactersIgnoringModifiers?.lowercased(), !characters.isEmpty else {
+                return nil
+            }
+            key = characters
         }
         self.init(
             command: flags.contains(.command),
             shift: flags.contains(.shift),
             option: flags.contains(.option),
             control: flags.contains(.control),
-            key: characters)
+            key: key)
+    }
+
+    /// Keys whose `charactersIgnoringModifiers` is a non-printing character render as tofu (□) — map
+    /// them to a display glyph, which `KeycapView` draws as an SF Symbol and `configToken`/`parse`
+    /// round-trip as a single character.
+    private static func glyphForSpecialKey(_ keyCode: UInt16) -> String? {
+        switch keyCode {
+        case 123: return "←"
+        case 124: return "→"
+        case 125: return "↓"
+        case 126: return "↑"
+        case 36: return "⏎"
+        default: return nil
+        }
     }
 }

@@ -46,20 +46,25 @@
 
 # Opacity of the on-brand tint over the behind-window blur. 1 = solid shell,
 # 0 = raw system blur showing your desktop through the whole window.
+# In-app Settings edit: applies live.
 # backdrop-alpha = 0.82               # clamped to 0…1
 
 # Inset from the window edge to the tiled panes, all four sides (px).
+# In-app Settings edit: applies live.
 # window-gutter = 8                   # clamped to 0…64
 
 # Gap between tiled panes, and between the canvas and a drawer (px).
+# In-app Settings edit: applies live.
 # pane-gap = 8                        # clamped to 0…64
 
 # Initial size a drawer opens to, as a fraction of the tab's working area.
+# In-app Settings edit: applies to new tabs (a hand ⌥-resize owns the running ratio).
 # bottom-drawer-fraction = 0.28       # clamped to 0.1…0.9
 # right-drawer-fraction = 0.30        # clamped to 0.1…0.9
 
 # One ⌥-arrow nudge when resizing a focused drawer (px), and the ceiling a
 # drawer may grow to (fraction of the working area — the canvas keeps the rest).
+# In-app Settings edit: both apply live.
 # drawer-resize-step = 40             # clamped to 4…400
 # max-drawer-fraction = 0.7           # clamped to 0.3…0.95
 
@@ -67,10 +72,12 @@
 
 # Animation policy. `system` follows the macOS "Reduce motion" accessibility
 # setting; `on`/`off` force it regardless.
+# In-app Settings edit: applies live.
 # reduce-motion = system              # system | on | off
 
 # Shell for new panes. Unset → $SHELL, then /bin/zsh. When set, it launches
 # login+interactive by default; override the flags with shell-args.
+# In-app Settings edit: applies to new tabs.
 # shell = /bin/zsh
 # shell-args = -l -i                  # whitespace-separated argv
 

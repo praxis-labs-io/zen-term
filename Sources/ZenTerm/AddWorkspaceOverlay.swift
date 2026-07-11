@@ -14,7 +14,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private enum LayoutChoice { case minimal, editorAIShell, custom }
 
     private static let layoutCaptions = [
-        "One shell, drawers closed", "nvim · claude · shell", "Set each region yourself",
+        "One shell, drawers closed", "nvim, claude, shell", "Set each region yourself",
     ]
 
     private let existingTitles: Set<String>

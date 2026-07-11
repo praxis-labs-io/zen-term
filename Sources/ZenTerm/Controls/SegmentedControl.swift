@@ -10,11 +10,22 @@ final class SegmentedControl: NSView {
     var onChange: (Int) -> Void
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
+    var onTab: (() -> Void)?
+    var onBacktab: (() -> Void)?
+    var onEsc: (() -> Void)?
 
     private var segments: [AppButton] = []
+    /// When true, re-picking the already-selected segment still fires `onChange`. Off by default;
+    /// the reduce-motion row opts in so clicking the currently-shown (OS-derived `system`) value can
+    /// pin it — otherwise a no-op click leaves config unpinned and it silently follows the OS later.
+    private let notifiesOnReselect: Bool
 
-    init(options: [String], selectedIndex: Int = 0, onChange: @escaping (Int) -> Void) {
+    init(
+        options: [String], selectedIndex: Int = 0, notifiesOnReselect: Bool = false,
+        onChange: @escaping (Int) -> Void
+    ) {
         self.selectedIndex = selectedIndex
+        self.notifiesOnReselect = notifiesOnReselect
         self.onChange = onChange
         super.init(frame: .zero)
         wantsLayer = true
@@ -44,7 +55,7 @@ final class SegmentedControl: NSView {
     /// Select an option (clamped), update the fill, and notify — used by both clicks and arrows.
     func select(_ index: Int) {
         let clamped = min(max(index, 0), segments.count - 1)
-        guard clamped != selectedIndex || !segments[clamped].isOn else {
+        guard notifiesOnReselect || clamped != selectedIndex || !segments[clamped].isOn else {
             selectedIndex = clamped
             updateSelection()
             return
@@ -52,6 +63,13 @@ final class SegmentedControl: NSView {
         selectedIndex = clamped
         updateSelection()
         onChange(clamped)
+    }
+
+    /// Set the selection WITHOUT firing `onChange` — for programmatic sync (e.g. after a config
+    /// reload) where the change didn't originate from the user.
+    func setSelection(_ index: Int) {
+        selectedIndex = min(max(index, 0), segments.count - 1)
+        updateSelection()
     }
 
     private var isControlFocused = false
@@ -85,6 +103,9 @@ final class SegmentedControl: NSView {
         case 124: select(selectedIndex + 1)  // right
         case 126: onArrowUp?()  // up → previous field
         case 125, 36, 76: onArrowDown?()  // down / return / enter → next field
+        case 48 where onTab != nil || onBacktab != nil:
+            event.modifierFlags.contains(.shift) ? onBacktab?() : onTab?()  // ⇧tab / tab
+        case 53 where onEsc != nil: onEsc?()  // esc
         default: super.keyDown(with: event)
         }
     }

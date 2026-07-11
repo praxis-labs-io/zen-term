@@ -64,6 +64,15 @@ final class ChordTests: XCTestCase {
         XCTAssertNil(Chord.parse("cmd+shift++"))  // the raw form is still rejected
     }
 
+    func test_configToken_arrowGlyph_roundTrips() {
+        // Arrow keys carry a non-printing character from the event; `Chord(event:)` maps them to a
+        // glyph so they display and round-trip as a single character.
+        let up = Chord(command: true, key: "↑")
+        XCTAssertEqual(up.configToken, "cmd+↑")
+        XCTAssertEqual(up.displayGlyph, "⌘↑")
+        XCTAssertEqual(Chord.parse(up.configToken), up)
+    }
+
     private func expectedToken(_ c: Chord) -> String {
         var t = ""
         if c.command { t += "cmd+" }

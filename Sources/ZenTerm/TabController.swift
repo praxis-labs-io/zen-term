@@ -115,6 +115,10 @@ final class TabController: NSObject {
     /// accumulate constraints.
     private var tileConstraints: [NSLayoutConstraint] = []
 
+    /// The four window-gutter content-inset constraints, kept so a config change can re-apply the
+    /// gutter to this already-built tab (see `reapplyChromeLayout()`).
+    private var gutterConstraints: [NSLayoutConstraint] = []
+
     var onTitleChanged: (() -> Void)? {
         get { paneCanvas.onTitleChanged }
         set { paneCanvas.onTitleChanged = newValue }
@@ -191,12 +195,13 @@ final class TabController: NSObject {
         view.addSubview(content)
         // Content-rect inset: an even `windowGutter` on all four sides (the traffic
         // lights are hidden, so the top no longer needs extra clearance).
-        NSLayoutConstraint.activate([
+        gutterConstraints = [
             content.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: ChromeMetrics.windowGutter),
             content.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -ChromeMetrics.windowGutter),
             content.topAnchor.constraint(equalTo: view.topAnchor, constant: ChromeMetrics.windowGutter),
             content.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -ChromeMetrics.windowGutter),
-        ])
+        ]
+        NSLayoutConstraint.activate(gutterConstraints)
         content.addSubview(canvas)
         relayoutPanels()
 
@@ -974,6 +979,23 @@ final class TabController: NSObject {
         } else if view.superview === content {
             view.removeFromSuperview()
         }
+    }
+
+    /// Re-apply the live chrome-layout knobs (window gutter, pane gap) to this built tab after a
+    /// config change — no relaunch. `relayoutPanels()` re-reads `panelGap`; the gutter constraints
+    /// get their new constant. Drawer fractions are intentionally not reset (a hand ⌥-resize owns
+    /// the running ratio; the new fraction seeds new tabs).
+    func reapplyChromeLayout() {
+        let gutter = ChromeMetrics.windowGutter
+        // Sign is keyed to positional identity, not the live constant: at gutter == 0 the
+        // trailing/bottom constraints were built with `-0.0`, and `-0.0 < 0` is false in Swift,
+        // so inferring sign from the current value silently flips them positive on the next
+        // reapply. Order is fixed at construction above: 0 leading, 1 trailing, 2 top, 3 bottom.
+        for (index, constraint) in gutterConstraints.enumerated() {
+            constraint.constant = (index == 1 || index == 3) ? -gutter : gutter
+        }
+        relayoutPanels()
+        view.layoutSubtreeIfNeeded()
     }
 
     private func relayoutPanels() {

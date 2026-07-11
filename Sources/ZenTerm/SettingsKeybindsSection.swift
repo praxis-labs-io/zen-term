@@ -1,9 +1,10 @@
 import AppKit
 
-/// The Keybinds settings section: remap the built-in actions. Reads the live keymap, captures a
-/// new chord per row (press-to-record, ≥1 modifier, block-on-conflict), writes the override set
-/// via `ConfigWriter`, and reloads via `AppConfig` so the rebind is live — no restart. Per-row
-/// and section reset return bindings to their built-in defaults.
+/// The Keybinds settings section: remap the built-in actions. Each action's chord is a focusable
+/// `KeybindChip` — Return/click begins capture (a hint bubble appears and the next chord is diverted
+/// through the interceptor, so an already-bound chord isn't pre-empted), Backspace reverts to the
+/// default. Rebinds are ≥1-modifier, block-on-conflict, written via `ConfigWriter` and reloaded via
+/// `AppConfig` so they're live — no restart. A section reset returns everything to the defaults.
 final class SettingsKeybindsSection: SettingsSection {
     var navTitle: String { "Keybinds" }
     var onExitToNav: (() -> Void)?
@@ -23,6 +24,12 @@ final class SettingsKeybindsSection: SettingsSection {
     private var desired: [Chord: KeyInterceptor.ReservedChord] = [:]
     private var rows: [KeybindRow] = []
     private let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
+    private weak var detailScroll: NSScrollView?
+    private var hintBubble: KeybindHintBubble?
+    private var hintBackdrop: NSView?
+    private weak var capturingRow: KeybindRow?
+    private var captureCloseTimer: DispatchWorkItem?
+    private let resetAllMessage = ResetFlashLabel()
 
     init(capturer: KeybindCapturing?) { self.capturer = capturer }
 
@@ -48,18 +55,14 @@ final class SettingsKeybindsSection: SettingsSection {
             if let previous { rowsStack.setCustomSpacing(18, after: previous) }  // gap between groups
             for action in actions {
                 let row = KeybindRow(action: action, title: CommandCatalog.spec(for: action).title)
-                // `weak row`: these closures live *on* the row, so capturing it strongly would be a
-                // retain cycle — every row (and its subtree) would leak on each Settings open.
-                row.onArrowUp = { [weak self, weak row] in
-                    row.map { self?.moveFocus(from: $0.recordButton, delta: -1) }
-                }
-                row.onArrowDown = { [weak self, weak row] in
-                    row.map { self?.moveFocus(from: $0.recordButton, delta: 1) }
-                }
-                row.onExitToNav = { [weak self] in self?.onExitToNav?() }
-                row.onEsc = { [weak self] in self?.onClose?() }
-                row.onRecordTapped = { [weak self, weak row] in row.map { self?.beginCapture(for: $0) } }
-                row.onReset = { [weak self, weak row] in row.map { self?.reset($0) } }
+                // `weak row`: these closures live *on* the row's chip, so capturing it strongly would
+                // be a retain cycle — every row would leak on each Settings open.
+                row.chip.onActivate = { [weak self, weak row] in row.map { self?.beginCapture(for: $0) } }
+                row.chip.onReset = { [weak self, weak row] in row.map { self?.reset($0) } }
+                row.chip.onArrowUp = { [weak self, weak row] in row.map { self?.moveFocus(from: $0.chip, delta: -1) } }
+                row.chip.onArrowDown = { [weak self, weak row] in row.map { self?.moveFocus(from: $0.chip, delta: 1) } }
+                row.chip.onExitToNav = { [weak self] in self?.onExitToNav?() }
+                row.chip.onEsc = { [weak self] in self?.onClose?() }
                 rows.append(row)
                 rowsStack.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalTo: rowsStack.widthAnchor).isActive = true
@@ -79,39 +82,29 @@ final class SettingsKeybindsSection: SettingsSection {
         rowsStack.addArrangedSubview(resetAllButton)
         if let previous { rowsStack.setCustomSpacing(18, after: previous) }  // gap before Reset all
 
-        let doc = FlippedView()
-        doc.translatesAutoresizingMaskIntoConstraints = false
-        doc.addSubview(rowsStack)
+        rowsStack.addArrangedSubview(resetAllMessage)
+        rowsStack.setCustomSpacing(6, after: resetAllButton)  // tuck the success line under the button
 
-        let scroll = NSScrollView()
-        scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
-        scroll.verticalScroller = SlimScroller()
-        scroll.scrollerStyle = .overlay
-        scroll.autohidesScrollers = true
-        scroll.documentView = doc
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-
-        NSLayoutConstraint.activate([
-            doc.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
-            doc.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
-            doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-            // Inset the rows within the flipped document — padding on all four sides.
-            rowsStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: 18),
-            rowsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 20),
-            rowsStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -20),
-            rowsStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -18),
-        ])
+        let scroll = SettingsDetail.scroll(for: rowsStack)
+        detailScroll = scroll
         refreshRows()
         return scroll
     }
 
-    func detailStops() -> [NSView] { rows.map(\.recordButton) + [resetAllButton] }
+    func detailStops() -> [NSView] { rows.map(\.chip) + [resetAllButton] }
+
+    /// End an armed capture when the section is torn down (a nav switch) so the app-wide interceptor
+    /// doesn't keep diverting keystrokes with the recording popover already gone.
+    func sectionWillHide() {
+        if let row = capturingRow { endCapture(row) }
+    }
 
     // MARK: edits
 
-    /// Record the next chord through the interceptor (so an already-bound chord isn't pre-empted),
-    /// then rebind. Esc cancels; capture is one-shot (the handler ends it on the first event).
+    /// Record a chord through the interceptor (so an already-bound chord isn't pre-empted), showing a
+    /// hint bubble that previews the keys live. Capture stays armed — an invalid chord shows a warning
+    /// and lets the user try again; only a valid chord commits (with a success line, then a delayed
+    /// close). Esc cancels; Delete reverts to default.
     private func beginCapture(for row: KeybindRow) {
         // No interceptor means capture could never complete — bail before arming the row so it
         // doesn't stick on "Press keys…" with no way out. (Always wired in-app; a guard, not a path.)
@@ -119,71 +112,179 @@ final class SettingsKeybindsSection: SettingsSection {
             row.showMessage("Keybind capture is unavailable.")
             return
         }
+        captureCloseTimer?.cancel()
+        capturingRow?.setCapturing(false)  // clear any prior capturing / just-committed chip's state
         row.setCapturing(true)
         row.showMessage(nil)
+        showHint(for: row)  // calls hideHint, which nils capturingRow — so set it AFTER
+        capturingRow = row
         capturer.beginCapture { [weak self, weak row] event in
             guard let self, let row else { return }
-            self.capturer?.endCapture()
-            row.setCapturing(false)
-            if event.keyCode == 53 { return }  // Esc cancels — no change
-            guard let chord = Chord(event: event) else { return }
-            self.rebind(row, to: chord)
+            self.handleCaptureEvent(event, for: row)
         }
     }
 
-    private func rebind(_ row: KeybindRow, to chord: Chord) {
-        guard chord.command || chord.shift || chord.option || chord.control else {
-            row.showMessage("Needs at least one modifier."); return
-        }
-        if let owner = GeneralConfig.current.keymap[chord], owner != row.action {
-            row.showMessage("\(chord.displayGlyph) is already bound to \(CommandCatalog.spec(for: owner).title).")
+    private func handleCaptureEvent(_ event: NSEvent, for row: KeybindRow) {
+        if event.type == .flagsChanged {  // live modifier preview (⌘, ⌘⇧, …) before a key lands
+            hintBubble?.setPreview(Self.modifierGlyph(event.modifierFlags))
             return
         }
-        row.showMessage(nil)
-        desired = desired.filter { $0.value != row.action }  // drop this action's old chord(s)
-        desired[chord] = row.action  // the chord is free — a conflict would have been blocked above
-        persist(reportingRow: row)
+        // keyDown. Esc / backspace / forward-delete are commands (the popover promises them), not
+        // recordable chords.
+        if event.keyCode == 53 { endCapture(row); refreshRows(); return }  // Esc → cancel
+        if event.keyCode == 51 || event.keyCode == 117 { endCapture(row); reset(row); return }  // Delete → default
+        guard let chord = Chord(event: event) else { return }  // unmappable key — keep waiting
+        hintBubble?.setPreview(chord.displayGlyph)
+        hintBubble?.clearError()
+        guard chord.command || chord.shift || chord.option || chord.control else {
+            hintBubble?.showError("Add at least one modifier (⌘ ⇧ ⌥ ⌃).")
+            positionBubble(for: row)
+            return  // stay armed
+        }
+        if let owner = GeneralConfig.current.keymap[chord], owner != row.action {
+            hintBubble?.showError(
+                "\(chord.displayGlyph) is already bound to \(CommandCatalog.spec(for: owner).title).")
+            positionBubble(for: row)
+            return  // stay armed
+        }
+        commitRebind(row, to: chord)  // valid — apply, show success, close after a beat
     }
 
+    /// Apply a validated rebind, flash a success line, and close the popover after a short delay.
+    private func commitRebind(_ row: KeybindRow, to chord: Chord) {
+        capturer?.endCapture()
+        desired = desired.filter { $0.value != row.action }
+        desired[chord] = row.action
+        guard persist(reportingRow: row) else {  // write failed — persist showed the error; don't claim success
+            endCapture(row)
+            return
+        }
+        hintBubble?.setPreview(chord.displayGlyph)
+        hintBubble?.showSuccess("Shortcut saved.")
+        positionBubble(for: row)
+        let close = DispatchWorkItem { [weak self, weak row] in
+            self?.hideHint()
+            row?.setCapturing(false)
+        }
+        captureCloseTimer = close
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: close)
+    }
+
+    /// End an armed capture immediately (Esc / Delete) — the caller then restores or resets the row.
+    private func endCapture(_ row: KeybindRow) {
+        captureCloseTimer?.cancel()
+        capturer?.endCapture()
+        hideHint()
+        row.setCapturing(false)
+    }
+
+    /// Backspace on a focused chip: revert the action to its built-in default chord(s).
     private func reset(_ row: KeybindRow) {
         desired = desired.filter { $0.value != row.action }
         for (chord, action) in KeymapDefaults.map where action == row.action { desired[chord] = action }
         row.showMessage(nil)
         persist(reportingRow: row)
-        row.focusRecord()  // the reset icon just hid (no longer overridden) — keep focus on the row
+        row.focusChip()  // keep focus on the row after the reload
     }
 
     private func resetAll() {
         desired = reservedEntries(of: KeymapDefaults.map)
         rows.forEach { $0.showMessage(nil) }
-        persist(reportingRow: rows.last)  // Reset-all lives at the bottom — report near it, not the top
+        guard persist(reportingRow: rows.last) else { return }  // report a write error near the button
+        resetAllMessage.flash("Defaults restored.")
     }
 
-    /// Write the override set, reload the live config, then refresh every row from the new keymap. A
-    /// write failure reports on `reportingRow` (the row the user was editing, kept in view by the
-    /// focus scroll) so the message isn't stranded off-screen at the top of a long list.
-    private func persist(reportingRow: KeybindRow?) {
+    /// Write the override set, reload the live config, then refresh every row from the new keymap.
+    /// Returns whether the write succeeded. A failure reports on `reportingRow` (the row the user was
+    /// editing, kept in view by the focus scroll) so the message isn't stranded off-screen.
+    @discardableResult
+    private func persist(reportingRow: KeybindRow?) -> Bool {
         do {
             try ConfigWriter.apply(keybinds: desired)
         } catch {
             (reportingRow ?? rows.first)?.showMessage("Couldn't write config: \(error.localizedDescription)")
             // Roll the failed edit out of the in-memory map, back to what's on disk — otherwise it
             // rides along on the next successful write, silently applying an edit the user was told
-            // failed. (`refreshRows` restores keycaps/reset-icons; it leaves the error message set.)
+            // failed. (`refreshRows` restores the chips; it leaves the error message set.)
             desired = reservedEntries(of: GeneralConfig.current.keymap)
             refreshRows()
-            return
+            return false
         }
         AppConfig.reload()
         desired = reservedEntries(of: GeneralConfig.current.keymap)
         refreshRows()
+        return true
     }
 
     private func refreshRows() {
         for row in rows {
-            let shortcut = displayedChord(for: row.action)?.displayGlyph ?? ""
-            row.render(currentShortcut: shortcut, isOverridden: isOverridden(row.action))
+            row.render(currentShortcut: displayedChord(for: row.action)?.displayGlyph ?? "")
         }
+    }
+
+    // MARK: hint bubble
+
+    /// Float a themed hint over the detail pane, just below the capturing chip. Added to the scroll
+    /// view's superview (the detail container), so it tears down with the card — no orphaned bubble.
+    private func showHint(for row: KeybindRow) {
+        hideHint()
+        guard let host = detailScroll?.superview else { return }
+        // A transparent backdrop over the detail pane makes the popover modal: a click anywhere
+        // outside it cancels (rather than falling through and starting capture on the chip beneath).
+        let backdrop = BackdropView { [weak self] in self?.cancelCapture() }
+        backdrop.frame = host.bounds
+        backdrop.autoresizingMask = [.width, .height]
+        host.addSubview(backdrop)
+        hintBackdrop = backdrop
+        let bubble = KeybindHintBubble()
+        bubble.translatesAutoresizingMaskIntoConstraints = true
+        host.addSubview(bubble)  // above the backdrop
+        hintBubble = bubble
+        positionBubble(for: row)
+    }
+
+    /// Dismiss an armed capture from a click outside the popover — cancel, no change (like Esc).
+    private func cancelCapture() {
+        guard let row = capturingRow else { hideHint(); return }
+        endCapture(row)
+        refreshRows()
+    }
+
+    /// (Re)place the bubble just below its chip — re-run whenever its height changes (a warning or
+    /// success line replacing the instructions can grow it).
+    private func positionBubble(for row: KeybindRow) {
+        guard let bubble = hintBubble, let host = bubble.superview else { return }
+        bubble.layoutSubtreeIfNeeded()
+        let size = bubble.fittingSize
+        let chipRect = row.chip.convert(row.chip.bounds, to: host)
+        let x = max(8, min(chipRect.midX - size.width / 2, host.bounds.width - size.width - 8))
+        // Place the popover just past the chip; if that would run off the pane (a chip low in the
+        // scrolled list), use the far side, then clamp so it never draws off the bottom of the card.
+        let primary = host.isFlipped ? (chipRect.maxY + 6) : (chipRect.minY - size.height - 6)
+        let fallback = host.isFlipped ? (chipRect.minY - size.height - 6) : (chipRect.maxY + 6)
+        let maxY = max(8, host.bounds.height - size.height - 8)
+        var y = primary
+        if y < 8 || y > maxY { y = fallback }
+        y = max(8, min(y, maxY))
+        bubble.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
+    }
+
+    private func hideHint() {
+        hintBubble?.removeFromSuperview()
+        hintBubble = nil
+        hintBackdrop?.removeFromSuperview()
+        hintBackdrop = nil
+        capturingRow = nil
+    }
+
+    /// The modifier-only glyph for the live preview while keys are still being held (⌘, ⌘⇧, …).
+    private static func modifierGlyph(_ flags: NSEvent.ModifierFlags) -> String {
+        var glyph = ""
+        if flags.contains(.command) { glyph += "⌘" }
+        if flags.contains(.shift) { glyph += "⇧" }
+        if flags.contains(.option) { glyph += "⌥" }
+        if flags.contains(.control) { glyph += "⌃" }
+        return glyph
     }
 
     // MARK: helpers
@@ -199,24 +300,16 @@ final class SettingsKeybindsSection: SettingsSection {
         desired.filter { $0.value == action }.map(\.key).sorted { $0.configToken < $1.configToken }.first
     }
 
-    /// True when the action's current chords differ from its built-in defaults.
-    private func isOverridden(_ action: KeyInterceptor.ReservedChord) -> Bool {
-        let current = Set(desired.filter { $0.value == action }.map(\.key))
-        let defaults = Set(KeymapDefaults.map.filter { $0.value == action }.map(\.key))
-        return current != defaults
-    }
-
-    /// Move keyboard focus between the vertical stops (each row's record button, then "Reset all").
+    /// Move keyboard focus between the vertical stops (each row's chip, then "Reset all").
     private func moveFocus(from view: NSView, delta: Int) {
-        let stops = rows.map(\.recordButton) + [resetAllButton]
+        let stops = rows.map(\.chip) + [resetAllButton]
         guard let index = stops.firstIndex(where: { $0 === view }) else { return }
         guard let next = KeyboardFocus.step(from: index, delta: delta, count: stops.count) else { return }
         let target = stops[next]
         target.window?.makeFirstResponder(target)
         // AppKit doesn't scroll to a newly-focused responder — keep it in view. Scroll the whole row
-        // when the stop is a row's record button so the row's inline message shows too; else the stop
-        // itself. A little padding keeps it off the clip edge.
-        let scrollTarget: NSView = rows.first { $0.recordButton === target } ?? target
+        // when the stop is a row's chip so the row's inline message shows too; else the stop itself.
+        let scrollTarget: NSView = rows.first { $0.chip === target } ?? target
         scrollTarget.scrollToVisible(scrollTarget.bounds.insetBy(dx: 0, dy: -12))
     }
 }

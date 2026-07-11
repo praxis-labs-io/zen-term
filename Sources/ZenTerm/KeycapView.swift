@@ -15,11 +15,13 @@ final class KeycapView: NSView {
     ]
     private static let ink = Theme.current.chrome.ink(alpha: 0.55)
 
-    init(shortcut: String) {
+    /// `showsBackground: false` renders just the glyph tokens with no rounded fill — for a host that
+    /// supplies its own background (the keybind chip's full-width focus target).
+    init(shortcut: String, showsBackground: Bool = true) {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
-        layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        if showsBackground { layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor }
         translatesAutoresizingMaskIntoConstraints = false
 
         // A horizontal run of icon/text tokens; the spacing keeps the glyphs from crowding.
