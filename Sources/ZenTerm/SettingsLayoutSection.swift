@@ -382,21 +382,12 @@ final class SettingsLayoutSection: SettingsSection {
         guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: stops.count) else { return }
         let target = stops[next]
         target.window?.makeFirstResponder(target)
-        let scrollTarget = rows.first { $0.subviews(recursively: target) } ?? target
+        let scrollTarget = rows.first { target.isDescendant(of: $0) } ?? target
         scrollTarget.scrollToVisible(scrollTarget.bounds.insetBy(dx: 0, dy: -12))
     }
 
     private func rowFor(_ key: String) -> LayoutRow? {
         guard let control = controlForKey[key] else { return nil }
-        return rows.first { $0.subviews(recursively: control) }
-    }
-}
-
-extension NSView {
-    /// True if `view` is this view or nested anywhere beneath it — used to map a focused control
-    /// back to its row for scroll-into-view and messaging.
-    fileprivate func subviews(recursively view: NSView) -> Bool {
-        if view === self { return true }
-        return subviews.contains { $0.subviews(recursively: view) }
+        return rows.first { control.isDescendant(of: $0) }
     }
 }

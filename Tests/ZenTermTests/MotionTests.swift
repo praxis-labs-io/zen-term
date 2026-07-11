@@ -57,10 +57,14 @@ final class MotionTests: XCTestCase {
         XCTAssertFalse(Motion.isReduceMotionEnabled())
     }
 
-    func test_motionConfig_systemLeavesClosureUntouched() {
-        Motion.isReduceMotionEnabled = { true }  // stand in for "system says yes"
+    func test_motionConfig_systemRestoresTheSystemReader() {
+        // `.system` runs on every config change now, so it must UNDO a prior on/off override and
+        // fall back to reading the OS setting — not leave the forced closure in place.
+        let systemValue = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        MotionConfig.apply(.on)
+        XCTAssertTrue(Motion.isReduceMotionEnabled())
         MotionConfig.apply(.system)
-        XCTAssertTrue(Motion.isReduceMotionEnabled(), "`.system` must not override the existing closure")
+        XCTAssertEqual(Motion.isReduceMotionEnabled(), systemValue, "`.system` must restore the OS reader")
     }
 
     // MARK: - Pure geometry

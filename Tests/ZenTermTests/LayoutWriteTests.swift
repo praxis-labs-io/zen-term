@@ -4,10 +4,18 @@ import XCTest
 @testable import ZenTerm
 
 final class LayoutWriteTests: XCTestCase {
+    private var tempDirs: [URL] = []
+
+    override func tearDownWithError() throws {
+        for dir in tempDirs { try? FileManager.default.removeItem(at: dir) }
+        tempDirs = []
+    }
+
     private func makeTempDir() throws -> URL {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(
             "zt-layout-\(ProcessInfo.processInfo.globallyUniqueString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        tempDirs.append(dir)
         return dir
     }
 

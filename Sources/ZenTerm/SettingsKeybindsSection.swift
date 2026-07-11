@@ -133,10 +133,11 @@ final class SettingsKeybindsSection: SettingsSection {
             return
         }
         captureCloseTimer?.cancel()
-        capturingRow = row
+        capturingRow?.setCapturing(false)  // clear any prior capturing / just-committed chip's state
         row.setCapturing(true)
         row.showMessage(nil)
-        showHint(for: row)
+        showHint(for: row)  // calls hideHint, which nils capturingRow — so set it AFTER
+        capturingRow = row
         capturer.beginCapture { [weak self, weak row] event in
             guard let self, let row else { return }
             self.handleCaptureEvent(event, for: row)
@@ -174,7 +175,10 @@ final class SettingsKeybindsSection: SettingsSection {
         capturer?.endCapture()
         desired = desired.filter { $0.value != row.action }
         desired[chord] = row.action
-        persist(reportingRow: row)
+        guard persist(reportingRow: row) else {  // write failed — persist showed the error; don't claim success
+            endCapture(row)
+            return
+        }
         hintBubble?.setPreview(chord.displayGlyph)
         hintBubble?.showSuccess("Shortcut saved.")
         positionBubble(for: row)
