@@ -137,18 +137,20 @@ final class SettingsKeybindsSection: SettingsSection {
             hintBubble?.setPreview(Self.modifierGlyph(event.modifierFlags))
             return
         }
-        // keyDown. Esc/Delete are commands (the popover promises them), not recordable chords.
+        // keyDown. Esc / backspace / forward-delete are commands (the popover promises them), not
+        // recordable chords.
         if event.keyCode == 53 { endCapture(row); refreshRows(); return }  // Esc → cancel
-        if event.keyCode == 51 { endCapture(row); reset(row); return }  // Delete → revert to default
+        if event.keyCode == 51 || event.keyCode == 117 { endCapture(row); reset(row); return }  // Delete → default
         guard let chord = Chord(event: event) else { return }  // unmappable key — keep waiting
         hintBubble?.setPreview(chord.displayGlyph)
+        hintBubble?.clearError()
         guard chord.command || chord.shift || chord.option || chord.control else {
-            hintBubble?.showWarning("Needs at least one modifier — try again.")
+            hintBubble?.showError("Needs at least one modifier.")
             positionBubble(for: row)
             return  // stay armed
         }
         if let owner = GeneralConfig.current.keymap[chord], owner != row.action {
-            hintBubble?.showWarning("Already bound to \(CommandCatalog.spec(for: owner).title) — try again.")
+            hintBubble?.showError("Already bound to \(CommandCatalog.spec(for: owner).title).")
             positionBubble(for: row)
             return  // stay armed
         }

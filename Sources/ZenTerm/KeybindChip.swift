@@ -77,7 +77,7 @@ final class KeybindChip: NSView {
     override func keyDown(with event: NSEvent) {
         switch event.keyCode {
         case 36, 49: onActivate?()  // return / space → begin capture
-        case 51 where !isCapturing: onReset?()  // delete → revert to default
+        case 51, 117: onReset?()  // backspace / forward-delete → revert (capture diverts keys, so safe)
         case 126: onArrowUp?()  // up
         case 125: onArrowDown?()  // down
         case 123: onExitToNav?()  // left → nav

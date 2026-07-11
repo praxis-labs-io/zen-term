@@ -2,14 +2,15 @@ import AppKit
 
 /// The chord-capture popover — built on the toast card chrome (`FloatShadow` background + hairline
 /// edge + drop shadow). A header row (tinted keyboard badge + title), a full-width muted preview box
-/// that shows the chord live as it's typed, and a status line that starts as the cancel/remove keys
-/// and is replaced with a validation warning or a success message. Shown by the section beside a
-/// capturing keybind chip.
+/// that shows the chord live (centered) with a small red validation line tucked beneath it, and a
+/// status line (the cancel/remove keys, replaced by a success message on save). Shown by the section
+/// beside a capturing keybind chip.
 final class KeybindHintBubble: NSView {
     private static let width: CGFloat = 300
 
     private let previewHost = NSView()
     private let statusHost = NSView()
+    private let errorLabel = NSTextField(wrappingLabelWithString: "")
 
     init() {
         super.init(frame: .zero)
@@ -44,7 +45,7 @@ final class KeybindHintBubble: NSView {
         header.alignment = .centerY
         header.spacing = 10
 
-        // Full-width muted input-looking box holding the live chord preview.
+        // Full-width muted input-looking box holding the live chord preview, centered.
         let previewBox = NSView()
         previewBox.wantsLayer = true
         previewBox.layer?.cornerRadius = 6
@@ -53,9 +54,20 @@ final class KeybindHintBubble: NSView {
         previewHost.translatesAutoresizingMaskIntoConstraints = false
         previewBox.addSubview(previewHost)
 
+        // Small red validation line, tucked just under the preview; collapsed until there's an error.
+        errorLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        errorLabel.textColor = Theme.current.chrome.destructive.nsColor
+        errorLabel.preferredMaxLayoutWidth = Self.width - 28
+        errorLabel.isHidden = true
+
+        let previewGroup = NSStackView(views: [previewBox, errorLabel])
+        previewGroup.orientation = .vertical
+        previewGroup.alignment = .leading
+        previewGroup.spacing = 4
+
         statusHost.translatesAutoresizingMaskIntoConstraints = false
 
-        let col = NSStackView(views: [header, previewBox, statusHost])
+        let col = NSStackView(views: [header, previewGroup, statusHost])
         col.orientation = .vertical
         col.alignment = .leading
         col.spacing = 14
@@ -68,11 +80,13 @@ final class KeybindHintBubble: NSView {
             badge.heightAnchor.constraint(equalToConstant: 28),
             icon.centerXAnchor.constraint(equalTo: badge.centerXAnchor),
             icon.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
+            previewGroup.widthAnchor.constraint(equalTo: col.widthAnchor),
             previewBox.heightAnchor.constraint(equalToConstant: 34),
-            previewBox.widthAnchor.constraint(equalTo: col.widthAnchor),
-            previewHost.leadingAnchor.constraint(equalTo: previewBox.leadingAnchor, constant: 10),
-            previewHost.trailingAnchor.constraint(lessThanOrEqualTo: previewBox.trailingAnchor, constant: -10),
+            previewBox.widthAnchor.constraint(equalTo: previewGroup.widthAnchor),
+            previewHost.centerXAnchor.constraint(equalTo: previewBox.centerXAnchor),
             previewHost.centerYAnchor.constraint(equalTo: previewBox.centerYAnchor),
+            previewHost.leadingAnchor.constraint(greaterThanOrEqualTo: previewBox.leadingAnchor, constant: 10),
+            previewHost.trailingAnchor.constraint(lessThanOrEqualTo: previewBox.trailingAnchor, constant: -10),
             statusHost.widthAnchor.constraint(equalTo: col.widthAnchor),
             col.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
             col.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
@@ -86,7 +100,7 @@ final class KeybindHintBubble: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Show the chord being typed (its display glyph) in the preview box, or a placeholder when empty.
+    /// Show the chord being typed (its display glyph) centered in the preview box, or a placeholder.
     func setPreview(_ glyph: String) {
         previewHost.subviews.forEach { $0.removeFromSuperview() }
         let content: NSView
@@ -108,6 +122,13 @@ final class KeybindHintBubble: NSView {
         ])
     }
 
+    /// A small red validation line under the preview; the status controls below stay put.
+    func showError(_ text: String) {
+        errorLabel.stringValue = text
+        errorLabel.isHidden = false
+    }
+    func clearError() { errorLabel.isHidden = true }
+
     /// The default status line: the cancel / remove keys.
     func showInstructions() {
         let row = NSStackView(views: [
@@ -120,8 +141,13 @@ final class KeybindHintBubble: NSView {
         setStatus(row)
     }
 
-    func showWarning(_ text: String) { setStatus(message(text, color: Theme.current.chrome.destructive.nsColor)) }
-    func showSuccess(_ text: String) { setStatus(message(text, color: Theme.current.chrome.accent.nsColor)) }
+    /// Replace the status line with a success message before the popover closes.
+    func showSuccess(_ text: String) {
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.textColor = Theme.current.chrome.accent.nsColor
+        setStatus(label)
+    }
 
     private func setStatus(_ view: NSView) {
         statusHost.subviews.forEach { $0.removeFromSuperview() }
@@ -133,14 +159,6 @@ final class KeybindHintBubble: NSView {
             view.topAnchor.constraint(equalTo: statusHost.topAnchor),
             view.bottomAnchor.constraint(equalTo: statusHost.bottomAnchor),
         ])
-    }
-
-    private func message(_ text: String, color: NSColor) -> NSTextField {
-        let label = NSTextField(wrappingLabelWithString: text)
-        label.font = .systemFont(ofSize: 11, weight: .medium)
-        label.textColor = color
-        label.preferredMaxLayoutWidth = Self.width - 28
-        return label
     }
 
     /// A small inline key chip (`esc`, `del`) — a faint rounded box with muted monospaced text.
