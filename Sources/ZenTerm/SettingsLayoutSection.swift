@@ -133,6 +133,7 @@ final class SettingsLayoutSection: SettingsSection {
     private func addNumericRow(_ knob: NumericKnob, to stack: NSStackView) {
         scalarKeys.append(knob.key)
         let box = FieldBox(placeholder: LayoutFormat.number(knob.read(GeneralConfig.builtIn)))
+        box.field.alignment = .right  // numbers read right-aligned; shell/path fields stay left
         box.setText(fieldText(for: knob))
         box.onChange = { [weak self, weak box] in
             guard let self, let box else { return }
