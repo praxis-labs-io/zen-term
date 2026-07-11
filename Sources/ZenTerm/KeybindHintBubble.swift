@@ -6,7 +6,7 @@ import AppKit
 /// status line (the cancel/remove keys, replaced by a success message on save). Shown by the section
 /// beside a capturing keybind chip.
 final class KeybindHintBubble: NSView {
-    private static let width: CGFloat = 300
+    private static let width: CGFloat = 240
 
     private let previewHost = NSView()
     private let statusHost = NSView()
@@ -82,7 +82,7 @@ final class KeybindHintBubble: NSView {
             icon.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
             previewGroup.widthAnchor.constraint(equalTo: col.widthAnchor),
             previewBox.heightAnchor.constraint(equalToConstant: 34),
-            previewBox.widthAnchor.constraint(equalToConstant: 130),  // just wide enough for a chord
+            previewBox.widthAnchor.constraint(equalTo: previewGroup.widthAnchor),  // full width of the card
             previewHost.centerXAnchor.constraint(equalTo: previewBox.centerXAnchor),
             previewHost.centerYAnchor.constraint(equalTo: previewBox.centerYAnchor),
             previewHost.leadingAnchor.constraint(greaterThanOrEqualTo: previewBox.leadingAnchor, constant: 10),
