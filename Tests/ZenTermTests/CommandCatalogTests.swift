@@ -12,7 +12,7 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(
             names,
             [
-                "Open Workspace Picker", "Add Workspace…", "Open Lazygit",
+                "Open Workspace Picker", "Add Workspace…", "Settings…", "Open Lazygit",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab",
                 "Split Horizontally", "Split Vertically",

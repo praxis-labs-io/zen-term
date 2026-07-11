@@ -21,10 +21,12 @@ enum Theme {
         ]
     )
 
-    /// The resolved appearance for this launch — a user theme from
-    /// `~/.config/zen-term/theme`, or the built-in Rosé Pine Moon default. Resolved once,
-    /// lazily on first access (before the first window is built). Launch-only in v1.
-    static let current: AppTheme = ConfigLoader.loadAppTheme()
+    /// The resolved appearance for this launch, re-resolvable via `reloadCurrent()`. Reads the
+    /// general config for the font, so `GeneralConfig.reloadCurrent()` must run first.
+    static private(set) var current: AppTheme = ConfigLoader.loadAppTheme()
+
+    /// Re-read the theme (and font from the general config) and swap `current`.
+    static func reloadCurrent() { current = ConfigLoader.loadAppTheme() }
 
     private static func rgb(_ hex: UInt32) -> TerminalColor {
         TerminalColor(red: UInt8((hex >> 16) & 0xFF), green: UInt8((hex >> 8) & 0xFF), blue: UInt8(hex & 0xFF))

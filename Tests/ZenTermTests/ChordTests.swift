@@ -40,4 +40,36 @@ final class ChordTests: XCTestCase {
             XCTAssertFalse(chord.displayGlyph.isEmpty)
         }
     }
+
+    func test_configToken_roundTripsWithParse() {
+        let chords = [
+            Chord(command: true, shift: true, key: "p"),
+            Chord(command: true, key: ","),
+            Chord(command: true, shift: true, key: "\\"),
+            Chord(command: true, shift: true, key: "|"),
+            Chord(option: true, control: true, key: "5"),
+        ]
+        for chord in chords {
+            XCTAssertEqual(chord.configToken, expectedToken(chord))
+            XCTAssertEqual(Chord.parse(chord.configToken), chord)
+        }
+    }
+
+    func test_configToken_plusKey_roundTrips() {
+        // `+` is the token separator, so the plus key travels as the word `plus` — otherwise
+        // `cmd+shift++` parses as a stray empty token and the binding is lost on reload.
+        let plus = Chord(command: true, shift: true, key: "+")
+        XCTAssertEqual(plus.configToken, "cmd+shift+plus")
+        XCTAssertEqual(Chord.parse(plus.configToken), plus)
+        XCTAssertNil(Chord.parse("cmd+shift++"))  // the raw form is still rejected
+    }
+
+    private func expectedToken(_ c: Chord) -> String {
+        var t = ""
+        if c.command { t += "cmd+" }
+        if c.shift { t += "shift+" }
+        if c.option { t += "opt+" }
+        if c.control { t += "ctrl+" }
+        return t + c.key
+    }
 }

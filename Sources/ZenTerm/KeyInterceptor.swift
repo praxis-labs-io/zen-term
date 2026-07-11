@@ -1,5 +1,13 @@
 import AppKit
 
+/// The narrow capability the Settings Keybinds section needs from the key interceptor: divert
+/// the next keystrokes to a capture handler instead of routing them, so recording a new chord
+/// isn't pre-empted by the chord's current binding.
+protocol KeybindCapturing: AnyObject {
+    func beginCapture(_ handler: @escaping (NSEvent) -> Void)
+    func endCapture()
+}
+
 /// Selective global interception: consume a small reserved allowlist of chrome
 /// chords, pass everything else through to the PTY. This is the mechanism behind
 /// the "don't steal Ctrl+hjkl from nvim" rule — un-reserved chords are returned
@@ -21,6 +29,7 @@ final class KeyInterceptor {
         case toggleRepoPicker
         case toggleCommandPalette
         case addWorkspace
+        case openSettings
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?
@@ -33,10 +42,21 @@ final class KeyInterceptor {
 
     func setKeymap(_ map: [Chord: ReservedChord]) { keymap = map }
 
+    /// When set (the Settings card is recording), every keyDown is diverted here and consumed,
+    /// bypassing keymap routing — so even a bound chord (⌘P) is captured, not fired.
+    private var captureHandler: ((NSEvent) -> Void)?
+
+    func beginCapture(_ handler: @escaping (NSEvent) -> Void) { captureHandler = handler }
+    func endCapture() { captureHandler = nil }
+
     func start() {
         stop()  // idempotent: never stack a second monitor on repeat calls
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
+            if let captureHandler = self.captureHandler {
+                captureHandler(event)
+                return nil  // consumed — never routes or reaches the PTY while capturing
+            }
             // Build the chord this event represents and look it up. A hit is consumed (never
             // reaches the PTY); a miss — including every un-reserved chord like Ctrl+hjkl —
             // passes straight through to the terminal. The ⌘⇧\ → "|" shifted-symbol quirk is
@@ -54,3 +74,5 @@ final class KeyInterceptor {
 
     deinit { stop() }
 }
+
+extension KeyInterceptor: KeybindCapturing {}

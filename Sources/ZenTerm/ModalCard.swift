@@ -26,3 +26,19 @@ final class BackdropView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
     override func mouseDown(with event: NSEvent) { onClick() }
 }
+
+/// A flipped document view so a scroll view's offsets and `scrollToVisible` are top-down — a
+/// non-flipped document opens scrolled to the bottom. Shared by the modal card lists (the
+/// command palette / repo picker and the Settings sections).
+final class FlippedView: NSView { override var isFlipped: Bool { true } }
+
+/// A scroller pinned to the slim overlay style, so a modal card's list keeps a thin, auto-hiding
+/// bar even when the system "Show scroll bars: Always" setting would otherwise force the wide
+/// legacy track once the list overflows.
+final class SlimScroller: NSScroller {
+    override class var isCompatibleWithOverlayScrollers: Bool { true }
+    override var scrollerStyle: NSScroller.Style {
+        get { .overlay }
+        set {}
+    }
+}

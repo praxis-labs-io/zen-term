@@ -1,10 +1,11 @@
 import CoreGraphics
 import TerminalKit
 
-/// The resolved general configuration for this launch — everything the user can override in
-/// `~/.config/zen-term/config`, or the built-in defaults. Loaded once, lazily, launch-only
-/// (mirrors `Theme.current`). Reads nothing from `Theme`, so the two lazy `static let`s have
-/// a one-way dependency (`Theme.current → GeneralConfig.current`) and never deadlock.
+/// The resolved general configuration — everything the user can override in
+/// `~/.config/zen-term/config`, or the built-in defaults. `current` resolves at launch and is
+/// re-resolved by `AppConfig.reload()` after an in-app config write (mirrors `Theme.current`).
+/// Reads nothing from `Theme`, so the one-way dependency (`Theme.current → GeneralConfig.current`)
+/// holds and the two never deadlock.
 struct GeneralConfig: Equatable {
     enum ReduceMotion: Equatable { case system, on, off }
 
@@ -67,9 +68,12 @@ struct GeneralConfig: Equatable {
         floats: [],
         keymap: KeymapDefaults.map)
 
-    /// The resolved config for this launch. Immutable after load — changing it requires a
-    /// restart (launch-only in v1, same model as `Theme.current`).
-    static let current: GeneralConfig = ConfigLoader.loadGeneralConfig()
+    /// The resolved config for this launch, re-resolvable via `reloadCurrent()` when the Settings
+    /// card writes the file (see `AppConfig.reload()`). External hand-edits still need a relaunch.
+    static private(set) var current: GeneralConfig = ConfigLoader.loadGeneralConfig()
+
+    /// Re-read `config` from disk and swap `current`. Called by `AppConfig.reload()` after a write.
+    static func reloadCurrent() { current = ConfigLoader.loadGeneralConfig() }
 
     /// The subset that crosses the seam to the terminal backends.
     var terminalBehavior: TerminalBehavior {

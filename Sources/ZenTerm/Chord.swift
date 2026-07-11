@@ -41,7 +41,9 @@ struct Chord: Hashable {
             case "ctrl", "control": control = true
             default:
                 if key != nil { return nil }  // two non-modifier tokens → ambiguous
-                key = token
+                // `+` is the token separator, so the plus key travels as the word `plus`
+                // (ghostty's spelling too) — translate it back here. See `configToken`.
+                key = (token == "plus") ? "+" : token
             }
         }
         guard let key else { return nil }
@@ -65,6 +67,20 @@ struct Chord: Hashable {
         if control { glyph += "⌃" }
         glyph += key.count == 1 ? key.uppercased() : key
         return glyph
+    }
+
+    /// The config-file word form the writer emits (`cmd+shift+g`) — modifiers in the
+    /// repo's order (cmd, shift, opt, ctrl) then the key. The inverse of `parse`, mirroring
+    /// `displayGlyph`'s glyph form.
+    var configToken: String {
+        var token = ""
+        if command { token += "cmd+" }
+        if shift { token += "shift+" }
+        if option { token += "opt+" }
+        if control { token += "ctrl+" }
+        // The plus key can't travel literally — `+` is the token separator, so `cmd+shift++`
+        // would parse as a stray empty token. Emit the word `plus`; `parse` maps it back.
+        return token + (key == "+" ? "plus" : key)
     }
 
     /// Build the chord an `NSEvent` represents, for keymap lookup. Mirrors the modifier +

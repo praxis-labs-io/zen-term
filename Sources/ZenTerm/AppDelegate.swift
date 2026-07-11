@@ -29,6 +29,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         keys.onReservedChord = { [weak self] chord in self?.route(chord) }
         keys.setKeymap(GeneralConfig.current.keymap)
         keys.start()
+
+        // The one live consumer in PR1: when config changes (a keybind edit in the Settings card),
+        // rebuild the interceptor's keymap so the rebind takes effect with no relaunch.
+        NotificationCenter.default.addObserver(
+            forName: .configDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.keys.setKeymap(GeneralConfig.current.keymap)
+        }
+
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -56,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let offset = CGFloat(windows.count) * 28
         let rect = NSRect(x: 0, y: 0, width: 900, height: 560).offsetBy(dx: offset, dy: -offset)
         let wc = WindowController(contentRect: rect, initialCWD: initialCWD)
+        wc.keybindCapturer = keys
         if centered { wc.window.center() }
         wc.onClosed = { [weak self, weak wc] in
             guard let self, let wc else { return }

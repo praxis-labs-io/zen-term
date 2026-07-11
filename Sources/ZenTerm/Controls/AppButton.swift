@@ -25,12 +25,16 @@ final class AppButton: NSButton {
     var onArrowDown: (() -> Void)?
     var onArrowLeft: (() -> Void)?
     var onArrowRight: (() -> Void)?
+    /// Esc while focused (opt-in, like the arrows) — used by the Settings card so Esc closes from
+    /// any focused button, not only the nav rows.
+    var onEsc: (() -> Void)?
     /// Draw the accent focus outline without being first responder — used by `SegmentedControl`
     /// to outline its selected segment while the control (not the segment) holds focus.
     var showsFocusOutline = false { didSet { restyle() } }
 
     private let variant: Variant
-    private let labelText: String
+    private let symbolName: String?
+    private var labelText: String
     private var isHovered = false { didSet { restyle() } }
     private var isFocusedStop = false { didSet { restyle() } }
     private var trackingAreaRef: NSTrackingArea?
@@ -50,11 +54,12 @@ final class AppButton: NSButton {
     }
 
     init(
-        title: String, variant: Variant, keyEquivalent: String = "",
+        title: String = "", variant: Variant, symbol: String? = nil, keyEquivalent: String = "",
         keyEquivalentModifierMask: NSEvent.ModifierFlags = [], onTap: @escaping () -> Void = {}
     ) {
         self.onTap = onTap
         self.variant = variant
+        self.symbolName = symbol
         self.labelText = title
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -62,6 +67,12 @@ final class AppButton: NSButton {
         wantsLayer = true
         layer?.cornerRadius = 6
         setButtonType(.momentaryChange)
+        if let symbol {
+            let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
+            image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+                .withSymbolConfiguration(config)
+            imagePosition = .imageOnly
+        }
         target = self
         action = #selector(fire)
         self.keyEquivalent = keyEquivalent
@@ -70,6 +81,13 @@ final class AppButton: NSButton {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Change the button's label after init (e.g. "Set" → "Change" as a keybind row's recorded
+    /// state changes) and restyle so the new title picks up the current variant/state colors.
+    func setTitle(_ title: String) {
+        labelText = title
+        restyle()
+    }
 
     // MARK: keyboard focus (form flow)
 
@@ -96,6 +114,10 @@ final class AppButton: NSButton {
         case 125: onArrowDown?()  // down
         case 123 where onArrowLeft != nil: onArrowLeft?()  // left
         case 124 where onArrowRight != nil: onArrowRight?()  // right
+        // Tab / Shift-Tab advance and retreat like Down / Up — and stay consumed here so focus
+        // can't jump the key-view loop out of the card's 2D model.
+        case 48: event.modifierFlags.contains(.shift) ? onArrowUp?() : onArrowDown?()
+        case 53 where onEsc != nil: onEsc?()  // esc
         case 36, 76, 49: fire()  // return / enter / space → activate
         default: super.keyDown(with: event)
         }
@@ -145,12 +167,16 @@ final class AppButton: NSButton {
         let outlined = isFocusedStop || showsFocusOutline
         layer?.borderWidth = outlined ? 1.5 : 0
         layer?.borderColor = outlined ? chrome.accent.nsColor.cgColor : nil
-        attributedTitle = NSAttributedString(
-            string: labelText,
-            attributes: [
-                .foregroundColor: textColor,
-                .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
-            ])
+        if symbolName != nil {
+            contentTintColor = textColor  // tint the SF Symbol like the variant's text would be
+        } else {
+            attributedTitle = NSAttributedString(
+                string: labelText,
+                attributes: [
+                    .foregroundColor: textColor,
+                    .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+                ])
+        }
     }
 
     @objc private func fire() { onTap() }
