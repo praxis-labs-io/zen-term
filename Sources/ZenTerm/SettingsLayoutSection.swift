@@ -52,6 +52,8 @@ final class SettingsLayoutSection: SettingsSection {
     ]
 
     private let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
+    private let resetAllMessage = NSTextField(labelWithString: "")
+    private var resetAllMessageTimer: DispatchWorkItem?
     private var rows: [LayoutRow] = []
     private var stops: [NSView] = []  // ordered vertical focus stops: each row's control + Reset-all
     private var controlForKey: [String: NSView] = [:]
@@ -100,6 +102,12 @@ final class SettingsLayoutSection: SettingsSection {
         rowsStack.addArrangedSubview(resetAllButton)
         if let previous { rowsStack.setCustomSpacing(20, after: previous) }  // gap before Reset all
         stops.append(resetAllButton)
+
+        resetAllMessage.font = .systemFont(ofSize: 11, weight: .medium)
+        resetAllMessage.textColor = Theme.current.chrome.accent.nsColor
+        resetAllMessage.isHidden = true
+        rowsStack.addArrangedSubview(resetAllMessage)
+        rowsStack.setCustomSpacing(6, after: resetAllButton)  // tuck the success line under the button
 
         let doc = FlippedView()
         doc.translatesAutoresizingMaskIntoConstraints = false
@@ -279,20 +287,30 @@ final class SettingsLayoutSection: SettingsSection {
             persist({ try ConfigWriter.apply(removals: [key]) }, reportKey: row)
         }
     }
-    private func resetAll() { persist({ try ConfigWriter.apply(removals: Set(self.scalarKeys)) }, reportKey: nil) }
+    private func resetAll() {
+        guard persist({ try ConfigWriter.apply(removals: Set(self.scalarKeys)) }, reportKey: nil) else { return }
+        resetAllMessage.stringValue = "Defaults restored."
+        resetAllMessage.isHidden = false
+        let hide = DispatchWorkItem { [weak self] in self?.resetAllMessage.isHidden = true }
+        resetAllMessageTimer?.cancel()
+        resetAllMessageTimer = hide
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: hide)
+    }
 
-    /// Run a write, reload, and refresh every row from the new config. On failure, report on the
-    /// edited row and return — there's no staged state here (unlike keybinds) to roll back.
-    private func persist(_ write: () throws -> Void, reportKey: String?) {
+    /// Run a write, reload, and refresh every row from the new config; returns whether it succeeded.
+    /// On failure, report on the edited row — there's no staged state here (unlike keybinds).
+    @discardableResult
+    private func persist(_ write: () throws -> Void, reportKey: String?) -> Bool {
         do {
             try write()
         } catch {
             (reportKey.flatMap(rowFor) ?? rows.first)?.showMessage(
                 "Couldn't write config: \(error.localizedDescription)")
-            return
+            return false
         }
         AppConfig.reload()
         refreshRows()
+        return true
     }
 
     /// Sync every control to the reloaded config: a numeric field shows the value only when it's

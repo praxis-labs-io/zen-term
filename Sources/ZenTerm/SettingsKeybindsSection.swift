@@ -26,7 +26,11 @@ final class SettingsKeybindsSection: SettingsSection {
     private let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
     private weak var detailScroll: NSScrollView?
     private var hintBubble: KeybindHintBubble?
+    private var hintBackdrop: NSView?
+    private weak var capturingRow: KeybindRow?
     private var captureCloseTimer: DispatchWorkItem?
+    private let resetAllMessage = NSTextField(labelWithString: "")
+    private var resetAllMessageTimer: DispatchWorkItem?
 
     init(capturer: KeybindCapturing?) { self.capturer = capturer }
 
@@ -79,6 +83,12 @@ final class SettingsKeybindsSection: SettingsSection {
         rowsStack.addArrangedSubview(resetAllButton)
         if let previous { rowsStack.setCustomSpacing(18, after: previous) }  // gap before Reset all
 
+        resetAllMessage.font = .systemFont(ofSize: 11, weight: .medium)
+        resetAllMessage.textColor = Theme.current.chrome.accent.nsColor
+        resetAllMessage.isHidden = true
+        rowsStack.addArrangedSubview(resetAllMessage)
+        rowsStack.setCustomSpacing(6, after: resetAllButton)  // tuck the success line under the button
+
         let doc = FlippedView()
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(rowsStack)
@@ -123,6 +133,7 @@ final class SettingsKeybindsSection: SettingsSection {
             return
         }
         captureCloseTimer?.cancel()
+        capturingRow = row
         row.setCapturing(true)
         row.showMessage(nil)
         showHint(for: row)
@@ -195,13 +206,25 @@ final class SettingsKeybindsSection: SettingsSection {
     private func resetAll() {
         desired = reservedEntries(of: KeymapDefaults.map)
         rows.forEach { $0.showMessage(nil) }
-        persist(reportingRow: rows.last)  // Reset-all lives at the bottom — report near it, not the top
+        guard persist(reportingRow: rows.last) else { return }  // report a write error near the button
+        flashResetAllSuccess()
     }
 
-    /// Write the override set, reload the live config, then refresh every row from the new keymap. A
-    /// write failure reports on `reportingRow` (the row the user was editing, kept in view by the
-    /// focus scroll) so the message isn't stranded off-screen at the top of a long list.
-    private func persist(reportingRow: KeybindRow?) {
+    /// Flash a success line under the "Reset all" button, then fade it after a couple seconds.
+    private func flashResetAllSuccess() {
+        resetAllMessage.stringValue = "Defaults restored."
+        resetAllMessage.isHidden = false
+        let hide = DispatchWorkItem { [weak self] in self?.resetAllMessage.isHidden = true }
+        resetAllMessageTimer?.cancel()
+        resetAllMessageTimer = hide
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: hide)
+    }
+
+    /// Write the override set, reload the live config, then refresh every row from the new keymap.
+    /// Returns whether the write succeeded. A failure reports on `reportingRow` (the row the user was
+    /// editing, kept in view by the focus scroll) so the message isn't stranded off-screen.
+    @discardableResult
+    private func persist(reportingRow: KeybindRow?) -> Bool {
         do {
             try ConfigWriter.apply(keybinds: desired)
         } catch {
@@ -211,11 +234,12 @@ final class SettingsKeybindsSection: SettingsSection {
             // failed. (`refreshRows` restores the chips; it leaves the error message set.)
             desired = reservedEntries(of: GeneralConfig.current.keymap)
             refreshRows()
-            return
+            return false
         }
         AppConfig.reload()
         desired = reservedEntries(of: GeneralConfig.current.keymap)
         refreshRows()
+        return true
     }
 
     private func refreshRows() {
@@ -231,11 +255,25 @@ final class SettingsKeybindsSection: SettingsSection {
     private func showHint(for row: KeybindRow) {
         hideHint()
         guard let host = detailScroll?.superview else { return }
+        // A transparent backdrop over the detail pane makes the popover modal: a click anywhere
+        // outside it cancels (rather than falling through and starting capture on the chip beneath).
+        let backdrop = BackdropView { [weak self] in self?.cancelCapture() }
+        backdrop.frame = host.bounds
+        backdrop.autoresizingMask = [.width, .height]
+        host.addSubview(backdrop)
+        hintBackdrop = backdrop
         let bubble = KeybindHintBubble()
         bubble.translatesAutoresizingMaskIntoConstraints = true
-        host.addSubview(bubble)
+        host.addSubview(bubble)  // above the backdrop
         hintBubble = bubble
         positionBubble(for: row)
+    }
+
+    /// Dismiss an armed capture from a click outside the popover — cancel, no change (like Esc).
+    private func cancelCapture() {
+        guard let row = capturingRow else { hideHint(); return }
+        endCapture(row)
+        refreshRows()
     }
 
     /// (Re)place the bubble just below its chip — re-run whenever its height changes (a warning or
@@ -253,6 +291,9 @@ final class SettingsKeybindsSection: SettingsSection {
     private func hideHint() {
         hintBubble?.removeFromSuperview()
         hintBubble = nil
+        hintBackdrop?.removeFromSuperview()
+        hintBackdrop = nil
+        capturingRow = nil
     }
 
     /// The modifier-only glyph for the live preview while keys are still being held (⌘, ⌘⇧, …).
