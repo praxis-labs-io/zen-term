@@ -1,8 +1,8 @@
 import AppKit
 
 /// The chord-capture popover — built on the same card chrome as a toast (`FloatShadow` background +
-/// hairline edge + drop shadow, a tinted icon badge, a title and body column). Shown by the section
-/// beside a capturing keybind chip: a title, an example chord, and the cancel / remove keys.
+/// hairline edge + drop shadow). A header row (tinted keyboard badge + title), a centered example
+/// chord, and the cancel / remove keys. Shown by the section beside a capturing keybind chip.
 final class KeybindHintBubble: NSView {
     init() {
         super.init(frame: .zero)
@@ -32,7 +32,28 @@ final class KeybindHintBubble: NSView {
         title.font = .systemFont(ofSize: 13, weight: .semibold)
         title.textColor = Theme.current.chrome.foreground.nsColor
 
-        let example = KeycapView(shortcut: "⌘P")
+        // Badge + title on one line.
+        let header = NSStackView(views: [badge, title])
+        header.orientation = .horizontal
+        header.alignment = .centerY
+        header.spacing = 10
+
+        // A centered "eg. ⌘P" example so it clearly reads as a sample chord.
+        let example = NSStackView(views: [Self.muted("eg."), KeycapView(shortcut: "⌘P")])
+        example.orientation = .horizontal
+        example.alignment = .centerY
+        example.spacing = 6
+        example.translatesAutoresizingMaskIntoConstraints = false
+        let exampleWrap = NSView()
+        exampleWrap.translatesAutoresizingMaskIntoConstraints = false
+        exampleWrap.addSubview(example)
+        NSLayoutConstraint.activate([
+            example.centerXAnchor.constraint(equalTo: exampleWrap.centerXAnchor),
+            example.topAnchor.constraint(equalTo: exampleWrap.topAnchor),
+            example.bottomAnchor.constraint(equalTo: exampleWrap.bottomAnchor),
+            example.leadingAnchor.constraint(greaterThanOrEqualTo: exampleWrap.leadingAnchor),
+            example.trailingAnchor.constraint(lessThanOrEqualTo: exampleWrap.trailingAnchor),
+        ])
 
         let instructions = NSStackView(views: [
             Self.keyCap("esc"), Self.muted("to cancel"), Self.muted("·"),
@@ -42,27 +63,23 @@ final class KeybindHintBubble: NSView {
         instructions.alignment = .centerY
         instructions.spacing = 5
 
-        let col = NSStackView(views: [title, example, instructions])
+        let col = NSStackView(views: [header, exampleWrap, instructions])
         col.orientation = .vertical
         col.alignment = .leading
-        col.spacing = 8
-
-        let root = NSStackView(views: [badge, col])
-        root.orientation = .horizontal
-        root.alignment = .top
-        root.spacing = 12
-        root.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(root)
+        col.spacing = 10
+        col.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(col)
 
         NSLayoutConstraint.activate([
             badge.widthAnchor.constraint(equalToConstant: 28),
             badge.heightAnchor.constraint(equalToConstant: 28),
             icon.centerXAnchor.constraint(equalTo: badge.centerXAnchor),
             icon.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
-            root.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            root.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            root.topAnchor.constraint(equalTo: topAnchor, constant: 12),
-            root.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
+            exampleWrap.widthAnchor.constraint(equalTo: col.widthAnchor),  // full width so it centers
+            col.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            col.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            col.topAnchor.constraint(equalTo: topAnchor, constant: 14),
+            col.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -14),
         ])
     }
 
