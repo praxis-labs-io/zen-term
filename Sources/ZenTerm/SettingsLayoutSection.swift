@@ -196,7 +196,9 @@ final class SettingsLayoutSection: SettingsSection {
 
     private func makeRow(key: String, caption: String, control: NSView, note: String?) -> LayoutRow {
         let row = LayoutRow(caption: caption, control: control, note: note)
-        row.onReset = { [weak self] in self?.reset(key: key, row: row) }
+        // `weak row`: this closure lives *on* the row, so capturing it strongly would be a retain
+        // cycle — every row (and its subtree) would leak on each Settings open.
+        row.onReset = { [weak self, weak row] in row.map { self?.reset(key: key, row: $0) } }
         row.onArrowUp = { [weak self, weak control] in control.map { self?.moveFocus(from: $0, delta: -1) } }
         row.onArrowDown = { [weak self, weak control] in control.map { self?.moveFocus(from: $0, delta: 1) } }
         row.onEsc = { [weak self] in self?.onClose?() }
@@ -233,6 +235,7 @@ final class SettingsLayoutSection: SettingsSection {
             seg.onArrowDown = { [weak self] in self?.moveFocus(from: seg, delta: 1) }
             seg.onTab = toReset
             seg.onBacktab = { [weak self] in self?.onExitToNav?() }
+            seg.onEsc = { [weak self] in self?.onClose?() }
         default:
             break
         }
@@ -263,11 +266,13 @@ final class SettingsLayoutSection: SettingsSection {
     }
     private func reset(key: String, row: LayoutRow) {
         persist({ try ConfigWriter.apply(removals: [key]) }, reportKey: key)
+        row.onFocusControl?()  // the reset icon just hid (no longer overridden) — keep focus on the row
     }
     private func resetAll() { persist({ try ConfigWriter.apply(removals: Set(self.scalarKeys)) }, reportKey: nil) }
 
     /// Run a write, reload, and refresh every row from the new config. On failure, report on the
-    /// edited row and rebuild the detail view so controls snap back to disk state.
+    /// edited row and return — there's no staged `desired` state here (unlike keybinds) to roll
+    /// back or go stale, so nothing needs re-rendering.
     private func persist(_ write: () throws -> Void, reportKey: String?) {
         do {
             try write()

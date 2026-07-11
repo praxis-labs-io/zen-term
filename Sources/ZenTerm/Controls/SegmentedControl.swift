@@ -12,6 +12,7 @@ final class SegmentedControl: NSView {
     var onArrowDown: (() -> Void)?
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
+    var onEsc: (() -> Void)?
 
     private var segments: [AppButton] = []
 
@@ -87,7 +88,9 @@ final class SegmentedControl: NSView {
         case 124: select(selectedIndex + 1)  // right
         case 126: onArrowUp?()  // up → previous field
         case 125, 36, 76: onArrowDown?()  // down / return / enter → next field
-        case 48: event.modifierFlags.contains(.shift) ? onBacktab?() : onTab?()  // ⇧tab / tab
+        case 48 where onTab != nil || onBacktab != nil:
+            event.modifierFlags.contains(.shift) ? onBacktab?() : onTab?()  // ⇧tab / tab
+        case 53 where onEsc != nil: onEsc?()  // esc
         default: super.keyDown(with: event)
         }
     }
