@@ -480,8 +480,9 @@ final class WindowController: NSObject {
         if modal?.kind == .settings { closeModal(); return }
         let overlay = SettingsOverlay(
             sections: [
-                SettingsKeybindsSection(capturer: keybindCapturer),
                 SettingsAppearanceSection(),
+                SettingsTerminalSection(),
+                SettingsKeybindsSection(capturer: keybindCapturer),
             ],
             capturer: keybindCapturer,
             background: Theme.current.chrome.background.nsColor,

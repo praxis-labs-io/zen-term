@@ -1,0 +1,56 @@
+import AppKit
+import TerminalKit
+
+/// The Terminal settings section: font, cursor, input, and shell knobs. A subclass of
+/// `SettingsFormSection` — it only declares its groups. Every knob applies to new tabs (per-surface
+/// config read at surface construction), matching how shell has always behaved.
+final class SettingsTerminalSection: SettingsFormSection {
+    override var navTitle: String { "Terminal" }
+
+    private static let cursorStyles: [TerminalBehavior.CursorStyle] = [.block, .bar, .underline]
+
+    override func populate() {
+        addGroup("Font") {
+            self.addTextRow(
+                key: "font-family", caption: "Font family", blurb: "Terminal font (new tabs)",
+                placeholder: GeneralConfig.builtIn.fontName, read: { $0.fontName }, width: 200)
+            self.addNumericRow(
+                key: "font-size", caption: "Font size", blurb: "Point size (new tabs)",
+                range: 6...72, read: { $0.fontSize }, width: 64)
+        }
+        addGroup("Cursor") {
+            self.addSegmentedRow(
+                key: "cursor-style", caption: "Style", blurb: "Cursor shape (new tabs)",
+                options: ["Block", "Bar", "Underline"], read: { self.cursorStyleIndex($0) },
+                token: { LayoutFormat.cursorStyleToken(Self.cursorStyles[$0]) }, notifiesOnReselect: false)
+            self.addSegmentedRow(
+                key: "cursor-style-blink", caption: "Blink", blurb: "Blink the cursor (new tabs)",
+                options: ["On", "Off"], read: { $0.cursorBlink ? 0 : 1 },
+                token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
+            self.addNumericRow(
+                key: "cursor-thickness", caption: "Thickness", blurb: "Bar/underline thickness in px (new tabs)",
+                range: 1...12, read: { CGFloat($0.cursorThickness) }, width: 64)
+        }
+        addGroup("Input") {
+            self.addSegmentedRow(
+                key: "macos-option-as-alt", caption: "Option as Alt", blurb: "Send Option as Meta (new tabs)",
+                options: ["On", "Off"], read: { $0.optionAsAlt ? 0 : 1 },
+                token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
+            self.addNumericRow(
+                key: "scroll-multiplier", caption: "Scroll speed", blurb: "Scroll wheel multiplier (new tabs)",
+                range: 0.1...10, read: { CGFloat($0.scrollMultiplier) }, width: 64)
+        }
+        addGroup("Shell") {
+            self.addTextRow(
+                key: "shell", caption: "Shell", blurb: "Login shell (new tabs)", placeholder: "login shell",
+                read: { $0.shell ?? "" }, width: 200)
+            self.addTextRow(
+                key: "shell-args", caption: "Shell args", blurb: "Passed to the shell (new tabs)",
+                placeholder: "optional", read: { LayoutFormat.joinArgs($0.shellArgs) }, width: 200)
+        }
+    }
+
+    private func cursorStyleIndex(_ c: GeneralConfig) -> Int {
+        Self.cursorStyles.firstIndex(of: c.cursorStyle) ?? 0
+    }
+}
