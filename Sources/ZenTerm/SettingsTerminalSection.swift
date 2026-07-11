@@ -21,7 +21,7 @@ final class SettingsTerminalSection: SettingsFormSection {
         addGroup("Cursor") {
             self.addSegmentedRow(
                 key: "cursor-style", caption: "Style", blurb: "Cursor shape (new tabs)",
-                options: ["Block", "Bar", "Underline"], read: { self.cursorStyleIndex($0) },
+                options: ["Block", "Bar", "Underline"], read: { Self.cursorStyleIndex($0) },
                 token: { LayoutFormat.cursorStyleToken(Self.cursorStyles[$0]) }, notifiesOnReselect: false)
             self.addSegmentedRow(
                 key: "cursor-style-blink", caption: "Blink", blurb: "Blink the cursor (new tabs)",
@@ -50,7 +50,9 @@ final class SettingsTerminalSection: SettingsFormSection {
         }
     }
 
-    private func cursorStyleIndex(_ c: GeneralConfig) -> Int {
-        Self.cursorStyles.firstIndex(of: c.cursorStyle) ?? 0
+    /// Cursor style shown by index; static so the `read` closure the base stores per row doesn't
+    /// capture `self` (which would retain-cycle through the section's `refreshers`).
+    private static func cursorStyleIndex(_ c: GeneralConfig) -> Int {
+        cursorStyles.firstIndex(of: c.cursorStyle) ?? 0
     }
 }
