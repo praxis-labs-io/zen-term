@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import ZenTerm
 
 final class LayoutFormatTests: XCTestCase {

@@ -89,7 +89,8 @@ final class Slider: NSView {
         let usable = track.frame.width - thumbSize
         let x = track.frame.minX + thumbSize / 2 + max(0, min(1, fraction)) * usable
         fill.frame = NSRect(x: track.frame.minX, y: track.frame.minY, width: x - track.frame.minX, height: trackHeight)
-        thumb.frame = NSRect(x: x - thumbSize / 2, y: (bounds.height - thumbSize) / 2, width: thumbSize, height: thumbSize)
+        thumb.frame = NSRect(
+            x: x - thumbSize / 2, y: (bounds.height - thumbSize) / 2, width: thumbSize, height: thumbSize)
     }
 
     // MARK: keyboard
@@ -120,7 +121,8 @@ final class Slider: NSView {
         let usable = track.frame.width - thumbSize
         guard usable > 0 else { return }
         let fraction = (local.x - track.frame.minX - thumbSize / 2) / usable
-        apply(Slider.snap(range.lowerBound + fraction * (range.upperBound - range.lowerBound), range: range, step: step))
+        apply(
+            Slider.snap(range.lowerBound + fraction * (range.upperBound - range.lowerBound), range: range, step: step))
     }
 
     private func apply(_ newValue: CGFloat) {
