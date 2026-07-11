@@ -25,22 +25,6 @@ enum LayoutFormat {
         }
     }
 
-    static func reduceMotionIndex(_ r: GeneralConfig.ReduceMotion) -> Int {
-        switch r {
-        case .system: return 0
-        case .on: return 1
-        case .off: return 2
-        }
-    }
-
-    static func reduceMotion(fromIndex index: Int) -> GeneralConfig.ReduceMotion {
-        switch index {
-        case 1: return .on
-        case 2: return .off
-        default: return .system
-        }
-    }
-
     static func joinArgs(_ args: [String]) -> String { args.joined(separator: " ") }
 
     static func splitArgs(_ text: String) -> [String] {

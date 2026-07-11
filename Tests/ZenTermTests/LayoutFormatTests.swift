@@ -22,12 +22,10 @@ final class LayoutFormatTests: XCTestCase {
         XCTAssertEqual(LayoutFormat.parseNumber(" 0.82 ", in: 0...1), 0.82)
     }
 
-    func test_reduceMotion_indexRoundTrips() {
-        for (index, r) in [(0, GeneralConfig.ReduceMotion.system), (1, .on), (2, .off)] {
-            XCTAssertEqual(LayoutFormat.reduceMotion(fromIndex: index), r)
-            XCTAssertEqual(LayoutFormat.reduceMotionIndex(r), index)
-        }
+    func test_reduceMotion_tokens() {
+        XCTAssertEqual(LayoutFormat.reduceMotionToken(.system), "system")
         XCTAssertEqual(LayoutFormat.reduceMotionToken(.on), "on")
+        XCTAssertEqual(LayoutFormat.reduceMotionToken(.off), "off")
     }
 
     func test_args_joinSplitRoundTrips() {

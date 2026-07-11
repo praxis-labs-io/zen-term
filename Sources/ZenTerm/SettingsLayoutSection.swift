@@ -11,14 +11,14 @@ final class SettingsLayoutSection: SettingsSection {
     var onExitToNav: (() -> Void)?
     var onClose: (() -> Void)?
 
-    /// A numeric (CGFloat) knob: config key, caption, valid range, and how to read its value from a
-    /// resolved config. `read(GeneralConfig.builtIn)` is the placeholder + blank-state default;
-    /// `note` labels units / new-tab-only knobs.
+    /// A numeric (CGFloat) knob: config key, caption, a short `blurb` describing it, valid range, and
+    /// how to read its value. `read(GeneralConfig.builtIn)` is the placeholder + blank-state default;
+    /// the row's subtext is the blurb plus the range.
     private struct NumericKnob {
         let key: String
         let caption: String
+        let blurb: String
         let range: ClosedRange<CGFloat>
-        let note: String?
         let read: (GeneralConfig) -> CGFloat
     }
 
@@ -27,26 +27,26 @@ final class SettingsLayoutSection: SettingsSection {
             "Layout",
             [
                 NumericKnob(
-                    key: "backdrop-alpha", caption: "Backdrop alpha", range: 0...1, note: nil,
-                    read: { $0.backdropAlpha }),
+                    key: "backdrop-alpha", caption: "Backdrop alpha", blurb: "Tint strength over the window blur",
+                    range: 0...1, read: { $0.backdropAlpha }),
                 NumericKnob(
-                    key: "window-gutter", caption: "Window gutter", range: 0...64, note: "px",
-                    read: { $0.windowGutter }),
+                    key: "window-gutter", caption: "Window gutter", blurb: "Space around the window edge",
+                    range: 0...64, read: { $0.windowGutter }),
                 NumericKnob(
-                    key: "pane-gap", caption: "Pane gap", range: 0...64, note: "px",
-                    read: { $0.panelGap }),
+                    key: "pane-gap", caption: "Pane gap", blurb: "Space between split panes",
+                    range: 0...64, read: { $0.panelGap }),
                 NumericKnob(
-                    key: "bottom-drawer-fraction", caption: "Bottom drawer", range: 0.1...0.9, note: "new tabs",
-                    read: { $0.bottomDrawerFraction }),
+                    key: "bottom-drawer-fraction", caption: "Default bottom drawer height",
+                    blurb: "Height it opens to (new tabs)", range: 0.1...0.9, read: { $0.bottomDrawerFraction }),
                 NumericKnob(
-                    key: "right-drawer-fraction", caption: "Right drawer", range: 0.1...0.9, note: "new tabs",
-                    read: { $0.rightDrawerFraction }),
+                    key: "right-drawer-fraction", caption: "Default right drawer width",
+                    blurb: "Width it opens to (new tabs)", range: 0.1...0.9, read: { $0.rightDrawerFraction }),
                 NumericKnob(
-                    key: "drawer-resize-step", caption: "Drawer resize step", range: 4...400, note: "px",
-                    read: { $0.drawerResizeStep }),
+                    key: "drawer-resize-step", caption: "Drawer resize step",
+                    blurb: "How far each ⌥-arrow nudge resizes", range: 4...400, read: { $0.drawerResizeStep }),
                 NumericKnob(
-                    key: "max-drawer-fraction", caption: "Max drawer", range: 0.3...0.95, note: nil,
-                    read: { $0.maxDrawerFraction }),
+                    key: "max-drawer-fraction", caption: "Max drawer width/height",
+                    blurb: "Largest a drawer can grow", range: 0.3...0.95, read: { $0.maxDrawerFraction }),
             ]
         )
     ]
@@ -157,17 +157,27 @@ final class SettingsLayoutSection: SettingsSection {
 
     private func addReduceMotionRow(to stack: NSStackView) {
         scalarKeys.append("reduce-motion")
-        let index = LayoutFormat.reduceMotionIndex(GeneralConfig.current.reduceMotion)
-        let segmented = SegmentedControl(options: ["System", "On", "Off"], selectedIndex: index) { [weak self] i in
-            let motion = LayoutFormat.reduceMotion(fromIndex: i)
-            // System is the default → remove the key (blank-is-default); On/Off write it.
+        // On/Off only. The config's `system` default follows the OS accessibility setting; with no
+        // System segment we resolve it to show the effective initial state, and picking On/Off pins
+        // reduce-motion regardless of the OS.
+        let segmented = SegmentedControl(options: ["On", "Off"], selectedIndex: reduceMotionIsOn() ? 0 : 1) {
+            [weak self] index in
             self?.writeOrRemove(
-                "reduce-motion", motion == .system ? nil : LayoutFormat.reduceMotionToken(motion),
-                row: "reduce-motion")
+                "reduce-motion", LayoutFormat.reduceMotionToken(index == 0 ? .on : .off), row: "reduce-motion")
         }
         addRow(
             key: "reduce-motion", caption: "Reduce motion", control: segmented, focusStop: segmented,
             note: nil, width: nil, to: stack)
+    }
+
+    /// Whether reduce-motion is currently effective: an explicit on/off wins; `system` follows the
+    /// OS accessibility setting (there's no System segment, so it's resolved for the initial state).
+    private func reduceMotionIsOn() -> Bool {
+        switch GeneralConfig.current.reduceMotion {
+        case .on: return true
+        case .off: return false
+        case .system: return Motion.isReduceMotionEnabled()
+        }
     }
 
     private func addShellRows(to stack: NSStackView) {
@@ -293,7 +303,7 @@ final class SettingsLayoutSection: SettingsSection {
             }
         }
         if let seg = controlForKey["reduce-motion"] as? SegmentedControl {
-            seg.setSelection(LayoutFormat.reduceMotionIndex(GeneralConfig.current.reduceMotion))
+            seg.setSelection(reduceMotionIsOn() ? 0 : 1)
         }
         if let shellBox = controlForKey["shell"] as? FieldBox, shellBox.field.currentEditor() == nil {
             shellBox.setText(GeneralConfig.current.shell ?? "")
@@ -339,11 +349,10 @@ final class SettingsLayoutSection: SettingsSection {
         "Enter a number in \(rangeText(knob))."
     }
 
-    /// The row hint beside the caption: the valid range, plus the unit / new-tab note (e.g. "0–1",
-    /// "0–64 · px", "0.1–0.9 · new tabs"). Restores the range cue the slider track used to imply.
+    /// The row subtext under the caption: a short description plus the valid range (e.g. "Space
+    /// between split panes · 0–64"). The range keeps the cue the slider track used to imply.
     private func hint(for knob: NumericKnob) -> String {
-        guard let note = knob.note else { return rangeText(knob) }
-        return "\(rangeText(knob)) · \(note)"
+        "\(knob.blurb) · \(rangeText(knob))"
     }
 
     private func rangeText(_ knob: NumericKnob) -> String {
