@@ -43,7 +43,9 @@ final class KeybindChip: NSView {
     /// Show the current chord centered (or a muted placeholder when unbound).
     func render(shortcut: String) {
         host.subviews.forEach { $0.removeFromSuperview() }
-        let content: NSView = shortcut.isEmpty ? placeholder("Not set") : KeycapView(shortcut: shortcut)
+        // Chromeless keycap — the chip's own full-width fill is the background, not an inner box.
+        let content: NSView =
+            shortcut.isEmpty ? placeholder("Not set") : KeycapView(shortcut: shortcut, showsBackground: false)
         content.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(content)
         NSLayoutConstraint.activate([
@@ -93,9 +95,17 @@ final class KeybindChip: NSView {
 
     private func restyle() {
         let chrome = Theme.current.chrome
-        layer?.borderWidth = isFocused ? 1.5 : 0
-        layer?.borderColor = isFocused ? chrome.accent.nsColor.cgColor : nil
-        layer?.backgroundColor =
-            isCapturing ? chrome.accent.nsColor.withAlphaComponent(0.12).cgColor : NSColor.clear.cgColor
+        let fill: NSColor
+        if isCapturing {
+            fill = chrome.accent.nsColor.withAlphaComponent(0.14)
+        } else if isFocused {
+            fill = chrome.ink(alpha: 0.10)
+        } else {
+            fill = chrome.ink(alpha: 0.06)
+        }
+        layer?.backgroundColor = fill.cgColor
+        let outlined = isFocused || isCapturing
+        layer?.borderWidth = outlined ? 1.5 : 0
+        layer?.borderColor = outlined ? chrome.accent.nsColor.cgColor : nil
     }
 }

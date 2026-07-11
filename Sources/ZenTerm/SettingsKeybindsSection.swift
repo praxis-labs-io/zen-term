@@ -128,8 +128,11 @@ final class SettingsKeybindsSection: SettingsSection {
             self.capturer?.endCapture()
             self.hideHint()
             row.setCapturing(false)
-            self.refreshRows()  // restore the chip's chord display before applying anything
-            if event.keyCode == 53 { return }  // Esc cancels — no change
+            // During capture every key is diverted here, so Esc/Delete must be handled as commands,
+            // not recorded as chords (the popover promises "esc to cancel · del to remove").
+            if event.keyCode == 53 { self.refreshRows(); return }  // Esc → cancel, restore
+            if event.keyCode == 51 { self.reset(row); return }  // Delete → revert to default
+            self.refreshRows()  // restore the chip's chord display before applying a rebind
             guard let chord = Chord(event: event) else { return }
             self.rebind(row, to: chord)
         }
