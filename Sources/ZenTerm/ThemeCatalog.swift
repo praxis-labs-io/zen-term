@@ -56,7 +56,12 @@ enum ThemeCatalog {
     static func userThemeTokens(configRoot: URL) -> [String] {
         let dir = configRoot.appendingPathComponent("themes")
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return [] }
-        return names.filter { !$0.hasPrefix(".") }.sorted()
+        return names.filter { name in
+            guard !name.hasPrefix(".") else { return false }
+            var isDir: ObjCBool = false
+            let path = dir.appendingPathComponent(name).path
+            return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && !isDir.boolValue
+        }.sorted()
     }
 
     /// The bundled resource URL for a token, or nil if it isn't a bundled theme.

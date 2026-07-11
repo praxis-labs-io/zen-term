@@ -51,7 +51,10 @@ enum ConfigLoader {
     private static func resolveThemeURL(configRoot: URL, general: GeneralConfig) -> URL? {
         if let name = general.themeName {
             let userURL = configRoot.appendingPathComponent("themes").appendingPathComponent(name)
-            if FileManager.default.fileExists(atPath: userURL.path) { return userURL }
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: userURL.path, isDirectory: &isDir), !isDir.boolValue {
+                return userURL
+            }
             if let bundled = ThemeCatalog.bundledURL(for: name) { return bundled }
             NSLog(
                 "ConfigLoader: theme `\(name)` not found in user themes/ or the bundled catalog — using built-in theme")

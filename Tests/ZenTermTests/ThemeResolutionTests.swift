@@ -51,6 +51,16 @@ final class ThemeResolutionTests: XCTestCase {
         XCTAssertEqual(theme.terminal.background, Theme.rosePineMoon.background)
     }
 
+    func test_directoryNamedLikeATheme_fallsBackToBuiltIn() throws {
+        let root = try makeTempRoot()
+        let themes = root.appendingPathComponent("themes")
+        try FileManager.default.createDirectory(
+            at: themes.appendingPathComponent("dir-theme"), withIntermediateDirectories: true)
+
+        let theme = ConfigLoader.loadAppTheme(configRoot: root, general: config(themeName: "dir-theme"))
+        XCTAssertEqual(theme.terminal.background, Theme.rosePineMoon.background)
+    }
+
     func test_nilName_isBuiltIn() throws {
         let root = try makeTempRoot()
         let theme = ConfigLoader.loadAppTheme(configRoot: root, general: config(themeName: nil))

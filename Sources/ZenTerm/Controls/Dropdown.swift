@@ -151,7 +151,8 @@ final class Dropdown: NSView {
     /// swallow the click (they are `NSControl`/`NSImageView`), so `mouseDown` would only fire in the
     /// padding gaps and clicking the visible text would do nothing.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        bounds.contains(convert(point, from: superview)) ? self : nil
+        guard !isHidden, alphaValue > 0 else { return nil }
+        return bounds.contains(convert(point, from: superview)) ? self : nil
     }
 
     // MARK: list
@@ -246,18 +247,16 @@ final class Dropdown: NSView {
         card.layer?.backgroundColor = chrome.background.nsColor.cgColor
         card.layer?.borderWidth = 1
         card.layer?.borderColor = FloatShadow.edge.cgColor
-        // Self-sizing via the width/height constraints below; positioned by frame in positionList
-        // (the KeybindHintBubble pattern). Leaving this `true` conflicts with those constraints and
-        // collapses fittingSize to ~zero, so the list opens invisibly.
-        card.translatesAutoresizingMaskIntoConstraints = false
+        // Frame-driven: positioned AND sized by frame in positionList (the KeybindHintBubble
+        // pattern). An unconstrained origin under `false` can be dropped on a layout pass, so the
+        // card owns its own frame rather than relying on width/height constraints.
+        card.translatesAutoresizingMaskIntoConstraints = true
         FloatShadow.applyShadow(to: card)
         card.addSubview(scroll)
 
         let insets: CGFloat = 6
         let cardHeight = min(contentHeight + insets * 2, Self.maxListHeight)
         NSLayoutConstraint.activate([
-            card.widthAnchor.constraint(equalToConstant: width),
-            card.heightAnchor.constraint(equalToConstant: cardHeight),
             scroll.leadingAnchor.constraint(equalTo: card.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: card.trailingAnchor),
             scroll.topAnchor.constraint(equalTo: card.topAnchor),
@@ -270,6 +269,7 @@ final class Dropdown: NSView {
             stack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -8),
             stack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -insets),
         ])
+        card.frame = NSRect(x: 0, y: 0, width: width, height: cardHeight)
         refreshListHighlight()
         return card
     }
@@ -277,7 +277,7 @@ final class Dropdown: NSView {
     private func positionList() {
         guard let card = listCard, let contentView = window?.contentView else { return }
         card.layoutSubtreeIfNeeded()
-        let size = card.fittingSize
+        let size = card.frame.size
         let origin = convert(bounds, to: contentView)
         let x = max(8, min(origin.minX, contentView.bounds.width - size.width - 8))
         // contentView is not flipped: below the button = a smaller y. Prefer below; if that runs

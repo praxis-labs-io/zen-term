@@ -42,6 +42,20 @@ final class ThemeCatalogTests: XCTestCase {
         XCTAssertEqual(matches.first?.source, .user)
     }
 
+    func test_userSubdirectory_isNotListedAsATheme() throws {
+        let root = try makeTempRoot()
+        let themes = root.appendingPathComponent("themes")
+        try FileManager.default.createDirectory(at: themes, withIntermediateDirectories: true)
+        try "background = 000000\n".write(
+            to: themes.appendingPathComponent("my-theme"), atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(
+            at: themes.appendingPathComponent("a-folder"), withIntermediateDirectories: true)
+
+        let entries = ThemeCatalog.entries(configRoot: root)
+        XCTAssertTrue(entries.contains { $0.source == .user && $0.name == "my-theme" })
+        XCTAssertFalse(entries.contains { $0.name == "a-folder" })
+    }
+
     func test_everyBundledTheme_parsesToNonDefaultColors() throws {
         let builtIn = Theme.rosePineMoon
         for entry in ThemeCatalog.bundled {
