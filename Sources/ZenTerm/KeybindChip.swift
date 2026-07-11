@@ -1,9 +1,10 @@
 import AppKit
 
-/// A keybind's chord shown as a focusable chip — the control for changing it. At rest it looks like
-/// a plain `KeycapView`; focused it gains an accent ring. Return / Space / click begins capture (the
-/// section shows a hint bubble and diverts the next chord); Backspace reverts to the default. Up/Down
-/// move between rows, Left exits to the nav, Esc closes the card.
+/// A keybind's chord shown as a focusable, fixed-width target — the control for changing it. All
+/// chips share one width so the shortcuts read as a uniform column; the chord sits centered inside.
+/// At rest it looks like a plain `KeycapView`; focused it gains an accent ring; capturing it takes an
+/// accent fill (the section shows a branded popover). Return / Space / click begins capture,
+/// Backspace reverts to the default, Up/Down move rows, Left exits to nav, Esc closes the card.
 final class KeybindChip: NSView {
     var onActivate: (() -> Void)?  // Return / Space / click → begin capture
     var onReset: (() -> Void)?  // Backspace → revert to default
@@ -12,9 +13,12 @@ final class KeybindChip: NSView {
     var onExitToNav: (() -> Void)?
     var onEsc: (() -> Void)?
 
+    /// One width for every shortcut input, so they line up as a column rather than sizing to content.
+    static let width: CGFloat = 110
+
     private let host = NSView()
     private var isFocused = false { didSet { restyle() } }
-    private(set) var isCapturing = false
+    private(set) var isCapturing = false { didSet { restyle() } }
 
     init() {
         super.init(frame: .zero)
@@ -24,47 +28,40 @@ final class KeybindChip: NSView {
         host.translatesAutoresizingMaskIntoConstraints = false
         addSubview(host)
         NSLayoutConstraint.activate([
-            host.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            host.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
-            host.topAnchor.constraint(equalTo: topAnchor, constant: 4),
-            host.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
-            heightAnchor.constraint(greaterThanOrEqualToConstant: 28),
+            widthAnchor.constraint(equalToConstant: Self.width),
+            heightAnchor.constraint(equalToConstant: 32),
+            host.centerXAnchor.constraint(equalTo: centerXAnchor),
+            host.centerYAnchor.constraint(equalTo: centerYAnchor),
+            host.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 4),
+            host.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
         ])
         restyle()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Show the current chord (or a muted placeholder when unbound); clears the capturing state.
+    /// Show the current chord centered (or a muted placeholder when unbound).
     func render(shortcut: String) {
-        isCapturing = false
-        setContent(shortcut.isEmpty ? placeholder("Not set") : KeycapView(shortcut: shortcut))
-        restyle()
-    }
-
-    /// Switch to the "listening" look while the section captures the next chord.
-    func setCapturing(_ capturing: Bool) {
-        isCapturing = capturing
-        if capturing { setContent(placeholder("Press keys…")) }
-        restyle()
-    }
-
-    private func setContent(_ view: NSView) {
         host.subviews.forEach { $0.removeFromSuperview() }
-        view.translatesAutoresizingMaskIntoConstraints = false
-        host.addSubview(view)
+        let content: NSView = shortcut.isEmpty ? placeholder("Not set") : KeycapView(shortcut: shortcut)
+        content.translatesAutoresizingMaskIntoConstraints = false
+        host.addSubview(content)
         NSLayoutConstraint.activate([
-            view.leadingAnchor.constraint(equalTo: host.leadingAnchor),
-            view.trailingAnchor.constraint(equalTo: host.trailingAnchor),
-            view.centerYAnchor.constraint(equalTo: host.centerYAnchor),
-            view.topAnchor.constraint(greaterThanOrEqualTo: host.topAnchor),
+            content.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+            content.topAnchor.constraint(equalTo: host.topAnchor),
+            content.bottomAnchor.constraint(equalTo: host.bottomAnchor),
         ])
     }
+
+    /// The "listening" look while the section captures the next chord — the chord stays visible under
+    /// an accent fill (the popover carries the instructions).
+    func setCapturing(_ capturing: Bool) { isCapturing = capturing }
 
     private func placeholder(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: 12)
-        label.textColor = Theme.current.chrome.ink(alpha: isCapturing ? 0.7 : 0.4)
+        label.textColor = Theme.current.chrome.ink(alpha: 0.4)
         return label
     }
 

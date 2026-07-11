@@ -197,7 +197,7 @@ final class SettingsKeybindsSection: SettingsSection {
     private func showHint(for row: KeybindRow) {
         hideHint()
         guard let host = detailScroll?.superview else { return }
-        let bubble = KeybindHintBubble(message: "Type a shortcut · e.g. ⌘⇧K · Esc to cancel")
+        let bubble = KeybindHintBubble()
         bubble.translatesAutoresizingMaskIntoConstraints = true
         host.addSubview(bubble)
         hintBubble = bubble
