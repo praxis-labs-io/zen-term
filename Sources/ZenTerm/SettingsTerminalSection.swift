@@ -29,7 +29,7 @@ final class SettingsTerminalSection: SettingsFormSection {
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
             self.addNumericRow(
                 key: "cursor-thickness", caption: "Thickness", blurb: "Bar/underline thickness in px (new tabs)",
-                range: 1...12, read: { CGFloat($0.cursorThickness) }, width: 64)
+                range: 1...12, read: { CGFloat($0.cursorThickness) }, width: 64, integer: true)
         }
         addGroup("Input") {
             self.addSegmentedRow(

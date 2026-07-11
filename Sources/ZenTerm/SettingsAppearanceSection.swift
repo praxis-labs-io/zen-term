@@ -53,7 +53,7 @@ final class SettingsAppearanceSection: SettingsFormSection {
             [weak self] index in self?.selectTheme(index)
         }
         themeDropdown = dropdown
-        restartButton.isKeyboardFocusable = false
+        restartButton.isKeyboardFocusable = true
         restartButton.isHidden = true
         restartButton.onTap = { Relauncher.relaunch() }
 
@@ -62,8 +62,9 @@ final class SettingsAppearanceSection: SettingsFormSection {
             key: "theme", caption: "Theme", description: "Applies on restart",
             control: dropdown, focusStop: dropdown, controlNote: nil, width: 220,
             refresh: { [weak self] in self?.refreshThemeRow() })
-        // Place the restart button under the dropdown row (added as its own arranged view).
-        appendTrailing(restartButton)
+        // Place the restart button under the dropdown row, as its own focus stop — hidden (and so
+        // skipped by moveFocus/detailStops) until `updateRestartVisibility` reveals it.
+        appendTrailing(restartButton, focusStop: restartButton)
     }
 
     private func themeItems(selected: Int) -> [DropdownItem] {

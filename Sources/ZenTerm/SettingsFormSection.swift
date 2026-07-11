@@ -19,6 +19,7 @@ class SettingsFormSection: SettingsSection {
     private var controlForKey: [String: NSView] = [:]
     private var scalarKeys: [String] = []  // every key this section owns (for Reset-all)
     private var refreshers: [() -> Void] = []  // per-row "sync me to the reloaded config" closures
+    private var integerKeys: Set<String> = []  // numeric rows that commit whole numbers (e.g. counts)
 
     /// Live-apply debounce: a field edit schedules its write ~`applyDelay` later; rapid typing
     /// coalesces into one write + reload + relayout. Blur/Return flush it immediately.
@@ -36,6 +37,7 @@ class SettingsFormSection: SettingsSection {
         controlForKey = [:]
         scalarKeys = []
         refreshers = []
+        integerKeys = []
         lastArranged = nil
 
         let stack = NSStackView()
@@ -64,7 +66,7 @@ class SettingsFormSection: SettingsSection {
         return scroll
     }
 
-    func detailStops() -> [NSView] { stops }
+    func detailStops() -> [NSView] { stops.filter { !$0.isHidden } }
 
     /// Subclass hook: declare the section's groups and rows here (via `addGroup` + the row builders).
     func populate() {}
@@ -89,9 +91,10 @@ class SettingsFormSection: SettingsSection {
     /// default; the row's subtext is the blurb plus the range. Blank = default (the key is removed).
     func addNumericRow(
         key: String, caption: String, blurb: String, range: ClosedRange<CGFloat>,
-        read: @escaping (GeneralConfig) -> CGFloat, width: CGFloat = 64
+        read: @escaping (GeneralConfig) -> CGFloat, width: CGFloat = 64, integer: Bool = false
     ) {
         scalarKeys.append(key)
+        if integer { integerKeys.insert(key) }
         let box = FieldBox(placeholder: LayoutFormat.number(read(GeneralConfig.builtIn)))
         box.field.alignment = .right  // numbers read right-aligned; shell/path fields stay left
         box.setText(fieldText(for: read))
@@ -189,11 +192,17 @@ class SettingsFormSection: SettingsSection {
             controlNote: controlNote, width: width, refresh: refresh)
     }
 
-    /// Append an arranged subview to the rows stack directly, without registering it as a focus stop
-    /// (e.g. the restart button tucked under the Theme row).
-    func appendTrailing(_ view: NSView) {
+    /// Append an arranged subview to the rows stack directly. Pass `focusStop` to also register it
+    /// as a vertical focus stop (its keyboard wired like any other control) — e.g. the restart
+    /// button tucked under the Theme row, which starts hidden and is skipped by `moveFocus` /
+    /// `detailStops()` until it's shown. Omit `focusStop` for a purely decorative trailing view.
+    func appendTrailing(_ view: NSView, focusStop: NSView? = nil) {
         guard let stack = rowsStack else { return }
         stack.addArrangedSubview(view)
+        if let focusStop {
+            wireControlKeyboard(focusStop)
+            stops.append(focusStop)
+        }
     }
 
     /// Register a row. `focusStop` is the actual first-responder-focusable view (a `FieldBox`'s inner
@@ -241,6 +250,11 @@ class SettingsFormSection: SettingsSection {
             dropdown.onTab = { [weak self] in self?.moveFocus(1) }
             dropdown.onBacktab = { [weak self] in self?.onExitToNav?() }
             dropdown.onEsc = { [weak self] in self?.onClose?() }
+        case let button as AppButton:
+            button.onArrowUp = { [weak self] in self?.moveFocus(-1) }
+            button.onArrowDown = { [weak self] in self?.moveFocus(1) }
+            button.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+            button.onEsc = { [weak self] in self?.onClose?() }
         default:
             break
         }
@@ -256,7 +270,8 @@ class SettingsFormSection: SettingsSection {
             writeOrRemove(key, nil, row: key)
             return
         }
-        guard let value = LayoutFormat.parseNumber(text, in: range) else { return }
+        guard var value = LayoutFormat.parseNumber(text, in: range) else { return }
+        if integerKeys.contains(key) { value = value.rounded() }
         write(key, LayoutFormat.number(value), row: key)
     }
 
@@ -337,13 +352,16 @@ class SettingsFormSection: SettingsSection {
         "\(LayoutFormat.number(range.lowerBound))–\(LayoutFormat.number(range.upperBound))"
     }
 
-    /// Move focus between the vertical stops. Finds the current stop by which one is first responder
-    /// (a stop may be a `FieldBox`'s field editor, so this is more robust than a passed-in view).
+    /// Move focus between the vertical stops that are currently visible — a hidden stop (e.g. the
+    /// restart button before a theme change reveals it) is transparently skipped. Finds the current
+    /// stop by which one is first responder (a stop may be a `FieldBox`'s field editor, so this is
+    /// more robust than a passed-in view).
     private func moveFocus(_ delta: Int) {
-        let window = stops.first?.window
-        let anchor = stops.firstIndex { KeyboardFocus.isFocused($0, in: window) }
-        guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: stops.count) else { return }
-        let target = stops[next]
+        let visible = stops.filter { !$0.isHidden }
+        let window = visible.first?.window
+        let anchor = visible.firstIndex { KeyboardFocus.isFocused($0, in: window) }
+        guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: visible.count) else { return }
+        let target = visible[next]
         target.window?.makeFirstResponder(target)
         let scrollTarget = rows.first { target.isDescendant(of: $0) } ?? target
         scrollTarget.scrollToVisible(scrollTarget.bounds.insetBy(dx: 0, dy: -12))
