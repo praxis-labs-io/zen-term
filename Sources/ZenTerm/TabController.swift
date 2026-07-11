@@ -987,8 +987,12 @@ final class TabController: NSObject {
     /// the running ratio; the new fraction seeds new tabs).
     func reapplyChromeLayout() {
         let gutter = ChromeMetrics.windowGutter
-        for constraint in gutterConstraints {
-            constraint.constant = (constraint.constant < 0) ? -gutter : gutter
+        // Sign is keyed to positional identity, not the live constant: at gutter == 0 the
+        // trailing/bottom constraints were built with `-0.0`, and `-0.0 < 0` is false in Swift,
+        // so inferring sign from the current value silently flips them positive on the next
+        // reapply. Order is fixed at construction above: 0 leading, 1 trailing, 2 top, 3 bottom.
+        for (index, constraint) in gutterConstraints.enumerated() {
+            constraint.constant = (index == 1 || index == 3) ? -gutter : gutter
         }
         relayoutPanels()
         view.layoutSubtreeIfNeeded()
