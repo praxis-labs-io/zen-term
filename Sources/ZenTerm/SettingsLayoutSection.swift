@@ -150,7 +150,7 @@ final class SettingsLayoutSection: SettingsSection {
         }
         box.onEndEditing = { [weak self] in self?.flushApply() }
         addRow(
-            key: knob.key, caption: knob.caption, control: box, focusStop: box.field, note: knob.note,
+            key: knob.key, caption: knob.caption, control: box, focusStop: box.field, note: hint(for: knob),
             width: 64, to: stack)
     }
 
@@ -335,7 +335,18 @@ final class SettingsLayoutSection: SettingsSection {
     }
 
     private func rangeMessage(_ knob: NumericKnob) -> String {
-        "Enter a number in \(LayoutFormat.number(knob.range.lowerBound))–\(LayoutFormat.number(knob.range.upperBound))."
+        "Enter a number in \(rangeText(knob))."
+    }
+
+    /// The row hint beside the caption: the valid range, plus the unit / new-tab note (e.g. "0–1",
+    /// "0–64 · px", "0.1–0.9 · new tabs"). Restores the range cue the slider track used to imply.
+    private func hint(for knob: NumericKnob) -> String {
+        guard let note = knob.note else { return rangeText(knob) }
+        return "\(rangeText(knob)) · \(note)"
+    }
+
+    private func rangeText(_ knob: NumericKnob) -> String {
+        "\(LayoutFormat.number(knob.range.lowerBound))–\(LayoutFormat.number(knob.range.upperBound))"
     }
 
     /// Move focus between the vertical stops. Finds the current stop by which one is first responder
