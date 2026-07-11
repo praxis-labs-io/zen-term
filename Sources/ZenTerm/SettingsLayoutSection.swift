@@ -151,8 +151,8 @@ final class SettingsLayoutSection: SettingsSection {
         }
         box.onEndEditing = { [weak self] in self?.flushApply() }
         addRow(
-            key: knob.key, caption: knob.caption, control: box, focusStop: box.field, note: hint(for: knob),
-            width: 64, to: stack)
+            key: knob.key, caption: knob.caption, description: knob.blurb, control: box, focusStop: box.field,
+            controlNote: rangeText(knob), width: 64, to: stack)
     }
 
     private func addReduceMotionRow(to stack: NSStackView) {
@@ -166,8 +166,8 @@ final class SettingsLayoutSection: SettingsSection {
                 "reduce-motion", LayoutFormat.reduceMotionToken(index == 0 ? .on : .off), row: "reduce-motion")
         }
         addRow(
-            key: "reduce-motion", caption: "Reduce motion", control: segmented, focusStop: segmented,
-            note: nil, width: nil, to: stack)
+            key: "reduce-motion", caption: "Reduce motion", description: nil, control: segmented,
+            focusStop: segmented, controlNote: nil, width: nil, to: stack)
     }
 
     /// Whether reduce-motion is currently effective: an explicit on/off wins; `system` follows the
@@ -194,8 +194,8 @@ final class SettingsLayoutSection: SettingsSection {
         }
         shellBox.onEndEditing = { [weak self] in self?.flushApply() }
         addRow(
-            key: "shell", caption: "Shell", control: shellBox, focusStop: shellBox.field, note: "new tabs",
-            width: 200, to: stack)
+            key: "shell", caption: "Shell", description: "new tabs", control: shellBox, focusStop: shellBox.field,
+            controlNote: nil, width: 200, to: stack)
 
         let argsBox = FieldBox(placeholder: "—")
         argsBox.setText(LayoutFormat.joinArgs(GeneralConfig.current.shellArgs))
@@ -209,18 +209,21 @@ final class SettingsLayoutSection: SettingsSection {
         }
         argsBox.onEndEditing = { [weak self] in self?.flushApply() }
         addRow(
-            key: "shell-args", caption: "Shell args", control: argsBox, focusStop: argsBox.field,
-            note: "new tabs", width: 200, to: stack)
+            key: "shell-args", caption: "Shell args", description: "new tabs", control: argsBox,
+            focusStop: argsBox.field, controlNote: nil, width: 200, to: stack)
     }
 
     /// Add a row. `focusStop` is the actual first-responder-focusable view (a `FieldBox`'s inner
     /// `field`, or the control itself for a `SegmentedControl`) — the wrapper `FieldBox` isn't
-    /// focusable, so the stop must be its text field (mirroring `AddWorkspaceOverlay`).
+    /// focusable, so the stop must be its text field (mirroring `AddWorkspaceOverlay`). `description`
+    /// sits under the caption; `controlNote` (the range) sits under the input.
     private func addRow(
-        key: String, caption: String, control: NSView, focusStop: NSView, note: String?,
-        width: CGFloat?, to stack: NSStackView
+        key: String, caption: String, description: String?, control: NSView, focusStop: NSView,
+        controlNote: String?, width: CGFloat?, to stack: NSStackView
     ) {
-        let row = LayoutRow(caption: caption, control: control, note: note, controlWidth: width)
+        let row = LayoutRow(
+            caption: caption, description: description, control: control, controlNote: controlNote,
+            controlWidth: width)
         wireControlKeyboard(control)
         rows.append(row)
         stops.append(focusStop)
@@ -347,12 +350,6 @@ final class SettingsLayoutSection: SettingsSection {
 
     private func rangeMessage(_ knob: NumericKnob) -> String {
         "Enter a number in \(rangeText(knob))."
-    }
-
-    /// The row subtext under the caption: a short description plus the valid range (e.g. "Space
-    /// between split panes · 0–64"). The range keeps the cue the slider track used to imply.
-    private func hint(for knob: NumericKnob) -> String {
-        "\(knob.blurb) · \(rangeText(knob))"
     }
 
     private func rangeText(_ knob: NumericKnob) -> String {

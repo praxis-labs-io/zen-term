@@ -1,13 +1,12 @@
 import AppKit
 
-/// One Layout & Motion row: a caption (with an optional unit / "new tabs" note), an editing control,
-/// and an inline validation message beneath it. The control is supplied and keyboard-wired by the
-/// section; the row just lays it out and shows messages. A blank field is the default, so there's no
-/// per-row reset control.
+/// One Layout & Motion row: a caption with an optional description beneath it on the left, an editing
+/// control on the right with an optional note beneath it (e.g. the valid range), and an inline
+/// validation message under the whole row. The control is supplied and keyboard-wired by the section.
 final class LayoutRow: NSView {
     private let messageLabel = NSTextField(labelWithString: "")
 
-    init(caption: String, control: NSView, note: String?, controlWidth: CGFloat?) {
+    init(caption: String, description: String?, control: NSView, controlNote: String?, controlWidth: CGFloat?) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
@@ -16,23 +15,12 @@ final class LayoutRow: NSView {
         label.textColor = Theme.current.chrome.foreground.nsColor
         label.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let captionView: NSView
-        if let note {
-            let noteLabel = NSTextField(labelWithString: note)
-            noteLabel.font = .systemFont(ofSize: 10)
-            noteLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
-            let stack = NSStackView(views: [label, noteLabel])
-            stack.orientation = .vertical
-            stack.spacing = 2
-            stack.alignment = .leading
-            captionView = stack
-        } else {
-            captionView = label
-        }
+        let captionColumn = LayoutRow.column(primary: label, note: description, alignment: .leading)
+        let controlColumn = LayoutRow.column(primary: control, note: controlNote, alignment: .trailing)
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let controls = NSStackView(views: [captionView, spacer, control])
+        let controls = NSStackView(views: [captionColumn, spacer, controlColumn])
         controls.orientation = .horizontal
         controls.alignment = .centerY
         controls.spacing = 8
@@ -61,6 +49,22 @@ final class LayoutRow: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// A `primary` view with an optional muted `note` label stacked beneath it (the range under an
+    /// input, the description under a caption). Returns `primary` alone when there's no note.
+    private static func column(
+        primary: NSView, note: String?, alignment: NSLayoutConstraint.Attribute
+    ) -> NSView {
+        guard let note else { return primary }
+        let noteLabel = NSTextField(labelWithString: note)
+        noteLabel.font = .systemFont(ofSize: 10)
+        noteLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        let stack = NSStackView(views: [primary, noteLabel])
+        stack.orientation = .vertical
+        stack.spacing = 2
+        stack.alignment = alignment
+        return stack
+    }
 
     func showMessage(_ text: String?) {
         messageLabel.stringValue = text ?? ""
