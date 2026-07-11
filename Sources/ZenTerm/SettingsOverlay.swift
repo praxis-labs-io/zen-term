@@ -92,6 +92,25 @@ final class SettingsOverlay: NSView, ModalOverlay {
         navStack.alignment = .leading
         navStack.spacing = 2
         navStack.edgeInsets = NSEdgeInsets(top: 18, left: 12, bottom: 16, right: 12)
+
+        // Top-level "SETTINGS" heading, styled like the detail pane's section captions. Wrapped so
+        // its text is inset the same 10pt as the nav rows' labels, keeping them left-aligned.
+        let heading = NSTextField(labelWithString: "Settings".uppercased())
+        heading.font = .systemFont(ofSize: 10, weight: .semibold)
+        heading.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        heading.translatesAutoresizingMaskIntoConstraints = false
+        let headingRow = NSView()
+        headingRow.translatesAutoresizingMaskIntoConstraints = false
+        headingRow.addSubview(heading)
+        NSLayoutConstraint.activate([
+            heading.leadingAnchor.constraint(equalTo: headingRow.leadingAnchor, constant: 10),
+            heading.trailingAnchor.constraint(equalTo: headingRow.trailingAnchor),
+            heading.topAnchor.constraint(equalTo: headingRow.topAnchor),
+            heading.bottomAnchor.constraint(equalTo: headingRow.bottomAnchor),
+        ])
+        navStack.addArrangedSubview(headingRow)
+        navStack.setCustomSpacing(10, after: headingRow)
+
         for (index, section) in sections.enumerated() {
             section.onExitToNav = { [weak self] in self?.focusNav() }
             section.onClose = { [weak self] in self?.onClose() }

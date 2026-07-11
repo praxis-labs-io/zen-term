@@ -7,7 +7,7 @@ import AppKit
 /// and a field renders blank while it's at the default. Live-appliable knobs update running windows
 /// through the `configDidChange` seam; the rest apply to new tabs, labeled as such.
 final class SettingsLayoutSection: SettingsSection {
-    var navTitle: String { "Layout & Motion" }
+    var navTitle: String { "General" }
     var onExitToNav: (() -> Void)?
     var onClose: (() -> Void)?
 
