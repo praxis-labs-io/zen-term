@@ -42,8 +42,9 @@ final class KeyInterceptor {
 
     func setKeymap(_ map: [Chord: ReservedChord]) { keymap = map }
 
-    /// When set (the Settings card is recording), every keyDown is diverted here and consumed,
-    /// bypassing keymap routing — so even a bound chord (⌘P) is captured, not fired.
+    /// When set (the Settings card is recording), every keyDown — and flagsChanged, for the live
+    /// modifier preview — is diverted here and consumed, bypassing keymap routing, so even a bound
+    /// chord (⌘P) is captured, not fired.
     private var captureHandler: ((NSEvent) -> Void)?
 
     func beginCapture(_ handler: @escaping (NSEvent) -> Void) { captureHandler = handler }
@@ -51,12 +52,14 @@ final class KeyInterceptor {
 
     func start() {
         stop()  // idempotent: never stack a second monitor on repeat calls
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
             guard let self else { return event }
             if let captureHandler = self.captureHandler {
-                captureHandler(event)
+                captureHandler(event)  // keyDown AND flagsChanged (live modifier preview) are diverted
                 return nil  // consumed — never routes or reaches the PTY while capturing
             }
+            // Outside capture, flagsChanged passes straight through; only keyDown routes to a chord.
+            guard event.type == .keyDown else { return event }
             // Build the chord this event represents and look it up. A hit is consumed (never
             // reaches the PTY); a miss — including every un-reserved chord like Ctrl+hjkl —
             // passes straight through to the terminal. The ⌘⇧\ → "|" shifted-symbol quirk is

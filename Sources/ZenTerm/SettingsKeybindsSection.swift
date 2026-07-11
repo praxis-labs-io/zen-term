@@ -26,6 +26,7 @@ final class SettingsKeybindsSection: SettingsSection {
     private let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
     private weak var detailScroll: NSScrollView?
     private var hintBubble: KeybindHintBubble?
+    private var captureCloseTimer: DispatchWorkItem?
 
     init(capturer: KeybindCapturing?) { self.capturer = capturer }
 
@@ -110,9 +111,10 @@ final class SettingsKeybindsSection: SettingsSection {
 
     // MARK: edits
 
-    /// Record the next chord through the interceptor (so an already-bound chord isn't pre-empted),
-    /// showing a hint bubble. Esc cancels; capture is one-shot (the handler ends it on the first
-    /// event). Whatever the outcome, the chip is restored from `desired` before applying a rebind.
+    /// Record a chord through the interceptor (so an already-bound chord isn't pre-empted), showing a
+    /// hint bubble that previews the keys live. Capture stays armed — an invalid chord shows a warning
+    /// and lets the user try again; only a valid chord commits (with a success line, then a delayed
+    /// close). Esc cancels; Delete reverts to default.
     private func beginCapture(for row: KeybindRow) {
         // No interceptor means capture could never complete — bail before arming the row so it
         // doesn't stick on "Press keys…" with no way out. (Always wired in-app; a guard, not a path.)
@@ -120,36 +122,62 @@ final class SettingsKeybindsSection: SettingsSection {
             row.showMessage("Keybind capture is unavailable.")
             return
         }
+        captureCloseTimer?.cancel()
         row.setCapturing(true)
         row.showMessage(nil)
         showHint(for: row)
         capturer.beginCapture { [weak self, weak row] event in
             guard let self, let row else { return }
-            self.capturer?.endCapture()
-            self.hideHint()
-            row.setCapturing(false)
-            // During capture every key is diverted here, so Esc/Delete must be handled as commands,
-            // not recorded as chords (the popover promises "esc to cancel · del to remove").
-            if event.keyCode == 53 { self.refreshRows(); return }  // Esc → cancel, restore
-            if event.keyCode == 51 { self.reset(row); return }  // Delete → revert to default
-            self.refreshRows()  // restore the chip's chord display before applying a rebind
-            guard let chord = Chord(event: event) else { return }
-            self.rebind(row, to: chord)
+            self.handleCaptureEvent(event, for: row)
         }
     }
 
-    private func rebind(_ row: KeybindRow, to chord: Chord) {
-        guard chord.command || chord.shift || chord.option || chord.control else {
-            row.showMessage("Needs at least one modifier."); return
-        }
-        if let owner = GeneralConfig.current.keymap[chord], owner != row.action {
-            row.showMessage("\(chord.displayGlyph) is already bound to \(CommandCatalog.spec(for: owner).title).")
+    private func handleCaptureEvent(_ event: NSEvent, for row: KeybindRow) {
+        if event.type == .flagsChanged {  // live modifier preview (⌘, ⌘⇧, …) before a key lands
+            hintBubble?.setPreview(Self.modifierGlyph(event.modifierFlags))
             return
         }
-        row.showMessage(nil)
-        desired = desired.filter { $0.value != row.action }  // drop this action's old chord(s)
-        desired[chord] = row.action  // the chord is free — a conflict would have been blocked above
+        // keyDown. Esc/Delete are commands (the popover promises them), not recordable chords.
+        if event.keyCode == 53 { endCapture(row); refreshRows(); return }  // Esc → cancel
+        if event.keyCode == 51 { endCapture(row); reset(row); return }  // Delete → revert to default
+        guard let chord = Chord(event: event) else { return }  // unmappable key — keep waiting
+        hintBubble?.setPreview(chord.displayGlyph)
+        guard chord.command || chord.shift || chord.option || chord.control else {
+            hintBubble?.showWarning("Needs at least one modifier — try again.")
+            positionBubble(for: row)
+            return  // stay armed
+        }
+        if let owner = GeneralConfig.current.keymap[chord], owner != row.action {
+            hintBubble?.showWarning("Already bound to \(CommandCatalog.spec(for: owner).title) — try again.")
+            positionBubble(for: row)
+            return  // stay armed
+        }
+        commitRebind(row, to: chord)  // valid — apply, show success, close after a beat
+    }
+
+    /// Apply a validated rebind, flash a success line, and close the popover after a short delay.
+    private func commitRebind(_ row: KeybindRow, to chord: Chord) {
+        capturer?.endCapture()
+        desired = desired.filter { $0.value != row.action }
+        desired[chord] = row.action
         persist(reportingRow: row)
+        hintBubble?.setPreview(chord.displayGlyph)
+        hintBubble?.showSuccess("Shortcut saved.")
+        positionBubble(for: row)
+        let close = DispatchWorkItem { [weak self, weak row] in
+            self?.hideHint()
+            row?.setCapturing(false)
+        }
+        captureCloseTimer = close
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: close)
+    }
+
+    /// End an armed capture immediately (Esc / Delete) — the caller then restores or resets the row.
+    private func endCapture(_ row: KeybindRow) {
+        captureCloseTimer?.cancel()
+        capturer?.endCapture()
+        hideHint()
+        row.setCapturing(false)
     }
 
     /// Backspace on a focused chip: revert the action to its built-in default chord(s).
@@ -204,10 +232,17 @@ final class SettingsKeybindsSection: SettingsSection {
         bubble.translatesAutoresizingMaskIntoConstraints = true
         host.addSubview(bubble)
         hintBubble = bubble
+        positionBubble(for: row)
+    }
+
+    /// (Re)place the bubble just below its chip — re-run whenever its height changes (a warning or
+    /// success line replacing the instructions can grow it).
+    private func positionBubble(for row: KeybindRow) {
+        guard let bubble = hintBubble, let host = bubble.superview else { return }
+        bubble.layoutSubtreeIfNeeded()
         let size = bubble.fittingSize
         let chipRect = row.chip.convert(row.chip.bounds, to: host)
         let x = max(8, min(chipRect.midX - size.width / 2, host.bounds.width - size.width - 8))
-        // Just below the chip, accounting for the host's flip.
         let y = host.isFlipped ? (chipRect.maxY + 6) : (chipRect.minY - size.height - 6)
         bubble.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
     }
@@ -215,6 +250,16 @@ final class SettingsKeybindsSection: SettingsSection {
     private func hideHint() {
         hintBubble?.removeFromSuperview()
         hintBubble = nil
+    }
+
+    /// The modifier-only glyph for the live preview while keys are still being held (⌘, ⌘⇧, …).
+    private static func modifierGlyph(_ flags: NSEvent.ModifierFlags) -> String {
+        var glyph = ""
+        if flags.contains(.command) { glyph += "⌘" }
+        if flags.contains(.shift) { glyph += "⇧" }
+        if flags.contains(.option) { glyph += "⌥" }
+        if flags.contains(.control) { glyph += "⌃" }
+        return glyph
     }
 
     // MARK: helpers

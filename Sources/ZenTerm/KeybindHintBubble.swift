@@ -1,9 +1,16 @@
 import AppKit
 
-/// The chord-capture popover — built on the same card chrome as a toast (`FloatShadow` background +
-/// hairline edge + drop shadow). A header row (tinted keyboard badge + title), a centered example
-/// chord, and the cancel / remove keys. Shown by the section beside a capturing keybind chip.
+/// The chord-capture popover — built on the toast card chrome (`FloatShadow` background + hairline
+/// edge + drop shadow). A header row (tinted keyboard badge + title), a full-width muted preview box
+/// that shows the chord live as it's typed, and a status line that starts as the cancel/remove keys
+/// and is replaced with a validation warning or a success message. Shown by the section beside a
+/// capturing keybind chip.
 final class KeybindHintBubble: NSView {
+    private static let width: CGFloat = 300
+
+    private let previewHost = NSView()
+    private let statusHost = NSView()
+
     init() {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -32,58 +39,109 @@ final class KeybindHintBubble: NSView {
         title.font = .systemFont(ofSize: 13, weight: .semibold)
         title.textColor = Theme.current.chrome.foreground.nsColor
 
-        // Badge + title on one line.
         let header = NSStackView(views: [badge, title])
         header.orientation = .horizontal
         header.alignment = .centerY
         header.spacing = 10
 
-        // A centered "eg. ⌘P" example so it clearly reads as a sample chord.
-        let example = NSStackView(views: [Self.muted("eg."), KeycapView(shortcut: "⌘P")])
-        example.orientation = .horizontal
-        example.alignment = .centerY
-        example.spacing = 6
-        example.translatesAutoresizingMaskIntoConstraints = false
-        let exampleWrap = NSView()
-        exampleWrap.translatesAutoresizingMaskIntoConstraints = false
-        exampleWrap.addSubview(example)
-        NSLayoutConstraint.activate([
-            example.centerXAnchor.constraint(equalTo: exampleWrap.centerXAnchor),
-            example.topAnchor.constraint(equalTo: exampleWrap.topAnchor),
-            example.bottomAnchor.constraint(equalTo: exampleWrap.bottomAnchor),
-            example.leadingAnchor.constraint(greaterThanOrEqualTo: exampleWrap.leadingAnchor),
-            example.trailingAnchor.constraint(lessThanOrEqualTo: exampleWrap.trailingAnchor),
-        ])
+        // Full-width muted input-looking box holding the live chord preview.
+        let previewBox = NSView()
+        previewBox.wantsLayer = true
+        previewBox.layer?.cornerRadius = 6
+        previewBox.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.06).cgColor
+        previewBox.translatesAutoresizingMaskIntoConstraints = false
+        previewHost.translatesAutoresizingMaskIntoConstraints = false
+        previewBox.addSubview(previewHost)
 
-        let instructions = NSStackView(views: [
-            Self.keyCap("esc"), Self.muted("to cancel"), Self.muted("·"),
-            Self.keyCap("del"), Self.muted("to remove"),
-        ])
-        instructions.orientation = .horizontal
-        instructions.alignment = .centerY
-        instructions.spacing = 5
+        statusHost.translatesAutoresizingMaskIntoConstraints = false
 
-        let col = NSStackView(views: [header, exampleWrap, instructions])
+        let col = NSStackView(views: [header, previewBox, statusHost])
         col.orientation = .vertical
         col.alignment = .leading
-        col.spacing = 10
+        col.spacing = 14
         col.translatesAutoresizingMaskIntoConstraints = false
         addSubview(col)
 
         NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: Self.width),
             badge.widthAnchor.constraint(equalToConstant: 28),
             badge.heightAnchor.constraint(equalToConstant: 28),
             icon.centerXAnchor.constraint(equalTo: badge.centerXAnchor),
             icon.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
-            exampleWrap.widthAnchor.constraint(equalTo: col.widthAnchor),  // full width so it centers
+            previewBox.heightAnchor.constraint(equalToConstant: 34),
+            previewBox.widthAnchor.constraint(equalTo: col.widthAnchor),
+            previewHost.leadingAnchor.constraint(equalTo: previewBox.leadingAnchor, constant: 10),
+            previewHost.trailingAnchor.constraint(lessThanOrEqualTo: previewBox.trailingAnchor, constant: -10),
+            previewHost.centerYAnchor.constraint(equalTo: previewBox.centerYAnchor),
+            statusHost.widthAnchor.constraint(equalTo: col.widthAnchor),
             col.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
             col.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
             col.topAnchor.constraint(equalTo: topAnchor, constant: 14),
             col.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -14),
         ])
+
+        setPreview("")
+        showInstructions()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Show the chord being typed (its display glyph) in the preview box, or a placeholder when empty.
+    func setPreview(_ glyph: String) {
+        previewHost.subviews.forEach { $0.removeFromSuperview() }
+        let content: NSView
+        if glyph.isEmpty {
+            let label = NSTextField(labelWithString: "Press keys…")
+            label.font = .systemFont(ofSize: 12)
+            label.textColor = Theme.current.chrome.ink(alpha: 0.4)
+            content = label
+        } else {
+            content = KeycapView(shortcut: glyph, showsBackground: false)
+        }
+        content.translatesAutoresizingMaskIntoConstraints = false
+        previewHost.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: previewHost.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: previewHost.trailingAnchor),
+            content.topAnchor.constraint(equalTo: previewHost.topAnchor),
+            content.bottomAnchor.constraint(equalTo: previewHost.bottomAnchor),
+        ])
+    }
+
+    /// The default status line: the cancel / remove keys.
+    func showInstructions() {
+        let row = NSStackView(views: [
+            Self.keyCap("esc"), Self.muted("to cancel"), Self.muted("·"),
+            Self.keyCap("del"), Self.muted("to remove"),
+        ])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 5
+        setStatus(row)
+    }
+
+    func showWarning(_ text: String) { setStatus(message(text, color: Theme.current.chrome.destructive.nsColor)) }
+    func showSuccess(_ text: String) { setStatus(message(text, color: Theme.current.chrome.accent.nsColor)) }
+
+    private func setStatus(_ view: NSView) {
+        statusHost.subviews.forEach { $0.removeFromSuperview() }
+        view.translatesAutoresizingMaskIntoConstraints = false
+        statusHost.addSubview(view)
+        NSLayoutConstraint.activate([
+            view.leadingAnchor.constraint(equalTo: statusHost.leadingAnchor),
+            view.trailingAnchor.constraint(lessThanOrEqualTo: statusHost.trailingAnchor),
+            view.topAnchor.constraint(equalTo: statusHost.topAnchor),
+            view.bottomAnchor.constraint(equalTo: statusHost.bottomAnchor),
+        ])
+    }
+
+    private func message(_ text: String, color: NSColor) -> NSTextField {
+        let label = NSTextField(wrappingLabelWithString: text)
+        label.font = .systemFont(ofSize: 11, weight: .medium)
+        label.textColor = color
+        label.preferredMaxLayoutWidth = Self.width - 28
+        return label
+    }
 
     /// A small inline key chip (`esc`, `del`) — a faint rounded box with muted monospaced text.
     private static func keyCap(_ text: String) -> NSView {
