@@ -218,21 +218,21 @@ final class SettingsLayoutSection: SettingsSection {
         }
         switch control {
         case let slider as Slider:
-            slider.onArrowUp = { [weak self] in self?.moveFocus(from: slider, delta: -1) }
-            slider.onArrowDown = { [weak self] in self?.moveFocus(from: slider, delta: 1) }
+            slider.onArrowUp = { [weak self, weak slider] in slider.map { self?.moveFocus(from: $0, delta: -1) } }
+            slider.onArrowDown = { [weak self, weak slider] in slider.map { self?.moveFocus(from: $0, delta: 1) } }
             slider.onTab = toReset
             slider.onBacktab = { [weak self] in self?.onExitToNav?() }
             slider.onEsc = { [weak self] in self?.onClose?() }
         case let box as FieldBox:
-            box.onArrowUp = { [weak self] in self?.moveFocus(from: box, delta: -1) }
-            box.onArrowDown = { [weak self] in self?.moveFocus(from: box, delta: 1) }
+            box.onArrowUp = { [weak self, weak box] in box.map { self?.moveFocus(from: $0, delta: -1) } }
+            box.onArrowDown = { [weak self, weak box] in box.map { self?.moveFocus(from: $0, delta: 1) } }
             box.onArrowLeft = { [weak self] in self?.onExitToNav?() }  // Left at cursor-start → nav
             box.onTab = toReset
             box.onBacktab = { [weak self] in self?.onExitToNav?() }
             box.onEsc = { [weak self] in self?.onClose?() }
         case let seg as SegmentedControl:
-            seg.onArrowUp = { [weak self] in self?.moveFocus(from: seg, delta: -1) }
-            seg.onArrowDown = { [weak self] in self?.moveFocus(from: seg, delta: 1) }
+            seg.onArrowUp = { [weak self, weak seg] in seg.map { self?.moveFocus(from: $0, delta: -1) } }
+            seg.onArrowDown = { [weak self, weak seg] in seg.map { self?.moveFocus(from: $0, delta: 1) } }
             seg.onTab = toReset
             seg.onBacktab = { [weak self] in self?.onExitToNav?() }
             seg.onEsc = { [weak self] in self?.onClose?() }
