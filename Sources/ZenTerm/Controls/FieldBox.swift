@@ -20,6 +20,10 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     /// the row's reset icon. Unset elsewhere, so the field keeps default tab behavior.
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
+    /// Editing ended — the field blurred (focus moved away via keyboard nav, Return, or a click
+    /// elsewhere). Opt-in, default nil; the Layout section uses it to commit a field on Return/blur
+    /// instead of on every keystroke. Unset elsewhere, so behavior is unchanged for other consumers.
+    var onEndEditing: (() -> Void)?
     /// ⌘Return anywhere in the field — submit the whole form.
     var onSubmit: (() -> Void)?
     var onEmptyClick: (() -> Void)? {
@@ -67,7 +71,10 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     // `becomeFirstResponder` reliably reports focus gained (even under keyboard nav); the matching
     // resign never fires on the field (its field editor is the real responder), so clear focus on
     // `controlTextDidEndEditing`, which does fire when editing moves away.
-    func controlTextDidEndEditing(_ obj: Notification) { setFocused(false) }
+    func controlTextDidEndEditing(_ obj: Notification) {
+        setFocused(false)
+        onEndEditing?()
+    }
 
     /// Focus lifts the fill to the palettes' muted accent AND outlines the box with the accent.
     private func setFocused(_ focused: Bool) {

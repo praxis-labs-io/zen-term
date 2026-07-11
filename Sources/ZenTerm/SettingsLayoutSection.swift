@@ -146,9 +146,15 @@ final class SettingsLayoutSection: SettingsSection {
         case .field:
             let box = FieldBox(placeholder: LayoutFormat.number(knob.read(GeneralConfig.builtIn)))
             box.setText(LayoutFormat.number(current))
+            // Validate live (inline error), but only write on Return/blur — so typing "16" doesn't
+            // apply "1" then "16" and re-tile every window on each keystroke.
             box.onChange = { [weak self, weak box] in
                 guard let self, let box else { return }
-                self.validateAndWriteNumeric(knob, box: box)
+                self.showNumericValidity(knob, box: box)
+            }
+            box.onEndEditing = { [weak self, weak box] in
+                guard let self, let box else { return }
+                self.commitNumeric(knob, box: box)
             }
             control = box
         }
@@ -176,7 +182,7 @@ final class SettingsLayoutSection: SettingsSection {
         scalarKeys.append(contentsOf: ["shell", "shell-args"])
         let shellBox = FieldBox(placeholder: "login shell")
         shellBox.setText(GeneralConfig.current.shell ?? "")
-        shellBox.onChange = { [weak self, weak shellBox] in
+        shellBox.onEndEditing = { [weak self, weak shellBox] in
             guard let self, let shellBox else { return }
             let text = shellBox.text.trimmingCharacters(in: .whitespaces)
             self.writeOrRemove("shell", text.isEmpty ? nil : text, row: "shell")
@@ -188,7 +194,7 @@ final class SettingsLayoutSection: SettingsSection {
 
         let argsBox = FieldBox(placeholder: "—")
         argsBox.setText(LayoutFormat.joinArgs(GeneralConfig.current.shellArgs))
-        argsBox.onChange = { [weak self, weak argsBox] in
+        argsBox.onEndEditing = { [weak self, weak argsBox] in
             guard let self, let argsBox else { return }
             let joined = LayoutFormat.joinArgs(LayoutFormat.splitArgs(argsBox.text))
             self.writeOrRemove("shell-args", joined.isEmpty ? nil : joined, row: "shell-args")
@@ -217,9 +223,11 @@ final class SettingsLayoutSection: SettingsSection {
     /// Wire a control's Up/Down (move rows), Tab (→ this row's reset), Left-at-boundary/⇧Tab
     /// (→ nav or prev), and Esc through the row/section. Handles the three control types.
     private func wireControlKeyboard(_ control: NSView, row: LayoutRow) {
-        let toReset: () -> Void = { [weak row] in
+        // Tab reaches the reset icon; when the row is at its default (no reset icon), Tab advances
+        // to the next control instead of being a dead keystroke.
+        let toReset: () -> Void = { [weak self, weak row, weak control] in
             guard let row else { return }
-            row.focusReset()
+            if !row.focusReset(), let self, let control { self.moveFocus(from: control, delta: 1) }
         }
         switch control {
         case let slider as Slider:
@@ -248,15 +256,27 @@ final class SettingsLayoutSection: SettingsSection {
 
     // MARK: writes
 
-    private func validateAndWriteNumeric(_ knob: NumericKnob, box: FieldBox) {
+    /// Live feedback while typing: show the range error when the current text is invalid, clear it
+    /// when valid. Does not write — that happens on commit (Return/blur).
+    private func showNumericValidity(_ knob: NumericKnob, box: FieldBox) {
+        let message = LayoutFormat.parseNumber(box.text, in: knob.range) == nil ? rangeMessage(knob) : nil
+        rowFor(knob.key)?.showMessage(message)
+    }
+
+    /// Commit on Return/blur: write a valid value; on an invalid one, revert the field to the current
+    /// config value and clear the error (the live message already explained the range while typing).
+    private func commitNumeric(_ knob: NumericKnob, box: FieldBox) {
         guard let value = LayoutFormat.parseNumber(box.text, in: knob.range) else {
-            rowFor(knob.key)?.showMessage(
-                "Enter a number in \(LayoutFormat.number(knob.range.lowerBound))–\(LayoutFormat.number(knob.range.upperBound))."
-            )
+            box.setText(LayoutFormat.number(knob.read(GeneralConfig.current)))
+            rowFor(knob.key)?.showMessage(nil)
             return
         }
         rowFor(knob.key)?.showMessage(nil)
         write(knob.key, LayoutFormat.number(value), row: knob.key)
+    }
+
+    private func rangeMessage(_ knob: NumericKnob) -> String {
+        "Enter a number in \(LayoutFormat.number(knob.range.lowerBound))–\(LayoutFormat.number(knob.range.upperBound))."
     }
 
     private func write(_ key: String, _ value: String, row: String) {

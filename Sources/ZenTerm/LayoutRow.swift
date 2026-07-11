@@ -76,7 +76,14 @@ final class LayoutRow: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func render(isOverridden: Bool) { resetButton.isHidden = !isOverridden }
-    func focusReset() { if !resetButton.isHidden { window?.makeFirstResponder(resetButton) } }
+    /// Focus the reset icon if it's shown (row overridden); returns whether it moved focus, so the
+    /// caller can advance elsewhere when there's no reset to reach.
+    @discardableResult
+    func focusReset() -> Bool {
+        guard !resetButton.isHidden else { return false }
+        window?.makeFirstResponder(resetButton)
+        return true
+    }
     func showMessage(_ text: String?) {
         messageLabel.stringValue = text ?? ""
         messageLabel.isHidden = (text == nil)
