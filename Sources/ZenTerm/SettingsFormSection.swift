@@ -235,6 +235,12 @@ class SettingsFormSection: SettingsSection {
             seg.onTab = { [weak self] in self?.moveFocus(1) }
             seg.onBacktab = { [weak self] in self?.onExitToNav?() }
             seg.onEsc = { [weak self] in self?.onClose?() }
+        case let dropdown as Dropdown:
+            dropdown.onArrowUp = { [weak self] in self?.moveFocus(-1) }
+            dropdown.onArrowDown = { [weak self] in self?.moveFocus(1) }
+            dropdown.onTab = { [weak self] in self?.moveFocus(1) }
+            dropdown.onBacktab = { [weak self] in self?.onExitToNav?() }
+            dropdown.onEsc = { [weak self] in self?.onClose?() }
         default:
             break
         }
