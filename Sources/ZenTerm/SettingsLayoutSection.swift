@@ -146,7 +146,10 @@ final class SettingsLayoutSection: SettingsSection {
         case .field:
             let box = FieldBox(placeholder: LayoutFormat.number(knob.read(GeneralConfig.builtIn)))
             box.setText(LayoutFormat.number(current))
-            box.onChange = { [weak self] in self?.validateAndWriteNumeric(knob, box: box) }
+            box.onChange = { [weak self, weak box] in
+                guard let self, let box else { return }
+                self.validateAndWriteNumeric(knob, box: box)
+            }
             control = box
         }
         let row = makeRow(key: knob.key, caption: knob.caption, control: control, note: knob.note)
@@ -173,9 +176,10 @@ final class SettingsLayoutSection: SettingsSection {
         scalarKeys.append(contentsOf: ["shell", "shell-args"])
         let shellBox = FieldBox(placeholder: "login shell")
         shellBox.setText(GeneralConfig.current.shell ?? "")
-        shellBox.onChange = { [weak self] in
+        shellBox.onChange = { [weak self, weak shellBox] in
+            guard let self, let shellBox else { return }
             let text = shellBox.text.trimmingCharacters(in: .whitespaces)
-            self?.writeOrRemove("shell", text.isEmpty ? nil : text, row: "shell")
+            self.writeOrRemove("shell", text.isEmpty ? nil : text, row: "shell")
         }
         let shellRow = makeRow(key: "shell", caption: "Shell", control: shellBox, note: "new tabs")
         wireControlKeyboard(shellBox, row: shellRow)
@@ -184,9 +188,10 @@ final class SettingsLayoutSection: SettingsSection {
 
         let argsBox = FieldBox(placeholder: "—")
         argsBox.setText(LayoutFormat.joinArgs(GeneralConfig.current.shellArgs))
-        argsBox.onChange = { [weak self] in
+        argsBox.onChange = { [weak self, weak argsBox] in
+            guard let self, let argsBox else { return }
             let joined = LayoutFormat.joinArgs(LayoutFormat.splitArgs(argsBox.text))
-            self?.writeOrRemove("shell-args", joined.isEmpty ? nil : joined, row: "shell-args")
+            self.writeOrRemove("shell-args", joined.isEmpty ? nil : joined, row: "shell-args")
         }
         let argsRow = makeRow(key: "shell-args", caption: "Shell args", control: argsBox, note: "new tabs")
         wireControlKeyboard(argsBox, row: argsRow)
