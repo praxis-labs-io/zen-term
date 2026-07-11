@@ -7,7 +7,7 @@ import AppKit
 final class LayoutRow: NSView {
     private let messageLabel = NSTextField(labelWithString: "")
 
-    init(caption: String, control: NSView, note: String?) {
+    init(caption: String, control: NSView, note: String?, controlWidth: CGFloat?) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
@@ -47,14 +47,17 @@ final class LayoutRow: NSView {
         stack.spacing = 3
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
-        NSLayoutConstraint.activate([
+        var constraints = [
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor),
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
             controls.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            control.widthAnchor.constraint(equalToConstant: 180),
-        ])
+        ]
+        if let controlWidth {
+            constraints.append(control.widthAnchor.constraint(equalToConstant: controlWidth))
+        }
+        NSLayoutConstraint.activate(constraints)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }

@@ -93,10 +93,7 @@ final class SettingsLayoutSection: SettingsSection {
         addGroup("Shell") { stack in self.addShellRows(to: stack) }
 
         resetAllButton.isKeyboardFocusable = true
-        resetAllButton.onArrowUp = { [weak self] in
-            guard let self else { return }
-            self.moveFocus(from: self.resetAllButton, delta: -1)
-        }
+        resetAllButton.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         resetAllButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
         resetAllButton.onEsc = { [weak self] in self?.onClose?() }
         resetAllButton.onTap = { [weak self] in self?.resetAll() }
@@ -152,7 +149,9 @@ final class SettingsLayoutSection: SettingsSection {
             }
         }
         box.onEndEditing = { [weak self] in self?.flushApply() }
-        addRow(key: knob.key, caption: knob.caption, control: box, note: knob.note, to: stack)
+        addRow(
+            key: knob.key, caption: knob.caption, control: box, focusStop: box.field, note: knob.note,
+            width: 64, to: stack)
     }
 
     private func addReduceMotionRow(to stack: NSStackView) {
@@ -165,7 +164,9 @@ final class SettingsLayoutSection: SettingsSection {
                 "reduce-motion", motion == .system ? nil : LayoutFormat.reduceMotionToken(motion),
                 row: "reduce-motion")
         }
-        addRow(key: "reduce-motion", caption: "Reduce motion", control: segmented, note: nil, to: stack)
+        addRow(
+            key: "reduce-motion", caption: "Reduce motion", control: segmented, focusStop: segmented,
+            note: nil, width: nil, to: stack)
     }
 
     private func addShellRows(to stack: NSStackView) {
@@ -181,7 +182,9 @@ final class SettingsLayoutSection: SettingsSection {
             }
         }
         shellBox.onEndEditing = { [weak self] in self?.flushApply() }
-        addRow(key: "shell", caption: "Shell", control: shellBox, note: "new tabs", to: stack)
+        addRow(
+            key: "shell", caption: "Shell", control: shellBox, focusStop: shellBox.field, note: "new tabs",
+            width: 200, to: stack)
 
         let argsBox = FieldBox(placeholder: "—")
         argsBox.setText(LayoutFormat.joinArgs(GeneralConfig.current.shellArgs))
@@ -194,14 +197,22 @@ final class SettingsLayoutSection: SettingsSection {
             }
         }
         argsBox.onEndEditing = { [weak self] in self?.flushApply() }
-        addRow(key: "shell-args", caption: "Shell args", control: argsBox, note: "new tabs", to: stack)
+        addRow(
+            key: "shell-args", caption: "Shell args", control: argsBox, focusStop: argsBox.field,
+            note: "new tabs", width: 200, to: stack)
     }
 
-    private func addRow(key: String, caption: String, control: NSView, note: String?, to stack: NSStackView) {
-        let row = LayoutRow(caption: caption, control: control, note: note)
+    /// Add a row. `focusStop` is the actual first-responder-focusable view (a `FieldBox`'s inner
+    /// `field`, or the control itself for a `SegmentedControl`) — the wrapper `FieldBox` isn't
+    /// focusable, so the stop must be its text field (mirroring `AddWorkspaceOverlay`).
+    private func addRow(
+        key: String, caption: String, control: NSView, focusStop: NSView, note: String?,
+        width: CGFloat?, to stack: NSStackView
+    ) {
+        let row = LayoutRow(caption: caption, control: control, note: note, controlWidth: width)
         wireControlKeyboard(control)
         rows.append(row)
-        stops.append(control)
+        stops.append(focusStop)
         controlForKey[key] = control
         stack.addArrangedSubview(row)
         row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -213,16 +224,16 @@ final class SettingsLayoutSection: SettingsSection {
     private func wireControlKeyboard(_ control: NSView) {
         switch control {
         case let box as FieldBox:
-            box.onArrowUp = { [weak self, weak box] in box.map { self?.moveFocus(from: $0, delta: -1) } }
-            box.onArrowDown = { [weak self, weak box] in box.map { self?.moveFocus(from: $0, delta: 1) } }
+            box.onArrowUp = { [weak self] in self?.moveFocus(-1) }
+            box.onArrowDown = { [weak self] in self?.moveFocus(1) }
             box.onArrowLeft = { [weak self] in self?.onExitToNav?() }  // Left at cursor-start → nav
-            box.onTab = { [weak self, weak box] in box.map { self?.moveFocus(from: $0, delta: 1) } }
+            box.onTab = { [weak self] in self?.moveFocus(1) }
             box.onBacktab = { [weak self] in self?.onExitToNav?() }
             box.onEsc = { [weak self] in self?.onClose?() }
         case let seg as SegmentedControl:
-            seg.onArrowUp = { [weak self, weak seg] in seg.map { self?.moveFocus(from: $0, delta: -1) } }
-            seg.onArrowDown = { [weak self, weak seg] in seg.map { self?.moveFocus(from: $0, delta: 1) } }
-            seg.onTab = { [weak self, weak seg] in seg.map { self?.moveFocus(from: $0, delta: 1) } }
+            seg.onArrowUp = { [weak self] in self?.moveFocus(-1) }
+            seg.onArrowDown = { [weak self] in self?.moveFocus(1) }
+            seg.onTab = { [weak self] in self?.moveFocus(1) }
             seg.onBacktab = { [weak self] in self?.onExitToNav?() }
             seg.onEsc = { [weak self] in self?.onClose?() }
         default:
@@ -327,9 +338,12 @@ final class SettingsLayoutSection: SettingsSection {
         "Enter a number in \(LayoutFormat.number(knob.range.lowerBound))–\(LayoutFormat.number(knob.range.upperBound))."
     }
 
-    private func moveFocus(from view: NSView, delta: Int) {
-        guard let index = stops.firstIndex(where: { $0 === view }) else { return }
-        guard let next = KeyboardFocus.step(from: index, delta: delta, count: stops.count) else { return }
+    /// Move focus between the vertical stops. Finds the current stop by which one is first responder
+    /// (a stop may be a `FieldBox`'s field editor, so this is more robust than a passed-in view).
+    private func moveFocus(_ delta: Int) {
+        let window = stops.first?.window
+        let anchor = stops.firstIndex { KeyboardFocus.isFocused($0, in: window) }
+        guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: stops.count) else { return }
         let target = stops[next]
         target.window?.makeFirstResponder(target)
         let scrollTarget = rows.first { $0.subviews(recursively: target) } ?? target
