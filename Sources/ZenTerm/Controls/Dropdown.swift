@@ -98,6 +98,7 @@ final class Dropdown: NSView {
     }
     override func resignFirstResponder() -> Bool {
         isFocusedStop = false
+        closeList()
         restyle()
         return super.resignFirstResponder()
     }
