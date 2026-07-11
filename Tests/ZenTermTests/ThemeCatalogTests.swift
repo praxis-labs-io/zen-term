@@ -54,6 +54,9 @@ final class ThemeCatalogTests: XCTestCase {
             // fallback's. (Checking `background` alone isn't safe here: the built-in "Rosé Pine
             // Moon" default deliberately uses Rosé Pine Main's background hex, which coincides
             // with the bundled `rose-pine` [Main] file's background - see Theme.swift.)
+            if entry.token != "rose-pine" {
+                XCTAssertNotEqual(theme.background, builtIn.background, "\(entry.token) bg not set")
+            }
             XCTAssertNotEqual(theme.ansi, builtIn.ansi, "\(entry.token) palette not set")
             XCTAssertEqual(theme.ansi.count, 16)
         }
