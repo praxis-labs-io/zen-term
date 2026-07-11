@@ -22,9 +22,9 @@ final class LayoutRow: NSView {
             noteLabel.font = .systemFont(ofSize: 10)
             noteLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
             let stack = NSStackView(views: [label, noteLabel])
-            stack.orientation = .horizontal
-            stack.spacing = 6
-            stack.alignment = .firstBaseline
+            stack.orientation = .vertical
+            stack.spacing = 2
+            stack.alignment = .leading
             captionView = stack
         } else {
             captionView = label
