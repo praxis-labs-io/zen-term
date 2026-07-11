@@ -160,6 +160,9 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
     private func selectSection(_ index: Int) {
         guard sections.indices.contains(index) else { return }
+        // Let the outgoing section end any in-flight interaction (e.g. an armed keybind capture)
+        // before its detail view — and any capture backdrop/popover on it — is removed.
+        if sections.indices.contains(selectedIndex) { sections[selectedIndex].sectionWillHide() }
         selectedIndex = index
         for (rowIndex, row) in navRows.enumerated() { row.setSelected(rowIndex == index) }
         detailContainer.subviews.forEach { $0.removeFromSuperview() }

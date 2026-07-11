@@ -29,8 +29,7 @@ final class SettingsKeybindsSection: SettingsSection {
     private var hintBackdrop: NSView?
     private weak var capturingRow: KeybindRow?
     private var captureCloseTimer: DispatchWorkItem?
-    private let resetAllMessage = NSTextField(labelWithString: "")
-    private var resetAllMessageTimer: DispatchWorkItem?
+    private let resetAllMessage = ResetFlashLabel()
 
     init(capturer: KeybindCapturing?) { self.capturer = capturer }
 
@@ -83,41 +82,22 @@ final class SettingsKeybindsSection: SettingsSection {
         rowsStack.addArrangedSubview(resetAllButton)
         if let previous { rowsStack.setCustomSpacing(18, after: previous) }  // gap before Reset all
 
-        resetAllMessage.font = .systemFont(ofSize: 11, weight: .medium)
-        resetAllMessage.textColor = Theme.current.chrome.accent.nsColor
-        resetAllMessage.isHidden = true
         rowsStack.addArrangedSubview(resetAllMessage)
         rowsStack.setCustomSpacing(6, after: resetAllButton)  // tuck the success line under the button
 
-        let doc = FlippedView()
-        doc.translatesAutoresizingMaskIntoConstraints = false
-        doc.addSubview(rowsStack)
-
-        let scroll = NSScrollView()
-        scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
-        scroll.verticalScroller = SlimScroller()
-        scroll.scrollerStyle = .overlay
-        scroll.autohidesScrollers = true
-        scroll.documentView = doc
-        scroll.translatesAutoresizingMaskIntoConstraints = false
+        let scroll = SettingsDetail.scroll(for: rowsStack)
         detailScroll = scroll
-
-        NSLayoutConstraint.activate([
-            doc.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
-            doc.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
-            doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-            // Inset the rows within the flipped document — padding on all four sides.
-            rowsStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: 18),
-            rowsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 20),
-            rowsStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -20),
-            rowsStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -18),
-        ])
         refreshRows()
         return scroll
     }
 
     func detailStops() -> [NSView] { rows.map(\.chip) + [resetAllButton] }
+
+    /// End an armed capture when the section is torn down (a nav switch) so the app-wide interceptor
+    /// doesn't keep diverting keystrokes with the recording popover already gone.
+    func sectionWillHide() {
+        if let row = capturingRow { endCapture(row) }
+    }
 
     // MARK: edits
 
@@ -211,17 +191,7 @@ final class SettingsKeybindsSection: SettingsSection {
         desired = reservedEntries(of: KeymapDefaults.map)
         rows.forEach { $0.showMessage(nil) }
         guard persist(reportingRow: rows.last) else { return }  // report a write error near the button
-        flashResetAllSuccess()
-    }
-
-    /// Flash a success line under the "Reset all" button, then fade it after a couple seconds.
-    private func flashResetAllSuccess() {
-        resetAllMessage.stringValue = "Defaults restored."
-        resetAllMessage.isHidden = false
-        let hide = DispatchWorkItem { [weak self] in self?.resetAllMessage.isHidden = true }
-        resetAllMessageTimer?.cancel()
-        resetAllMessageTimer = hide
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: hide)
+        resetAllMessage.flash("Defaults restored.")
     }
 
     /// Write the override set, reload the live config, then refresh every row from the new keymap.
@@ -288,7 +258,14 @@ final class SettingsKeybindsSection: SettingsSection {
         let size = bubble.fittingSize
         let chipRect = row.chip.convert(row.chip.bounds, to: host)
         let x = max(8, min(chipRect.midX - size.width / 2, host.bounds.width - size.width - 8))
-        let y = host.isFlipped ? (chipRect.maxY + 6) : (chipRect.minY - size.height - 6)
+        // Place the popover just past the chip; if that would run off the pane (a chip low in the
+        // scrolled list), use the far side, then clamp so it never draws off the bottom of the card.
+        let primary = host.isFlipped ? (chipRect.maxY + 6) : (chipRect.minY - size.height - 6)
+        let fallback = host.isFlipped ? (chipRect.minY - size.height - 6) : (chipRect.maxY + 6)
+        let maxY = max(8, host.bounds.height - size.height - 8)
+        var y = primary
+        if y < 8 || y > maxY { y = fallback }
+        y = max(8, min(y, maxY))
         bubble.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
     }
 

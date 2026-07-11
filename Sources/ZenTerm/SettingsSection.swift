@@ -13,4 +13,13 @@ protocol SettingsSection: AnyObject {
     func makeDetailView() -> NSView
     /// The detail pane's vertical focus stops, top to bottom (for the shared 2D keyboard model).
     func detailStops() -> [NSView]
+    /// Called by the card just before this section's detail view is torn down (a section switch),
+    /// so the section can end any in-flight interaction — e.g. an armed keybind capture that would
+    /// otherwise leave the app-wide interceptor diverting keystrokes with no visible recording UI.
+    func sectionWillHide()
+}
+
+extension SettingsSection {
+    /// Most sections have nothing to tear down; only the keybinds capturer overrides this.
+    func sectionWillHide() {}
 }

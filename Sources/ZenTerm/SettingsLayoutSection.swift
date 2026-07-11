@@ -52,8 +52,7 @@ final class SettingsLayoutSection: SettingsSection {
     ]
 
     private let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
-    private let resetAllMessage = NSTextField(labelWithString: "")
-    private var resetAllMessageTimer: DispatchWorkItem?
+    private let resetAllMessage = ResetFlashLabel()
     private var rows: [LayoutRow] = []
     private var stops: [NSView] = []  // ordered vertical focus stops: each row's control + Reset-all
     private var controlForKey: [String: NSView] = [:]
@@ -103,33 +102,10 @@ final class SettingsLayoutSection: SettingsSection {
         if let previous { rowsStack.setCustomSpacing(20, after: previous) }  // gap before Reset all
         stops.append(resetAllButton)
 
-        resetAllMessage.font = .systemFont(ofSize: 11, weight: .medium)
-        resetAllMessage.textColor = Theme.current.chrome.accent.nsColor
-        resetAllMessage.isHidden = true
         rowsStack.addArrangedSubview(resetAllMessage)
         rowsStack.setCustomSpacing(6, after: resetAllButton)  // tuck the success line under the button
 
-        let doc = FlippedView()
-        doc.translatesAutoresizingMaskIntoConstraints = false
-        doc.addSubview(rowsStack)
-
-        let scroll = NSScrollView()
-        scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
-        scroll.verticalScroller = SlimScroller()
-        scroll.scrollerStyle = .overlay
-        scroll.autohidesScrollers = true
-        scroll.documentView = doc
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            doc.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
-            doc.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
-            doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-            rowsStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: 18),
-            rowsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 20),
-            rowsStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -20),
-            rowsStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -18),
-        ])
+        let scroll = SettingsDetail.scroll(for: rowsStack)
         refreshRows()
         return scroll
     }
@@ -146,7 +122,19 @@ final class SettingsLayoutSection: SettingsSection {
         box.onChange = { [weak self, weak box] in
             guard let self, let box else { return }
             let text = box.text.trimmingCharacters(in: .whitespaces)
-            let isValid = text.isEmpty || LayoutFormat.parseNumber(text, in: knob.range) != nil
+            if text.isEmpty {
+                // Blank = default, but don't live-apply the removal mid-edit — clearing the field to
+                // retype it would otherwise snap every window to the built-in value on the debounce
+                // tick. Stage the blank so blur/Return still commits it, and cancel any pending write.
+                self.rowFor(knob.key)?.showMessage(nil)
+                self.applyTimer?.cancel()
+                self.pendingApply = { [weak self, weak box] in
+                    guard let self, let box else { return }
+                    self.commitNumeric(knob, box: box)
+                }
+                return
+            }
+            let isValid = LayoutFormat.parseNumber(text, in: knob.range) != nil
             self.rowFor(knob.key)?.showMessage(isValid ? nil : self.rangeMessage(knob))
             if isValid {
                 self.scheduleApply { [weak self, weak box] in
@@ -168,8 +156,9 @@ final class SettingsLayoutSection: SettingsSection {
         // On/Off only. The config's `system` default follows the OS accessibility setting; with no
         // System segment we resolve it to show the effective initial state, and picking On/Off pins
         // reduce-motion regardless of the OS.
-        let segmented = SegmentedControl(options: ["On", "Off"], selectedIndex: reduceMotionIsOn() ? 0 : 1) {
-            [weak self] index in
+        let segmented = SegmentedControl(
+            options: ["On", "Off"], selectedIndex: reduceMotionIsOn() ? 0 : 1, notifiesOnReselect: true
+        ) { [weak self] index in
             self?.writeOrRemove(
                 "reduce-motion", LayoutFormat.reduceMotionToken(index == 0 ? .on : .off), row: "reduce-motion")
         }
@@ -289,12 +278,7 @@ final class SettingsLayoutSection: SettingsSection {
     }
     private func resetAll() {
         guard persist({ try ConfigWriter.apply(removals: Set(self.scalarKeys)) }, reportKey: nil) else { return }
-        resetAllMessage.stringValue = "Defaults restored."
-        resetAllMessage.isHidden = false
-        let hide = DispatchWorkItem { [weak self] in self?.resetAllMessage.isHidden = true }
-        resetAllMessageTimer?.cancel()
-        resetAllMessageTimer = hide
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: hide)
+        resetAllMessage.flash("Defaults restored.")
     }
 
     /// Run a write, reload, and refresh every row from the new config; returns whether it succeeded.

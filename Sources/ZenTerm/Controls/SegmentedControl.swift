@@ -15,9 +15,17 @@ final class SegmentedControl: NSView {
     var onEsc: (() -> Void)?
 
     private var segments: [AppButton] = []
+    /// When true, re-picking the already-selected segment still fires `onChange`. Off by default;
+    /// the reduce-motion row opts in so clicking the currently-shown (OS-derived `system`) value can
+    /// pin it — otherwise a no-op click leaves config unpinned and it silently follows the OS later.
+    private let notifiesOnReselect: Bool
 
-    init(options: [String], selectedIndex: Int = 0, onChange: @escaping (Int) -> Void) {
+    init(
+        options: [String], selectedIndex: Int = 0, notifiesOnReselect: Bool = false,
+        onChange: @escaping (Int) -> Void
+    ) {
         self.selectedIndex = selectedIndex
+        self.notifiesOnReselect = notifiesOnReselect
         self.onChange = onChange
         super.init(frame: .zero)
         wantsLayer = true
@@ -47,7 +55,7 @@ final class SegmentedControl: NSView {
     /// Select an option (clamped), update the fill, and notify — used by both clicks and arrows.
     func select(_ index: Int) {
         let clamped = min(max(index, 0), segments.count - 1)
-        guard clamped != selectedIndex || !segments[clamped].isOn else {
+        guard notifiesOnReselect || clamped != selectedIndex || !segments[clamped].isOn else {
             selectedIndex = clamped
             updateSelection()
             return
