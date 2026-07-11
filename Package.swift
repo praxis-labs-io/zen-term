@@ -55,7 +55,10 @@ let package = Package(
         .executableTarget(
             name: "ZenTerm",
             dependencies: ["TerminalKit", "PaneKit", "TabKit"],  // still no SwiftTerm
-            resources: [.copy("Resources")]  // brand marks (GitHub, git) SVGs for the dock
+            resources: [
+                .copy("Resources"),  // brand marks (GitHub, git) SVGs for the dock
+                .copy("Themes"),  // bundled ghostty theme catalog for the Settings theme picker
+            ]
         ),
         .testTarget(
             name: "TerminalKitTests",
