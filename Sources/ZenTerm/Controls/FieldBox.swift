@@ -16,6 +16,10 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     /// Return in this field; defaults to `onArrowDown` (advance) when unset.
     var onEnter: (() -> Void)?
     var onEsc: (() -> Void)?
+    /// Tab / Shift-Tab out of the field (opt-in, default nil) — the Layout section routes Tab to
+    /// the row's reset icon. Unset elsewhere, so the field keeps default tab behavior.
+    var onTab: (() -> Void)?
+    var onBacktab: (() -> Void)?
     /// ⌘Return anywhere in the field — submit the whole form.
     var onSubmit: (() -> Void)?
     var onEmptyClick: (() -> Void)? {
@@ -93,6 +97,12 @@ final class FieldBox: NSView, NSTextFieldDelegate {
             }
         case #selector(NSResponder.cancelOperation(_:)):
             onEsc?()
+        case #selector(NSResponder.insertTab(_:)):
+            guard let onTab else { return false }
+            onTab()
+        case #selector(NSResponder.insertBacktab(_:)):
+            guard let onBacktab else { return false }
+            onBacktab()
         default:
             return false
         }
