@@ -63,7 +63,9 @@ class PaletteOverlay: NSView, ModalOverlay {
     private var selected = 0
 
     /// The selection highlight shared by every palette row (accent @ 18%).
-    static let selectionBackground = Theme.current.chrome.accent.nsColor.withAlphaComponent(0.18)
+    static var selectionBackground: NSColor {
+        Theme.current.chrome.accent.nsColor.withAlphaComponent(0.18)
+    }
 
     init(
         background: NSColor, placeholder: String, emptyText: String, footerHints: [PaletteHint],

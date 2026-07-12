@@ -31,8 +31,8 @@ final class Dropdown: NSView {
     private var highlighted = 0
     private var isFocusedStop = false
 
-    private static let restFill = Theme.current.chrome.ink(alpha: 0.06)
-    private static let focusFill = PaletteOverlay.selectionBackground
+    private static var restFill: NSColor { Theme.current.chrome.ink(alpha: 0.06) }
+    private static var focusFill: NSColor { PaletteOverlay.selectionBackground }
     private static let rowHeight: CGFloat = 28
     private static let headerHeight: CGFloat = 20
     private static let maxListHeight: CGFloat = 260

@@ -13,7 +13,7 @@ final class KeycapView: NSView {
         "⏎": "return", "↵": "return", "⎋": "escape",
         "↑": "arrow.up", "↓": "arrow.down", "←": "arrow.left", "→": "arrow.right",
     ]
-    private static let ink = Theme.current.chrome.ink(alpha: 0.55)
+    private static var ink: NSColor { Theme.current.chrome.ink(alpha: 0.55) }
 
     /// `showsBackground: false` renders just the glyph tokens with no rounded fill — for a host that
     /// supplies its own background (the keybind chip's full-width focus target).

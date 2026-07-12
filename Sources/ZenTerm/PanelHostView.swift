@@ -139,7 +139,16 @@ final class PanelHostView: NSView {
         ]
     }
 
-    private static let idleBorder = Theme.current.chrome.ink(alpha: 0.08)
+    private static var idleBorder: NSColor { Theme.current.chrome.ink(alpha: 0.08) }
+
+    /// Re-apply the live pane border / focus-halo colors after a config change — no relaunch.
+    /// The glow's `shadowColor` is set once at init (only its opacity is toggled elsewhere), so
+    /// it's reset explicitly; the border color is picked up by re-running `updateHalo()`, which
+    /// reads `idleBorder`/`accent` fresh.
+    func reapplyTheme() {
+        pane.layer?.shadowColor = Theme.current.chrome.accent.nsColor.cgColor
+        updateHalo()
+    }
 
     private func updateHalo() {
         guard let layer = pane.layer else { return }

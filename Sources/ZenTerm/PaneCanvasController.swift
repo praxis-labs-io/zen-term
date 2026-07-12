@@ -219,6 +219,12 @@ final class PaneCanvasController: NSObject {
         }
     }
 
+    /// Re-apply the live pane border / focus-halo colors to every built pane after a config
+    /// change — no relaunch, no restructure.
+    func reapplyChromeColors() {
+        for host in hostByLeaf.values { host.reapplyTheme() }
+    }
+
     /// Render the focused leaf full-canvas, retaining its surface — no restart.
     func zoomFocusedLeaf() {
         guard zoomedLeaf == nil else { return }

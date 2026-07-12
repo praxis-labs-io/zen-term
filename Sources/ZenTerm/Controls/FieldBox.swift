@@ -30,9 +30,9 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         didSet { field.onEmptyClick = onEmptyClick }
     }
 
-    private static let restFill = Theme.current.chrome.ink(alpha: 0.06)
+    private static var restFill: NSColor { Theme.current.chrome.ink(alpha: 0.06) }
     /// The same muted accent fill the ⌘P/⌘⇧P palettes use for the selected row.
-    private static let focusFill = PaletteOverlay.selectionBackground
+    private static var focusFill: NSColor { PaletteOverlay.selectionBackground }
 
     var text: String { field.stringValue }
     func setText(_ value: String) { field.stringValue = value }

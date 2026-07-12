@@ -13,6 +13,11 @@ final class ToggleDock: NSView {
     private let zoomBtn: IconButton
     private let lazygitBtn: IconButton
     private var toolFloatBtns: [String: IconButton] = [:]
+    /// Every button + divider in the dock, retained so `reapplyTheme()` can re-color them all
+    /// after a config change (some, like split-h/v and the dividers, have no other stored
+    /// reference to reach through).
+    private var allButtons: [IconButton] = []
+    private var dividers: [NSView] = []
 
     private static let iconPointSize: CGFloat = 11
 
@@ -41,11 +46,16 @@ final class ToggleDock: NSView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         for (id, btn) in toolButtonPairs { toolFloatBtns[id] = btn }
+        allButtons =
+            [splitH, splitV, bottomBtn, rightBtn, zoomBtn, paletteBtn, lazygitBtn] + toolButtonPairs.map(\.1)
+        let dividerA = Self.divider()
+        let dividerB = Self.divider()
+        dividers = [dividerA, dividerB]
 
         let stack = NSStackView(
             views: [
-                splitH, splitV, Self.divider(),
-                bottomBtn, rightBtn, zoomBtn, Self.divider(),
+                splitH, splitV, dividerA,
+                bottomBtn, rightBtn, zoomBtn, dividerB,
                 paletteBtn, lazygitBtn,
             ] + toolButtonPairs.map(\.1))
         stack.orientation = .horizontal
@@ -97,6 +107,15 @@ final class ToggleDock: NSView {
             bottomBtn.isActive = false
             rightBtn.isActive = true
         }
+    }
+
+    /// Re-apply the live chrome colors to every button + divider after a config change — no
+    /// relaunch. Each `IconButton` already reads `Theme.current` fresh; this just re-triggers
+    /// that read. The dividers bake their color in once at build time, so it's reset explicitly.
+    func reapplyTheme() {
+        for button in allButtons { button.reapplyTheme() }
+        let dividerColor = Theme.current.chrome.ink(alpha: 0.10).cgColor
+        for divider in dividers { divider.layer?.backgroundColor = dividerColor }
     }
 
     /// A thin 1×12 vertical divider matching the demo's group separators.

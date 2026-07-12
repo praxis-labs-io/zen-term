@@ -27,9 +27,9 @@ final class TabBarView: NSView {
 
     static let height: CGFloat = 30
 
-    fileprivate static let activeInk = Theme.current.chrome.ink(alpha: 1)
-    fileprivate static let idleInk = Theme.current.chrome.ink(alpha: 0.55)
-    fileprivate static let numberInk = Theme.current.chrome.ink(alpha: 0.5)
+    fileprivate static var activeInk: NSColor { Theme.current.chrome.ink(alpha: 1) }
+    fileprivate static var idleInk: NSColor { Theme.current.chrome.ink(alpha: 0.55) }
+    fileprivate static var numberInk: NSColor { Theme.current.chrome.ink(alpha: 0.5) }
 
     private let stack = NSStackView()
     /// A single iris underline that slides along the bar to the active tab (a tracer),
@@ -39,6 +39,9 @@ final class TabBarView: NSView {
     /// toward the target rather than growing symmetrically about the center.
     private let tracer = CALayer()
     private var activeTabID: TabID?
+    /// The last snapshot handed to `render(_:)`, retained so `reapplyTheme()` can re-render it
+    /// after a theme swap without the caller re-supplying the tab list.
+    private var lastItems: [TabBarItem] = []
     /// How long the tracer takes to reach the newly-selected tab — matched to the canvas
     /// page-slide (0.28s) so the two land together.
     private static let tracerDuration: CFTimeInterval = 0.28
@@ -79,6 +82,7 @@ final class TabBarView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func render(_ items: [TabBarItem]) {
+        lastItems = items
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         var activeChip: Chip?
         for item in items {
@@ -109,6 +113,22 @@ final class TabBarView: NSView {
         }
         activeTabID = newActive
     }
+
+    /// Re-apply the live chrome colors to the already-built bar after a config change — no
+    /// relaunch. The tracer's color is baked in once at init and untouched by `render(_:)`, so
+    /// it's reset explicitly; the chips/number/labels pick up fresh colors by re-invoking
+    /// `render(_:)` with the retained snapshot (its ink colors are computed from
+    /// `Theme.current` on every access, not cached).
+    func reapplyTheme() {
+        tracer.backgroundColor = Theme.current.chrome.accent.nsColor.cgColor
+        render(lastItems)
+    }
+
+    /// Test hook: the chip (+ trailing "+") views currently in the bar.
+    var chipsForTesting: [NSView] { stack.arrangedSubviews }
+
+    /// Test hook: the tracer underline's current color.
+    var tracerColorForTesting: NSColor? { tracer.backgroundColor.flatMap { NSColor(cgColor: $0) } }
 
     /// The 2pt underline frame under `chip`, spanning its label (inset 9pt each side),
     /// in this view's coordinates.

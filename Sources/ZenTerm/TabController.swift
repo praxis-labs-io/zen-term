@@ -1009,6 +1009,15 @@ final class TabController: NSObject {
         view.layoutSubtreeIfNeeded()
     }
 
+    /// Re-apply the live pane border / focus-halo colors to this built tab after a config
+    /// change — no relaunch. Sibling to `reapplyChromeLayout()` (layout only); covers the pane
+    /// canvas plus any built drawer panels.
+    func reapplyChromeColors() {
+        paneCanvas.reapplyChromeColors()
+        bottomDrawerPanel?.reapplyTheme()
+        rightDrawerPanel?.reapplyTheme()
+    }
+
     private func relayoutPanels() {
         NSLayoutConstraint.deactivate(tileConstraints)
         tileConstraints = []
