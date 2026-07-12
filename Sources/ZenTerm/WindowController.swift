@@ -156,6 +156,10 @@ final class WindowController: NSObject {
             self.tint.layer?.backgroundColor =
                 Theme.current.chrome.background.nsColor.withAlphaComponent(Self.backdropTintAlpha).cgColor
             for controller in self.controllers.values { controller.reapplyChromeLayout() }
+            for surface in self.controllers.values.flatMap({ $0.allSurfaces }) {
+                surface.applyAppearance(
+                    theme: Theme.current.terminal, behavior: GeneralConfig.current.terminalBehavior)
+            }
         }
     }
 

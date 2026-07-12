@@ -14,6 +14,8 @@ public final class PaneSurfaceRegistry {
 
     public func surface(for id: PaneID) -> TerminalSurface? { surfaces[id] }
     public var ids: Set<PaneID> { Set(surfaces.keys) }
+    /// Every live surface in the registry, for a full config-change re-theme pass.
+    public var allSurfaces: [TerminalSurface] { Array(surfaces.values) }
 
     /// Terminates every surface and empties the registry. Used when a whole tab is
     /// torn down at once (its controller is discarded), so its shells don't leak.

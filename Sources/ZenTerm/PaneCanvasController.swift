@@ -89,6 +89,9 @@ final class PaneCanvasController: NSObject {
     /// Number of leaves (panes) in the tab's canvas. `1` means ⌘W closes the tab.
     var paneCount: Int { tree.leafIDs.count }
 
+    /// Every live pane surface in this canvas, for a full config-change re-theme pass.
+    var allSurfaces: [TerminalSurface] { registry.allSurfaces }
+
     /// Whether the focused pane's shell has live work (busy). False when the
     /// surface hasn't started or the backend can't tell.
     var focusedPaneIsBusy: Bool {

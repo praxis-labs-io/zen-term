@@ -138,6 +138,17 @@ final class TabController: NSObject {
     /// True when the tab has a single pane, so ⌘W on it would close the whole tab.
     var isSinglePane: Bool { paneCanvas.paneCount == 1 }
 
+    /// Every live terminal surface this tab owns: the split-pane surfaces (via the canvas) plus
+    /// the auxiliary drawer/lazygit/tool-float surfaces. Used to re-theme all surfaces live on a
+    /// config change.
+    var allSurfaces: [TerminalSurface] {
+        var result = paneCanvas.allSurfaces
+        result.append(
+            contentsOf: [bottomDrawerSurface, rightDrawerSurface, lazygitSurface, activeToolFloat?.surface]
+                .compactMap { $0 })
+        return result
+    }
+
     /// Whether the focused main-canvas pane has a running process.
     var focusedPaneIsBusy: Bool { paneCanvas.focusedPaneIsBusy }
 
