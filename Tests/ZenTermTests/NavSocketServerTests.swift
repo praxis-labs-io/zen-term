@@ -29,20 +29,52 @@ final class NavSocketServerTests: XCTestCase {
         XCTAssertTrue(commands.contains(.setVim(token: 5, on: true)))
     }
 
+    func test_persistentConnection_dispatchesEachLineBeforeClose() throws {
+        // One connection, two lines sent with a wait between them and no close until the end:
+        // proves each line dispatches as it arrives rather than waiting on EOF/timeout.
+        let path = "/tmp/zt-nav-persist-\(getpid()).sock"
+        let first = expectation(description: "first line")
+        let second = expectation(description: "second line")
+        var commands: [NavCommand] = []
+        let server = NavSocketServer(path: path) { command in
+            commands.append(command)
+            if commands.count == 1 { first.fulfill() }
+            if commands.count == 2 { second.fulfill() }
+        }
+        server.start()
+        defer { server.stop() }
+
+        let fd = try connectClient(to: path)
+        defer { close(fd) }
+        writeLine(#"{"cmd":"focus","dir":"up","pane":1}"#, to: fd)
+        wait(for: [first], timeout: 3)
+        writeLine(#"{"cmd":"focus","dir":"down","pane":2}"#, to: fd)
+        wait(for: [second], timeout: 3)
+
+        XCTAssertEqual(commands, [.focus(token: 1, dir: .up), .focus(token: 2, dir: .down)])
+    }
+
     func test_stop_removesSocketFile() {
         let path = "/tmp/zt-nav-stop-\(getpid()).sock"
         let server = NavSocketServer(path: path) { _ in }
         server.start()
         XCTAssertTrue(FileManager.default.fileExists(atPath: path))
         server.stop()
+        // The listen fd closes on the source's queue; the socket file is unlinked in stop().
         XCTAssertFalse(FileManager.default.fileExists(atPath: path))
     }
 
     /// Connect a throwaway `AF_UNIX` client, write one newline-terminated line, close.
     private func sendLine(_ line: String, to path: String) throws {
+        let fd = try connectClient(to: path)
+        defer { close(fd) }
+        writeLine(line, to: fd)
+    }
+
+    /// Open and connect an `AF_UNIX` stream client to `path`, returning the socket fd.
+    private func connectClient(to path: String) throws -> Int32 {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         XCTAssertGreaterThanOrEqual(fd, 0)
-        defer { close(fd) }
 
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)
@@ -61,7 +93,11 @@ final class NavSocketServerTests: XCTestCase {
             }
         }
         XCTAssertEqual(connected, 0, "connect failed, errno=\(errno)")
+        return fd
+    }
 
+    /// Write one newline-terminated line to a connected client fd.
+    private func writeLine(_ line: String, to fd: Int32) {
         let payload = Array((line + "\n").utf8)
         _ = payload.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
     }

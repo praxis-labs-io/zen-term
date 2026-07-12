@@ -158,7 +158,14 @@ final class PaneCanvasController: NSObject {
     private func registerNavToken(for id: PaneID) -> Int {
         let token = NavRegistry.shared.mintToken()
         tokenByLeaf[id] = token
-        NavRegistry.shared.register(token: token) { [weak self] dir in self?.onSocketFocus?(dir) }
+        NavRegistry.shared.register(token: token) { [weak self] dir in
+            // Only the focused pane hands off. nvim emits `focus` on a keypress, which it can
+            // only receive while focused, so the sender is the focused pane in the normal flow;
+            // dropping a mismatch ignores a stale or background command that would otherwise
+            // navigate from the wrong origin.
+            guard let self, self.focusedPaneToken == token else { return }
+            self.onSocketFocus?(dir)
+        }
         return token
     }
 
@@ -408,6 +415,8 @@ final class PaneCanvasController: NSObject {
     /// tab is discarded (its controller is dropped), so no shell leaks as a zombie.
     func shutdown() {
         registry.terminateAll()
+        for token in tokenByLeaf.values { NavRegistry.shared.unregister(token: token) }
+        tokenByLeaf.removeAll()
         canvasView.subviews.forEach { $0.removeFromSuperview() }
         hostByLeaf.removeAll()
     }

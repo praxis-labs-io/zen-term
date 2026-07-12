@@ -66,48 +66,69 @@ final class NavSocketServer {
         guard bound == 0, listen(fd, 8) == 0 else { close(fd); return }
         listenFD = fd
 
+        // The source owns the listen fd: it's closed in the cancel handler (which runs on
+        // `queue` after the last accept), so `stop()` on the main thread never races the
+        // accept handler over the descriptor.
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         source.setEventHandler { [weak self] in self?.acceptOne() }
+        source.setCancelHandler { [weak self] in
+            close(fd)
+            self?.listenFD = -1
+        }
         source.resume()
         acceptSource = source
     }
 
-    /// Stop accepting, close the socket, and remove the file so the next launch rebinds.
+    /// Stop accepting and remove the file so the next launch rebinds. The listen fd is closed
+    /// by the source's cancel handler, not here, to keep all fd access on `queue`.
     func stop() {
         acceptSource?.cancel()
         acceptSource = nil
-        if listenFD >= 0 {
-            close(listenFD)
-            listenFD = -1
-        }
         unlink(path)
     }
 
     private func acceptOne() {
         let conn = accept(listenFD, nil, nil)
         guard conn >= 0 else { return }
-        // A wedged client must not stall the accept queue: bound the read, then read off
-        // the shared concurrent queue so one slow connection can't head-of-line the rest.
+        // A wedged client must not stall the accept queue: bound the read, then read off the
+        // shared concurrent queue so one slow connection can't head-of-line the rest. Close
+        // the connection even if `self` is gone by the time the read block runs.
         var timeout = timeval(tv_sec: 2, tv_usec: 0)
         setsockopt(conn, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
-        DispatchQueue.global(qos: .utility).async { [weak self] in self?.readConnection(conn) }
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self else {
+                close(conn)
+                return
+            }
+            self.readConnection(conn)
+        }
     }
 
     private func readConnection(_ fd: Int32) {
         defer { close(fd) }
-        var buffer = Data()
+        var pending = Data()
         var chunk = [UInt8](repeating: 0, count: 4096)
         while true {
             let n = read(fd, &chunk, chunk.count)
             if n <= 0 { break }
-            buffer.append(contentsOf: chunk[0..<n])
-            if buffer.count > 64 * 1024 { break }  // a nav command is tiny; cap runaway input
+            pending.append(contentsOf: chunk[0..<n])
+            // Dispatch each complete line as it arrives, so a client that holds the channel
+            // open (rather than closing after one line) sees no EOF/timeout latency.
+            while let newline = pending.firstIndex(of: 0x0A) {
+                dispatch(pending[pending.startIndex..<newline])
+                pending.removeSubrange(pending.startIndex...newline)
+            }
+            // A single unterminated line grown past the cap is junk (never a nav command):
+            // drop it rather than buffer unboundedly or later decode a truncated tail.
+            if pending.count > 64 * 1024 { pending.removeAll(keepingCapacity: false) }
         }
-        guard let text = String(data: buffer, encoding: .utf8) else { return }
-        for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
-            guard let command = NavCommand.decode(String(line)) else { continue }
-            DispatchQueue.main.async { [weak self] in self?.apply(command) }
-        }
+    }
+
+    private func dispatch(_ lineData: Data) {
+        guard let line = String(data: lineData, encoding: .utf8),
+            let command = NavCommand.decode(line)
+        else { return }
+        DispatchQueue.main.async { [weak self] in self?.apply(command) }
     }
 
     deinit { stop() }
