@@ -1,8 +1,9 @@
 import AppKit
 
-/// One left-nav entry in the Settings card: a selectable, keyboard-focusable label. Selected
-/// reads as a muted accent fill; focus is the shared 2D model (Up/Down move, Right/Tab enter
-/// the detail pane, Esc closes).
+/// One left-nav entry in the Settings card: a selectable, keyboard-focusable label. Focus reads
+/// as an accent background fill — the same highlight the command palette and repo picker rows use
+/// (`PaletteOverlay.selectionBackground`), not a border — over a subtler selected-section fill.
+/// Keyboard follows the shared 2D model (Up/Down move, Right/Tab enter the detail pane, Esc closes).
 final class SettingsNavRow: NSView {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
@@ -49,7 +50,8 @@ final class SettingsNavRow: NSView {
 
     private func refreshFill() {
         if isFocusedStop {
-            layer?.backgroundColor = Theme.current.chrome.accent.nsColor.withAlphaComponent(0.18).cgColor
+            // Share the palette/repo-picker row highlight so every focus background matches.
+            layer?.backgroundColor = PaletteOverlay.selectionBackground.cgColor
         } else if isSelected {
             layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.06).cgColor
         } else {
@@ -64,11 +66,11 @@ final class SettingsNavRow: NSView {
     override func mouseDown(with event: NSEvent) { window?.makeFirstResponder(self); onActivate() }
 
     override func keyDown(with event: NSEvent) {
-        switch event.keyCode {
-        case 126: onArrowUp?()  // Up
-        case 125: onArrowDown?()  // Down
-        case 124, 48: onEnterDetail?()  // Right, Tab
-        case 53: onEsc?()  // Esc
+        switch KeyboardFocus.key(for: event) {
+        case .up: onArrowUp?()
+        case .down: onArrowDown?()
+        case .right, .tab: onEnterDetail?()  // Right or Tab enters the detail pane
+        case .escape: onEsc?()
         default: super.keyDown(with: event)
         }
     }
