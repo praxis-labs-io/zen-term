@@ -140,4 +140,76 @@ final class ReapplyThemeTests: XCTestCase {
 
         XCTAssertNotEqual(colorBefore, label.textColor)
     }
+
+    func test_reapplyTheme_recolorsSurfaceFloatOverlay() throws {
+        let overlay = SurfaceFloatOverlay(
+            content: NSView(), background: Theme.current.chrome.background.nsColor,
+            widthFraction: 0.6, heightFraction: 0.6, contentInset: 12, cornerRadius: 12,
+            onDismiss: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+
+        // Construction order is backdrop then card (SurfaceFloatOverlay.swift), so the card is
+        // the second subview.
+        guard overlay.subviews.count == 2 else {
+            return XCTFail("expected backdrop + card subviews")
+        }
+        let card = overlay.subviews[1]
+        let colorBefore = card.layer?.borderColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        overlay.reapplyTheme()
+
+        XCTAssertNotEqual(colorBefore, card.layer?.borderColor)
+    }
+
+    /// A minimal `SettingsSection` whose detail view is rebuilt fresh (reading `Theme.current`)
+    /// on every `makeDetailView()` call, mirroring how the real sections read the live theme at
+    /// construction. `lastButton` tracks the most recently built detail control so the test can
+    /// confirm the rebuild produced a control colored under the new theme.
+    private final class FakeSettingsSection: SettingsSection {
+        var navTitle: String { "Fake" }
+        var onExitToNav: (() -> Void)?
+        var onClose: (() -> Void)?
+        private(set) var lastButton: AppButton?
+
+        func makeDetailView() -> NSView {
+            let button = AppButton(title: "Detail", variant: .primary) {}
+            lastButton = button
+            return button
+        }
+        func detailStops() -> [NSView] { lastButton.map { [$0] } ?? [] }
+    }
+
+    func test_reapplyTheme_recolorsSettingsOverlayShellAndDetail() throws {
+        let section = FakeSettingsSection()
+        let overlay = SettingsOverlay(
+            sections: [section], capturer: nil,
+            background: Theme.current.chrome.background.nsColor, onClose: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 620, height: 460)
+
+        guard let card = overlay.subviews.compactMap({ $0 as? CardView }).first else {
+            return XCTFail("expected the card")
+        }
+        let shellColorBefore = card.layer?.borderColor
+        guard let buttonBefore = section.lastButton else {
+            return XCTFail("expected the detail section to have built its control")
+        }
+        let detailColorBefore = attributedTitleColor(buttonBefore)
+        XCTAssertNotNil(detailColorBefore)
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        overlay.reapplyTheme()
+
+        XCTAssertNotEqual(shellColorBefore, card.layer?.borderColor)
+        guard let buttonAfter = section.lastButton else {
+            return XCTFail("expected reapplyTheme to rebuild the detail section")
+        }
+        XCTAssertNotEqual(detailColorBefore, attributedTitleColor(buttonAfter))
+    }
 }

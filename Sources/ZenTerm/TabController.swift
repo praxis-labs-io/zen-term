@@ -1016,6 +1016,8 @@ final class TabController: NSObject {
         paneCanvas.reapplyChromeColors()
         bottomDrawerPanel?.reapplyTheme()
         rightDrawerPanel?.reapplyTheme()
+        lazygitOverlay?.reapplyTheme()
+        activeToolFloat?.overlay.reapplyTheme()
     }
 
     private func relayoutPanels() {

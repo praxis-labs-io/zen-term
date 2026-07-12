@@ -166,6 +166,7 @@ final class WindowController: NSObject {
             }
             self.tabBar.reapplyTheme()
             self.dock.reapplyTheme()
+            self.modal?.overlay.reapplyTheme()
         }
     }
 
