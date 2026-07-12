@@ -45,6 +45,11 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private var bottomGroup: LabeledField?
     private let focusSegment = SegmentedControl(options: ["Main", "Right", "Bottom"], selectedIndex: 0) { _ in }
 
+    /// Captions built directly into a stack rather than wrapped by a `LabeledField` (which
+    /// retains its own caption already) — e.g. LAYOUT/ENVIRONMENT/FOCUS. Retained here so
+    /// `reapplyTheme()` can reach them too; otherwise they'd go stranded and stale on a live
+    /// theme swap while the form is open. Built via the `caption(_:required:)` instance helper.
+    private var captions: [FieldCaption] = []
     private var envRows: [EnvRow] = []
     private let envStack = NSStackView()
     private let envError = NSTextField(labelWithString: "")
@@ -147,6 +152,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         for group in [titleGroup, folderGroup, mainGroup, rightGroup, bottomGroup] {
             group?.reapplyTheme()
         }
+        captions.forEach { $0.reapplyTheme() }
     }
 
     // MARK: content
@@ -182,7 +188,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         layoutCaption.font = .systemFont(ofSize: 11)
         layoutCaption.textColor = Theme.current.chrome.ink(alpha: 0.45)
         let layoutGroup = Self.vStack(
-            [Self.caption("LAYOUT", required: false), layoutSegment, layoutCaption], spacing: 6)
+            [caption("LAYOUT", required: false), layoutSegment, layoutCaption], spacing: 6)
 
         buildCustomDetail()
 
@@ -194,7 +200,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         envError.textColor = Theme.current.chrome.destructive.nsColor
         envError.isHidden = true
         let envControls = Self.vStack([envStack, Self.leadingWrap(addVarButton), envError], spacing: 8)
-        let envGroup = Self.vStack([Self.caption("ENVIRONMENT", required: false), envControls], spacing: 6)
+        let envGroup = Self.vStack([caption("ENVIRONMENT", required: false), envControls], spacing: 6)
 
         cancelButton.onTap = { [weak self] in self?.onCancel() }
         addButton.onTap = { [weak self] in self?.submit() }
@@ -236,7 +242,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         self.mainGroup = mainGroup
         self.rightGroup = rightGroup
         self.bottomGroup = bottomGroup
-        let focusGroup = Self.vStack([Self.caption("FOCUS", required: false), focusSegment], spacing: 6)
+        let focusGroup = Self.vStack([caption("FOCUS", required: false), focusSegment], spacing: 6)
         for group in [mainGroup, rightGroup, bottomGroup, focusGroup] as [NSView] {
             customDetail.addArrangedSubview(group)
             group.widthAnchor.constraint(equalTo: customDetail.widthAnchor).isActive = true
@@ -488,6 +494,15 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     /// A small-caps caption; a required field marks it with a trailing accent asterisk.
     private static func caption(_ text: String, required: Bool) -> NSTextField {
         FieldCaption(text, required: required)
+    }
+
+    /// Same as `Self.caption`, but for a caption built directly into a stack (not wrapped by a
+    /// `LabeledField`, which retains its own) — retains the created `FieldCaption` in `captions`
+    /// so `reapplyTheme()` can reach it too.
+    private func caption(_ text: String, required: Bool) -> FieldCaption {
+        let field = FieldCaption(text, required: required)
+        captions.append(field)
+        return field
     }
 
     private static func hStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {

@@ -243,4 +243,72 @@ final class OverlayReapplyThemeTests: XCTestCase {
             as? NSColor
         XCTAssertNotEqual(colorBefore, colorAfter)
     }
+
+    /// Regression: LAYOUT/ENVIRONMENT/FOCUS are captions built directly into a stack rather than
+    /// wrapped by a `LabeledField` (which retains its own caption already) — before this fix they
+    /// were built bare via `Self.caption(_:required:)` and never retained, so `reapplyTheme()`
+    /// couldn't reach them and they stayed stale on a live theme swap while the form was open.
+    func test_reapplyTheme_recolorsBareGroupCaption() throws {
+        let overlay = AddWorkspaceOverlay(
+            existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            onSubmit: { _ in }, onCancel: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 460, height: 640)
+
+        guard
+            let caption = descendants(of: overlay).compactMap({ $0 as? NSTextField })
+                .first(where: { $0.attributedStringValue.string == "LAYOUT" })
+        else {
+            return XCTFail("expected the LAYOUT caption")
+        }
+        let colorBefore =
+            caption.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil)
+            as? NSColor
+        XCTAssertNotNil(colorBefore)
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        overlay.reapplyTheme()
+
+        let colorAfter =
+            caption.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil)
+            as? NSColor
+        XCTAssertNotEqual(colorBefore, colorAfter)
+    }
+
+    // MARK: ToastView
+
+    /// Regression: `titleColor`/`messageColor` are computed from `Theme.current.chrome`, so a
+    /// freshly-built toast always themes correctly — but an already-visible one (e.g. a confirm
+    /// left up across a `.reloadConfig` swap, which has no modal gate) was never recolored in
+    /// place. `WindowController` now calls `confirmToast?.reapplyTheme()` from its
+    /// `.configDidChange` observer; this exercises `ToastView.reapplyTheme()` directly.
+    func test_reapplyTheme_recolorsToastView() throws {
+        // `.destructive`'s border derives from ANSI slot 1, which `makeAlternateTheme()`
+        // overrides — so the border assertion below is guaranteed to move, unlike `.info`
+        // (a fixed `FloatShadow.edge`) or `.warning` (slot 3, which the fixture leaves untouched).
+        let toast = ToastView(
+            content: ToastContent(variant: .destructive, title: "Reload Config", message: "Reloaded."))
+        toast.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(toast)
+        toast.frame = NSRect(x: 0, y: 0, width: 300, height: 80)
+
+        guard
+            let titleLabel = descendants(of: toast).compactMap({ $0 as? NSTextField })
+                .first(where: { $0.stringValue == "Reload Config" })
+        else {
+            return XCTFail("expected the toast's title label")
+        }
+        let colorBefore = titleLabel.textColor
+        let borderBefore = toast.layer?.borderColor
+        XCTAssertNotNil(colorBefore)
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        toast.reapplyTheme()
+
+        XCTAssertNotEqual(colorBefore, titleLabel.textColor)
+        XCTAssertNotEqual(borderBefore, toast.layer?.borderColor)
+    }
 }
