@@ -1,9 +1,9 @@
 import AppKit
 
-/// One left-nav entry in the Settings card: a selectable, keyboard-focusable label. Selected
-/// reads as a subtle fill; focus adds an accent ring — the same focus outline `AppButton`,
-/// `Dropdown`, and the segments use — so a focused selected row shows both. Keyboard follows the
-/// shared 2D model (Up/Down move, Right/Tab enter the detail pane, Esc closes).
+/// One left-nav entry in the Settings card: a selectable, keyboard-focusable label. Focus reads
+/// as an accent background fill — the same highlight the command palette and repo picker rows use
+/// (`PaletteOverlay.selectionBackground`), not a border — over a subtler selected-section fill.
+/// Keyboard follows the shared 2D model (Up/Down move, Right/Tab enter the detail pane, Esc closes).
 final class SettingsNavRow: NSView {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
@@ -38,28 +38,30 @@ final class SettingsNavRow: NSView {
 
     func setSelected(_ selected: Bool) {
         isSelected = selected
-        restyle()
+        refreshFill()
     }
 
-    /// Re-apply the live chrome colors after a config change — no relaunch. `restyle()` already
-    /// reads `Theme.current` fresh, but doesn't touch `label` (set once in init).
+    /// Re-apply the live chrome colors after a config change — no relaunch. `refreshFill()`
+    /// already reads `Theme.current` fresh, but doesn't touch `label` (set once in init).
     func reapplyTheme() {
         label.textColor = Theme.current.chrome.foreground.nsColor
-        restyle()
+        refreshFill()
     }
 
-    private func restyle() {
-        let chrome = Theme.current.chrome
-        // Selection is a subtle fill; focus is an accent ring layered on top — so the fill and the
-        // ring are independent and a focused selected row shows both.
-        layer?.backgroundColor = (isSelected ? chrome.ink(alpha: 0.06) : .clear).cgColor
-        layer?.borderWidth = isFocusedStop ? 1.5 : 0
-        layer?.borderColor = isFocusedStop ? chrome.accent.nsColor.cgColor : nil
+    private func refreshFill() {
+        if isFocusedStop {
+            // Share the palette/repo-picker row highlight so every focus background matches.
+            layer?.backgroundColor = PaletteOverlay.selectionBackground.cgColor
+        } else if isSelected {
+            layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.06).cgColor
+        } else {
+            layer?.backgroundColor = NSColor.clear.cgColor
+        }
     }
 
     override var acceptsFirstResponder: Bool { true }
-    override func becomeFirstResponder() -> Bool { isFocusedStop = true; restyle(); return true }
-    override func resignFirstResponder() -> Bool { isFocusedStop = false; restyle(); return true }
+    override func becomeFirstResponder() -> Bool { isFocusedStop = true; refreshFill(); return true }
+    override func resignFirstResponder() -> Bool { isFocusedStop = false; refreshFill(); return true }
 
     override func mouseDown(with event: NSEvent) { window?.makeFirstResponder(self); onActivate() }
 
