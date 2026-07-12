@@ -34,6 +34,13 @@ final class KeyInterceptor {
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?
+
+    /// Opt-in escape hatch for the nvim navigator: when this returns `true` for a chord that
+    /// *did* hit the keymap, the real `NSEvent` is passed through to the terminal instead of
+    /// being consumed — so an nvim pane receives a genuine `Ctrl-h` rather than the chord
+    /// firing pane nav. `AppDelegate` only returns `true` for `Ctrl`-nav over an nvim pane,
+    /// so default `⌘`-nav is never affected.
+    var passThroughGuard: ((Chord, ReservedChord) -> Bool)?
     private var monitor: Any?
 
     /// The chord → action lookup. Defaults to the built-in map; `AppDelegate` overlays the
@@ -61,14 +68,33 @@ final class KeyInterceptor {
             }
             // Outside capture, flagsChanged passes straight through; only keyDown routes to a chord.
             guard event.type == .keyDown else { return event }
-            // Build the chord this event represents and look it up. A hit is consumed (never
-            // reaches the PTY); a miss — including every un-reserved chord like Ctrl+hjkl —
-            // passes straight through to the terminal. The ⌘⇧\ → "|" shifted-symbol quirk is
-            // covered by the map holding both "|" and "\\" entries, so this stays pure lookup.
-            guard let chord = Chord(event: event), let action = self.keymap[chord] else { return event }
-            self.onReservedChord?(action)
-            return nil
+            switch self.resolve(Chord(event: event)) {
+            case .passThrough:
+                return event
+            case .consume(let action):
+                self.onReservedChord?(action)
+                return nil
+            }
         }
+    }
+
+    /// What to do with a resolved keyDown, factored out of the live monitor so it's
+    /// unit-testable. A miss — a nil chord or an un-reserved chord like an unbound Ctrl+hjkl —
+    /// passes through to the terminal. A hit is consumed, unless the pass-through guard vetoes
+    /// it (Ctrl-nav over an nvim pane), in which case it passes through too so nvim receives
+    /// the real key. The ⌘⇧\ → "|" shifted-symbol quirk is covered by the map holding both
+    /// "|" and "\\" entries, so this stays a pure lookup.
+    func resolve(_ chord: Chord?) -> Route {
+        guard let chord, let action = keymap[chord] else { return .passThrough }
+        if passThroughGuard?(chord, action) == true { return .passThrough }
+        return .consume(action)
+    }
+
+    /// The outcome of `resolve(_:)`: pass the event to the terminal, or consume it and fire
+    /// the reserved action.
+    enum Route: Equatable {
+        case passThrough
+        case consume(ReservedChord)
     }
 
     func stop() {

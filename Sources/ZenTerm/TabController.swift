@@ -151,6 +151,7 @@ final class TabController: NSObject {
 
     /// Whether the focused main-canvas pane has a running process.
     var focusedPaneIsBusy: Bool { paneCanvas.focusedPaneIsBusy }
+    var focusedPaneIsVim: Bool { paneCanvas.focusedPaneIsVim }
 
     /// Whether either drawer has a running process — closing the tab would stop it. (An idle
     /// drawer isn't worth a confirm; only a busy one is.)
@@ -217,6 +218,7 @@ final class TabController: NSObject {
         relayoutPanels()
 
         paneCanvas.onFocusChanged = { [weak self] in self?.paneGainedFocus() }
+        paneCanvas.onSocketFocus = { [weak self] dir in self?.navigate(dir) }
         paneCanvas.onZoomExitRequested = { [weak self] in self?.toggleZoom() }
         paneCanvas.onZoomEnded = { [weak self] in self?.paneZoomEndedInternally() }
         paneCanvas.onNotification = { [weak self] n in self?.onNotification?(n) }
