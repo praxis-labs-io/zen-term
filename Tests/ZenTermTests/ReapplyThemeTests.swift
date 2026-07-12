@@ -241,6 +241,28 @@ final class ReapplyThemeTests: XCTestCase {
         XCTAssertEqual(section.sectionWillHideCallCount, callsBefore)
     }
 
+    func test_reapplyTheme_recolorsKeybindChipBox() throws {
+        let row = KeybindRow(action: .newTab, title: "New Tab")
+        row.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(row)
+        row.frame = NSRect(x: 0, y: 0, width: 300, height: 40)
+        row.render(currentShortcut: "⌘T")
+
+        // Focus so the chip's box carries a border color, not just an unfocused fill — the fill
+        // alone (ink 0.06) is theme-derived too, but the border makes the regression unmissable.
+        window.makeFirstResponder(row.chip)
+        let borderBefore = row.chip.layer?.borderColor
+        let fillBefore = row.chip.layer?.backgroundColor
+        XCTAssertNotNil(borderBefore)
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        row.reapplyTheme()
+
+        XCTAssertNotEqual(borderBefore, row.chip.layer?.borderColor)
+        XCTAssertNotEqual(fillBefore, row.chip.layer?.backgroundColor)
+    }
+
     func test_reapplyTheme_recolorsEveryHiddenSectionToo() throws {
         let visible = FakeSettingsSection()
         let hidden = FakeSettingsSection()

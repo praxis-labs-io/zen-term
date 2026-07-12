@@ -69,10 +69,12 @@ final class KeybindRow: NSView {
     /// Re-apply the live chrome colors after a config change — no relaunch. Matches the exact
     /// roles set at construction: title foreground, message destructive. Re-renders the chip with
     /// the last-known shortcut so its `KeycapView` glyphs (built fresh against `Theme.current` on
-    /// every render) pick up the new theme too.
+    /// every render) pick up the new theme too, and recolors the chip's own box (fill/border),
+    /// which `render(shortcut:)` never touches.
     func reapplyTheme() {
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         messageLabel.textColor = Theme.current.chrome.destructive.nsColor
         chip.render(shortcut: lastShortcut)
+        chip.reapplyTheme()
     }
 }

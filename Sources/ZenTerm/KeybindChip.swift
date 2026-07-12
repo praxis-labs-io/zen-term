@@ -60,6 +60,11 @@ final class KeybindChip: NSView {
     /// an accent fill (the popover carries the instructions).
     func setCapturing(_ capturing: Bool) { isCapturing = capturing }
 
+    /// Re-apply the live chrome colors after a config change — no relaunch. `restyle()` already
+    /// reads `Theme.current` fresh on every call; it just needs re-triggering (the box's fill and
+    /// border, unlike the inner glyph, aren't rebuilt by `render(shortcut:)`).
+    func reapplyTheme() { restyle() }
+
     private func placeholder(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: 12)
