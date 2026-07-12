@@ -128,7 +128,7 @@ final class OverlayReapplyThemeTests: XCTestCase {
         }
         guard
             let titleField = descendants(of: overlay).compactMap({ $0 as? FieldBox })
-                .first(where: { $0.field.placeholderString == "Workspace name" })
+                .first(where: { $0.placeholder == "Workspace name" })
         else {
             return XCTFail("expected the title field")
         }
@@ -187,7 +187,7 @@ final class OverlayReapplyThemeTests: XCTestCase {
 
         guard
             let keyBox = descendants(of: overlay).compactMap({ $0 as? FieldBox })
-                .first(where: { $0.field.placeholderString == "KEY" })
+                .first(where: { $0.placeholder == "KEY" })
         else {
             return XCTFail("expected the env row's KEY field")
         }

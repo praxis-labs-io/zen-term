@@ -50,6 +50,7 @@ class PaletteOverlay: NSView, ModalOverlay {
     private var isDismissing = false
     private let searchGlyph = NSTextField(labelWithString: "⌕")
     private let searchField = NSTextField()
+    private let searchPlaceholder: String
     private let divider = NSView()
     private let rowsStack = NSStackView()
     private let scrollView = NSScrollView()
@@ -83,6 +84,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         self.maxListHeight = maxListHeight
         self.emptyListHeight = emptyListHeight
         self.emptyLabel = NSTextField(labelWithString: emptyText)
+        self.searchPlaceholder = placeholder
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -107,8 +109,8 @@ class PaletteOverlay: NSView, ModalOverlay {
         // Search row: a magnifier glyph + a borderless field.
         searchGlyph.font = .systemFont(ofSize: 16)
         searchGlyph.textColor = Theme.current.chrome.ink(alpha: 0.4)
-        searchField.placeholderString = placeholder
         searchField.font = .systemFont(ofSize: 15)
+        applyPlaceholder()
         searchField.isBordered = false
         searchField.drawsBackground = false
         searchField.focusRingType = .none
@@ -255,12 +257,27 @@ class PaletteOverlay: NSView, ModalOverlay {
         card.layer?.borderColor = FloatShadow.edge.cgColor
         searchGlyph.textColor = chrome.ink(alpha: 0.4)
         searchField.textColor = chrome.foreground.nsColor
+        applyPlaceholder()
         divider.layer?.backgroundColor = chrome.ink(alpha: 0.08).cgColor
         emptyLabel.textColor = chrome.ink(alpha: 0.4)
         footerHintLabels.forEach { $0.textColor = chrome.ink(alpha: 0.5) }
         footerKeycaps.forEach { $0.reapplyTheme() }
         applyFilter(query: searchField.stringValue)
         reloadRows()
+    }
+
+    /// The system `placeholderString` draws in AppKit's `placeholderTextColor`, which follows the
+    /// view's `effectiveAppearance` rather than `Theme.current` — near-white on a light theme under
+    /// a dark appearance. Build the placeholder as an attributed string colored from the chrome ink
+    /// role instead, so it stays readable and re-derives on a live theme swap.
+    private func applyPlaceholder() {
+        searchField.placeholderAttributedString = NSAttributedString(
+            string: searchPlaceholder,
+            attributes: [
+                .foregroundColor: Theme.current.chrome.ink(alpha: 0.4),
+                .font: searchField.font ?? .systemFont(ofSize: 15),
+            ]
+        )
     }
 
     // MARK: template hooks (subclass overrides)

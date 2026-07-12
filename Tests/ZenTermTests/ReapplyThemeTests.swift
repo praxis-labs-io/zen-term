@@ -85,6 +85,37 @@ final class ReapplyThemeTests: XCTestCase {
         XCTAssertNotEqual(colorBefore, field.field.textColor)
     }
 
+    private func placeholderColor(_ field: NSTextField) -> NSColor? {
+        guard let placeholder = field.placeholderAttributedString, placeholder.length > 0 else {
+            return nil
+        }
+        return placeholder.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+    }
+
+    /// The system `placeholderString` draws in AppKit's own `placeholderTextColor`, which tracks
+    /// the view's `effectiveAppearance` rather than `Theme.current` — near-white on a light theme
+    /// under a dark appearance (ZEN-89). `FieldBox` builds a `placeholderAttributedString` colored
+    /// from `chrome.ink(alpha: 0.4)` instead, so it must both match that role and actually change
+    /// on a live theme swap.
+    func test_reapplyTheme_recolorsFieldBoxPlaceholder() throws {
+        let field = FieldBox(placeholder: "0.82")
+        field.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(field)
+        field.frame = NSRect(x: 0, y: 0, width: 200, height: 30)
+
+        let colorBefore = placeholderColor(field.field)
+        XCTAssertNotNil(colorBefore)
+        XCTAssertEqual(colorBefore, Theme.current.chrome.ink(alpha: 0.4))
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        field.reapplyTheme()
+
+        let colorAfter = placeholderColor(field.field)
+        XCTAssertEqual(colorAfter, Theme.current.chrome.ink(alpha: 0.4))
+        XCTAssertNotEqual(colorBefore, colorAfter)
+    }
+
     func test_reapplyTheme_recolorsDropdown() throws {
         let items = [DropdownItem(title: "One", group: nil, note: nil, isSelected: true)]
         let dropdown = Dropdown(items: items, selectedIndex: 0) { _ in }
