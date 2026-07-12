@@ -196,21 +196,6 @@ class SettingsFormSection: SettingsSection {
             controlNote: controlNote, width: width, refresh: refresh)
     }
 
-    /// Append an arranged subview to the rows stack directly. Pass `focusStop` to also register it
-    /// as a vertical focus stop (its keyboard wired like any other control) — if that view starts
-    /// hidden, it's skipped by `moveFocus` / `detailStops()` until shown. Omit `focusStop` for a
-    /// purely decorative trailing view.
-    func appendTrailing(_ view: NSView, focusStop: NSView? = nil) {
-        guard let stack = rowsStack else { return }
-        let row = SettingsDetail.trailingRow(view)
-        stack.addArrangedSubview(row)
-        row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        if let focusStop {
-            wireControlKeyboard(focusStop)
-            stops.append(focusStop)
-        }
-    }
-
     /// Register a row. `focusStop` is the actual first-responder-focusable view (a `FieldBox`'s inner
     /// `field`, or the control itself for a `SegmentedControl`) — the wrapper `FieldBox` isn't
     /// focusable, so the stop must be its text field. `description` sits under the caption;
