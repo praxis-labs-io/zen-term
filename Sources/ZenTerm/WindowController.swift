@@ -674,8 +674,8 @@ final class WindowController: NSObject {
         case .prevTab: cycleTab(-1)
         case .nextTab: cycleTab(1)
         case .closePane: requestClosePane()
-        case .newWindow:
-            break  // handled by AppDelegate (window manager); no-op here
+        case .newWindow, .reloadConfig:
+            break  // handled by AppDelegate (window manager / app-global config reload); no-op here
         case .toggleBottomDrawer: active?.toggleBottomDrawer()
         case .toggleRightDrawer: active?.toggleRightDrawer()
         case .toggleZoom: active?.toggleZoom()

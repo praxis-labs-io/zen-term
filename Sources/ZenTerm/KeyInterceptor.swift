@@ -30,6 +30,7 @@ final class KeyInterceptor {
         case toggleCommandPalette
         case addWorkspace
         case openSettings
+        case reloadConfig
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?
