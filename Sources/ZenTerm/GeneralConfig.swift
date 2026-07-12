@@ -69,7 +69,8 @@ struct GeneralConfig: Equatable {
         keymap: KeymapDefaults.map)
 
     /// The resolved config for this launch, re-resolvable via `reloadCurrent()` when the Settings
-    /// card writes the file (see `AppConfig.reload()`). External hand-edits still need a relaunch.
+    /// card writes the file (see `AppConfig.reload()`). External hand-edits are picked up on
+    /// demand via the Reload Config command (⌘⌥R).
     static private(set) var current: GeneralConfig = ConfigLoader.loadGeneralConfig()
 
     /// Re-read `config` from disk and swap `current`. Called by `AppConfig.reload()` after a write.
