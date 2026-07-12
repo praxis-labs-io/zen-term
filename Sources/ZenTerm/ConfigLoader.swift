@@ -50,10 +50,14 @@ enum ConfigLoader {
     /// file. A named theme that doesn't exist warns and falls back to the built-in.
     private static func resolveThemeURL(configRoot: URL, general: GeneralConfig) -> URL? {
         if let name = general.themeName {
-            let url = configRoot.appendingPathComponent("themes").appendingPathComponent(name)
-            if FileManager.default.fileExists(atPath: url.path) { return url }
-            let dir = url.deletingLastPathComponent().path
-            NSLog("ConfigLoader: theme `\(name)` not found in \(dir) — using built-in theme")
+            let userURL = configRoot.appendingPathComponent("themes").appendingPathComponent(name)
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: userURL.path, isDirectory: &isDir), !isDir.boolValue {
+                return userURL
+            }
+            if let bundled = ThemeCatalog.bundledURL(for: name) { return bundled }
+            NSLog(
+                "ConfigLoader: theme `\(name)` not found in user themes/ or the bundled catalog — using built-in theme")
             return nil
         }
         let legacy = configRoot.appendingPathComponent("theme")

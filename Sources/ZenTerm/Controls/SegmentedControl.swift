@@ -15,6 +15,10 @@ final class SegmentedControl: NSView {
     var onEsc: (() -> Void)?
 
     private var segments: [AppButton] = []
+    /// The segment row, kept so `intrinsicContentSize` can report the content width — without an
+    /// intrinsic size, content hugging has nothing to bite on and the control stretches to fill its
+    /// row (leaving the segments floating left) instead of hugging its content and aligning right.
+    private var segmentsStack: NSStackView?
     /// When true, re-picking the already-selected segment still fires `onChange`. Off by default;
     /// the reduce-motion row opts in so clicking the currently-shown (OS-derived `system`) value can
     /// pin it — otherwise a no-op click leaves config unpinned and it silently follows the OS later.
@@ -41,6 +45,7 @@ final class SegmentedControl: NSView {
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
+        segmentsStack = stack
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
             stack.topAnchor.constraint(equalTo: topAnchor),
@@ -51,6 +56,13 @@ final class SegmentedControl: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Report the segment row's width so content hugging can keep the control at its content size
+    /// (and let a form's spacer push it to the trailing edge). Height stays constraint-driven.
+    override var intrinsicContentSize: NSSize {
+        guard let segmentsStack else { return super.intrinsicContentSize }
+        return NSSize(width: segmentsStack.fittingSize.width, height: NSView.noIntrinsicMetric)
+    }
 
     /// Select an option (clamped), update the fill, and notify — used by both clicks and arrows.
     func select(_ index: Int) {

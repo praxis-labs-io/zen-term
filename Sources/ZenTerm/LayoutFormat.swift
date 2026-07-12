@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import TerminalKit
 
 /// Value ↔ config-string helpers for the Layout & Motion settings section: render a scalar to the
 /// minimal decimal form the `config` file uses, parse+range-validate a typed field, and map the
@@ -30,4 +31,26 @@ enum LayoutFormat {
     static func splitArgs(_ text: String) -> [String] {
         text.split(whereSeparator: \.isWhitespace).map(String.init)
     }
+
+    /// ghostty's `cursor-style` literal for a cursor shape (`block`/`bar`/`underline`).
+    static func cursorStyleToken(_ s: TerminalBehavior.CursorStyle) -> String {
+        switch s {
+        case .block: return "block"
+        case .bar: return "bar"
+        case .underline: return "underline"
+        }
+    }
+
+    /// Parse a `cursor-style` value, case-insensitively; nil if it isn't a known shape.
+    static func parseCursorStyle(_ text: String) -> TerminalBehavior.CursorStyle? {
+        switch text.trimmingCharacters(in: .whitespaces).lowercased() {
+        case "block": return .block
+        case "bar": return .bar
+        case "underline": return .underline
+        default: return nil
+        }
+    }
+
+    /// The config token for a boolean knob (`cursor-style-blink`, `macos-option-as-alt`).
+    static func boolToken(_ on: Bool) -> String { on ? "true" : "false" }
 }

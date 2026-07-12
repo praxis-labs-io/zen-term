@@ -79,11 +79,15 @@ final class SettingsKeybindsSection: SettingsSection {
         resetAllButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
         resetAllButton.onEsc = { [weak self] in self?.onClose?() }
         resetAllButton.onTap = { [weak self] in self?.resetAll() }
-        rowsStack.addArrangedSubview(resetAllButton)
+        let resetRow = SettingsDetail.trailingRow(resetAllButton)
+        rowsStack.addArrangedSubview(resetRow)
+        resetRow.widthAnchor.constraint(equalTo: rowsStack.widthAnchor).isActive = true
         if let previous { rowsStack.setCustomSpacing(18, after: previous) }  // gap before Reset all
 
-        rowsStack.addArrangedSubview(resetAllMessage)
-        rowsStack.setCustomSpacing(6, after: resetAllButton)  // tuck the success line under the button
+        let messageRow = SettingsDetail.trailingRow(resetAllMessage)
+        rowsStack.addArrangedSubview(messageRow)
+        messageRow.widthAnchor.constraint(equalTo: rowsStack.widthAnchor).isActive = true
+        rowsStack.setCustomSpacing(6, after: resetRow)  // tuck the success line under the button
 
         let scroll = SettingsDetail.scroll(for: rowsStack)
         detailScroll = scroll
