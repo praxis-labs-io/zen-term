@@ -26,6 +26,8 @@ final class Dropdown: NSView {
     var onEsc: (() -> Void)?
 
     private let titleLabel = NSTextField(labelWithString: "")
+    /// Retained (not a throwaway init-local) so `reapplyTheme()` can re-tint it on a theme swap.
+    private let chevron = NSImageView()
     private var listCard: NSView?
     private var rowViews: [DropdownRowView] = []
     private var highlighted = 0
@@ -73,7 +75,6 @@ final class Dropdown: NSView {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.lineBreakMode = .byTruncatingTail
 
-        let chevron = NSImageView()
         chevron.image = NSImage(systemSymbolName: "chevron.up.chevron.down", accessibilityDescription: nil)
         chevron.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
         chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
@@ -102,6 +103,16 @@ final class Dropdown: NSView {
 
     private func renderTitle() {
         titleLabel.stringValue = items.indices.contains(selectedIndex) ? items[selectedIndex].title : ""
+    }
+
+    /// Re-apply the live chrome colors after a config change — no relaunch. `restyle()` already
+    /// reads `Theme.current` fresh, but doesn't touch the title/chevron (set once in init); the
+    /// open list popover needs nothing here since it's rebuilt fresh (reading Theme fresh) on
+    /// every open.
+    func reapplyTheme() {
+        restyle()
+        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
     }
 
     // MARK: focus

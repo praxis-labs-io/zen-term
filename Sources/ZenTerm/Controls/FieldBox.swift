@@ -76,6 +76,15 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         onEndEditing?()
     }
 
+    /// Re-apply the live chrome colors after a config change — no relaunch. There's no retained
+    /// `isFocused` flag (`setFocused` is only ever called from focus-transition callbacks), so
+    /// re-derive it from whether the field is currently the active editor, and re-set
+    /// `field.textColor`, which `setFocused` doesn't touch (it's set once in init).
+    func reapplyTheme() {
+        setFocused(field.currentEditor() != nil)
+        field.textColor = Theme.current.chrome.foreground.nsColor
+    }
+
     /// Focus lifts the fill to the palettes' muted accent AND outlines the box with the accent.
     private func setFocused(_ focused: Bool) {
         let chrome = Theme.current.chrome

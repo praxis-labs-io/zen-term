@@ -86,6 +86,13 @@ final class SegmentedControl: NSView {
 
     private var isControlFocused = false
 
+    /// Re-apply the live chrome colors after a config change — no relaunch. All color lives on
+    /// the `AppButton` segments; this control's own layer never carries color.
+    func reapplyTheme() {
+        segments.forEach { $0.reapplyTheme() }
+        refreshOutline()
+    }
+
     private func updateSelection() {
         for (index, segment) in segments.enumerated() { segment.isOn = (index == selectedIndex) }
         refreshOutline()

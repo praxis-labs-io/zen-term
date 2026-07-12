@@ -1,0 +1,143 @@
+import AppKit
+import XCTest
+
+@testable import ZenTerm
+
+/// Window-mounted recolor tests for the shared leaf controls' `reapplyTheme()` (ZEN-89 task 6):
+/// each test swaps `Theme.current` via the test-only `Theme.setCurrentForTesting(_:)` hook,
+/// calls `reapplyTheme()`, and asserts a real color-bearing property actually changed — not
+/// just that the method exists. Per the house rule "GUI controls need interaction tests," the
+/// controls are mounted in a real (borderless) `NSWindow` rather than tested state-only.
+final class ReapplyThemeTests: XCTestCase {
+    private var originalTheme: AppTheme!
+    private var tempRoots: [URL] = []
+
+    override func setUp() {
+        super.setUp()
+        originalTheme = Theme.current
+    }
+
+    override func tearDownWithError() throws {
+        Theme.setCurrentForTesting(originalTheme)
+        for dir in tempRoots { try? FileManager.default.removeItem(at: dir) }
+        tempRoots = []
+        try super.tearDownWithError()
+    }
+
+    /// A theme whose background/foreground/accent/destructive are all clearly distinct from
+    /// Rosé Pine Moon's, built via the same `ConfigLoader.loadAppTheme(configRoot:general:)`
+    /// path `ConfigLoaderTests`/`ThemeResolutionTests` use, so `chrome`'s derived roles (accent,
+    /// muted, etc.) are populated exactly like a real theme swap would produce them.
+    private func makeAlternateTheme() throws -> AppTheme {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-reapply-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        tempRoots.append(dir)
+        try """
+        background = #010101
+        foreground = #fefefe
+        palette = 1=#ff0000
+        palette = 5=#00ff00
+        """.write(to: dir.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
+        return ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn)
+    }
+
+    private func makeWindow() -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        return window
+    }
+
+    private func attributedTitleColor(_ button: AppButton) -> NSColor? {
+        guard button.attributedTitle.length > 0 else { return nil }
+        return button.attributedTitle.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+    }
+
+    func test_reapplyTheme_recolorsAppButton() throws {
+        let button = AppButton(title: "Add", variant: .primary) {}
+        button.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(button)
+        button.frame = NSRect(x: 0, y: 0, width: 80, height: 26)
+
+        let colorBefore = attributedTitleColor(button)
+        XCTAssertNotNil(colorBefore)
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        button.reapplyTheme()
+
+        XCTAssertNotEqual(colorBefore, attributedTitleColor(button))
+    }
+
+    func test_reapplyTheme_recolorsFieldBox() throws {
+        let field = FieldBox(placeholder: "Name")
+        field.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(field)
+        field.frame = NSRect(x: 0, y: 0, width: 200, height: 30)
+
+        let colorBefore = field.field.textColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        field.reapplyTheme()
+
+        XCTAssertNotEqual(colorBefore, field.field.textColor)
+    }
+
+    func test_reapplyTheme_recolorsDropdown() throws {
+        let items = [DropdownItem(title: "One", group: nil, note: nil, isSelected: true)]
+        let dropdown = Dropdown(items: items, selectedIndex: 0) { _ in }
+        dropdown.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(dropdown)
+        dropdown.frame = NSRect(x: 0, y: 0, width: 200, height: 30)
+
+        let colorBefore = dropdown.layer?.backgroundColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        dropdown.reapplyTheme()
+
+        XCTAssertNotEqual(colorBefore, dropdown.layer?.backgroundColor)
+    }
+
+    func test_reapplyTheme_recolorsSegmentedControl() throws {
+        let control = SegmentedControl(options: ["A", "B"], selectedIndex: 0) { _ in }
+        control.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(control)
+        control.frame = NSRect(x: 0, y: 0, width: 100, height: 26)
+
+        guard
+            let firstSegment = control.subviews.compactMap({ $0 as? NSStackView }).first?.arrangedSubviews
+                .compactMap({ $0 as? AppButton }).first
+        else {
+            return XCTFail("expected a segment AppButton")
+        }
+        let colorBefore = attributedTitleColor(firstSegment)
+        XCTAssertNotNil(colorBefore)
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        control.reapplyTheme()
+
+        XCTAssertNotEqual(colorBefore, attributedTitleColor(firstSegment))
+    }
+
+    func test_reapplyTheme_recolorsSettingsNavRow() throws {
+        let row = SettingsNavRow(title: "General") {}
+        row.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(row)
+        row.frame = NSRect(x: 0, y: 0, width: 150, height: 30)
+
+        guard let label = row.subviews.compactMap({ $0 as? NSTextField }).first else {
+            return XCTFail("expected the row's label")
+        }
+        let colorBefore = label.textColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        row.reapplyTheme()
+
+        XCTAssertNotEqual(colorBefore, label.textColor)
+    }
+}

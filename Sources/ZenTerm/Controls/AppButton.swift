@@ -89,6 +89,10 @@ final class AppButton: NSButton {
         restyle()
     }
 
+    /// Re-apply the live chrome colors after a config change — no relaunch. `restyle()` already
+    /// reads `Theme.current` fresh on every call; it just needs re-triggering.
+    func reapplyTheme() { restyle() }
+
     // MARK: keyboard focus (form flow)
 
     override var acceptsFirstResponder: Bool { isKeyboardFocusable && isEnabled }

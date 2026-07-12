@@ -40,6 +40,13 @@ final class SettingsNavRow: NSView {
         refreshFill()
     }
 
+    /// Re-apply the live chrome colors after a config change — no relaunch. `refreshFill()`
+    /// already reads `Theme.current` fresh, but doesn't touch `label` (set once in init).
+    func reapplyTheme() {
+        label.textColor = Theme.current.chrome.foreground.nsColor
+        refreshFill()
+    }
+
     private func refreshFill() {
         if isFocusedStop {
             layer?.backgroundColor = Theme.current.chrome.accent.nsColor.withAlphaComponent(0.18).cgColor
