@@ -48,10 +48,16 @@ class PaletteOverlay: NSView, ModalOverlay {
 
     private let card = CardView()
     private var isDismissing = false
+    private let searchGlyph = NSTextField(labelWithString: "⌕")
     private let searchField = NSTextField()
+    private let divider = NSView()
     private let rowsStack = NSStackView()
     private let scrollView = NSScrollView()
     private let emptyLabel: NSTextField
+    /// The footer hints' labels + keycaps, retained so `reapplyTheme()` can recolor them — they're
+    /// built once in `init` (never rebuilt by a row re-render) and bake their ink color in.
+    private var footerHintLabels: [NSTextField] = []
+    private var footerKeycaps: [KeycapView] = []
     private let defaultRowHeight: CGFloat
     private let maxListHeight: CGFloat
     private let emptyListHeight: CGFloat
@@ -99,9 +105,8 @@ class PaletteOverlay: NSView, ModalOverlay {
         FloatShadow.applyShadow(to: card)
 
         // Search row: a magnifier glyph + a borderless field.
-        let glyph = NSTextField(labelWithString: "⌕")
-        glyph.font = .systemFont(ofSize: 16)
-        glyph.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        searchGlyph.font = .systemFont(ofSize: 16)
+        searchGlyph.textColor = Theme.current.chrome.ink(alpha: 0.4)
         searchField.placeholderString = placeholder
         searchField.font = .systemFont(ofSize: 15)
         searchField.isBordered = false
@@ -110,12 +115,11 @@ class PaletteOverlay: NSView, ModalOverlay {
         searchField.textColor = Theme.current.chrome.foreground.nsColor
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
-        let searchRow = NSStackView(views: [glyph, searchField])
+        let searchRow = NSStackView(views: [searchGlyph, searchField])
         searchRow.orientation = .horizontal
         searchRow.spacing = 8
         searchRow.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
 
-        let divider = NSView()
         divider.wantsLayer = true
         divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         divider.translatesAutoresizingMaskIntoConstraints = false
@@ -149,7 +153,9 @@ class PaletteOverlay: NSView, ModalOverlay {
 
         // The hints get the same keycap treatment as the list rows: each key in a box
         // (SF Symbols where available), its action beside it. Centered in the footer row.
-        let footer = Self.makeFooter(footerHints)
+        let (footer, footerLabels, footerKeycaps) = Self.makeFooter(footerHints)
+        self.footerHintLabels = footerLabels
+        self.footerKeycaps = footerKeycaps
         footer.translatesAutoresizingMaskIntoConstraints = false
         let footerRow = NSView()
         footerRow.translatesAutoresizingMaskIntoConstraints = false
@@ -234,6 +240,27 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// falls through to the terminal instead of the still-present backdrop.
     override func hitTest(_ point: NSPoint) -> NSView? {
         isDismissing ? nil : super.hitTest(point)
+    }
+
+    /// Re-apply the card's theme-dependent colors after a live theme change: the retained shell
+    /// (card fill/border, search glyph, search field text, divider, empty label, footer hints),
+    /// then re-render the rows for the CURRENT query so per-row content (title/shortcut ink,
+    /// name/git ink, add-row accent — all read fresh from `Theme.current` in the row builders)
+    /// comes back correct too, for free. The typed query lives in `searchField`, untouched by
+    /// this — nothing is lost. `reloadRows()` does reset the selection to the top as a normal
+    /// side effect of any re-render; that's an acceptable trade for a theme swap.
+    func reapplyTheme() {
+        let chrome = Theme.current.chrome
+        card.layer?.backgroundColor = chrome.background.nsColor.cgColor
+        card.layer?.borderColor = FloatShadow.edge.cgColor
+        searchGlyph.textColor = chrome.ink(alpha: 0.4)
+        searchField.textColor = chrome.foreground.nsColor
+        divider.layer?.backgroundColor = chrome.ink(alpha: 0.08).cgColor
+        emptyLabel.textColor = chrome.ink(alpha: 0.4)
+        footerHintLabels.forEach { $0.textColor = chrome.ink(alpha: 0.5) }
+        footerKeycaps.forEach { $0.reapplyTheme() }
+        applyFilter(query: searchField.stringValue)
+        reloadRows()
     }
 
     // MARK: template hooks (subclass overrides)
@@ -332,12 +359,22 @@ class PaletteOverlay: NSView, ModalOverlay {
     }
 
     /// Build the footer: a centered horizontal row of hints, each a keycap box + its label.
-    private static func makeFooter(_ hints: [PaletteHint]) -> NSStackView {
+    /// Returns the labels + keycaps it created too, so `init` can retain them for
+    /// `reapplyTheme()` — the footer is built once and never rebuilt by a row re-render, so
+    /// nothing here may be a throwaway local.
+    private static func makeFooter(_ hints: [PaletteHint]) -> (
+        view: NSStackView, labels: [NSTextField], keycaps: [KeycapView]
+    ) {
+        var labels: [NSTextField] = []
+        var keycaps: [KeycapView] = []
         let items = hints.map { hint -> NSView in
+            let keycap = KeycapView(shortcut: hint.keys)
             let label = NSTextField(labelWithString: hint.label)
             label.font = .systemFont(ofSize: 11, weight: .medium)
             label.textColor = Theme.current.chrome.ink(alpha: 0.5)
-            let item = NSStackView(views: [KeycapView(shortcut: hint.keys), label])
+            keycaps.append(keycap)
+            labels.append(label)
+            let item = NSStackView(views: [keycap, label])
             item.orientation = .horizontal
             item.spacing = 5
             item.alignment = .centerY
@@ -347,7 +384,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         stack.orientation = .horizontal
         stack.spacing = 16
         stack.alignment = .centerY
-        return stack
+        return (stack, labels, keycaps)
     }
 
 }

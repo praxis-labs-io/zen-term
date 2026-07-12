@@ -2,14 +2,17 @@ import AppKit
 
 /// A form control that can re-apply its own theme colors — lets `SettingsFormSection` recolor
 /// whatever `controlForKey` happens to be holding (a `FieldBox`, `Dropdown`, or `SegmentedControl`)
-/// without a type-switch. Conformance is declared where each control already defines its own
-/// `reapplyTheme()` (Task 6); this file just groups them so `controlForKey.values` can be filtered.
+/// without a type-switch, and lets `AddWorkspaceOverlay` (ZEN-89 task 8) recolor its own mixed
+/// bag of controls (`FieldBox`, `SegmentedControl`, `AppButton`) the same way. Conformance is
+/// declared where each control already defines its own `reapplyTheme()` (Task 6); this file just
+/// groups them so a heterogeneous collection can be filtered/iterated by protocol.
 protocol ThemeReapplying: AnyObject {
     func reapplyTheme()
 }
 extension FieldBox: ThemeReapplying {}
 extension Dropdown: ThemeReapplying {}
 extension SegmentedControl: ThemeReapplying {}
+extension AppButton: ThemeReapplying {}
 
 /// Base for settings sections built from live-editing form rows: number-field / segmented / text /
 /// custom editors over the chrome config. Each edit applies live via a `ConfigWriter` scalar write +
