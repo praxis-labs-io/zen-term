@@ -1,5 +1,16 @@
 import AppKit
 
+/// A form control that can re-apply its own theme colors — lets `SettingsFormSection` recolor
+/// whatever `controlForKey` happens to be holding (a `FieldBox`, `Dropdown`, or `SegmentedControl`)
+/// without a type-switch. Conformance is declared where each control already defines its own
+/// `reapplyTheme()` (Task 6); this file just groups them so `controlForKey.values` can be filtered.
+protocol ThemeReapplying: AnyObject {
+    func reapplyTheme()
+}
+extension FieldBox: ThemeReapplying {}
+extension Dropdown: ThemeReapplying {}
+extension SegmentedControl: ThemeReapplying {}
+
 /// Base for settings sections built from live-editing form rows: number-field / segmented / text /
 /// custom editors over the chrome config. Each edit applies live via a `ConfigWriter` scalar write +
 /// `AppConfig.reload()`, debounced so rapid typing coalesces into one write. A blank numeric field
@@ -15,6 +26,9 @@ class SettingsFormSection: SettingsSection {
     private let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
     private let resetAllMessage = ResetFlashLabel()
     private var rows: [LayoutRow] = []
+    /// Retained (not throwaway locals) so `reapplyTheme()` can recolor them in place — see
+    /// `addGroup`.
+    private var groupCaptions: [NSTextField] = []
     private var stops: [NSView] = []  // ordered vertical focus stops: each row's control + Reset-all
     private var controlForKey: [String: NSView] = [:]
     private var scalarKeys: [String] = []  // every key this section owns (for Reset-all)
@@ -33,6 +47,7 @@ class SettingsFormSection: SettingsSection {
 
     func makeDetailView() -> NSView {
         rows = []
+        groupCaptions = []
         stops = []
         controlForKey = [:]
         scalarKeys = []
@@ -72,6 +87,20 @@ class SettingsFormSection: SettingsSection {
 
     func detailStops() -> [NSView] { stops.filter { !$0.isHidden } }
 
+    /// Re-apply the section's theme-dependent colors IN PLACE — no rebuild, so this never routes
+    /// through `makeDetailView()`/`selectSection` and never triggers `sectionWillHide()`. Recolors
+    /// every group caption, every row (caption/description/control-note/message), every registered
+    /// control (`FieldBox`/`Dropdown`/`SegmentedControl`, whichever `controlForKey` is holding), and
+    /// the persistent Reset-all button + its flash message — the two views that were previously only
+    /// re-parented (never recolored) by a rebuild.
+    func reapplyTheme() {
+        groupCaptions.forEach { $0.textColor = Theme.current.chrome.ink(alpha: 0.4) }
+        rows.forEach { $0.reapplyTheme() }
+        controlForKey.values.compactMap { $0 as? ThemeReapplying }.forEach { $0.reapplyTheme() }
+        resetAllButton.reapplyTheme()
+        resetAllMessage.reapplyTheme()
+    }
+
     /// Subclass hook: declare the section's groups and rows here (via `addGroup` + the row builders).
     func populate() {}
 
@@ -84,6 +113,7 @@ class SettingsFormSection: SettingsSection {
         caption.font = .systemFont(ofSize: 10, weight: .semibold)
         caption.textColor = Theme.current.chrome.ink(alpha: 0.4)
         stack.addArrangedSubview(caption)
+        groupCaptions.append(caption)
         if let lastArranged { stack.setCustomSpacing(20, after: lastArranged) }  // gap between groups
         build()
         lastArranged = stack.arrangedSubviews.last

@@ -7,17 +7,25 @@ import AppKit
 final class KeybindRow: NSView {
     let action: KeyInterceptor.ReservedChord
     let chip = KeybindChip()
+    /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it in place.
+    private let titleLabel: NSTextField
     private let messageLabel = NSTextField(labelWithString: "")
+    /// The last shortcut string handed to `render` — kept so `reapplyTheme()` can re-render the
+    /// chip (rebuilding its `KeycapView` glyphs against the new theme) without the section having
+    /// to resupply it.
+    private var lastShortcut = ""
 
     init(action: KeyInterceptor.ReservedChord, title: String) {
         self.action = action
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
 
         let label = NSTextField(labelWithString: title)
         label.font = .systemFont(ofSize: 13)
         label.textColor = Theme.current.chrome.foreground.nsColor
         label.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        titleLabel = label
+
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -47,11 +55,24 @@ final class KeybindRow: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func render(currentShortcut: String) { chip.render(shortcut: currentShortcut) }
+    func render(currentShortcut: String) {
+        lastShortcut = currentShortcut
+        chip.render(shortcut: currentShortcut)
+    }
     func setCapturing(_ capturing: Bool) { chip.setCapturing(capturing) }
     func showMessage(_ text: String?) {
         messageLabel.stringValue = text ?? ""
         messageLabel.isHidden = (text == nil)
     }
     func focusChip() { window?.makeFirstResponder(chip) }
+
+    /// Re-apply the live chrome colors after a config change — no relaunch. Matches the exact
+    /// roles set at construction: title foreground, message destructive. Re-renders the chip with
+    /// the last-known shortcut so its `KeycapView` glyphs (built fresh against `Theme.current` on
+    /// every render) pick up the new theme too.
+    func reapplyTheme() {
+        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        messageLabel.textColor = Theme.current.chrome.destructive.nsColor
+        chip.render(shortcut: lastShortcut)
+    }
 }

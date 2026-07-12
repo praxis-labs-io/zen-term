@@ -165,25 +165,32 @@ final class ReapplyThemeTests: XCTestCase {
         XCTAssertNotEqual(colorBefore, card.layer?.borderColor)
     }
 
-    /// A minimal `SettingsSection` whose detail view is rebuilt fresh (reading `Theme.current`)
-    /// on every `makeDetailView()` call, mirroring how the real sections read the live theme at
-    /// construction. `lastButton` tracks the most recently built detail control so the test can
-    /// confirm the rebuild produced a control colored under the new theme.
+    /// A `SettingsSection` fake that mirrors the real sections' persistent-reset-control shape:
+    /// the Reset-all button is constructed ONCE (like `SettingsFormSection.resetAllButton` /
+    /// `SettingsKeybindsSection.resetAllButton`) and `makeDetailView()` only re-parents it — it
+    /// never rebuilds a fresh button. This is the exact shape that hid the original bug: a
+    /// detail-rebuild-based `reapplyTheme()` (routing through `makeDetailView()` via
+    /// `selectSection`) would re-parent this already-themed button without ever recoloring it,
+    /// because a fresh-per-call fake (the old `FakeSettingsSection`, which built a brand-new
+    /// `AppButton` every `makeDetailView()`) can't distinguish "recolored" from "rebuilt".
     private final class FakeSettingsSection: SettingsSection {
         var navTitle: String { "Fake" }
         var onExitToNav: (() -> Void)?
         var onClose: (() -> Void)?
-        private(set) var lastButton: AppButton?
+        let resetButton = AppButton(title: "Reset all to defaults", variant: .muted)
+        private(set) var sectionWillHideCallCount = 0
+        private(set) var reapplyThemeCallCount = 0
 
-        func makeDetailView() -> NSView {
-            let button = AppButton(title: "Detail", variant: .primary) {}
-            lastButton = button
-            return button
+        func makeDetailView() -> NSView { resetButton }
+        func detailStops() -> [NSView] { [resetButton] }
+        func sectionWillHide() { sectionWillHideCallCount += 1 }
+        func reapplyTheme() {
+            reapplyThemeCallCount += 1
+            resetButton.reapplyTheme()
         }
-        func detailStops() -> [NSView] { lastButton.map { [$0] } ?? [] }
     }
 
-    func test_reapplyTheme_recolorsSettingsOverlayShellAndDetail() throws {
+    func test_reapplyTheme_recolorsSettingsOverlayShellAndPersistentResetControl() throws {
         let section = FakeSettingsSection()
         let overlay = SettingsOverlay(
             sections: [section], capturer: nil,
@@ -197,19 +204,60 @@ final class ReapplyThemeTests: XCTestCase {
             return XCTFail("expected the card")
         }
         let shellColorBefore = card.layer?.borderColor
-        guard let buttonBefore = section.lastButton else {
-            return XCTFail("expected the detail section to have built its control")
-        }
-        let detailColorBefore = attributedTitleColor(buttonBefore)
-        XCTAssertNotNil(detailColorBefore)
+        let resetColorBefore = attributedTitleColor(section.resetButton)
+        XCTAssertNotNil(resetColorBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         overlay.reapplyTheme()
 
         XCTAssertNotEqual(shellColorBefore, card.layer?.borderColor)
-        guard let buttonAfter = section.lastButton else {
-            return XCTFail("expected reapplyTheme to rebuild the detail section")
-        }
-        XCTAssertNotEqual(detailColorBefore, attributedTitleColor(buttonAfter))
+        // Same button instance before and after — a rebuild would swap it out; an in-place recolor
+        // must actually change its color, not just re-parent the stale one.
+        XCTAssertNotEqual(resetColorBefore, attributedTitleColor(section.resetButton))
+    }
+
+    func test_reapplyTheme_doesNotCallSectionWillHide() throws {
+        let section = FakeSettingsSection()
+        let overlay = SettingsOverlay(
+            sections: [section], capturer: nil,
+            background: Theme.current.chrome.background.nsColor, onClose: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 620, height: 460)
+
+        // `SettingsOverlay.init` itself calls `selectSection(0)` once to mount the initial detail
+        // view, which also calls `sectionWillHide()` on that section as a pre-existing quirk
+        // (unrelated to theme changes) — so the baseline is 1, not 0. What must NOT happen is a
+        // *second* call from `reapplyTheme()`.
+        let callsBefore = section.sectionWillHideCallCount
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        overlay.reapplyTheme()
+
+        // A rebuild-based `reapplyTheme()` routes through `selectSection`, which calls
+        // `sectionWillHide()` on the current section even though its index didn't change — in the
+        // real keybinds section that cancels an in-progress capture. It must never fire from here.
+        XCTAssertEqual(section.sectionWillHideCallCount, callsBefore)
+    }
+
+    func test_reapplyTheme_recolorsEveryHiddenSectionToo() throws {
+        let visible = FakeSettingsSection()
+        let hidden = FakeSettingsSection()
+        let overlay = SettingsOverlay(
+            sections: [visible, hidden], capturer: nil,
+            background: Theme.current.chrome.background.nsColor, onClose: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 620, height: 460)
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        overlay.reapplyTheme()
+
+        // The overlay opens on section 0 — `hidden` never becomes the selected section, but its
+        // persistent Reset-all control still must recolor for when it's next shown.
+        XCTAssertEqual(hidden.reapplyThemeCallCount, 1)
+        XCTAssertEqual(hidden.sectionWillHideCallCount, 0)
     }
 }

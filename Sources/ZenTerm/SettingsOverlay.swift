@@ -88,15 +88,20 @@ final class SettingsOverlay: NSView, ModalOverlay {
     override func hitTest(_ point: NSPoint) -> NSView? { isDismissing ? nil : super.hitTest(point) }
 
     /// Re-apply the card's theme-dependent colors after a live theme change: the retained shell
-    /// (card fill/border, heading, divider), the nav rows, and a full detail-pane rebuild so every
-    /// row/label/control inside it is reconstructed against the new theme.
+    /// (card fill/border, heading, divider), the nav rows, and every section IN PLACE — never via
+    /// `selectSection`, which would call `sectionWillHide()` on the current section even though its
+    /// index didn't change. That matters across windows: a theme edit in one window fires
+    /// `.configDidChange` globally, so a *different* window sitting on Keybinds with a capture armed
+    /// must not have it silently cancelled by this window's theme swap. Every section (not just the
+    /// visible one) is recolored — a hidden section's rows are unparented (harmless to recolor) but
+    /// its persistent Reset-all button/flash must be right for when it's next shown.
     func reapplyTheme() {
         card.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         card.layer?.borderColor = FloatShadow.edge.cgColor
         heading.textColor = Theme.current.chrome.ink(alpha: 0.4)
         divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         navRows.forEach { $0.reapplyTheme() }
-        selectSection(selectedIndex)
+        sections.forEach { $0.reapplyTheme() }
     }
 
     // MARK: content

@@ -4,12 +4,14 @@ import AppKit
 /// control on the right with an optional note beneath it (e.g. the valid range), and an inline
 /// validation message under the whole row. The control is supplied and keyboard-wired by the section.
 final class LayoutRow: NSView {
+    /// Retained (not throwaway locals) so `reapplyTheme()` can recolor them in place — the section
+    /// recolors the mounted detail rather than rebuilding it, so nothing here may go stranded.
+    private let captionLabel: NSTextField
+    private let descriptionLabel: NSTextField?
+    private let controlNoteLabel: NSTextField?
     private let messageLabel = NSTextField(labelWithString: "")
 
     init(caption: String, description: String?, control: NSView, controlNote: String?, controlWidth: CGFloat?) {
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-
         let label = NSTextField(labelWithString: caption)
         label.font = .systemFont(ofSize: 13)
         label.textColor = Theme.current.chrome.foreground.nsColor
@@ -20,8 +22,17 @@ final class LayoutRow: NSView {
         // leading) expands and its buttons float mid-row instead of aligning right like the fields.
         control.setContentHuggingPriority(.defaultHigh, for: .horizontal)
 
-        let captionColumn = LayoutRow.column(primary: label, note: description, alignment: .leading)
-        let controlColumn = LayoutRow.column(primary: control, note: controlNote, alignment: .trailing)
+        let (captionColumn, descriptionNote) = LayoutRow.column(primary: label, note: description, alignment: .leading)
+        let (controlColumn, controlNoteField) = LayoutRow.column(
+            primary: control, note: controlNote, alignment: .trailing)
+
+        // Own stored properties must be set before delegating to `super.init` (two-phase init).
+        captionLabel = label
+        descriptionLabel = descriptionNote
+        controlNoteLabel = controlNoteField
+
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -56,11 +67,12 @@ final class LayoutRow: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// A `primary` view with an optional muted `note` label stacked beneath it (the range under an
-    /// input, the description under a caption). Returns `primary` alone when there's no note.
+    /// input, the description under a caption). Returns `primary` alone (and a nil note) when
+    /// there's no note; the note label is returned too so the caller can retain it for recoloring.
     private static func column(
         primary: NSView, note: String?, alignment: NSLayoutConstraint.Attribute
-    ) -> NSView {
-        guard let note else { return primary }
+    ) -> (NSView, NSTextField?) {
+        guard let note else { return (primary, nil) }
         let noteLabel = NSTextField(labelWithString: note)
         noteLabel.font = .systemFont(ofSize: 10)
         noteLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
@@ -68,11 +80,21 @@ final class LayoutRow: NSView {
         stack.orientation = .vertical
         stack.spacing = 2
         stack.alignment = alignment
-        return stack
+        return (stack, noteLabel)
     }
 
     func showMessage(_ text: String?) {
         messageLabel.stringValue = text ?? ""
         messageLabel.isHidden = (text == nil)
+    }
+
+    /// Re-apply the live chrome colors after a config change — no relaunch. Matches the exact
+    /// roles set at construction: caption foreground, both note labels at `ink(0.4)`, message
+    /// destructive.
+    func reapplyTheme() {
+        captionLabel.textColor = Theme.current.chrome.foreground.nsColor
+        descriptionLabel?.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        controlNoteLabel?.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        messageLabel.textColor = Theme.current.chrome.destructive.nsColor
     }
 }
