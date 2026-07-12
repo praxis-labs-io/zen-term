@@ -46,4 +46,25 @@ final class DropdownTests: XCTestCase {
         XCTAssertGreaterThan(dropdown.listCardSizeForTesting.height, 0)
         XCTAssertGreaterThan(dropdown.listCardSizeForTesting.width, 0)
     }
+
+    func test_arrowNavigation_scrollsHighlightIntoView() {
+        // 15 rows overflow the ~260pt list cap, so the last row starts below the fold.
+        let items = (0..<15).map {
+            DropdownItem(title: "Theme \($0)", group: nil, note: nil, isSelected: $0 == 0)
+        }
+        let dropdown = Dropdown(items: items, selectedIndex: 0) { _ in }
+        dropdown.translatesAutoresizingMaskIntoConstraints = true
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView?.addSubview(dropdown)
+        dropdown.frame = NSRect(x: 20, y: 400, width: 220, height: 30)
+
+        dropdown.openListForTesting()
+        // Walk the highlight down to the last item, past the visible cap.
+        for _ in 0..<(items.count - 1) { dropdown.moveHighlightForTesting(1) }
+
+        // Regression: the highlighted row must have been scrolled into view, not left below the fold.
+        XCTAssertTrue(dropdown.isHighlightedRowVisibleForTesting)
+    }
 }

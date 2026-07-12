@@ -45,6 +45,16 @@ final class Dropdown: NSView {
     func openListForTesting() { openList() }
     var isListOpenForTesting: Bool { listCard != nil }
     var listCardSizeForTesting: NSSize { listCard?.frame.size ?? .zero }
+    /// Test hook: drive the highlight the way an arrow key would.
+    func moveHighlightForTesting(_ delta: Int) { moveHighlight(delta) }
+    /// Test hook: is the highlighted row within its scroll view's visible area right now?
+    var isHighlightedRowVisibleForTesting: Bool {
+        guard rowViews.indices.contains(highlighted),
+            let clip = rowViews[highlighted].enclosingScrollView?.contentView
+        else { return false }
+        let row = rowViews[highlighted]
+        return clip.bounds.intersects(row.convert(row.bounds, to: clip))
+    }
 
     init(items: [DropdownItem], selectedIndex: Int, onChange: @escaping (Int) -> Void) {
         self.items = items
@@ -164,6 +174,7 @@ final class Dropdown: NSView {
         window?.contentView?.addSubview(card)
         listCard = card
         positionList()
+        scrollHighlightIntoView()  // open scrolled to the current selection when it's below the fold
         restyle()
     }
 
@@ -178,6 +189,14 @@ final class Dropdown: NSView {
         guard let next = KeyboardFocus.step(from: highlighted, delta: delta, count: items.count) else { return }
         highlighted = next
         refreshListHighlight()
+        scrollHighlightIntoView()
+    }
+
+    /// Keep the highlighted row visible as arrow keys move it past the scroll view's capped height.
+    private func scrollHighlightIntoView() {
+        guard rowViews.indices.contains(highlighted) else { return }
+        let row = rowViews[highlighted]
+        row.scrollToVisible(row.bounds)
     }
 
     private func commitHighlight() {
