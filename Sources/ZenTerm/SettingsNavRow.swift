@@ -64,11 +64,11 @@ final class SettingsNavRow: NSView {
     override func mouseDown(with event: NSEvent) { window?.makeFirstResponder(self); onActivate() }
 
     override func keyDown(with event: NSEvent) {
-        switch event.keyCode {
-        case 126: onArrowUp?()  // Up
-        case 125: onArrowDown?()  // Down
-        case 124, 48: onEnterDetail?()  // Right, Tab
-        case 53: onEsc?()  // Esc
+        switch KeyboardFocus.key(for: event) {
+        case .up: onArrowUp?()
+        case .down: onArrowDown?()
+        case .right, .tab: onEnterDetail?()  // Right or Tab enters the detail pane
+        case .escape: onEsc?()
         default: super.keyDown(with: event)
         }
     }

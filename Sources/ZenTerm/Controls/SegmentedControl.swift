@@ -116,14 +116,14 @@ final class SegmentedControl: NSView {
     override func drawFocusRingMask() {}  // the selected segment's accent outline marks focus
 
     override func keyDown(with event: NSEvent) {
-        switch event.keyCode {
-        case 123: select(selectedIndex - 1)  // left
-        case 124: select(selectedIndex + 1)  // right
-        case 126: onArrowUp?()  // up → previous field
-        case 125, 36, 76: onArrowDown?()  // down / return / enter → next field
-        case 48 where onTab != nil || onBacktab != nil:
-            event.modifierFlags.contains(.shift) ? onBacktab?() : onTab?()  // ⇧tab / tab
-        case 53 where onEsc != nil: onEsc?()  // esc
+        switch KeyboardFocus.key(for: event) {
+        case .left: select(selectedIndex - 1)
+        case .right: select(selectedIndex + 1)
+        case .up: onArrowUp?()  // previous field
+        case .down, .activate: onArrowDown?()  // down / return / enter / space → next field
+        case .tab(let shift) where onTab != nil || onBacktab != nil:
+            shift ? onBacktab?() : onTab?()  // ⇧tab / tab
+        case .escape where onEsc != nil: onEsc?()
         default: super.keyDown(with: event)
         }
     }

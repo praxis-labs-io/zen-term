@@ -143,22 +143,22 @@ final class Dropdown: NSView {
 
     override func keyDown(with event: NSEvent) {
         if listCard != nil {
-            switch event.keyCode {
-            case 126: moveHighlight(-1)  // up
-            case 125: moveHighlight(1)  // down
-            case 36, 76, 49: commitHighlight()  // return / enter / space
-            case 53: closeList()  // esc
-            default: break
+            switch KeyboardFocus.key(for: event) {
+            case .up: moveHighlight(-1)
+            case .down: moveHighlight(1)
+            case .activate: commitHighlight()  // return / enter / space
+            case .escape: closeList()
+            default: break  // consume every other key while the list is open
             }
             return
         }
-        switch event.keyCode {
-        case 36, 76, 49: openList()  // return / enter / space
-        case 126: onArrowUp?()
-        case 125: onArrowDown?()
-        case 123 where onArrowLeft != nil: onArrowLeft?()
-        case 48: event.modifierFlags.contains(.shift) ? onBacktab?() : onTab?()
-        case 53 where onEsc != nil: onEsc?()
+        switch KeyboardFocus.key(for: event) {
+        case .activate: openList()  // return / enter / space
+        case .up: onArrowUp?()
+        case .down: onArrowDown?()
+        case .left where onArrowLeft != nil: onArrowLeft?()
+        case .tab(let shift): shift ? onBacktab?() : onTab?()
+        case .escape where onEsc != nil: onEsc?()
         default: super.keyDown(with: event)
         }
     }

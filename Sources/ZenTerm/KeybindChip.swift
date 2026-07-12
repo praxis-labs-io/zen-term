@@ -80,13 +80,13 @@ final class KeybindChip: NSView {
     override func drawFocusRingMask() {}
 
     override func keyDown(with event: NSEvent) {
-        switch event.keyCode {
-        case 36, 49: onActivate?()  // return / space → begin capture
-        case 51, 117: onReset?()  // backspace / forward-delete → revert (capture diverts keys, so safe)
-        case 126: onArrowUp?()  // up
-        case 125: onArrowDown?()  // down
-        case 123: onExitToNav?()  // left → nav
-        case 53: onEsc?()  // esc (capture-cancel is handled by the capturer, not here)
+        switch KeyboardFocus.key(for: event) {
+        case .activate: onActivate?()  // return / enter / space → begin capture
+        case .delete: onReset?()  // backspace / forward-delete → revert (capture diverts keys, so safe)
+        case .up: onArrowUp?()
+        case .down: onArrowDown?()
+        case .left: onExitToNav?()  // left → nav
+        case .escape: onEsc?()  // capture-cancel is handled by the capturer, not here
         default: super.keyDown(with: event)
         }
     }

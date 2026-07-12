@@ -113,16 +113,16 @@ final class AppButton: NSButton {
 
     override func keyDown(with event: NSEvent) {
         guard isKeyboardFocusable else { return super.keyDown(with: event) }
-        switch event.keyCode {
-        case 126: onArrowUp?()  // up
-        case 125: onArrowDown?()  // down
-        case 123 where onArrowLeft != nil: onArrowLeft?()  // left
-        case 124 where onArrowRight != nil: onArrowRight?()  // right
+        switch KeyboardFocus.key(for: event) {
+        case .up: onArrowUp?()
+        case .down: onArrowDown?()
+        case .left where onArrowLeft != nil: onArrowLeft?()
+        case .right where onArrowRight != nil: onArrowRight?()
         // Tab / Shift-Tab advance and retreat like Down / Up — and stay consumed here so focus
         // can't jump the key-view loop out of the card's 2D model.
-        case 48: event.modifierFlags.contains(.shift) ? onArrowUp?() : onArrowDown?()
-        case 53 where onEsc != nil: onEsc?()  // esc
-        case 36, 76, 49: fire()  // return / enter / space → activate
+        case .tab(let shift): shift ? onArrowUp?() : onArrowDown?()
+        case .escape where onEsc != nil: onEsc?()
+        case .activate: fire()  // return / enter / space → activate
         default: super.keyDown(with: event)
         }
     }
