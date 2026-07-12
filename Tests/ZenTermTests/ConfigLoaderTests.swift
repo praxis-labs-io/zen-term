@@ -14,7 +14,7 @@ final class ConfigLoaderTests: XCTestCase {
 
     func test_missingFileYieldsBuiltInDefault() throws {
         let root = try makeTempDir()  // empty — no `theme` file
-        let app = ConfigLoader.loadAppTheme(configRoot: root)
+        let app = ConfigLoader.loadAppTheme(configRoot: root, general: .builtIn)
         XCTAssertEqual(app.terminal.background, Theme.rosePineMoon.background)
         XCTAssertEqual(app.chrome.destructive, TerminalColor(hex: "#eb6f92"))
     }
@@ -23,7 +23,7 @@ final class ConfigLoaderTests: XCTestCase {
         let root = try makeTempDir()
         try "background = #010101\npalette = 1=#020202\n"
             .write(to: root.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
-        let app = ConfigLoader.loadAppTheme(configRoot: root)
+        let app = ConfigLoader.loadAppTheme(configRoot: root, general: .builtIn)
         XCTAssertEqual(app.terminal.background, TerminalColor(hex: "#010101"))
         XCTAssertEqual(app.chrome.background, TerminalColor(hex: "#010101"))
         XCTAssertEqual(app.chrome.destructive, TerminalColor(hex: "#020202"))  // palette[1]
@@ -34,7 +34,7 @@ final class ConfigLoaderTests: XCTestCase {
         // Make `theme` a directory so reading it as a file throws.
         try FileManager.default.createDirectory(
             at: root.appendingPathComponent("theme"), withIntermediateDirectories: true)
-        let app = ConfigLoader.loadAppTheme(configRoot: root)
+        let app = ConfigLoader.loadAppTheme(configRoot: root, general: .builtIn)
         XCTAssertEqual(app.terminal.background, Theme.rosePineMoon.background)
     }
 
