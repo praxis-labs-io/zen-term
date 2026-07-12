@@ -90,7 +90,6 @@ final class SegmentedControl: NSView {
     /// the `AppButton` segments; this control's own layer never carries color.
     func reapplyTheme() {
         segments.forEach { $0.reapplyTheme() }
-        refreshOutline()
     }
 
     private func updateSelection() {
