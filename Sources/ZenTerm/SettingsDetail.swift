@@ -31,6 +31,20 @@ enum SettingsDetail {
         ])
         return scroll
     }
+
+    /// Wrap a control in a full-width row that right-aligns it: a leading spacer takes the slack so
+    /// the control lands in the same right-hand column as the row editors. The caller pins the row's
+    /// width to the list stack. Used for the Reset-all and Restart buttons (and the reset flash) so
+    /// every button sits on the right, uniform with the field/segmented controls above.
+    static func trailingRow(_ view: NSView) -> NSStackView {
+        view.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let row = NSStackView(views: [spacer, view])
+        row.orientation = .horizontal
+        row.translatesAutoresizingMaskIntoConstraints = false
+        return row
+    }
 }
 
 /// The "Defaults restored." line tucked under a section's Reset-all button: a muted-accent label

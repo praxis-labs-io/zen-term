@@ -15,6 +15,11 @@ final class LayoutRow: NSView {
         label.textColor = Theme.current.chrome.foreground.nsColor
         label.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
+        // Hug the control to its content so it never stretches to fill the row — the spacer then
+        // pushes it to the trailing edge. Without this a `SegmentedControl` (which pins its segments
+        // leading) expands and its buttons float mid-row instead of aligning right like the fields.
+        control.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+
         let captionColumn = LayoutRow.column(primary: label, note: description, alignment: .leading)
         let controlColumn = LayoutRow.column(primary: control, note: controlNote, alignment: .trailing)
 

@@ -54,12 +54,16 @@ class SettingsFormSection: SettingsSection {
         resetAllButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
         resetAllButton.onEsc = { [weak self] in self?.onClose?() }
         resetAllButton.onTap = { [weak self] in self?.resetAll() }
-        stack.addArrangedSubview(resetAllButton)
+        let resetRow = SettingsDetail.trailingRow(resetAllButton)
+        stack.addArrangedSubview(resetRow)
+        resetRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         if let lastArranged { stack.setCustomSpacing(20, after: lastArranged) }  // gap before Reset all
         stops.append(resetAllButton)
 
-        stack.addArrangedSubview(resetAllMessage)
-        stack.setCustomSpacing(6, after: resetAllButton)  // tuck the success line under the button
+        let messageRow = SettingsDetail.trailingRow(resetAllMessage)
+        stack.addArrangedSubview(messageRow)
+        messageRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        stack.setCustomSpacing(6, after: resetRow)  // tuck the success line under the button
 
         let scroll = SettingsDetail.scroll(for: stack)
         refreshRows()
@@ -198,7 +202,9 @@ class SettingsFormSection: SettingsSection {
     /// `detailStops()` until it's shown. Omit `focusStop` for a purely decorative trailing view.
     func appendTrailing(_ view: NSView, focusStop: NSView? = nil) {
         guard let stack = rowsStack else { return }
-        stack.addArrangedSubview(view)
+        let row = SettingsDetail.trailingRow(view)
+        stack.addArrangedSubview(row)
+        row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         if let focusStop {
             wireControlKeyboard(focusStop)
             stops.append(focusStop)
