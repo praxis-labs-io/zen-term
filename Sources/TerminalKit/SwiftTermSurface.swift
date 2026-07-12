@@ -127,7 +127,8 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
     }
 
     public func start(_ config: TerminalSurfaceConfig) {
-        applyAppearance(theme: config.theme, behavior: config.behavior)
+        if let theme = config.theme { applyTheme(theme) }
+        if let behavior = config.behavior { applyBehavior(behavior) }
         let base = Terminal.getEnvironmentVariables(termName: "xterm-256color", trueColor: true)
         // Present as Ghostty so terminal-aware tools that auto-detect the host — notably
         // Claude Code's "auto" notification mode — pick a channel we actually handle: OSC 777
@@ -176,10 +177,9 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
     }
 
     /// Re-apply appearance/behavior to this already-running surface in place (hot reload).
-    /// `start(_:)` routes through this too, so first-start and later re-themes share one path.
-    public func applyAppearance(theme: TerminalTheme?, behavior: TerminalBehavior?) {
-        if let theme { applyTheme(theme) }
-        if let behavior { applyBehavior(behavior) }
+    public func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {
+        applyTheme(theme)
+        applyBehavior(behavior)
     }
 
     /// Maps a chrome-supplied `TerminalTheme` onto the SwiftTerm view: font, the 16

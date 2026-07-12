@@ -91,7 +91,7 @@ final class GhosttyApp {
     /// Re-load the app-global libghostty config from a fresh TerminalTheme/behavior and swap it
     /// live (re-themes every surface). Deduped by generated text so N per-surface callers trigger
     /// at most one real swap per change.
-    func updateConfig(theme: TerminalTheme?, behavior: TerminalBehavior?) {
+    func updateConfig(theme: TerminalTheme, behavior: TerminalBehavior) {
         let text = GhosttyConfigWriter.configText(for: theme, behavior: behavior)
         guard text != lastConfigText else { return }
         guard let cfg = ghostty_config_new() else { return }
