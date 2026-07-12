@@ -71,6 +71,11 @@ final class IconButton: NSView {
     override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
     override func accessibilityPerformPress() -> Bool { onClick(); return true }
 
+    /// Re-apply the live chrome colors after a config change — no relaunch. `update()` already
+    /// reads `Theme.current` fresh on every call; it just needs re-triggering since nothing else
+    /// changed (hover/active state didn't) to fire it on its own.
+    func reapplyTheme() { update() }
+
     private func update() {
         let bg: NSColor
         let tint: NSColor

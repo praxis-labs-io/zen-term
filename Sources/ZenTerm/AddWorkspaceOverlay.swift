@@ -23,6 +23,8 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
 
     private let card = CardView()
     private var isDismissing = false
+    /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it in place.
+    private let header = NSTextField(labelWithString: "New Workspace")
 
     private let titleField = FieldBox(placeholder: "Workspace name")
     private let folderField = FieldBox(placeholder: "Click to choose, or type a path")
@@ -43,6 +45,11 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private var bottomGroup: LabeledField?
     private let focusSegment = SegmentedControl(options: ["Main", "Right", "Bottom"], selectedIndex: 0) { _ in }
 
+    /// Captions built directly into a stack rather than wrapped by a `LabeledField` (which
+    /// retains its own caption already) — e.g. LAYOUT/ENVIRONMENT/FOCUS. Retained here so
+    /// `reapplyTheme()` can reach them too; otherwise they'd go stranded and stale on a live
+    /// theme swap while the form is open. Built via the `caption(_:required:)` instance helper.
+    private var captions: [FieldCaption] = []
     private var envRows: [EnvRow] = []
     private let envStack = NSStackView()
     private let envError = NSTextField(labelWithString: "")
@@ -122,10 +129,35 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         isDismissing ? nil : super.hitTest(point)
     }
 
+    /// Re-apply the form's theme-dependent colors after a live theme change, IN PLACE — unlike
+    /// the palettes, this form holds uncommitted typed values (fields + dynamic env rows) that a
+    /// rebuild would lose, so nothing here is ever rebuilt, only recolored. Every leaf control
+    /// conforms to `ThemeReapplying` (Task 6/7), so they're recolored as one group instead of a
+    /// type-switch; `EnvRow` and `LabeledField` get their own small `reapplyTheme()` for the same
+    /// reason KeybindRow does — a composite that owns otherwise-stranded static labels.
+    func reapplyTheme() {
+        let chrome = Theme.current.chrome
+        card.layer?.backgroundColor = chrome.background.nsColor.cgColor
+        card.layer?.borderColor = FloatShadow.edge.cgColor
+        header.textColor = chrome.foreground.nsColor
+        layoutCaption.textColor = chrome.ink(alpha: 0.45)
+        envError.textColor = chrome.destructive.nsColor
+
+        let controls: [ThemeReapplying] = [
+            titleField, folderField, mainField, rightField, bottomField,
+            layoutSegment, focusSegment, addVarButton, cancelButton, addButton,
+        ]
+        controls.forEach { $0.reapplyTheme() }
+        envRows.forEach { $0.reapplyTheme() }
+        for group in [titleGroup, folderGroup, mainGroup, rightGroup, bottomGroup] {
+            group?.reapplyTheme()
+        }
+        captions.forEach { $0.reapplyTheme() }
+    }
+
     // MARK: content
 
     private func buildContent() -> NSStackView {
-        let header = NSTextField(labelWithString: "New Workspace")
         header.font = .systemFont(ofSize: 15, weight: .semibold)
         header.textColor = Theme.current.chrome.foreground.nsColor
 
@@ -156,7 +188,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         layoutCaption.font = .systemFont(ofSize: 11)
         layoutCaption.textColor = Theme.current.chrome.ink(alpha: 0.45)
         let layoutGroup = Self.vStack(
-            [Self.caption("LAYOUT", required: false), layoutSegment, layoutCaption], spacing: 6)
+            [caption("LAYOUT", required: false), layoutSegment, layoutCaption], spacing: 6)
 
         buildCustomDetail()
 
@@ -168,7 +200,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         envError.textColor = Theme.current.chrome.destructive.nsColor
         envError.isHidden = true
         let envControls = Self.vStack([envStack, Self.leadingWrap(addVarButton), envError], spacing: 8)
-        let envGroup = Self.vStack([Self.caption("ENVIRONMENT", required: false), envControls], spacing: 6)
+        let envGroup = Self.vStack([caption("ENVIRONMENT", required: false), envControls], spacing: 6)
 
         cancelButton.onTap = { [weak self] in self?.onCancel() }
         addButton.onTap = { [weak self] in self?.submit() }
@@ -210,7 +242,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         self.mainGroup = mainGroup
         self.rightGroup = rightGroup
         self.bottomGroup = bottomGroup
-        let focusGroup = Self.vStack([Self.caption("FOCUS", required: false), focusSegment], spacing: 6)
+        let focusGroup = Self.vStack([caption("FOCUS", required: false), focusSegment], spacing: 6)
         for group in [mainGroup, rightGroup, bottomGroup, focusGroup] as [NSView] {
             customDetail.addArrangedSubview(group)
             group.widthAnchor.constraint(equalTo: customDetail.widthAnchor).isActive = true
@@ -461,23 +493,16 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
 
     /// A small-caps caption; a required field marks it with a trailing accent asterisk.
     private static func caption(_ text: String, required: Bool) -> NSTextField {
-        let string = NSMutableAttributedString(
-            string: text.uppercased(),
-            attributes: [
-                .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
-                .foregroundColor: Theme.current.chrome.ink(alpha: 0.4),
-                .kern: 0.6,
-            ])
-        if required {
-            string.append(
-                NSAttributedString(
-                    string: " ✳",
-                    attributes: [
-                        .font: NSFont.systemFont(ofSize: 8, weight: .bold),
-                        .foregroundColor: Theme.current.chrome.accent.nsColor,
-                    ]))
-        }
-        return NSTextField(labelWithAttributedString: string)
+        FieldCaption(text, required: required)
+    }
+
+    /// Same as `Self.caption`, but for a caption built directly into a stack (not wrapped by a
+    /// `LabeledField`, which retains its own) — retains the created `FieldCaption` in `captions`
+    /// so `reapplyTheme()` can reach it too.
+    private func caption(_ text: String, required: Bool) -> FieldCaption {
+        let field = FieldCaption(text, required: required)
+        captions.append(field)
+        return field
     }
 
     private static func hStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {
@@ -507,6 +532,50 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     }
 }
 
+/// A small-caps field caption ("WORKSPACE NAME ✳"), built by `AddWorkspaceOverlay.caption(_:required:)`.
+/// Its attributed string bakes in two color runs (the label ink, the required asterisk's accent)
+/// that `LabeledField` — a shared primitive with no insight into that structure — can't recolor
+/// itself, so this rebuilds its own string fresh in `reapplyTheme()` and conforms to
+/// `ThemeReapplying` so `LabeledField` can reach it generically.
+private final class FieldCaption: NSTextField, ThemeReapplying {
+    private let text: String
+    private let isRequired: Bool
+
+    init(_ text: String, required: Bool) {
+        self.text = text
+        self.isRequired = required
+        super.init(frame: .zero)
+        isEditable = false
+        isSelectable = false
+        isBordered = false
+        drawsBackground = false
+        translatesAutoresizingMaskIntoConstraints = false
+        reapplyTheme()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func reapplyTheme() {
+        let string = NSMutableAttributedString(
+            string: text.uppercased(),
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
+                .foregroundColor: Theme.current.chrome.ink(alpha: 0.4),
+                .kern: 0.6,
+            ])
+        if isRequired {
+            string.append(
+                NSAttributedString(
+                    string: " ✳",
+                    attributes: [
+                        .font: NSFont.systemFont(ofSize: 8, weight: .bold),
+                        .foregroundColor: Theme.current.chrome.accent.nsColor,
+                    ]))
+        }
+        attributedStringValue = string
+    }
+}
+
 // MARK: - Env row (a form-specific composite of the shared `FieldBox` / `AppButton` primitives)
 
 /// One environment-variable row: a KEY box, a `=`, a VALUE box, and a remove button.
@@ -515,6 +584,9 @@ final class EnvRow: NSView {
     let valueBox = FieldBox(placeholder: "value")
     /// A focus stop in the form's keyboard flow (arrow to it, Return removes the row).
     let removeButton = AppButton(title: "✕", variant: .secondary)
+    /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it — otherwise this
+    /// static `=` label would go stranded, stale forever after a theme swap while the row is up.
+    private let equals = NSTextField(labelWithString: "=")
 
     var key: String { keyBox.text }
     var value: String { valueBox.text }
@@ -525,7 +597,6 @@ final class EnvRow: NSView {
         keyBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
         valueBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let equals = NSTextField(labelWithString: "=")
         equals.font = .systemFont(ofSize: 13)
         equals.textColor = Theme.current.chrome.ink(alpha: 0.4)
         equals.setContentHuggingPriority(.required, for: .horizontal)
@@ -550,4 +621,13 @@ final class EnvRow: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Re-apply the live chrome colors after a config change — no relaunch: the KEY/value boxes,
+    /// the remove button (all `ThemeReapplying`), and the `=` label baked in at construction.
+    func reapplyTheme() {
+        keyBox.reapplyTheme()
+        valueBox.reapplyTheme()
+        removeButton.reapplyTheme()
+        equals.textColor = Theme.current.chrome.ink(alpha: 0.4)
+    }
 }

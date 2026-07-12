@@ -28,6 +28,14 @@ enum Theme {
     /// Re-read the theme (and font from the general config) and swap `current`.
     static func reloadCurrent() { current = ConfigLoader.loadAppTheme() }
 
+    #if DEBUG
+        /// Test hook: swap `current` directly so a test can assert theme-reactive views actually
+        /// recolor. `current`'s setter is otherwise `private`, and `reloadCurrent()` only re-reads
+        /// real config off disk, which leaves recolor behavior unassertable. Pair with a teardown
+        /// that restores the original value so the swap can't leak into other tests.
+        static func setCurrentForTesting(_ theme: AppTheme) { current = theme }
+    #endif
+
     private static func rgb(_ hex: UInt32) -> TerminalColor {
         TerminalColor(red: UInt8((hex >> 16) & 0xFF), green: UInt8((hex >> 8) & 0xFF), blue: UInt8(hex & 0xFF))
     }

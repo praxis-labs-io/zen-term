@@ -1,5 +1,19 @@
 import AppKit
 
+/// A form control that can re-apply its own theme colors — lets `SettingsFormSection` recolor
+/// whatever `controlForKey` happens to be holding (a `FieldBox`, `Dropdown`, or `SegmentedControl`)
+/// without a type-switch, and lets `AddWorkspaceOverlay` (ZEN-89 task 8) recolor its own mixed
+/// bag of controls (`FieldBox`, `SegmentedControl`, `AppButton`) the same way. Conformance is
+/// declared where each control already defines its own `reapplyTheme()` (Task 6); this file just
+/// groups them so a heterogeneous collection can be filtered/iterated by protocol.
+protocol ThemeReapplying: AnyObject {
+    func reapplyTheme()
+}
+extension FieldBox: ThemeReapplying {}
+extension Dropdown: ThemeReapplying {}
+extension SegmentedControl: ThemeReapplying {}
+extension AppButton: ThemeReapplying {}
+
 /// Base for settings sections built from live-editing form rows: number-field / segmented / text /
 /// custom editors over the chrome config. Each edit applies live via a `ConfigWriter` scalar write +
 /// `AppConfig.reload()`, debounced so rapid typing coalesces into one write. A blank numeric field
@@ -15,6 +29,9 @@ class SettingsFormSection: SettingsSection {
     private let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
     private let resetAllMessage = ResetFlashLabel()
     private var rows: [LayoutRow] = []
+    /// Retained (not throwaway locals) so `reapplyTheme()` can recolor them in place — see
+    /// `addGroup`.
+    private var groupCaptions: [NSTextField] = []
     private var stops: [NSView] = []  // ordered vertical focus stops: each row's control + Reset-all
     private var controlForKey: [String: NSView] = [:]
     private var scalarKeys: [String] = []  // every key this section owns (for Reset-all)
@@ -33,6 +50,7 @@ class SettingsFormSection: SettingsSection {
 
     func makeDetailView() -> NSView {
         rows = []
+        groupCaptions = []
         stops = []
         controlForKey = [:]
         scalarKeys = []
@@ -72,6 +90,20 @@ class SettingsFormSection: SettingsSection {
 
     func detailStops() -> [NSView] { stops.filter { !$0.isHidden } }
 
+    /// Re-apply the section's theme-dependent colors IN PLACE — no rebuild, so this never routes
+    /// through `makeDetailView()`/`selectSection` and never triggers `sectionWillHide()`. Recolors
+    /// every group caption, every row (caption/description/control-note/message), every registered
+    /// control (`FieldBox`/`Dropdown`/`SegmentedControl`, whichever `controlForKey` is holding), and
+    /// the persistent Reset-all button + its flash message — the two views that were previously only
+    /// re-parented (never recolored) by a rebuild.
+    func reapplyTheme() {
+        groupCaptions.forEach { $0.textColor = Theme.current.chrome.ink(alpha: 0.4) }
+        rows.forEach { $0.reapplyTheme() }
+        controlForKey.values.compactMap { $0 as? ThemeReapplying }.forEach { $0.reapplyTheme() }
+        resetAllButton.reapplyTheme()
+        resetAllMessage.reapplyTheme()
+    }
+
     /// Subclass hook: declare the section's groups and rows here (via `addGroup` + the row builders).
     func populate() {}
 
@@ -84,6 +116,7 @@ class SettingsFormSection: SettingsSection {
         caption.font = .systemFont(ofSize: 10, weight: .semibold)
         caption.textColor = Theme.current.chrome.ink(alpha: 0.4)
         stack.addArrangedSubview(caption)
+        groupCaptions.append(caption)
         if let lastArranged { stack.setCustomSpacing(20, after: lastArranged) }  // gap between groups
         build()
         lastArranged = stack.arrangedSubviews.last
@@ -194,21 +227,6 @@ class SettingsFormSection: SettingsSection {
         addRow(
             key: key, caption: caption, description: description, control: control, focusStop: focusStop,
             controlNote: controlNote, width: width, refresh: refresh)
-    }
-
-    /// Append an arranged subview to the rows stack directly. Pass `focusStop` to also register it
-    /// as a vertical focus stop (its keyboard wired like any other control) — e.g. the restart
-    /// button tucked under the Theme row, which starts hidden and is skipped by `moveFocus` /
-    /// `detailStops()` until it's shown. Omit `focusStop` for a purely decorative trailing view.
-    func appendTrailing(_ view: NSView, focusStop: NSView? = nil) {
-        guard let stack = rowsStack else { return }
-        let row = SettingsDetail.trailingRow(view)
-        stack.addArrangedSubview(row)
-        row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        if let focusStop {
-            wireControlKeyboard(focusStop)
-            stops.append(focusStop)
-        }
     }
 
     /// Register a row. `focusStop` is the actual first-responder-focusable view (a `FieldBox`'s inner
@@ -358,10 +376,9 @@ class SettingsFormSection: SettingsSection {
         "\(LayoutFormat.number(range.lowerBound))–\(LayoutFormat.number(range.upperBound))"
     }
 
-    /// Move focus between the vertical stops that are currently visible — a hidden stop (e.g. the
-    /// restart button before a theme change reveals it) is transparently skipped. Finds the current
-    /// stop by which one is first responder (a stop may be a `FieldBox`'s field editor, so this is
-    /// more robust than a passed-in view).
+    /// Move focus between the vertical stops that are currently visible — a hidden stop is
+    /// transparently skipped. Finds the current stop by which one is first responder (a stop may be
+    /// a `FieldBox`'s field editor, so this is more robust than a passed-in view).
     private func moveFocus(_ delta: Int) {
         let visible = stops.filter { !$0.isHidden }
         let window = visible.first?.window

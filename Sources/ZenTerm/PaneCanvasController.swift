@@ -89,6 +89,9 @@ final class PaneCanvasController: NSObject {
     /// Number of leaves (panes) in the tab's canvas. `1` means ⌘W closes the tab.
     var paneCount: Int { tree.leafIDs.count }
 
+    /// Every live pane surface in this canvas, for a full config-change re-theme pass.
+    var allSurfaces: [TerminalSurface] { registry.allSurfaces }
+
     /// Whether the focused pane's shell has live work (busy). False when the
     /// surface hasn't started or the backend can't tell.
     var focusedPaneIsBusy: Bool {
@@ -214,6 +217,12 @@ final class PaneCanvasController: NSObject {
             // leaves stale blinking cursors on background panes after rapid splits.
             registry.surface(for: id)?.setFocused(focused)
         }
+    }
+
+    /// Re-apply the live pane border / focus-halo colors to every built pane after a config
+    /// change — no relaunch, no restructure.
+    func reapplyChromeColors() {
+        for host in hostByLeaf.values { host.reapplyTheme() }
     }
 
     /// Render the focused leaf full-canvas, retaining its surface — no restart.

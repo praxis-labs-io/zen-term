@@ -16,6 +16,7 @@ final class KeymapAssemblyTests: XCTestCase {
         // The ⌘⇧\ shifted-symbol quirk: both "|" and "\\" map to splitVertical.
         XCTAssertEqual(map[Chord(command: true, shift: true, key: "|")], .splitVertical)
         XCTAssertEqual(map[Chord(command: true, shift: true, key: "\\")], .splitVertical)
+        XCTAssertEqual(map[Chord(command: true, option: true, key: "r")], .reloadConfig)
     }
 
     func test_floatChord_overridesBuiltin() {

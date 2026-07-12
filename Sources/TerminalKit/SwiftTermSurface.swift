@@ -176,6 +176,12 @@ public final class SwiftTermSurface: NSObject, TerminalSurface {
         }
     }
 
+    /// Re-apply appearance/behavior to this already-running surface in place (hot reload).
+    public func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {
+        applyTheme(theme)
+        applyBehavior(behavior)
+    }
+
     /// Maps a chrome-supplied `TerminalTheme` onto the SwiftTerm view: font, the 16
     /// ANSI colors, and the default fg/bg, cursor, and selection colors.
     private func applyTheme(_ theme: TerminalTheme) {

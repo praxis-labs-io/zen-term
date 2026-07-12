@@ -13,22 +13,31 @@ final class KeycapView: NSView {
         "⏎": "return", "↵": "return", "⎋": "escape",
         "↑": "arrow.up", "↓": "arrow.down", "←": "arrow.left", "→": "arrow.right",
     ]
-    private static let ink = Theme.current.chrome.ink(alpha: 0.55)
+    private static var ink: NSColor { Theme.current.chrome.ink(alpha: 0.55) }
+
+    private let shortcut: String
+    private let showsBackground: Bool
+    /// The glyph-token row, retained so `reapplyTheme()` can rebuild it — every token bakes its
+    /// ink/tint color in at construction (there's nothing to mutate in place).
+    private let tokenStack: NSStackView
 
     /// `showsBackground: false` renders just the glyph tokens with no rounded fill — for a host that
     /// supplies its own background (the keybind chip's full-width focus target).
     init(shortcut: String, showsBackground: Bool = true) {
+        self.shortcut = shortcut
+        self.showsBackground = showsBackground
+        // A horizontal run of icon/text tokens; the spacing keeps the glyphs from crowding.
+        let stack = NSStackView(views: Self.tokens(for: shortcut))
+        stack.orientation = .horizontal
+        stack.spacing = 3
+        stack.alignment = .centerY
+        tokenStack = stack
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
         if showsBackground { layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor }
         translatesAutoresizingMaskIntoConstraints = false
 
-        // A horizontal run of icon/text tokens; the spacing keeps the glyphs from crowding.
-        let stack = NSStackView(views: Self.tokens(for: shortcut))
-        stack.orientation = .horizontal
-        stack.spacing = 3
-        stack.alignment = .centerY
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
 
@@ -41,6 +50,16 @@ final class KeycapView: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Re-apply the live chrome colors after a config change — no relaunch. Every token (modifier
+    /// icon tint, key-label ink) bakes its color in at construction, so rebuild them fresh against
+    /// `Theme.current` rather than mutate in place — the same pattern `KeybindRow.reapplyTheme()`
+    /// already uses for its nested `KeycapView` (re-render, don't patch).
+    func reapplyTheme() {
+        if showsBackground { layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor }
+        tokenStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        Self.tokens(for: shortcut).forEach { tokenStack.addArrangedSubview($0) }
+    }
 
     /// Split the shortcut into views: an SF Symbol per modifier glyph and a monospaced
     /// text run for each maximal stretch of key characters.

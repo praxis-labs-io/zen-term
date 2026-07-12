@@ -88,6 +88,13 @@ class SurfaceFloatOverlay: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// Re-apply the card's theme-dependent colors after a live theme change. The shadow
+    /// (`FloatShadow.applyShadow`) is theme-independent and untouched.
+    func reapplyTheme() {
+        card.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
+        card.layer?.borderColor = FloatShadow.edge.cgColor
+    }
+
     /// Spring the card in (fade + subtle scale about its center). Call after presenting.
     func animateIn() {
         superview?.layoutSubtreeIfNeeded()  // resolve the card's frame before scaling about its center

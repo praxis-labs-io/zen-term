@@ -12,7 +12,7 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(
             names,
             [
-                "Open Workspace Picker", "Add Workspace…", "Settings…", "Open Lazygit",
+                "Open Workspace Picker", "Add Workspace…", "Settings…", "Reload Config", "Open Lazygit",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab",
                 "Split Horizontally", "Split Vertically",
@@ -56,6 +56,12 @@ final class CommandCatalogTests: XCTestCase {
         let entry = CommandCatalog.commands(tabCount: 0).first { $0.title == "Open Workspace Picker" }
         XCTAssertNotNil(entry)
         if case .toggleRepoPicker = entry!.chord {} else { XCTFail("expected .toggleRepoPicker") }
+    }
+
+    func test_reloadConfig_mapsToReloadConfigChord() {
+        let entry = CommandCatalog.commands(tabCount: 0).first { $0.title == "Reload Config" }
+        XCTAssertNotNil(entry)
+        if case .reloadConfig = entry!.chord {} else { XCTFail("expected .reloadConfig") }
     }
 
     func test_everyEntry_hasTitle_andBoundEntriesHaveShortcut() {

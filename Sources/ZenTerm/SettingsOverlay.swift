@@ -16,6 +16,8 @@ final class SettingsOverlay: NSView, ModalOverlay {
     private var navRows: [SettingsNavRow] = []
     private let detailContainer = NSView()
     private var selectedIndex = 0
+    private let heading = NSTextField(labelWithString: "Settings".uppercased())
+    private let divider = NSView()
 
     init(
         sections: [SettingsSection], capturer: KeybindCapturing?, background: NSColor,
@@ -85,6 +87,23 @@ final class SettingsOverlay: NSView, ModalOverlay {
     }
     override func hitTest(_ point: NSPoint) -> NSView? { isDismissing ? nil : super.hitTest(point) }
 
+    /// Re-apply the card's theme-dependent colors after a live theme change: the retained shell
+    /// (card fill/border, heading, divider), the nav rows, and every section IN PLACE — never via
+    /// `selectSection`, which would call `sectionWillHide()` on the current section even though its
+    /// index didn't change. That matters across windows: a theme edit in one window fires
+    /// `.configDidChange` globally, so a *different* window sitting on Keybinds with a capture armed
+    /// must not have it silently cancelled by this window's theme swap. Every section (not just the
+    /// visible one) is recolored — a hidden section's rows are unparented (harmless to recolor) but
+    /// its persistent Reset-all button/flash must be right for when it's next shown.
+    func reapplyTheme() {
+        card.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
+        card.layer?.borderColor = FloatShadow.edge.cgColor
+        heading.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        navRows.forEach { $0.reapplyTheme() }
+        sections.forEach { $0.reapplyTheme() }
+    }
+
     // MARK: content
 
     private func buildContent() -> NSView {
@@ -95,7 +114,6 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
         // Top-level "SETTINGS" heading, styled like the detail pane's section captions. Wrapped so
         // its text is inset the same 10pt as the nav rows' labels, keeping them left-aligned.
-        let heading = NSTextField(labelWithString: "Settings".uppercased())
         heading.font = .systemFont(ofSize: 10, weight: .semibold)
         heading.textColor = Theme.current.chrome.ink(alpha: 0.4)
         heading.translatesAutoresizingMaskIntoConstraints = false
@@ -126,7 +144,6 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
         detailContainer.translatesAutoresizingMaskIntoConstraints = false
 
-        let divider = NSView()
         divider.wantsLayer = true
         divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         divider.translatesAutoresizingMaskIntoConstraints = false

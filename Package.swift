@@ -74,7 +74,7 @@ let package = Package(
         ),
         .testTarget(
             name: "ZenTermTests",
-            dependencies: ["ZenTerm"]
+            dependencies: ["ZenTerm", "TabKit"]
         ),
     ]
 )

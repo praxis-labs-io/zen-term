@@ -2,8 +2,9 @@ import AppKit
 import TerminalKit
 
 /// The Terminal settings section: font, cursor, input, and shell knobs. A subclass of
-/// `SettingsFormSection` — it only declares its groups. Every knob applies to new tabs (per-surface
-/// config read at surface construction), matching how shell has always behaved.
+/// `SettingsFormSection` — it only declares its groups. Font/cursor/input apply live to every open
+/// surface; shell/shell-args still apply to new tabs only, since a running shell process can't be
+/// hot-swapped.
 final class SettingsTerminalSection: SettingsFormSection {
     override var navTitle: String { "Terminal" }
 
@@ -12,32 +13,32 @@ final class SettingsTerminalSection: SettingsFormSection {
     override func populate() {
         addGroup("Font") {
             self.addTextRow(
-                key: "font-family", caption: "Font family", blurb: "Terminal font (new tabs)",
+                key: "font-family", caption: "Font family", blurb: "Terminal font",
                 placeholder: GeneralConfig.builtIn.fontName, read: { $0.fontName }, width: 200)
             self.addNumericRow(
-                key: "font-size", caption: "Font size", blurb: "Point size (new tabs)",
+                key: "font-size", caption: "Font size", blurb: "Point size",
                 range: 6...72, read: { $0.fontSize }, width: 64)
         }
         addGroup("Cursor") {
             self.addSegmentedRow(
-                key: "cursor-style", caption: "Style", blurb: "Cursor shape (new tabs)",
+                key: "cursor-style", caption: "Style", blurb: "Cursor shape",
                 options: ["Block", "Bar", "Underline"], read: { Self.cursorStyleIndex($0) },
                 token: { LayoutFormat.cursorStyleToken(Self.cursorStyles[$0]) }, notifiesOnReselect: false)
             self.addSegmentedRow(
-                key: "cursor-style-blink", caption: "Blink", blurb: "Blink the cursor (new tabs)",
+                key: "cursor-style-blink", caption: "Blink", blurb: "Blink the cursor",
                 options: ["On", "Off"], read: { $0.cursorBlink ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
             self.addNumericRow(
-                key: "cursor-thickness", caption: "Thickness", blurb: "Bar/underline thickness in px (new tabs)",
+                key: "cursor-thickness", caption: "Thickness", blurb: "Bar/underline thickness in px",
                 range: 1...12, read: { CGFloat($0.cursorThickness) }, width: 64, integer: true)
         }
         addGroup("Input") {
             self.addSegmentedRow(
-                key: "macos-option-as-alt", caption: "Option as Alt", blurb: "Send Option as Meta (new tabs)",
+                key: "macos-option-as-alt", caption: "Option as Alt", blurb: "Send Option as Meta",
                 options: ["On", "Off"], read: { $0.optionAsAlt ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
             self.addNumericRow(
-                key: "scroll-multiplier", caption: "Scroll speed", blurb: "Scroll wheel multiplier (new tabs)",
+                key: "scroll-multiplier", caption: "Scroll speed", blurb: "Scroll wheel multiplier",
                 range: 0.1...10, read: { CGFloat($0.scrollMultiplier) }, width: 64)
         }
         addGroup("Shell") {

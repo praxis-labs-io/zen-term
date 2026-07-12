@@ -29,11 +29,19 @@ final class ToastView: NSView {
     /// Only a modal confirm (actionable AND arming Return/Esc) should take first responder;
     /// a non-modal sticky toast must not, or it would steal input from the terminal.
     private let gatesFocus: Bool
+    /// The border tone (neutral for info, tinted for warning/destructive) — re-derived in
+    /// `reapplyTheme()` since it's a `Theme.current.chrome`-sourced value baked at init.
+    private let variant: ToastVariant
+    /// Retained (not throwaway init-locals) so `reapplyTheme()` can recolor them — otherwise an
+    /// already-visible toast (e.g. a confirm left up across ⌘⌥R) stays stale after a live theme
+    /// change, since a passive `show()` toast is never rebuilt while an old one lingers.
+    private let titleLabel: NSTextField
+    private let messageLabel: NSTextField
 
     /// Fixed card width — toasts read as a consistent column rather than sizing to their text.
     private static let width: CGFloat = 300
-    private static let titleColor = Theme.current.chrome.foreground.nsColor
-    private static let messageColor = Theme.current.chrome.muted.nsColor
+    private static var titleColor: NSColor { Theme.current.chrome.foreground.nsColor }
+    private static var messageColor: NSColor { Theme.current.chrome.muted.nsColor }
 
     convenience init(content: ToastContent) {
         self.init(content: content, actions: [])
@@ -42,6 +50,9 @@ final class ToastView: NSView {
     init(content: ToastContent, actions: [ToastAction], keyEquivalents: Bool = true) {
         self.hasActions = !actions.isEmpty
         self.gatesFocus = keyEquivalents && !actions.isEmpty
+        self.variant = content.variant
+        self.titleLabel = NSTextField(labelWithString: content.title)
+        self.messageLabel = NSTextField(wrappingLabelWithString: content.message)
         super.init(frame: .zero)
         let accent = content.variant.accent
 
@@ -70,20 +81,18 @@ final class ToastView: NSView {
 
         // No close button — passive toasts dismiss on body-click / timeout; confirms answer
         // via their buttons (or Esc).
-        let title = NSTextField(labelWithString: content.title)
-        title.font = .systemFont(ofSize: 13, weight: .semibold)
-        title.textColor = Self.titleColor
+        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        titleLabel.textColor = Self.titleColor
 
-        let message = NSTextField(wrappingLabelWithString: content.message)
-        message.font = .systemFont(ofSize: 12)
-        message.textColor = Self.messageColor
-        message.preferredMaxLayoutWidth = 236  // card width minus badge + gaps + insets
+        messageLabel.font = .systemFont(ofSize: 12)
+        messageLabel.textColor = Self.messageColor
+        messageLabel.preferredMaxLayoutWidth = 236  // card width minus badge + gaps + insets
 
-        let col = NSStackView(views: [title, message])
+        let col = NSStackView(views: [titleLabel, messageLabel])
         col.orientation = .vertical
         col.alignment = .leading
         col.spacing = 3
-        message.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
+        messageLabel.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
 
         if !actions.isEmpty {
             // Small buttons hugging the leading edge (a trailing spacer absorbs the slack).
@@ -95,7 +104,7 @@ final class ToastView: NSView {
             row.alignment = .centerY
             row.spacing = 6
             col.addArrangedSubview(row)
-            col.setCustomSpacing(9, after: message)
+            col.setCustomSpacing(9, after: messageLabel)
             row.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         }
 
@@ -145,6 +154,17 @@ final class ToastView: NSView {
     /// old card is still fading) can't have the outgoing card's Dismiss fire against the new one.
     override func hitTest(_ point: NSPoint) -> NSView? {
         isDismissing ? nil : super.hitTest(point)
+    }
+
+    /// Re-apply the live chrome colors after a config change — no relaunch. Needed for a toast
+    /// left up across the change (e.g. a `.reloadConfig` confirm, which has no modal gate): a
+    /// passive `show()` toast is only ever built fresh, so an already-visible one would
+    /// otherwise stay stale until it's dismissed and replaced.
+    func reapplyTheme() {
+        layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
+        layer?.borderColor = variant.border.cgColor  // neutral for info; tinted for warning/destructive
+        titleLabel.textColor = Self.titleColor
+        messageLabel.textColor = Self.messageColor
     }
 
     /// Spring the card in (fade + subtle scale about its center). Call after adding it.

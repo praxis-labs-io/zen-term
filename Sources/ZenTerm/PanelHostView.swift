@@ -16,6 +16,7 @@ struct PanelMeta {
 final class PanelHostView: NSView {
     private let onFocusRequest: () -> Void
     private let pane = NSView()
+    private let clip = NSView()  // inner clip so terminal content stays inside the radius
     private let zoomButton: IconButton
     private let hideButton: IconButton?
     private static let cornerSize = NSSize(width: 22, height: 20)
@@ -71,7 +72,6 @@ final class PanelHostView: NSView {
         addSubview(pane)
 
         content.translatesAutoresizingMaskIntoConstraints = false
-        let clip = NSView()  // inner clip so terminal content stays inside the radius
         clip.wantsLayer = true
         clip.layer?.cornerRadius = 12
         clip.layer?.masksToBounds = true
@@ -139,7 +139,20 @@ final class PanelHostView: NSView {
         ]
     }
 
-    private static let idleBorder = Theme.current.chrome.ink(alpha: 0.08)
+    private static var idleBorder: NSColor { Theme.current.chrome.ink(alpha: 0.08) }
+
+    /// Re-apply the live pane border / focus-halo colors after a config change — no relaunch.
+    /// The glow's `shadowColor` is set once at init (only its opacity is toggled elsewhere), so
+    /// it's reset explicitly; the border color is picked up by re-running `updateHalo()`, which
+    /// reads `idleBorder`/`accent` fresh. The clip's padding-ring fill and the corner buttons'
+    /// icon tint are likewise set once at init, so they're refreshed explicitly too.
+    func reapplyTheme() {
+        pane.layer?.shadowColor = Theme.current.chrome.accent.nsColor.cgColor
+        clip.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
+        zoomButton.reapplyTheme()
+        hideButton?.reapplyTheme()
+        updateHalo()
+    }
 
     private func updateHalo() {
         guard let layer = pane.layer else { return }

@@ -95,6 +95,11 @@ public protocol TerminalSurface: AnyObject {
     func start(_ config: TerminalSurfaceConfig)
     func focus()
 
+    /// Re-apply appearance/behavior to a RUNNING surface without recreating it (hot reload).
+    /// Font, colors, cursor style/blink, option-as-alt take effect in place; the shell is fixed
+    /// for the surface's life. A backend that can't reconfigure live is a no-op (default ext).
+    func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior)
+
     /// Explicitly set whether this surface renders as focused (active/blinking cursor) or
     /// unfocused (hollow). The chrome drives this from its own single-focus model instead of
     /// trusting the AppKit responder chain, which doesn't propagate reliably while many pane
@@ -119,4 +124,7 @@ public extension TerminalSurface {
 
     /// Backends that can't inspect the child process report "not busy".
     var isBusy: Bool { false }
+
+    /// Default no-op: a backend that can't reconfigure live needs nothing here.
+    func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {}
 }

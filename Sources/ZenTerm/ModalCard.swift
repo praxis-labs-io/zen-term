@@ -12,6 +12,13 @@ protocol ModalOverlay: NSView {
     func animateIn()
     /// Spring the card back out, then run `completion` (the host removes the overlay).
     func animateOut(completion: @escaping () -> Void)
+    /// Re-apply the overlay's theme-dependent colors after a live theme change. Default no-op;
+    /// overlays with theme-dependent chrome override it.
+    func reapplyTheme()
+}
+
+extension ModalOverlay {
+    func reapplyTheme() {}
 }
 
 /// The card container: swallows clicks so a tap on the card's empty area doesn't fall through

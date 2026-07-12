@@ -30,14 +30,20 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         didSet { field.onEmptyClick = onEmptyClick }
     }
 
-    private static let restFill = Theme.current.chrome.ink(alpha: 0.06)
+    private static var restFill: NSColor { Theme.current.chrome.ink(alpha: 0.06) }
     /// The same muted accent fill the ⌘P/⌘⇧P palettes use for the selected row.
-    private static let focusFill = PaletteOverlay.selectionBackground
+    private static var focusFill: NSColor { PaletteOverlay.selectionBackground }
 
     var text: String { field.stringValue }
     func setText(_ value: String) { field.stringValue = value }
 
+    /// Retained so `applyPlaceholder()` can rebuild the colored attributed string on a theme swap,
+    /// and so callers (tests included) can identify a field by its placeholder — the system
+    /// `placeholderString` getter goes nil once `placeholderAttributedString` is set instead.
+    let placeholder: String
+
     init(placeholder: String) {
+        self.placeholder = placeholder
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
@@ -46,11 +52,11 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         layer?.borderColor = Theme.current.chrome.ink(alpha: 0.10).cgColor
         translatesAutoresizingMaskIntoConstraints = false
 
-        field.placeholderString = placeholder
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 13)
+        applyPlaceholder()
         field.textColor = Theme.current.chrome.foreground.nsColor
         field.delegate = self
         field.onGainedFocus = { [weak self] in self?.setFocused(true) }
@@ -74,6 +80,30 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     func controlTextDidEndEditing(_ obj: Notification) {
         setFocused(false)
         onEndEditing?()
+    }
+
+    /// Re-apply the live chrome colors after a config change — no relaunch. There's no retained
+    /// `isFocused` flag (`setFocused` is only ever called from focus-transition callbacks), so
+    /// re-derive it from whether the field is currently the active editor, and re-set
+    /// `field.textColor`, which `setFocused` doesn't touch (it's set once in init).
+    func reapplyTheme() {
+        setFocused(field.currentEditor() != nil)
+        field.textColor = Theme.current.chrome.foreground.nsColor
+        applyPlaceholder()
+    }
+
+    /// The system `placeholderString` draws in AppKit's `placeholderTextColor`, which follows the
+    /// view's `effectiveAppearance` rather than `Theme.current` — near-white on a light theme under
+    /// a dark appearance. Build the placeholder as an attributed string colored from the chrome ink
+    /// role instead, so it stays readable and re-derives on a live theme swap.
+    private func applyPlaceholder() {
+        field.placeholderAttributedString = NSAttributedString(
+            string: placeholder,
+            attributes: [
+                .foregroundColor: Theme.current.chrome.ink(alpha: 0.4),
+                .font: field.font ?? .systemFont(ofSize: 13),
+            ]
+        )
     }
 
     /// Focus lifts the fill to the palettes' muted accent AND outlines the box with the accent.

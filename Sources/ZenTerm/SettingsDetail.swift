@@ -74,4 +74,10 @@ final class ResetFlashLabel: NSTextField {
         hideTimer = hide
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: hide)
     }
+
+    /// Re-apply the live chrome colors after a config change — no relaunch. Matches the accent
+    /// role set once in `init`.
+    func reapplyTheme() {
+        textColor = Theme.current.chrome.accent.nsColor
+    }
 }

@@ -42,14 +42,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// Route a chord: `⌘n` makes a new window; everything else goes to the key
-    /// window's controller.
+    /// Route a chord: `⌘n` makes a new window, `.reloadConfig` re-reads config + theme from
+    /// disk (app-global, not window-scoped); everything else goes to the key window's
+    /// controller.
     private func route(_ chord: KeyInterceptor.ReservedChord) {
         if case .newWindow = chord {
             // ⌘N is intercepted here before `handle(_:)`, so a palette's / confirm's modal
             // gate doesn't cover it — swallow it explicitly while either is open.
             if let key = keyController(), key.isModalOverlayOpen || key.isConfirmOpen { return }
             newWindow(initialCWD: keyController()?.focusedCWD, centered: false)
+            return
+        }
+        if case .reloadConfig = chord {
+            AppConfig.reload()
             return
         }
         keyController()?.handle(chord)
@@ -124,9 +129,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSApp.reply(toApplicationShouldTerminate: false)
             })
         return .terminateLater
-    }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        Relauncher.performPendingRelaunchIfNeeded()
     }
 }

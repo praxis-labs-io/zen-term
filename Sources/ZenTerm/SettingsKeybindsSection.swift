@@ -23,6 +23,8 @@ final class SettingsKeybindsSection: SettingsSection {
     private let capturer: KeybindCapturing?
     private var desired: [Chord: KeyInterceptor.ReservedChord] = [:]
     private var rows: [KeybindRow] = []
+    /// Retained (not throwaway locals) so `reapplyTheme()` can recolor them in place.
+    private var groupCaptions: [NSTextField] = []
     private let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
     private weak var detailScroll: NSScrollView?
     private var hintBubble: KeybindHintBubble?
@@ -36,6 +38,7 @@ final class SettingsKeybindsSection: SettingsSection {
     func makeDetailView() -> NSView {
         desired = reservedEntries(of: GeneralConfig.current.keymap)
         rows = []
+        groupCaptions = []
 
         // The rows list, built like the command palette: a flipped document view (top-down scroll
         // coords, so it opens at the top — not mid-scroll) holding a vertical stack, in a slim-overlay
@@ -52,6 +55,7 @@ final class SettingsKeybindsSection: SettingsSection {
             caption.font = .systemFont(ofSize: 10, weight: .semibold)
             caption.textColor = Theme.current.chrome.ink(alpha: 0.4)
             rowsStack.addArrangedSubview(caption)
+            groupCaptions.append(caption)
             if let previous { rowsStack.setCustomSpacing(18, after: previous) }  // gap between groups
             for action in actions {
                 let row = KeybindRow(action: action, title: CommandCatalog.spec(for: action).title)
@@ -101,6 +105,19 @@ final class SettingsKeybindsSection: SettingsSection {
     /// doesn't keep diverting keystrokes with the recording popover already gone.
     func sectionWillHide() {
         if let row = capturingRow { endCapture(row) }
+    }
+
+    /// Re-apply the section's theme-dependent colors IN PLACE — no rebuild, so this never routes
+    /// through `makeDetailView()`/`selectSection` and never calls `sectionWillHide()`. Rebuilding
+    /// here (as a naive recolor might) would tear down an in-progress capture — including one
+    /// armed in a *different* window, since a theme swap is a global `.configDidChange` that every
+    /// open Settings card observes. Recolors every group caption, every row (title/message/chip
+    /// glyphs), and the persistent Reset-all button + its flash message.
+    func reapplyTheme() {
+        groupCaptions.forEach { $0.textColor = Theme.current.chrome.ink(alpha: 0.4) }
+        rows.forEach { $0.reapplyTheme() }
+        resetAllButton.reapplyTheme()
+        resetAllMessage.reapplyTheme()
     }
 
     // MARK: edits

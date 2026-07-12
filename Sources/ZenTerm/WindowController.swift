@@ -74,9 +74,10 @@ final class WindowController: NSObject {
     /// current; it only re-renders when a title actually changed.
     private var titlePoll: Timer?
 
-    /// Live re-apply for the Layout & Motion settings (backdrop tint + gutter/gap): re-tints and
-    /// re-lays-out every tab when a Settings-card edit posts `.configDidChange`. Torn down in
-    /// `tearDown()`.
+    /// Live re-apply for a theme / config change: re-tints the backdrop, re-lays-out every tab
+    /// (gutter/gap), re-themes every live terminal surface, and recolors the persistent chrome
+    /// (pane borders/halo, tab bar, dock) when a Settings-card edit or a config reload posts
+    /// `.configDidChange`. Torn down in `tearDown()`.
     private var configObserver: NSObjectProtocol?
 
     /// The window has closed (via the last-tab cascade OR the native close button) →
@@ -155,7 +156,18 @@ final class WindowController: NSObject {
             guard let self else { return }
             self.tint.layer?.backgroundColor =
                 Theme.current.chrome.background.nsColor.withAlphaComponent(Self.backdropTintAlpha).cgColor
-            for controller in self.controllers.values { controller.reapplyChromeLayout() }
+            for controller in self.controllers.values {
+                controller.reapplyChromeLayout()
+                controller.reapplyChromeColors()
+            }
+            for surface in self.controllers.values.flatMap({ $0.allSurfaces }) {
+                surface.applyAppearance(
+                    theme: Theme.current.terminal, behavior: GeneralConfig.current.terminalBehavior)
+            }
+            self.tabBar.reapplyTheme()
+            self.dock.reapplyTheme()
+            self.modal?.overlay.reapplyTheme()
+            self.confirmToast?.reapplyTheme()
         }
     }
 
@@ -664,8 +676,8 @@ final class WindowController: NSObject {
         case .prevTab: cycleTab(-1)
         case .nextTab: cycleTab(1)
         case .closePane: requestClosePane()
-        case .newWindow:
-            break  // handled by AppDelegate (window manager); no-op here
+        case .newWindow, .reloadConfig:
+            break  // handled by AppDelegate (window manager / app-global config reload); no-op here
         case .toggleBottomDrawer: active?.toggleBottomDrawer()
         case .toggleRightDrawer: active?.toggleRightDrawer()
         case .toggleZoom: active?.toggleZoom()
