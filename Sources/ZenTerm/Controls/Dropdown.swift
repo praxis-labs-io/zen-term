@@ -215,6 +215,9 @@ final class Dropdown: NSView {
         renderTitle()
         closeList()
         onChange(selectedIndex)
+        // Keep focus on the dropdown after a pick (keyboard or mouse) so the user can keep
+        // arrowing/tabbing from here — a downstream config reload must not pull focus elsewhere.
+        window?.makeFirstResponder(self)
     }
 
     // Build + position + highlight helpers below mirror KeybindHintBubble's window-child pattern:
