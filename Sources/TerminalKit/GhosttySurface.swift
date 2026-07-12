@@ -144,6 +144,20 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         }
     }
 
+    /// Re-apply appearance/behavior in place. libghostty config is app-global, so this
+    /// re-themes every surface via `GhosttyApp.updateConfig` (deduped there); the pieces
+    /// scoped to this surface (opaque-layer bg, scroll multiplier, redraw) are applied here.
+    public func applyAppearance(theme: TerminalTheme?, behavior: TerminalBehavior?) {
+        GhosttyApp.shared.updateConfig(theme: theme, behavior: behavior)
+        if let theme, let layer = hostView.layer {
+            // Reset the opaque-layer background (the same trick start(_:) uses) so redraw gaps
+            // show the new terminal bg, not the old one.
+            layer.backgroundColor = theme.background.nsColor.cgColor
+        }
+        hostView.scrollMultiplier = (behavior ?? .default).scrollMultiplier
+        if let surfacePtr { ghostty_surface_refresh(surfacePtr) }
+    }
+
     public func focus() { hostView.window?.makeFirstResponder(hostView) }
 
     public func setFocused(_ focused: Bool) {

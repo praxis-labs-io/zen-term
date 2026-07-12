@@ -37,7 +37,12 @@ final class GhosttyApp {
     let app: ghostty_app_t
     // Retained for the app's (process) lifetime: libghostty keeps a reference to the
     // config passed to ghostty_app_new; freeing it would pull it out from under the app.
-    private let config: ghostty_config_t
+    // A `var`, not `let`: `updateConfig` swaps in a fresh config and frees this one, but
+    // only AFTER the swap, so the app never sees a freed config.
+    private var config: ghostty_config_t
+    // Dedupe redundant app-global swaps: N per-surface `applyAppearance` callers for one
+    // config change should trigger at most one real ghostty_app_update_config.
+    private var lastConfigText: String?
 
     private init(theme: TerminalTheme?, behavior: TerminalBehavior?) {
         // Point the embedded lib at the resources staged from the pinned vendor/ghostty
@@ -82,6 +87,25 @@ final class GhosttyApp {
     }
 
     func tick() { ghostty_app_tick(app) }
+
+    /// Re-load the app-global libghostty config from a fresh TerminalTheme/behavior and swap it
+    /// live (re-themes every surface). Deduped by generated text so N per-surface callers trigger
+    /// at most one real swap per change.
+    func updateConfig(theme: TerminalTheme?, behavior: TerminalBehavior?) {
+        let text = GhosttyConfigWriter.configText(for: theme, behavior: behavior)
+        guard text != lastConfigText else { return }
+        guard let cfg = ghostty_config_new() else { return }
+        if let path = GhosttyConfigWriter.writeConfig(for: theme, behavior: behavior) {
+            ghostty_config_load_file(cfg, path)
+        }
+        ghostty_config_finalize(cfg)
+        ghostty_app_update_config(app, cfg)
+        let old = config
+        config = cfg
+        ghostty_config_free(old)
+        lastConfigText = text
+        tick()
+    }
 
     /// Point `GHOSTTY_RESOURCES_DIR` at the resources bin/build-ghosttykit staged into
     /// TerminalKit's bundle, always overriding any inherited value. The env var points
