@@ -95,9 +95,14 @@ final class GhosttyApp {
         let text = GhosttyConfigWriter.configText(for: theme, behavior: behavior)
         guard text != lastConfigText else { return }
         guard let cfg = ghostty_config_new() else { return }
-        if let path = GhosttyConfigWriter.writeConfig(for: theme, behavior: behavior) {
-            ghostty_config_load_file(cfg, path)
+        // If the generated config file can't be written, keep the CURRENT config rather than
+        // pushing an effectively-default one that would drop the theme app-wide. Free the unused
+        // cfg and leave `lastConfigText` untouched so a later reload with the same theme retries.
+        guard let path = GhosttyConfigWriter.writeConfig(for: theme, behavior: behavior) else {
+            ghostty_config_free(cfg)
+            return
         }
+        ghostty_config_load_file(cfg, path)
         ghostty_config_finalize(cfg)
         ghostty_app_update_config(app, cfg)
         let old = config

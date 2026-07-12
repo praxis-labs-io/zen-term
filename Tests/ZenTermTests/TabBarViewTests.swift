@@ -5,12 +5,12 @@ import XCTest
 @testable import ZenTerm
 
 /// `TabBarView` is persistent chrome: it must recolor live on a theme swap (ZEN-89), not just
-/// on next construction. `Theme.current` has no test-facing setter (its setter is `private`,
-/// and `reloadCurrent()` reads real config off disk), so this can't assert an actual before/
-/// after color change — see the house rule "GUI controls need interaction tests": we instead
-/// drive the real window-mounted view and assert `reapplyTheme()` performs its two real
-/// effects (re-renders the stored snapshot; resets the tracer's baked-in color), which is the
-/// window-based behavior the manual runbook then confirms end-to-end with an actual theme file.
+/// on next construction. Per the house rule "GUI controls need interaction tests", this drives
+/// the real window-mounted view and asserts `reapplyTheme()` performs its two real effects
+/// (re-renders the stored snapshot; resets the tracer's baked-in color) — the window-based
+/// behavior the manual runbook then confirms end-to-end with an actual theme file. (A
+/// DEBUG-only `Theme.setCurrentForTesting(_:)` seam exists for direct before/after color
+/// assertions; the `ReapplyThemeTests` suite uses it.)
 final class TabBarViewTests: XCTestCase {
     func test_reapplyTheme_reRendersStoredSnapshot() {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onNewTab: {})
