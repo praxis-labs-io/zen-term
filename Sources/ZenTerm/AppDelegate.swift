@@ -130,8 +130,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             })
         return .terminateLater
     }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        Relauncher.performPendingRelaunchIfNeeded()
-    }
 }

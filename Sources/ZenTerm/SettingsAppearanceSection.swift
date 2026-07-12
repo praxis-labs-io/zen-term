@@ -8,7 +8,6 @@ final class SettingsAppearanceSection: SettingsFormSection {
 
     private var themeEntries: [ThemeEntry] = []
     private weak var themeDropdown: Dropdown?
-    private let restartButton = AppButton(title: "Restart to apply", variant: .primary)
 
     override func populate() {
         addGroup("Theme") { self.addThemeRow() }
@@ -53,18 +52,11 @@ final class SettingsAppearanceSection: SettingsFormSection {
             [weak self] index in self?.selectTheme(index)
         }
         themeDropdown = dropdown
-        restartButton.isKeyboardFocusable = true
-        restartButton.isHidden = true
-        restartButton.onTap = { Relauncher.relaunch() }
 
-        // A trailing control column: the dropdown with the restart button tucked under it.
         addCustomRow(
-            key: "theme", caption: "Theme", description: "Applies on restart",
+            key: "theme", caption: "Theme", description: "Applies instantly",
             control: dropdown, focusStop: dropdown, controlNote: nil, width: 220,
             refresh: { [weak self] in self?.refreshThemeRow() })
-        // Place the restart button under the dropdown row, as its own focus stop — hidden (and so
-        // skipped by moveFocus/detailStops) until `updateRestartVisibility` reveals it.
-        appendTrailing(restartButton, focusStop: restartButton)
     }
 
     private func themeItems(selected: Int) -> [DropdownItem] {
@@ -90,22 +82,12 @@ final class SettingsAppearanceSection: SettingsFormSection {
         } else {
             writeOrRemove("theme", nil, row: "theme")  // built-in default clears the key
         }
-        updateRestartVisibility()
     }
 
     private func refreshThemeRow() {
         let selected = currentThemeIndex()
         themeDropdown?.setItems(themeItems(selected: selected), selectedIndex: selected)
-        updateRestartVisibility()
     }
-
-    /// Show "Restart to apply" only when the chosen theme differs from the running one.
-    private func updateRestartVisibility() {
-        let chosen = GeneralConfig.current.themeName
-        restartButton.isHidden = (chosen == Self.launchThemeName)
-    }
-
-    private static let launchThemeName: String? = GeneralConfig.current.themeName
 
     /// Reduce-motion shown as On/Off; `system` resolves via the OS accessibility setting. Static so the
     /// `read` closure the base stores per row doesn't capture `self` (which would retain-cycle through

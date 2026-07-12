@@ -197,9 +197,9 @@ class SettingsFormSection: SettingsSection {
     }
 
     /// Append an arranged subview to the rows stack directly. Pass `focusStop` to also register it
-    /// as a vertical focus stop (its keyboard wired like any other control) — e.g. the restart
-    /// button tucked under the Theme row, which starts hidden and is skipped by `moveFocus` /
-    /// `detailStops()` until it's shown. Omit `focusStop` for a purely decorative trailing view.
+    /// as a vertical focus stop (its keyboard wired like any other control) — if that view starts
+    /// hidden, it's skipped by `moveFocus` / `detailStops()` until shown. Omit `focusStop` for a
+    /// purely decorative trailing view.
     func appendTrailing(_ view: NSView, focusStop: NSView? = nil) {
         guard let stack = rowsStack else { return }
         let row = SettingsDetail.trailingRow(view)
@@ -358,10 +358,9 @@ class SettingsFormSection: SettingsSection {
         "\(LayoutFormat.number(range.lowerBound))–\(LayoutFormat.number(range.upperBound))"
     }
 
-    /// Move focus between the vertical stops that are currently visible — a hidden stop (e.g. the
-    /// restart button before a theme change reveals it) is transparently skipped. Finds the current
-    /// stop by which one is first responder (a stop may be a `FieldBox`'s field editor, so this is
-    /// more robust than a passed-in view).
+    /// Move focus between the vertical stops that are currently visible — a hidden stop is
+    /// transparently skipped. Finds the current stop by which one is first responder (a stop may be
+    /// a `FieldBox`'s field editor, so this is more robust than a passed-in view).
     private func moveFocus(_ delta: Int) {
         let visible = stops.filter { !$0.isHidden }
         let window = visible.first?.window
