@@ -102,7 +102,10 @@ final class PaneCanvasControllerTests: XCTestCase {
         XCTAssertEqual(controller.focusedLeafID, second, "resize keeps focus where it was")
     }
 
-    func test_resizeWhileZoomed_fallsBackAndAppliesRatio() {
+    /// Covers the defensive fallback in `resize(_:)` by driving the controller API directly —
+    /// the chrome never resizes while zoomed (`TabController` blocks the chord), so zooming is
+    /// just the only way to reach a split with no built container.
+    func test_resize_withoutBuiltContainers_fallsBackToRebuild() {
         let first = controller.focusedLeafID
         controller.split(.vertical)
         layout()

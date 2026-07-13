@@ -382,7 +382,9 @@ final class PaneCanvasController: NSObject {
             // detaches, so focus, halo, and first responder are untouched.
             container.setRatio(next)
         } else {
-            // No built container for this split (e.g. resized while zoomed) — full rebuild.
+            // Defensive only: every split gets a container on rebuild, and the one state with
+            // none built (zoomed) can't reach here — TabController blocks resize while zoomed.
+            // A direct API call still lands correctly via a full rebuild.
             reconcileAndRender()
             focusActivePane()
         }

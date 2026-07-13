@@ -18,7 +18,11 @@ class ShadowCardView: NSView {
     }
 
     private func updateShadowPath() {
-        guard let layer, bounds.width > 0, bounds.height > 0 else { return }
+        guard let layer else { return }
+        guard bounds.width > 0, bounds.height > 0 else {
+            layer.shadowPath = nil  // a collapsed card must not keep casting its old shadow
+            return
+        }
         // CGPath traps when the corner radius exceeds half the rect, so clamp for tiny frames.
         let radius = min(layer.cornerRadius, bounds.width / 2, bounds.height / 2)
         layer.shadowPath = CGPath(

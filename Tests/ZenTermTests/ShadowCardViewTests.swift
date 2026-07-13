@@ -6,8 +6,16 @@ import XCTest
 /// ZEN-54: every shadowed chrome card derives an explicit `layer.shadowPath` from its rounded
 /// bounds (no offscreen shadow pass) and keeps it current as the card resizes.
 final class ShadowCardViewTests: XCTestCase {
-    private func mount(_ card: ShadowCardView, size: NSSize) -> NSWindow {
-        let window = NSWindow(
+    /// Retained so the card stays window-mounted for the duration of each test.
+    private var window: NSWindow!
+
+    override func tearDown() {
+        window = nil
+        super.tearDown()
+    }
+
+    private func mount(_ card: ShadowCardView, size: NSSize) {
+        window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
             styleMask: [.borderless], backing: .buffered, defer: false)
         card.wantsLayer = true
@@ -15,12 +23,11 @@ final class ShadowCardViewTests: XCTestCase {
         window.contentView?.addSubview(card)
         card.frame = NSRect(origin: .zero, size: size)
         card.layoutSubtreeIfNeeded()
-        return window
     }
 
     func test_layout_setsShadowPathMatchingBounds() {
         let card = ShadowCardView()
-        _ = mount(card, size: NSSize(width: 300, height: 200))
+        mount(card, size: NSSize(width: 300, height: 200))
         guard let path = card.layer?.shadowPath else {
             return XCTFail("layout must install a shadowPath")
         }
@@ -29,7 +36,7 @@ final class ShadowCardViewTests: XCTestCase {
 
     func test_resize_retracksShadowPath() {
         let card = ShadowCardView()
-        _ = mount(card, size: NSSize(width: 300, height: 200))
+        mount(card, size: NSSize(width: 300, height: 200))
         card.frame = NSRect(x: 0, y: 0, width: 420, height: 260)
         card.layoutSubtreeIfNeeded()
         XCTAssertEqual(
@@ -39,7 +46,20 @@ final class ShadowCardViewTests: XCTestCase {
 
     func test_degenerateFrame_clampsRadiusWithoutTrapping() {
         let card = ShadowCardView()
-        _ = mount(card, size: NSSize(width: 8, height: 8))  // radius 12 > 8/2 would trap CGPath
+        mount(card, size: NSSize(width: 8, height: 8))  // radius 12 > 8/2 would trap CGPath
         XCTAssertNotNil(card.layer?.shadowPath)
+    }
+
+    func test_collapseToZeroSize_clearsShadowPath() {
+        let card = ShadowCardView()
+        mount(card, size: NSSize(width: 300, height: 200))
+        XCTAssertNotNil(card.layer?.shadowPath)
+
+        card.frame = NSRect(x: 0, y: 0, width: 0, height: 0)
+        card.layoutSubtreeIfNeeded()
+
+        XCTAssertNil(
+            card.layer?.shadowPath,
+            "a collapsed card must not keep casting its previous full-size shadow")
     }
 }

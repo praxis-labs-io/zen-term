@@ -31,14 +31,19 @@ final class SplitContainerView: NSView {
     func setRatio(_ ratio: Double) {
         guard let firstChild, let splitAxis, let old = ratioConstraint else { return }
         old.isActive = false
-        let next =
-            splitAxis == .vertical
-            ? firstChild.widthAnchor.constraint(
-                equalTo: widthAnchor, multiplier: ratio, constant: -gutter / 2)
-            : firstChild.heightAnchor.constraint(
-                equalTo: heightAnchor, multiplier: ratio, constant: -gutter / 2)
+        let next = makeRatioConstraint(ratio, first: firstChild, axis: splitAxis)
         next.isActive = true
         ratioConstraint = next
+    }
+
+    /// The one ratio formula, shared by `build` and `setRatio` so the two paths can't drift:
+    /// `first` sized to `ratio` of the container along the axis, minus its half of the gutter.
+    private func makeRatioConstraint(_ ratio: Double, first: NSView, axis: SplitAxis) -> NSLayoutConstraint {
+        axis == .vertical
+            ? first.widthAnchor.constraint(
+                equalTo: widthAnchor, multiplier: ratio, constant: -gutter / 2)
+            : first.heightAnchor.constraint(
+                equalTo: heightAnchor, multiplier: ratio, constant: -gutter / 2)
     }
 
     private func build(
@@ -66,13 +71,12 @@ final class SplitContainerView: NSView {
             firstChild = first
             splitAxis = axis
             self.gutter = gutter
+            let ratioConstraint = makeRatioConstraint(ratio, first: first, axis: axis)
+            self.ratioConstraint = ratioConstraint
 
             // Common cross-axis pinning + gutter along the split axis, with `first`
             // sized to `ratio` of the available space (minus half the gutter).
             if axis == .vertical {
-                let ratioConstraint = first.widthAnchor.constraint(
-                    equalTo: widthAnchor, multiplier: ratio, constant: -gutter / 2)
-                self.ratioConstraint = ratioConstraint
                 NSLayoutConstraint.activate([
                     first.leadingAnchor.constraint(equalTo: leadingAnchor),
                     first.topAnchor.constraint(equalTo: topAnchor),
@@ -84,9 +88,6 @@ final class SplitContainerView: NSView {
                     ratioConstraint,
                 ])
             } else {
-                let ratioConstraint = first.heightAnchor.constraint(
-                    equalTo: heightAnchor, multiplier: ratio, constant: -gutter / 2)
-                self.ratioConstraint = ratioConstraint
                 NSLayoutConstraint.activate([
                     first.leadingAnchor.constraint(equalTo: leadingAnchor),
                     first.trailingAnchor.constraint(equalTo: trailingAnchor),
