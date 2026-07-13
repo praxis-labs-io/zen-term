@@ -112,9 +112,7 @@ class SettingsFormSection: SettingsSection {
     /// Open a titled group: a small caption, a 20pt gap above it, then the rows added inside `build`.
     func addGroup(_ title: String, _ build: () -> Void) {
         guard let stack = rowsStack else { return }
-        let caption = NSTextField(labelWithString: title.uppercased())
-        caption.font = .systemFont(ofSize: 10, weight: .semibold)
-        caption.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        let caption = SettingsDetail.groupCaption(title)
         stack.addArrangedSubview(caption)
         groupCaptions.append(caption)
         if let lastArranged { stack.setCustomSpacing(20, after: lastArranged) }  // gap between groups
@@ -383,11 +381,9 @@ class SettingsFormSection: SettingsSection {
         let visible = stops.filter { !$0.isHidden }
         let window = visible.first?.window
         let anchor = visible.firstIndex { KeyboardFocus.isFocused($0, in: window) }
-        guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: visible.count) else { return }
-        let target = visible[next]
-        target.window?.makeFirstResponder(target)
-        let scrollTarget = rows.first { target.isDescendant(of: $0) } ?? target
-        scrollTarget.scrollToVisible(scrollTarget.bounds.insetBy(dx: 0, dy: -12))
+        SettingsDetail.moveFocus(stops: visible, from: anchor, delta: delta) { [rows] target in
+            rows.first { target.isDescendant(of: $0) } ?? target
+        }
     }
 
     private func rowFor(_ key: String) -> LayoutRow? {

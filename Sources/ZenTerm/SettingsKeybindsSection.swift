@@ -51,9 +51,7 @@ final class SettingsKeybindsSection: SettingsSection {
 
         var previous: NSView?
         for (category, actions) in Self.groups {
-            let caption = NSTextField(labelWithString: category.uppercased())
-            caption.font = .systemFont(ofSize: 10, weight: .semibold)
-            caption.textColor = Theme.current.chrome.ink(alpha: 0.4)
+            let caption = SettingsDetail.groupCaption(category)
             rowsStack.addArrangedSubview(caption)
             groupCaptions.append(caption)
             if let previous { rowsStack.setCustomSpacing(18, after: previous) }  // gap between groups
@@ -325,13 +323,11 @@ final class SettingsKeybindsSection: SettingsSection {
     /// Move keyboard focus between the vertical stops (each row's chip, then "Reset all").
     private func moveFocus(from view: NSView, delta: Int) {
         let stops = rows.map(\.chip) + [resetAllButton]
-        guard let index = stops.firstIndex(where: { $0 === view }) else { return }
-        guard let next = KeyboardFocus.step(from: index, delta: delta, count: stops.count) else { return }
-        let target = stops[next]
-        target.window?.makeFirstResponder(target)
-        // AppKit doesn't scroll to a newly-focused responder — keep it in view. Scroll the whole row
-        // when the stop is a row's chip so the row's inline message shows too; else the stop itself.
-        let scrollTarget: NSView = rows.first { $0.chip === target } ?? target
-        scrollTarget.scrollToVisible(scrollTarget.bounds.insetBy(dx: 0, dy: -12))
+        guard let anchor = stops.firstIndex(where: { $0 === view }) else { return }
+        // Scroll the whole row when the destination is a row's chip so the row's inline message
+        // shows too; otherwise the stop itself.
+        SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta) { [rows] target in
+            rows.first { $0.chip === target } ?? target
+        }
     }
 }

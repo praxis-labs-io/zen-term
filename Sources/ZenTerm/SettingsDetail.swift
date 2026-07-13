@@ -32,6 +32,32 @@ enum SettingsDetail {
         return scroll
     }
 
+    /// A section group caption: 10pt semibold, uppercased, muted ink. The identical builder lived
+    /// in every settings section; the caller retains the returned label so `reapplyTheme` can
+    /// recolor it (the ink role re-derives from `Theme.current` here).
+    static func groupCaption(_ title: String) -> NSTextField {
+        let caption = NSTextField(labelWithString: title.uppercased())
+        caption.font = .systemFont(ofSize: 10, weight: .semibold)
+        caption.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        return caption
+    }
+
+    /// Move keyboard focus to the `delta`-neighbor of `stops` (a no-op at the ends — `step`
+    /// returns nil past either end, it doesn't wrap or clamp) and scroll it into view — the shared
+    /// core of every section's arrow-nav. `anchor` is the current stop's
+    /// index (nil = none focused). `scrollTarget` maps the destination stop to the view actually
+    /// scrolled visible (e.g. the whole row, so its inline message shows), and the `-12` inset is
+    /// the shared breathing room. AppKit doesn't scroll to a newly-focused responder on its own.
+    static func moveFocus(
+        stops: [NSView], from anchor: Int?, delta: Int, scrollTarget: (NSView) -> NSView
+    ) {
+        guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: stops.count) else { return }
+        let target = stops[next]
+        target.window?.makeFirstResponder(target)
+        let scroll = scrollTarget(target)
+        scroll.scrollToVisible(scroll.bounds.insetBy(dx: 0, dy: -12))
+    }
+
     /// Wrap a control in a full-width row that right-aligns it: a leading spacer takes the slack so
     /// the control lands in the same right-hand column as the row editors. The caller pins the row's
     /// width to the list stack. Used for the Reset-all and Restart buttons (and the reset flash) so
