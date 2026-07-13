@@ -6,9 +6,16 @@ import TerminalKit
 /// a missing file yields the built-in default, an unreadable one logs and falls back, and a
 /// partial/typo'd file falls back per-key inside `GhosttyThemeParser`.
 enum ConfigLoader {
+    /// Test-only override for `defaultRoot`, so a settings/commit test can sandbox the config
+    /// directory to a temp path. Set via env would be unreliable — `ProcessInfo.environment` caches,
+    /// so a `setenv` after first access is invisible; this is the deterministic seam, mirroring
+    /// `Theme.setCurrentForTesting`. Always nil in production.
+    static var defaultRootOverrideForTesting: URL?
+
     /// `$XDG_CONFIG_HOME/zen-term/` if set, else `~/.config/zen-term/` — ghostty's own
     /// resolution.
     static var defaultRoot: URL {
+        if let defaultRootOverrideForTesting { return defaultRootOverrideForTesting }
         let base: URL
         let environment = ProcessInfo.processInfo.environment
         if let xdg = environment["XDG_CONFIG_HOME"], !xdg.isEmpty {
