@@ -79,12 +79,12 @@ final class NavSocketServerTests: XCTestCase {
         }
 
         server.start()
+        defer { server.stop() }  // registered before the first throwing sendLine, so a throw can't leak the listener
         try sendLine(#"{"cmd":"focus","dir":"left","pane":1}"#, to: path)
         wait(for: [firstRound], timeout: 3)
 
         server.stop()
         server.start()
-        defer { server.stop() }
         try sendLine(#"{"cmd":"focus","dir":"right","pane":2}"#, to: path)
         wait(for: [secondRound], timeout: 3)
 
