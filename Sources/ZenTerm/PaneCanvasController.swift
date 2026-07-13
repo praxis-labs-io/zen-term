@@ -53,6 +53,11 @@ final class PaneCanvasController: NSObject {
     /// chrome closes the window directly.)
     var onLastPaneClosed: (() -> Void)?
 
+    /// Fired with the leaf ids that vanished on the last reconcile (a ⌘W close or a shell
+    /// exiting on its own) — the single choke point for pane removal. `TabController` uses it
+    /// to prune per-pane focus memory so it can't grow unbounded.
+    var onPanesRemoved: (([PaneID]) -> Void)?
+
     /// Fired when the tab's title may have changed — the focused pane's cwd
     /// changed, or focus moved to a different pane.
     var onTitleChanged: (() -> Void)?
@@ -202,6 +207,7 @@ final class PaneCanvasController: NSObject {
             hostByLeaf[id] = nil
             if let token = tokenByLeaf.removeValue(forKey: id) { NavRegistry.shared.unregister(token: token) }
         }
+        if !diff.removed.isEmpty { onPanesRemoved?(diff.removed) }
         rebuildViews()
     }
 
