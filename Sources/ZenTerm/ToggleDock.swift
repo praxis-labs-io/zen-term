@@ -27,6 +27,7 @@ final class ToggleDock: NSView {
     private static let iconPointSize: CGFloat = 11
 
     init(
+        onNewTab: @escaping () -> Void,
         onSplitH: @escaping () -> Void, onSplitV: @escaping () -> Void,
         onPalette: @escaping () -> Void, onBottom: @escaping () -> Void,
         onRight: @escaping () -> Void, onZoom: @escaping () -> Void,
@@ -34,19 +35,26 @@ final class ToggleDock: NSView {
         toolFloats: [ToolFloat], onToolFloat: @escaping (ToolFloat) -> Void
     ) {
         self.onToolFloat = onToolFloat
-        func button(_ symbol: String, _ label: String, _ onClick: @escaping () -> Void) -> IconButton {
-            IconButton(symbol: symbol, pointSize: Self.iconPointSize, accessibilityLabel: label, onClick: onClick)
+        // Each toggle's tooltip resolves its glyph from the live keymap, so it tracks user rebinds.
+        func button(
+            _ symbol: String, _ label: String, _ action: KeyInterceptor.ReservedChord,
+            _ onClick: @escaping () -> Void
+        ) -> IconButton {
+            IconButton(
+                symbol: symbol, pointSize: Self.iconPointSize, accessibilityLabel: label,
+                shortcut: { CommandCatalog.spec(for: action).shortcut }, onClick: onClick)
         }
-        let splitH = button("rectangle.split.1x2", "Split horizontally", onSplitH)  // ⌘- stacked
-        let splitV = button("rectangle.split.2x1", "Split vertically", onSplitV)  // ⌘⇧\ side-by-side
-        paletteBtn = button("command", "Command palette", onPalette)  // ⌘P
-        bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", onBottom)  // ⌘B
-        rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", onRight)  // ⌘\
-        zoomBtn = button("arrow.up.left.and.arrow.down.right", "Toggle zoom", onZoom)  // ⌘F
-        lazygitBtn = button("git", "Toggle lazygit", onLazygit)  // ⌘G — bundled git mark
+        let newTab = button("plus", "New tab", .newTab, onNewTab)
+        let splitH = button("rectangle.split.1x2", "Split horizontally", .splitHorizontal, onSplitH)
+        let splitV = button("rectangle.split.2x1", "Split vertically", .splitVertical, onSplitV)
+        paletteBtn = button("command", "Command palette", .toggleCommandPalette, onPalette)
+        bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", .toggleBottomDrawer, onBottom)
+        rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", .toggleRightDrawer, onRight)
+        zoomBtn = button("arrow.up.left.and.arrow.down.right", "Toggle zoom", .toggleZoom, onZoom)
+        lazygitBtn = button("git", "Toggle lazygit", .toggleLazygit, onLazygit)  // bundled git mark
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        allButtons = [splitH, splitV, bottomBtn, rightBtn, zoomBtn, paletteBtn, lazygitBtn]
+        allButtons = [newTab, splitH, splitV, bottomBtn, rightBtn, zoomBtn, paletteBtn, lazygitBtn]
         let dividerA = Self.divider()
         let dividerB = Self.divider()
         dividers = [dividerA, dividerB]
@@ -55,7 +63,8 @@ final class ToggleDock: NSView {
         stack.alignment = .centerY
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
-        for view in [splitH, splitV, dividerA, bottomBtn, rightBtn, zoomBtn, dividerB, paletteBtn, lazygitBtn] {
+        // New-tab leads the "create" cluster (new tab + splits), sitting just past the tab strip.
+        for view in [newTab, splitH, splitV, dividerA, bottomBtn, rightBtn, zoomBtn, dividerB, paletteBtn, lazygitBtn] {
             stack.addArrangedSubview(view)
         }
         addSubview(stack)

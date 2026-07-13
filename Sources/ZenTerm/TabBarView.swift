@@ -29,7 +29,6 @@ struct TabBarItem {
 final class TabBarView: NSView {
     private let onSelect: (TabID) -> Void
     private let onClose: (TabID) -> Void
-    private let onNewTab: () -> Void
 
     static let height: CGFloat = 30
 
@@ -51,9 +50,6 @@ final class TabBarView: NSView {
     /// The scrolling content, frame-managed. Holds the chips and owns the tracer layer so the
     /// underline scrolls with them. Not flipped — bottom-left origin matches the tracer math.
     private let docView = NSView()
-    /// The trailing "+" affordance, pinned outside the scroll view so it stays visible no matter
-    /// how far the tabs scroll.
-    private let plusButton: IconButton
     /// The current chips, in order, retained so `layout()` can re-frame them on resize.
     private var chips: [Chip] = []
     /// Edge alpha ramp applied as the scroll view's layer mask (fixed in window space, so it
@@ -79,18 +75,12 @@ final class TabBarView: NSView {
 
     init(
         onSelect: @escaping (TabID) -> Void,
-        onClose: @escaping (TabID) -> Void,
-        onNewTab: @escaping () -> Void
+        onClose: @escaping (TabID) -> Void
     ) {
         self.onSelect = onSelect
         self.onClose = onClose
-        self.onNewTab = onNewTab
-        plusButton = IconButton(
-            symbol: "plus", size: NSSize(width: 22, height: 22),
-            pointSize: 11, accessibilityLabel: "New tab", shortcut: "⌘T", onClick: {})
         super.init(frame: .zero)
         wantsLayer = true
-        plusButton.onClick = { [weak self] in self?.onNewTab() }
 
         docView.wantsLayer = true
         docView.layer?.addSublayer(tracer)
@@ -111,9 +101,6 @@ final class TabBarView: NSView {
         edgeFade.endPoint = CGPoint(x: 1, y: 0.5)
         addSubview(scrollView)
 
-        plusButton.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(plusButton)
-
         let clip = scrollView.contentView
         clip.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(
@@ -127,15 +114,13 @@ final class TabBarView: NSView {
         tracer.isHidden = true  // placed under the active chip on the first render
 
         // Size the scroll strip to the chip height and center it with the same band nudge as the
-        // dock and "+", so the tabs line up with them by construction (rather than depending on
-        // how the scroll/clip views place content vertically).
+        // dock, so the tabs line up with the footer controls by construction (rather than
+        // depending on how the scroll/clip views place content vertically).
         NSLayoutConstraint.activate([
             scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: plusButton.leadingAnchor, constant: -6),
+            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
             scrollView.heightAnchor.constraint(equalToConstant: Self.chipHeight),
             scrollView.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -Self.bandNudge),
-            plusButton.trailingAnchor.constraint(equalTo: trailingAnchor),
-            plusButton.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -Self.bandNudge),
         ])
     }
 
@@ -188,12 +173,11 @@ final class TabBarView: NSView {
     /// `Theme.current` on every access, not cached).
     func reapplyTheme() {
         tracer.backgroundColor = Theme.current.chrome.accent.nsColor.cgColor
-        plusButton.reapplyTheme()
         render(lastItems)
     }
 
-    /// Test hook: the chip views currently in the bar, plus the trailing "+".
-    var chipsForTesting: [NSView] { chips + [plusButton] }
+    /// Test hook: the chip views currently in the bar.
+    var chipsForTesting: [NSView] { chips }
 
     /// Test hook: the tracer underline's current color.
     var tracerColorForTesting: NSColor? { tracer.backgroundColor.flatMap { NSColor(cgColor: $0) } }

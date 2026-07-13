@@ -13,7 +13,7 @@ import XCTest
 /// assertions; the `ReapplyThemeTests` suite uses it.)
 final class TabBarViewTests: XCTestCase {
     func test_reapplyTheme_reRendersStoredSnapshot() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onNewTab: {})
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
         tabBar.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 60),
@@ -36,7 +36,7 @@ final class TabBarViewTests: XCTestCase {
     }
 
     func test_reapplyTheme_resetsTracerColor() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onNewTab: {})
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
         let items = [TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, agentState: .idle)]
         tabBar.render(items)
 
@@ -48,11 +48,11 @@ final class TabBarViewTests: XCTestCase {
     }
 
     func test_reapplyTheme_beforeAnyRender_doesNotCrash() {
-        // No render() call before reapplyTheme() — must not crash on an empty snapshot; render(_:)
-        // always appends the trailing "+" chip, so the bar ends up with exactly that one view.
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onNewTab: {})
+        // No render() call before reapplyTheme() — must not crash on an empty snapshot; with no
+        // tabs rendered the bar holds no chips (new-tab lives in the footer dock now).
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
         tabBar.reapplyTheme()
-        XCTAssertEqual(tabBar.chipsForTesting.count, 1)
+        XCTAssertTrue(tabBar.chipsForTesting.isEmpty)
     }
 
     func test_tabLabel_prefixesCommandGlyphForFirstNine() {
@@ -73,7 +73,7 @@ final class TabBarViewTests: XCTestCase {
     }
 
     func test_overflow_fadesWhenTabsExceedWidth() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onNewTab: {})
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
         tabBar.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 160, height: 60),
@@ -90,7 +90,7 @@ final class TabBarViewTests: XCTestCase {
     }
 
     func test_overflow_noFadeWhenTabsFit() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onNewTab: {})
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
         tabBar.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 60),
@@ -104,7 +104,7 @@ final class TabBarViewTests: XCTestCase {
     }
 
     func test_overflow_leadingFadesOnceScrolledRight() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onNewTab: {})
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
         tabBar.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 160, height: 60),
@@ -121,16 +121,5 @@ final class TabBarViewTests: XCTestCase {
 
         tabBar.scrollToForTesting(x: 80)  // drag the strip rightward
         XCTAssertTrue(tabBar.isLeadingFadedForTesting, "scrolling tabs off the left must fade that edge")
-    }
-
-    func test_plusButton_alwaysPresent() {
-        // The "+" is pinned outside the scroll view, so it survives overflow (it must never
-        // scroll away with the tabs).
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onNewTab: {})
-        let many = (1...20).map {
-            TabBarItem(id: TabID($0), index: $0, title: "tab\($0)", isActive: $0 == 20, agentState: .idle)
-        }
-        tabBar.render(many)
-        XCTAssertTrue(tabBar.chipsForTesting.last is IconButton, "the trailing + must always be mounted")
     }
 }

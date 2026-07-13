@@ -23,23 +23,28 @@ final class IconButton: NSView {
     var activityDotHiddenForTesting: Bool { activityDot.isHidden }
     private let activityDot = NSView()
     private static let dotDiameter: CGFloat = 4
-    /// Distance from the button's top-right corner to the dot's center — enough that the 6pt
-    /// dot clears the 6pt corner radius.
+    /// Distance from the button's top-right corner to the dot's center — inset so the dot reads as
+    /// a small badge tucked inside the corner rather than sitting in the rounded-off corner region.
     private static let dotInset: CGFloat = dotDiameter / 2 + 2
+
+    /// The hover-tooltip label, and an optional resolver for its keybind glyph — evaluated at hover
+    /// time so it reflects the live keymap (ZEN-42). A branded `ChromeTooltip`, not the native
+    /// `toolTip`, which is OS-drawn and unaware of the chrome.
+    private let tooltipLabel: String
+    private let tooltipShortcut: (() -> String?)?
 
     init(
         symbol: String, size: NSSize = NSSize(width: 24, height: 24),
         pointSize: CGFloat = 12, weight: NSFont.Weight = .medium,
-        accessibilityLabel label: String, shortcut: String? = nil,
+        accessibilityLabel label: String, shortcut: (() -> String?)? = nil,
         onClick: @escaping () -> Void
     ) {
         self.onClick = onClick
+        tooltipLabel = label
+        tooltipShortcut = shortcut
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
-        // Hover tooltip (ZEN-42): the accessibility label, plus the live keybind glyph when the
-        // caller knows it — so an icon-only control names itself on hover.
-        toolTip = shortcut.map { "\(label)  \($0)" } ?? label
         // Prefer an SF Symbol; fall back to a bundled brand mark (e.g. "github", "git")
         // from the asset catalog — rendered as a template so it tints exactly like a symbol.
         let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: weight)
@@ -92,11 +97,30 @@ final class IconButton: NSView {
         trackingArea = area
     }
 
-    override func mouseEntered(with event: NSEvent) { isHovered = true }
-    override func mouseExited(with event: NSEvent) { isHovered = false }
-    override func mouseDown(with event: NSEvent) { onClick() }
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        TooltipPresenter.shared.scheduleShow(for: self, label: tooltipLabel, shortcut: tooltipShortcut?())
+    }
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        TooltipPresenter.shared.hide(for: self)
+    }
+    override func mouseDown(with event: NSEvent) {
+        TooltipPresenter.shared.hide(for: self)  // a click dismisses the tooltip
+        onClick()
+    }
     override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
     override func accessibilityPerformPress() -> Bool { onClick(); return true }
+
+    /// Drop the tooltip if this button leaves the window (e.g. the dock rebuilds its floats).
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { TooltipPresenter.shared.hide(for: self) }
+    }
+
+    /// Test hooks for the tooltip content (ZEN-42).
+    var tooltipLabelForTesting: String { tooltipLabel }
+    var tooltipShortcutForTesting: String? { tooltipShortcut?() }
 
     /// Re-apply the live chrome colors after a config change — no relaunch. `update()` already
     /// reads `Theme.current` fresh on every call; it just needs re-triggering since nothing else

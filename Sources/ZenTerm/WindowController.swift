@@ -113,8 +113,7 @@ final class WindowController: NSObject {
         var onNewTab: () -> Void = {}
         tabBar = TabBarView(
             onSelect: { onSelect($0) },
-            onClose: { onClose($0) },
-            onNewTab: { onNewTab() })
+            onClose: { onClose($0) })
         var onSplitH: () -> Void = {}
         var onSplitV: () -> Void = {}
         var onPalette: () -> Void = {}
@@ -124,6 +123,7 @@ final class WindowController: NSObject {
         var onLazygit: () -> Void = {}
         var onToolFloat: (ToolFloat) -> Void = { _ in }
         dock = ToggleDock(
+            onNewTab: { onNewTab() },
             onSplitH: { onSplitH() }, onSplitV: { onSplitV() },
             onPalette: { onPalette() }, onBottom: { onBottom() },
             onRight: { onRight() }, onZoom: { onZoom() }, onLazygit: { onLazygit() },
@@ -133,7 +133,7 @@ final class WindowController: NSObject {
 
         onSelect = { [weak self] in self?.select($0) }
         onClose = { [weak self] in self?.closeTab($0) }
-        onNewTab = { [weak self] in self?.newTab() }
+        onNewTab = { [weak self] in self?.handle(.newTab) }
         // Dock buttons route through `handle(_:)` (not the tab directly) so they obey the
         // same modal gates as the keyboard chords.
         onSplitH = { [weak self] in self?.handle(.splitHorizontal) }
@@ -245,20 +245,16 @@ final class WindowController: NSObject {
         }
         if changed { renderTabBar() }
 
-        // The active tab's drawer busy-state has no push event, so poll it here and re-render
-        // the dock only when a drawer's activity dot flips (ZEN-107).
-        let busy = (
-            activeController?.overlayState.bottomBusy ?? false,
-            activeController?.overlayState.rightBusy ?? false
-        )
-        if busy != lastDrawerBusy {
-            lastDrawerBusy = busy
-            renderDock()
-        }
+        // The active tab's drawer busy-state has no push event, so poll it here (building the
+        // overlay once) and re-render the dock only when a drawer's activity dot flips (ZEN-107).
+        let overlay = activeController?.overlayState
+        let busy = (overlay?.bottomBusy ?? false, overlay?.rightBusy ?? false)
+        if busy != lastDrawerBusy { renderDock() }
     }
 
-    /// The active tab's (bottom, right) drawer busy-state at the last poll — so the dock only
-    /// re-renders when the activity dot actually flips.
+    /// The active tab's (bottom, right) drawer busy-state as of the last `renderDock()` — so the
+    /// poll re-renders only when the activity dot actually flips. Updated on every dock render
+    /// (including tab switches), so a switch to a differently-busy tab can't leave it stale.
     private var lastDrawerBusy = (false, false)
 
     deinit { titlePoll?.invalidate() }  // backstop; tearDown() normally handles it
@@ -1006,9 +1002,11 @@ final class WindowController: NSObject {
     /// Mirror the active tab's overlay state + the window's command-palette state onto the
     /// dock's active tints. Called on tab switch, overlay toggles, and palette open/close.
     private func renderDock() {
-        dock.render(
-            overlay: activeController?.overlayState ?? OverlayState(),
-            paletteOpen: modal?.kind == .commandPalette)
+        let overlay = activeController?.overlayState ?? OverlayState()
+        dock.render(overlay: overlay, paletteOpen: modal?.kind == .commandPalette)
+        // Keep the poll's change-guard in sync with what's actually shown, so a tab switch to a
+        // differently-busy tab re-evaluates instead of comparing against a stale value.
+        lastDrawerBusy = (overlay.bottomBusy, overlay.rightBusy)
     }
 
     /// Wire the first controller once the dict is populated. Called from
