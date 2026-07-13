@@ -13,7 +13,7 @@ import XCTest
 /// assertions; the `ReapplyThemeTests` suite uses it.)
 final class TabBarViewTests: XCTestCase {
     func test_reapplyTheme_reRendersStoredSnapshot() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onNewTab: {})
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
         tabBar.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 60),
@@ -36,7 +36,7 @@ final class TabBarViewTests: XCTestCase {
     }
 
     func test_reapplyTheme_resetsTracerColor() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onNewTab: {})
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
         let items = [TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, agentState: .idle)]
         tabBar.render(items)
 
@@ -48,10 +48,78 @@ final class TabBarViewTests: XCTestCase {
     }
 
     func test_reapplyTheme_beforeAnyRender_doesNotCrash() {
-        // No render() call before reapplyTheme() — must not crash on an empty snapshot; render(_:)
-        // always appends the trailing "+" chip, so the bar ends up with exactly that one view.
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onNewTab: {})
+        // No render() call before reapplyTheme() — must not crash on an empty snapshot; with no
+        // tabs rendered the bar holds no chips (new-tab lives in the footer dock now).
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
         tabBar.reapplyTheme()
-        XCTAssertEqual(tabBar.chipsForTesting.count, 1)
+        XCTAssertTrue(tabBar.chipsForTesting.isEmpty)
+    }
+
+    func test_tabLabel_prefixesCommandGlyphForFirstNine() {
+        // Tabs 1–9 have a real ⌘N shortcut, so the number carries the ⌘ glyph (ZEN-110).
+        let one = TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, agentState: .idle)
+        let nine = TabBarItem(id: TabID(9), index: 9, title: "nine", isActive: false, agentState: .idle)
+        XCTAssertTrue(TabBarView.tabLabelStringForTesting(one).hasPrefix("⌘1 "))
+        XCTAssertTrue(TabBarView.tabLabelStringForTesting(nine).hasPrefix("⌘9 "))
+    }
+
+    func test_tabLabel_bareNumberBeyondNine() {
+        // Tab 10+ has no ⌘ shortcut, so it shows a bare number — the glyph would imply a
+        // binding that doesn't exist.
+        let ten = TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, agentState: .idle)
+        let label = TabBarView.tabLabelStringForTesting(ten)
+        XCTAssertTrue(label.hasPrefix("10 "))
+        XCTAssertFalse(label.contains("⌘"))
+    }
+
+    func test_overflow_fadesWhenTabsExceedWidth() {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        tabBar.translatesAutoresizingMaskIntoConstraints = true
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 160, height: 60),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView?.addSubview(tabBar)
+        tabBar.frame = NSRect(x: 0, y: 0, width: 160, height: 30)
+
+        let many = (1...14).map {
+            TabBarItem(id: TabID($0), index: $0, title: "tab\($0)", isActive: $0 == 1, agentState: .idle)
+        }
+        tabBar.render(many)
+        tabBar.layoutSubtreeIfNeeded()
+        XCTAssertTrue(tabBar.isOverflowFadedForTesting, "many tabs in a narrow bar must fade the trailing edge")
+    }
+
+    func test_overflow_noFadeWhenTabsFit() {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        tabBar.translatesAutoresizingMaskIntoConstraints = true
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 60),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView?.addSubview(tabBar)
+        tabBar.frame = NSRect(x: 0, y: 0, width: 800, height: 30)
+
+        tabBar.render([TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, agentState: .idle)])
+        tabBar.layoutSubtreeIfNeeded()
+        XCTAssertFalse(tabBar.isOverflowFadedForTesting, "a single tab in a wide bar must not fade")
+    }
+
+    func test_overflow_leadingFadesOnceScrolledRight() {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        tabBar.translatesAutoresizingMaskIntoConstraints = true
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 160, height: 60),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView?.addSubview(tabBar)
+        tabBar.frame = NSRect(x: 0, y: 0, width: 160, height: 30)
+
+        let many = (1...14).map {
+            TabBarItem(id: TabID($0), index: $0, title: "tab\($0)", isActive: $0 == 1, agentState: .idle)
+        }
+        tabBar.render(many)
+        tabBar.layoutSubtreeIfNeeded()
+        XCTAssertFalse(tabBar.isLeadingFadedForTesting, "at the start there's nothing off the left edge")
+
+        tabBar.scrollToForTesting(x: 80)  // drag the strip rightward
+        XCTAssertTrue(tabBar.isLeadingFadedForTesting, "scrolling tabs off the left must fade that edge")
     }
 }

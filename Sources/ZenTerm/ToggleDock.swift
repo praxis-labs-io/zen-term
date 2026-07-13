@@ -27,6 +27,7 @@ final class ToggleDock: NSView {
     private static let iconPointSize: CGFloat = 11
 
     init(
+        onNewTab: @escaping () -> Void,
         onSplitH: @escaping () -> Void, onSplitV: @escaping () -> Void,
         onPalette: @escaping () -> Void, onBottom: @escaping () -> Void,
         onRight: @escaping () -> Void, onZoom: @escaping () -> Void,
@@ -34,19 +35,26 @@ final class ToggleDock: NSView {
         toolFloats: [ToolFloat], onToolFloat: @escaping (ToolFloat) -> Void
     ) {
         self.onToolFloat = onToolFloat
-        func button(_ symbol: String, _ label: String, _ onClick: @escaping () -> Void) -> IconButton {
-            IconButton(symbol: symbol, pointSize: Self.iconPointSize, accessibilityLabel: label, onClick: onClick)
+        // Each toggle's tooltip resolves its glyph from the live keymap, so it tracks user rebinds.
+        func button(
+            _ symbol: String, _ label: String, _ action: KeyInterceptor.ReservedChord,
+            _ onClick: @escaping () -> Void
+        ) -> IconButton {
+            IconButton(
+                symbol: symbol, pointSize: Self.iconPointSize, accessibilityLabel: label,
+                shortcut: { CommandCatalog.spec(for: action).shortcut }, onClick: onClick)
         }
-        let splitH = button("rectangle.split.1x2", "Split horizontally", onSplitH)  // ⌘- stacked
-        let splitV = button("rectangle.split.2x1", "Split vertically", onSplitV)  // ⌘⇧\ side-by-side
-        paletteBtn = button("command", "Command palette", onPalette)  // ⌘P
-        bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", onBottom)  // ⌘B
-        rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", onRight)  // ⌘\
-        zoomBtn = button("arrow.up.left.and.arrow.down.right", "Toggle zoom", onZoom)  // ⌘F
-        lazygitBtn = button("git", "Toggle lazygit", onLazygit)  // ⌘G — bundled git mark
+        let newTab = button("plus", "New tab", .newTab, onNewTab)
+        let splitH = button("rectangle.split.1x2", "Split horizontally", .splitHorizontal, onSplitH)
+        let splitV = button("rectangle.split.2x1", "Split vertically", .splitVertical, onSplitV)
+        paletteBtn = button("command", "Command palette", .toggleCommandPalette, onPalette)
+        bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", .toggleBottomDrawer, onBottom)
+        rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", .toggleRightDrawer, onRight)
+        zoomBtn = button("arrow.up.left.and.arrow.down.right", "Toggle zoom", .toggleZoom, onZoom)
+        lazygitBtn = button("git", "Toggle lazygit", .toggleLazygit, onLazygit)  // bundled git mark
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        allButtons = [splitH, splitV, bottomBtn, rightBtn, zoomBtn, paletteBtn, lazygitBtn]
+        allButtons = [newTab, splitH, splitV, bottomBtn, rightBtn, zoomBtn, paletteBtn, lazygitBtn]
         let dividerA = Self.divider()
         let dividerB = Self.divider()
         dividers = [dividerA, dividerB]
@@ -55,7 +63,8 @@ final class ToggleDock: NSView {
         stack.alignment = .centerY
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
-        for view in [splitH, splitV, dividerA, bottomBtn, rightBtn, zoomBtn, dividerB, paletteBtn, lazygitBtn] {
+        // New-tab leads the "create" cluster (new tab + splits), sitting just past the tab strip.
+        for view in [newTab, splitH, splitV, dividerA, bottomBtn, rightBtn, zoomBtn, dividerB, paletteBtn, lazygitBtn] {
             stack.addArrangedSubview(view)
         }
         addSubview(stack)
@@ -72,6 +81,16 @@ final class ToggleDock: NSView {
 
     /// Test hook: the ids of the per-float buttons currently mounted in the dock.
     var toolFloatButtonIDsForTesting: Set<String> { Set(toolFloatBtns.keys) }
+
+    /// Test hooks: whether each drawer toggle currently shows its busy activity dot (ZEN-107).
+    var bottomActivityForTesting: Bool { bottomBtn.showsActivity }
+    var rightActivityForTesting: Bool { rightBtn.showsActivity }
+
+    /// Test hook: whether the fixed new-tab button is mounted (ZEN-115 moved it from the tab strip
+    /// into the dock, so it must always be present regardless of tab overflow).
+    var hasNewTabButtonForTesting: Bool {
+        stack.arrangedSubviews.contains { ($0 as? IconButton)?.accessibilityLabel() == "New tab" }
+    }
 
     /// Rebuild the per-float buttons at the tail of the dock from the current catalog — called on
     /// init and whenever a config change adds / edits / removes a float, so the dock reflects it with
@@ -106,28 +125,33 @@ final class ToggleDock: NSView {
         for (id, btn) in toolFloatBtns { btn.isActive = overlay.activeToolFloatID == id }
 
         // A float covers the tab, so zoom/drawer state beneath it would read as lit-but-hidden.
-        if overlay.isLazygitOpen || overlay.activeToolFloatID != nil {
+        let floatCoversTab = overlay.isLazygitOpen || overlay.activeToolFloatID != nil
+        if floatCoversTab {
             zoomBtn.isActive = false
             bottomBtn.isActive = false
             rightBtn.isActive = false
-            return
+        } else {
+            zoomBtn.isActive = overlay.zoomed != nil
+            switch overlay.zoomed {
+            case nil:
+                bottomBtn.isActive = overlay.isBottomOpen
+                rightBtn.isActive = overlay.isRightOpen
+            case .pane:
+                bottomBtn.isActive = false
+                rightBtn.isActive = false
+            case .bottomDrawer:
+                bottomBtn.isActive = true
+                rightBtn.isActive = false
+            case .rightDrawer:
+                bottomBtn.isActive = false
+                rightBtn.isActive = true
+            }
         }
 
-        zoomBtn.isActive = overlay.zoomed != nil
-        switch overlay.zoomed {
-        case nil:
-            bottomBtn.isActive = overlay.isBottomOpen
-            rightBtn.isActive = overlay.isRightOpen
-        case .pane:
-            bottomBtn.isActive = false
-            rightBtn.isActive = false
-        case .bottomDrawer:
-            bottomBtn.isActive = true
-            rightBtn.isActive = false
-        case .rightDrawer:
-            bottomBtn.isActive = false
-            rightBtn.isActive = true
-        }
+        // A busy drawer earns a dot so its live process is evident from the footer, whether the
+        // drawer is currently shown or hidden (ZEN-107).
+        bottomBtn.showsActivity = overlay.bottomBusy
+        rightBtn.showsActivity = overlay.rightBusy
     }
 
     /// Re-apply the live chrome colors to every button + divider after a config change — no

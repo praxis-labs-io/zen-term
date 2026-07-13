@@ -16,22 +16,48 @@ struct TabBarItem {
 }
 
 /// The bottom-left numbered tab bar. Stateless beyond its last rendered snapshot;
-/// selection/close/new all flow out through callbacks. Clicking a tab selects it;
-/// middle-clicking a tab closes it; the trailing "+" chip makes a new tab. The
-/// active tab is marked with an iris underline; the rounded box is a hover-only
-/// affordance shared by tabs and the "+".
+/// selection/close flow out through callbacks. Clicking a tab selects it; middle-clicking a tab
+/// closes it. The active tab is marked with an iris underline. When the tabs overflow the bar they
+/// scroll horizontally with no scroller, the active tab is kept in view, and each edge fades
+/// when tabs sit off that side (ZEN-115). New-tab lives in the footer dock, not here.
+///
+/// The chips are laid out by explicit frame rather than a stack view: inside a scroll view an
+/// `NSStackView`'s intrinsic width isn't authoritative, so the document view stayed capped and
+/// later chips were clipped. Manual layout (recomputed in `layout()`, so it tracks window
+/// resizes) keeps the content width exact.
 final class TabBarView: NSView {
     private let onSelect: (TabID) -> Void
     private let onClose: (TabID) -> Void
-    private let onNewTab: () -> Void
 
     static let height: CGFloat = 30
+
+    private static let leadingInset: CGFloat = 12
+    private static let chipSpacing: CGFloat = 4
+    private static let chipHeight: CGFloat = 22
+    /// The chips ride 6pt up so they read as centered in the whole band between the terminal
+    /// content and the window edge, matching the footer dock's nudge.
+    private static let bandNudge: CGFloat = 6
+    /// The last ~28pt at each edge over which overflowing tabs dissolve into the backdrop.
+    private static let fadeWidth: CGFloat = 28
 
     fileprivate static var activeInk: NSColor { Theme.current.chrome.ink(alpha: 1) }
     fileprivate static var idleInk: NSColor { Theme.current.chrome.ink(alpha: 0.55) }
     fileprivate static var numberInk: NSColor { Theme.current.chrome.ink(alpha: 0.5) }
 
-    private let stack = NSStackView()
+    /// Horizontal scroll host for the chips — no visible scroller; overflow scrolls and fades.
+    private let scrollView = NSScrollView()
+    /// The scrolling content, frame-managed. Holds the chips and owns the tracer layer so the
+    /// underline scrolls with them. Not flipped — bottom-left origin matches the tracer math.
+    private let docView = NSView()
+    /// The current chips, in order, retained so `layout()` can re-frame them on resize.
+    private var chips: [Chip] = []
+    /// Edge alpha ramp applied as the scroll view's layer mask (fixed in window space, so it
+    /// doesn't scroll): opaque across the strip, fading to clear over the leading/trailing
+    /// `fadeWidth` when tabs are scrolled off that side. Theme-independent — only the alpha
+    /// channel is used to dissolve tabs into whatever is behind them (like `FloatShadow`'s
+    /// documented exception), so no chrome color is involved. Each edge's ramp is toggled
+    /// fully-opaque when nothing overflows past it.
+    private let edgeFade = CAGradientLayer()
     /// A single iris underline that slides along the bar to the active tab (a tracer),
     /// rather than a per-chip underline snapping on/off.
     /// Owned (not an NSView backing layer) so its anchor point is ours: a left-edge anchor
@@ -48,42 +74,63 @@ final class TabBarView: NSView {
 
     init(
         onSelect: @escaping (TabID) -> Void,
-        onClose: @escaping (TabID) -> Void,
-        onNewTab: @escaping () -> Void
+        onClose: @escaping (TabID) -> Void
     ) {
         self.onSelect = onSelect
         self.onClose = onClose
-        self.onNewTab = onNewTab
         super.init(frame: .zero)
         wantsLayer = true
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.spacing = 4
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
+
+        docView.wantsLayer = true
+        docView.layer?.addSublayer(tracer)
+
+        scrollView.wantsLayer = true
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasHorizontalScroller = false
+        scrollView.hasVerticalScroller = false
+        scrollView.horizontalScrollElasticity = .allowed
+        scrollView.verticalScrollElasticity = .none
+        scrollView.automaticallyAdjustsContentInsets = false
+        scrollView.contentInsets = .init()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.documentView = docView
+        scrollView.layer?.mask = edgeFade
+        edgeFade.startPoint = CGPoint(x: 0, y: 0.5)
+        edgeFade.endPoint = CGPoint(x: 1, y: 0.5)
+        addSubview(scrollView)
+
+        let clip = scrollView.contentView
+        clip.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(clipBoundsChanged),
+            name: NSView.boundsDidChangeNotification, object: clip)
 
         tracer.backgroundColor = Theme.current.chrome.accent.nsColor.cgColor
         tracer.cornerRadius = 1
         tracer.anchorPoint = CGPoint(x: 0, y: 0.5)  // position.x is the left edge
         tracer.zPosition = 1  // above the chips regardless of sublayer order
         tracer.isHidden = true  // placed under the active chip on the first render
-        layer?.addSublayer(tracer)
-        // Nudge up by half the pane canvas's 12pt bottom gutter so the chips read as
-        // centered in the whole band between the terminal content and the window edge,
-        // not just within this bar's own height. (This view's superview is flipped, so
-        // a negative centerY constant moves the stack visually up.)
+
+        // Size the scroll strip to the chip height and center it with the same band nudge as the
+        // dock, so the tabs line up with the footer controls by construction (rather than
+        // depending on how the scroll/clip views place content vertically).
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            stack.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -6),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -12),
+            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            scrollView.heightAnchor.constraint(equalToConstant: Self.chipHeight),
+            scrollView.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -Self.bandNudge),
         ])
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    deinit { NotificationCenter.default.removeObserver(self) }
+
     func render(_ items: [TabBarItem]) {
         lastItems = items
-        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        chips.forEach { $0.removeFromSuperview() }
+        chips = []
         var activeChip: Chip?
         for item in items {
             let id = item.id
@@ -91,27 +138,31 @@ final class TabBarView: NSView {
                 attributed: Self.tabLabel(item),
                 onClick: { [weak self] in self?.onSelect(id) },
                 onMiddleClick: { [weak self] in self?.onClose(id) })
-            stack.addArrangedSubview(chip)
+            docView.addSubview(chip)
+            chips.append(chip)
             if item.isActive { activeChip = chip }
         }
-        let plus = IconButton(
-            symbol: "plus", size: NSSize(width: 22, height: 22),
-            pointSize: 11, accessibilityLabel: "New tab",
-            onClick: { [weak self] in self?.onNewTab() })
-        stack.addArrangedSubview(plus)
+        layoutChips()
 
         // Slide the tracer to the active tab. Animate only when the active tab actually
         // changed (not on the first render, nor a re-render of the same selection).
         let newActive = items.first(where: \.isActive)?.id
-        layoutSubtreeIfNeeded()  // resolve chip frames before measuring the underline
         if let activeChip {
-            let shouldAnimate = activeTabID != nil && activeTabID != newActive
-            moveTracer(to: tracerFrame(for: activeChip), animated: shouldAnimate)
+            let selectionChanged = activeTabID != newActive
+            moveTracer(to: tracerFrame(for: activeChip), animated: activeTabID != nil && selectionChanged)
             tracer.isHidden = false
+            // Reveal the active tab only when the selection actually moves — not on a title-poll
+            // re-render, which would otherwise yank the strip back while the user scrolls it. Pad by
+            // `fadeWidth` on each side so the revealed tab clears the edge fade instead of sitting
+            // under it.
+            if selectionChanged {
+                activeChip.scrollToVisible(activeChip.bounds.insetBy(dx: -Self.fadeWidth, dy: 0))
+            }
         } else {
             tracer.isHidden = true
         }
         activeTabID = newActive
+        updateFade()
     }
 
     /// Re-apply the live chrome colors to the already-built bar after a config change — no
@@ -124,17 +175,127 @@ final class TabBarView: NSView {
         render(lastItems)
     }
 
-    /// Test hook: the chip (+ trailing "+") views currently in the bar.
-    var chipsForTesting: [NSView] { stack.arrangedSubviews }
+    /// Test hook: the chip views currently in the bar.
+    var chipsForTesting: [NSView] { chips }
 
     /// Test hook: the tracer underline's current color.
     var tracerColorForTesting: NSColor? { tracer.backgroundColor.flatMap { NSColor(cgColor: $0) } }
 
-    /// The 2pt underline frame under `chip`, spanning its label (inset 9pt each side),
-    /// in this view's coordinates.
+    /// Test hook: whether the trailing-edge overflow fade is currently active.
+    var isOverflowFadedForTesting: Bool { hasRightOverflow }
+
+    /// Test hook: whether the leading-edge overflow fade is currently active.
+    var isLeadingFadedForTesting: Bool { hasLeftOverflow }
+
+    /// Test hook: the rendered label string (number prefix + title) for an item (ZEN-110).
+    static func tabLabelStringForTesting(_ item: TabBarItem) -> String { tabLabel(item).string }
+
+    /// Test hook: scroll the strip to a horizontal offset, as a trackpad drag would.
+    func scrollToForTesting(x: CGFloat) {
+        let clip = scrollView.contentView
+        clip.scroll(to: CGPoint(x: x, y: 0))
+        scrollView.reflectScrolledClipView(clip)
+        updateFade()
+    }
+
+    override func layout() {
+        super.layout()
+        // Re-frame the chips + content width so the strip tracks window resizes, then clamp any
+        // stale scroll offset once the bar is wide enough that the tabs fit again.
+        layoutChips()
+        clampScrollIfContentFits()
+
+        // The mask covers the scroll view in its own (window-fixed) space; its ramp stops are
+        // geometry, so update frame + locations without animation.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        edgeFade.frame = scrollView.bounds
+        let w = scrollView.bounds.width
+        let f = w > 2 * Self.fadeWidth ? Double(Self.fadeWidth / w) : 0
+        edgeFade.locations = [0, NSNumber(value: f), NSNumber(value: 1 - f), 1]
+        CATransaction.commit()
+        updateFade()
+    }
+
+    /// Lay the chips out left-to-right with the leading inset and fixed spacing, then size the
+    /// document view to hug the last chip (no trailing pad, so the final tab never reads as
+    /// phantom overflow that would keep the fade over it).
+    private func layoutChips() {
+        // The scroll strip is already the chip height and centered with the band nudge, so chips
+        // just fill it — no per-chip nudge here.
+        let h = scrollView.contentView.bounds.height > 0 ? scrollView.contentView.bounds.height : Self.chipHeight
+        let chipY = (h - Self.chipHeight) / 2
+        var x = Self.leadingInset
+        for chip in chips {
+            let width = chip.fittingWidth
+            chip.frame = CGRect(x: x, y: chipY, width: width, height: Self.chipHeight)
+            x += width + Self.chipSpacing
+        }
+        let contentWidth = chips.isEmpty ? 0 : x - Self.chipSpacing
+        docView.frame = CGRect(x: 0, y: 0, width: contentWidth, height: h)
+    }
+
+    /// When the bar grows enough that all tabs fit, snap any leftover scroll offset back to the
+    /// start so there's no empty gutter and both edges read as un-faded.
+    private func clampScrollIfContentFits() {
+        let clip = scrollView.contentView
+        if docView.frame.width <= clip.bounds.width, clip.bounds.origin.x > 0 {
+            clip.scroll(to: .zero)
+            scrollView.reflectScrolledClipView(clip)
+        }
+    }
+
+    @objc private func clipBoundsChanged() {
+        updateFade()
+        refreshHover()
+    }
+
+    /// Recompute hover from the actual mouse position. Per-chip tracking areas miss `mouseExited`
+    /// when chips slide under a stationary cursor during a scroll, leaving several stuck hovered;
+    /// this sets exactly the chip under the pointer (if any, and only while this is the key window).
+    private func refreshHover() {
+        guard let window, window.isKeyWindow else {
+            chips.forEach { $0.setHover(false) }
+            return
+        }
+        let mouse = window.mouseLocationOutsideOfEventStream
+        let visible = scrollView.contentView.documentVisibleRect
+        for chip in chips {
+            let underPointer = chip.frame.intersects(visible) && chip.convert(chip.bounds, to: nil).contains(mouse)
+            chip.setHover(underPointer)
+        }
+    }
+
+    /// Whether any chip content sits off-screen to the right of the visible strip.
+    private var hasRightOverflow: Bool {
+        let clip = scrollView.contentView
+        let visibleMaxX = clip.bounds.origin.x + clip.bounds.width
+        return docView.frame.width - visibleMaxX > 0.5
+    }
+
+    /// Whether the strip is scrolled far enough right that content is hidden off the left edge.
+    private var hasLeftOverflow: Bool {
+        scrollView.contentView.bounds.origin.x > 0.5
+    }
+
+    /// Fade each edge only when tabs overflow past it; an edge with nothing beyond stays fully
+    /// opaque so nothing dissolves there. Alpha-only ramp — theme-independent (see `edgeFade`).
+    private func updateFade() {
+        let opaque = CGColor(gray: 1, alpha: 1)
+        let clear = CGColor(gray: 1, alpha: 0)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        edgeFade.colors = [
+            hasLeftOverflow ? clear : opaque, opaque, opaque, hasRightOverflow ? clear : opaque,
+        ]
+        CATransaction.commit()
+    }
+
+    /// The 2pt underline frame under `chip` (its label inset 9pt each side), in the scrolling
+    /// content's coordinates so the tracer scrolls with the chips. Pinned to the bar's bottom
+    /// band rather than the chip's own (nudged) origin so it reads as a consistent underline.
     private func tracerFrame(for chip: NSView) -> CGRect {
-        let f = chip.convert(chip.bounds, to: self)
-        return CGRect(x: f.minX + 9, y: f.minY, width: f.width - 18, height: 2)
+        CGRect(x: chip.frame.minX + 9, y: 0, width: chip.frame.width - 18, height: 2)
     }
 
     /// Set the tracer's frame with no implicit animation (an owned layer would otherwise
@@ -191,8 +352,12 @@ final class TabBarView: NSView {
         case .idle: numberColor = numberInk
         case .waiting: numberColor = Theme.current.chrome.attention.nsColor
         }
+        // ⌘-prefix only tabs 1–9, which have a real ⌘1–⌘9 shortcut; 10+ show a bare number so
+        // the glyph never implies a binding that doesn't exist (ZEN-110). The whole prefix shares
+        // `numberColor`, so it recolors with the agent-waiting state.
+        let prefix = item.index <= 9 ? "⌘\(item.index) " : "\(item.index) "
         let s = NSMutableAttributedString(
-            string: "\(item.index) ",
+            string: prefix,
             attributes: [.font: font, .foregroundColor: numberColor])
         s.append(
             NSAttributedString(
@@ -202,12 +367,18 @@ final class TabBarView: NSView {
     }
 
     /// A rounded box holding a centered label. The box background appears on hover
-    /// only; the active tab is marked by the shared tracer underline. Used for both tabs
-    /// and the "+" affordance so they share hover feel and stay vertically aligned.
+    /// only; the active tab is marked by the shared tracer underline. Used for tabs so they
+    /// share hover feel and stay vertically aligned.
     private final class Chip: NSView {
         private let onClick: () -> Void
         private let onMiddleClick: (() -> Void)?
         private var isHovered = false
+        private let label: NSTextField
+
+        /// The width this chip wants: its label plus the 9pt inset on each side. Read from the
+        /// label's intrinsic size (not `fittingSize`) so it's independent of the frame the parent
+        /// assigns during manual layout.
+        var fittingWidth: CGFloat { label.intrinsicContentSize.width + 18 }
 
         init(
             attributed: NSAttributedString,
@@ -215,19 +386,17 @@ final class TabBarView: NSView {
         ) {
             self.onClick = onClick
             self.onMiddleClick = onMiddleClick
+            label = NSTextField(labelWithAttributedString: attributed)
             super.init(frame: .zero)
             wantsLayer = true
             layer?.cornerRadius = 6
 
-            let label = NSTextField(labelWithAttributedString: attributed)
             label.translatesAutoresizingMaskIntoConstraints = false
             addSubview(label)
 
             NSLayoutConstraint.activate([
                 label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
-                label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
                 label.centerYAnchor.constraint(equalTo: centerYAnchor),
-                heightAnchor.constraint(equalToConstant: 22),
             ])
         }
 
@@ -243,8 +412,15 @@ final class TabBarView: NSView {
                     owner: self))
         }
 
-        override func mouseEntered(with event: NSEvent) { isHovered = true; updateBackground() }
-        override func mouseExited(with event: NSEvent) { isHovered = false; updateBackground() }
+        override func mouseEntered(with event: NSEvent) { setHover(true) }
+        override func mouseExited(with event: NSEvent) { setHover(false) }
+
+        /// Externally-driven hover (from the bar's scroll-time recompute), a no-op when unchanged.
+        func setHover(_ on: Bool) {
+            guard isHovered != on else { return }
+            isHovered = on
+            updateBackground()
+        }
         override func mouseDown(with event: NSEvent) { onClick() }
         override func otherMouseDown(with event: NSEvent) {
             if event.buttonNumber == 2 { onMiddleClick?() }  // middle-click closes

@@ -16,8 +16,8 @@ final class ToggleDockTests: XCTestCase {
 
     private func makeDock(_ floats: [ToolFloat]) -> ToggleDock {
         ToggleDock(
-            onSplitH: {}, onSplitV: {}, onPalette: {}, onBottom: {}, onRight: {}, onZoom: {},
-            onLazygit: {}, toolFloats: floats, onToolFloat: { _ in })
+            onNewTab: {}, onSplitH: {}, onSplitV: {}, onPalette: {}, onBottom: {}, onRight: {},
+            onZoom: {}, onLazygit: {}, toolFloats: floats, onToolFloat: { _ in })
     }
 
     func test_setToolFloats_rebuildsButtonsForCatalog() {
@@ -32,5 +32,44 @@ final class ToggleDockTests: XCTestCase {
 
         dock.setToolFloats([])  // remove all
         XCTAssertTrue(dock.toolFloatButtonIDsForTesting.isEmpty)
+    }
+
+    func test_render_showsActivityDotForBusyDrawer() {
+        let dock = makeDock([])
+
+        var overlay = OverlayState()
+        overlay.bottomBusy = true
+        dock.render(overlay: overlay, paletteOpen: false)
+        XCTAssertTrue(dock.bottomActivityForTesting, "a busy bottom drawer must dot its toggle")
+        XCTAssertFalse(dock.rightActivityForTesting)
+
+        overlay.bottomBusy = false
+        overlay.rightBusy = true
+        dock.render(overlay: overlay, paletteOpen: false)
+        XCTAssertFalse(dock.bottomActivityForTesting)
+        XCTAssertTrue(dock.rightActivityForTesting)
+    }
+
+    func test_render_dotShowsEvenWhileDrawerOpen() {
+        // The dot signals a live process regardless of whether the drawer is currently shown.
+        let dock = makeDock([])
+        var overlay = OverlayState()
+        overlay.isBottomOpen = true
+        overlay.bottomBusy = true
+        dock.render(overlay: overlay, paletteOpen: false)
+        XCTAssertTrue(dock.bottomActivityForTesting)
+    }
+
+    func test_render_noDotWhenIdle() {
+        let dock = makeDock([])
+        dock.render(overlay: OverlayState(), paletteOpen: false)
+        XCTAssertFalse(dock.bottomActivityForTesting)
+        XCTAssertFalse(dock.rightActivityForTesting)
+    }
+
+    func test_newTabButton_isMounted() {
+        // New-tab moved from the tab strip into the dock (ZEN-115); it must always be present so it
+        // never scrolls away with the tabs.
+        XCTAssertTrue(makeDock([]).hasNewTabButtonForTesting)
     }
 }

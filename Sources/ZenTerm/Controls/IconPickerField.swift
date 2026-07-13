@@ -184,7 +184,8 @@ final class IconPickerField: NSView {
                 symbol: symbol, size: NSSize(width: Self.cellSize, height: Self.cellSize),
                 pointSize: 15, accessibilityLabel: IconCatalog.displayName(symbol)
             ) { [weak self] in self?.commit(symbol) }
-            cell.toolTip = IconCatalog.displayName(symbol)  // hover to name the glyph
+            // IconButton now owns hover labeling via its branded tooltip (the accessibility label
+            // above is the glyph name), so no native cell.toolTip is needed.
             row?.addArrangedSubview(cell)
             cells.append(cell)
         }
