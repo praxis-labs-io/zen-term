@@ -874,6 +874,10 @@ final class TabController: NSObject {
     private var lastZoomBlockToast: (verb: String, at: Date)?
     private static let zoomBlockToastThrottle: TimeInterval = 3
 
+    /// The last "nothing in that direction" nav toast (direction + when) — same auto-repeat
+    /// coalescing as the zoom toast, keyed by direction so a distinct dead direction still speaks.
+    private var lastNoNeighborToast: (direction: Direction, at: Date)?
+
     /// A grid command (split / navigate / resize / drawers) was invoked while zoomed. Zoom is
     /// a strict focus mode, so instead of silently doing nothing, point the user at ⌘F.
     private func toastZoomBlocked(_ verb: String) {
@@ -888,6 +892,35 @@ final class TabController: NSObject {
             ToastContent(
                 variant: .info, title: "Zoom mode",
                 message: "Exit zoom (⌘F) to \(verb)."))
+    }
+
+    /// A ⌘hjkl nav found no panel in `direction` — the edge of the layout, or only a diagonal
+    /// that isn't a straight neighbor. Speak it instead of a silent no-op; held chords auto-repeat,
+    /// so coalesce repeats of the SAME direction into one card while a distinct dead direction
+    /// always speaks.
+    private func toastNoNeighbor(_ direction: Direction) {
+        let now = Date()
+        if let last = lastNoNeighborToast, last.direction == direction,
+            now.timeIntervalSince(last.at) < Self.zoomBlockToastThrottle
+        {
+            return
+        }
+        lastNoNeighborToast = (direction, now)
+        let action: KeyInterceptor.ReservedChord
+        let word: String
+        switch direction {
+        case .left: action = .navLeft; word = "left"
+        case .right: action = .navRight; word = "right"
+        case .up: action = .navUp; word = "up"
+        case .down: action = .navDown; word = "down"
+        }
+        // Title is the command itself ("Focus Pane Left"), from the same catalog the palette
+        // uses so it tracks any rename; the message says what's missing.
+        onRequestToast?(
+            ToastContent(
+                variant: .info,
+                title: CommandCatalog.spec(for: action).title,
+                message: "No pane \(word) to focus"))
     }
 
     // MARK: cross-panel spatial nav (⌘hjkl)
@@ -929,7 +962,10 @@ final class TabController: NSObject {
             (remembered.map { isPanel($0, inDirection: direction, from: origin, frames: frames) } == true)
             ? remembered
             : nearestLeaf(from: origin, frames: frames, direction: direction)
-        guard let target else { return }
+        guard let target else {
+            toastNoNeighbor(direction)  // no silent no-op — every dead nav attempt speaks
+            return
+        }
 
         navReturn[target, default: [:]][direction.opposite] = origin  // enable the return hop
         focusPanel(target)
@@ -978,22 +1014,16 @@ final class TabController: NSObject {
         }
     }
 
-    /// Whether `candidate` lies in `direction` from `origin`, using the same y-flipped
-    /// frames and thresholds as `nearestLeaf` — so a remembered return target is only used
-    /// when it's still spatially in that direction.
+    /// Whether `candidate` lies in `direction` from `origin` — PaneKit's `lies`, which
+    /// also requires perpendicular-axis overlap. Center offset alone let the full-height
+    /// right drawer pass as "up" from the bottom drawer (it's diagonal), so a ⌃J hop out
+    /// of it poisoned the return memory and ⌃K from the bottom drawer skipped the canvas
+    /// for the rest of the session.
     private func isPanel(
         _ candidate: PaneID, inDirection direction: Direction,
         from origin: PaneID, frames: [PaneID: CGRect]
     ) -> Bool {
-        guard let s = frames[origin], let r = frames[candidate] else { return false }
-        let dx = r.midX - s.midX
-        let dy = r.midY - s.midY
-        switch direction {
-        case .left: return dx < -4
-        case .right: return dx > 4
-        case .up: return dy < -4
-        case .down: return dy > 4
-        }
+        lies(candidate, inDirection: direction, from: origin, frames: frames)
     }
 
     /// Resize whichever panel holds focus by moving its edge in `direction`. For a pane
