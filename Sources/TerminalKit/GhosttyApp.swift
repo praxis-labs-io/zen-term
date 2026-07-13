@@ -43,6 +43,8 @@ final class GhosttyApp {
     // Dedupe redundant app-global swaps: N per-surface `applyAppearance` callers for one
     // config change should trigger at most one real ghostty_app_update_config.
     private var lastConfigText: String?
+    // NSApp activate/resign observers keeping libghostty's app-level focus in sync.
+    private var focusObservers: [NSObjectProtocol] = []
 
     private init(theme: TerminalTheme?, behavior: TerminalBehavior?) {
         // Point the embedded lib at the resources staged from the pinned vendor/ghostty
@@ -84,9 +86,33 @@ final class GhosttyApp {
         }
         self.app = app
         ghostty_app_set_focus(app, NSApp.isActive)
+        observeAppFocus()
     }
 
+    deinit { focusObservers.forEach { NotificationCenter.default.removeObserver($0) } }
+
     func tick() { ghostty_app_tick(app) }
+
+    /// Keep libghostty's app-level focus in sync with `NSApp`. It's set once at creation, but the
+    /// app backgrounds/foregrounds afterward, and libghostty gates cursor-blink (and other
+    /// focus-conditional behavior) on this flag — without these observers it believes the app is
+    /// focused forever. Ghostty's own macOS app syncs on these same notifications.
+    private func observeAppFocus() {
+        let center = NotificationCenter.default
+        let apply: (Bool) -> Void = { [weak self] focused in
+            guard let self else { return }
+            ghostty_app_set_focus(self.app, focused)
+            self.tick()  // pump so the focus change takes effect promptly (blink, etc.)
+        }
+        focusObservers = [
+            center.addObserver(
+                forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+            ) { _ in apply(true) },
+            center.addObserver(
+                forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
+            ) { _ in apply(false) },
+        ]
+    }
 
     /// Re-load the app-global libghostty config from a fresh TerminalTheme/behavior and swap it
     /// live (re-themes every surface). Deduped by generated text so N per-surface callers trigger
