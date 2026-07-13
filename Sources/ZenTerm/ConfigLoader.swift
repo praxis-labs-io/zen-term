@@ -92,14 +92,9 @@ enum ConfigLoader {
             NSLog("ConfigLoader: could not read \(url.path): \(error) — no workspaces loaded")
             return []
         }
-        for workspace in workspaces where !directoryExists(workspace.path) {
+        for workspace in workspaces where !PathDisplay.isDirectory(workspace.path) {
             NSLog("ConfigLoader: workspace `\(workspace.title)` path \(workspace.path.path) isn't a directory")
         }
         return workspaces
-    }
-
-    private static func directoryExists(_ url: URL) -> Bool {
-        var isDirectory: ObjCBool = false
-        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 }

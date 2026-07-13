@@ -309,7 +309,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         panel.prompt = "Choose"
         let handle: (NSApplication.ModalResponse) -> Void = { [weak self] response in
             guard let self, response == .OK, let url = panel.url else { return }
-            self.folderField.setText(self.abbreviate(url.path))
+            self.folderField.setText(PathDisplay.abbreviatingHome(url.path))
             if !self.titleEditedByUser { self.titleField.setText(url.lastPathComponent) }
             self.refreshValidity()
         }
@@ -449,7 +449,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             folderMessage = "Choose or type a workspace folder."
         } else if folderText.contains("\"") {
             folderMessage = "The path can’t contain a \" character."  // the format has no escaping
-        } else if !folderText.isEmpty, let folder = resolvedFolder(), !directoryExists(folder) {
+        } else if !folderText.isEmpty, let folder = resolvedFolder(), !PathDisplay.isDirectory(folder) {
             folderMessage = "That folder doesn’t exist."
         }
         flag(folderGroup, field: folderField.field, folderMessage)
@@ -480,16 +480,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private func refreshValidity() { validate(includeRequired: false) }
 
     // MARK: layout helpers
-
-    private func abbreviate(_ path: String) -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
-    }
-
-    private func directoryExists(_ url: URL) -> Bool {
-        var isDirectory: ObjCBool = false
-        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
-    }
 
     /// A small-caps caption; a required field marks it with a trailing accent asterisk.
     private static func caption(_ text: String, required: Bool) -> NSTextField {
