@@ -47,6 +47,11 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     /// The chord captured for the shortcut, or nil until one is recorded. The float's single source
     /// of truth for its key — rendered into the chip and written as the `key:` token.
     private var capturedChord: Chord?
+    /// The shared keybind-capture popover (same as the Keybinds section) + its modal backdrop and the
+    /// timer that closes it after a successful capture.
+    private var hintBubble: KeybindHintBubble?
+    private var hintBackdrop: NSView?
+    private var captureCloseTimer: DispatchWorkItem?
 
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary, keyEquivalent: "\u{1b}")
     private let submitButton = AppButton(
@@ -115,7 +120,9 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
     func animateOut(completion: @escaping () -> Void) {
         guard dismiss.begin() else { return }
+        captureCloseTimer?.cancel()
         capturer?.endCapture()  // never leave a capture handler armed after the form closes
+        hideHint()
         Motion.springScaleFade(card, appearing: false, completion: completion)
     }
 
@@ -274,47 +281,120 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
     // MARK: chord capture
 
-    /// Arm the shortcut chip: record the next chord through the interceptor (so an already-bound
-    /// chord isn't pre-empted). An invalid chord (no modifier) shows a message and stays armed; a
-    /// valid one commits and disarms. Esc cancels; Backspace clears.
+    /// Arm the shortcut chip and float the shared keybind-capture popover (`KeybindHintBubble`) beside
+    /// it — the same UX as the Keybinds section. The next chord records through the interceptor (so an
+    /// already-bound chord isn't pre-empted); an invalid chord (no modifier) shows an error in the
+    /// popover and stays armed, a valid one commits with a success line and closes. A backdrop makes
+    /// it modal: an outside click cancels. Esc cancels; Backspace clears.
     private func beginCapture() {
         guard let capturer else {
             chordGroup?.setMessage("Keybind capture is unavailable.")
             return
         }
-        chordChip.setCapturing(true)
         chordGroup?.setMessage(nil)
+        chordChip.setCapturing(true)
+        showHint()
         capturer.beginCapture { [weak self] event in self?.handleCaptureEvent(event) }
     }
 
     private func handleCaptureEvent(_ event: NSEvent) {
-        if event.type == .flagsChanged { return }  // modifier held, no key yet
+        if event.type == .flagsChanged {  // live modifier preview (⌘, ⌘⇧, …) before a key lands
+            hintBubble?.setPreview(Chord.modifierGlyph(event.modifierFlags))
+            return
+        }
         switch KeyboardFocus.key(for: event) {
-        case .escape: endCapture(); return  // cancel — keep the current chord
+        case .escape: endCapture(); renderChord(); return  // cancel — keep the current chord
         case .delete: endCapture(); clearChord(); return  // Backspace → clear
         default: break
         }
         guard let chord = Chord(event: event) else { return }  // unmappable key — keep waiting
+        hintBubble?.setPreview(chord.displayGlyph)
+        hintBubble?.clearError()
         guard chord.command || chord.shift || chord.option || chord.control else {
-            chordGroup?.setMessage("Add at least one modifier (⌘ ⇧ ⌥ ⌃).")
+            hintBubble?.showError("Add at least one modifier (⌘ ⇧ ⌥ ⌃).")
+            positionHint()
             return  // stay armed
         }
+        commit(chord)
+    }
+
+    /// Apply a validated chord: flash a success line in the popover, then close after a short beat.
+    private func commit(_ chord: Chord) {
         capturedChord = chord
-        endCapture()
+        capturer?.endCapture()
         chordChip.render(shortcut: chord.displayGlyph)
-        chordGroup?.setMessage(nil)
+        hintBubble?.setPreview(chord.displayGlyph)
+        hintBubble?.showSuccess("Shortcut saved.")
+        positionHint()
+        let close = DispatchWorkItem { [weak self] in
+            self?.hideHint()
+            self?.chordChip.setCapturing(false)
+        }
+        captureCloseTimer = close
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: close)
         refreshValidity()
     }
 
+    /// End an armed capture immediately (Esc / Delete / outside click); the caller restores or clears.
     private func endCapture() {
+        captureCloseTimer?.cancel()
         capturer?.endCapture()
+        hideHint()
         chordChip.setCapturing(false)
     }
 
+    private func renderChord() { chordChip.render(shortcut: capturedChord?.displayGlyph ?? "") }
+
     private func clearChord() {
         capturedChord = nil
-        chordChip.render(shortcut: "")
+        renderChord()
         refreshValidity()
+    }
+
+    // MARK: capture popover
+
+    /// Float the shared `KeybindHintBubble` over the form, just below the shortcut chip, behind a
+    /// transparent modal backdrop that cancels on an outside click. Mirrors the Keybinds section.
+    private func showHint() {
+        hideHint()
+        let backdrop = BackdropView { [weak self] in self?.cancelCapture() }
+        backdrop.frame = bounds
+        backdrop.autoresizingMask = [.width, .height]
+        addSubview(backdrop)
+        hintBackdrop = backdrop
+        let bubble = KeybindHintBubble()
+        bubble.translatesAutoresizingMaskIntoConstraints = true
+        addSubview(bubble)  // above the backdrop
+        hintBubble = bubble
+        positionHint()
+    }
+
+    private func cancelCapture() {
+        endCapture()
+        renderChord()
+    }
+
+    /// (Re)place the bubble just below the chip — re-run when its height changes (an error/success
+    /// line replacing the instructions grows it). `self` isn't flipped: below the chip = a smaller y;
+    /// if that runs off the top, flip below the chip.
+    private func positionHint() {
+        guard let bubble = hintBubble else { return }
+        bubble.layoutSubtreeIfNeeded()
+        let size = bubble.fittingSize
+        let chipRect = chordChip.convert(chordChip.bounds, to: self)
+        let x = max(8, min(chipRect.midX - size.width / 2, bounds.width - size.width - 8))
+        let maxY = max(8, bounds.height - size.height - 8)
+        var y = chipRect.minY - size.height - 6
+        if y < 8 { y = chipRect.maxY + 6 }
+        y = max(8, min(y, maxY))
+        bubble.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
+    }
+
+    private func hideHint() {
+        hintBubble?.removeFromSuperview()
+        hintBubble = nil
+        hintBackdrop?.removeFromSuperview()
+        hintBackdrop = nil
     }
 
     // MARK: keyboard focus ring

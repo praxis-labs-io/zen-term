@@ -125,6 +125,14 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         XCTAssertEqual(float?.requiresGitRepo, false)
     }
 
+    func test_shortcutCapture_showsSharedKeybindPopover() {
+        let (overlay, capturer, _) = mount()
+        descendants(of: overlay).compactMap { $0 as? KeybindChip }.first?.onActivate?()
+        XCTAssertTrue(capturer.isArmed)
+        let bubble = descendants(of: overlay).compactMap { $0 as? KeybindHintBubble }.first
+        XCTAssertNotNil(bubble, "arming the shortcut capture shows the shared Keybinds popover")
+    }
+
     func test_missingChord_blocksSubmit() {
         let (overlay, _, sink) = mount()
         field(in: overlay, placeholder: "gitdash").setText("dev")
