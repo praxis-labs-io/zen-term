@@ -162,8 +162,8 @@ final class TabController: NSObject {
     var focusedPaneIsVim: Bool {
         switch focusedPanel {
         case .pane: return paneCanvas.focusedPaneIsVim
-        case .bottomDrawer: return bottomDrawerToken.map(NavRegistry.shared.isVim) ?? false
-        case .rightDrawer: return rightDrawerToken.map(NavRegistry.shared.isVim) ?? false
+        case .bottomDrawer, .rightDrawer:
+            return drawerToken(focusedPanel).map(NavRegistry.shared.isVim) ?? false
         }
     }
 
@@ -304,12 +304,10 @@ final class TabController: NSObject {
         paneCanvas.shutdown()
         bottomDrawerSurface?.terminate()
         bottomDrawerSurface = nil
-        bottomDrawerToken.map(NavRegistry.shared.unregister)
-        bottomDrawerToken = nil
+        unregisterDrawerToken(.bottomDrawer)
         rightDrawerSurface?.terminate()
         rightDrawerSurface = nil
-        rightDrawerToken.map(NavRegistry.shared.unregister)
-        rightDrawerToken = nil
+        unregisterDrawerToken(.rightDrawer)
         lazygitOverlay?.removeFromSuperview()
         lazygitOverlay = nil
         lazygitDismissingOverlay?.removeFromSuperview()
@@ -402,23 +400,48 @@ final class TabController: NSObject {
     /// A drawer's launch config: a workspace recipe command runs program-then-shell; nil or the
     /// sentinel `"shell"` opens a plain shell. The workspace env is injected either way.
     private func drawerConfig(command: String?, token: Int) -> TerminalSurfaceConfig {
-        let env = workspaceEnv.merging(NavSocketServer.env(token: token)) { _, new in new }
+        let env = NavSocketServer.env(base: workspaceEnv, token: token)
         if let command, command != "shell" {
             return ShellLaunch.program(command, cwd: focusedCWD, env: env)
         }
         return ShellLaunch.shell(cwd: focusedCWD, env: env)
     }
 
+    /// This tab's live token for a drawer panel, or nil for a closed/exited drawer or `.pane`.
+    private func drawerToken(_ panel: PanelRef) -> Int? {
+        switch panel {
+        case .bottomDrawer: return bottomDrawerToken
+        case .rightDrawer: return rightDrawerToken
+        case .pane: return nil
+        }
+    }
+
     /// Mint and register a nav token for a drawer's shell, so an nvim inside it hands off over
-    /// the socket like a pane does. The route fires only while this drawer holds focus (the
-    /// drawer analog of the pane route's focused-token check).
+    /// the socket like a pane does. The route fires only while this drawer holds focus AND the
+    /// token is still current — the drawer analog of the pane route's focused-token check, so a
+    /// stale command for an exited-then-reopened drawer can't drive navigation.
     private func registerDrawerToken(_ panel: PanelRef) -> Int {
         let token = NavRegistry.shared.mintToken()
         NavRegistry.shared.register(token: token) { [weak self] dir in
-            guard let self, self.focusedPanel == panel else { return }
+            guard let self, self.focusedPanel == panel, self.drawerToken(panel) == token else { return }
             self.navigate(dir)
         }
         return token
+    }
+
+    /// Release a drawer's nav token when its shell dies (self-exit or tab teardown), matching
+    /// the surface's lifetime so `NavRegistry` never keeps an orphaned route or vim flag.
+    private func unregisterDrawerToken(_ panel: PanelRef) {
+        switch panel {
+        case .bottomDrawer:
+            bottomDrawerToken.map(NavRegistry.shared.unregister)
+            bottomDrawerToken = nil
+        case .rightDrawer:
+            rightDrawerToken.map(NavRegistry.shared.unregister)
+            rightDrawerToken = nil
+        case .pane:
+            break
+        }
     }
 
     // MARK: right drawer (⌘|)
@@ -1198,6 +1221,7 @@ extension TabController: TerminalSurfaceDelegate {
             bottomDrawerSurface?.terminate()
             bottomDrawerSurface = nil
             bottomDrawerPanel = nil
+            unregisterDrawerToken(.bottomDrawer)
             isBottomOpen = false
             relayoutPanels()
             // `focusActivePane()` restores BOTH the pane's keyboard first-responder
@@ -1215,6 +1239,7 @@ extension TabController: TerminalSurfaceDelegate {
             rightDrawerSurface?.terminate()
             rightDrawerSurface = nil
             rightDrawerPanel = nil
+            unregisterDrawerToken(.rightDrawer)
             isRightOpen = false
             relayoutPanels()
             // See the bottom-drawer branch above: keep the modal float focused if open,

@@ -24,6 +24,12 @@ final class NavSocketServer {
         ["ZEN_SOCK": socketPath, "ZEN_PANE": String(token)]
     }
 
+    /// `base` with the nav vars layered on top (last-writer-wins), the single recipe both
+    /// pane and drawer launches use so their nvim socket env never drifts apart.
+    static func env(base: [String: String], token: Int) -> [String: String] {
+        base.merging(env(token: token)) { _, new in new }
+    }
+
     /// Applied on the main actor for every decoded command.
     private let apply: (NavCommand) -> Void
     /// The bound socket path. Defaults to the shared `$ZEN_SOCK` location; overridden in

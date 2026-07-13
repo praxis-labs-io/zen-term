@@ -172,7 +172,7 @@ final class PaneCanvasController: NSObject {
     /// The pane's launch environment: the tab's workspace env plus the nav-socket path and
     /// this pane's token, so the nvim plugin inside can address itself over the socket.
     private func navEnv(token: Int) -> [String: String] {
-        workspaceEnv.merging(NavSocketServer.env(token: token)) { _, new in new }
+        NavSocketServer.env(base: workspaceEnv, token: token)
     }
 
     /// Boots the first pane and renders.
