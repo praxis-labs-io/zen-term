@@ -105,16 +105,4 @@ final class SettingsToolsSectionTests: XCTestCase {
 
         XCTAssertEqual(sink.calls.first??.id, "top")
     }
-
-    func test_remove_writesConfigAndDropsRow() throws {
-        try seed(twoFloats)
-        let section = SettingsToolsSection()
-        let detail = mount(section)
-        XCTAssertEqual(rows(in: detail).count, 2)
-
-        rows(in: detail).first { $0.float.id == "dev" }?.onRemove?()
-
-        XCTAssertEqual(GeneralConfig.current.floats.map(\.id), ["top"], "the removed float is gone from config")
-        XCTAssertEqual(rows(in: detail).map(\.float.id), ["top"], "the row list rebuilds without it")
-    }
 }

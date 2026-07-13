@@ -21,6 +21,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
     private final class Sink {
         var submitted: [ToolFloat] = []
         var cancelled = 0
+        var deleted = 0
     }
 
     private var window: NSWindow?
@@ -54,7 +55,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
     }
 
     private func mount(
-        editing: ToolFloat? = nil, existingIDs: Set<String> = []
+        editing: ToolFloat? = nil, existingIDs: Set<String> = [], withDelete: Bool = false
     ) -> (overlay: ToolFloatFormOverlay, capturer: FakeCapturer, sink: Sink) {
         let capturer = FakeCapturer()
         let sink = Sink()
@@ -62,7 +63,8 @@ final class ToolFloatFormOverlayTests: XCTestCase {
             editing: editing, existingIDs: existingIDs, capturer: capturer,
             background: Theme.current.chrome.background.nsColor,
             onSubmit: { sink.submitted.append($0) },
-            onCancel: { sink.cancelled += 1 })
+            onCancel: { sink.cancelled += 1 },
+            onDelete: withDelete ? { sink.deleted += 1 } : nil)
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 480, height: 640),
             styleMask: [.borderless], backing: .buffered, defer: false)
@@ -171,6 +173,26 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
         submit(in: overlay)
         XCTAssertEqual(sink.submitted.first?.icon, IconCatalog.all[1])
+    }
+
+    func test_editForm_deleteButton_firesOnDelete() {
+        let existing = ToolFloat(
+            id: "dev", title: "Open dev", icon: IconCatalog.defaultSymbol, command: "vim",
+            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false, emptyGuard: nil,
+            toggle: Chord(command: true, shift: true, key: "d"))
+        let (overlay, _, sink) = mount(editing: existing, withDelete: true)
+        let delete = descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Delete" }
+        XCTAssertNotNil(delete, "editing an existing float shows a Delete button")
+
+        delete?.onTap()
+
+        XCTAssertEqual(sink.deleted, 1)
+    }
+
+    func test_addForm_hasNoDeleteButton() {
+        let (overlay, _, _) = mount()  // add mode
+        let delete = descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Delete" }
+        XCTAssertNil(delete, "adding a new float has no Delete button")
     }
 
     func test_edit_prefillsAndSavesChangedCommand() {

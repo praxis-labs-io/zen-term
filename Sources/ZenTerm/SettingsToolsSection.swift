@@ -1,11 +1,11 @@
 import AppKit
 
-/// The Tools settings section: the configured tool floats, with add / edit / remove. Each float is a
-/// focusable `ToolFloatRow` — Return / click opens the edit form, Backspace removes it, Up/Down move
-/// between rows, Left exits to the nav, Esc closes the card. A trailing "Add tool float" button opens
-/// a blank form. Add / edit route out through `onEditFloat` (the host presents `ToolFloatFormOverlay`
-/// and writes on submit); remove writes inline via `ConfigWriter` + `AppConfig.reload()`, so the dock
-/// button, ⌘P entry, and keybind update with no restart.
+/// The Tools settings section: the configured tool floats, with add / edit. Each float is a focusable
+/// `ToolFloatRow` — Return / click opens the edit form (delete lives there), Up/Down move between
+/// rows, Left exits to the nav, Esc closes the card. A trailing "Add tool float" button opens a blank
+/// form. Add / edit route out through `onEditFloat`; the host presents `ToolFloatFormOverlay`, which
+/// writes on submit / delete and reloads, so the dock button, ⌘P entry, and keybind update with no
+/// restart.
 final class SettingsToolsSection: SettingsSection {
     var navTitle: String { "Tools" }
     var onExitToNav: (() -> Void)?
@@ -15,11 +15,10 @@ final class SettingsToolsSection: SettingsSection {
 
     private var rows: [ToolFloatRow] = []
     private let addButton = AppButton(title: "＋ Add tool float", variant: .muted)
-    /// Retained so `reapplyTheme()` / `rebuildRows()` can reach them in place.
+    /// Retained so `reapplyTheme()` / `populateRows()` can reach them in place.
     private let caption = SettingsDetail.groupCaption("Tool floats")
     private let emptyHint = NSTextField(labelWithString: "")
     private var rowsStack: NSStackView?
-    private weak var detailScroll: NSScrollView?
 
     func makeDetailView() -> NSView {
         let stack = NSStackView()
@@ -42,10 +41,7 @@ final class SettingsToolsSection: SettingsSection {
         addButton.onTap = { [weak self] in self?.onEditFloat?(nil) }
 
         populateRows()
-
-        let scroll = SettingsDetail.scroll(for: stack)
-        detailScroll = scroll
-        return scroll
+        return SettingsDetail.scroll(for: stack)
     }
 
     func detailStops() -> [NSView] { rows + [addButton] }
@@ -59,8 +55,8 @@ final class SettingsToolsSection: SettingsSection {
 
     // MARK: rows
 
-    /// (Re)fill the rows stack from the live config — used on first build and after a remove, so the
-    /// list reflects the current floats without the card rebuilding the whole detail view.
+    /// Fill the rows stack from the live config. The list refreshes after an add / edit / delete
+    /// because the form hands back to a freshly-built Settings → Tools (no in-place mutation here).
     private func populateRows() {
         guard let stack = rowsStack else { return }
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -73,12 +69,10 @@ final class SettingsToolsSection: SettingsSection {
         if floats.isEmpty {
             stack.addArrangedSubview(emptyHint)
             emptyHint.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-            stack.setCustomSpacing(10, after: caption)
         } else {
             for float in floats {
                 let row = ToolFloatRow(float: float)
                 row.onActivate = { [weak self, weak row] in row.map { self?.onEditFloat?($0.float) } }
-                row.onRemove = { [weak self, weak row] in row.map { self?.remove($0) } }
                 row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
                 row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
                 row.onExitToNav = { [weak self] in self?.onExitToNav?() }
@@ -87,27 +81,13 @@ final class SettingsToolsSection: SettingsSection {
                 stack.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
             }
-            stack.setCustomSpacing(10, after: caption)
         }
+        stack.setCustomSpacing(10, after: caption)
 
         let addRow = SettingsDetail.trailingRow(addButton)
         stack.addArrangedSubview(addRow)
         addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
-    }
-
-    /// Remove a float: write it out, reload the live config, then rebuild the list. On a write
-    /// failure the row stays and shows why. Focus lands on the add button (the removed row is gone).
-    private func remove(_ row: ToolFloatRow) {
-        do {
-            try ConfigWriter.apply(floatRemovals: [row.float.id])
-        } catch {
-            row.showMessage("Couldn’t write config: \(error.localizedDescription)")
-            return
-        }
-        AppConfig.reload()
-        populateRows()
-        detailScroll?.window?.makeFirstResponder(addButton)
     }
 
     private func moveFocus(from view: NSView?, delta: Int) {
@@ -118,14 +98,12 @@ final class SettingsToolsSection: SettingsSection {
     }
 }
 
-/// One Tools row: a float's icon, title, an id · command subtitle, and its shortcut keycap, with an
-/// inline remove button. The whole row is one focus stop — Return / click edits, Backspace removes,
-/// Up/Down move rows, Left exits to nav, Esc closes. An inline message under the row carries a write
-/// error. Mirrors `KeybindRow`.
+/// One Tools row: a float's icon, title, an id · command subtitle, and its shortcut keycap. The whole
+/// row is one focus stop — Return / click opens the edit form (where delete lives), Up/Down move rows,
+/// Left exits to nav, Esc closes. Mirrors `KeybindRow`.
 final class ToolFloatRow: NSView {
     let float: ToolFloat
     var onActivate: (() -> Void)?
-    var onRemove: (() -> Void)?
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onExitToNav: (() -> Void)?
@@ -135,8 +113,6 @@ final class ToolFloatRow: NSView {
     private let titleLabel: NSTextField
     private let subtitleLabel: NSTextField
     private let keycap: KeycapView
-    private let removeButton = AppButton(title: "✕", variant: .secondary)
-    private let messageLabel = NSTextField(labelWithString: "")
     private var isFocused = false { didSet { restyle() } }
 
     init(float: ToolFloat) {
@@ -167,47 +143,28 @@ final class ToolFloatRow: NSView {
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        removeButton.setContentHuggingPriority(.required, for: .horizontal)
-        removeButton.onTap = { [weak self] in self?.onRemove?() }
-        let controls = NSStackView(views: [iconView, labels, spacer, keycap, removeButton])
+        let controls = NSStackView(views: [iconView, labels, spacer, keycap])
         controls.orientation = .horizontal
         controls.alignment = .centerY
         controls.spacing = 10
-
-        messageLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        messageLabel.textColor = Theme.current.chrome.destructive.nsColor
-        messageLabel.isHidden = true
-
-        let stack = NSStackView(views: [controls, messageLabel])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 3
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
+        controls.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(controls)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 5),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
-            controls.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            controls.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+            controls.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            controls.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            controls.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
         ])
         restyle()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func showMessage(_ text: String?) {
-        messageLabel.stringValue = text ?? ""
-        messageLabel.isHidden = (text == nil)
-    }
-
     func reapplyTheme() {
         iconView.contentTintColor = Theme.current.chrome.ink(alpha: 0.75)
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         subtitleLabel.textColor = Theme.current.chrome.ink(alpha: 0.5)
-        messageLabel.textColor = Theme.current.chrome.destructive.nsColor
         keycap.reapplyTheme()
-        removeButton.reapplyTheme()
         restyle()
     }
 
@@ -221,7 +178,6 @@ final class ToolFloatRow: NSView {
     override func keyDown(with event: NSEvent) {
         switch KeyboardFocus.key(for: event) {
         case .activate: onActivate?()
-        case .delete: onRemove?()
         case .up: onArrowUp?()
         case .down: onArrowDown?()
         case .left: onExitToNav?()

@@ -16,6 +16,8 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private let capturer: KeybindCapturing?
     private let onSubmit: (ToolFloat) -> Void
     private let onCancel: () -> Void
+    /// Non-nil only when editing — its presence shows the Delete button.
+    private let onDelete: (() -> Void)?
 
     private let card = CardView()
     private var dismiss = DismissGate()
@@ -49,14 +51,17 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary, keyEquivalent: "\u{1b}")
     private let submitButton = AppButton(
         title: "", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
+    private let deleteButton = AppButton(title: "Delete", variant: .destructive)
 
     init(
         editing: ToolFloat?, existingIDs: Set<String>, capturer: KeybindCapturing?, background: NSColor,
-        onSubmit: @escaping (ToolFloat) -> Void, onCancel: @escaping () -> Void
+        onSubmit: @escaping (ToolFloat) -> Void, onCancel: @escaping () -> Void,
+        onDelete: (() -> Void)? = nil
     ) {
         self.editingFloat = editing
         self.existingIDs = existingIDs
         self.capturer = capturer
+        self.onDelete = onDelete
         self.onSubmit = onSubmit
         self.onCancel = onCancel
         super.init(frame: .zero)
@@ -127,7 +132,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
         let controls: [ThemeReapplying] = [
             idField, titleField, commandField, widthField, heightField, gitSegment,
-            cancelButton, submitButton,
+            cancelButton, submitButton, deleteButton,
         ]
         controls.forEach { $0.reapplyTheme() }
         chordChip.reapplyTheme()
@@ -219,7 +224,20 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         cancelButton.onArrowRight = { [weak self] in self?.focus(self?.submitButton) }
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let footer = Self.hStack([spacer, cancelButton, submitButton], spacing: 8)
+        var footerViews: [NSView] = [spacer, cancelButton, submitButton]
+        if onDelete != nil {
+            // Delete sits far left, split from Cancel/Save; Left from Save walks Save → Cancel →
+            // Delete (a destructive action kept a deliberate step off the primary path).
+            deleteButton.isKeyboardFocusable = true
+            deleteButton.onTap = { [weak self] in self?.onDelete?() }
+            deleteButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
+            deleteButton.onArrowDown = { [weak self] in self?.moveVertical(1) }
+            deleteButton.onArrowRight = { [weak self] in self?.focus(self?.cancelButton) }
+            deleteButton.onEsc = { [weak self] in self?.onCancel() }
+            cancelButton.onArrowLeft = { [weak self] in self?.focus(self?.deleteButton) }
+            footerViews = [deleteButton, spacer, cancelButton, submitButton]
+        }
+        let footer = Self.hStack(footerViews, spacing: 8)
 
         let content = NSStackView(views: [
             header, idGroup, titleGroup, iconGroup, chordGroup, commandGroup, sizeGroup, gitGroup, footer,
@@ -322,7 +340,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private func currentVerticalAnchor(in stops: [NSView]) -> NSView? {
         if let direct = stops.first(where: isFocused) { return direct }
         if isFocused(heightField.field) { return widthField.field }
-        if isFocused(cancelButton) { return submitButton }
+        if isFocused(cancelButton) || isFocused(deleteButton) { return submitButton }
         return nil
     }
 

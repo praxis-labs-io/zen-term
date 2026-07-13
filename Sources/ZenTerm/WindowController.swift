@@ -530,9 +530,26 @@ final class WindowController: NSObject {
             capturer: keybindCapturer,
             background: Theme.current.chrome.background.nsColor,
             onSubmit: { [weak self] built in self?.submitToolFloat(built) },
-            onCancel: { [weak self] in self?.reopenSettingsOnTools() }
+            onCancel: { [weak self] in self?.reopenSettingsOnTools() },
+            onDelete: float.map { existing in { [weak self] in self?.deleteToolFloat(existing) } }
         )
         presentModal(form, kind: .toolFloatForm)
+    }
+
+    /// Delete the float being edited, reload the live config (dropping its dock button / ⌘P entry /
+    /// keybind), then hand back to Settings → Tools. A write failure keeps the form up with a toast.
+    private func deleteToolFloat(_ float: ToolFloat) {
+        do {
+            try ConfigWriter.apply(floatRemovals: [float.id])
+        } catch {
+            toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Couldn't Delete Tool Float",
+                    message: "Failed to update the config file: \(error.localizedDescription)"))
+            return
+        }
+        AppConfig.reload()
+        reopenSettingsOnTools()
     }
 
     /// Persist a built tool float (upsert by id), reload the live config so the dock button, ⌘P
