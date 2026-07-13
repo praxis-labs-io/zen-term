@@ -60,13 +60,26 @@ struct Chord: Hashable {
     /// order (⌘ ⇧ ⌥ ⌃), then the key: letters uppercased, symbols/digits as-is. `KeycapView`
     /// turns the modifier glyphs into SF Symbols.
     var displayGlyph: String {
+        Chord.modifierGlyph(command: command, shift: shift, option: option, control: control)
+            + (key.count == 1 ? key.uppercased() : key)
+    }
+
+    /// The modifier glyphs in the repo's established order (⌘ ⇧ ⌥ ⌃) — the one place that order
+    /// lives, shared by `displayGlyph` and the keybind capture's live modifier preview.
+    static func modifierGlyph(command: Bool, shift: Bool, option: Bool, control: Bool) -> String {
         var glyph = ""
         if command { glyph += "⌘" }
         if shift { glyph += "⇧" }
         if option { glyph += "⌥" }
         if control { glyph += "⌃" }
-        glyph += key.count == 1 ? key.uppercased() : key
         return glyph
+    }
+
+    /// The modifier glyphs for a live `NSEvent`'s flags — same ⌘⇧⌥⌃ order as `displayGlyph`.
+    static func modifierGlyph(_ flags: NSEvent.ModifierFlags) -> String {
+        modifierGlyph(
+            command: flags.contains(.command), shift: flags.contains(.shift),
+            option: flags.contains(.option), control: flags.contains(.control))
     }
 
     /// The config-file word form the writer emits (`cmd+shift+g`) — modifiers in the
