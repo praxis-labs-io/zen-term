@@ -17,11 +17,7 @@ enum ConfigWriter {
     ) throws {
         try FileManager.default.createDirectory(at: configRoot, withIntermediateDirectories: true)
         let url = configRoot.appendingPathComponent("config")
-        // If the file exists but can't be read, propagate — never treat an unreadable file as
-        // empty, or the whole-file rewrite below would erase the user's config.
-        let existing =
-            FileManager.default.fileExists(atPath: url.path)
-            ? try String(contentsOf: url, encoding: .utf8) : ""
+        let existing = try ConfigFileIO.readExistingOrEmpty(url)
 
         var lines = splitLines(existing)
         for (key, value) in scalars { setScalar(key, value, in: &lines) }
@@ -30,9 +26,7 @@ enum ConfigWriter {
 
         var output = lines.joined(separator: "\n")
         if !output.isEmpty { output += "\n" }  // config files end with a trailing newline
-        // Write to the symlink's target, not over the symlink — a config symlinked into a
-        // dotfiles repo must keep pointing there.
-        try output.write(to: url.resolvingSymlinksInPath(), atomically: true, encoding: .utf8)
+        try ConfigFileIO.writePreservingSymlink(output, to: url)
     }
 
     /// Split into lines with the final trailing newline stripped, so a rejoin + single "\n"
@@ -50,7 +44,7 @@ enum ConfigWriter {
         let rendered = "\(key) = \(value)"
         if let index = lines.firstIndex(where: { activeAssignmentKey($0) == key }) {
             // Preserve any trailing comment on the existing active line.
-            if let comment = trailingComment(of: lines[index]) {
+            if let comment = ConfigText.trailingComment(of: lines[index]) {
                 lines[index] = "\(rendered)  \(comment)"
             } else {
                 lines[index] = rendered
@@ -158,17 +152,4 @@ enum ConfigWriter {
         return key
     }
 
-    /// A trailing `# comment` on an active line (quote-aware — a `#` inside quotes isn't a
-    /// comment), including the `#`; nil if none. Mirrors `GeneralConfigParser.stripComment`.
-    private static func trailingComment(of line: String) -> String? {
-        var inQuotes = false
-        var previousWasSpace = true
-        for index in line.indices {
-            let character = line[index]
-            if character == "\"" { inQuotes.toggle() }
-            if character == "#", !inQuotes, previousWasSpace { return String(line[index...]) }
-            previousWasSpace = character.isWhitespace
-        }
-        return nil
-    }
 }

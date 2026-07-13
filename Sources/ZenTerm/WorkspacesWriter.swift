@@ -51,11 +51,7 @@ enum WorkspacesWriter {
     static func append(_ ws: Workspace, configRoot: URL = ConfigLoader.defaultRoot) throws {
         try FileManager.default.createDirectory(at: configRoot, withIntermediateDirectories: true)
         let url = configRoot.appendingPathComponent("workspaces")
-        // If the file exists but can't be read, propagate the error — never treat an unreadable
-        // file as empty, or the whole-file rewrite below would erase every existing workspace.
-        let existing =
-            FileManager.default.fileExists(atPath: url.path)
-            ? try String(contentsOf: url, encoding: .utf8) : ""
+        let existing = try ConfigFileIO.readExistingOrEmpty(url)
         guard !WorkspacesParser.parse(existing).contains(where: { $0.title == ws.title }) else {
             throw WriteError.titleExists(ws.title)
         }
@@ -67,10 +63,7 @@ enum WorkspacesWriter {
         } else {
             separator = "\n\n"
         }
-        // Write to the symlink's target, not over the symlink — a config symlinked into a dotfiles
-        // repo must keep pointing there (atomic write would otherwise replace it with a plain file).
-        try (existing + separator + serialize(ws))
-            .write(to: url.resolvingSymlinksInPath(), atomically: true, encoding: .utf8)
+        try ConfigFileIO.writePreservingSymlink(existing + separator + serialize(ws), to: url)
     }
 
     /// Wrap a value in double quotes when it contains whitespace or a `#`, so it survives the
