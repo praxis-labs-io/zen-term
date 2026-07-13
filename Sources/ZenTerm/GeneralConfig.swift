@@ -76,6 +76,14 @@ struct GeneralConfig: Equatable {
     /// Re-read `config` from disk and swap `current`. Called by `AppConfig.reload()` after a write.
     static func reloadCurrent() { current = ConfigLoader.loadGeneralConfig() }
 
+    #if DEBUG
+        /// Test hook: swap `current` directly so a test can drive config-reactive code (e.g.
+        /// `ShellLaunch`'s custom-shell branch) without a file write. `current`'s setter is otherwise
+        /// `private`, and `reloadCurrent()` only re-reads real config off disk. Mirrors
+        /// `Theme.setCurrentForTesting`; pair with a teardown that restores the original.
+        static func setCurrentForTesting(_ config: GeneralConfig) { current = config }
+    #endif
+
     /// The subset that crosses the seam to the terminal backends.
     var terminalBehavior: TerminalBehavior {
         TerminalBehavior(
