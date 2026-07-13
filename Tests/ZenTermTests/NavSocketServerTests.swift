@@ -126,31 +126,33 @@ final class NavSocketServerTests: XCTestCase {
         XCTAssertEqual(commands, [.focus(token: 1, dir: .left), .focus(token: 2, dir: .right)])
     }
 
-    func test_sweep_removesOnlyDeadInstanceSockets() throws {
+    func test_sweep_removesOnlySocketsWithNoListener() throws {
         let dir = NSTemporaryDirectory() + "zt-sweep-\(getpid())"
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(atPath: dir) }
 
-        // A pid that just exited is guaranteed dead; our own pid is guaranteed alive.
-        let probe = Process()
-        probe.executableURL = URL(fileURLWithPath: "/usr/bin/true")
-        try probe.run()
-        probe.waitUntilExit()
-        let deadPid = probe.processIdentifier
+        // Live = a real listener answers the sweep's connect probe (the foreign-pid name
+        // proves liveness comes from the probe, not pid arithmetic). Dead = a socket file
+        // nobody answers — what a crashed instance leaves behind.
+        let live = "\(dir)/nav.99999.sock"
+        let liveServer = NavSocketServer(path: live) { _ in }
+        liveServer.start()
+        defer { liveServer.stop() }
 
-        let dead = "\(dir)/nav.\(deadPid).sock"
-        let alive = "\(dir)/nav.\(getpid()).sock"
-        let legacy = "\(dir)/nav.sock"  // pre-per-pid build may still be running — never touch
+        let deadPerPid = "\(dir)/nav.4242.sock"
+        let deadLegacy = "\(dir)/nav.sock"  // a crashed pre-per-pid build's leftover
+        let ownPid = "\(dir)/nav.\(getpid()).sock"  // skipped: probing it could race our own bind
         let unrelated = "\(dir)/notes.txt"
-        for path in [dead, alive, legacy, unrelated] {
+        for path in [deadPerPid, deadLegacy, ownPid, unrelated] {
             FileManager.default.createFile(atPath: path, contents: nil)
         }
 
         NavSocketServer.sweepStaleSockets(in: dir)
 
-        XCTAssertFalse(FileManager.default.fileExists(atPath: dead))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: alive))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: legacy))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: deadPerPid))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: deadLegacy))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: live))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: ownPid))
         XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated))
     }
 

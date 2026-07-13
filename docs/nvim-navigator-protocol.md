@@ -22,6 +22,11 @@ ZenTerm injects two variables into every pane's shell:
 The plugin **degrades to plain `wincmd`** when either is absent (i.e. Neovim is
 not running under ZenTerm).
 
+> **Long-lived sessions:** both vars are captured at shell launch, and the
+> socket is per app instance. A shell that outlives its instance (a reattached
+> tmux/screen session) holds a dead `$ZEN_SOCK`; hand-offs silently no-op there
+> until nvim is restarted in a fresh pane. `⌘-hjkl` always works.
+
 ## Socket
 
 - Path: `$ZEN_SOCK` (currently

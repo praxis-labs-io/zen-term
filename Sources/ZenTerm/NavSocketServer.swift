@@ -21,20 +21,50 @@ final class NavSocketServer {
     }
     static var socketPath: String { socketURL.path }
 
-    /// Remove `nav.<pid>.sock` files whose instance is gone (`kill(pid, 0)` → `ESRCH`) —
-    /// a crashed instance never reaches its quit-unlink, so files would otherwise
-    /// accumulate. A live pid's socket is never touched, and neither is a bare `nav.sock`:
-    /// a pre-per-pid build could still be running and using it.
+    /// Remove nav socket files nobody is listening on — a crashed instance never reaches
+    /// its quit-unlink, so files would otherwise accumulate. Liveness is a connect probe,
+    /// not a pid check: it can't be fooled by pid recycling, and it also collects a dead
+    /// legacy `nav.sock` from a pre-per-pid build while leaving a live one alone. Our own
+    /// file is skipped by pid because the probe runs off-main and must never race our bind.
     static func sweepStaleSockets(in directory: String) {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return }
-        for name in names {
-            guard name.hasPrefix("nav."), name.hasSuffix(".sock"),
-                let pid = pid_t(name.dropFirst("nav.".count).dropLast(".sock".count)),
-                pid != getpid(),
-                kill(pid, 0) != 0, errno == ESRCH
-            else { continue }
-            unlink(directory + "/" + name)
+        for name in names where name.hasPrefix("nav.") && name.hasSuffix(".sock") {
+            if pid_t(name.dropFirst("nav.".count).dropLast(".sock".count)) == getpid() { continue }
+            let path = directory + "/" + name
+            if !hasListener(at: path) { unlink(path) }
         }
+    }
+
+    /// Whether an `AF_UNIX` connect to `path` succeeds — i.e. some process is listening.
+    /// Errs on the side of "live" when the probe itself can't run, so the sweep never
+    /// deletes a file it couldn't actually check.
+    private static func hasListener(at path: String) -> Bool {
+        guard var addr = socketAddress(for: path) else { return true }
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else { return true }
+        defer { close(fd) }
+        let connected = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        return connected == 0
+    }
+
+    /// `sockaddr_un` for `path`, or nil when the path overflows `sun_path` (NUL included).
+    private static func socketAddress(for path: String) -> sockaddr_un? {
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        let pathBytes = Array(path.utf8)
+        let capacity = MemoryLayout.size(ofValue: addr.sun_path)
+        guard pathBytes.count < capacity else { return nil }
+        withUnsafeMutablePointer(to: &addr.sun_path) {
+            $0.withMemoryRebound(to: UInt8.self, capacity: capacity) { dst in
+                for (i, byte) in pathBytes.enumerated() { dst[i] = byte }
+                dst[pathBytes.count] = 0
+            }
+        }
+        return addr
     }
 
     /// The two env vars a pane or drawer shell needs so an nvim inside it can address itself
@@ -51,8 +81,8 @@ final class NavSocketServer {
 
     /// Applied on the main actor for every decoded command.
     private let apply: (NavCommand) -> Void
-    /// The bound socket path. Defaults to the shared `$ZEN_SOCK` location; overridden in
-    /// tests so they never touch the real socket.
+    /// The bound socket path. Defaults to this instance's per-pid `$ZEN_SOCK` location;
+    /// overridden in tests so they never touch the real socket.
     private let path: String
     private let queue = DispatchQueue(label: "com.zenterm.nav-socket")
     private var acceptSource: DispatchSourceRead?
@@ -71,7 +101,17 @@ final class NavSocketServer {
 
         try? FileManager.default.createDirectory(
             at: URL(fileURLWithPath: path).deletingLastPathComponent(), withIntermediateDirectories: true)
-        unlink(path)  // clear a stale socket from a prior run
+
+        // Crash hygiene, before the bind attempts so it runs even when binding fails, and
+        // off the main thread (start() runs at launch on main). Only the production server
+        // sweeps: a custom-path server (tests) must never touch files beside its injected
+        // path, and it only ever cleans ZenTerm's own directory.
+        if path == Self.socketPath {
+            let directory = URL(fileURLWithPath: path).deletingLastPathComponent().path
+            queue.async { Self.sweepStaleSockets(in: directory) }
+        }
+
+        unlink(path)  // clear a stale socket from a prior run of this same pid
 
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else {
@@ -79,20 +119,10 @@ final class NavSocketServer {
             return
         }
 
-        var addr = sockaddr_un()
-        addr.sun_family = sa_family_t(AF_UNIX)
-        let pathBytes = Array(path.utf8)
-        let capacity = MemoryLayout.size(ofValue: addr.sun_path)
-        guard pathBytes.count < capacity else {  // leave room for NUL
-            NSLog("NavSocket: socket path too long (\(pathBytes.count) ≥ \(capacity)): \(path) — seamless nav disabled")
+        guard var addr = Self.socketAddress(for: path) else {
+            NSLog("NavSocket: socket path too long for sun_path: \(path) — seamless nav disabled")
             close(fd)
             return
-        }
-        withUnsafeMutablePointer(to: &addr.sun_path) {
-            $0.withMemoryRebound(to: UInt8.self, capacity: capacity) { dst in
-                for (i, byte) in pathBytes.enumerated() { dst[i] = byte }
-                dst[pathBytes.count] = 0
-            }
         }
 
         let bound = withUnsafePointer(to: &addr) {
@@ -114,11 +144,6 @@ final class NavSocketServer {
         source.setCancelHandler { close(fd) }
         source.resume()
         acceptSource = source
-
-        // Crash hygiene, off the main thread (start() runs at launch on main): drop socket
-        // files left by instances that died without their quit-unlink.
-        let directory = URL(fileURLWithPath: path).deletingLastPathComponent().path
-        queue.async { Self.sweepStaleSockets(in: directory) }
     }
 
     /// `errno` rendered as a human string, for the bind-failure logs above.
