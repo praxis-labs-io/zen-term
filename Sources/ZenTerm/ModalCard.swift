@@ -23,7 +23,7 @@ extension ModalOverlay {
 
 /// The card container: swallows clicks so a tap on the card's empty area doesn't fall through
 /// to the backdrop (which would dismiss). Shared by every modal card.
-final class CardView: NSView { override func mouseDown(with event: NSEvent) {} }
+final class CardView: ShadowCardView { override func mouseDown(with event: NSEvent) {} }
 
 /// The shared modal-card chrome — rounded corners, a hairline `FloatShadow.edge` border, and the
 /// float elevation shadow. Every modal card (palettes, settings, add-workspace, tool float) applied

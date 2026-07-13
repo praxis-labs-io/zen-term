@@ -11,7 +11,8 @@ import AppKit
 /// the enter/exit motion.
 class SurfaceFloatOverlay: NSView {
     private let onDismiss: () -> Void
-    private let card = NSView()
+    // ShadowCardView (not CardView) — the hosted terminal must receive mouseDown.
+    private let card = ShadowCardView()
     private var dismiss = DismissGate()
 
     /// - Parameters:

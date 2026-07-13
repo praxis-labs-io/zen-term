@@ -20,7 +20,7 @@ struct ToastContent: Equatable {
 /// muted description, and an optional small actions row — on the shared overlay-card chrome
 /// (`FloatShadow` bg + hairline edge + drop shadow). Fixed width; springs in/out on `Motion`.
 /// The `ToastPresenter` owns placement (top-right) and lifetime.
-final class ToastView: NSView {
+final class ToastView: ShadowCardView {
     /// The "×" (and, for a passive toast, a body click) fires this — the presenter dismisses,
     /// or a confirm cancels.
     var onClose: (() -> Void)?

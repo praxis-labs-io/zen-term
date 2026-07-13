@@ -17,7 +17,7 @@ struct PanelMeta {
 /// in the panel requests focus.
 final class PanelHostView: NSView {
     private let onFocusRequest: () -> Void
-    private let pane = NSView()
+    private let pane = ShadowCardView()  // focus glow gets an explicit shadowPath
     private let clip = NSView()  // inner clip so terminal content stays inside the radius
     private let headerView: PanelHeader?
     /// True when the header is a pane's full-screen header (shown only while zoomed); false for
