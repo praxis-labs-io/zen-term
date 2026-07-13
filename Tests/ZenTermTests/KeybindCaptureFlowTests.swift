@@ -99,12 +99,15 @@ final class KeybindCaptureFlowTests: XCTestCase {
     func test_validChord_commitsRebindAndEndsCapture() {
         let capturer = FakeCapturer()
         _ = mountSection(capturer)
+        let oldChord = liveKeymap.first { $0.value == .newTab }!.key  // new-tab's chord before the rebind
         row(for: .newTab).chip.onActivate?()
         XCTAssertTrue(capturer.isArmed)
 
         capturer.feed(event(for: novelChord))
 
         XCTAssertEqual(liveKeymap[novelChord], .newTab, "the novel chord should now open a new tab")
+        // A rebind is a MOVE, not an add: the old chord must be freed, else both would fire new-tab.
+        XCTAssertNotEqual(liveKeymap[oldChord], .newTab, "the previous new-tab chord is released on rebind")
         XCTAssertEqual(capturer.endCount, 1, "a commit ends the capture")
         XCTAssertFalse(capturer.isArmed)
     }
@@ -134,8 +137,13 @@ final class KeybindCaptureFlowTests: XCTestCase {
 
         // …then capture again and press Delete → back to the built-in default(s).
         row(for: .newTab).chip.onActivate?()
+        let endCountBeforeDelete = capturer.endCount
         capturer.feed(keyDown("\u{7f}", code: 51))  // Delete
 
+        // Delete must END the capture, not just reset the mapping — leaving it armed is the
+        // input-bricking scenario these tests guard against.
+        XCTAssertEqual(capturer.endCount, endCountBeforeDelete + 1, "Delete ends the capture")
+        XCTAssertFalse(capturer.isArmed)
         XCTAssertNil(liveKeymap[novelChord], "the reset drops the custom chord")
         let defaultNewTab = KeymapDefaults.map.first { $0.value == .newTab }!.key
         XCTAssertEqual(liveKeymap[defaultNewTab], .newTab, "new-tab is back on its default chord")
