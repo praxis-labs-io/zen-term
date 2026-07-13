@@ -13,7 +13,7 @@ enum ToolFloatParser {
             guard let colon = token.firstIndex(of: ":") else { continue }
             let field = String(token[..<colon])
             let raw = String(token[token.index(after: colon)...])
-            fields[field] = unquote(raw)
+            fields[field] = ConfigText.unquote(raw)
         }
 
         guard let id = fields["id"], !id.isEmpty else {
@@ -66,11 +66,5 @@ enum ToolFloatParser {
         }
         if !current.isEmpty { tokens.append(current) }
         return tokens
-    }
-
-    /// Strip one surrounding pair of double quotes, if present.
-    private static func unquote(_ value: String) -> String {
-        guard value.count >= 2, value.hasPrefix("\""), value.hasSuffix("\"") else { return value }
-        return String(value.dropFirst().dropLast())
     }
 }

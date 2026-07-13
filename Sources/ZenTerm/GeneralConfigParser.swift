@@ -14,7 +14,7 @@ enum GeneralConfigParser {
         var keybinds: [(Chord, KeyInterceptor.ReservedChord)] = []
 
         for rawLine in text.split(whereSeparator: \.isNewline) {
-            let line = stripComment(String(rawLine)).trimmingCharacters(in: .whitespaces)
+            let line = ConfigText.stripComment(String(rawLine)).trimmingCharacters(in: .whitespaces)
             guard !line.isEmpty, let equals = line.firstIndex(of: "=") else {
                 continue
             }
@@ -77,24 +77,6 @@ enum GeneralConfigParser {
         config.floats = floats
         config.keymap = KeymapAssembler.assemble(floats: floats, keybinds: keybinds)
         return config
-    }
-
-    /// Drop a comment: everything from a `#` that starts a line or follows whitespace, unless
-    /// it's inside double quotes (so a `#` in a quoted float command survives). This lets both
-    /// whole-line (`# note`) and trailing (`cursor-style = bar   # note`) comments work — the
-    /// latter is what the annotated reference config invites when a user uncomments a line.
-    private static func stripComment(_ line: String) -> String {
-        var inQuotes = false
-        var previousWasSpace = true  // start-of-line counts, so a leading `#` is a comment
-        for index in line.indices {
-            let character = line[index]
-            if character == "\"" { inQuotes.toggle() }
-            if character == "#", !inQuotes, previousWasSpace {
-                return String(line[..<index])
-            }
-            previousWasSpace = character.isWhitespace
-        }
-        return line
     }
 
     private static func parseBool(_ value: String, _ key: String) -> Bool? {
