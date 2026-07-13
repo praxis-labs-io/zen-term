@@ -730,18 +730,27 @@ final class TabController: NSObject {
             process.currentDirectoryURL = cwd
             process.standardOutput = FileHandle.nullDevice
             process.standardError = FileHandle.nullDevice
-            let isEmpty: Bool
             do {
                 try process.run()
-                // Watchdog: terminate a pathological probe so this queue slot can't park forever.
-                // A terminated process reports a non-zero status → fail open, matching the intent.
-                let watchdog = DispatchWorkItem { if process.isRunning { process.terminate() } }
-                DispatchQueue.global().asyncAfter(deadline: .now() + Self.probeTimeout, execute: watchdog)
-                process.waitUntilExit()
-                watchdog.cancel()
-                isEmpty = process.terminationStatus == 0
             } catch {
-                isEmpty = false  // couldn't probe → don't block opening the float
+                DispatchQueue.main.async { completion(false) }  // couldn't probe → open the float
+                return
+            }
+            // Reap on a separate worker and wait on it with a timeout, so a probe that ignores
+            // SIGTERM can NEVER wedge the decision: on timeout we fail open immediately (isEmpty
+            // == false) and best-effort terminate, while the reaper keeps waiting to collect the
+            // child. `completion` fires exactly once, so `probingToolFloatID` is always cleared.
+            let finished = DispatchSemaphore(value: 0)
+            DispatchQueue.global(qos: .userInitiated).async {
+                process.waitUntilExit()
+                finished.signal()
+            }
+            let isEmpty: Bool
+            if finished.wait(timeout: .now() + Self.probeTimeout) == .timedOut {
+                process.terminate()
+                isEmpty = false
+            } else {
+                isEmpty = process.terminationStatus == 0
             }
             DispatchQueue.main.async { completion(isEmpty) }
         }
