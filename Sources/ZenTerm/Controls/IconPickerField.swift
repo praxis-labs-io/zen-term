@@ -202,7 +202,7 @@ final class IconPickerField: NSView {
         scroll.documentView = doc
         scroll.translatesAutoresizingMaskIntoConstraints = false
 
-        let card = NSView()
+        let card = ShadowCardView()
         card.wantsLayer = true
         card.layer?.cornerRadius = 8
         card.layer?.backgroundColor = chrome.background.nsColor.cgColor

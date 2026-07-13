@@ -5,7 +5,7 @@ import AppKit
 /// that shows the chord live (centered) with a small red validation line tucked beneath it, and a
 /// status line (the cancel/remove keys, replaced by a success message on save). Shown by the section
 /// beside a capturing keybind chip.
-final class KeybindHintBubble: NSView {
+final class KeybindHintBubble: ShadowCardView {
     private static let width: CGFloat = 220
 
     private let previewHost = NSView()

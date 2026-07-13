@@ -4,7 +4,7 @@ import AppKit
 /// a soft elevation shadow) holding a muted label and, when known, the action's live keybind
 /// chip. Replaces the native `NSView.toolTip`, which is OS-drawn — unbranded, not centered on the
 /// trigger, and unaware of the window. Positioned by `TooltipPresenter`.
-final class ChromeTooltip: NSView {
+final class ChromeTooltip: ShadowCardView {
     init(label: String, shortcut: String?) {
         super.init(frame: .zero)
         // Framed directly by `TooltipPresenter` (not Auto Layout), so leave the default
