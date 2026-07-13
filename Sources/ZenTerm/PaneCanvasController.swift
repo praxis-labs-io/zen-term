@@ -34,8 +34,9 @@ final class PaneCanvasController: NSObject {
 
     /// Each split's rendered container view, refreshed every `rebuildViews()`. Read at
     /// resize time so a nudge can be clamped to keep both sides ≥ `minSplitExtent` in
-    /// pixels, not just a bare ratio.
-    private var splitViewByID: [SplitID: NSView] = [:]
+    /// pixels, not just a bare ratio — and retargeted in place via `setRatio` so an
+    /// ⌥-arrow nudge never rebuilds the tree.
+    private var splitViewByID: [SplitID: SplitContainerView] = [:]
 
     /// Whether panes may show their focus halo. `TabController` sets this to false
     /// when a drawer holds unified focus, so exactly one panel is haloed across the
@@ -376,8 +377,15 @@ final class PaneCanvasController: NSObject {
         let next = min(max(current + (positive ? Self.resizeStep : -Self.resizeStep), minRatio), 1 - minRatio)
         guard abs(next - current) > 1e-6 else { NSSound.beep(); return }  // already at the min-size wall
         tree = tree.settingRatio(split, to: next)
-        reconcileAndRender()
-        focusActivePane()
+        if let container = splitViewByID[split] {
+            // Key-repeatable hot path: swap the one ratio constraint in place. Nothing
+            // detaches, so focus, halo, and first responder are untouched.
+            container.setRatio(next)
+        } else {
+            // No built container for this split (e.g. resized while zoomed) — full rebuild.
+            reconcileAndRender()
+            focusActivePane()
+        }
     }
 
     /// The smallest ratio that keeps BOTH sides of `split` at least `minSplitExtent` along

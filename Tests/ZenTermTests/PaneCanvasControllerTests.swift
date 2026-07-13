@@ -80,6 +80,43 @@ final class PaneCanvasControllerTests: XCTestCase {
         }
     }
 
+    func test_resize_swapsRatioInPlace_withoutRebuildingContainers() {
+        let first = controller.focusedLeafID
+        controller.split(.vertical)
+        layout()
+        let second = controller.focusedLeafID
+        let superviewsBefore = controller.hostsForTesting.compactMapValues { $0.superview }
+
+        controller.resize(.right)
+        layout()
+
+        for (id, host) in controller.hostsForTesting {
+            XCTAssertTrue(
+                host.superview === superviewsBefore[id],
+                "an in-place resize must not rebuild the split containers")
+        }
+        // `.right` on the flush-right focused pane moves the shared divider right:
+        // ratio 0.5 → 0.54, so the first (left) pane grows by one step.
+        let expected = 0.54 * 900 - ChromeMetrics.panelGap / 2
+        XCTAssertEqual(controller.hostsForTesting[first]?.bounds.width ?? 0, expected, accuracy: 1.0)
+        XCTAssertEqual(controller.focusedLeafID, second, "resize keeps focus where it was")
+    }
+
+    func test_resizeWhileZoomed_fallsBackAndAppliesRatio() {
+        let first = controller.focusedLeafID
+        controller.split(.vertical)
+        layout()
+
+        controller.zoomFocusedLeaf()
+        layout()
+        controller.resize(.right)  // no built containers while zoomed → full-rebuild fallback
+        controller.unzoom()
+        layout()
+
+        let expected = 0.54 * 900 - ChromeMetrics.panelGap / 2
+        XCTAssertEqual(controller.hostsForTesting[first]?.bounds.width ?? 0, expected, accuracy: 1.0)
+    }
+
     func test_resize_clampsAtMinExtent() {
         controller.split(.vertical)
         layout()
