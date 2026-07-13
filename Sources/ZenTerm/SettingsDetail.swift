@@ -42,8 +42,9 @@ enum SettingsDetail {
         return caption
     }
 
-    /// Move keyboard focus to the `delta`-neighbor of `stops` (clamped at the ends) and scroll it
-    /// into view — the shared core of every section's arrow-nav. `anchor` is the current stop's
+    /// Move keyboard focus to the `delta`-neighbor of `stops` (a no-op at the ends — `step`
+    /// returns nil past either end, it doesn't wrap or clamp) and scroll it into view — the shared
+    /// core of every section's arrow-nav. `anchor` is the current stop's
     /// index (nil = none focused). `scrollTarget` maps the destination stop to the view actually
     /// scrolled visible (e.g. the whole row, so its inline message shows), and the `-12` inset is
     /// the shared breathing room. AppKit doesn't scroll to a newly-focused responder on its own.
