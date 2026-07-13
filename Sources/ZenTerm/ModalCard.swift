@@ -25,6 +25,44 @@ extension ModalOverlay {
 /// to the backdrop (which would dismiss). Shared by every modal card.
 final class CardView: NSView { override func mouseDown(with event: NSEvent) {} }
 
+/// The shared modal-card chrome — rounded corners, a hairline `FloatShadow.edge` border, and the
+/// float elevation shadow. Every modal card (palettes, settings, add-workspace, tool float) applied
+/// exactly this by hand; `apply` sets it up and `reapplyTheme` re-derives the theme-dependent half
+/// (fill + border) on a live theme swap.
+enum CardChrome {
+    static let cornerRadius: CGFloat = 12
+
+    static func apply(to card: NSView, background: NSColor, cornerRadius: CGFloat = CardChrome.cornerRadius) {
+        card.wantsLayer = true
+        card.layer?.cornerRadius = cornerRadius
+        card.layer?.backgroundColor = background.cgColor
+        card.layer?.borderWidth = 1
+        card.layer?.borderColor = FloatShadow.edge.cgColor
+        FloatShadow.applyShadow(to: card)  // masksToBounds stays off so the shadow isn't clipped
+    }
+
+    static func reapplyTheme(to card: NSView) {
+        card.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
+        card.layer?.borderColor = FloatShadow.edge.cgColor
+    }
+}
+
+/// The behavior-critical dismissal latch shared by every modal overlay. Once an exit animation
+/// starts, a second `animateOut` is ignored (idempotent), and `hitTest` reads `isDismissing` to
+/// stop intercepting clicks — so a tap during the spring-out falls through to the terminal instead
+/// of the vanishing backdrop. This idiom lived hand-copied in every overlay; a single miss would
+/// swallow a click or double-run an exit.
+struct DismissGate {
+    private(set) var isDismissing = false
+
+    /// Begin dismissing; returns `false` if it was already dismissing (the caller should bail).
+    mutating func begin() -> Bool {
+        guard !isDismissing else { return false }
+        isDismissing = true
+        return true
+    }
+}
+
 /// A transparent backdrop filling the tile region; a click anywhere on it (outside the card)
 /// dismisses. No dimming — the terminal stays visible behind the card.
 final class BackdropView: NSView {

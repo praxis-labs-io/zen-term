@@ -47,7 +47,7 @@ class PaletteOverlay: NSView, ModalOverlay {
     private let onDismiss: () -> Void
 
     private let card = CardView()
-    private var isDismissing = false
+    private var dismiss = DismissGate()
     private let searchGlyph = NSTextField(labelWithString: "⌕")
     private let searchField = NSTextField()
     private let searchPlaceholder: String
@@ -95,16 +95,9 @@ class PaletteOverlay: NSView, ModalOverlay {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        card.wantsLayer = true
-        card.layer?.cornerRadius = 12
-        card.layer?.backgroundColor = background.cgColor
-        card.layer?.borderWidth = 1
-        card.layer?.borderColor = FloatShadow.edge.cgColor
+        CardChrome.apply(to: card, background: background)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
-        // Dark elevation shadow on the card itself (masksToBounds stays off so it isn't
-        // clipped); the list clips its own rows, so nothing overflows the rounded corners.
-        FloatShadow.applyShadow(to: card)
 
         // Search row: a magnifier glyph + a borderless field.
         searchGlyph.font = .systemFont(ofSize: 16)
@@ -233,15 +226,14 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// Spring the card back out, then run `completion` (the host removes the overlay).
     /// Idempotent — a second call while already dismissing is ignored.
     func animateOut(completion: @escaping () -> Void) {
-        guard !isDismissing else { return }
-        isDismissing = true
+        guard dismiss.begin() else { return }
         Motion.springScaleFade(card, appearing: false, completion: completion)
     }
 
     /// Once dismissal starts, stop intercepting clicks so a tap during the exit animation
     /// falls through to the terminal instead of the still-present backdrop.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        isDismissing ? nil : super.hitTest(point)
+        dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
     /// Re-apply the card's theme-dependent colors after a live theme change: the retained shell
@@ -253,8 +245,7 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// side effect of any re-render; that's an acceptable trade for a theme swap.
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        card.layer?.backgroundColor = chrome.background.nsColor.cgColor
-        card.layer?.borderColor = FloatShadow.edge.cgColor
+        CardChrome.reapplyTheme(to: card)
         searchGlyph.textColor = chrome.ink(alpha: 0.4)
         searchField.textColor = chrome.foreground.nsColor
         applyPlaceholder()
