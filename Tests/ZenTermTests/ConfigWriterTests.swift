@@ -149,6 +149,81 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertNil(keymap[Chord(command: true, key: "f")])  // old ⌘F default was dropped
     }
 
+    // MARK: floats
+
+    private func float(
+        id: String, title: String? = nil, icon: String = ToolFloatParser.defaultIcon,
+        command: String, width: CGFloat = 0.85, height: CGFloat = 0.85, git: Bool = false, toggle: Chord
+    ) -> ToolFloat {
+        ToolFloat(
+            id: id, title: title ?? "Open \(id)", icon: icon, command: command,
+            widthFraction: width, heightFraction: height, requiresGitRepo: git, emptyGuard: nil, toggle: toggle)
+    }
+
+    func test_float_serialize_roundTripsThroughParser() throws {
+        let original = float(
+            id: "gitdash", title: "Open GitDash", icon: "chart.bar", command: "npm run dev",
+            width: 0.9, height: 0.8, git: true, toggle: Chord(command: true, shift: true, key: "g"))
+        let line = ConfigWriter.serializeFloat(original)
+        let value = String(line.dropFirst("float = ".count))
+        XCTAssertEqual(ToolFloatParser.parse(value), original)
+    }
+
+    func test_float_serialize_omitsDefaultFields() throws {
+        let lean = float(id: "dev", command: "vim", toggle: Chord(command: true, shift: true, key: "d"))
+        XCTAssertEqual(ConfigWriter.serializeFloat(lean), "float = id:dev key:cmd+shift+d command:vim")
+    }
+
+    func test_float_upsert_appendsWhenAbsent() throws {
+        let dir = try makeTempDir()
+        try seed("theme = x\n", in: dir)
+        try ConfigWriter.apply(
+            floatUpserts: [float(id: "dev", command: "vim", toggle: Chord(command: true, shift: true, key: "d"))],
+            configRoot: dir)
+        XCTAssertEqual(try read(dir), "theme = x\nfloat = id:dev key:cmd+shift+d command:vim\n")
+    }
+
+    func test_float_upsert_replacesByIDPreservingComment() throws {
+        let dir = try makeTempDir()
+        try seed("float = id:dev command:old key:cmd+shift+d  # my dev float\n", in: dir)
+        try ConfigWriter.apply(
+            floatUpserts: [float(id: "dev", command: "new", toggle: Chord(command: true, shift: true, key: "d"))],
+            configRoot: dir)
+        XCTAssertEqual(try read(dir), "float = id:dev key:cmd+shift+d command:new  # my dev float\n")
+    }
+
+    func test_float_removal_deletesByIDLeavingOthers() throws {
+        let dir = try makeTempDir()
+        try seed(
+            "# tools\nfloat = id:dev command:vim key:cmd+shift+d\nfloat = id:top command:htop key:cmd+shift+t\n",
+            in: dir)
+        try ConfigWriter.apply(floatRemovals: ["dev"], configRoot: dir)
+        XCTAssertEqual(try read(dir), "# tools\nfloat = id:top command:htop key:cmd+shift+t\n")
+    }
+
+    func test_float_roundTripsThroughLoader() throws {
+        let dir = try makeTempDir()
+        try ConfigWriter.apply(
+            floatUpserts: [
+                float(id: "dev", command: "npm run dev", toggle: Chord(command: true, shift: true, key: "d"))
+            ], configRoot: dir)
+        let floats = ConfigLoader.loadGeneralConfig(configRoot: dir).floats
+        XCTAssertEqual(floats.count, 1)
+        XCTAssertEqual(floats.first?.id, "dev")
+        XCTAssertEqual(floats.first?.command, "npm run dev")
+        XCTAssertEqual(floats.first?.toggle, Chord(command: true, shift: true, key: "d"))
+    }
+
+    func test_float_quotesHashInCommand_survivesParse() throws {
+        let original = float(
+            id: "note", command: "echo #1", toggle: Chord(command: true, shift: true, key: "n"))
+        let line = ConfigWriter.serializeFloat(original)
+        XCTAssertTrue(line.contains("command:\"echo #1\""), line)
+        // The whole line must survive the parser's comment strip (the `#` is inside quotes).
+        let stripped = ConfigText.stripComment(line)
+        XCTAssertEqual(ToolFloatParser.parse(String(stripped.dropFirst("float = ".count))), original)
+    }
+
     func test_keybind_narrowingMultiDefaultAction_persistsAndRoundTrips() throws {
         let dir = try makeTempDir()
         // splitVertical ships bound to BOTH ⌘⇧| and ⌘⇧\. Narrow it to just ⌘⇧\ — a chord that

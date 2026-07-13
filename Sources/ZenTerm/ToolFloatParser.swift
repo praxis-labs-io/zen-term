@@ -7,7 +7,16 @@ import Foundation
 /// missing a required field (`id`, `key`, `command`) or with an unparseable `key:` is
 /// dropped with a warning; optional fields fall back to sensible defaults.
 enum ToolFloatParser {
-    static func parse(_ value: String) -> ToolFloat? {
+    /// The defaults an omitted optional field falls back to — shared with `ConfigWriter`, which omits
+    /// a field from its serialized line when the value equals the default, so the two halves can't drift.
+    static let defaultIcon = "square.on.square"
+    static let defaultFraction: CGFloat = 0.85
+    static func defaultTitle(forID id: String) -> String { "Open \(id)" }
+
+    /// Split a `float =` value into its `field:value` map — quote-aware, each token split on its
+    /// first `:`, values unquoted. The read half of the grammar `ConfigWriter.serializeFloat` writes;
+    /// `ConfigWriter` also uses it to read a line's `id:` when matching a float to replace/remove.
+    static func fields(_ value: String) -> [String: String] {
         var fields: [String: String] = [:]
         for token in tokenize(value) {
             guard let colon = token.firstIndex(of: ":") else { continue }
@@ -15,6 +24,11 @@ enum ToolFloatParser {
             let raw = String(token[token.index(after: colon)...])
             fields[field] = ConfigText.unquote(raw)
         }
+        return fields
+    }
+
+    static func parse(_ value: String) -> ToolFloat? {
+        let fields = fields(value)
 
         guard let id = fields["id"], !id.isEmpty else {
             NSLog("GeneralConfig: float line missing required `id:` — ignored")
@@ -31,11 +45,11 @@ enum ToolFloatParser {
 
         return ToolFloat(
             id: id,
-            title: fields["title"] ?? "Open \(id)",
-            icon: fields["icon"] ?? "square.on.square",
+            title: fields["title"] ?? Self.defaultTitle(forID: id),
+            icon: fields["icon"] ?? Self.defaultIcon,
             command: command,
-            widthFraction: fraction(fields["width"]) ?? 0.85,
-            heightFraction: fraction(fields["height"]) ?? 0.85,
+            widthFraction: fraction(fields["width"]) ?? Self.defaultFraction,
+            heightFraction: fraction(fields["height"]) ?? Self.defaultFraction,
             requiresGitRepo: fields["git"]?.lowercased() == "true",
             emptyGuard: nil,
             toggle: toggle)

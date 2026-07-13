@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Edits the flat `~/.config/zen-term/config` file in place — the counterpart to
@@ -13,6 +14,8 @@ enum ConfigWriter {
         scalars: [String: String] = [:],
         removals: Set<String> = [],
         keybinds: [Chord: KeyInterceptor.ReservedChord]? = nil,
+        floatUpserts: [ToolFloat] = [],
+        floatRemovals: Set<String> = [],
         configRoot: URL = ConfigLoader.defaultRoot
     ) throws {
         try FileManager.default.createDirectory(at: configRoot, withIntermediateDirectories: true)
@@ -23,6 +26,9 @@ enum ConfigWriter {
         for (key, value) in scalars { setScalar(key, value, in: &lines) }
         for key in removals { removeScalar(key, in: &lines) }
         if let keybinds { applyKeybinds(keybinds, to: &lines) }
+        if !floatUpserts.isEmpty || !floatRemovals.isEmpty {
+            applyFloats(upserts: floatUpserts, removals: floatRemovals, in: &lines)
+        }
 
         var output = lines.joined(separator: "\n")
         if !output.isEmpty { output += "\n" }  // config files end with a trailing newline
@@ -125,6 +131,79 @@ enum ConfigWriter {
         guard isKeybindLine(line), let equals = line.firstIndex(of: "=") else { return false }
         let value = line[line.index(after: equals)...].trimmingCharacters(in: .whitespaces)
         return value.hasPrefix("toggle_float:")
+    }
+
+    // MARK: floats
+
+    /// Serialize a `ToolFloat` into its full `float = …` line — the inverse of `ToolFloatParser`,
+    /// round-tripping its quote-aware `field:value` grammar. The required fields (`id`, `key`,
+    /// `command`) are always emitted; an optional field is omitted when it equals the parser's default
+    /// (shared via `ToolFloatParser`, so the two halves can't drift), keeping a plain float's line
+    /// lean. A value with whitespace or a `#` is quoted — the same rule `WorkspacesWriter` uses — so
+    /// the parser's comment strip and whitespace tokenizer don't split it. `emptyGuard` has no grammar
+    /// yet (the parser always reads it as nil), so it isn't serialized.
+    static func serializeFloat(_ float: ToolFloat) -> String {
+        var tokens = ["id:\(quotedValue(float.id))", "key:\(float.toggle.configToken)"]
+        if float.title != ToolFloatParser.defaultTitle(forID: float.id) {
+            tokens.append("title:\(quotedValue(float.title))")
+        }
+        if float.icon != ToolFloatParser.defaultIcon { tokens.append("icon:\(quotedValue(float.icon))") }
+        tokens.append("command:\(quotedValue(float.command))")
+        if float.widthFraction != ToolFloatParser.defaultFraction {
+            tokens.append("width:\(fractionToken(float.widthFraction))")
+        }
+        if float.heightFraction != ToolFloatParser.defaultFraction {
+            tokens.append("height:\(fractionToken(float.heightFraction))")
+        }
+        if float.requiresGitRepo { tokens.append("git:true") }
+        return "float = " + tokens.joined(separator: " ")
+    }
+
+    /// Replace each upsert's `float =` line in place (matched by `id:`, preserving any trailing
+    /// comment), or insert it after the last existing float line (else append). Removals run first,
+    /// dropping every float line whose id is in the set. Only float lines are touched; comments,
+    /// blanks, and every other key survive verbatim.
+    private static func applyFloats(upserts: [ToolFloat], removals: Set<String>, in lines: inout [String]) {
+        if !removals.isEmpty {
+            lines.removeAll { floatID(of: $0).map(removals.contains) ?? false }
+        }
+        for float in upserts {
+            let rendered = serializeFloat(float)
+            if let index = lines.firstIndex(where: { floatID(of: $0) == float.id }) {
+                if let comment = ConfigText.trailingComment(of: lines[index]) {
+                    lines[index] = "\(rendered)  \(comment)"
+                } else {
+                    lines[index] = rendered
+                }
+            } else if let lastFloat = lines.lastIndex(where: { floatID(of: $0) != nil }) {
+                lines.insert(rendered, at: lastFloat + 1)  // group with the existing float lines
+            } else {
+                lines.append(rendered)
+            }
+        }
+    }
+
+    /// The `id:` of an active `float =` line, else nil (not a float line, or its id is missing). Reads
+    /// through `ToolFloatParser.fields` so line-matching uses the very tokenizer the parser does.
+    private static func floatID(of line: String) -> String? {
+        guard activeAssignmentKey(line) == "float", let equals = line.firstIndex(of: "=") else { return nil }
+        let value = ConfigText.stripComment(String(line[line.index(after: equals)...]))
+        let id = ToolFloatParser.fields(value)["id"] ?? ""
+        return id.isEmpty ? nil : id
+    }
+
+    /// Quote a value that carries whitespace or a `#` so the parser's comment strip and tokenizer
+    /// keep it intact; leave a bare token bare. Values never contain a `"` — the form rejects them
+    /// (the grammar has no escape).
+    private static func quotedValue(_ value: String) -> String {
+        let needsQuoting = value.contains("#") || value.contains(where: \.isWhitespace)
+        return needsQuoting ? "\"\(value)\"" : value
+    }
+
+    /// A width/height fraction as a compact decimal (`0.85`, not `0.850000`) — `%g` drops trailing
+    /// zeros and, being C-locale, never emits a comma the parser's `Double(_:)` would reject.
+    private static func fractionToken(_ value: CGFloat) -> String {
+        String(format: "%g", Double(value))
     }
 
     // MARK: line classification

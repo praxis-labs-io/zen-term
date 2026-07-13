@@ -20,12 +20,13 @@ final class SettingsOverlay: NSView, ModalOverlay {
     private let divider = NSView()
 
     init(
-        sections: [SettingsSection], capturer: KeybindCapturing?, background: NSColor,
-        onClose: @escaping () -> Void
+        sections: [SettingsSection], capturer: KeybindCapturing?, initialSection: Int = 0,
+        background: NSColor, onClose: @escaping () -> Void
     ) {
         self.sections = sections
         self.capturer = capturer
         self.onClose = onClose
+        self.selectedIndex = sections.indices.contains(initialSection) ? initialSection : 0
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -60,7 +61,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
             content.bottomAnchor.constraint(equalTo: card.bottomAnchor),
         ])
 
-        selectSection(0)
+        selectSection(selectedIndex)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -68,7 +69,8 @@ final class SettingsOverlay: NSView, ModalOverlay {
     // MARK: ModalOverlay
 
     func focusInitialResponder() {
-        if let first = navRows.first { window?.makeFirstResponder(first) }
+        guard navRows.indices.contains(selectedIndex) else { return }
+        window?.makeFirstResponder(navRows[selectedIndex])
     }
     func animateIn() {
         superview?.layoutSubtreeIfNeeded()
