@@ -10,7 +10,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
     private let onClose: () -> Void
 
     private let card = CardView()
-    private var isDismissing = false
+    private var dismiss = DismissGate()
 
     private let navStack = NSStackView()
     private var navRows: [SettingsNavRow] = []
@@ -34,14 +34,9 @@ final class SettingsOverlay: NSView, ModalOverlay {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        card.wantsLayer = true
-        card.layer?.cornerRadius = 12
-        card.layer?.backgroundColor = background.cgColor
-        card.layer?.borderWidth = 1
-        card.layer?.borderColor = FloatShadow.edge.cgColor
+        CardChrome.apply(to: card, background: background)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
-        FloatShadow.applyShadow(to: card)
 
         let content = buildContent()
         card.addSubview(content)
@@ -80,12 +75,11 @@ final class SettingsOverlay: NSView, ModalOverlay {
         Motion.springScaleFade(card, appearing: true)
     }
     func animateOut(completion: @escaping () -> Void) {
-        guard !isDismissing else { return }
-        isDismissing = true
+        guard dismiss.begin() else { return }
         capturer?.endCapture()  // never leave a capture handler armed after the card closes
         Motion.springScaleFade(card, appearing: false, completion: completion)
     }
-    override func hitTest(_ point: NSPoint) -> NSView? { isDismissing ? nil : super.hitTest(point) }
+    override func hitTest(_ point: NSPoint) -> NSView? { dismiss.isDismissing ? nil : super.hitTest(point) }
 
     /// Re-apply the card's theme-dependent colors after a live theme change: the retained shell
     /// (card fill/border, heading, divider), the nav rows, and every section IN PLACE — never via
@@ -96,8 +90,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
     /// visible one) is recolored — a hidden section's rows are unparented (harmless to recolor) but
     /// its persistent Reset-all button/flash must be right for when it's next shown.
     func reapplyTheme() {
-        card.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        card.layer?.borderColor = FloatShadow.edge.cgColor
+        CardChrome.reapplyTheme(to: card)
         heading.textColor = Theme.current.chrome.ink(alpha: 0.4)
         divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         navRows.forEach { $0.reapplyTheme() }

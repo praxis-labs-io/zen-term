@@ -12,7 +12,7 @@ import AppKit
 class SurfaceFloatOverlay: NSView {
     private let onDismiss: () -> Void
     private let card = NSView()
-    private var isDismissing = false
+    private var dismiss = DismissGate()
 
     /// - Parameters:
     ///   - content: the view hosted in the card (e.g. a terminal surface's view).
@@ -44,16 +44,9 @@ class SurfaceFloatOverlay: NSView {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        card.wantsLayer = true
-        card.layer?.cornerRadius = cornerRadius
-        card.layer?.backgroundColor = background.cgColor
-        card.layer?.borderWidth = 1
-        card.layer?.borderColor = FloatShadow.edge.cgColor  // subtle neutral edge
+        CardChrome.apply(to: card, background: background, cornerRadius: cornerRadius)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
-        // Dark elevation shadow on the card itself (masksToBounds stays off so it isn't
-        // clipped); the content inset keeps the content off the rounded corners.
-        FloatShadow.applyShadow(to: card)
 
         content.translatesAutoresizingMaskIntoConstraints = false
         // The card is sized as a fraction of the tile (relaxable). A hosted terminal
@@ -91,8 +84,7 @@ class SurfaceFloatOverlay: NSView {
     /// Re-apply the card's theme-dependent colors after a live theme change. The shadow
     /// (`FloatShadow.applyShadow`) is theme-independent and untouched.
     func reapplyTheme() {
-        card.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        card.layer?.borderColor = FloatShadow.edge.cgColor
+        CardChrome.reapplyTheme(to: card)
     }
 
     /// Spring the card in (fade + subtle scale about its center). Call after presenting.
@@ -104,23 +96,14 @@ class SurfaceFloatOverlay: NSView {
     /// Spring the card back out, then run `completion` (the host removes the overlay and
     /// tears down the surface). Idempotent — a second call while dismissing is ignored.
     func animateOut(completion: @escaping () -> Void) {
-        guard !isDismissing else { return }
-        isDismissing = true
+        guard dismiss.begin() else { return }
         Motion.springScaleFade(card, appearing: false, completion: completion)
     }
 
     /// Once dismissal starts, stop intercepting clicks so a tap during the exit animation
     /// falls through to the panes instead of the still-present backdrop.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        isDismissing ? nil : super.hitTest(point)
+        dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
-    /// A transparent backdrop; a click anywhere on it (i.e. outside the card) dismisses.
-    /// Clicks on the card/content land on those subviews and never reach here.
-    private final class BackdropView: NSView {
-        private let onClick: () -> Void
-        init(onClick: @escaping () -> Void) { self.onClick = onClick; super.init(frame: .zero) }
-        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-        override func mouseDown(with event: NSEvent) { onClick() }
-    }
 }

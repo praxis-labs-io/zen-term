@@ -22,7 +22,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private let onCancel: () -> Void
 
     private let card = CardView()
-    private var isDismissing = false
+    private var dismiss = DismissGate()
     /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it in place.
     private let header = NSTextField(labelWithString: "New Workspace")
 
@@ -73,14 +73,9 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        card.wantsLayer = true
-        card.layer?.cornerRadius = 12
-        card.layer?.backgroundColor = background.cgColor
-        card.layer?.borderWidth = 1
-        card.layer?.borderColor = FloatShadow.edge.cgColor
+        CardChrome.apply(to: card, background: background)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
-        FloatShadow.applyShadow(to: card)
 
         let content = buildContent()
         card.addSubview(content)
@@ -120,13 +115,12 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     }
 
     func animateOut(completion: @escaping () -> Void) {
-        guard !isDismissing else { return }
-        isDismissing = true
+        guard dismiss.begin() else { return }
         Motion.springScaleFade(card, appearing: false, completion: completion)
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        isDismissing ? nil : super.hitTest(point)
+        dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
     /// Re-apply the form's theme-dependent colors after a live theme change, IN PLACE — unlike
@@ -137,8 +131,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     /// reason KeybindRow does — a composite that owns otherwise-stranded static labels.
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        card.layer?.backgroundColor = chrome.background.nsColor.cgColor
-        card.layer?.borderColor = FloatShadow.edge.cgColor
+        CardChrome.reapplyTheme(to: card)
         header.textColor = chrome.foreground.nsColor
         layoutCaption.textColor = chrome.ink(alpha: 0.45)
         envError.textColor = chrome.destructive.nsColor
