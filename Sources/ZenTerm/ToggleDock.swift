@@ -73,6 +73,10 @@ final class ToggleDock: NSView {
     /// Test hook: the ids of the per-float buttons currently mounted in the dock.
     var toolFloatButtonIDsForTesting: Set<String> { Set(toolFloatBtns.keys) }
 
+    /// Test hooks: whether each drawer toggle currently shows its busy activity dot (ZEN-107).
+    var bottomActivityForTesting: Bool { bottomBtn.showsActivity }
+    var rightActivityForTesting: Bool { rightBtn.showsActivity }
+
     /// Rebuild the per-float buttons at the tail of the dock from the current catalog — called on
     /// init and whenever a config change adds / edits / removes a float, so the dock reflects it with
     /// no relaunch. The fixed buttons and dividers are untouched; the caller re-runs `render` after
@@ -106,28 +110,33 @@ final class ToggleDock: NSView {
         for (id, btn) in toolFloatBtns { btn.isActive = overlay.activeToolFloatID == id }
 
         // A float covers the tab, so zoom/drawer state beneath it would read as lit-but-hidden.
-        if overlay.isLazygitOpen || overlay.activeToolFloatID != nil {
+        let floatCoversTab = overlay.isLazygitOpen || overlay.activeToolFloatID != nil
+        if floatCoversTab {
             zoomBtn.isActive = false
             bottomBtn.isActive = false
             rightBtn.isActive = false
-            return
+        } else {
+            zoomBtn.isActive = overlay.zoomed != nil
+            switch overlay.zoomed {
+            case nil:
+                bottomBtn.isActive = overlay.isBottomOpen
+                rightBtn.isActive = overlay.isRightOpen
+            case .pane:
+                bottomBtn.isActive = false
+                rightBtn.isActive = false
+            case .bottomDrawer:
+                bottomBtn.isActive = true
+                rightBtn.isActive = false
+            case .rightDrawer:
+                bottomBtn.isActive = false
+                rightBtn.isActive = true
+            }
         }
 
-        zoomBtn.isActive = overlay.zoomed != nil
-        switch overlay.zoomed {
-        case nil:
-            bottomBtn.isActive = overlay.isBottomOpen
-            rightBtn.isActive = overlay.isRightOpen
-        case .pane:
-            bottomBtn.isActive = false
-            rightBtn.isActive = false
-        case .bottomDrawer:
-            bottomBtn.isActive = true
-            rightBtn.isActive = false
-        case .rightDrawer:
-            bottomBtn.isActive = false
-            rightBtn.isActive = true
-        }
+        // A busy drawer earns a dot so its live process is evident from the footer, whether the
+        // drawer is currently shown or hidden (ZEN-107).
+        bottomBtn.showsActivity = overlay.bottomBusy
+        rightBtn.showsActivity = overlay.rightBusy
     }
 
     /// Re-apply the live chrome colors to every button + divider after a config change — no

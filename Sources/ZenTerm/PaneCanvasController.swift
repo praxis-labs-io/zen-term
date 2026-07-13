@@ -76,10 +76,6 @@ final class PaneCanvasController: NSObject {
     /// relays it up.
     var onNotification: ((TerminalNotification) -> Void)?
 
-    /// Fired when a zoomed pane's corner unzoom button is clicked — the owning
-    /// `TabController` exits zoom (keeping its `zoomedPanel` in sync).
-    var onZoomExitRequested: (() -> Void)?
-
     /// Fired when zoom ends on its own because the zoomed leaf disappeared (its shell
     /// exited) — the owning `TabController` clears its `zoomedPanel` so zoom state and
     /// panel visibility stay in sync.
@@ -249,10 +245,10 @@ final class PaneCanvasController: NSObject {
             content: surface.view,
             background: Theme.current.chrome.background.nsColor,
             meta: nil,
+            zoomMeta: PanelMeta(title: "Full screen", action: .toggleZoom),
             onFocusRequest: { [weak self] in
                 self?.focus(id)
             })
-        host.onZoomExit = { [weak self] in self?.onZoomExitRequested?() }
         hostByLeaf[id] = host
         return host
     }

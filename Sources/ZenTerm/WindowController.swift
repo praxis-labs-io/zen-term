@@ -244,7 +244,22 @@ final class WindowController: NSObject {
             if titles[id] != t { titles[id] = t; changed = true }
         }
         if changed { renderTabBar() }
+
+        // The active tab's drawer busy-state has no push event, so poll it here and re-render
+        // the dock only when a drawer's activity dot flips (ZEN-107).
+        let busy = (
+            activeController?.overlayState.bottomBusy ?? false,
+            activeController?.overlayState.rightBusy ?? false
+        )
+        if busy != lastDrawerBusy {
+            lastDrawerBusy = busy
+            renderDock()
+        }
     }
+
+    /// The active tab's (bottom, right) drawer busy-state at the last poll — so the dock only
+    /// re-renders when the activity dot actually flips.
+    private var lastDrawerBusy = (false, false)
 
     deinit { titlePoll?.invalidate() }  // backstop; tearDown() normally handles it
 

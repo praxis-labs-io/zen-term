@@ -16,6 +16,10 @@ struct OverlayState: Equatable {
     var isLazygitOpen = false
     var activeToolFloatID: String?
     var zoomed: ZoomedPanel?
+    /// Whether each drawer's shell has a live process — drives the footer dock's activity dot
+    /// when the drawer is hidden (ZEN-107).
+    var bottomBusy = false
+    var rightBusy = false
 }
 
 /// One tab: owns the pane tree (`PaneCanvasController`) and the per-tab overlay
@@ -182,7 +186,9 @@ final class TabController: NSObject {
         OverlayState(
             isBottomOpen: isBottomOpen, isRightOpen: isRightOpen,
             isLazygitOpen: isLazygitOpen, activeToolFloatID: activeToolFloatID,
-            zoomed: zoomedPanel.map(\.asZoomed))
+            zoomed: zoomedPanel.map(\.asZoomed),
+            bottomBusy: bottomDrawerSurface?.isBusy == true,
+            rightBusy: rightDrawerSurface?.isBusy == true)
     }
     var onOverlayStateChanged: (() -> Void)?
 
@@ -237,7 +243,6 @@ final class TabController: NSObject {
         paneCanvas.onFocusChanged = { [weak self] in self?.paneGainedFocus() }
         paneCanvas.onPanesRemoved = { [weak self] closed in self?.pruneNavReturn(closed: closed) }
         paneCanvas.onSocketFocus = { [weak self] dir in self?.navigate(dir) }
-        paneCanvas.onZoomExitRequested = { [weak self] in self?.toggleZoom() }
         paneCanvas.onZoomEnded = { [weak self] in self?.paneZoomEndedInternally() }
         paneCanvas.onNotification = { [weak self] n in self?.onNotification?(n) }
     }
@@ -760,25 +765,17 @@ final class TabController: NSObject {
     // MARK: tiling
 
     private func makeDrawerPanel(edge: DrawerEdge, surface: TerminalSurface) -> PanelHostView {
-        // Headers dropped for now — drawers use the bare pane chrome (meta: nil). A
-        // corner hide button (chevron pointing the way it collapses) toggles the drawer.
-        let hideSymbol = edge == .bottom ? "chevron.down" : "chevron.right"
-        let hideLabel = edge == .bottom ? "Hide bottom drawer" : "Hide right drawer"
+        // A labeled header (title + live toggle keybind) instead of a floating corner icon;
+        // the drawer is toggled from the footer dock or the keymap (ZEN-65).
+        let meta =
+            edge == .bottom
+            ? PanelMeta(title: "Bottom drawer", action: .toggleBottomDrawer)
+            : PanelMeta(title: "Right drawer", action: .toggleRightDrawer)
         let panel = PanelHostView(
             content: surface.view,
             background: Theme.current.chrome.background.nsColor,
-            meta: nil,
-            hideButton: (
-                symbol: hideSymbol, label: hideLabel,
-                onHide: { [weak self] in
-                    switch edge {
-                    case .bottom: self?.toggleBottomDrawer()
-                    case .right: self?.toggleRightDrawer()
-                    }
-                }
-            ),
+            meta: meta,
             onFocusRequest: { [weak self] in self?.focusDrawer(edge) })
-        panel.onZoomExit = { [weak self] in self?.toggleZoom() }
         panel.translatesAutoresizingMaskIntoConstraints = false
         return panel
     }

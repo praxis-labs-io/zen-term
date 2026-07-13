@@ -1,37 +1,40 @@
 import AppKit
 
-/// Optional top meta header for a `PanelHostView` — a small-caps label (left) and its
-/// toggle keybind (right), e.g. `("BOTTOM", "⌘B")` for a drawer panel.
+/// A panel's top header: a muted small-caps title (left) and its live keybind (right),
+/// e.g. `("Bottom drawer", .toggleBottomDrawer)` → `BOTTOM DRAWER  ⌘B`. Replaces the old
+/// floating corner icons — a labeled header, not a control; the toggle lives in the footer
+/// dock and the keymap.
 struct PanelMeta {
-    let label: String
-    let keybind: String
+    let title: String
+    let action: KeyInterceptor.ReservedChord
 }
 
-/// Hosts one terminal surface (a pane leaf today; a drawer later) inside the shared
-/// rounded/bordered chrome: the iris focus halo (accent border + soft glow) and an
-/// inner clip that keeps content within the corner radius. An optional top meta row
-/// (label + keybind) renders above the content when `meta` is non-nil; panes pass
-/// `meta: nil` and look/behave exactly as the original pane-only chrome. Clicking
-/// anywhere in the panel requests focus.
+/// Hosts one terminal surface (a pane leaf or a drawer) inside the shared rounded/bordered
+/// chrome: the iris focus halo (accent border + soft glow) and an inner clip that keeps
+/// content within the corner radius. A drawer passes `meta` for an always-on header; a pane
+/// passes `zoomMeta` for a header that appears only while the pane is zoomed (full screen).
+/// Panes with neither look/behave exactly as the original pane-only chrome. Clicking anywhere
+/// in the panel requests focus.
 final class PanelHostView: NSView {
     private let onFocusRequest: () -> Void
     private let pane = NSView()
     private let clip = NSView()  // inner clip so terminal content stays inside the radius
-    private let zoomButton: IconButton
-    private let hideButton: IconButton?
-    private static let cornerSize = NSSize(width: 22, height: 20)
-
-    /// Invoked when the corner zoom action button is clicked — the chrome exits zoom.
-    var onZoomExit: (() -> Void)?
+    private let headerView: PanelHeader?
+    /// True when the header is a pane's full-screen header (shown only while zoomed); false for
+    /// a drawer header (always shown). Drives whether `isZoomed` toggles the header.
+    private let headerZoomOnly: Bool
+    private var headerTopConstraints: [NSLayoutConstraint] = []
+    private var contentTopToHeader: NSLayoutConstraint?
+    private var contentTopToClip: NSLayoutConstraint?
 
     var isFocused: Bool = false { didSet { if oldValue != isFocused { updateHalo() } } }
 
-    /// Whether this panel is the sole full-canvas panel (zoomed). Shows the corner
-    /// unzoom button and hides the (drawer) hide button — they share the corner.
+    /// Whether this panel is the sole full-canvas panel (zoomed). A pane reveals its
+    /// full-screen header; a drawer keeps its own header, so its state is a no-op here.
     var isZoomed: Bool = false {
         didSet {
-            zoomButton.isHidden = !isZoomed
-            hideButton?.isHidden = isZoomed
+            guard oldValue != isZoomed, headerZoomOnly else { return }
+            setHeaderShown(isZoomed)
         }
     }
 
@@ -40,24 +43,21 @@ final class PanelHostView: NSView {
     private let padding: CGFloat = 10
 
     init(
-        content: NSView, background: NSColor, meta: PanelMeta?,
-        hideButton hideSpec: (symbol: String, label: String, onHide: () -> Void)? = nil,
+        content: NSView, background: NSColor, meta: PanelMeta?, zoomMeta: PanelMeta? = nil,
         onFocusRequest: @escaping () -> Void
     ) {
         self.onFocusRequest = onFocusRequest
-        // Shown only while zoomed → exit-zoom (inward arrows). onClick wired post-super.
-        self.zoomButton = IconButton(
-            symbol: "arrow.down.right.and.arrow.up.left",
-            size: Self.cornerSize, pointSize: 11,
-            accessibilityLabel: "Exit zoom", onClick: {})
-        self.hideButton = hideSpec.map {
-            IconButton(
-                symbol: $0.symbol, size: Self.cornerSize, pointSize: 11,
-                accessibilityLabel: $0.label, onClick: $0.onHide)
+        if let meta {
+            headerView = PanelHeader(meta)
+            headerZoomOnly = false
+        } else if let zoomMeta {
+            headerView = PanelHeader(zoomMeta)
+            headerZoomOnly = true
+        } else {
+            headerView = nil
+            headerZoomOnly = false
         }
         super.init(frame: .zero)
-        zoomButton.onClick = { [weak self] in self?.onZoomExit?() }
-        zoomButton.isHidden = true  // only appears while zoomed
 
         wantsLayer = true
         pane.wantsLayer = true
@@ -95,29 +95,20 @@ final class PanelHostView: NSView {
             content.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -padding),
         ])
 
-        // Both corner buttons share the top-right slot; visibility is mutually
-        // exclusive (hide button when not zoomed, unzoom button when zoomed).
-        pane.addSubview(zoomButton)
-        var buttonCs = cornerConstraints(for: zoomButton)
-        if let hideButton {
-            hideButton.isHidden = false
-            pane.addSubview(hideButton)
-            buttonCs += cornerConstraints(for: hideButton)
-        }
-        NSLayoutConstraint.activate(buttonCs)
-
-        if let meta {
-            let header = Self.makeMetaHeader(meta)
-            header.translatesAutoresizingMaskIntoConstraints = false
-            clip.addSubview(header)
-            NSLayoutConstraint.activate([
-                header.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: 6),
-                header.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -6),
-                header.topAnchor.constraint(equalTo: clip.topAnchor, constant: 6),
-                content.topAnchor.constraint(equalTo: header.bottomAnchor, constant: padding),
-            ])
+        contentTopToClip = content.topAnchor.constraint(equalTo: clip.topAnchor, constant: padding)
+        if let headerView {
+            headerView.translatesAutoresizingMaskIntoConstraints = false
+            clip.addSubview(headerView)
+            headerTopConstraints = [
+                headerView.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
+                headerView.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
+                headerView.topAnchor.constraint(equalTo: clip.topAnchor, constant: 8),
+            ]
+            contentTopToHeader = content.topAnchor.constraint(
+                equalTo: headerView.bottomAnchor, constant: padding)
+            setHeaderShown(!headerZoomOnly)  // drawer headers show now; a pane's waits for zoom
         } else {
-            content.topAnchor.constraint(equalTo: clip.topAnchor, constant: padding).isActive = true
+            contentTopToClip?.isActive = true
         }
 
         updateHalo()
@@ -125,18 +116,25 @@ final class PanelHostView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// Test hook: whether the header is present and currently shown (ZEN-65).
+    var isHeaderVisibleForTesting: Bool { headerView.map { !$0.isHidden } ?? false }
+
     override func mouseDown(with event: NSEvent) {
         onFocusRequest()
         super.mouseDown(with: event)
     }
 
-    /// Top-right corner slot (8pt inset) shared by the corner action buttons; each
-    /// `IconButton` supplies its own size.
-    private func cornerConstraints(for button: NSView) -> [NSLayoutConstraint] {
-        [
-            button.topAnchor.constraint(equalTo: pane.topAnchor, constant: 8),
-            button.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -8),
-        ]
+    /// Swap between header-above-content and content-at-top, and hide/show the header.
+    private func setHeaderShown(_ shown: Bool) {
+        guard let headerView, let contentTopToHeader, let contentTopToClip else { return }
+        headerView.isHidden = !shown
+        if shown {
+            contentTopToClip.isActive = false
+            NSLayoutConstraint.activate(headerTopConstraints + [contentTopToHeader])
+        } else {
+            NSLayoutConstraint.deactivate(headerTopConstraints + [contentTopToHeader])
+            contentTopToClip.isActive = true
+        }
     }
 
     private static var idleBorder: NSColor { Theme.current.chrome.ink(alpha: 0.08) }
@@ -144,13 +142,12 @@ final class PanelHostView: NSView {
     /// Re-apply the live pane border / focus-halo colors after a config change — no relaunch.
     /// The glow's `shadowColor` is set once at init (only its opacity is toggled elsewhere), so
     /// it's reset explicitly; the border color is picked up by re-running `updateHalo()`, which
-    /// reads `idleBorder`/`accent` fresh. The clip's padding-ring fill and the corner buttons'
-    /// icon tint are likewise set once at init, so they're refreshed explicitly too.
+    /// reads `idleBorder`/`accent` fresh. The clip's padding-ring fill is likewise set once at
+    /// init, and the header rebuilds its title/keybind against the live theme and keymap.
     func reapplyTheme() {
         pane.layer?.shadowColor = Theme.current.chrome.accent.nsColor.cgColor
         clip.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        zoomButton.reapplyTheme()
-        hideButton?.reapplyTheme()
+        headerView?.reapplyTheme()
         updateHalo()
     }
 
@@ -165,24 +162,61 @@ final class PanelHostView: NSView {
         Motion.ease(layer, keyPath: "shadowOpacity", to: isFocused ? Float(0.3) : Float(0))
     }
 
-    /// A muted small-caps mono label (left) and its keybind (right), e.g. "BOTTOM  ⌘B".
-    private static func makeMetaHeader(_ meta: PanelMeta) -> NSStackView {
-        let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
+    /// A muted small-caps title (left) and its live keybind chip (right), e.g. `BOTTOM DRAWER ⌘B`.
+    /// The keybind resolves from the live keymap via `CommandCatalog`, so it tracks user rebinds.
+    private final class PanelHeader: NSView {
+        private let title: String
+        private let action: KeyInterceptor.ReservedChord
+        private let titleField = NSTextField(labelWithString: "")
+        private var keycap: KeycapView
+        private static let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
 
-        let labelField = NSTextField(labelWithString: "")
-        labelField.attributedStringValue = NSAttributedString(
-            string: meta.label.uppercased(),
-            attributes: [.font: font, .foregroundColor: Theme.current.chrome.ink(alpha: 0.4), .kern: 1.2]
-        )
+        init(_ meta: PanelMeta) {
+            title = meta.title
+            action = meta.action
+            keycap = KeycapView(shortcut: CommandCatalog.spec(for: meta.action).shortcut, showsBackground: false)
+            super.init(frame: .zero)
+            titleField.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(titleField)
+            addSubview(keycap)
+            NSLayoutConstraint.activate([
+                titleField.leadingAnchor.constraint(equalTo: leadingAnchor),
+                titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
+                heightAnchor.constraint(equalToConstant: 20),
+            ])
+            activateKeycapConstraints()
+            applyTitle()
+        }
 
-        let keybindField = NSTextField(labelWithString: meta.keybind)
-        keybindField.font = font
-        keybindField.textColor = Theme.current.chrome.ink(alpha: 0.4)
-        keybindField.alignment = .right
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-        let stack = NSStackView(views: [labelField, keybindField])
-        stack.orientation = .horizontal
-        stack.distribution = .equalSpacing
-        return stack
+        /// Re-apply the live title ink and rebuild the keybind chip — its shortcut is fixed at
+        /// build time, so a rebind (or theme swap) is reflected by re-resolving from the keymap.
+        func reapplyTheme() {
+            applyTitle()
+            keycap.removeFromSuperview()
+            keycap = KeycapView(shortcut: CommandCatalog.spec(for: action).shortcut, showsBackground: false)
+            addSubview(keycap)
+            activateKeycapConstraints()
+        }
+
+        private func activateKeycapConstraints() {
+            keycap.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                keycap.trailingAnchor.constraint(equalTo: trailingAnchor),
+                keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
+                keycap.leadingAnchor.constraint(greaterThanOrEqualTo: titleField.trailingAnchor, constant: 8),
+            ])
+        }
+
+        private func applyTitle() {
+            titleField.attributedStringValue = NSAttributedString(
+                string: title.uppercased(),
+                attributes: [
+                    .font: Self.font,
+                    .foregroundColor: Theme.current.chrome.ink(alpha: 0.4),
+                    .kern: 1.2,
+                ])
+        }
     }
 }
