@@ -201,6 +201,17 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(try read(dir), "# tools\nfloat = id:top command:htop key:cmd+shift+t\n")
     }
 
+    func test_float_upsertWithRemoval_movesFloatToNewID() throws {
+        let dir = try makeTempDir()
+        try seed("float = id:dev command:vim key:cmd+shift+d\n", in: dir)
+        // A rename: upsert under the new id AND remove the old one in the same write.
+        let renamed = float(id: "devbox", command: "vim", toggle: Chord(command: true, shift: true, key: "d"))
+        try ConfigWriter.apply(floatUpserts: [renamed], floatRemovals: ["dev"], configRoot: dir)
+        XCTAssertEqual(
+            ConfigLoader.loadGeneralConfig(configRoot: dir).floats.map(\.id), ["devbox"],
+            "the rename drops the old id, leaving exactly one float — not a duplicate")
+    }
+
     func test_float_roundTripsThroughLoader() throws {
         let dir = try makeTempDir()
         try ConfigWriter.apply(

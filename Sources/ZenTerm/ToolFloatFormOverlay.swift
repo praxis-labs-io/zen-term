@@ -271,10 +271,10 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         chordChip.render(shortcut: float.toggle.displayGlyph)
         commandField.setText(float.command)
         if float.widthFraction != ToolFloatParser.defaultFraction {
-            widthField.setText(Self.fractionText(float.widthFraction))
+            widthField.setText(ToolFloatParser.fractionText(float.widthFraction))
         }
         if float.heightFraction != ToolFloatParser.defaultFraction {
-            heightField.setText(Self.fractionText(float.heightFraction))
+            heightField.setText(ToolFloatParser.fractionText(float.heightFraction))
         }
         gitSegment.setSelection(float.requiresGitRepo ? 1 : 0)
     }
@@ -315,7 +315,21 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             positionHint()
             return  // stay armed
         }
+        if let conflict = chordConflict(chord) {
+            hintBubble?.showError(conflict)
+            positionHint()
+            return  // stay armed
+        }
         commit(chord)
+    }
+
+    /// Reject a chord already bound to another action or float (mirrors the Keybinds section's
+    /// block-on-conflict) so a new float can't silently shadow an existing shortcut. The float being
+    /// edited keeps its own current chord.
+    private func chordConflict(_ chord: Chord) -> String? {
+        let ownAction: KeyInterceptor.ReservedChord? = editingFloat.map { .toggleToolFloat($0.id) }
+        guard let owner = GeneralConfig.current.keymap[chord], owner != ownAction else { return nil }
+        return "That shortcut is already in use."
     }
 
     /// Apply a validated chord: flash a success line in the popover, then close after a short beat.
@@ -494,6 +508,11 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         }
         flag(idGroup, field: idField.field, idMessage)
 
+        // A `"` in the title can't round-trip — `serializeFloat` quotes it and the parser has no
+        // escape, so it corrupts or drops the float on reload. Reject it, like id and command.
+        let title = titleField.text.trimmingCharacters(in: .whitespaces)
+        flag(titleGroup, field: titleField.field, title.contains("\"") ? "Can’t contain a \" character." : nil)
+
         let command = commandField.text.trimmingCharacters(in: .whitespaces)
         var commandMessage: String?
         if command.contains("\"") {
@@ -516,25 +535,27 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         return firstInvalid
     }
 
-    /// The first of Width / Height carrying a non-empty, non-fractional value — a blank field is
-    /// valid (it falls back to the 0.85 default).
+    /// The first of Width / Height carrying a non-empty, out-of-range value — a blank field is valid
+    /// (it falls back to the default). Shares the parser's range so the two never disagree.
     private func firstInvalidSizeField() -> NSView? {
         for box in [widthField, heightField] {
             let text = box.text.trimmingCharacters(in: .whitespaces)
             guard !text.isEmpty else { continue }
-            guard let value = Double(text), (0.2...1.0).contains(value) else { return box.field }
+            guard let value = Double(text), ToolFloatParser.fractionRange.contains(CGFloat(value)) else {
+                return box.field
+            }
         }
         return nil
     }
 
     private func refreshValidity() { validate(includeRequired: false) }
 
-    /// A width/height field's fraction: its parsed value clamped to 0.2…1.0, or the 0.85 default when
-    /// blank. Invalid text never reaches here (validation blocks submit first).
+    /// A width/height field's fraction: its parsed value clamped to the valid range, or the default
+    /// when blank. Invalid text never reaches here (validation blocks submit first).
     private func fraction(_ box: FieldBox) -> CGFloat {
         let text = box.text.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty, let value = Double(text) else { return ToolFloatParser.defaultFraction }
-        return CGFloat(min(max(value, 0.2), 1.0))
+        return ToolFloatParser.clampedFraction(value)
     }
 
     // MARK: layout helpers
@@ -545,8 +566,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         captions.append(field)
         return field
     }
-
-    private static func fractionText(_ value: CGFloat) -> String { String(format: "%g", Double(value)) }
 
     private static func hStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {
         let stack = NSStackView(views: views)

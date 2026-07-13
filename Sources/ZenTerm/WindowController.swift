@@ -524,12 +524,13 @@ final class WindowController: NSObject {
     private func openToolFloatForm(editing float: ToolFloat?) {
         closeModal()
         let existingIDs = Set(GeneralConfig.current.floats.map(\.id)).subtracting(float.map { [$0.id] } ?? [])
+        let originalID = float?.id
         let form = ToolFloatFormOverlay(
             editing: float,
             existingIDs: existingIDs,
             capturer: keybindCapturer,
             background: Theme.current.chrome.background.nsColor,
-            onSubmit: { [weak self] built in self?.submitToolFloat(built) },
+            onSubmit: { [weak self] built in self?.submitToolFloat(built, replacing: originalID) },
             onCancel: { [weak self] in self?.reopenSettingsOnTools() },
             onDelete: float.map { existing in { [weak self] in self?.deleteToolFloat(existing) } }
         )
@@ -554,10 +555,12 @@ final class WindowController: NSObject {
 
     /// Persist a built tool float (upsert by id), reload the live config so the dock button, ⌘P
     /// entry, and keybind appear with no restart, then hand back to Settings → Tools. A write failure
-    /// keeps the form up with a toast.
-    private func submitToolFloat(_ float: ToolFloat) {
+    /// keeps the form up with a toast. `originalID` is the id before an edit — when a rename changed
+    /// it, the old line is removed in the same write so the float moves rather than duplicating.
+    private func submitToolFloat(_ float: ToolFloat, replacing originalID: String?) {
+        let removals: Set<String> = (originalID.map { $0 != float.id ? [$0] : [] }) ?? []
         do {
-            try ConfigWriter.apply(floatUpserts: [float])
+            try ConfigWriter.apply(floatUpserts: [float], floatRemovals: removals)
         } catch {
             toasts.show(
                 ToastContent(

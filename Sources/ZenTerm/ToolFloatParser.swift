@@ -13,6 +13,15 @@ enum ToolFloatParser {
     static let defaultFraction: CGFloat = 0.85
     static func defaultTitle(forID id: String) -> String { "Open \(id)" }
 
+    /// The valid width/height range, plus the shared clamp + compact format — one home for the
+    /// fraction grammar so the parser, the `float =` writer, and the Settings form can't disagree on
+    /// the range or how a fraction reads (`0.85`, not `0.850000`).
+    static let fractionRange: ClosedRange<CGFloat> = 0.2...1.0
+    static func clampedFraction(_ value: Double) -> CGFloat {
+        CGFloat(min(max(value, Double(fractionRange.lowerBound)), Double(fractionRange.upperBound)))
+    }
+    static func fractionText(_ value: CGFloat) -> String { String(format: "%g", Double(value)) }
+
     /// Split a `float =` value into its `field:value` map — quote-aware, each token split on its
     /// first `:`, values unquoted. The read half of the grammar `ConfigWriter.serializeFloat` writes;
     /// `ConfigWriter` also uses it to read a line's `id:` when matching a float to replace/remove.
@@ -59,7 +68,7 @@ enum ToolFloatParser {
     /// (invalid Auto Layout multiplier) and a value > 1 overflows the window.
     private static func fraction(_ raw: String?) -> CGFloat? {
         guard let value = raw.flatMap({ Double($0) }), value.isFinite else { return nil }
-        return CGFloat(min(max(value, 0.2), 1.0))
+        return clampedFraction(value)
     }
 
     /// Split on whitespace, but keep runs inside double quotes intact so a quoted value can

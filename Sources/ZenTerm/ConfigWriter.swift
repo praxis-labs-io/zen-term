@@ -150,10 +150,10 @@ enum ConfigWriter {
         if float.icon != ToolFloatParser.defaultIcon { tokens.append("icon:\(quotedValue(float.icon))") }
         tokens.append("command:\(quotedValue(float.command))")
         if float.widthFraction != ToolFloatParser.defaultFraction {
-            tokens.append("width:\(fractionToken(float.widthFraction))")
+            tokens.append("width:\(ToolFloatParser.fractionText(float.widthFraction))")
         }
         if float.heightFraction != ToolFloatParser.defaultFraction {
-            tokens.append("height:\(fractionToken(float.heightFraction))")
+            tokens.append("height:\(ToolFloatParser.fractionText(float.heightFraction))")
         }
         if float.requiresGitRepo { tokens.append("git:true") }
         return "float = " + tokens.joined(separator: " ")
@@ -198,12 +198,6 @@ enum ConfigWriter {
     private static func quotedValue(_ value: String) -> String {
         let needsQuoting = value.contains("#") || value.contains(where: \.isWhitespace)
         return needsQuoting ? "\"\(value)\"" : value
-    }
-
-    /// A width/height fraction as a compact decimal (`0.85`, not `0.850000`) — `%g` drops trailing
-    /// zeros and, being C-locale, never emits a comma the parser's `Double(_:)` would reject.
-    private static func fractionToken(_ value: CGFloat) -> String {
-        String(format: "%g", Double(value))
     }
 
     // MARK: line classification

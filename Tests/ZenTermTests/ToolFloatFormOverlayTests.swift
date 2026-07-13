@@ -153,6 +153,43 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         XCTAssertTrue(sink.submitted.isEmpty, "empty command → submit is blocked")
     }
 
+    func test_titleWithQuote_blocksSubmit() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "npm run dev").setText("vim")
+        field(in: overlay, placeholder: "Open GitDash").setText("Say \" hi")  // a `"` can't round-trip
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertTrue(sink.submitted.isEmpty, "a title with a \" is rejected, so submit is blocked")
+    }
+
+    func test_conflictingShortcut_isRejected() throws {
+        // Sandbox a config that already binds ⌘⇧G to an existing float.
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-floatconflict-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        ConfigLoader.defaultRootOverrideForTesting = tempRoot
+        defer {
+            ConfigLoader.defaultRootOverrideForTesting = nil
+            AppConfig.reload()
+            try? FileManager.default.removeItem(at: tempRoot)
+        }
+        try "float = id:existing command:htop key:cmd+shift+g\n"
+            .write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+        AppConfig.reload()
+
+        let (overlay, capturer, sink) = mount()  // a new float
+        field(in: overlay, placeholder: "gitdash").setText("new")
+        field(in: overlay, placeholder: "npm run dev").setText("vim")
+        capture(Chord(command: true, shift: true, key: "g"), in: overlay, capturer)  // conflicts
+
+        submit(in: overlay)
+
+        XCTAssertTrue(sink.submitted.isEmpty, "a shortcut already in use is rejected, so submit is blocked")
+    }
+
     func test_duplicateID_blocksSubmit() {
         let (overlay, capturer, sink) = mount(existingIDs: ["dev"])
         field(in: overlay, placeholder: "gitdash").setText("dev")

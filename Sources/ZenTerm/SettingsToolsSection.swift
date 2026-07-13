@@ -15,9 +15,11 @@ final class SettingsToolsSection: SettingsSection {
 
     private var rows: [ToolFloatRow] = []
     private let addButton = AppButton(title: "＋ Add tool float", variant: .muted)
-    /// Retained so `reapplyTheme()` / `populateRows()` can reach them in place.
-    private let caption = SettingsDetail.groupCaption("Tool floats")
-    private let emptyHint = NSTextField(labelWithString: "")
+    /// Rebuilt fresh by `populateRows` on each `makeDetailView` (the card rebuilds a section's detail
+    /// on every switch), so their width constraints never accumulate on a retained view. Weak refs
+    /// just let `reapplyTheme` recolor whichever pair is currently mounted.
+    private weak var caption: NSTextField?
+    private weak var emptyHint: NSTextField?
     private var rowsStack: NSStackView?
 
     func makeDetailView() -> NSView {
@@ -27,12 +29,6 @@ final class SettingsToolsSection: SettingsSection {
         stack.spacing = 3
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
-
-        emptyHint.font = .systemFont(ofSize: 12)
-        emptyHint.textColor = Theme.current.chrome.ink(alpha: 0.5)
-        emptyHint.stringValue = "No tool floats yet. Add one to get a dock button and a shortcut."
-        emptyHint.lineBreakMode = .byWordWrapping
-        emptyHint.maximumNumberOfLines = 0
 
         addButton.isKeyboardFocusable = true
         addButton.onArrowUp = { [weak self] in self?.moveFocus(from: self?.addButton, delta: -1) }
@@ -47,8 +43,8 @@ final class SettingsToolsSection: SettingsSection {
     func detailStops() -> [NSView] { rows + [addButton] }
 
     func reapplyTheme() {
-        caption.textColor = Theme.current.chrome.ink(alpha: 0.4)
-        emptyHint.textColor = Theme.current.chrome.ink(alpha: 0.5)
+        caption?.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        emptyHint?.textColor = Theme.current.chrome.ink(alpha: 0.5)
         rows.forEach { $0.reapplyTheme() }
         addButton.reapplyTheme()
     }
@@ -62,13 +58,21 @@ final class SettingsToolsSection: SettingsSection {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rows = []
 
+        let caption = SettingsDetail.groupCaption("Tool floats")
+        self.caption = caption
         stack.addArrangedSubview(caption)
         caption.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
         let floats = GeneralConfig.current.floats
         if floats.isEmpty {
-            stack.addArrangedSubview(emptyHint)
-            emptyHint.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+            let hint = NSTextField(labelWithString: "No tool floats yet. Add one to get a dock button and a shortcut.")
+            hint.font = .systemFont(ofSize: 12)
+            hint.textColor = Theme.current.chrome.ink(alpha: 0.5)
+            hint.lineBreakMode = .byWordWrapping
+            hint.maximumNumberOfLines = 0
+            emptyHint = hint
+            stack.addArrangedSubview(hint)
+            hint.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         } else {
             for float in floats {
                 let row = ToolFloatRow(float: float)
