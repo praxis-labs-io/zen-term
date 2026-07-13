@@ -134,10 +134,13 @@ final class PaneCanvasController: NSObject {
         return "shell"
     }
 
-    init(initialCWD: URL? = nil, initialCommand: String? = nil, env: [String: String] = [:]) {
+    init(
+        initialCWD: URL? = nil, initialCommand: String? = nil, env: [String: String] = [:],
+        makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make
+    ) {
         let firstLeaf = PaneID(1)
         self.tree = PaneTree(singleLeaf: firstLeaf)
-        self.registry = PaneSurfaceRegistry(makeSurface: TerminalSurfaceFactory.make)
+        self.registry = PaneSurfaceRegistry(makeSurface: makeSurface)
         self.workspaceEnv = env
         super.init()
         nextID = 2
@@ -209,7 +212,9 @@ final class PaneCanvasController: NSObject {
 
     private func rebuildViews() {
         canvasView.subviews.forEach { $0.removeFromSuperview() }
-        hostByLeaf.removeAll(keepingCapacity: true)
+        // `hostByLeaf` survives the rebuild: retained leaves keep their PanelHostView (and
+        // its constraints to `content`), so a restructure only reparents hosts instead of
+        // rebuilding the pane chrome. Removed leaves were already pruned in reconcile.
         splitViewByID.removeAll(keepingCapacity: true)
 
         let root: NSView
@@ -240,6 +245,7 @@ final class PaneCanvasController: NSObject {
     }
 
     private func hostView(for id: PaneID) -> NSView {
+        if let cached = hostByLeaf[id] { return cached }
         guard let surface = registry.surface(for: id) else { return NSView() }
         let host = PanelHostView(
             content: surface.view,
@@ -252,6 +258,9 @@ final class PaneCanvasController: NSObject {
         hostByLeaf[id] = host
         return host
     }
+
+    /// Test hook: the live host per leaf, for asserting reuse across restructures (ZEN-54).
+    var hostsForTesting: [PaneID: PanelHostView] { hostByLeaf }
 
     private func updateHalo() {
         for (id, host) in hostByLeaf {
