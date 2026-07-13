@@ -24,8 +24,10 @@ not running under ZenTerm).
 
 ## Socket
 
-- Path: `$ZEN_SOCK` (currently `~/Library/Application Support/ZenTerm/nav.sock`).
-  Always discover it via the env var, never hardcode.
+- Path: `$ZEN_SOCK` (currently
+  `~/Library/Application Support/ZenTerm/nav.<pid>.sock` — per app instance, so
+  two running ZenTerms never fight over one socket). Always discover it via the
+  env var, never hardcode.
 - Type: `AF_UNIX`, `SOCK_STREAM`. Neovim connects natively with
   `sockconnect('pipe', $ZEN_SOCK)` — no per-keystroke process spawn.
 - Framing: newline-delimited (`\n`) UTF-8 JSON, one command per line. A

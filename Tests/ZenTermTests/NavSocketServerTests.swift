@@ -91,6 +91,69 @@ final class NavSocketServerTests: XCTestCase {
         XCTAssertEqual(commands, [.focus(token: 1, dir: .left), .focus(token: 2, dir: .right)])
     }
 
+    func test_socketPath_isPerProcess() {
+        // ZEN-116: a shared well-known path let a second ZenTerm instance steal (bind-over)
+        // and then delete (quit-unlink) the first instance's socket. The path must embed
+        // the pid so instances can never collide.
+        XCTAssertTrue(NavSocketServer.socketPath.hasSuffix("nav.\(getpid()).sock"))
+    }
+
+    func test_secondServer_neverDisturbsFirst() throws {
+        // The ZEN-116 mechanism, inverted: with per-instance paths, a second server's full
+        // start→stop lifecycle must leave the first server's file AND dispatch intact.
+        let pathA = "/tmp/zt-nav-a-\(getpid()).sock"
+        let pathB = "/tmp/zt-nav-b-\(getpid()).sock"
+        var commands: [NavCommand] = []
+        let first = expectation(description: "before B")
+        let second = expectation(description: "after B stopped")
+        let serverA = NavSocketServer(path: pathA) { command in
+            commands.append(command)
+            if commands.count == 1 { first.fulfill() }
+            if commands.count == 2 { second.fulfill() }
+        }
+        serverA.start()
+        defer { serverA.stop() }
+        try sendLine(#"{"cmd":"focus","dir":"left","pane":1}"#, to: pathA)
+        wait(for: [first], timeout: 3)
+
+        let serverB = NavSocketServer(path: pathB) { _ in }
+        serverB.start()
+        serverB.stop()
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: pathA))
+        try sendLine(#"{"cmd":"focus","dir":"right","pane":2}"#, to: pathA)
+        wait(for: [second], timeout: 3)
+        XCTAssertEqual(commands, [.focus(token: 1, dir: .left), .focus(token: 2, dir: .right)])
+    }
+
+    func test_sweep_removesOnlyDeadInstanceSockets() throws {
+        let dir = NSTemporaryDirectory() + "zt-sweep-\(getpid())"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+
+        // A pid that just exited is guaranteed dead; our own pid is guaranteed alive.
+        let probe = Process()
+        probe.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+        try probe.run()
+        probe.waitUntilExit()
+        let deadPid = probe.processIdentifier
+
+        let dead = "\(dir)/nav.\(deadPid).sock"
+        let alive = "\(dir)/nav.\(getpid()).sock"
+        let legacy = "\(dir)/nav.sock"  // pre-per-pid build may still be running — never touch
+        let unrelated = "\(dir)/notes.txt"
+        for path in [dead, alive, legacy, unrelated] {
+            FileManager.default.createFile(atPath: path, contents: nil)
+        }
+
+        NavSocketServer.sweepStaleSockets(in: dir)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dead))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: alive))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: legacy))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated))
+    }
+
     /// Connect a throwaway `AF_UNIX` client, write one newline-terminated line, close.
     private func sendLine(_ line: String, to path: String) throws {
         let fd = try connectClient(to: path)

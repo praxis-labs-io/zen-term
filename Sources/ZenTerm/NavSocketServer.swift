@@ -10,13 +10,32 @@ import Foundation
 /// bounded read per connection. The wire format and all routing live elsewhere
 /// (`NavCommand`, `NavRegistry`).
 final class NavSocketServer {
-    /// `~/Library/Application Support/ZenTerm/nav.sock`. Exported to panes as `$ZEN_SOCK`.
+    /// `~/Library/Application Support/ZenTerm/nav.<pid>.sock`. Exported to panes as
+    /// `$ZEN_SOCK`. Per-instance: a shared well-known path let a second running ZenTerm
+    /// (a `swift run` dev build beside the installed app) bind over this instance's socket
+    /// and then delete it on quit, leaving every nvim here deaf until relaunch (ZEN-116).
     static var socketURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ZenTerm", isDirectory: true)
-        return base.appendingPathComponent("nav.sock")
+        return base.appendingPathComponent("nav.\(getpid()).sock")
     }
     static var socketPath: String { socketURL.path }
+
+    /// Remove `nav.<pid>.sock` files whose instance is gone (`kill(pid, 0)` → `ESRCH`) —
+    /// a crashed instance never reaches its quit-unlink, so files would otherwise
+    /// accumulate. A live pid's socket is never touched, and neither is a bare `nav.sock`:
+    /// a pre-per-pid build could still be running and using it.
+    static func sweepStaleSockets(in directory: String) {
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return }
+        for name in names {
+            guard name.hasPrefix("nav."), name.hasSuffix(".sock"),
+                let pid = pid_t(name.dropFirst("nav.".count).dropLast(".sock".count)),
+                pid != getpid(),
+                kill(pid, 0) != 0, errno == ESRCH
+            else { continue }
+            unlink(directory + "/" + name)
+        }
+    }
 
     /// The two env vars a pane or drawer shell needs so an nvim inside it can address itself
     /// over the nav socket: the socket path and this surface's token.
@@ -95,6 +114,11 @@ final class NavSocketServer {
         source.setCancelHandler { close(fd) }
         source.resume()
         acceptSource = source
+
+        // Crash hygiene, off the main thread (start() runs at launch on main): drop socket
+        // files left by instances that died without their quit-unlink.
+        let directory = URL(fileURLWithPath: path).deletingLastPathComponent().path
+        queue.async { Self.sweepStaleSockets(in: directory) }
     }
 
     /// `errno` rendered as a human string, for the bind-failure logs above.
