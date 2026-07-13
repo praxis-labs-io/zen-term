@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+# Cut a signed, notarized public ZenTerm release.
+# Usage: bin/release X.Y.Z [--notes-file FILE] [--skip-checks]
+#   --notes-file  release notes markdown (default: curated git-log scaffold in $EDITOR)
+#   --skip-checks skip the bin/check gate
+#
+# One-time setup (see CLAUDE.md "Releasing"): Developer ID Application cert in
+# the keychain, `xcrun notarytool store-credentials zenterm-notary`, and the
+# public releases repo. Safe to rerun after a partial failure with the same
+# version — tagging, notes curation, and release creation each detect and reuse
+# the prior run's state.
+set -euo pipefail
+INVOKER_PWD="$PWD"
+cd "$(dirname "$0")/.."
+
+NOTARY_PROFILE="zenterm-notary"
+RELEASES_REPO="Drucial/zen-term-releases"
+DIST="dist"
+
+VERSION="${1:-}"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+    echo "usage: bin/release X.Y.Z [--notes-file FILE] [--skip-checks]" >&2
+    exit 1
+}
+shift
+
+NOTES_FILE=""
+SKIP_CHECKS=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --notes-file)
+            [[ $# -ge 2 && "$2" != -* ]] || { echo "✗ missing value for --notes-file" >&2; exit 1; }
+            NOTES_FILE="$2"; shift 2 ;;
+        --skip-checks) SKIP_CHECKS=1; shift ;;
+        *) echo "unknown argument: $1" >&2; exit 1 ;;
+    esac
+done
+
+TAG="v$VERSION"
+APP="$DIST/ZenTerm.app"
+DMG="$DIST/ZenTerm-$VERSION-arm64.dmg"
+
+echo "▸ Preflight"
+[[ -z "$(git status --porcelain)" ]] || { echo "✗ working tree not clean" >&2; exit 1; }
+[[ "$(git rev-parse --abbrev-ref HEAD)" == "main" ]] || { echo "✗ not on main" >&2; exit 1; }
+git fetch origin main --quiet
+[[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] \
+    || { echo "✗ local main is not in sync with origin/main" >&2; exit 1; }
+
+if [[ -n "$NOTES_FILE" ]]; then
+    # The script cd'd to the repo root; resolve a relative path against the
+    # directory the user invoked from, not the repo root.
+    [[ "$NOTES_FILE" == /* ]] || NOTES_FILE="$INVOKER_PWD/$NOTES_FILE"
+    [[ -f "$NOTES_FILE" ]] || { echo "✗ notes file not found: $NOTES_FILE" >&2; exit 1; }
+else
+    [[ -t 0 ]] || { echo "✗ no TTY for the \$EDITOR notes pass — pass --notes-file" >&2; exit 1; }
+fi
+
+# A tag may exist from a failed prior run of this same release; that's fine as
+# long as it points at HEAD, locally and on origin. Anything else is a
+# version collision.
+TAG_AT_HEAD=0
+if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+    [[ "$(git rev-parse "$TAG^{commit}")" == "$(git rev-parse HEAD)" ]] \
+        || { echo "✗ tag $TAG exists locally and does not point at HEAD" >&2; exit 1; }
+    TAG_AT_HEAD=1
+fi
+REMOTE_TAG_SHA="$(git ls-remote --tags origin "$TAG^{}" "$TAG" | awk 'END {print $1}')"
+if [[ -n "$REMOTE_TAG_SHA" && "$REMOTE_TAG_SHA" != "$(git rev-parse HEAD)" ]]; then
+    echo "✗ tag $TAG exists on origin and does not point at HEAD" >&2
+    exit 1
+fi
+
+gh auth status >/dev/null || { echo "✗ gh not authenticated" >&2; exit 1; }
+gh repo view "$RELEASES_REPO" >/dev/null || { echo "✗ can't reach $RELEASES_REPO" >&2; exit 1; }
+
+# Distinguish "release absent" (proceed), "release exists without our DMG"
+# (partial prior run — upload into it), and "release exists with the DMG"
+# (already shipped) — without letting a transient gh failure pass as absent.
+RELEASE_EXISTS=0
+set +e
+RELEASE_ASSETS="$(gh release view "$TAG" --repo "$RELEASES_REPO" --json assets --jq '.assets[].name' 2>&1)"
+RELEASE_VIEW_RC=$?
+set -e
+if [[ "$RELEASE_VIEW_RC" -eq 0 ]]; then
+    if grep -qx "$(basename "$DMG")" <<< "$RELEASE_ASSETS"; then
+        echo "✗ release $TAG already shipped on $RELEASES_REPO with $(basename "$DMG")" >&2
+        exit 1
+    fi
+    RELEASE_EXISTS=1
+elif ! grep -qi "release not found" <<< "$RELEASE_ASSETS"; then
+    echo "✗ couldn't query releases on $RELEASES_REPO: $RELEASE_ASSETS" >&2
+    exit 1
+fi
+
+IDENTITY="$(security find-identity -v -p codesigning | awk -F'"' '/Developer ID Application/{print $2; exit}')"
+[[ -n "$IDENTITY" ]] || {
+    echo "✗ no 'Developer ID Application' identity in the keychain (see CLAUDE.md → Releasing)" >&2
+    exit 1
+}
+
+xcrun --find notarytool >/dev/null && xcrun --find stapler >/dev/null \
+    || { echo "✗ notarytool/stapler missing — full Xcode required, not just CLT" >&2; exit 1; }
+xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null \
+    || { echo "✗ notary profile '$NOTARY_PROFILE' missing or invalid (see CLAUDE.md → Releasing)" >&2; exit 1; }
+
+[[ -d Frameworks/GhosttyKit.xcframework ]] \
+    || { echo "✗ GhosttyKit.xcframework missing — run bin/build-ghosttykit" >&2; exit 1; }
+
+if [[ "$SKIP_CHECKS" -eq 0 ]]; then
+    echo "▸ Gate: bin/check"
+    bin/check
+fi
+
+# Notes are curated BEFORE the multi-minute notarization waits, and a prior
+# partial run's curated notes are reused rather than wiped.
+mkdir -p "$DIST"
+if [[ -z "$NOTES_FILE" ]]; then
+    NOTES_FILE="$DIST/notes.md"
+    if [[ ! -s "$NOTES_FILE" ]]; then
+        PREV="$(git describe --tags --abbrev=0 --exclude "$TAG" 2>/dev/null || true)"
+        git log ${PREV:+"$PREV.."}HEAD --pretty='- %s' > "$NOTES_FILE"
+    fi
+    # Curate before publishing — private-repo commit subjects go public here.
+    # sh -c so multi-word editors ("code --wait") work.
+    sh -c "${EDITOR:-vi} \"\$1\"" sh "$NOTES_FILE"
+fi
+
+rm -rf "$APP" "$DIST/ZenTerm.zip" "$DIST/dmg-root" "$DMG"
+bin/package-app --version "$VERSION" --identity "$IDENTITY" --dest "$DIST"
+
+echo "▸ Notarizing app"
+ditto -c -k --keepParent "$APP" "$DIST/ZenTerm.zip"
+xcrun notarytool submit "$DIST/ZenTerm.zip" --keychain-profile "$NOTARY_PROFILE" --wait \
+    || { echo "✗ notarization failed — inspect with: xcrun notarytool log <id> --keychain-profile $NOTARY_PROFILE" >&2; exit 1; }
+xcrun stapler staple "$APP"
+
+echo "▸ Building DMG"
+STAGE="$DIST/dmg-root"
+mkdir -p "$STAGE"
+cp -R "$APP" "$STAGE/"
+ln -s /Applications "$STAGE/Applications"
+hdiutil create -volname "ZenTerm $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+codesign --force --timestamp --sign "$IDENTITY" "$DMG"
+
+echo "▸ Notarizing DMG"
+xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait \
+    || { echo "✗ notarization failed — inspect with: xcrun notarytool log <id> --keychain-profile $NOTARY_PROFILE" >&2; exit 1; }
+xcrun stapler staple "$DMG"
+
+echo "▸ Verifying"
+codesign --verify --strict --deep --verbose=2 "$APP"
+spctl -a -t exec -vv "$APP"
+xcrun stapler validate "$APP"
+spctl -a -t open --context context:primary-signature -vv "$DMG"
+xcrun stapler validate "$DMG"
+
+echo "▸ Tagging + publishing"
+if [[ "$TAG_AT_HEAD" -eq 0 ]]; then
+    git tag -a "$TAG" -m "ZenTerm $TAG"
+fi
+if [[ -z "$REMOTE_TAG_SHA" ]]; then
+    git push origin "$TAG"
+fi
+if [[ "$RELEASE_EXISTS" -eq 1 ]]; then
+    gh release upload "$TAG" --repo "$RELEASES_REPO" --clobber "$DMG"
+else
+    gh release create "$TAG" --repo "$RELEASES_REPO" \
+        --title "ZenTerm $VERSION" --notes-file "$NOTES_FILE" "$DMG"
+fi
+
+echo "✓ ZenTerm $VERSION released: https://github.com/$RELEASES_REPO/releases/tag/$TAG"

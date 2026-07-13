@@ -1,14 +1,39 @@
 #!/usr/bin/env bash
-# Package ZenTerm as a standalone, ad-hoc-signed .app for daily driving.
-# Usage: bin/package-app [DEST_DIR]   (default: ~/Applications)
+# Package ZenTerm as a standalone .app.
+# Usage: bin/package-app [--version X.Y.Z] [--identity "NAME"] [--dest DIR]
+#   --version   CFBundleShortVersionString (default: latest tag + "-dev", or 0.0.0-dev)
+#   --identity  codesign identity (default "-" = ad-hoc, for daily driving)
+#   --dest      output directory (default ~/Applications)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-DEST="${1:-$HOME/Applications}"
+VERSION=""
+IDENTITY="-"
+DEST="$HOME/Applications"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --version | --identity | --dest)
+            [[ $# -ge 2 ]] || { echo "✗ missing value for $1" >&2; exit 1; }
+            case "$1" in
+                --version) VERSION="$2" ;;
+                --identity) IDENTITY="$2" ;;
+                --dest) DEST="$2" ;;
+            esac
+            shift 2 ;;
+        *) echo "unknown argument: $1" >&2; exit 1 ;;
+    esac
+done
+
+if [[ -z "$VERSION" ]]; then
+    LAST_TAG="$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)"
+    VERSION="${LAST_TAG:-0.0.0}-dev"
+fi
+# Monotonic build number (commit count on the current branch) — unique per
+# release commit and Sparkle-compatible, unlike a short SHA.
+BUILD="$(git rev-list --count HEAD 2>/dev/null || echo 0)"
+
 APP="$DEST/ZenTerm.app"
 BIN=".build/release/ZenTerm"
-VERSION="0.3.0"                          # Epic 3
-BUILD="$(git rev-parse --short HEAD 2>/dev/null || echo 0)"
 
 echo "▸ Building release…"
 swift build -c release
@@ -48,7 +73,15 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-echo "▸ Ad-hoc signing"
-codesign --force --deep --sign - "$APP"
+# No --deep and no nested-code signing: GhosttyKit is a static library linked
+# into the executable, and the SwiftPM .bundles are code-free resources sealed
+# by the outer signature.
+if [[ "$IDENTITY" == "-" ]]; then
+    echo "▸ Ad-hoc signing"
+    codesign --force --sign - "$APP"
+else
+    echo "▸ Signing with hardened runtime: $IDENTITY"
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP"
+fi
 
 echo "✓ $APP  (v${VERSION} build ${BUILD})"
