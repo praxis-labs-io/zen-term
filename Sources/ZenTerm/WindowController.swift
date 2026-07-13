@@ -42,18 +42,18 @@ final class WindowController: NSObject {
     /// a kind discriminator rather than parallel per-overlay stacks. Window-level (they open/
     /// switch tabs) but presented over the active tab's tile region. Modal while open.
     private enum ModalKind {
-        case repoPicker, commandPalette, addWorkspace, settings, toolFloatForm
+        case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm
 
         /// The chord that closes this same modal when pressed again (its own toggle), or nil for a
-        /// card with no dedicated chord (the tool-float form, reached only from the Tools section) —
-        /// it's still closed by any surface-switch chord in `handle(_:)`, just not self-toggled.
+        /// card with no dedicated chord (the workspace / tool-float forms, reached from the picker or
+        /// a Settings section) — those are still closed by any surface-switch chord in `handle(_:)`,
+        /// just not self-toggled.
         var selfToggle: KeyInterceptor.ReservedChord? {
             switch self {
             case .repoPicker: return .toggleRepoPicker
             case .commandPalette: return .toggleCommandPalette
-            case .addWorkspace: return .addWorkspace
             case .settings: return .openSettings
-            case .toolFloatForm: return nil
+            case .workspaceForm, .toolFloatForm: return nil
             }
         }
     }
@@ -480,10 +480,10 @@ final class WindowController: NSObject {
         presentModal(palette, kind: .commandPalette)
     }
 
-    /// Open the Add-Workspace form. Seeds it with the current titles for inline collision checks;
-    /// submitting writes the section and opens it. Reached from ⌘P and the picker's ＋ row — the
-    /// latter calls in while the picker is still up, so close it first (the ⌘P path is already
-    /// closed by `runCommand`, making this a no-op there).
+    /// Open the Add-Workspace form from the ⌘⇧P picker's ＋ row. Seeds it with the current titles for
+    /// inline collision checks; submitting writes the section and opens it. The picker is still up
+    /// when the ＋ fires, so close it first. (Editing / deleting a workspace goes through Settings →
+    /// Workspaces instead, via `openWorkspaceForm`.)
     private func openAddWorkspaceForm() {
         closeModal()
         let form = AddWorkspaceOverlay(
@@ -492,25 +492,37 @@ final class WindowController: NSObject {
             onSubmit: { [weak self] ws in self?.submitNewWorkspace(ws) },
             onCancel: { [weak self] in self?.closeModal() }
         )
-        presentModal(form, kind: .addWorkspace)
+        presentModal(form, kind: .workspaceForm)
     }
 
+    /// Which section the Settings card opens on. `.tools` / `.workspaces` are used when a sub-form
+    /// (tool-float or workspace editor) hands back to the section it was launched from.
+    private enum SettingsLanding { case top, tools, workspaces }
+
     /// Open the Settings card. Built fresh each open so every section reads live config values.
-    /// `showTools` opens straight on the Tools section — used when the tool-float form hands back.
-    private func openSettings(showTools: Bool = false) {
+    private func openSettings(landing: SettingsLanding = .top) {
         if modal?.kind == .settings { closeModal(); return }
         let toolsSection = SettingsToolsSection()
         toolsSection.onEditFloat = { [weak self] float in self?.openToolFloatForm(editing: float) }
+        let workspacesSection = SettingsWorkspacesSection()
+        workspacesSection.onEditWorkspace = { [weak self] ws in self?.openWorkspaceForm(editing: ws) }
         let sections: [SettingsSection] = [
             SettingsAppearanceSection(),
             SettingsTerminalSection(),
             SettingsKeybindsSection(capturer: keybindCapturer),
             toolsSection,
+            workspacesSection,
         ]
+        let landingSection: SettingsSection?
+        switch landing {
+        case .top: landingSection = nil
+        case .tools: landingSection = toolsSection
+        case .workspaces: landingSection = workspacesSection
+        }
         let overlay = SettingsOverlay(
             sections: sections,
             capturer: keybindCapturer,
-            initialSection: showTools ? (sections.firstIndex { $0 === toolsSection } ?? 0) : 0,
+            initialSection: landingSection.flatMap { target in sections.firstIndex { $0 === target } } ?? 0,
             background: Theme.current.chrome.background.nsColor,
             onClose: { [weak self] in self?.closeModal() }
         )
@@ -576,7 +588,70 @@ final class WindowController: NSObject {
     /// the sub-form, so save / cancel land where the user launched it.
     private func reopenSettingsOnTools() {
         closeModal()
-        openSettings(showTools: true)
+        openSettings(landing: .tools)
+    }
+
+    /// Open the workspace add / edit form from the Settings → Workspaces section (`nil` adds, a value
+    /// edits). Closes the Settings card first — one modal slot — mirroring the tool-float hand-off;
+    /// the form's own title-collision check excludes the workspace being edited. On save / cancel /
+    /// delete it hands back to Settings → Workspaces.
+    private func openWorkspaceForm(editing workspace: Workspace?) {
+        closeModal()
+        let existingTitles = Set(ConfigLoader.loadWorkspaces().map(\.title))
+            .subtracting(workspace.map { [$0.title] } ?? [])
+        let originalTitle = workspace?.title
+        let form = AddWorkspaceOverlay(
+            editing: workspace,
+            existingTitles: existingTitles,
+            background: Theme.current.chrome.background.nsColor,
+            onSubmit: { [weak self] built in self?.submitWorkspace(built, replacing: originalTitle) },
+            onCancel: { [weak self] in self?.reopenSettingsOnWorkspaces() },
+            onDelete: workspace.map { existing in { [weak self] in self?.deleteWorkspace(existing) } }
+        )
+        presentModal(form, kind: .workspaceForm)
+    }
+
+    /// Persist a workspace edited / added from Settings, then hand back to Settings → Workspaces (the
+    /// ⌘⇧P picker reads the file fresh on each open, so no reload is needed for it to reflect this).
+    /// `originalTitle` is the title before an edit — a rename replaces that section in place; a nil
+    /// original is a fresh add. A write failure keeps the form up with a toast.
+    private func submitWorkspace(_ ws: Workspace, replacing originalTitle: String?) {
+        do {
+            if let originalTitle {
+                try WorkspacesWriter.update(ws, originalTitle: originalTitle)
+            } else {
+                try WorkspacesWriter.append(ws)
+            }
+        } catch {
+            toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Couldn't Save Workspace",
+                    message: "Failed to write \(ws.title) to the workspaces file: \(error.localizedDescription)"))
+            return
+        }
+        reopenSettingsOnWorkspaces()
+    }
+
+    /// Delete the workspace being edited, then hand back to Settings → Workspaces. A write failure
+    /// keeps the form up with a toast.
+    private func deleteWorkspace(_ ws: Workspace) {
+        do {
+            try WorkspacesWriter.remove(title: ws.title)
+        } catch {
+            toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Couldn't Delete Workspace",
+                    message: "Failed to update the workspaces file: \(error.localizedDescription)"))
+            return
+        }
+        reopenSettingsOnWorkspaces()
+    }
+
+    /// Close the workspace form and reopen the Settings card on its Workspaces section — the "back"
+    /// for the sub-form, so save / cancel / delete land where the user launched it.
+    private func reopenSettingsOnWorkspaces() {
+        closeModal()
+        openSettings(landing: .workspaces)
     }
 
     /// Persist a freshly-built workspace, then open it. On a write failure the form stays up and
@@ -687,7 +762,7 @@ final class WindowController: NSObject {
                 return
             }
             switch chord {
-            case .toggleRepoPicker, .toggleCommandPalette, .addWorkspace, .openSettings,
+            case .toggleRepoPicker, .toggleCommandPalette, .openSettings,
                 .toggleLazygit, .toggleToolFloat:
                 closeModal()  // close the current card, then open the requested surface below
             default:
@@ -706,7 +781,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Close Pane",
                         message: "Close lazygit first to close a pane."))
                 return
-            case .toggleToolFloat, .toggleCommandPalette, .toggleRepoPicker, .addWorkspace, .openSettings:
+            case .toggleToolFloat, .toggleCommandPalette, .toggleRepoPicker, .openSettings:
                 active?.toggleLazygit()  // close lazygit, then fall through to open the other
             case .toggleLazygit, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
@@ -727,7 +802,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Close Pane",
                         message: "Close \(name) first to close a pane."))
                 return
-            case .toggleLazygit, .toggleCommandPalette, .toggleRepoPicker, .addWorkspace, .openSettings:
+            case .toggleLazygit, .toggleCommandPalette, .toggleRepoPicker, .openSettings:
                 active?.closeToolFloat()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
@@ -763,7 +838,6 @@ final class WindowController: NSObject {
             if let spec = ToolFloatCatalog.byID(id) { active?.toggleToolFloat(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
-        case .addWorkspace: openAddWorkspaceForm()
         case .openSettings: openSettings()
         }
     }

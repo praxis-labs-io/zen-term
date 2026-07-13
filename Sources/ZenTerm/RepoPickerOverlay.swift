@@ -144,10 +144,8 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             if GitRepo.isGitRepo(workspace.path) {
                 let git = NSImageView()
-                let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .medium)
-                git.image = NSImage(
-                    systemSymbolName: "arrow.triangle.branch", accessibilityDescription: "git repository")?
-                    .withSymbolConfiguration(config)
+                git.image = IconCatalog.gitBadge()
+                git.setAccessibilityLabel("git repository")
                 git.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
                 git.translatesAutoresizingMaskIntoConstraints = false
                 addSubview(git)

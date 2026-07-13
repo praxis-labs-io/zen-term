@@ -66,6 +66,81 @@ enum WorkspacesWriter {
         try ConfigFileIO.writePreservingSymlink(existing + separator + serialize(ws), to: url)
     }
 
+    /// Replace the `[originalTitle]` section with `ws` (renamed when the titles differ), rewriting
+    /// only that section's header + `key = value` lines in place — every other section, hand-written
+    /// comment, and blank separator survives verbatim. Falls back to `append` when `originalTitle`
+    /// isn't present (so a stale edit still lands). Throws `titleExists` when a rename would collide
+    /// with a *different* section already carrying the new title (last-wins would shadow it).
+    static func update(_ ws: Workspace, originalTitle: String, configRoot: URL = ConfigLoader.defaultRoot) throws {
+        let url = configRoot.appendingPathComponent("workspaces")
+        let existing = try ConfigFileIO.readExistingOrEmpty(url)
+        if ws.title != originalTitle,
+            WorkspacesParser.parse(existing).contains(where: { $0.title == ws.title })
+        {
+            throw WriteError.titleExists(ws.title)
+        }
+        var lines = existing.components(separatedBy: "\n")
+        guard let span = locateSection(titled: originalTitle, in: lines) else {
+            try append(ws, configRoot: configRoot)  // original gone — treat as a fresh add
+            return
+        }
+        // `serialize` ends with a trailing "\n"; drop that empty tail so we splice bare body lines.
+        let body = Array(serialize(ws).components(separatedBy: "\n").dropLast())
+        lines.replaceSubrange(span.start..<span.bodyEnd, with: body)
+        try FileManager.default.createDirectory(at: configRoot, withIntermediateDirectories: true)
+        try ConfigFileIO.writePreservingSymlink(lines.joined(separator: "\n"), to: url)
+    }
+
+    /// Drop the `[title]` section, preserving every other section, comment, and the file's shape.
+    /// Also consumes the one blank separator that trailed the section so removing a middle section
+    /// doesn't leave a double blank line. A no-op when no section carries that title.
+    static func remove(title: String, configRoot: URL = ConfigLoader.defaultRoot) throws {
+        let url = configRoot.appendingPathComponent("workspaces")
+        let existing = try ConfigFileIO.readExistingOrEmpty(url)
+        var lines = existing.components(separatedBy: "\n")
+        guard let span = locateSection(titled: title, in: lines) else { return }
+        var end = span.bodyEnd
+        // Swallow blank separator lines after the body (but not comments — those document the next
+        // section) so the neighbours close up cleanly.
+        while end < span.nextHeader, lines[end].trimmingCharacters(in: .whitespaces).isEmpty {
+            end += 1
+        }
+        lines.removeSubrange(span.start..<end)
+        try ConfigFileIO.writePreservingSymlink(lines.joined(separator: "\n"), to: url)
+    }
+
+    /// Locate the `[title]` section within `lines`: the header index (`start`), the index just past
+    /// its last `key = value` line (`bodyEnd`, excluding trailing blank/comment lines that belong to
+    /// the separator or the next section), and the next header index or end-of-file (`nextHeader`).
+    /// Matches on the comment-stripped, trimmed header like the parser; the last section wins a
+    /// duplicated title, mirroring `WorkspacesParser`'s last-wins rule.
+    private static func locateSection(
+        titled title: String, in lines: [String]
+    ) -> (start: Int, bodyEnd: Int, nextHeader: Int)? {
+        func headerTitle(_ line: String) -> String? {
+            let stripped = ConfigText.stripComment(line).trimmingCharacters(in: .whitespaces)
+            guard stripped.hasPrefix("["), stripped.hasSuffix("]") else { return nil }
+            return String(stripped.dropFirst().dropLast()).trimmingCharacters(in: .whitespaces)
+        }
+        guard let start = lines.lastIndex(where: { headerTitle($0) == title }) else { return nil }
+        var nextHeader = lines.count
+        var index = start + 1
+        while index < lines.count {
+            if headerTitle(lines[index]) != nil {
+                nextHeader = index
+                break
+            }
+            index += 1
+        }
+        var bodyEnd = nextHeader
+        while bodyEnd > start + 1,
+            ConfigText.stripComment(lines[bodyEnd - 1]).trimmingCharacters(in: .whitespaces).isEmpty
+        {
+            bodyEnd -= 1
+        }
+        return (start, bodyEnd, nextHeader)
+    }
+
     /// Wrap a value in double quotes when it contains whitespace or a `#`, so it survives the
     /// parser's comment-stripping and whitespace-trimming; otherwise leave it bare. Values never
     /// contain a `"` (the form rejects them — the format has no escape mechanism).

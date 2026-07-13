@@ -1,9 +1,10 @@
 import AppKit
 
-/// The "Add Workspace" form card, opened from the ⌘P command and the ⌘⇧P picker's ＋ row. It
-/// collects a folder, title, layout recipe, and env vars, builds a `Workspace`, and hands it to
-/// `onSubmit` — the host writes it to the `workspaces` file and opens it. A `ModalOverlay` like
-/// the palettes (shared card + backdrop + spring), but a multi-field form.
+/// The add / edit form card for a workspace, opened from the ⌘⇧P picker's ＋ row (add) and the
+/// Settings → Workspaces section (add / edit). It collects a folder, title, layout recipe, and env
+/// vars, builds a `Workspace`, and hands it to `onSubmit` — the host writes it to the `workspaces`
+/// file (and, from the picker, opens it). A `ModalOverlay` like the palettes (shared card + backdrop
+/// + spring), but a multi-field form; mirrors `ToolFloatFormOverlay`, including its Delete button.
 ///
 /// Fully keyboard-driven: Up/Down move between fields, Left/Right pick within a segmented control,
 /// Return advances to the next field (opens the folder panel when the empty folder field is
@@ -17,14 +18,17 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         "One shell, drawers closed", "nvim, claude, shell", "Set each region yourself",
     ]
 
+    private let editingWorkspace: Workspace?
     private let existingTitles: Set<String>
     private let onSubmit: (Workspace) -> Void
     private let onCancel: () -> Void
+    /// Non-nil only when editing — its presence shows the Delete button.
+    private let onDelete: (() -> Void)?
 
     private let card = CardView()
     private var dismiss = DismissGate()
     /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it in place.
-    private let header = NSTextField(labelWithString: "New Workspace")
+    private let header = NSTextField(labelWithString: "")
 
     private let titleField = FieldBox(placeholder: "Workspace name")
     private let folderField = FieldBox(placeholder: "Click to choose, or type a path")
@@ -57,14 +61,18 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary, keyEquivalent: "\u{1b}")
     private let addButton = AppButton(
         title: "Add Workspace", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
+    private let deleteButton = AppButton(title: "Delete", variant: .destructive)
 
     init(
-        existingTitles: Set<String>, background: NSColor,
-        onSubmit: @escaping (Workspace) -> Void, onCancel: @escaping () -> Void
+        editing: Workspace? = nil, existingTitles: Set<String>, background: NSColor,
+        onSubmit: @escaping (Workspace) -> Void, onCancel: @escaping () -> Void,
+        onDelete: (() -> Void)? = nil
     ) {
+        self.editingWorkspace = editing
         self.existingTitles = existingTitles
         self.onSubmit = onSubmit
         self.onCancel = onCancel
+        self.onDelete = onDelete
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -100,6 +108,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             content.bottomAnchor.constraint(equalTo: card.bottomAnchor),
         ])
 
+        prefill()  // seed the fields from the edited workspace (a no-op when adding)
         layoutChanged(layoutSegment.selectedIndex)  // seed the caption + custom visibility
     }
 
@@ -138,7 +147,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
 
         let controls: [ThemeReapplying] = [
             titleField, folderField, mainField, rightField, bottomField,
-            layoutSegment, focusSegment, addVarButton, cancelButton, addButton,
+            layoutSegment, focusSegment, addVarButton, cancelButton, addButton, deleteButton,
         ]
         controls.forEach { $0.reapplyTheme() }
         envRows.forEach { $0.reapplyTheme() }
@@ -153,6 +162,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private func buildContent() -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
         header.textColor = Theme.current.chrome.foreground.nsColor
+        header.stringValue = editingWorkspace == nil ? "New Workspace" : "Edit Workspace"
 
         wireField(titleField)
         titleField.onChange = { [weak self] in
@@ -196,6 +206,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         let envGroup = Self.vStack([caption("ENVIRONMENT", required: false), envControls], spacing: 6)
 
         cancelButton.onTap = { [weak self] in self?.onCancel() }
+        addButton.setTitle(editingWorkspace == nil ? "Add Workspace" : "Save")
         addButton.onTap = { [weak self] in self?.submit() }
         for button in [addVarButton, cancelButton, addButton] {
             button.isKeyboardFocusable = true
@@ -207,7 +218,21 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         cancelButton.onArrowRight = { [weak self] in self?.focus(self?.addButton) }
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let footer = Self.hStack([spacer, cancelButton, addButton], spacing: 8)
+        var footerViews: [NSView] = [spacer, cancelButton, addButton]
+        if onDelete != nil {
+            // Delete sits far left, split from Cancel/Save; Left from Save walks Save → Cancel →
+            // Delete (a destructive action kept a deliberate step off the primary path). Mirrors
+            // `ToolFloatFormOverlay`.
+            deleteButton.isKeyboardFocusable = true
+            deleteButton.onTap = { [weak self] in self?.onDelete?() }
+            deleteButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
+            deleteButton.onArrowDown = { [weak self] in self?.moveVertical(1) }
+            deleteButton.onArrowRight = { [weak self] in self?.focus(self?.cancelButton) }
+            deleteButton.onEsc = { [weak self] in self?.onCancel() }
+            cancelButton.onArrowLeft = { [weak self] in self?.focus(self?.deleteButton) }
+            footerViews = [deleteButton, spacer, cancelButton, addButton]
+        }
+        let footer = Self.hStack(footerViews, spacing: 8)
 
         let content = NSStackView(views: [
             header, titleGroup, folderGroup, layoutGroup, customDetail, envGroup, footer,
@@ -273,7 +298,8 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         for row in envRows where isFocused(row.valueBox.field) || isFocused(row.removeButton) {
             return row.keyBox.field
         }
-        if isFocused(cancelButton) { return addButton }  // Cancel shares the footer's stop
+        // Cancel and Delete share the footer's vertical stop (Add); they're reached with Left/Right.
+        if isFocused(cancelButton) || isFocused(deleteButton) { return addButton }
         return nil
     }
 
@@ -319,7 +345,8 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         refreshValidity()
     }
 
-    private func addEnvRow() {
+    @discardableResult
+    private func addEnvRow() -> EnvRow {
         let row = EnvRow { [weak self] row in self?.removeEnvRow(row) }
         wireField(row.keyBox)
         wireField(row.valueBox)
@@ -338,6 +365,58 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         row.widthAnchor.constraint(equalTo: envStack.widthAnchor).isActive = true
         window?.makeFirstResponder(row.keyBox.field)
         refreshValidity()
+        return row
+    }
+
+    /// Seed the fields from the workspace being edited (a no-op when adding). The layout choice is
+    /// reverse-derived from the recipe: a workspace whose recipe doesn't map cleanly onto Minimal or
+    /// Editor+AI+Shell — or that focuses a non-`.main` region — opens as Custom so every field round
+    /// trips. `titleEditedByUser` is set so choosing a folder later won't overwrite the loaded name.
+    private func prefill() {
+        guard let ws = editingWorkspace else { return }
+        titleEditedByUser = true
+        titleField.setText(ws.title)
+        folderField.setText(PathDisplay.abbreviatingHome(ws.path.path))
+        let choice = Self.layoutChoice(for: ws)
+        layoutSegment.setSelection(Self.layoutIndex(for: choice))
+        if choice == .custom {
+            mainField.setText(ws.main ?? "")
+            rightField.setText(ws.right ?? "")
+            bottomField.setText(ws.bottom ?? "")
+            focusSegment.setSelection(Self.focusIndex(for: ws.focus))
+        }
+        for key in ws.env.keys.sorted() {
+            let row = addEnvRow()
+            row.keyBox.setText(key)
+            row.valueBox.setText(ws.env[key] ?? "")
+        }
+    }
+
+    /// The preset a workspace maps back to: Minimal / Editor+AI+Shell only when the recipe matches
+    /// exactly *and* focus is the default `.main` (those presets can't express a focus); otherwise
+    /// Custom, which carries every field verbatim.
+    private static func layoutChoice(for ws: Workspace) -> LayoutChoice {
+        if ws.focus == .main, ws.main == nil, ws.right == nil, ws.bottom == nil { return .minimal }
+        if ws.focus == .main, ws.main == "nvim", ws.right == "claude", ws.bottom == "shell" {
+            return .editorAIShell
+        }
+        return .custom
+    }
+
+    private static func layoutIndex(for choice: LayoutChoice) -> Int {
+        switch choice {
+        case .minimal: return 0
+        case .editorAIShell: return 1
+        case .custom: return 2
+        }
+    }
+
+    private static func focusIndex(for region: Workspace.Region) -> Int {
+        switch region {
+        case .main: return 0
+        case .right: return 1
+        case .bottom: return 2
+        }
     }
 
     private func focus(_ view: NSView?) {

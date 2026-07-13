@@ -167,4 +167,131 @@ final class WorkspacesWriterTests: XCTestCase {
         // The rejected write left the file with a single section.
         XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).count, 1)
     }
+
+    // MARK: update (ZEN-112)
+
+    private func seed(_ text: String, in root: URL) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try text.write(to: root.appendingPathComponent("workspaces"), atomically: true, encoding: .utf8)
+    }
+
+    private func read(_ root: URL) throws -> String {
+        try String(contentsOf: root.appendingPathComponent("workspaces"), encoding: .utf8)
+    }
+
+    func test_update_replacesSectionInPlace_preservingNeighboursAndComments() throws {
+        let root = try makeTempDir()
+        try seed(
+            """
+            # my workspaces
+            [Alpha]
+            path = ~/Dev/alpha
+
+            [Beta]
+            path = ~/Dev/beta
+            main = nvim
+
+            [Gamma]
+            path = ~/Dev/gamma
+            """, in: root)
+
+        try WorkspacesWriter.update(
+            Workspace(
+                title: "Beta", path: expandTilde("~/Dev/beta-moved"),
+                main: "vim", right: "claude", bottom: nil, focus: .main, env: [:]),
+            originalTitle: "Beta", configRoot: root)
+
+        // Order preserved, only Beta changed.
+        let parsed = ConfigLoader.loadWorkspaces(configRoot: root)
+        XCTAssertEqual(parsed.map(\.title), ["Alpha", "Beta", "Gamma"])
+        let beta = parsed.first { $0.title == "Beta" }
+        XCTAssertEqual(beta?.path, expandTilde("~/Dev/beta-moved"))
+        XCTAssertEqual(beta?.main, "vim")
+        XCTAssertEqual(beta?.right, "claude")
+        // The hand-written header comment and the untouched neighbours survive verbatim.
+        let text = try read(root)
+        XCTAssertTrue(text.contains("# my workspaces"))
+        XCTAssertTrue(text.contains("[Alpha]"))
+        XCTAssertTrue(text.contains("[Gamma]"))
+    }
+
+    func test_update_renamesSection_movingItToTheNewTitle() throws {
+        let root = try makeTempDir()
+        try seed("[Old]\npath = ~/Dev/old\n", in: root)
+
+        try WorkspacesWriter.update(
+            Workspace(
+                title: "New", path: expandTilde("~/Dev/old"),
+                main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+            originalTitle: "Old", configRoot: root)
+
+        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["New"])
+        XCTAssertFalse(try read(root).contains("[Old]"), "the old header is gone, not duplicated")
+    }
+
+    func test_update_renameOntoExistingTitle_throwsWithoutClobbering() throws {
+        let root = try makeTempDir()
+        try seed("[A]\npath = ~/Dev/a\n\n[B]\npath = ~/Dev/b\n", in: root)
+
+        // Renaming A → B would shadow the real B under last-wins; the writer must refuse.
+        XCTAssertThrowsError(
+            try WorkspacesWriter.update(
+                Workspace(
+                    title: "B", path: expandTilde("~/Dev/a"),
+                    main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+                originalTitle: "A", configRoot: root)
+        ) { error in
+            guard case WorkspacesWriter.WriteError.titleExists("B") = error else {
+                return XCTFail("expected titleExists, got \(error)")
+            }
+        }
+        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["A", "B"])
+    }
+
+    func test_update_missingOriginal_fallsBackToAppend() throws {
+        let root = try makeTempDir()
+        try seed("[A]\npath = ~/Dev/a\n", in: root)
+
+        try WorkspacesWriter.update(
+            Workspace(
+                title: "Fresh", path: expandTilde("~/Dev/fresh"),
+                main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+            originalTitle: "Ghost", configRoot: root)
+
+        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["A", "Fresh"])
+    }
+
+    // MARK: remove (ZEN-112)
+
+    func test_remove_dropsSection_preservingNeighbours() throws {
+        let root = try makeTempDir()
+        try seed(
+            "[Alpha]\npath = ~/Dev/alpha\n\n[Beta]\npath = ~/Dev/beta\n\n[Gamma]\npath = ~/Dev/gamma\n",
+            in: root)
+
+        try WorkspacesWriter.remove(title: "Beta", configRoot: root)
+
+        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Alpha", "Gamma"])
+        let text = try read(root)
+        XCTAssertFalse(text.contains("[Beta]"))
+        XCTAssertFalse(text.contains("\n\n\n"), "removing a middle section leaves no triple blank")
+    }
+
+    func test_remove_lastSection_leavesTheRest() throws {
+        let root = try makeTempDir()
+        try seed("[Alpha]\npath = ~/Dev/alpha\n\n[Beta]\npath = ~/Dev/beta\n", in: root)
+
+        try WorkspacesWriter.remove(title: "Beta", configRoot: root)
+
+        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Alpha"])
+    }
+
+    func test_remove_unknownTitle_isANoOp() throws {
+        let root = try makeTempDir()
+        try seed("[Alpha]\npath = ~/Dev/alpha\n", in: root)
+
+        try WorkspacesWriter.remove(title: "Ghost", configRoot: root)
+
+        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Alpha"])
+    }
 }

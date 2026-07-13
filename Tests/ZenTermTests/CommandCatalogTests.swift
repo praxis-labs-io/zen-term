@@ -12,7 +12,7 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(
             names,
             [
-                "Open Workspace Picker", "Add Workspace…", "Settings…", "Reload Config", "Open Lazygit",
+                "Open Workspace Picker", "Settings…", "Reload Config", "Open Lazygit",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab",
                 "Split Horizontally", "Split Vertically",
@@ -20,6 +20,12 @@ final class CommandCatalogTests: XCTestCase {
                 "Resize Pane Left", "Resize Pane Down", "Resize Pane Up", "Resize Pane Right",
                 "Toggle Zoom", "Close Pane",
             ])
+    }
+
+    func test_addWorkspace_isNotInThePalette() {
+        // ZEN-112 removed the ⌘P entry — adding a workspace is a Settings-only action now.
+        let titles = CommandCatalog.commands(tabCount: 3).map(\.title)
+        XCTAssertFalse(titles.contains { $0.localizedCaseInsensitiveContains("add workspace") })
     }
 
     func test_categories_areContiguousInOrder() {
@@ -64,15 +70,12 @@ final class CommandCatalogTests: XCTestCase {
         if case .reloadConfig = entry!.chord {} else { XCTFail("expected .reloadConfig") }
     }
 
-    func test_everyEntry_hasTitle_andBoundEntriesHaveShortcut() {
+    func test_everyEntry_hasTitle_andShortcut() {
+        // Every palette command has a default key binding, so each shows its glyph. (The one former
+        // exception, `.addWorkspace`, was unbound and is no longer in the palette — ZEN-112.)
         for command in CommandCatalog.commands(tabCount: 9) {
             XCTAssertFalse(command.title.isEmpty)
-            // `.addWorkspace` is deliberately unbound (opened from the palette/picker, no default
-            // key), so its shortcut glyph is empty; every bound command shows its glyph. Keyed on
-            // the chord, not the title, so a copy tweak can't quietly disable the check.
-            if command.chord != .addWorkspace {
-                XCTAssertFalse(command.shortcut.isEmpty, "\(command.title) should show a shortcut")
-            }
+            XCTAssertFalse(command.shortcut.isEmpty, "\(command.title) should show a shortcut")
         }
     }
 }
