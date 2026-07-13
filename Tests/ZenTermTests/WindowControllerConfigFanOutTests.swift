@@ -12,6 +12,7 @@ import XCTest
 /// `confirmToast`, …) — the exact stale-chrome bug class ZEN-89 fixed. This mounts the real
 /// chrome and drives the actual notification, so dropping `tabBar.reapplyTheme()` from the
 /// fan-out fails a test rather than shipping stale chrome after a theme swap.
+@MainActor
 final class WindowControllerConfigFanOutTests: XCTestCase {
     private var originalTheme: AppTheme!
     private var originalBackend: TerminalBackend!
@@ -79,8 +80,10 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
 
         // The observer is registered on `.main`, so its block runs as a queued main-queue op;
         // enqueue a fulfill after it (FIFO on the main run loop) and wait so it has run.
+        // The observer is registered on `OperationQueue.main`, so drain on the SAME queue — a
+        // `DispatchQueue.main` hop isn't guaranteed to sequence after an OperationQueue.main op.
         let drained = expectation(description: "main queue drained")
-        DispatchQueue.main.async { drained.fulfill() }
+        OperationQueue.main.addOperation { drained.fulfill() }
         wait(for: [drained], timeout: 5)
 
         // If the fan-out had dropped `tabBar.reapplyTheme()`, the tracer would still hold the old
