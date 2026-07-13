@@ -29,6 +29,20 @@ checks the backing view-model passes while the control is dead (that's exactly
 how a fully broken dropdown shipped past two reviews). Reserve the manual runbook
 for genuinely visual behavior (motion, layout, color) that no test can assert.
 
+## Releasing
+
+Public releases are cut locally with `bin/release X.Y.Z` — preflight (clean
+main, cert, notary profile, releases repo) → `bin/check` → assemble + Developer
+ID sign (`bin/package-app`) → notarize + staple app and DMG → verify gates →
+curated notes → tag `vX.Y.Z` on this repo → publish the DMG to the **public**
+`Drucial/zen-term-releases` repo (this repo is private, so its own Releases
+aren't downloadable). arm64-only; version source of truth is the git tag.
+`bin/package-app` alone still produces the ad-hoc-signed daily-driver build.
+
+One-time setup: a "Developer ID Application" cert in the keychain, and
+`xcrun notarytool store-credentials zenterm-notary --apple-id <id> --team-id
+<team>` with an app-specific password.
+
 ## Architecture — the seam (load-bearing)
 
 - `Sources/TerminalKit/` owns the seam (`TerminalSurface` protocol + types) and
