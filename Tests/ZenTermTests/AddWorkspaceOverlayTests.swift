@@ -1,0 +1,120 @@
+import AppKit
+import XCTest
+
+@testable import ZenTerm
+
+/// Interaction tests for the workspace add / edit form's ZEN-112 additions — edit-mode prefill and
+/// the Delete button — driven through the real controls in a window. A state-only test would pass
+/// while the control was dead, the failure mode the project's interaction-test rule guards against.
+final class AddWorkspaceOverlayTests: XCTestCase {
+    private final class Sink {
+        var submitted: [Workspace] = []
+        var cancelled = 0
+        var deleted = 0
+    }
+
+    private var window: NSWindow?
+
+    override func tearDown() {
+        window = nil
+        super.tearDown()
+    }
+
+    // MARK: harness
+
+    private func mount(
+        editing: Workspace? = nil, existingTitles: Set<String> = [], withDelete: Bool = false
+    ) -> (overlay: AddWorkspaceOverlay, sink: Sink) {
+        let sink = Sink()
+        let overlay = AddWorkspaceOverlay(
+            editing: editing, existingTitles: existingTitles,
+            background: Theme.current.chrome.background.nsColor,
+            onSubmit: { sink.submitted.append($0) },
+            onCancel: { sink.cancelled += 1 },
+            onDelete: withDelete ? { sink.deleted += 1 } : nil)
+        let win = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 640),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        win.contentView?.addSubview(overlay)
+        overlay.frame = win.contentView!.bounds
+        window = win
+        return (overlay, sink)
+    }
+
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews.flatMap { [$0] + descendants(of: $0) }
+    }
+
+    private func field(in overlay: NSView, placeholder: String) -> FieldBox {
+        descendants(of: overlay).compactMap { $0 as? FieldBox }.first { $0.placeholder == placeholder }!
+    }
+
+    private func button(in overlay: NSView, title: String) -> AppButton? {
+        descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == title }
+    }
+
+    /// A real on-disk directory, so the form's "that folder exists" validation passes on submit.
+    private func makeRealDir() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-ws-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        return dir
+    }
+
+    // MARK: tests
+
+    func test_editForm_prefillsTitleAndFolder() throws {
+        let dir = try makeRealDir()
+        let ws = Workspace(
+            title: "Alpha", path: dir, main: "nvim", right: "claude", bottom: "shell",
+            focus: .main, env: [:])
+        let (overlay, _) = mount(editing: ws)
+
+        XCTAssertEqual(field(in: overlay, placeholder: "Workspace name").text, "Alpha")
+        XCTAssertEqual(
+            field(in: overlay, placeholder: "Click to choose, or type a path").text,
+            PathDisplay.abbreviatingHome(dir.path))
+    }
+
+    func test_editForm_savesChangedTitle() throws {
+        let dir = try makeRealDir()
+        let ws = Workspace(
+            title: "Alpha", path: dir, main: nil, right: nil, bottom: nil, focus: .main, env: [:])
+        let (overlay, sink) = mount(editing: ws)
+
+        field(in: overlay, placeholder: "Workspace name").setText("Renamed")
+        button(in: overlay, title: "Save")?.onTap()
+
+        XCTAssertEqual(sink.submitted.count, 1)
+        XCTAssertEqual(sink.submitted.first?.title, "Renamed")
+        XCTAssertEqual(sink.submitted.first?.path, dir)
+    }
+
+    func test_editForm_hasSaveButton_notAdd() throws {
+        let dir = try makeRealDir()
+        let ws = Workspace(
+            title: "Alpha", path: dir, main: nil, right: nil, bottom: nil, focus: .main, env: [:])
+        let (overlay, _) = mount(editing: ws)
+        XCTAssertNotNil(button(in: overlay, title: "Save"))
+        XCTAssertNil(button(in: overlay, title: "Add Workspace"))
+    }
+
+    func test_editForm_deleteButton_firesOnDelete() throws {
+        let dir = try makeRealDir()
+        let ws = Workspace(
+            title: "Alpha", path: dir, main: nil, right: nil, bottom: nil, focus: .main, env: [:])
+        let (overlay, sink) = mount(editing: ws, withDelete: true)
+        let delete = button(in: overlay, title: "Delete")
+        XCTAssertNotNil(delete, "editing an existing workspace shows a Delete button")
+
+        delete?.onTap()
+
+        XCTAssertEqual(sink.deleted, 1)
+    }
+
+    func test_addForm_hasNoDeleteButton() {
+        let (overlay, _) = mount()  // add mode
+        XCTAssertNil(button(in: overlay, title: "Delete"), "adding a new workspace has no Delete button")
+    }
+}

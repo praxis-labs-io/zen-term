@@ -28,7 +28,6 @@ extension KeyInterceptor.ReservedChord {
         case .toggleToolFloat(let id): return "toggle_float:\(id)"
         case .toggleRepoPicker: return "toggle_repo_picker"
         case .toggleCommandPalette: return "toggle_command_palette"
-        case .addWorkspace: return "add_workspace"
         case .openSettings: return "open_settings"
         case .reloadConfig: return "reload_config"
         }
@@ -59,7 +58,6 @@ extension KeyInterceptor.ReservedChord {
         case "toggle_lazygit": self = .toggleLazygit
         case "toggle_repo_picker": self = .toggleRepoPicker
         case "toggle_command_palette": self = .toggleCommandPalette
-        case "add_workspace": self = .addWorkspace
         case "open_settings": self = .openSettings
         case "reload_config": self = .reloadConfig
         default:

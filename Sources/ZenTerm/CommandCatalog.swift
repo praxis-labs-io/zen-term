@@ -18,6 +18,7 @@ enum CommandCatalog {
         static let tabs = "Tabs"
         static let drawers = "Drawers"
         static let tools = "Tools"
+        static let config = "Config"
     }
 
     /// Title, display shortcut, and group for a chord. Exhaustive over `ReservedChord`. The
@@ -47,9 +48,8 @@ enum CommandCatalog {
         case .toggleLazygit: return tool("Open Lazygit", glyph, chord)
         case .toggleToolFloat(let id): return tool(ToolFloatCatalog.byID(id)?.title ?? id, glyph, chord)
         case .toggleRepoPicker: return tool("Open Workspace Picker", glyph, chord)
-        case .addWorkspace: return tool("Add Workspace…", glyph, chord)
-        case .openSettings: return tool("Settings…", glyph, chord)
-        case .reloadConfig: return tool("Reload Config", glyph, chord)
+        case .openSettings: return config("Settings…", glyph, chord)
+        case .reloadConfig: return config("Reload Config", glyph, chord)
         // Present for exhaustiveness; both are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
@@ -62,13 +62,14 @@ enum CommandCatalog {
     }
 
     /// The ordered commands shown for a window with `tabCount` tabs, grouped by category
-    /// (Tools → Drawers → Tabs → Panes). `.selectTab` expands to one entry per open tab
-    /// (capped at the bound ⌘1–⌘9). The command palette itself and New Window aren't shown.
+    /// (Tools → Config → Drawers → Tabs → Panes). Tools leads with the workspace picker, then
+    /// lazygit and the configured tool floats; Config holds Settings + Reload Config. `.selectTab`
+    /// expands to one entry per open tab (capped at the bound ⌘1–⌘9). The command palette itself and
+    /// New Window aren't shown.
     static func commands(tabCount: Int) -> [PaletteCommand] {
-        var chords: [KeyInterceptor.ReservedChord] = [
-            .toggleRepoPicker, .addWorkspace, .openSettings, .reloadConfig, .toggleLazygit,
-        ]
+        var chords: [KeyInterceptor.ReservedChord] = [.toggleRepoPicker, .toggleLazygit]
         chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
+        chords += [.openSettings, .reloadConfig]
         chords += [
             .toggleBottomDrawer, .toggleRightDrawer,
             .newTab, .prevTab, .nextTab,
@@ -104,5 +105,10 @@ enum CommandCatalog {
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
         .init(title: title, shortcut: shortcut, category: Category.tools, chord: chord)
+    }
+    private static func config(
+        _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
+    ) -> PaletteCommand {
+        .init(title: title, shortcut: shortcut, category: Category.config, chord: chord)
     }
 }

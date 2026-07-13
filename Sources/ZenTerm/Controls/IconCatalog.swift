@@ -54,4 +54,13 @@ enum IconCatalog {
         }
         return BrandMark.image(symbol)
     }
+
+    /// The proper Git logo (the bundled `git` brand mark), sized as a small inline badge. Shared by
+    /// the ⌘⇧P picker and the Settings → Workspaces list to mark a workspace whose folder is a repo,
+    /// so the two never drift. A template image, so the caller tints it like any SF Symbol.
+    static func gitBadge(pointSize: CGFloat = 12) -> NSImage? {
+        guard let image = BrandMark.image("git") else { return nil }
+        image.size = NSSize(width: pointSize, height: pointSize)
+        return image
+    }
 }

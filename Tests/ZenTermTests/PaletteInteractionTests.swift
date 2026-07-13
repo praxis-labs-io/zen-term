@@ -112,6 +112,15 @@ final class PaletteInteractionTests: XCTestCase {
         XCTAssertEqual(ran, .closePane)
     }
 
+    func test_commandPalette_searchingSectionName_surfacesTheWholeSection() {
+        let overlay = makeCommandPalette()
+        mount(overlay)
+        // "panes" isn't in either Panes command's title — it matches their category, so both surface
+        // while the Tabs command ("New Tab") is filtered out.
+        type("panes", into: overlay)
+        XCTAssertEqual(overlay.numberOfRows(), 2, "the section name surfaces every command in that section")
+    }
+
     func test_commandPalette_escDismisses() {
         var dismissed = false
         let overlay = makeCommandPalette(onDismiss: { dismissed = true })
