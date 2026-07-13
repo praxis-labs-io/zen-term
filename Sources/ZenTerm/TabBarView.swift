@@ -16,11 +16,10 @@ struct TabBarItem {
 }
 
 /// The bottom-left numbered tab bar. Stateless beyond its last rendered snapshot;
-/// selection/close/new all flow out through callbacks. Clicking a tab selects it;
-/// middle-clicking a tab closes it; the trailing "+" chip (pinned, always visible) makes a new
-/// tab. The active tab is marked with an iris underline. When the tabs overflow the bar they
+/// selection/close flow out through callbacks. Clicking a tab selects it; middle-clicking a tab
+/// closes it. The active tab is marked with an iris underline. When the tabs overflow the bar they
 /// scroll horizontally with no scroller, the active tab is kept in view, and each edge fades
-/// when tabs sit off that side (ZEN-115).
+/// when tabs sit off that side (ZEN-115). New-tab lives in the footer dock, not here.
 ///
 /// The chips are laid out by explicit frame rather than a stack view: inside a scroll view an
 /// `NSStackView`'s intrinsic width isn't authoritative, so the document view stayed capped and

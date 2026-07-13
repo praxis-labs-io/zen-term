@@ -66,4 +66,10 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertFalse(dock.bottomActivityForTesting)
         XCTAssertFalse(dock.rightActivityForTesting)
     }
+
+    func test_newTabButton_isMounted() {
+        // New-tab moved from the tab strip into the dock (ZEN-115); it must always be present so it
+        // never scrolls away with the tabs.
+        XCTAssertTrue(makeDock([]).hasNewTabButtonForTesting)
+    }
 }

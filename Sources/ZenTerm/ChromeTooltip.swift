@@ -7,7 +7,8 @@ import AppKit
 final class ChromeTooltip: NSView {
     init(label: String, shortcut: String?) {
         super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
+        // Framed directly by `TooltipPresenter` (not Auto Layout), so leave the default
+        // translatesAutoresizingMaskIntoConstraints = true.
         wantsLayer = true
         layer?.cornerRadius = 6
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor

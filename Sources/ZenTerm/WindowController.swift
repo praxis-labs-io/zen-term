@@ -133,7 +133,10 @@ final class WindowController: NSObject {
 
         onSelect = { [weak self] in self?.select($0) }
         onClose = { [weak self] in self?.closeTab($0) }
-        onNewTab = { [weak self] in self?.handle(.newTab) }
+        // New-tab is a top-level action (like new window) — it acts even while a modal card or
+        // float is up, matching the pre-move tab-bar "+", rather than being swallowed by the card
+        // gate in handle(_:).
+        onNewTab = { [weak self] in self?.newTab() }
         // Dock buttons route through `handle(_:)` (not the tab directly) so they obey the
         // same modal gates as the keyboard chords.
         onSplitH = { [weak self] in self?.handle(.splitHorizontal) }

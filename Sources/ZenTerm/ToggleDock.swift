@@ -86,6 +86,12 @@ final class ToggleDock: NSView {
     var bottomActivityForTesting: Bool { bottomBtn.showsActivity }
     var rightActivityForTesting: Bool { rightBtn.showsActivity }
 
+    /// Test hook: whether the fixed new-tab button is mounted (ZEN-115 moved it from the tab strip
+    /// into the dock, so it must always be present regardless of tab overflow).
+    var hasNewTabButtonForTesting: Bool {
+        stack.arrangedSubviews.contains { ($0 as? IconButton)?.accessibilityLabel() == "New tab" }
+    }
+
     /// Rebuild the per-float buttons at the tail of the dock from the current catalog — called on
     /// init and whenever a config change adds / edits / removes a float, so the dock reflects it with
     /// no relaunch. The fixed buttons and dividers are untouched; the caller re-runs `render` after
