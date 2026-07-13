@@ -23,8 +23,11 @@ debugger/Instruments session).
 
 **Verify before claiming done:** `bin/check` fully green (not just build +
 test — format-lint and swiftlint are part of the gate and CI enforces them).
-GUI behavior that has no unit test is verified by running the app and observing
-the documented expectation (see each plan's manual runbook).
+**AppKit controls get window-based interaction tests, not state-only tests** —
+assert the control by driving it in a real window, because a test that only
+checks the backing view-model passes while the control is dead (that's exactly
+how a fully broken dropdown shipped past two reviews). Reserve the manual runbook
+for genuinely visual behavior (motion, layout, color) that no test can assert.
 
 ## Architecture — the seam (load-bearing)
 
@@ -42,6 +45,10 @@ the documented expectation (see each plan's manual runbook).
 - Public API in `TerminalKit` is `public`. Prefer `struct` / `final class` /
   `type`.
 - No force-unwrap except documented AppKit (`contentView!`).
+- **Never block the main thread.** No synchronous subprocess (`waitUntilExit`),
+  file-system walk, or blocking I/O on the main queue — the chrome *is* the
+  product, and a stalled main thread is a beachball (ZEN-90). Do the work
+  off-main and hop back to main for the UI update.
 - Per global rules: no `TODO`/`FIXME`/`HACK` markers — fix it now, or file a
   Linear ticket for genuinely out-of-scope work.
 
@@ -58,8 +65,11 @@ bring-your-own theme and washes out on light themes. Every color resolves from
   hairlines, and hover fills (it applies the readability boost; pass the site's
   opacity, not a raw `NSColor`).
 
-**Banned in the chrome:** `NSColor(white:…)`, `.white` / `.black`, raw hex, and
-literal palette values (`0xc4a7e7`, `NSColor(srgbRed:…)`). The only exception is a
+**Banned in the chrome:** `NSColor(white:…)`, `.white` / `.black`, raw hex,
+literal palette values (`0xc4a7e7`, `NSColor(srgbRed:…)`), and AppKit
+system/semantic colors (`.secondaryLabelColor`, `.placeholderTextColor`, a text
+field's default `placeholderString` tint, …) — those follow `effectiveAppearance`,
+not `Theme.current`, so they wash out on light themes. The only exception is a
 genuinely theme-independent value (e.g. the black drop shadow in `FloatShadow`),
 and it must be commented as such. If a chrome element needs a role `ChromeTheme`
 doesn't expose, add the role and derive it from the terminal palette in
