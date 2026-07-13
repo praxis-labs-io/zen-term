@@ -152,8 +152,13 @@ final class SettingsKeybindsSection: SettingsSection {
         }
         // keyDown. Esc / backspace / forward-delete are commands (the popover promises them), not
         // recordable chords.
-        if event.keyCode == 53 { endCapture(row); refreshRows(); return }  // Esc → cancel
-        if event.keyCode == 51 || event.keyCode == 117 { endCapture(row); reset(row); return }  // Delete → default
+        // Route the physical-key decode through the shared decoder so the macOS keyCodes stay in
+        // exactly one place (KeyboardFocus.key). Esc / Delete are commands, not recordable chords.
+        switch KeyboardFocus.key(for: event) {
+        case .escape?: endCapture(row); refreshRows(); return  // Esc → cancel
+        case .delete?: endCapture(row); reset(row); return  // Backspace / Forward-Delete → default
+        default: break
+        }
         guard let chord = Chord(event: event) else { return }  // unmappable key — keep waiting
         hintBubble?.setPreview(chord.displayGlyph)
         hintBubble?.clearError()
@@ -298,14 +303,10 @@ final class SettingsKeybindsSection: SettingsSection {
         capturingRow = nil
     }
 
-    /// The modifier-only glyph for the live preview while keys are still being held (⌘, ⌘⇧, …).
+    /// The modifier-only glyph for the live preview while keys are still being held (⌘, ⌘⇧, …) —
+    /// delegates to `Chord.modifierGlyph` so the ⌘⇧⌥⌃ order isn't re-encoded here.
     private static func modifierGlyph(_ flags: NSEvent.ModifierFlags) -> String {
-        var glyph = ""
-        if flags.contains(.command) { glyph += "⌘" }
-        if flags.contains(.shift) { glyph += "⇧" }
-        if flags.contains(.option) { glyph += "⌥" }
-        if flags.contains(.control) { glyph += "⌃" }
-        return glyph
+        Chord.modifierGlyph(flags)
     }
 
     // MARK: helpers

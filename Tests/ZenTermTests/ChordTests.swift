@@ -34,6 +34,17 @@ final class ChordTests: XCTestCase {
         XCTAssertEqual(Chord(command: true, key: "\\").displayGlyph, "⌘\\")
     }
 
+    func test_modifierGlyph_ordersModifiersAndMatchesDisplayGlyph() {
+        // The ⌘⇧⌥⌃ order lives once (Chord.modifierGlyph); displayGlyph and the keybind-capture
+        // preview both route through it.
+        XCTAssertEqual(Chord.modifierGlyph(command: true, shift: true, option: false, control: false), "⌘⇧")
+        XCTAssertEqual(Chord.modifierGlyph(command: true, shift: true, option: true, control: true), "⌘⇧⌥⌃")
+        XCTAssertEqual(Chord.modifierGlyph(command: false, shift: false, option: false, control: false), "")
+        // The flags overload agrees with the bool core.
+        XCTAssertEqual(Chord.modifierGlyph([.command, .control]), "⌘⌃")
+        XCTAssertEqual(Chord.modifierGlyph([.shift, .option]), "⇧⌥")
+    }
+
     func test_defaultTable_roundTripsThroughDisplay() {
         // Every default chord produces a non-empty glyph and re-reads its key stably.
         for chord in KeymapDefaults.map.keys {
