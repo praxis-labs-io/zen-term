@@ -155,8 +155,8 @@ final class SettingsKeybindsSection: SettingsSection {
         // Route the physical-key decode through the shared decoder so the macOS keyCodes stay in
         // exactly one place (KeyboardFocus.key). Esc / Delete are commands, not recordable chords.
         switch KeyboardFocus.key(for: event) {
-        case .escape?: endCapture(row); refreshRows(); return  // Esc → cancel
-        case .delete?: endCapture(row); reset(row); return  // Backspace / Forward-Delete → default
+        case .escape: endCapture(row); refreshRows(); return  // Esc → cancel
+        case .delete: endCapture(row); reset(row); return  // Backspace / Forward-Delete → default
         default: break
         }
         guard let chord = Chord(event: event) else { return }  // unmappable key — keep waiting
