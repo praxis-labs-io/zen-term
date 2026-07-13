@@ -21,9 +21,21 @@ final class PaletteInteractionTests: XCTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    /// The overlay's editable search field, reached by walking the live view tree.
-    private func searchField(in overlay: PaletteOverlay) -> NSTextField {
-        descendants(of: overlay).compactMap { $0 as? NSTextField }.first { $0.isEditable }!
+    /// The overlay's search field, reached by walking the live view tree. Matched by
+    /// `delegate === overlay` (the overlay is its field delegate) so it can't pick up some other
+    /// editable field, and failing the test with a clear message rather than crashing the whole
+    /// suite on a hierarchy change.
+    private func searchField(
+        in overlay: PaletteOverlay, file: StaticString = #filePath, line: UInt = #line
+    ) -> NSTextField {
+        guard
+            let field = descendants(of: overlay).compactMap({ $0 as? NSTextField })
+                .first(where: { $0.delegate === overlay })
+        else {
+            XCTFail("no search field (delegated to the overlay) found", file: file, line: line)
+            return NSTextField()  // detached — keeps the suite alive; the XCTFail above is the failure
+        }
+        return field
     }
 
     /// Type `query` into the search field and fire the filter, exactly as AppKit would.
