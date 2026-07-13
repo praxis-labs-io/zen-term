@@ -113,8 +113,11 @@ final class SettingsFormCommitTests: XCTestCase {
         let box = mountField(FontSizeSection())
         box.setText("40")
         box.onChange?()  // schedules the debounced apply; no blur
-        let committed = expectation(description: "debounced apply ran")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { committed.fulfill() }
+        // Wait on the observable outcome (the file content), not a fixed delay tied to `applyDelay`.
+        let committed = XCTNSPredicateExpectation(
+            predicate: NSPredicate { [weak self] _, _ in
+                self?.configText().contains("font-size = 40") ?? false
+            }, object: nil)
         wait(for: [committed], timeout: 2)
         XCTAssertTrue(configText().contains("font-size = 40"), "debounce should commit; got: \(configText())")
     }
