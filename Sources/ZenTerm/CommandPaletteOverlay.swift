@@ -74,7 +74,13 @@ final class CommandPaletteOverlay: PaletteOverlay {
             rows =
                 commands
                 .compactMap { command -> (PaletteCommand, Int)? in
-                    FuzzyMatch.score(q, command.title).map { (command, $0) }
+                    // Match the section name too, so `config` surfaces the whole Config section and
+                    // `panes` the whole Panes section; a title hit still ranks a command by the
+                    // stronger of the two scores.
+                    let scores = [
+                        FuzzyMatch.score(q, command.title), FuzzyMatch.score(q, command.category),
+                    ].compactMap { $0 }
+                    return scores.max().map { (command, $0) }
                 }
                 .sorted { a, b in
                     if a.1 != b.1 { return a.1 > b.1 }  // higher score first
