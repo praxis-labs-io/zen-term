@@ -73,20 +73,25 @@ final class CommandPaletteOverlay: PaletteOverlay {
         } else {
             rows =
                 commands
-                .compactMap { command -> (PaletteCommand, Int)? in
+                .compactMap { command -> (command: PaletteCommand, isTitleMatch: Bool, score: Int)? in
                     // Match the section name too, so `config` surfaces the whole Config section and
-                    // `panes` the whole Panes section; a title hit still ranks a command by the
-                    // stronger of the two scores.
-                    let scores = [
-                        FuzzyMatch.score(q, command.title), FuzzyMatch.score(q, command.category),
-                    ].compactMap { $0 }
-                    return scores.max().map { (command, $0) }
+                    // `panes` the whole Panes section — but a category-only hit ranks *below* every
+                    // title hit, so it can never preselect (and Enter-run) a command the query
+                    // didn't name, even when the category scores higher than a weak title match.
+                    if let titleScore = FuzzyMatch.score(q, command.title) {
+                        return (command, true, titleScore)
+                    }
+                    if let categoryScore = FuzzyMatch.score(q, command.category) {
+                        return (command, false, categoryScore)
+                    }
+                    return nil
                 }
                 .sorted { a, b in
-                    if a.1 != b.1 { return a.1 > b.1 }  // higher score first
-                    return a.0.title.localizedCaseInsensitiveCompare(b.0.title) == .orderedAscending
+                    if a.isTitleMatch != b.isTitleMatch { return a.isTitleMatch }  // title matches first
+                    if a.score != b.score { return a.score > b.score }  // then higher score
+                    return a.command.title.localizedCaseInsensitiveCompare(b.command.title) == .orderedAscending
                 }
-                .map { .command($0.0) }  // flat, no headers while searching
+                .map { .command($0.command) }  // flat, no headers while searching
         }
     }
 

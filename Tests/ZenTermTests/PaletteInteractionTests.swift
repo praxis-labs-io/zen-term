@@ -121,6 +121,25 @@ final class PaletteInteractionTests: XCTestCase {
         XCTAssertEqual(overlay.numberOfRows(), 2, "the section name surfaces every command in that section")
     }
 
+    func test_commandPalette_titleMatchOutranksCategoryOnlyMatch() {
+        var ran: KeyInterceptor.ReservedChord?
+        let commands = [
+            PaletteCommand(title: "Open Settings", shortcut: "⌘,", category: "Config", chord: .openSettings),
+            PaletteCommand(title: "Close Pane", shortcut: "⌘W", category: "Panes", chord: .closePane),
+        ]
+        let overlay = CommandPaletteOverlay(
+            commands: commands, background: Theme.current.chrome.background.nsColor,
+            onRun: { ran = $0 }, onDismiss: {})
+        mount(overlay)
+        // "con" fuzzy-matches the "Config" category (surfacing Open Settings, whose title has no
+        // match) AND the "Close Pane" title. The title hit must take the top row so Enter runs the
+        // command the query named, not the higher-scoring category-only match.
+        type("con", into: overlay)
+        XCTAssertEqual(overlay.numberOfRows(), 2, "Close Pane by title, Open Settings by category")
+        send(Self.insertNewline, to: overlay)
+        XCTAssertEqual(ran, .closePane)
+    }
+
     func test_commandPalette_escDismisses() {
         var dismissed = false
         let overlay = makeCommandPalette(onDismiss: { dismissed = true })
