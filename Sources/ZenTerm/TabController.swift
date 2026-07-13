@@ -232,6 +232,7 @@ final class TabController: NSObject {
         relayoutPanels()
 
         paneCanvas.onFocusChanged = { [weak self] in self?.paneGainedFocus() }
+        paneCanvas.onPanesRemoved = { [weak self] closed in self?.pruneNavReturn(closed: closed) }
         paneCanvas.onSocketFocus = { [weak self] dir in self?.navigate(dir) }
         paneCanvas.onZoomExitRequested = { [weak self] in self?.toggleZoom() }
         paneCanvas.onZoomEnded = { [weak self] in self?.paneZoomEndedInternally() }
@@ -932,6 +933,27 @@ final class TabController: NSObject {
 
         navReturn[target, default: [:]][direction.opposite] = origin  // enable the return hop
         focusPanel(target)
+    }
+
+    /// Drop focus-memory entries for panes that have closed, so `navReturn` doesn't grow with
+    /// every pane ever created in a long-lived tab. Correctness already tolerates stale entries
+    /// (they fail the still-open / in-direction checks in `navigate`) — this is memory hygiene only.
+    private func pruneNavReturn(closed: [PaneID]) {
+        navReturn = Self.navReturnPruned(navReturn, removing: Set(closed))
+    }
+
+    /// Pure transform behind `pruneNavReturn`, factored out so it's unit-testable without a live
+    /// pane canvas: drops each closed pane both as an origin key and as a remembered target, and
+    /// drops any origin left with no directions.
+    static func navReturnPruned(
+        _ map: [PaneID: [Direction: PaneID]], removing closed: Set<PaneID>
+    ) -> [PaneID: [Direction: PaneID]] {
+        var result: [PaneID: [Direction: PaneID]] = [:]
+        for (origin, inner) in map where !closed.contains(origin) {
+            let kept = inner.filter { !closed.contains($0.value) }
+            if !kept.isEmpty { result[origin] = kept }
+        }
+        return result
     }
 
     /// The id of the panel that currently holds unified focus, in the shared nav id space.

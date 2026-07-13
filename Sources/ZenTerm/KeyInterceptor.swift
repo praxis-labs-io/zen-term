@@ -68,6 +68,11 @@ final class KeyInterceptor {
             }
             // Outside capture, flagsChanged passes straight through; only keyDown routes to a chord.
             guard event.type == .keyDown else { return event }
+            // A reserved chord always carries a modifier (`Chord.parse` rejects modifier-less
+            // binds), so a bare keystroke can never match the keymap. Bail before allocating a
+            // Chord + its lowercased string on the hot per-keystroke path.
+            let reservableModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
+            guard !event.modifierFlags.intersection(reservableModifiers).isEmpty else { return event }
             switch self.resolve(Chord(event: event)) {
             case .passThrough:
                 return event
