@@ -30,7 +30,7 @@ enum WorkspacesWriter {
             let paddedKey = key.padding(toLength: max(key.count, keyColumnWidth), withPad: " ", startingAt: 0)
             lines.append("\(paddedKey) = \(rendered)")
         }
-        add("path", quoted(abbreviatingHome(ws.path.path)))
+        add("path", quoted(PathDisplay.abbreviatingHome(ws.path.path)))
         if let main = ws.main { add("main", quoted(main)) }
         if let right = ws.right { add("right", quoted(right)) }
         if let bottom = ws.bottom { add("bottom", quoted(bottom)) }
@@ -74,11 +74,4 @@ enum WorkspacesWriter {
         return needsQuoting ? "\"\(value)\"" : value
     }
 
-    /// Re-collapse the home prefix to `~` so a serialized `path` matches the tilde house style in
-    /// `docs/config/workspaces` (the parser expands it back, so the round-trip is unchanged).
-    private static func abbreviatingHome(_ path: String) -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        if path == home { return "~" }
-        return path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
-    }
 }

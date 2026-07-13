@@ -122,7 +122,7 @@ final class PaneCanvasController: NSObject {
     var title: String {
         let surface = registry.surface(for: tree.focusedLeaf)
         if let cwd = surface?.currentDirectory ?? cwdByLeaf[tree.focusedLeaf] {
-            if cwd.path == Self.homePath { return "~" }
+            if cwd.path == PathDisplay.homePath { return "~" }
             let name = cwd.lastPathComponent
             if !name.isEmpty && name != "/" { return name }
         }
@@ -132,8 +132,6 @@ final class PaneCanvasController: NSObject {
         }
         return "shell"
     }
-
-    private static let homePath = FileManager.default.homeDirectoryForCurrentUser.path
 
     init(initialCWD: URL? = nil, initialCommand: String? = nil, env: [String: String] = [:]) {
         let firstLeaf = PaneID(1)
