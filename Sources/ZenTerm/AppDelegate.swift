@@ -7,6 +7,9 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windows: [WindowController] = []
     private let keys = KeyInterceptor()
+    /// The nvim navigator command socket (`$ZEN_SOCK`). Started at launch, torn down on
+    /// quit. Nil if it couldn't bind — the ⌘-nav path never depends on it.
+    private var navSocket: NavSocketServer?
     /// True between a ⌘Q that raised the quit confirm and its reply, so a second ⌘Q can't
     /// stack a second quit dialog — while a non-quit (close-pane) confirm never blocks ⌘Q.
     private var quitConfirmPending = false
@@ -27,8 +30,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         newWindow(initialCWD: nil, centered: true)
 
         keys.onReservedChord = { [weak self] chord in self?.route(chord) }
+        // Seamless-nav opt-in: let a `Ctrl`-nav chord fall through to a pane running nvim so
+        // nvim moves its own splits. `⌘`-nav (the default) is never passed through, so default
+        // pane nav is untouched whether or not the pane is nvim.
+        keys.passThroughGuard = { [weak self] chord, action in
+            NavGuard.shouldPassThrough(
+                chord: chord, action: action,
+                focusedPaneIsVim: self?.keyController()?.focusedPaneIsVim == true)
+        }
         keys.setKeymap(GeneralConfig.current.keymap)
         keys.start()
+
+        // The nvim navigator command socket. `apply` runs on the main thread (the server
+        // hops decoded commands there), so it touches `NavRegistry` safely.
+        let socket = NavSocketServer { command in
+            switch command {
+            case .focus(let token, let dir): NavRegistry.shared.route(focus: token, dir)
+            case .setVim(let token, let on): NavRegistry.shared.setVim(token: token, on)
+            }
+        }
+        socket.start()
+        navSocket = socket
 
         // The one live consumer in PR1: when config changes (a keybind edit in the Settings card),
         // rebuild the interceptor's keymap so the rebind takes effect with no relaunch.
@@ -108,6 +130,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isConfirmModal: Bool { keyController()?.isConfirmOpen == true }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    /// Remove the nav socket on quit so the next launch rebinds a fresh one. Fires after
+    /// the quit is approved, covering every termination path.
+    func applicationWillTerminate(_ notification: Notification) {
+        navSocket?.stop()
+    }
 
     /// ⌘Q always confirms: tally tabs across every window and gate on the key window's
     /// confirm toast. `.terminateLater` requires exactly one matching

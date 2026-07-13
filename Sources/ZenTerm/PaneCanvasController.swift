@@ -12,6 +12,10 @@ final class PaneCanvasController: NSObject {
     private let registry: PaneSurfaceRegistry
     private var cwdByLeaf: [PaneID: URL] = [:]
     private var hostByLeaf: [PaneID: PanelHostView] = [:]
+    /// The `NavRegistry` token minted for each live leaf, exported to its shell as
+    /// `$ZEN_PANE` and used to address the pane over the nav socket. Cleared (and
+    /// unregistered) when the leaf's surface is torn down.
+    private var tokenByLeaf: [PaneID: Int] = [:]
     /// A one-shot startup command per leaf (the `⌘P` workspace preset seeds the first
     /// leaf with `nvim`). Consumed when the leaf's surface is first started; splits
     /// never inherit it, so a split of an nvim pane is a plain shell.
@@ -58,6 +62,10 @@ final class PaneCanvasController: NSObject {
     /// routing) onto the pane canvas.
     var onFocusChanged: (() -> Void)?
 
+    /// Fired when a socket `focus` command names one of this canvas's panes (an nvim split
+    /// at its edge handing off). `TabController` routes it into its unified `navigate(_:)`.
+    var onSocketFocus: ((Direction) -> Void)?
+
     /// Fired when any pane's surface posts a desktop notification (OSC 777) — the tab-level,
     /// message-bearing "needs attention" signal (e.g. an agent asking permission). `TabController`
     /// relays it up.
@@ -98,6 +106,16 @@ final class PaneCanvasController: NSObject {
         registry.surface(for: tree.focusedLeaf)?.isBusy ?? false
     }
 
+    /// The `$ZEN_PANE` token of the focused pane, or nil before its surface has started.
+    var focusedPaneToken: Int? { tokenByLeaf[tree.focusedLeaf] }
+
+    /// Whether the focused pane is running nvim (advertised over the nav socket). Read by
+    /// the key pass-through guard so `Ctrl-hjkl` reaches nvim instead of moving pane focus.
+    var focusedPaneIsVim: Bool {
+        guard let token = focusedPaneToken else { return false }
+        return NavRegistry.shared.isVim(token: token)
+    }
+
     /// The tab's display title: the focused pane's cwd basename (`~` for home),
     /// resolved live from the shell process. Falls back to the terminal (OSC) title
     /// if a cwd can't be read, then a generic label.
@@ -135,6 +153,28 @@ final class PaneCanvasController: NSObject {
     private func mintPaneID() -> PaneID { defer { nextID += 1 }; return PaneID(nextID) }
     private func mintSplitID() -> SplitID { defer { nextID += 1 }; return SplitID(nextID) }
 
+    /// Mint and record a nav token for a freshly-created leaf, registering its focus-move
+    /// closure so a socket `focus` from that pane routes into the tab's `navigate(_:)`.
+    private func registerNavToken(for id: PaneID) -> Int {
+        let token = NavRegistry.shared.mintToken()
+        tokenByLeaf[id] = token
+        NavRegistry.shared.register(token: token) { [weak self] dir in
+            // Only the focused pane hands off. nvim emits `focus` on a keypress, which it can
+            // only receive while focused, so the sender is the focused pane in the normal flow;
+            // dropping a mismatch ignores a stale or background command that would otherwise
+            // navigate from the wrong origin.
+            guard let self, self.focusedPaneToken == token else { return }
+            self.onSocketFocus?(dir)
+        }
+        return token
+    }
+
+    /// The pane's launch environment: the tab's workspace env plus the nav-socket path and
+    /// this pane's token, so the nvim plugin inside can address itself over the socket.
+    private func navEnv(token: Int) -> [String: String] {
+        NavSocketServer.env(base: workspaceEnv, token: token)
+    }
+
     /// Boots the first pane and renders.
     func start() {
         reconcileAndRender()
@@ -148,17 +188,22 @@ final class PaneCanvasController: NSObject {
         let created = registry.apply(diff)
         for (id, surface) in created {
             surface.delegate = self
+            let token = registerNavToken(for: id)
             // Each created leaf starts with the cwd pre-seeded for it (nil → default
             // for the first pane; a split seeds the new leaf with its parent's cwd). A
             // seeded startup command (workspace preset) runs a program that drops back to
             // a shell; consume it so it never re-runs.
             if let cmd = startupCommandByLeaf.removeValue(forKey: id) {
-                surface.start(ShellLaunch.program(cmd, cwd: cwdByLeaf[id], env: workspaceEnv))
+                surface.start(ShellLaunch.program(cmd, cwd: cwdByLeaf[id], env: navEnv(token: token)))
             } else {
-                surface.start(ShellLaunch.shell(cwd: cwdByLeaf[id], env: workspaceEnv))
+                surface.start(ShellLaunch.shell(cwd: cwdByLeaf[id], env: navEnv(token: token)))
             }
         }
-        for id in diff.removed { cwdByLeaf[id] = nil; hostByLeaf[id] = nil }
+        for id in diff.removed {
+            cwdByLeaf[id] = nil
+            hostByLeaf[id] = nil
+            if let token = tokenByLeaf.removeValue(forKey: id) { NavRegistry.shared.unregister(token: token) }
+        }
         rebuildViews()
     }
 
@@ -367,6 +412,8 @@ final class PaneCanvasController: NSObject {
     /// tab is discarded (its controller is dropped), so no shell leaks as a zombie.
     func shutdown() {
         registry.terminateAll()
+        for token in tokenByLeaf.values { NavRegistry.shared.unregister(token: token) }
+        tokenByLeaf.removeAll()
         canvasView.subviews.forEach { $0.removeFromSuperview() }
         hostByLeaf.removeAll()
     }

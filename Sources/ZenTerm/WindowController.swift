@@ -88,6 +88,7 @@ final class WindowController: NSObject {
 
     /// The active tab's focused-pane cwd, for `⌘n` new-window inheritance.
     var focusedCWD: URL? { activeController?.focusedCWD }
+    var focusedPaneIsVim: Bool { activeController?.focusedPaneIsVim ?? false }
 
     /// The active tab's controller, or nil once the last tab has closed (the window
     /// is being torn down). Reading `tabs.activeID` on an empty list traps, so every
