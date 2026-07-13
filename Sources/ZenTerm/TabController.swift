@@ -84,6 +84,9 @@ final class TabController: NSObject {
     /// mutually exclusive, so one slot suffices. Terminated on close (not persisted).
     private var activeToolFloat: (spec: ToolFloat, surface: TerminalSurface, overlay: SurfaceFloatOverlay)?
     var isToolFloatOpen: Bool { activeToolFloat != nil }
+    /// The float id whose empty-guard probe is currently deciding (async). A re-press while a
+    /// probe is in flight is ignored, so a double-tap can't spawn two overlapping floats.
+    private var probingToolFloatID: String?
     var activeToolFloatID: String? { activeToolFloat?.spec.id }
 
     /// Which panel currently holds the tab's single unified focus/halo.
@@ -644,11 +647,25 @@ final class TabController: NSObject {
                         + "or open a folder that has one."))
             return
         }
-        if let guardSpec = spec.emptyGuard, probeIsEmpty(guardSpec.probe) {
-            onRequestToast?(guardSpec.toast)
+        guard let guardSpec = spec.emptyGuard else {
+            showToolFloat(spec)
             return
         }
-        showToolFloat(spec)
+        // Decide off the main thread: a `git diff`-style probe on a large repo or cold disk would
+        // otherwise beachball on the keybind press. The float animates in either way, so a
+        // sub-100ms deferred decision is invisible.
+        guard probingToolFloatID == nil else { return }  // a probe is already deciding — ignore re-press
+        probingToolFloatID = spec.id
+        probeIsEmpty(guardSpec.probe) { [weak self] isEmpty in
+            guard let self else { return }
+            self.probingToolFloatID = nil
+            guard self.activeToolFloat == nil else { return }  // a float opened while we probed
+            if isEmpty {
+                self.onRequestToast?(guardSpec.toast)
+            } else {
+                self.showToolFloat(spec)
+            }
+        }
     }
 
     /// Spawn `spec.command` in a fresh login+interactive shell at the focused cwd (so
@@ -694,37 +711,40 @@ final class TabController: NSObject {
         onOverlayStateChanged?()
     }
 
-    /// The empty-guard probe's timeout — the toggle path blocks on it, so a pathological
-    /// probe can't freeze the UI. On timeout we fail open (show the float).
+    /// The empty-guard probe's watchdog timeout — a pathological probe is terminated after this so
+    /// it can't run forever. On timeout (or any error) we fail open (show the float).
     private static let probeTimeout: TimeInterval = 2
 
     /// Run `probe` as a plain (non-login) shell at the focused cwd; exit 0 ⇒ nothing to show.
-    /// Used by a float's `emptyGuard` to toast instead of opening an empty float. Bounded by
-    /// `probeTimeout` and fail-open on any error/timeout so it never blocks or wrongly guards.
-    private func probeIsEmpty(_ probe: String) -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: ShellLaunch.userShell)
-        process.arguments = ["-c", probe]
-        process.currentDirectoryURL = focusedCWD ?? ShellLaunch.defaultCWD
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-        } catch {
-            return false  // couldn't probe → don't block opening the float
-        }
-        // Wait on a background queue (it keeps `process` alive and reaps the child even on the
-        // timeout path); the main thread blocks only up to `probeTimeout`.
-        let finished = DispatchSemaphore(value: 0)
+    /// Used by a float's `emptyGuard` to toast instead of opening an empty float. Runs entirely on
+    /// a background queue — the main thread is never blocked — and calls `completion` on the main
+    /// queue. Bounded by a `probeTimeout` watchdog and fail-open (isEmpty == false) on any
+    /// error/timeout so it never wrongly guards.
+    private func probeIsEmpty(_ probe: String, completion: @escaping (Bool) -> Void) {
+        let shell = ShellLaunch.userShell
+        let cwd = focusedCWD ?? ShellLaunch.defaultCWD
         DispatchQueue.global(qos: .userInitiated).async {
-            process.waitUntilExit()
-            finished.signal()
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: shell)
+            process.arguments = ["-c", probe]
+            process.currentDirectoryURL = cwd
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            let isEmpty: Bool
+            do {
+                try process.run()
+                // Watchdog: terminate a pathological probe so this queue slot can't park forever.
+                // A terminated process reports a non-zero status → fail open, matching the intent.
+                let watchdog = DispatchWorkItem { if process.isRunning { process.terminate() } }
+                DispatchQueue.global().asyncAfter(deadline: .now() + Self.probeTimeout, execute: watchdog)
+                process.waitUntilExit()
+                watchdog.cancel()
+                isEmpty = process.terminationStatus == 0
+            } catch {
+                isEmpty = false  // couldn't probe → don't block opening the float
+            }
+            DispatchQueue.main.async { completion(isEmpty) }
         }
-        if finished.wait(timeout: .now() + Self.probeTimeout) == .timedOut {
-            process.terminate()  // fail open; the background wait then reaps it
-            return false
-        }
-        return process.terminationStatus == 0
     }
 
     // MARK: tiling
