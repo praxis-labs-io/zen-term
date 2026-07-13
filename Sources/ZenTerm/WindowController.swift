@@ -42,15 +42,18 @@ final class WindowController: NSObject {
     /// a kind discriminator rather than parallel per-overlay stacks. Window-level (they open/
     /// switch tabs) but presented over the active tab's tile region. Modal while open.
     private enum ModalKind {
-        case repoPicker, commandPalette, addWorkspace, settings
+        case repoPicker, commandPalette, addWorkspace, settings, toolFloatForm
 
-        /// The chord that closes this same modal when pressed again (its own toggle).
-        var selfToggle: KeyInterceptor.ReservedChord {
+        /// The chord that closes this same modal when pressed again (its own toggle), or nil for a
+        /// card with no dedicated chord (the tool-float form, reached only from the Tools section) —
+        /// it's still closed by any surface-switch chord in `handle(_:)`, just not self-toggled.
+        var selfToggle: KeyInterceptor.ReservedChord? {
             switch self {
             case .repoPicker: return .toggleRepoPicker
             case .commandPalette: return .toggleCommandPalette
             case .addWorkspace: return .addWorkspace
             case .settings: return .openSettings
+            case .toolFloatForm: return nil
             }
         }
     }
@@ -166,7 +169,11 @@ final class WindowController: NSObject {
                     theme: Theme.current.terminal, behavior: GeneralConfig.current.terminalBehavior)
             }
             self.tabBar.reapplyTheme()
+            // A float add / edit / remove changes the catalog — rebuild the dock's per-float buttons
+            // (not just recolor) so the toolbar reflects it live, then restore active states.
+            self.dock.setToolFloats(ToolFloatCatalog.all)
             self.dock.reapplyTheme()
+            self.renderDock()
             self.modal?.overlay.reapplyTheme()
             self.confirmToast?.reapplyTheme()
         }
@@ -489,19 +496,87 @@ final class WindowController: NSObject {
     }
 
     /// Open the Settings card. Built fresh each open so every section reads live config values.
-    private func openSettings() {
+    /// `showTools` opens straight on the Tools section — used when the tool-float form hands back.
+    private func openSettings(showTools: Bool = false) {
         if modal?.kind == .settings { closeModal(); return }
+        let toolsSection = SettingsToolsSection()
+        toolsSection.onEditFloat = { [weak self] float in self?.openToolFloatForm(editing: float) }
+        let sections: [SettingsSection] = [
+            SettingsAppearanceSection(),
+            SettingsTerminalSection(),
+            SettingsKeybindsSection(capturer: keybindCapturer),
+            toolsSection,
+        ]
         let overlay = SettingsOverlay(
-            sections: [
-                SettingsAppearanceSection(),
-                SettingsTerminalSection(),
-                SettingsKeybindsSection(capturer: keybindCapturer),
-            ],
+            sections: sections,
             capturer: keybindCapturer,
+            initialSection: showTools ? (sections.firstIndex { $0 === toolsSection } ?? 0) : 0,
             background: Theme.current.chrome.background.nsColor,
             onClose: { [weak self] in self?.closeModal() }
         )
         presentModal(overlay, kind: .settings)
+    }
+
+    /// Open the tool-float add / edit form from the Tools section (`nil` adds, a value edits). Closes
+    /// the Settings card first — one modal slot — mirroring the picker → Add-Workspace hand-off; the
+    /// form's own id-collision check excludes the float being edited. On save or cancel it hands back
+    /// to Settings → Tools (the section it was launched from).
+    private func openToolFloatForm(editing float: ToolFloat?) {
+        closeModal()
+        let existingIDs = Set(GeneralConfig.current.floats.map(\.id)).subtracting(float.map { [$0.id] } ?? [])
+        let originalID = float?.id
+        let form = ToolFloatFormOverlay(
+            editing: float,
+            existingIDs: existingIDs,
+            capturer: keybindCapturer,
+            background: Theme.current.chrome.background.nsColor,
+            onSubmit: { [weak self] built in self?.submitToolFloat(built, replacing: originalID) },
+            onCancel: { [weak self] in self?.reopenSettingsOnTools() },
+            onDelete: float.map { existing in { [weak self] in self?.deleteToolFloat(existing) } }
+        )
+        presentModal(form, kind: .toolFloatForm)
+    }
+
+    /// Delete the float being edited, reload the live config (dropping its dock button / ⌘P entry /
+    /// keybind), then hand back to Settings → Tools. A write failure keeps the form up with a toast.
+    private func deleteToolFloat(_ float: ToolFloat) {
+        do {
+            try ConfigWriter.apply(floatRemovals: [float.id])
+        } catch {
+            toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Couldn't Delete Tool Float",
+                    message: "Failed to update the config file: \(error.localizedDescription)"))
+            return
+        }
+        AppConfig.reload()
+        reopenSettingsOnTools()
+    }
+
+    /// Persist a built tool float (upsert by id), reload the live config so the dock button, ⌘P
+    /// entry, and keybind appear with no restart, then hand back to Settings → Tools. A write failure
+    /// keeps the form up with a toast. `originalID` is the id before an edit — when a rename changed
+    /// it, the old line is removed in the same write so the float moves rather than duplicating.
+    private func submitToolFloat(_ float: ToolFloat, replacing originalID: String?) {
+        let removals: Set<String> = (originalID.map { $0 != float.id ? [$0] : [] }) ?? []
+        do {
+            try ConfigWriter.apply(floatUpserts: [float], floatRemovals: removals)
+        } catch {
+            toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Couldn't Save Tool Float",
+                    message: "Failed to write \(float.id) to the config file: \(error.localizedDescription)"))
+            return
+        }
+        AppConfig.reload()
+        reopenSettingsOnTools()
+    }
+
+    /// Close the tool-float form and reopen the Settings card on its Tools section — the "back" for
+    /// the sub-form, so save / cancel land where the user launched it.
+    private func reopenSettingsOnTools() {
+        closeModal()
+        openSettings(showTools: true)
     }
 
     /// Persist a freshly-built workspace, then open it. On a write failure the form stays up and
@@ -607,10 +682,11 @@ final class WindowController: NSObject {
         // cards; every other chord is swallowed. Its arrow/Enter/Esc keys aren't chords — they
         // go to the card's field editor, never here.
         if let modal {
-            switch chord {
-            case modal.kind.selfToggle:
+            if let selfToggle = modal.kind.selfToggle, chord == selfToggle {
                 closeModal()
                 return
+            }
+            switch chord {
             case .toggleRepoPicker, .toggleCommandPalette, .addWorkspace, .openSettings,
                 .toggleLazygit, .toggleToolFloat:
                 closeModal()  // close the current card, then open the requested surface below

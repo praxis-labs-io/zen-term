@@ -7,7 +7,25 @@ import Foundation
 /// missing a required field (`id`, `key`, `command`) or with an unparseable `key:` is
 /// dropped with a warning; optional fields fall back to sensible defaults.
 enum ToolFloatParser {
-    static func parse(_ value: String) -> ToolFloat? {
+    /// The defaults an omitted optional field falls back to — shared with `ConfigWriter`, which omits
+    /// a field from its serialized line when the value equals the default, so the two halves can't drift.
+    static let defaultIcon = "square.on.square"
+    static let defaultFraction: CGFloat = 0.85
+    static func defaultTitle(forID id: String) -> String { "Open \(id)" }
+
+    /// The valid width/height range, plus the shared clamp + compact format — one home for the
+    /// fraction grammar so the parser, the `float =` writer, and the Settings form can't disagree on
+    /// the range or how a fraction reads (`0.85`, not `0.850000`).
+    static let fractionRange: ClosedRange<CGFloat> = 0.2...1.0
+    static func clampedFraction(_ value: Double) -> CGFloat {
+        CGFloat(min(max(value, Double(fractionRange.lowerBound)), Double(fractionRange.upperBound)))
+    }
+    static func fractionText(_ value: CGFloat) -> String { String(format: "%g", Double(value)) }
+
+    /// Split a `float =` value into its `field:value` map — quote-aware, each token split on its
+    /// first `:`, values unquoted. The read half of the grammar `ConfigWriter.serializeFloat` writes;
+    /// `ConfigWriter` also uses it to read a line's `id:` when matching a float to replace/remove.
+    static func fields(_ value: String) -> [String: String] {
         var fields: [String: String] = [:]
         for token in tokenize(value) {
             guard let colon = token.firstIndex(of: ":") else { continue }
@@ -15,6 +33,11 @@ enum ToolFloatParser {
             let raw = String(token[token.index(after: colon)...])
             fields[field] = ConfigText.unquote(raw)
         }
+        return fields
+    }
+
+    static func parse(_ value: String) -> ToolFloat? {
+        let fields = fields(value)
 
         guard let id = fields["id"], !id.isEmpty else {
             NSLog("GeneralConfig: float line missing required `id:` — ignored")
@@ -31,11 +54,11 @@ enum ToolFloatParser {
 
         return ToolFloat(
             id: id,
-            title: fields["title"] ?? "Open \(id)",
-            icon: fields["icon"] ?? "square.on.square",
+            title: fields["title"] ?? Self.defaultTitle(forID: id),
+            icon: fields["icon"] ?? Self.defaultIcon,
             command: command,
-            widthFraction: fraction(fields["width"]) ?? 0.85,
-            heightFraction: fraction(fields["height"]) ?? 0.85,
+            widthFraction: fraction(fields["width"]) ?? Self.defaultFraction,
+            heightFraction: fraction(fields["height"]) ?? Self.defaultFraction,
             requiresGitRepo: fields["git"]?.lowercased() == "true",
             emptyGuard: nil,
             toggle: toggle)
@@ -45,7 +68,7 @@ enum ToolFloatParser {
     /// (invalid Auto Layout multiplier) and a value > 1 overflows the window.
     private static func fraction(_ raw: String?) -> CGFloat? {
         guard let value = raw.flatMap({ Double($0) }), value.isFinite else { return nil }
-        return CGFloat(min(max(value, 0.2), 1.0))
+        return clampedFraction(value)
     }
 
     /// Split on whitespace, but keep runs inside double quotes intact so a quoted value can

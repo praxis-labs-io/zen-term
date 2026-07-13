@@ -18,6 +18,11 @@ final class ToggleDock: NSView {
     /// reference to reach through).
     private var allButtons: [IconButton] = []
     private var dividers: [NSView] = []
+    /// The button row; the per-float buttons live at its tail and are rebuilt in place by
+    /// `setToolFloats` when the catalog changes (a float added / edited / removed in Settings).
+    private let stack = NSStackView()
+    /// Retained so `setToolFloats` can wire freshly-built float buttons to the same action.
+    private let onToolFloat: (ToolFloat) -> Void
 
     private static let iconPointSize: CGFloat = 11
 
@@ -28,6 +33,7 @@ final class ToggleDock: NSView {
         onLazygit: @escaping () -> Void,
         toolFloats: [ToolFloat], onToolFloat: @escaping (ToolFloat) -> Void
     ) {
+        self.onToolFloat = onToolFloat
         func button(_ symbol: String, _ label: String, _ onClick: @escaping () -> Void) -> IconButton {
             IconButton(symbol: symbol, pointSize: Self.iconPointSize, accessibilityLabel: label, onClick: onClick)
         }
@@ -38,30 +44,20 @@ final class ToggleDock: NSView {
         rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", onRight)  // ⌘\
         zoomBtn = button("arrow.up.left.and.arrow.down.right", "Toggle zoom", onZoom)  // ⌘F
         lazygitBtn = button("git", "Toggle lazygit", onLazygit)  // ⌘G — bundled git mark
-        // Local pairs — `button` is a local func, but the `toolFloatBtns` stored
-        // property can't be touched until after super.init.
-        let toolButtonPairs: [(String, IconButton)] = toolFloats.map { spec in
-            (spec.id, button(spec.icon, spec.title, { onToolFloat(spec) }))
-        }
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        for (id, btn) in toolButtonPairs { toolFloatBtns[id] = btn }
-        allButtons =
-            [splitH, splitV, bottomBtn, rightBtn, zoomBtn, paletteBtn, lazygitBtn] + toolButtonPairs.map(\.1)
+        allButtons = [splitH, splitV, bottomBtn, rightBtn, zoomBtn, paletteBtn, lazygitBtn]
         let dividerA = Self.divider()
         let dividerB = Self.divider()
         dividers = [dividerA, dividerB]
 
-        let stack = NSStackView(
-            views: [
-                splitH, splitV, dividerA,
-                bottomBtn, rightBtn, zoomBtn, dividerB,
-                paletteBtn, lazygitBtn,
-            ] + toolButtonPairs.map(\.1))
         stack.orientation = .horizontal
         stack.alignment = .centerY
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
+        for view in [splitH, splitV, dividerA, bottomBtn, rightBtn, zoomBtn, dividerB, paletteBtn, lazygitBtn] {
+            stack.addArrangedSubview(view)
+        }
         addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -69,9 +65,34 @@ final class ToggleDock: NSView {
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
+        setToolFloats(toolFloats)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Test hook: the ids of the per-float buttons currently mounted in the dock.
+    var toolFloatButtonIDsForTesting: Set<String> { Set(toolFloatBtns.keys) }
+
+    /// Rebuild the per-float buttons at the tail of the dock from the current catalog — called on
+    /// init and whenever a config change adds / edits / removes a float, so the dock reflects it with
+    /// no relaunch. The fixed buttons and dividers are untouched; the caller re-runs `render` after
+    /// to restore active states.
+    func setToolFloats(_ toolFloats: [ToolFloat]) {
+        for button in toolFloatBtns.values {
+            stack.removeArrangedSubview(button)
+            button.removeFromSuperview()
+        }
+        allButtons.removeAll { button in toolFloatBtns.values.contains { $0 === button } }
+        toolFloatBtns = [:]
+        for spec in toolFloats {
+            let btn = IconButton(
+                symbol: spec.icon, pointSize: Self.iconPointSize, accessibilityLabel: spec.title
+            ) { [weak self] in self?.onToolFloat(spec) }
+            toolFloatBtns[spec.id] = btn
+            allButtons.append(btn)
+            stack.addArrangedSubview(btn)
+        }
+    }
 
     /// Mirror the active tab's overlay state (drawers, lazygit, zoom) and the window's
     /// repo picker; split buttons are momentary and have no active state. A modal float
