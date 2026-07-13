@@ -36,7 +36,6 @@ final class NavSocketServer {
     /// tests so they never touch the real socket.
     private let path: String
     private let queue = DispatchQueue(label: "com.zenterm.nav-socket")
-    private var listenFD: Int32 = -1
     private var acceptSource: DispatchSourceRead?
 
     init(path: String = NavSocketServer.socketPath, apply: @escaping (NavCommand) -> Void) {
@@ -56,13 +55,20 @@ final class NavSocketServer {
         unlink(path)  // clear a stale socket from a prior run
 
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { return }
+        guard fd >= 0 else {
+            NSLog("NavSocket: socket() failed (\(errnoText())) — seamless nav disabled")
+            return
+        }
 
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)
         let pathBytes = Array(path.utf8)
         let capacity = MemoryLayout.size(ofValue: addr.sun_path)
-        guard pathBytes.count < capacity else { close(fd); return }  // leave room for NUL
+        guard pathBytes.count < capacity else {  // leave room for NUL
+            NSLog("NavSocket: socket path too long (\(pathBytes.count) ≥ \(capacity)): \(path) — seamless nav disabled")
+            close(fd)
+            return
+        }
         withUnsafeMutablePointer(to: &addr.sun_path) {
             $0.withMemoryRebound(to: UInt8.self, capacity: capacity) { dst in
                 for (i, byte) in pathBytes.enumerated() { dst[i] = byte }
@@ -75,21 +81,24 @@ final class NavSocketServer {
                 bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
             }
         }
-        guard bound == 0, listen(fd, 8) == 0 else { close(fd); return }
-        listenFD = fd
-
-        // The source owns the listen fd: it's closed in the cancel handler (which runs on
-        // `queue` after the last accept), so `stop()` on the main thread never races the
-        // accept handler over the descriptor.
-        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
-        source.setEventHandler { [weak self] in self?.acceptOne() }
-        source.setCancelHandler { [weak self] in
+        guard bound == 0, listen(fd, 8) == 0 else {
+            NSLog("NavSocket: bind/listen on \(path) failed (\(errnoText())) — seamless nav disabled")
             close(fd)
-            self?.listenFD = -1
+            return
         }
+
+        // The source owns the listen fd, captured per-source rather than through a shared ivar —
+        // it's closed in the cancel handler (which runs on `queue` after the last accept), so a
+        // stop→start cycle can never clobber a new listener's fd with a stale handler.
+        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
+        source.setEventHandler { [weak self] in self?.acceptOne(listenFD: fd) }
+        source.setCancelHandler { close(fd) }
         source.resume()
         acceptSource = source
     }
+
+    /// `errno` rendered as a human string, for the bind-failure logs above.
+    private func errnoText() -> String { "errno \(errno): \(String(cString: strerror(errno)))" }
 
     /// Stop accepting and remove the file so the next launch rebinds. The listen fd is closed
     /// by the source's cancel handler, not here, to keep all fd access on `queue`.
@@ -99,7 +108,7 @@ final class NavSocketServer {
         unlink(path)
     }
 
-    private func acceptOne() {
+    private func acceptOne(listenFD: Int32) {
         let conn = accept(listenFD, nil, nil)
         guard conn >= 0 else { return }
         // A wedged client must not stall the accept queue: bound the read, then read off the

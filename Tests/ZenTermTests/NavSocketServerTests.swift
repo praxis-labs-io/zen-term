@@ -64,6 +64,33 @@ final class NavSocketServerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: path))
     }
 
+    func test_restart_rebindsAndStillDispatches() throws {
+        // A stop→start cycle must rebind cleanly: the new listener owns its own fd (captured
+        // per-source), so a prior source's cancel handler can't clobber it. If the fd were
+        // shared, the restarted server would accept(-1) forever and this dispatch would time out.
+        let path = "/tmp/zt-nav-restart-\(getpid()).sock"
+        var commands: [NavCommand] = []
+        let firstRound = expectation(description: "first round dispatched")
+        let secondRound = expectation(description: "second round dispatched")
+        let server = NavSocketServer(path: path) { command in
+            commands.append(command)
+            if commands.count == 1 { firstRound.fulfill() }
+            if commands.count == 2 { secondRound.fulfill() }
+        }
+
+        server.start()
+        defer { server.stop() }  // registered before the first throwing sendLine, so a throw can't leak the listener
+        try sendLine(#"{"cmd":"focus","dir":"left","pane":1}"#, to: path)
+        wait(for: [firstRound], timeout: 3)
+
+        server.stop()
+        server.start()
+        try sendLine(#"{"cmd":"focus","dir":"right","pane":2}"#, to: path)
+        wait(for: [secondRound], timeout: 3)
+
+        XCTAssertEqual(commands, [.focus(token: 1, dir: .left), .focus(token: 2, dir: .right)])
+    }
+
     /// Connect a throwaway `AF_UNIX` client, write one newline-terminated line, close.
     private func sendLine(_ line: String, to path: String) throws {
         let fd = try connectClient(to: path)
