@@ -248,6 +248,24 @@ final class WorkspacesWriterTests: XCTestCase {
         XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["A", "B"])
     }
 
+    func test_update_handlesCRLFLineEndings_replacingInPlace() throws {
+        let root = try makeTempDir()
+        try seed("[Alpha]\r\npath = ~/Dev/alpha\r\n\r\n[Beta]\r\npath = ~/Dev/beta\r\n", in: root)
+
+        try WorkspacesWriter.update(
+            Workspace(
+                title: "Beta", path: expandTilde("~/Dev/beta-moved"),
+                main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+            originalTitle: "Beta", configRoot: root)
+
+        // With a stray `\r` defeating header detection, the edit would append a duplicate `[Beta]`
+        // instead of replacing in place. Assert exactly one header survives.
+        let text = try read(root)
+        XCTAssertEqual(
+            text.components(separatedBy: "[Beta]").count - 1, 1, "the section is replaced, not duplicated")
+        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Alpha", "Beta"])
+    }
+
     func test_update_missingOriginal_fallsBackToAppend() throws {
         let root = try makeTempDir()
         try seed("[A]\npath = ~/Dev/a\n", in: root)

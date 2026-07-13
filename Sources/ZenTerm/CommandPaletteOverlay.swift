@@ -152,8 +152,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
                 title.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
 
-            // An unbound command (e.g. Add Workspace…) has no shortcut — skip the keycap rather
-            // than render an empty pill.
+            // A command with no bound shortcut skips the keycap rather than render an empty pill.
             guard !command.shortcut.isEmpty else { return }
             let keycap = KeycapView(shortcut: command.shortcut)
             addSubview(keycap)

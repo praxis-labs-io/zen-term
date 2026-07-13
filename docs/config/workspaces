@@ -8,8 +8,8 @@
 # configure that workspace until the next header. Lines starting with `#` and blank
 # lines are ignored; unknown keys are ignored. A section with no `path` is skipped, a
 # malformed `env` line is dropped, and nothing here can crash the app (bad lines are
-# logged and skipped). Add a workspace from inside the app too — ⌘P → "Add Workspace…", or the
-# ＋ row in the ⌘⇧P picker — which appends a section here and opens it immediately. Hand-edits
+# logged and skipped). Manage workspaces from inside the app too — Settings → Workspaces
+# (add / edit / delete), or the ＋ row in the ⌘⇧P picker to add-and-open one. Hand-edits
 # to this file are picked up the next time you open the ⌘⇧P picker (or on restart).
 #
 # The section header is the title: it's shown in the picker and pinned as the tab name,

@@ -67,10 +67,12 @@ enum WorkspacesWriter {
     }
 
     /// Replace the `[originalTitle]` section with `ws` (renamed when the titles differ), rewriting
-    /// only that section's header + `key = value` lines in place — every other section, hand-written
-    /// comment, and blank separator survives verbatim. Falls back to `append` when `originalTitle`
-    /// isn't present (so a stale edit still lands). Throws `titleExists` when a rename would collide
-    /// with a *different* section already carrying the new title (last-wins would shadow it).
+    /// that section's header + `key = value` lines from the model in place. Every *other* section and
+    /// the file's shape around this one — comments, ordering, blank separators — survives verbatim;
+    /// comments *inside* the edited section are not preserved, since its body is regenerated from the
+    /// structured fields. Falls back to `append` when `originalTitle` isn't present (so a stale edit
+    /// still lands). Throws `titleExists` when a rename would collide with a *different* section
+    /// already carrying the new title (last-wins would shadow it).
     static func update(_ ws: Workspace, originalTitle: String, configRoot: URL = ConfigLoader.defaultRoot) throws {
         let url = configRoot.appendingPathComponent("workspaces")
         let existing = try ConfigFileIO.readExistingOrEmpty(url)
@@ -101,8 +103,9 @@ enum WorkspacesWriter {
         guard let span = locateSection(titled: title, in: lines) else { return }
         var end = span.bodyEnd
         // Swallow blank separator lines after the body (but not comments — those document the next
-        // section) so the neighbours close up cleanly.
-        while end < span.nextHeader, lines[end].trimmingCharacters(in: .whitespaces).isEmpty {
+        // section) so the neighbours close up cleanly. Trim newlines too, so a stray `\r` from a
+        // CRLF-edited file still reads as blank.
+        while end < span.nextHeader, lines[end].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             end += 1
         }
         lines.removeSubrange(span.start..<end)
@@ -117,8 +120,10 @@ enum WorkspacesWriter {
     private static func locateSection(
         titled title: String, in lines: [String]
     ) -> (start: Int, bodyEnd: Int, nextHeader: Int)? {
+        // Trim newlines as well as spaces, so a stray `\r` from a CRLF-edited file (we split on
+        // "\n") doesn't defeat the `]` suffix check and hide the header.
         func headerTitle(_ line: String) -> String? {
-            let stripped = ConfigText.stripComment(line).trimmingCharacters(in: .whitespaces)
+            let stripped = ConfigText.stripComment(line).trimmingCharacters(in: .whitespacesAndNewlines)
             guard stripped.hasPrefix("["), stripped.hasSuffix("]") else { return nil }
             return String(stripped.dropFirst().dropLast()).trimmingCharacters(in: .whitespaces)
         }
@@ -134,7 +139,8 @@ enum WorkspacesWriter {
         }
         var bodyEnd = nextHeader
         while bodyEnd > start + 1,
-            ConfigText.stripComment(lines[bodyEnd - 1]).trimmingCharacters(in: .whitespaces).isEmpty
+            ConfigText.stripComment(lines[bodyEnd - 1]).trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
         {
             bodyEnd -= 1
         }

@@ -109,7 +109,9 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
             let row = rows(in: detail).first { $0.workspace.title == title }!
             return descendants(of: row).compactMap { $0 as? NSImageView }.first
         }
-        XCTAssertNotNil(badge(inRowTitled: "Repo"), "a git-repo workspace shows the git badge")
+        let repoBadge = badge(inRowTitled: "Repo")
+        XCTAssertNotNil(repoBadge, "a git-repo workspace shows the git badge")
+        XCTAssertNotNil(repoBadge?.image, "the badge renders the bundled git logo, not an empty view")
         XCTAssertNil(badge(inRowTitled: "Plain"), "a plain folder shows no git badge")
     }
 
