@@ -55,10 +55,14 @@ final class TabController: NSObject {
     private var bottomDrawerSurface: TerminalSurface?
     private var bottomDrawerPanel: PanelHostView?
     private var isBottomOpen = false { didSet { onOverlayStateChanged?() } }
+    /// The nav token minted for the drawer's shell (exported as `$ZEN_PANE`), so an nvim
+    /// inside a drawer participates in seamless nav just like one in a pane.
+    private var bottomDrawerToken: Int?
 
     private var rightDrawerSurface: TerminalSurface?
     private var rightDrawerPanel: PanelHostView?
     private var isRightOpen = false { didSet { onOverlayStateChanged?() } }
+    private var rightDrawerToken: Int?
 
     // The lazygit float. Like the drawers, its surface is PERSISTENT: created once
     // (pre-warmed in the background for repo/workspace tabs, else lazily on the first
@@ -151,7 +155,17 @@ final class TabController: NSObject {
 
     /// Whether the focused main-canvas pane has a running process.
     var focusedPaneIsBusy: Bool { paneCanvas.focusedPaneIsBusy }
-    var focusedPaneIsVim: Bool { paneCanvas.focusedPaneIsVim }
+    // Whether the *focused* panel is running nvim, so the key guard passes ctrl-nav through to
+    // it. Keyed off the focused panel, not just the pane canvas: a drawer isn't a leaf, so when
+    // one holds focus `paneCanvas.focusedLeaf` still points at the last pane — reading it would
+    // treat a drawer as the nvim pane. Each panel reports its own token's vim state.
+    var focusedPaneIsVim: Bool {
+        switch focusedPanel {
+        case .pane: return paneCanvas.focusedPaneIsVim
+        case .bottomDrawer: return bottomDrawerToken.map(NavRegistry.shared.isVim) ?? false
+        case .rightDrawer: return rightDrawerToken.map(NavRegistry.shared.isVim) ?? false
+        }
+    }
 
     /// Whether either drawer has a running process — closing the tab would stop it. (An idle
     /// drawer isn't worth a confirm; only a busy one is.)
@@ -290,8 +304,12 @@ final class TabController: NSObject {
         paneCanvas.shutdown()
         bottomDrawerSurface?.terminate()
         bottomDrawerSurface = nil
+        bottomDrawerToken.map(NavRegistry.shared.unregister)
+        bottomDrawerToken = nil
         rightDrawerSurface?.terminate()
         rightDrawerSurface = nil
+        rightDrawerToken.map(NavRegistry.shared.unregister)
+        rightDrawerToken = nil
         lazygitOverlay?.removeFromSuperview()
         lazygitOverlay = nil
         lazygitDismissingOverlay?.removeFromSuperview()
@@ -372,7 +390,9 @@ final class TabController: NSObject {
         if let existing = bottomDrawerPanel { return existing }
         let surface = TerminalSurfaceFactory.make()
         surface.delegate = self
-        surface.start(drawerConfig(command: bottomDrawerCommand))
+        let token = registerDrawerToken(.bottomDrawer)
+        bottomDrawerToken = token
+        surface.start(drawerConfig(command: bottomDrawerCommand, token: token))
         bottomDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .bottom, surface: surface)
         bottomDrawerPanel = panel  // relayoutPanels() attaches it to `content`
@@ -381,11 +401,24 @@ final class TabController: NSObject {
 
     /// A drawer's launch config: a workspace recipe command runs program-then-shell; nil or the
     /// sentinel `"shell"` opens a plain shell. The workspace env is injected either way.
-    private func drawerConfig(command: String?) -> TerminalSurfaceConfig {
+    private func drawerConfig(command: String?, token: Int) -> TerminalSurfaceConfig {
+        let env = workspaceEnv.merging(NavSocketServer.env(token: token)) { _, new in new }
         if let command, command != "shell" {
-            return ShellLaunch.program(command, cwd: focusedCWD, env: workspaceEnv)
+            return ShellLaunch.program(command, cwd: focusedCWD, env: env)
         }
-        return ShellLaunch.shell(cwd: focusedCWD, env: workspaceEnv)
+        return ShellLaunch.shell(cwd: focusedCWD, env: env)
+    }
+
+    /// Mint and register a nav token for a drawer's shell, so an nvim inside it hands off over
+    /// the socket like a pane does. The route fires only while this drawer holds focus (the
+    /// drawer analog of the pane route's focused-token check).
+    private func registerDrawerToken(_ panel: PanelRef) -> Int {
+        let token = NavRegistry.shared.mintToken()
+        NavRegistry.shared.register(token: token) { [weak self] dir in
+            guard let self, self.focusedPanel == panel else { return }
+            self.navigate(dir)
+        }
+        return token
     }
 
     // MARK: right drawer (⌘|)
@@ -419,9 +452,11 @@ final class TabController: NSObject {
         if let existing = rightDrawerPanel { return existing }
         let surface = TerminalSurfaceFactory.make()
         surface.delegate = self
+        let token = registerDrawerToken(.rightDrawer)
+        rightDrawerToken = token
         // A workspace recipe runs a program here (e.g. claude) that drops back to a shell;
         // a plain toggle-open right drawer is just a shell.
-        surface.start(drawerConfig(command: rightDrawerCommand))
+        surface.start(drawerConfig(command: rightDrawerCommand, token: token))
         rightDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .right, surface: surface)
         rightDrawerPanel = panel  // relayoutPanels() attaches it to `content`

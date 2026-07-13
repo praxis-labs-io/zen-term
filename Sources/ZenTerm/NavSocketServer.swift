@@ -18,6 +18,12 @@ final class NavSocketServer {
     }
     static var socketPath: String { socketURL.path }
 
+    /// The two env vars a pane or drawer shell needs so an nvim inside it can address itself
+    /// over the nav socket: the socket path and this surface's token.
+    static func env(token: Int) -> [String: String] {
+        ["ZEN_SOCK": socketPath, "ZEN_PANE": String(token)]
+    }
+
     /// Applied on the main actor for every decoded command.
     private let apply: (NavCommand) -> Void
     /// The bound socket path. Defaults to the shared `$ZEN_SOCK` location; overridden in
