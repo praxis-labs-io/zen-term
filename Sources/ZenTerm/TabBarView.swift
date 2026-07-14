@@ -134,8 +134,13 @@ final class TabBarView: NSView {
         var activeChip: Chip?
         for item in items {
             let id = item.id
+            // Tabs 1–9 carry a ⌘N shortcut in the tooltip keycap (resolved at hover time from the
+            // live keymap, so it tracks rebinds); 10+ have no binding, so the keycap is omitted.
+            let index = item.index
             let chip = Chip(
                 attributed: Self.tabLabel(item),
+                tooltipLabel: "Focus tab",
+                tooltipShortcut: index <= 9 ? { CommandCatalog.spec(for: .selectTab(index)).shortcut } : nil,
                 onClick: { [weak self] in self?.onSelect(id) },
                 onMiddleClick: { [weak self] in self?.onClose(id) })
             docView.addSubview(chip)
@@ -189,6 +194,12 @@ final class TabBarView: NSView {
 
     /// Test hook: the rendered label string (number prefix + title) for an item (ZEN-110).
     static func tabLabelStringForTesting(_ item: TabBarItem) -> String { tabLabel(item).string }
+
+    /// Test hook: each chip's tooltip title + resolved keycap, in bar order (ZEN-110) — the ⌘N
+    /// shortcut moved off the inline label onto the hover tooltip.
+    var chipTooltipsForTesting: [(label: String, shortcut: String?)] {
+        chips.map { ($0.tooltipLabelForTesting, $0.tooltipShortcutForTesting) }
+    }
 
     /// Test hook: scroll the strip to a horizontal offset, as a trackpad drag would.
     func scrollToForTesting(x: CGFloat) {
@@ -352,10 +363,9 @@ final class TabBarView: NSView {
         case .idle: numberColor = numberInk
         case .waiting: numberColor = Theme.current.chrome.attention.nsColor
         }
-        // ⌘-prefix only tabs 1–9, which have a real ⌘1–⌘9 shortcut; 10+ show a bare number so
-        // the glyph never implies a binding that doesn't exist (ZEN-110). The whole prefix shares
-        // `numberColor`, so it recolors with the agent-waiting state.
-        let prefix = item.index <= 9 ? "⌘\(item.index) " : "\(item.index) "
+        // A bare number — the ⌘N binding for tabs 1–9 lives in the hover tooltip now, not inline
+        // (ZEN-110). The prefix shares `numberColor`, so it recolors with the agent-waiting state.
+        let prefix = "\(item.index) "
         let s = NSMutableAttributedString(
             string: prefix,
             attributes: [.font: font, .foregroundColor: numberColor])
@@ -374,18 +384,30 @@ final class TabBarView: NSView {
         private let onMiddleClick: (() -> Void)?
         private var isHovered = false
         private let label: NSTextField
+        /// The hover-tooltip title, and an optional resolver for its keybind glyph — evaluated at
+        /// hover time so it reflects the live keymap. A branded `ChromeTooltip` (the same one the
+        /// footer dock buttons use), not the OS-drawn native `toolTip`.
+        private let tooltipLabel: String
+        private let tooltipShortcut: (() -> String?)?
 
         /// The width this chip wants: its label plus the 9pt inset on each side. Read from the
         /// label's intrinsic size (not `fittingSize`) so it's independent of the frame the parent
         /// assigns during manual layout.
         var fittingWidth: CGFloat { label.intrinsicContentSize.width + 18 }
 
+        /// Test hooks for the tooltip content (ZEN-110), mirroring `IconButton`.
+        var tooltipLabelForTesting: String { tooltipLabel }
+        var tooltipShortcutForTesting: String? { tooltipShortcut?() }
+
         init(
             attributed: NSAttributedString,
+            tooltipLabel: String, tooltipShortcut: (() -> String?)?,
             onClick: @escaping () -> Void, onMiddleClick: (() -> Void)?
         ) {
             self.onClick = onClick
             self.onMiddleClick = onMiddleClick
+            self.tooltipLabel = tooltipLabel
+            self.tooltipShortcut = tooltipShortcut
             label = NSTextField(labelWithAttributedString: attributed)
             super.init(frame: .zero)
             wantsLayer = true
@@ -415,13 +437,31 @@ final class TabBarView: NSView {
         override func mouseEntered(with event: NSEvent) { setHover(true) }
         override func mouseExited(with event: NSEvent) { setHover(false) }
 
+        /// Drop the tooltip if this chip leaves the window (a title-poll re-render rebuilds the
+        /// chips without firing `mouseExited`, so the old chip's tooltip would otherwise linger).
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window == nil { TooltipPresenter.shared.hide(for: self) }
+        }
+
         /// Externally-driven hover (from the bar's scroll-time recompute), a no-op when unchanged.
+        /// Also drives the tooltip, so a chip that slides under a stationary cursor during a scroll
+        /// gets one too (its per-chip tracking area misses that `mouseEntered`).
         func setHover(_ on: Bool) {
             guard isHovered != on else { return }
             isHovered = on
             updateBackground()
+            if on {
+                TooltipPresenter.shared.scheduleShow(
+                    for: self, label: tooltipLabel, shortcut: tooltipShortcut?())
+            } else {
+                TooltipPresenter.shared.hide(for: self)
+            }
         }
-        override func mouseDown(with event: NSEvent) { onClick() }
+        override func mouseDown(with event: NSEvent) {
+            TooltipPresenter.shared.hide(for: self)  // a click dismisses the tooltip
+            onClick()
+        }
         override func otherMouseDown(with event: NSEvent) {
             if event.buttonNumber == 2 { onMiddleClick?() }  // middle-click closes
         }
