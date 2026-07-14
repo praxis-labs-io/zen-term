@@ -26,6 +26,8 @@ final class GeneralConfigParserTests: XCTestCase {
             reduce-motion = on
             shell = /bin/bash
             shell-args = -l -i
+            editor = vim
+            ai = codex
             """)
         XCTAssertEqual(config.fontName, "Menlo")
         XCTAssertEqual(config.fontSize, 16)
@@ -43,6 +45,14 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.reduceMotion, .on)
         XCTAssertEqual(config.shell, "/bin/bash")
         XCTAssertEqual(config.shellArgs, ["-l", "-i"])
+        XCTAssertEqual(config.editor, "vim")
+        XCTAssertEqual(config.ai, "codex")
+    }
+
+    func test_editorAndAI_absent_fallsBackToNil() {
+        let config = parse("font-size = 14\n")
+        XCTAssertNil(config.editor)  // absent → nil → the preset's nvim/claude fallback
+        XCTAssertNil(config.ai)
     }
 
     func test_themeKey_setsThemeName() {

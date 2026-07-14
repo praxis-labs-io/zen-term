@@ -40,9 +40,19 @@ struct GeneralConfig: Equatable {
     var shell: String?
     var shellArgs: [String]
 
+    // Workspace preset commands — the editor / AI the "Editor + AI + Shell" preset launches.
+    // Nil → the built-in `nvim` / `claude` fallback (see AddWorkspaceOverlay).
+    var editor: String?
+    var ai: String?
+
     // Structured.
     var floats: [ToolFloat]
     var keymap: [Chord: KeyInterceptor.ReservedChord]
+
+    /// The commands the "Editor + AI + Shell" workspace preset falls back to when `editor` / `ai`
+    /// are unset — single-sourced here so the Settings placeholders and the preset itself agree.
+    static let defaultEditor = "nvim"
+    static let defaultAI = "claude"
 
     /// The historical hardcodes — an absent config file yields exactly this, so behavior is
     /// unchanged from before ZEN-71. The font literal is single-sourced here; `Theme` reads it.
@@ -65,6 +75,8 @@ struct GeneralConfig: Equatable {
         reduceMotion: .system,
         shell: nil,
         shellArgs: [],
+        editor: nil,
+        ai: nil,
         floats: [],
         keymap: KeymapDefaults.map)
 

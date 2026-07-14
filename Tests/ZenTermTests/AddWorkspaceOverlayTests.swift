@@ -53,6 +53,24 @@ final class AddWorkspaceOverlayTests: XCTestCase {
         descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == title }
     }
 
+    /// The segmented control whose segments include `title` — distinguishes the layout picker
+    /// ("Editor + AI + Shell") from the focus picker, which both have three segments.
+    private func segment(in overlay: NSView, containing title: String) -> SegmentedControl? {
+        descendants(of: overlay).compactMap { $0 as? SegmentedControl }.first { control in
+            descendants(of: control).compactMap { $0 as? AppButton }.contains { $0.title == title }
+        }
+    }
+
+    /// Override the configured preset editor / AI for one test, restoring `current` on teardown.
+    private func setPresetConfig(editor: String, ai: String) {
+        let original = GeneralConfig.current
+        var overridden = original
+        overridden.editor = editor
+        overridden.ai = ai
+        GeneralConfig.setCurrentForTesting(overridden)
+        addTeardownBlock { GeneralConfig.setCurrentForTesting(original) }
+    }
+
     /// A real on-disk directory, so the form's "that folder exists" validation passes on submit.
     private func makeRealDir() throws -> URL {
         let dir = FileManager.default.temporaryDirectory
@@ -116,5 +134,45 @@ final class AddWorkspaceOverlayTests: XCTestCase {
     func test_addForm_hasNoDeleteButton() {
         let (overlay, _) = mount()  // add mode
         XCTAssertNil(button(in: overlay, title: "Delete"), "adding a new workspace has no Delete button")
+    }
+
+    func test_addForm_editorAIShellPreset_usesConfiguredEditorAndAI() throws {
+        setPresetConfig(editor: "vim", ai: "codex")
+        let dir = try makeRealDir()
+        let (overlay, sink) = mount()  // add mode defaults to the "Editor + AI + Shell" segment
+
+        field(in: overlay, placeholder: "Workspace name").setText("Beta")
+        field(in: overlay, placeholder: "Click to choose, or type a path")
+            .setText(PathDisplay.abbreviatingHome(dir.path))
+        button(in: overlay, title: "Add Workspace")?.onTap()
+
+        XCTAssertEqual(sink.submitted.count, 1)
+        XCTAssertEqual(sink.submitted.first?.main, "vim")
+        XCTAssertEqual(sink.submitted.first?.right, "codex")
+        XCTAssertEqual(sink.submitted.first?.bottom, "shell")
+    }
+
+    func test_editForm_matchingConfiguredPreset_selectsEditorAIShellSegment() throws {
+        setPresetConfig(editor: "vim", ai: "codex")
+        let dir = try makeRealDir()
+        let ws = Workspace(
+            title: "Gamma", path: dir, main: "vim", right: "codex", bottom: "shell",
+            focus: .main, env: [:])
+        let (overlay, _) = mount(editing: ws)
+
+        XCTAssertEqual(segment(in: overlay, containing: "Editor + AI + Shell")?.selectedIndex, 1)
+    }
+
+    /// A workspace stamped with the built-in default (nvim/claude) still reads as the preset after
+    /// the user reconfigures editor/AI — it doesn't silently drop to Custom.
+    func test_editForm_builtInDefaultRecipe_selectsPresetUnderChangedConfig() throws {
+        setPresetConfig(editor: "vim", ai: "codex")  // config now differs from the stored recipe
+        let dir = try makeRealDir()
+        let ws = Workspace(
+            title: "Delta", path: dir, main: "nvim", right: "claude", bottom: "shell",
+            focus: .main, env: [:])
+        let (overlay, _) = mount(editing: ws)
+
+        XCTAssertEqual(segment(in: overlay, containing: "Editor + AI + Shell")?.selectedIndex, 1)
     }
 }

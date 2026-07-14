@@ -58,6 +58,10 @@ enum GeneralConfigParser {
                 if !value.isEmpty { config.shell = value }
             case "shell-args":
                 config.shellArgs = value.split(whereSeparator: \.isWhitespace).map(String.init)
+            case "editor":
+                if !value.isEmpty { config.editor = value }
+            case "ai":
+                if !value.isEmpty { config.ai = value }
             case "float":
                 if let float = ToolFloatParser.parse(value) {
                     floats.removeAll { $0.id == float.id }  // last declaration of an id wins
