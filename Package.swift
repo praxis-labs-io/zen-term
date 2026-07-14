@@ -52,7 +52,7 @@ let package = Package(
             name: "ZenTerm",
             dependencies: ["TerminalKit", "PaneKit", "TabKit"],  // chrome — no backend
             resources: [
-                .copy("Resources"),  // brand marks (GitHub, git) SVGs for the dock
+                .copy("Resources"),  // brand marks (GitHub, git, origami) SVGs for the dock + Settings
                 .copy("Themes"),  // bundled ghostty theme catalog for the Settings theme picker
             ]
         ),

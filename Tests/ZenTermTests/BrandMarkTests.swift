@@ -9,6 +9,7 @@ final class BrandMarkTests: XCTestCase {
     func test_bundledMarks_load() {
         XCTAssertNotNil(BrandMark.image("github"), "GitHub mark must be bundled")
         XCTAssertNotNil(BrandMark.image("git"), "git mark must be bundled")
+        XCTAssertNotNil(BrandMark.image("origami"), "origami mark must be bundled for the Settings footer")
     }
 
     func test_unknownMark_isNil() {

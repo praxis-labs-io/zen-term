@@ -18,6 +18,9 @@ final class SettingsOverlay: NSView, ModalOverlay {
     private var selectedIndex = 0
     private let heading = NSTextField(labelWithString: "Settings".uppercased())
     private let divider = NSView()
+    /// Nav footer: the origami brand mark + the app version, pinned to the bottom of the nav column.
+    private let brandMark = NSImageView()
+    private let versionLabel = NSTextField(labelWithString: "")
 
     init(
         sections: [SettingsSection], capturer: KeybindCapturing?, initialSection: Int = 0,
@@ -95,6 +98,8 @@ final class SettingsOverlay: NSView, ModalOverlay {
         CardChrome.reapplyTheme(to: card)
         heading.textColor = Theme.current.chrome.ink(alpha: 0.4)
         divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        brandMark.contentTintColor = Theme.current.chrome.accent.nsColor
+        versionLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
         navRows.forEach { $0.reapplyTheme() }
         sections.forEach { $0.reapplyTheme() }
     }
@@ -143,17 +148,25 @@ final class SettingsOverlay: NSView, ModalOverlay {
         divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         divider.translatesAutoresizingMaskIntoConstraints = false
 
+        let footer = makeNavFooter()
+
         let root = NSView()
         root.translatesAutoresizingMaskIntoConstraints = false
         navStack.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(navStack)
+        root.addSubview(footer)
         root.addSubview(divider)
         root.addSubview(detailContainer)
         NSLayoutConstraint.activate([
             navStack.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             navStack.topAnchor.constraint(equalTo: root.topAnchor),
-            navStack.bottomAnchor.constraint(equalTo: root.bottomAnchor),
             navStack.widthAnchor.constraint(equalToConstant: 168),
+
+            // The version footer anchors the bottom of the nav column; the rows never overlap it.
+            footer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 22),
+            footer.trailingAnchor.constraint(lessThanOrEqualTo: navStack.trailingAnchor, constant: -12),
+            footer.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
+            navStack.bottomAnchor.constraint(lessThanOrEqualTo: footer.topAnchor),
 
             divider.leadingAnchor.constraint(equalTo: navStack.trailingAnchor),
             divider.topAnchor.constraint(equalTo: root.topAnchor),
@@ -166,6 +179,31 @@ final class SettingsOverlay: NSView, ModalOverlay {
             detailContainer.bottomAnchor.constraint(equalTo: root.bottomAnchor),
         ])
         return root
+    }
+
+    /// The origami brand mark + "ZenTerm v<version>", sitting at the very bottom of the nav column.
+    /// Informational only — non-interactive. The mark is the app icon's crane, tinted with the
+    /// live accent; the label is muted like the section captions.
+    private func makeNavFooter() -> NSView {
+        brandMark.image = BrandMark.image("origami")
+        brandMark.contentTintColor = Theme.current.chrome.accent.nsColor
+        brandMark.imageScaling = .scaleProportionallyUpOrDown
+        brandMark.translatesAutoresizingMaskIntoConstraints = false
+
+        versionLabel.stringValue = "ZenTerm v\(AppVersion.current)"
+        versionLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        versionLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
+
+        let stack = NSStackView(views: [brandMark, versionLabel])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 7
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            brandMark.widthAnchor.constraint(equalToConstant: 16),
+            brandMark.heightAnchor.constraint(equalToConstant: 16),
+        ])
+        return stack
     }
 
     // MARK: selection + focus
