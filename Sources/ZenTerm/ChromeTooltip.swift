@@ -16,12 +16,14 @@ final class ChromeTooltip: ShadowCardView {
         layer?.borderColor = FloatShadow.edge.cgColor
         // A lighter elevation than FloatShadow's full card shadow — a tooltip floats just above its
         // trigger, not over the whole canvas. Black is a theme-independent shadow (the documented
-        // FloatShadow exception), not a chrome color.
+        // FloatShadow exception), not a chrome color. Via `NSView.shadow`, not `layer.shadow*`,
+        // so AppKit's view→layer re-sync can't zero it (see FloatShadow.applyShadow).
         layer?.masksToBounds = false
-        layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.35
-        layer?.shadowRadius = 8
-        layer?.shadowOffset = CGSize(width: 0, height: -3)
+        let elevation = NSShadow()
+        elevation.shadowColor = NSColor.black.withAlphaComponent(0.35)
+        elevation.shadowBlurRadius = 8
+        elevation.shadowOffset = NSSize(width: 0, height: -3)
+        shadow = elevation
 
         let text = NSTextField(labelWithString: label)
         text.font = .systemFont(ofSize: 11, weight: .medium)
