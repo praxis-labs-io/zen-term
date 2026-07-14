@@ -5,20 +5,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// A seam-conforming fake so the canvas controller can run without a real backend.
-private final class FakeSurface: NSObject, TerminalSurface {
-    let view = NSView()
-    weak var delegate: TerminalSurfaceDelegate?
-    var title = ""
-    var isFocused = false
-    func start(_ config: TerminalSurfaceConfig) {}
-    func focus() {}
-    func terminate() {}
-    func paste(_ text: String) {}
-    func copySelection() -> String? { nil }
-    func scrollToBottom() {}
-}
-
 /// ZEN-54: the canvas reuses each leaf's `PanelHostView` across restructures instead of
 /// rebuilding the pane chrome on every reconcile. Window-mounted per the house rule, so the
 /// assertions run against the real built view tree.
@@ -28,7 +14,7 @@ final class PaneCanvasControllerTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        controller = PaneCanvasController(makeSurface: { FakeSurface() })
+        controller = PaneCanvasController(makeSurface: { RecordingSurface() })
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
             styleMask: [.borderless], backing: .buffered, defer: false)
