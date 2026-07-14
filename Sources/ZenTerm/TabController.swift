@@ -83,6 +83,13 @@ final class TabController: NSObject {
     /// repo/dir, so lazygit tracks the pane instead of showing a stale directory.
     private var lazygitLaunchAnchor: URL?
     var isLazygitOpen: Bool { lazygitOverlay != nil }
+    /// The pending debounced pre-warm (ZEN-55): scheduling off the `applyRecipe` turn
+    /// keeps a workspace open from bursting four login shells at once. Canceled by
+    /// `shutdown()` and by `showLazygit` (a `⌘G` that beats the timer supersedes it).
+    private var prewarmWorkItem: DispatchWorkItem?
+    var prewarmDelay: TimeInterval = 1.0
+    /// The LRU cap over never-opened pre-warms (ZEN-55). Tests inject a private pool.
+    var prewarmPool: LazygitPrewarmPool = .shared
 
     /// The single live ephemeral tool float (diffnav, …). Tool floats are modal and
     /// mutually exclusive, so one slot suffices. Terminated on close (not persisted).
@@ -215,9 +222,19 @@ final class TabController: NSObject {
     /// A workspace recipe's environment, injected into every pane and drawer of this tab.
     private let workspaceEnv: [String: String]
 
-    init(initialCWD: URL?, initialCommand: String? = nil, env: [String: String] = [:]) {
+    /// How this tab spawns terminal surfaces — the backend seam, injectable so tests
+    /// can count spawns/terminations without a real backend (mirrors `PaneCanvasController`).
+    private let makeSurface: () -> TerminalSurface
+
+    init(
+        initialCWD: URL?, initialCommand: String? = nil, env: [String: String] = [:],
+        makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make
+    ) {
         workspaceEnv = env
-        paneCanvas = PaneCanvasController(initialCWD: initialCWD, initialCommand: initialCommand, env: env)
+        self.makeSurface = makeSurface
+        paneCanvas = PaneCanvasController(
+            initialCWD: initialCWD, initialCommand: initialCommand, env: env,
+            makeSurface: makeSurface)
         canvas = paneCanvas.canvasView
         canvas.translatesAutoresizingMaskIntoConstraints = false
         super.init()
@@ -280,7 +297,7 @@ final class TabController: NSObject {
         case .bottom where isBottomOpen: focusDrawer(.bottom)
         default: focusActivePane()  // main, or a named drawer the recipe didn't open
         }
-        prewarmLazygit()  // workspace tab has a stable cwd → pre-warm so the first ⌘G is instant
+        schedulePrewarmLazygit()  // workspace tab has a stable cwd → pre-warm so the first ⌘G is instant
     }
 
     /// Present a modal overlay filling the tab's tile region — same scoping as the
@@ -310,6 +327,8 @@ final class TabController: NSObject {
     }
 
     func shutdown() {
+        prewarmWorkItem?.cancel()
+        prewarmWorkItem = nil
         paneCanvas.shutdown()
         bottomDrawerSurface?.terminate()
         bottomDrawerSurface = nil
@@ -395,7 +414,7 @@ final class TabController: NSObject {
 
     private func ensureBottomDrawerPanel() -> PanelHostView {
         if let existing = bottomDrawerPanel { return existing }
-        let surface = TerminalSurfaceFactory.make()
+        let surface = makeSurface()
         surface.delegate = self
         let token = registerDrawerToken(.bottomDrawer)
         bottomDrawerToken = token
@@ -482,7 +501,7 @@ final class TabController: NSObject {
 
     private func ensureRightDrawerPanel() -> PanelHostView {
         if let existing = rightDrawerPanel { return existing }
-        let surface = TerminalSurfaceFactory.make()
+        let surface = makeSurface()
         surface.delegate = self
         let token = registerDrawerToken(.rightDrawer)
         rightDrawerToken = token
@@ -522,12 +541,30 @@ final class TabController: NSObject {
         showLazygit(ensureLazygitSurface())
     }
 
+    /// Schedule the background pre-warm after `prewarmDelay` (ZEN-55): the delay keeps
+    /// the lazygit login shell out of `applyRecipe`'s spawn turn (which already opens the
+    /// main pane and up to two drawers), so a workspace open doesn't burst four shells.
+    private func schedulePrewarmLazygit() {
+        prewarmWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            self?.prewarmWorkItem = nil
+            self?.prewarmLazygitNow()
+        }
+        prewarmWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + prewarmDelay, execute: item)
+    }
+
     /// Eagerly spawn the lazygit surface in the background (no overlay shown) so the
     /// first `⌘G` reveals an already-loaded lazygit. Only for stable-path tabs, and only
     /// inside a repo — a plain tab's cwd drifts, and lazygit is useless off-repo anyway.
-    private func prewarmLazygit() {
+    /// The pre-warm is admitted to the never-opened LRU pool; the surface-exists guard
+    /// must run first, so a `⌘G` that beat the timer (already live, already promoted)
+    /// is never re-admitted and made evictable. Internal for deterministic tests.
+    func prewarmLazygitNow() {
+        guard lazygitSurface == nil else { return }
         guard gitRepoRoot(for: focusedCWD) != nil else { return }
         _ = ensureLazygitSurface()
+        prewarmPool.admit(self) { [weak self] in self?.discardLazygitSurface() }
     }
 
     /// A repo/workspace tab (opened via `⌘⇧P`, so `pinnedTitle` is set) has a fixed
@@ -558,7 +595,7 @@ final class TabController: NSObject {
     private func ensureLazygitSurface() -> TerminalSurface {
         if let existing = lazygitSurface { return existing }
         let shell = ShellLaunch.userShell
-        let surface = TerminalSurfaceFactory.make()
+        let surface = makeSurface()
         surface.delegate = self
         // `-l -i`: a login AND interactive shell, so it sources BOTH profile files and
         // `.zshrc` — matching how lazygit runs when typed in a pane. Without `-i`, a
@@ -578,6 +615,9 @@ final class TabController: NSObject {
     /// so a synchronous exit re-entry into `surfaceDidExit` is a no-op. Next reveal
     /// recreates it at the then-current cwd.
     private func discardLazygitSurface() {
+        // No-ops when this discard IS a pool eviction — the pool drops the entry
+        // before running the evict closure.
+        prewarmPool.remove(self)
         let surface = lazygitSurface
         lazygitSurface = nil
         lazygitLaunchAnchor = nil
@@ -587,6 +627,11 @@ final class TabController: NSObject {
     /// Reveal the persisted surface: mount its overlay above the tab's tile and give
     /// it the tab's unified focus.
     private func showLazygit(_ surface: TerminalSurface) {
+        // The user opened `⌘G`: promote the surface out of the never-opened pool — an
+        // actually-used lazygit is never evicted — and drop any pending pre-warm.
+        prewarmWorkItem?.cancel()
+        prewarmWorkItem = nil
+        prewarmPool.remove(self)
         // A prior overlay springing out still constrains `surface.view`; snap it away now so
         // reparenting into the new card doesn't leave the old card's constraints dangling.
         lazygitDismissingOverlay?.removeFromSuperview()
@@ -680,7 +725,7 @@ final class TabController: NSObject {
     /// tears the float down.
     private func showToolFloat(_ spec: ToolFloat) {
         let shell = ShellLaunch.userShell
-        let surface = TerminalSurfaceFactory.make()
+        let surface = makeSurface()
         surface.delegate = self
         surface.start(
             TerminalSurfaceConfig(
