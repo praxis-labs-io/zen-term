@@ -15,17 +15,17 @@ import XCTest
 @MainActor
 final class WindowControllerConfigFanOutTests: XCTestCase {
     private var originalTheme: AppTheme!
-    private var originalBackend: TerminalBackend!
+    private var originalOverride: (() -> TerminalSurface)?
     private var tempRoots: [URL] = []
     private var controller: WindowController?
 
     override func setUp() {
         super.setUp()
         originalTheme = Theme.current
-        originalBackend = TerminalSurfaceFactory.backend
-        // SwiftTerm is constructible headless (see SeamTests); the ghostty default needs a live
-        // libghostty app, which a test bundle has no business spinning up.
-        TerminalSurfaceFactory.backend = .swiftTerm
+        originalOverride = TerminalSurfaceFactory.makeOverride
+        // The real ghostty backend needs a live libghostty app, which a test bundle has no
+        // business spinning up — inject a headless stub surface instead.
+        TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
     }
 
     override func tearDownWithError() throws {
@@ -33,7 +33,7 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
         // config observer) runs through its NSWindowDelegate entry point.
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
-        TerminalSurfaceFactory.backend = originalBackend
+        TerminalSurfaceFactory.makeOverride = originalOverride
         Theme.setCurrentForTesting(originalTheme)
         for dir in tempRoots { try? FileManager.default.removeItem(at: dir) }
         tempRoots = []

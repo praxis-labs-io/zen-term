@@ -2,7 +2,7 @@
 
 Native macOS terminal. **The chrome is the product; the terminal is a drop-in
 dependency behind the `TerminalSurface` seam.** Swift + SwiftPM + AppKit over
-SwiftTerm (libghostty is a later, optional swap). Global workflow rules in
+libghostty (the sole backend, embedded as `GhosttyKit`). Global workflow rules in
 `~/.claude/CLAUDE.md` apply; this file only adds what's specific to zen-term.
 
 Design source of truth: `docs/superpowers/specs/` (architecture + epic charters)
@@ -46,9 +46,9 @@ One-time setup: a "Developer ID Application" cert in the keychain, and
 ## Architecture — the seam (load-bearing)
 
 - `Sources/TerminalKit/` owns the seam (`TerminalSurface` protocol + types) and
-  the SwiftTerm backend. It is the **only** target that depends on SwiftTerm.
+  the libghostty backend. It is the **only** target that depends on `GhosttyKit`.
 - `Sources/ZenTerm/` is the chrome. It depends on `TerminalKit` **only** and must
-  never `import SwiftTerm` (or any backend). This is enforced at the module level
+  never `import GhosttyKit` (or any backend). This is enforced at the module level
   in `Package.swift` — the app target has no backend dependency to import.
 - Anything only one backend can do stays **below** the seam; the protocol grows
   only to hold what the chrome needs from *any* terminal.

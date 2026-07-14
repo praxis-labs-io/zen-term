@@ -954,7 +954,7 @@ final class WindowController: NSObject {
     /// message, unless it's the tab you're already looking at. A repeat refreshes the toast in
     /// place, so "needs permission" updates to "waiting for input" without stacking.
     private func agentNotified(id: TabID, notification: TerminalNotification) {
-        // The notification arrives on SwiftTerm's read path; only touch the UI on main.
+        // The notification arrives off the terminal's read path; only touch the UI on main.
         DispatchQueue.main.async { [weak self] in
             guard let self, self.tabs.order.contains(id), id != self.tabs.activeID else { return }
             let wasWaiting = self.waitingToasts[id] != nil

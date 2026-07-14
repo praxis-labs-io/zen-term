@@ -181,9 +181,9 @@ final class KeybindCaptureFlowTests: XCTestCase {
     /// armed must end it — otherwise the shared interceptor stays in capture mode and swallows every
     /// keystroke in every other window.
     func test_windowClose_endsAnArmedCapture() {
-        let originalBackend = TerminalSurfaceFactory.backend
-        TerminalSurfaceFactory.backend = .swiftTerm
-        defer { TerminalSurfaceFactory.backend = originalBackend }
+        let originalOverride = TerminalSurfaceFactory.makeOverride
+        TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
+        defer { TerminalSurfaceFactory.makeOverride = originalOverride }
 
         let capturer = FakeCapturer()
         let controller = WindowController(

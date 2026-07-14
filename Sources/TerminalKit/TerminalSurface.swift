@@ -116,7 +116,7 @@ public protocol TerminalSurface: AnyObject {
 
 public extension TerminalSurface {
     /// Default no-op: a backend whose cursor already follows the AppKit first responder
-    /// (SwiftTerm) needs nothing here.
+    /// needs nothing here.
     func setFocused(_ focused: Bool) {}
 
     /// Backends that can't resolve a cwd get nil for free.

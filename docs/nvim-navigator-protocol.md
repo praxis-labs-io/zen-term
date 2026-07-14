@@ -2,8 +2,8 @@
 
 The durable contract between ZenTerm and the companion Neovim plugin
 (`zen-navigator.nvim`). ZenTerm implements this side; the plugin is written
-against it. Both ends are backend-agnostic — nothing here depends on SwiftTerm
-vs Ghostty.
+against it. Both ends are backend-agnostic — nothing here depends on the terminal
+backend behind the seam.
 
 The goal: `Ctrl-hjkl` walks across nvim splits and ZenTerm panes as one motion.
 It is **opt-in** — default `⌘-hjkl` pane nav is untouched. A user enables it by

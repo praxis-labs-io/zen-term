@@ -11,8 +11,8 @@ AppKit, no Xcode project. This repo is private; public builds ship through
 ## Architecture in one paragraph
 
 `Sources/TerminalKit/` owns the `TerminalSurface` seam and is the only target
-allowed to import a terminal backend (SwiftTerm today, libghostty behind
-`GhosttyKit`). `Sources/ZenTerm/` is the chrome and depends on TerminalKit
+allowed to import a terminal backend (libghostty, behind `GhosttyKit`).
+`Sources/ZenTerm/` is the chrome and depends on TerminalKit
 alone; `PaneKit` and `TabKit` hold the pane-tree and tab models. Design source
 of truth lives in `docs/superpowers/specs/` (architecture, epic charters) and
 `docs/superpowers/plans/` (per-epic implementation plans). Agent-facing rules,
@@ -36,7 +36,6 @@ worktrees need them symlinked in (`Frameworks/GhosttyKit.xcframework` and
 
 ```sh
 bin/run                # build + launch (guards that GhosttyKit artifacts exist)
-bin/run --swiftterm    # launch on the SwiftTerm backend instead
 swift test             # unit tests
 bin/check              # the full local gate: build, test, swift-format
                        # (strict), swiftlint (strict). Mirrors CI. Run before

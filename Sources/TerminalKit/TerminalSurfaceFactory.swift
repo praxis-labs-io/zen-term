@@ -1,20 +1,12 @@
-/// The one swap point. Chrome only ever calls `TerminalSurfaceFactory.make()`.
-public enum TerminalBackend {
-    /// SwiftTerm — the original CPU backend, kept as the escape hatch.
-    case swiftTerm
-    /// libghostty — GPU/Metal backend behind the same seam. The default (ZEN-45).
-    case ghostty
-}
-
+/// The one place the chrome asks for a terminal. Chrome only ever calls
+/// `TerminalSurfaceFactory.make()`; libghostty is the sole backend (ZEN-45, ZEN-66).
 public enum TerminalSurfaceFactory {
-    public static var backend: TerminalBackend = .ghostty
+    /// Test seam: when set, `make()` returns this instead of a live libghostty surface, so
+    /// tests can mount the chrome with a headless stub rather than booting a real ghostty app.
+    /// Production leaves it nil.
+    public static var makeOverride: (() -> TerminalSurface)?
 
     public static func make() -> TerminalSurface {
-        switch backend {
-        case .swiftTerm:
-            return SwiftTermSurface()
-        case .ghostty:
-            return GhosttySurface()
-        }
+        makeOverride?() ?? GhosttySurface()
     }
 }
