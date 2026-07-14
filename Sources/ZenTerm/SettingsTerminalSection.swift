@@ -52,10 +52,10 @@ final class SettingsTerminalSection: SettingsFormSection {
         addGroup("Workspace") {
             self.addTextRow(
                 key: "editor", caption: "Editor", blurb: "Editor for the Editor + AI + Shell preset",
-                placeholder: "nvim", read: { $0.editor ?? "" }, width: 200)
+                placeholder: GeneralConfig.defaultEditor, read: { $0.editor ?? "" }, width: 200)
             self.addTextRow(
                 key: "ai", caption: "AI", blurb: "AI tool for the Editor + AI + Shell preset",
-                placeholder: "claude", read: { $0.ai ?? "" }, width: 200)
+                placeholder: GeneralConfig.defaultAI, read: { $0.ai ?? "" }, width: 200)
         }
     }
 

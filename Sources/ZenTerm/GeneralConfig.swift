@@ -49,6 +49,11 @@ struct GeneralConfig: Equatable {
     var floats: [ToolFloat]
     var keymap: [Chord: KeyInterceptor.ReservedChord]
 
+    /// The commands the "Editor + AI + Shell" workspace preset falls back to when `editor` / `ai`
+    /// are unset — single-sourced here so the Settings placeholders and the preset itself agree.
+    static let defaultEditor = "nvim"
+    static let defaultAI = "claude"
+
     /// The historical hardcodes — an absent config file yields exactly this, so behavior is
     /// unchanged from before ZEN-71. The font literal is single-sourced here; `Theme` reads it.
     static let builtIn = GeneralConfig(

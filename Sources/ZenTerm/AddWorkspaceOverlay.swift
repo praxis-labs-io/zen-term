@@ -14,21 +14,17 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     /// A layout preset; `custom` reveals the raw recipe fields.
     private enum LayoutChoice { case minimal, editorAIShell, custom }
 
-    /// The editor / AI the "Editor + AI + Shell" preset launches — user-configurable via
-    /// `config` (`editor` / `ai`), falling back to these when unset.
-    private static let defaultEditor = "nvim"
-    private static let defaultAI = "claude"
-    private static func presetEditor() -> String { GeneralConfig.current.editor ?? defaultEditor }
-    private static func presetAI() -> String { GeneralConfig.current.ai ?? defaultAI }
+    /// The editor / AI the "Editor + AI + Shell" preset launches, snapshotted at open (from `config`
+    /// `editor` / `ai`, falling back to the built-in defaults) so the caption shown and the recipe
+    /// stored can't disagree if the config changes while the form is up.
+    private let presetEditor: String
+    private let presetAI: String
 
-    /// The layout captions; the preset caption reflects the configured editor / AI so it stays
-    /// truthful when the user picks their own tools.
-    private var layoutCaptions: [String] {
-        [
-            "One shell, drawers closed", "\(Self.presetEditor()), \(Self.presetAI()), shell",
-            "Set each region yourself",
-        ]
-    }
+    /// The layout captions, built once from the snapshot. The preset caption names the configured
+    /// editor / AI so it stays truthful when the user picks their own tools.
+    private lazy var layoutCaptions: [String] = [
+        "One shell, drawers closed", "\(presetEditor), \(presetAI), shell", "Set each region yourself",
+    ]
 
     private let editingWorkspace: Workspace?
     private let existingTitles: Set<String>
@@ -85,6 +81,8 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         self.onSubmit = onSubmit
         self.onCancel = onCancel
         self.onDelete = onDelete
+        self.presetEditor = GeneralConfig.current.editor ?? GeneralConfig.defaultEditor
+        self.presetAI = GeneralConfig.current.ai ?? GeneralConfig.defaultAI
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -389,7 +387,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         titleEditedByUser = true
         titleField.setText(ws.title)
         folderField.setText(PathDisplay.abbreviatingHome(ws.path.path))
-        let choice = Self.layoutChoice(for: ws)
+        let choice = layoutChoice(for: ws)
         layoutSegment.setSelection(Self.layoutIndex(for: choice))
         if choice == .custom {
             mainField.setText(ws.main ?? "")
@@ -405,14 +403,20 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     }
 
     /// The preset a workspace maps back to: Minimal / Editor+AI+Shell only when the recipe matches
-    /// exactly *and* focus is the default `.main` (those presets can't express a focus); otherwise
-    /// Custom, which carries every field verbatim.
-    private static func layoutChoice(for ws: Workspace) -> LayoutChoice {
+    /// *and* focus is the default `.main` (those presets can't express a focus); otherwise Custom,
+    /// which carries every field verbatim.
+    private func layoutChoice(for ws: Workspace) -> LayoutChoice {
         if ws.focus == .main, ws.main == nil, ws.right == nil, ws.bottom == nil { return .minimal }
-        if ws.focus == .main, ws.main == presetEditor(), ws.right == presetAI(), ws.bottom == "shell" {
-            return .editorAIShell
-        }
+        if ws.focus == .main, ws.bottom == "shell", matchesEditorAIPreset(ws) { return .editorAIShell }
         return .custom
+    }
+
+    /// A workspace reads back as the "Editor + AI + Shell" preset when its editor/AI are either the
+    /// currently-configured pair or the built-in default — so a workspace stamped before the user
+    /// changed the setting still shows as the preset rather than dropping to Custom.
+    private func matchesEditorAIPreset(_ ws: Workspace) -> Bool {
+        (ws.main == presetEditor && ws.right == presetAI)
+            || (ws.main == GeneralConfig.defaultEditor && ws.right == GeneralConfig.defaultAI)
     }
 
     private static func layoutIndex(for choice: LayoutChoice) -> Int {
@@ -489,7 +493,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private func recipeForChoice() -> (main: String?, right: String?, bottom: String?, focus: Workspace.Region) {
         switch layoutChoice {
         case .minimal: return (nil, nil, nil, .main)
-        case .editorAIShell: return (Self.presetEditor(), Self.presetAI(), "shell", .main)
+        case .editorAIShell: return (presetEditor, presetAI, "shell", .main)
         case .custom:
             func normalized(_ text: String) -> String? {
                 let trimmed = text.trimmingCharacters(in: .whitespaces)

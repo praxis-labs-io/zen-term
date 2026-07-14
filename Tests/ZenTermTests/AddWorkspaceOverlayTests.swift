@@ -162,4 +162,17 @@ final class AddWorkspaceOverlayTests: XCTestCase {
 
         XCTAssertEqual(segment(in: overlay, containing: "Editor + AI + Shell")?.selectedIndex, 1)
     }
+
+    /// A workspace stamped with the built-in default (nvim/claude) still reads as the preset after
+    /// the user reconfigures editor/AI — it doesn't silently drop to Custom.
+    func test_editForm_builtInDefaultRecipe_selectsPresetUnderChangedConfig() throws {
+        setPresetConfig(editor: "vim", ai: "codex")  // config now differs from the stored recipe
+        let dir = try makeRealDir()
+        let ws = Workspace(
+            title: "Delta", path: dir, main: "nvim", right: "claude", bottom: "shell",
+            focus: .main, env: [:])
+        let (overlay, _) = mount(editing: ws)
+
+        XCTAssertEqual(segment(in: overlay, containing: "Editor + AI + Shell")?.selectedIndex, 1)
+    }
 }

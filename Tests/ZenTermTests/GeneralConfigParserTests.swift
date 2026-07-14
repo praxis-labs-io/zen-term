@@ -49,7 +49,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.ai, "codex")
     }
 
-    func test_editorAndAI_absent_fallBackToNil() {
+    func test_editorAndAI_absent_fallsBackToNil() {
         let config = parse("font-size = 14\n")
         XCTAssertNil(config.editor)  // absent → nil → the preset's nvim/claude fallback
         XCTAssertNil(config.ai)
