@@ -60,7 +60,7 @@ final class SplitContainerView: NSView {
         splitInExtents = []
         secondChild?.layer?.removeAnimation(forKey: "split.slide")
         secondChild?.layer?.transform = CATransform3DIdentity
-        layer?.masksToBounds = false
+        SlideClip.remove(from: self)
         guard let first = firstChild, let second = secondChild,
             first.superview === self, second.superview === self
         else { return }
@@ -102,9 +102,9 @@ final class SplitContainerView: NSView {
         splitInExtents = [firstExtent, secondExtent]
         layoutSubtreeIfNeeded()  // first fills; second sits at final size against the trailing/bottom edge
 
-        // Park `second` just past that edge and clip, so it doesn't spill into siblings as it slides.
-        wantsLayer = true
-        layer?.masksToBounds = true
+        // Park `second` just past that edge and clip, so it doesn't spill into siblings as it slides
+        // (the expanded clip spares the freshly-focused pane's halo — see SlideClip).
+        SlideClip.apply(to: self)
         second.wantsLayer = true
         let keyPath = vertical ? "transform.translation.x" : "transform.translation.y"
         let from: CGFloat = vertical ? slide : -slide  // right for a vertical split, down for horizontal
