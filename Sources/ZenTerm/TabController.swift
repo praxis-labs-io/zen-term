@@ -1275,7 +1275,7 @@ final class TabController: NSObject {
     /// clipped for the duration to keep it from spilling over the footer. On completion it settles
     /// onto the canonical multiplier constraints via `relayoutPanels()` (same size, no jump),
     /// preserving window-resize proportionality. Zoom / Reduce Motion use the instant path.
-    /// (Spike: bottom drawer only — the right drawer still swaps instantly.)
+    /// `animateRightDrawer` is the horizontal twin.
     private func animateBottomDrawer(opening: Bool) {
         guard let bottomPanel = bottomDrawerPanel else {
             relayoutPanels()
@@ -1292,13 +1292,17 @@ final class TabController: NSObject {
         setAttached(bottomPanel, true)
         let canvasBottomC = canvas.bottomAnchor.constraint(
             equalTo: content.bottomAnchor, constant: opening ? 0 : -slide)
+        // `.defaultHigh` (like `relayoutPanels`) so an extremely short window relaxes the drawer
+        // instead of forcing the canvas negative and logging a broken constraint.
+        let drawerHeight = bottomPanel.heightAnchor.constraint(equalToConstant: target)
+        drawerHeight.priority = .defaultHigh
         var cs: [NSLayoutConstraint] = [
             canvas.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             canvas.topAnchor.constraint(equalTo: content.topAnchor),
             canvasBottomC,
             bottomPanel.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             bottomPanel.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-            bottomPanel.heightAnchor.constraint(equalToConstant: target),
+            drawerHeight,
         ]
         // Mirror `relayoutPanels`' column split: an open right drawer bounds both the canvas and the
         // bottom drawer's trailing edge, so the push stays inside the canvas column.
@@ -1349,12 +1353,17 @@ final class TabController: NSObject {
             bottomPanel.layer?.add(slideAnim, forKey: "drawer.slide")
         } completionHandler: { [weak self] in
             guard let self else { return }
-            self.endDrawerSlideClip()
-            // A newer toggle already owns the layout — leave it be (but the clip was still balanced).
-            guard self.bottomDrawerAnimationID == animationID else { return }
-            bottomPanel.layer?.transform = CATransform3DIdentity
-            if !opening { self.setAttached(bottomPanel, false) }
-            self.relayoutPanels()  // settle onto the canonical multiplier constraints
+            // `activeDrawerSlides` still counts this slide (balanced last, below): 1 means it's the
+            // only one, so it's safe to settle the shared tile constraints; >1 means a sibling drawer
+            // is mid-slide and its own completion will do the final relayout — relaying out now would
+            // tear down its in-flight animation.
+            let isLastSlide = self.activeDrawerSlides <= 1
+            if self.bottomDrawerAnimationID == animationID {  // else a newer toggle owns the layout
+                if !opening { self.setAttached(bottomPanel, false) }  // detach while parked + clipped — no flash
+                bottomPanel.layer?.transform = CATransform3DIdentity
+                if isLastSlide { self.relayoutPanels() }  // settle onto the canonical multiplier constraints
+            }
+            self.endDrawerSlideClip()  // balance last, so the clip outlives the detach
         }
     }
 
@@ -1362,7 +1371,7 @@ final class TabController: NSObject {
     /// slides in from the right edge at its final width (one reflow, then held) while the canvas
     /// real-resizes leftward. When the bottom drawer is open its trailing edge rides left on the
     /// same curve, so the right drawer visibly pushes it. Settles onto the canonical constraints on
-    /// completion. (Spike: the bottom drawer's width-follow is a real resize — it reflows.)
+    /// completion. (The bottom drawer's width-follow is a real resize — it reflows.)
     private func animateRightDrawer(opening: Bool) {
         guard let rightPanel = rightDrawerPanel else {
             relayoutPanels()
@@ -1376,6 +1385,10 @@ final class TabController: NSObject {
         setAttached(rightPanel, true)
         let canvasTrailingC = canvas.trailingAnchor.constraint(
             equalTo: content.trailingAnchor, constant: opening ? 0 : -slide)
+        // `.defaultHigh` (like `relayoutPanels`) so a very narrow window relaxes the drawer instead
+        // of forcing the canvas negative and logging a broken constraint.
+        let drawerWidth = rightPanel.widthAnchor.constraint(equalToConstant: target)
+        drawerWidth.priority = .defaultHigh
         var cs: [NSLayoutConstraint] = [
             canvas.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             canvas.topAnchor.constraint(equalTo: content.topAnchor),
@@ -1383,7 +1396,7 @@ final class TabController: NSObject {
             rightPanel.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             rightPanel.topAnchor.constraint(equalTo: content.topAnchor),
             rightPanel.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-            rightPanel.widthAnchor.constraint(equalToConstant: target),
+            drawerWidth,
         ]
         // With the bottom drawer open, its column is the canvas column: tie its bottom edge and
         // animate its trailing left in lockstep with the canvas, so the right drawer pushes it too.
@@ -1433,11 +1446,15 @@ final class TabController: NSObject {
             rightPanel.layer?.add(slideAnim, forKey: "drawer.slide")
         } completionHandler: { [weak self] in
             guard let self else { return }
-            self.endDrawerSlideClip()
-            guard self.rightDrawerAnimationID == animationID else { return }
-            rightPanel.layer?.transform = CATransform3DIdentity
-            if !opening { self.setAttached(rightPanel, false) }
-            self.relayoutPanels()  // settle onto the canonical multiplier constraints
+            // See `animateBottomDrawer`: only the last concurrent slide settles the shared tile
+            // constraints; detach before resetting the transform so a closing drawer never flashes.
+            let isLastSlide = self.activeDrawerSlides <= 1
+            if self.rightDrawerAnimationID == animationID {  // else a newer toggle owns the layout
+                if !opening { self.setAttached(rightPanel, false) }
+                rightPanel.layer?.transform = CATransform3DIdentity
+                if isLastSlide { self.relayoutPanels() }
+            }
+            self.endDrawerSlideClip()  // balance last, so the clip outlives the detach
         }
     }
 

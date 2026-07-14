@@ -15,6 +15,10 @@ final class SplitContainerView: NSView {
     private var secondFollowsFirst: NSLayoutConstraint?
     private var splitAxis: SplitAxis?
     private var gutter: CGFloat = 0
+    /// True while `animateSplitIn` owns `first`'s sizing via the temp extents below; a `setRatio`
+    /// resize finalizes it first so the fixed-extent and ratio constraints can't both be required.
+    private var isAnimatingIn = false
+    private var splitInExtents: [NSLayoutConstraint] = []
 
     /// Called for every split node as its container is built, with the split's id and its
     /// container view. Lets the pane controller clamp resizes to a pixel min instead of a
@@ -34,11 +38,34 @@ final class SplitContainerView: NSView {
     /// path, hot under key repeat. Only the one constraint is swapped; layout flows on the
     /// next pass.
     func setRatio(_ ratio: Double) {
+        // A split-in push has `first` pinned to a fixed extent for the slide; finalize it first so the
+        // resize doesn't add a second, conflicting required width — and so the resize still lands.
+        settleSplitIn()
         guard let firstChild, let splitAxis, let old = ratioConstraint else { return }
         old.isActive = false
         let next = makeRatioConstraint(ratio, first: firstChild, axis: splitAxis)
         next.isActive = true
         ratioConstraint = next
+    }
+
+    /// Finish an in-flight `animateSplitIn` immediately (or from its own completion): drop the temp
+    /// extents, stop the slide, unclip, and — unless a rebuild reparented the children into a fresh
+    /// container — restore the canonical ratio constraints. Idempotent.
+    private func settleSplitIn() {
+        guard isAnimatingIn else { return }
+        isAnimatingIn = false
+        // Release the temp extents unconditionally — they're attached to the child views, so leaving
+        // them active after a reparent would wrongly constrain the children in their new container.
+        splitInExtents.forEach { $0.isActive = false }
+        splitInExtents = []
+        secondChild?.layer?.removeAnimation(forKey: "split.slide")
+        secondChild?.layer?.transform = CATransform3DIdentity
+        layer?.masksToBounds = false
+        guard let first = firstChild, let second = secondChild,
+            first.superview === self, second.superview === self
+        else { return }
+        ratioConstraint?.isActive = true
+        secondFollowsFirst?.isActive = true
     }
 
     /// Animate this freshly-built split in like a drawer push: the pre-existing child (`first`)
@@ -56,6 +83,7 @@ final class SplitContainerView: NSView {
         let vertical = axis == .vertical
         let extent = vertical ? bounds.width : bounds.height
         guard extent > 1 else { return }
+        isAnimatingIn = true
 
         // Read the final child sizes from the canonical (ratio) layout before swapping it out.
         let finalFirst = vertical ? first.bounds.width : first.bounds.height
@@ -71,6 +99,7 @@ final class SplitContainerView: NSView {
             equalToConstant: finalSecond)
         firstExtent.isActive = true
         secondExtent.isActive = true
+        splitInExtents = [firstExtent, secondExtent]
         layoutSubtreeIfNeeded()  // first fills; second sits at final size against the trailing/bottom edge
 
         // Park `second` just past that edge and clip, so it doesn't spill into siblings as it slides.
@@ -92,16 +121,7 @@ final class SplitContainerView: NSView {
             firstExtent.animator().constant = finalFirst
             second.layer?.add(slideAnim, forKey: "split.slide")
         } completionHandler: { [weak self] in
-            // A rebuild (rapid re-split, or teardown) may have reparented the children into a fresh
-            // container mid-slide; that new container owns the canonical constraints, so only restore
-            // when these two are still ours — reactivating cross-hierarchy constraints would crash.
-            guard let self, first.superview === self, second.superview === self else { return }
-            firstExtent.isActive = false
-            secondExtent.isActive = false
-            ratioConstraint.isActive = true
-            secondFollowsFirst.isActive = true
-            second.layer?.transform = CATransform3DIdentity
-            self.layer?.masksToBounds = false
+            self?.settleSplitIn()
         }
     }
 
