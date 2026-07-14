@@ -11,7 +11,6 @@ func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
         blue: CGFloat(hex & 0xFF) / 255, alpha: a)
 }
 let iris = rgb(0xC4A7E7)  // brand accent
-let muted = rgb(0x6B6790)  // the app's terminal cursor color
 let bgTop = rgb(0x221E33)
 let bgBottom = rgb(0x141120)
 
@@ -30,6 +29,109 @@ func squircle(center c: CGPoint, radius a: CGFloat) -> CGPath {
     path.closeSubpath()
     return path
 }
+
+// MARK: - SVG path → polylines (Lucide's 24-unit grid, y-down)
+// Lets a mark be authored straight from its SVG `d` string. Arcs (Lucide's rounded
+// corners) are converted via the SVG endpoint parameterisation and flattened to short
+// segments; round joins keep them smooth at icon resolution.
+func vecAngle(_ ux: CGFloat, _ uy: CGFloat, _ vx: CGFloat, _ vy: CGFloat) -> CGFloat {
+    let len = (ux * ux + uy * uy).squareRoot() * (vx * vx + vy * vy).squareRoot()
+    let c = max(-1, min(1, (ux * vx + uy * vy) / len))
+    return ((ux * vy - uy * vx) < 0 ? -1 : 1) * acos(c)
+}
+
+func appendArc(
+    from p0: CGPoint, to p1: CGPoint, rx rx0: CGFloat, ry ry0: CGFloat, xRotDeg: CGFloat,
+    largeArc: Bool, sweep: Bool, into pts: inout [CGPoint]
+) {
+    var rx = abs(rx0), ry = abs(ry0)
+    if rx == 0 || ry == 0 { pts.append(p1); return }
+    let phi = xRotDeg * .pi / 180, cosP = cos(phi), sinP = sin(phi)
+    let dx = (p0.x - p1.x) / 2, dy = (p0.y - p1.y) / 2
+    let x1p = cosP * dx + sinP * dy, y1p = -sinP * dx + cosP * dy
+    let lambda = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry)
+    if lambda > 1 { let s = lambda.squareRoot(); rx *= s; ry *= s }
+    var num = rx * rx * ry * ry - rx * rx * y1p * y1p - ry * ry * x1p * x1p
+    let den = rx * rx * y1p * y1p + ry * ry * x1p * x1p
+    if num < 0 { num = 0 }
+    var co = (num / den).squareRoot()
+    if largeArc == sweep { co = -co }
+    let cxp = co * (rx * y1p / ry), cyp = co * (-ry * x1p / rx)
+    let cx = cosP * cxp - sinP * cyp + (p0.x + p1.x) / 2
+    let cy = sinP * cxp + cosP * cyp + (p0.y + p1.y) / 2
+    let ux = (x1p - cxp) / rx, uy = (y1p - cyp) / ry
+    let theta1 = vecAngle(1, 0, ux, uy)
+    var dTheta = vecAngle(ux, uy, (-x1p - cxp) / rx, (-y1p - cyp) / ry)
+    if !sweep && dTheta > 0 { dTheta -= 2 * .pi }
+    if sweep && dTheta < 0 { dTheta += 2 * .pi }
+    let steps = max(2, Int(ceil(abs(dTheta) / (.pi / 16))))
+    for i in 1...steps {
+        let t = theta1 + dTheta * CGFloat(i) / CGFloat(steps)
+        pts.append(
+            CGPoint(
+                x: cx + rx * cos(t) * cosP - ry * sin(t) * sinP,
+                y: cy + rx * cos(t) * sinP + ry * sin(t) * cosP))
+    }
+}
+
+func parsePath(_ d: String) -> [[CGPoint]] {
+    let pattern = "[MmLlHhVvCcSsQqTtAaZz]|[-+]?(?:\\d*\\.\\d+|\\d+\\.?)(?:[eE][-+]?\\d+)?"
+    let re = try! NSRegularExpression(pattern: pattern)
+    let ns = d as NSString
+    let toks = re.matches(in: d, range: NSRange(location: 0, length: ns.length))
+        .map { ns.substring(with: $0.range) }
+    var i = 0
+    func num() -> CGFloat {
+        var s = toks[i]; i += 1
+        if s.hasPrefix(".") { s = "0" + s } else if s.hasPrefix("-.") { s = "-0" + s.dropFirst() }
+        return CGFloat(Double(s)!)
+    }
+    func flag() -> Bool { let v = toks[i] != "0"; i += 1; return v }
+    var subpaths: [[CGPoint]] = [], cur: [CGPoint] = []
+    var pt = CGPoint.zero, start = CGPoint.zero
+    var cmd: Character = " "
+    func flush() { if cur.count > 1 { subpaths.append(cur) }; cur = [] }
+    while i < toks.count {
+        let t = toks[i]
+        if t.count == 1, let c = t.first, "MmLlHhVvCcSsQqTtAaZz".contains(c) { cmd = c; i += 1 }
+        switch cmd {
+        case "M": flush(); pt = CGPoint(x: num(), y: num()); start = pt; cur = [pt]; cmd = "L"
+        case "m":
+            flush(); pt = CGPoint(x: pt.x + num(), y: pt.y + num()); start = pt; cur = [pt]; cmd = "l"
+        case "L": pt = CGPoint(x: num(), y: num()); cur.append(pt)
+        case "l": pt = CGPoint(x: pt.x + num(), y: pt.y + num()); cur.append(pt)
+        case "H": pt = CGPoint(x: num(), y: pt.y); cur.append(pt)
+        case "h": pt = CGPoint(x: pt.x + num(), y: pt.y); cur.append(pt)
+        case "V": pt = CGPoint(x: pt.x, y: num()); cur.append(pt)
+        case "v": pt = CGPoint(x: pt.x, y: pt.y + num()); cur.append(pt)
+        case "A", "a":
+            let rel = cmd == "a"
+            let rx = num(), ry = num(), rot = num(), la = flag(), sw = flag()
+            let ex = num(), ey = num()
+            let p1 = rel ? CGPoint(x: pt.x + ex, y: pt.y + ey) : CGPoint(x: ex, y: ey)
+            appendArc(from: pt, to: p1, rx: rx, ry: ry, xRotDeg: rot, largeArc: la, sweep: sw, into: &cur)
+            pt = p1
+        case "Z", "z": pt = start; cur.append(start)
+        default: i += 1
+        }
+    }
+    flush()
+    return subpaths
+}
+
+// The `origami` mark as its three Lucide `d` strings, parsed once with its bounding box.
+let origamiPaths = [
+    "M12 12V4a1 1 0 0 1 1-1h6.297a1 1 0 0 1 .651 1.759l-4.696 4.025",
+    "m12 21-7.414-7.414A2 2 0 0 1 4 12.172V6.415a1.002 1.002 0 0 1 1.707-.707L20 20.009",
+    "m12.214 3.381 8.414 14.966a1 1 0 0 1-.167 1.199l-1.168 1.163a1 1 0 0 1-.706.291H6.351"
+        + "a1 1 0 0 1-.625-.219L3.25 18.8a1 1 0 0 1 .631-1.781l4.165.027",
+]
+let origamiSubpaths: [[CGPoint]] = origamiPaths.flatMap(parsePath)
+let origamiXs = origamiSubpaths.flatMap { $0.map(\.x) }
+let origamiYs = origamiSubpaths.flatMap { $0.map(\.y) }
+let origamiCenter = CGPoint(
+    x: (origamiXs.min()! + origamiXs.max()!) / 2, y: (origamiYs.min()! + origamiYs.max()!) / 2)
+let origamiExtent = max(origamiXs.max()! - origamiXs.min()!, origamiYs.max()! - origamiYs.min()!)
 
 // MARK: - Draw at a given pixel size
 func drawIcon(size: CGFloat) -> CGImage {
@@ -56,39 +158,33 @@ func drawIcon(size: CGFloat) -> CGImage {
     ctx.drawLinearGradient(
         bg, start: CGPoint(x: L(512), y: L(924)), end: CGPoint(x: L(512), y: L(100)), options: [])
 
-    // Soft iris glow, lifted slightly above center
+    // Soft iris glow behind the mark, centered
     let glow = CGGradient(
         colorsSpace: space, colors: [rgb(0xC4A7E7, 0.16), rgb(0xC4A7E7, 0)] as CFArray,
         locations: [0, 1])!
     ctx.drawRadialGradient(
-        glow, startCenter: CGPoint(x: L(512), y: L(560)), startRadius: 0,
-        endCenter: CGPoint(x: L(512), y: L(560)), endRadius: L(400), options: [])
+        glow, startCenter: CGPoint(x: L(512), y: L(512)), startRadius: 0,
+        endCenter: CGPoint(x: L(512), y: L(512)), endRadius: L(400), options: [])
 
-    // Focal glow behind the cursor bar — soft iris, matched to the muted bar
-    let cursorGlow = CGGradient(
-        colorsSpace: space, colors: [rgb(0xC4A7E7, 0.13), rgb(0xC4A7E7, 0)] as CFArray,
-        locations: [0, 1])!
-    ctx.drawRadialGradient(
-        cursorGlow, startCenter: CGPoint(x: L(645), y: L(512)), startRadius: 0,
-        endCenter: CGPoint(x: L(645), y: L(512)), endRadius: L(150), options: [])
-
-    // Prompt chevron  ❯
+    // Origami mark (Lucide `origami`): authored straight from its SVG paths, centred and
+    // scaled so its larger dimension fits `430` in icon space (Lucide's y-down grid is
+    // flipped into the icon's y-up space). Stroke is lightened to 1.5/24 (below Lucide's
+    // 2/24 default) so the crane's fold lines don't crowd at small sizes.
+    let k = L(430) / origamiExtent
+    func P(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: L(512) + (p.x - origamiCenter.x) * k, y: L(512) - (p.y - origamiCenter.y) * k)
+    }
     ctx.setStrokeColor(iris)
-    ctx.setLineWidth(L(54))
+    ctx.setLineWidth(1.5 * k)
     ctx.setLineCap(.round)
     ctx.setLineJoin(.round)
-    ctx.move(to: CGPoint(x: L(372), y: L(662)))
-    ctx.addLine(to: CGPoint(x: L(528), y: L(512)))
-    ctx.addLine(to: CGPoint(x: L(372), y: L(362)))
-    ctx.strokePath()
-
-    // Cursor bar — matched to the chevron's tip-to-tip height
-    let block = CGPath(
-        roundedRect: CGRect(x: L(618), y: L(342), width: L(54), height: L(340)),
-        cornerWidth: L(20), cornerHeight: L(20), transform: nil)
-    ctx.addPath(block)
-    ctx.setFillColor(muted)
-    ctx.fillPath()
+    for sp in origamiSubpaths {
+        let path = CGMutablePath()
+        path.move(to: P(sp[0]))
+        for pt in sp.dropFirst() { path.addLine(to: P(pt)) }
+        ctx.addPath(path)
+        ctx.strokePath()
+    }
 
     ctx.restoreGState()
 
