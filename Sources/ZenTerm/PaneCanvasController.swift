@@ -38,6 +38,10 @@ final class PaneCanvasController: NSObject {
     /// ⌥-arrow nudge never rebuilds the tree.
     private var splitViewByID: [SplitID: SplitContainerView] = [:]
 
+    /// Close-out overlays currently fading (a just-closed pane dissolving over the collapsed tree),
+    /// kept out of `rebuildViews`' teardown so a concurrent reconcile doesn't snap them away.
+    private var dissolvingHosts: [NSView] = []
+
     /// Whether panes may show their focus halo. `TabController` sets this to false
     /// when a drawer holds unified focus, so exactly one panel is haloed across the
     /// whole tab.
@@ -212,7 +216,10 @@ final class PaneCanvasController: NSObject {
     }
 
     private func rebuildViews() {
-        canvasView.subviews.forEach { $0.removeFromSuperview() }
+        // Keep any in-flight close-out dissolve overlays (re-fronted below); drop the previous tree.
+        for subview in canvasView.subviews where !dissolvingHosts.contains(where: { $0 === subview }) {
+            subview.removeFromSuperview()
+        }
         // `hostByLeaf` survives the rebuild: retained leaves keep their PanelHostView (and
         // its constraints to `content`), so a restructure only reparents hosts instead of
         // rebuilding the pane chrome. Removed leaves were already pruned in reconcile.
@@ -242,6 +249,7 @@ final class PaneCanvasController: NSObject {
             root.topAnchor.constraint(equalTo: canvasView.topAnchor),
             root.bottomAnchor.constraint(equalTo: canvasView.bottomAnchor),
         ])
+        dissolvingHosts.forEach { canvasView.addSubview($0) }  // keep the fade on top of the rebuilt tree
         updateHalo()
     }
 
@@ -422,7 +430,7 @@ final class PaneCanvasController: NSObject {
     /// Snapshot a pane's host + on-screen frame *before* the reconcile drops it, so
     /// `dissolveClosedPane` can fade it out over the collapsed layout. Nil (no animation) when the
     /// canvas isn't in a window.
-    private func captureDyingPane(_ id: PaneID) -> (host: NSView, frame: CGRect)? {
+    private func captureDyingPane(_ id: PaneID) -> (host: PanelHostView, frame: CGRect)? {
         guard let host = hostByLeaf[id], canvasView.window != nil else { return nil }
         return (host, host.convert(host.bounds, to: canvasView))
     }
@@ -430,14 +438,19 @@ final class PaneCanvasController: NSObject {
     /// Fade + scale the just-closed pane out over the already-collapsed layout (its surviving sibling
     /// has filled behind it) — the close-out counterpart to the split-in push. The reconcile has
     /// terminated the surface, so this is a static pane dissolving. Honors Reduce Motion.
-    private func dissolveClosedPane(_ closing: (host: NSView, frame: CGRect)?) {
+    private func dissolveClosedPane(_ closing: (host: PanelHostView, frame: CGRect)?) {
         guard let (host, frame) = closing else { return }
         host.removeFromSuperview()  // detach from its now-orphaned split container
         guard !Motion.isReduceMotionEnabled() else { return }
+        host.isHitTransparent = true  // clicks in the vacated region fall through to the survivor beneath
         host.translatesAutoresizingMaskIntoConstraints = true
+        host.frame = frame  // before addSubview, so the autoresizing-mask constraints capture it
         canvasView.addSubview(host)  // back on top of the rebuilt tree
-        host.frame = frame
-        Motion.springScaleFade(host, appearing: false) { host.removeFromSuperview() }
+        dissolvingHosts.append(host)  // survive a concurrent reconcile's rebuild instead of snapping away
+        Motion.springScaleFade(host, appearing: false) { [weak self] in
+            host.removeFromSuperview()
+            self?.dissolvingHosts.removeAll { $0 === host }
+        }
     }
 
     @objc func copyFromSurface(_ sender: Any?) {
