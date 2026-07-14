@@ -2,7 +2,8 @@ import Foundation
 
 /// Backend-neutral terminal behavior the chrome dials from user config — the seam's
 /// vocabulary for the non-appearance knobs (cursor shape/thickness, Option semantics, scroll
-/// feel). The libghostty backend maps every field to ghostty config.
+/// feel). The libghostty backend maps the cursor and Option fields to ghostty config; the
+/// scroll multiplier is applied in `GhosttyHostView`'s own scroll handling, not via config.
 public struct TerminalBehavior: Equatable, Sendable {
     public enum CursorStyle: Sendable, Equatable { case block, bar, underline }
 
