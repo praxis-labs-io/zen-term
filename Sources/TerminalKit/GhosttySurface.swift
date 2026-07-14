@@ -1,11 +1,11 @@
 import AppKit
 import GhosttyKit
 
-/// libghostty-backed terminal surface — the default backend (ZEN-45).
+/// libghostty-backed terminal surface — the sole backend (ZEN-45, ZEN-66).
 ///
-/// The counterpart to `SwiftTermSurface` behind the same `TerminalSurface` seam, so
-/// the chrome is identical either way. Unlike SwiftTerm's drop-in `NSView`, libghostty
-/// renders into a Metal layer it attaches to a host view we own, and the host must
+/// It sits behind the `TerminalSurface` seam so the chrome never touches libghostty
+/// directly. libghostty renders into a Metal layer it attaches to a host view we own,
+/// and the host must
 /// forward every input (key / mouse / focus / size / scale) and pump the shared app's
 /// event loop. IME/dead-key composition is not wired yet (no `NSTextInputClient`);
 /// tracked in ZEN-67.
@@ -29,7 +29,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// as not busy and a running command as busy. A shell ghostty can't integrate
     /// (Apple's /bin/bash) has no prompt marks, so this conservatively reads busy —
     /// erring toward an extra close confirmation, never toward losing live work.
-    /// True process-group parity with the SwiftTerm ProcessProbe is a follow-up.
+    /// True process-group parity is tracked as a follow-up (ZEN-69).
     public var isBusy: Bool {
         guard let surfacePtr else { return false }
         return ghostty_surface_needs_confirm_quit(surfacePtr)

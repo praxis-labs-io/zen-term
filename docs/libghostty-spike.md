@@ -4,19 +4,18 @@ Stands up `GhosttySurface` on the existing `TerminalSurface` seam: live shells i
 pane type rendered by libghostty's Metal renderer. This started as the "backend B" proof
 from `architecture-plan.md` (ZEN-40) — a leaf swap, not a rewrite.
 
-**Status:** the default backend (ZEN-45). The spike's load-bearing hacks are unwound:
-resources are staged from the pinned submodule build (no Ghostty.app dependency), the
-chrome's `TerminalTheme` drives a generated ghostty config (no in-repo config file, no
-`~/.config/ghostty`), spawn args are shell-quoted, and the SwiftTerm backend's parity
-features (isBusy close-confirm, Shift+Enter soft newline, desktop notifications, OSC 9;4
-progress) are wired. SwiftTerm remains the escape hatch.
+**Status:** the sole backend (ZEN-45 default, ZEN-66 stripped the old SwiftTerm
+fallback). The spike's load-bearing hacks are unwound: resources are staged from the
+pinned submodule build (no Ghostty.app dependency), the chrome's `TerminalTheme` drives a
+generated ghostty config (no in-repo config file, no `~/.config/ghostty`), spawn args are
+shell-quoted, and the parity features (isBusy close-confirm, Shift+Enter soft newline,
+desktop notifications, OSC 9;4 progress) are wired.
 
 ## Run it
 
 ```sh
 bin/build-ghosttykit    # one-time: inits the ghostty submodule + builds xcframework + resources
-bin/run                 # libghostty backend (default)
-bin/run --swiftterm     # SwiftTerm backend (escape hatch)
+bin/run                 # build + launch
 ```
 
 `GHOSTTY_LOG=stderr bin/run` surfaces libghostty's own logs (off by default in
@@ -102,6 +101,6 @@ backend needs that a CPU one doesn't.
   is a dev-loop artifact (killed processes), not something zen-term's pane churn can hit.
 
 None of these are seam problems — they're all below it, exactly where backend-specific work
-is supposed to live. libghostty is now the default backend (ZEN-45); SwiftTerm remains the
-escape hatch (`ZENTERM_BACKEND=swiftterm`). The remaining gaps above are tracked in ZEN-67
-(IME), ZEN-68 (shaders + scroll), and ZEN-69 (input + busy parity).
+is supposed to live. libghostty is the sole backend (ZEN-45 default, ZEN-66 stripped the old
+SwiftTerm fallback). The remaining gaps above are tracked in ZEN-67 (IME), ZEN-68 (shaders +
+scroll), and ZEN-69 (input + busy parity).

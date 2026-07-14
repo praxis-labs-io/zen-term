@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Build and run ZenTerm. Default backend is libghostty (ZEN-45); pass --swiftterm to
-# run the SwiftTerm backend (ZENTERM_BACKEND=swiftterm). Any further args pass
-# through to `swift run` (e.g. bin/run --swiftterm -Xswiftc -O).
+# Build and run ZenTerm on the libghostty backend (ZEN-45). Any args pass through
+# to `swift run` (e.g. bin/run -Xswiftc -O).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -12,11 +11,6 @@ if [[ ! -d Frameworks/GhosttyKit.xcframework ]] \
     || [[ ! -d Sources/TerminalKit/Resources/ghostty-resources ]]; then
     echo "✗ GhosttyKit artifacts missing — build them first: bin/build-ghosttykit" >&2
     exit 1
-fi
-
-if [[ "${1:-}" == "--swiftterm" ]]; then
-    shift
-    exec env ZENTERM_BACKEND=swiftterm swift run ZenTerm "$@"
 fi
 
 exec swift run ZenTerm "$@"

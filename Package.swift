@@ -4,9 +4,6 @@ import PackageDescription
 let package = Package(
     name: "ZenTerm",
     platforms: [.macOS(.v14)],
-    dependencies: [
-        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.13.0"),
-    ],
     targets: [
         // libghostty as a prebuilt static-library xcframework (ZEN-40 spike). Built from
         // source via bin/build-ghosttykit; gitignored, rebuilt per machine.
@@ -17,7 +14,6 @@ let package = Package(
         .target(
             name: "TerminalKit",
             dependencies: [
-                .product(name: "SwiftTerm", package: "SwiftTerm"),
                 "GhosttyKit",
             ],
             // libghostty's runtime resources (shell-integration, themes, terminfo),
@@ -47,14 +43,14 @@ let package = Package(
         ),
         .target(
             name: "PaneKit",
-            dependencies: ["TerminalKit"]   // seam type only — NOT SwiftTerm
+            dependencies: ["TerminalKit"]   // seam types only — never the backend
         ),
         .target(
-            name: "TabKit"                   // pure — no AppKit, no SwiftTerm
+            name: "TabKit"                   // pure — no AppKit, no backend
         ),
         .executableTarget(
             name: "ZenTerm",
-            dependencies: ["TerminalKit", "PaneKit", "TabKit"],  // still no SwiftTerm
+            dependencies: ["TerminalKit", "PaneKit", "TabKit"],  // chrome — no backend
             resources: [
                 .copy("Resources"),  // brand marks (GitHub, git) SVGs for the dock
                 .copy("Themes"),  // bundled ghostty theme catalog for the Settings theme picker

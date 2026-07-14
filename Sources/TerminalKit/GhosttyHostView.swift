@@ -35,8 +35,7 @@ final class GhosttyHostView: NSView {
     // `mouseDownCanMoveWindow` is true into a window move before the view sees the event —
     // and NSView defaults to true — so drags over terminal content moved the window instead
     // of reaching libghostty's selection. Opt out so click-drag here selects text; the
-    // window still drags by the gutters, window inset, and chrome around the panes. (The
-    // SwiftTerm backend's ProbeTerminalView does the same.)
+    // window still drags by the gutters, window inset, and chrome around the panes.
     override var mouseDownCanMoveWindow: Bool { false }
 
     // MARK: Size / scale
@@ -100,7 +99,7 @@ final class GhosttyHostView: NSView {
         guard let surfacePtr else { return }
         // Shift+Enter → LF so multiline-aware CLIs treat it as a soft newline while
         // plain Enter (CR) still submits — the convention `claude /terminal-setup`
-        // writes, and what the SwiftTerm backend implements. keyCode 36 = kVK_Return.
+        // writes. keyCode 36 = kVK_Return.
         // MUST stay ahead of the interpretKeyEvents hand-off so the IME can't swallow it.
         // Guarded on not-composing: mid-preedit, Enter must reach the input system to
         // commit the composition, not shortcut out and strand a stale underline.

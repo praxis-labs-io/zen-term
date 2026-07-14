@@ -49,16 +49,19 @@ final class SeamTests: XCTestCase {
         XCTAssertTrue(config.environment.isEmpty)
     }
 
-    func test_factoryDefaultsToGhosttyAndSwapsPerBackend() {
-        // We construct only — starting a process is out of unit scope. The factory's
-        // static backend is process-global, so restore it for other tests.
-        let original = TerminalSurfaceFactory.backend
-        defer { TerminalSurfaceFactory.backend = original }
+    func test_factoryMakesGhosttyByDefaultAndHonorsOverride() {
+        // We construct only — starting a process is out of unit scope. The override is
+        // process-global, so restore it for other tests.
+        let original = TerminalSurfaceFactory.makeOverride
+        defer { TerminalSurfaceFactory.makeOverride = original }
 
-        XCTAssertEqual(original, .ghostty, "libghostty is the default backend (ZEN-45)")
-        XCTAssertTrue(TerminalSurfaceFactory.make() is GhosttySurface)
+        TerminalSurfaceFactory.makeOverride = nil
+        XCTAssertTrue(
+            TerminalSurfaceFactory.make() is GhosttySurface,
+            "libghostty is the sole backend (ZEN-45, ZEN-66)")
 
-        TerminalSurfaceFactory.backend = .swiftTerm
-        XCTAssertTrue(TerminalSurfaceFactory.make() is SwiftTermSurface)
+        let stub = SpySurface()
+        TerminalSurfaceFactory.makeOverride = { stub }
+        XCTAssertTrue(TerminalSurfaceFactory.make() is SpySurface)
     }
 }
