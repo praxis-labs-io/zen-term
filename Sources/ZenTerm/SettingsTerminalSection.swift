@@ -49,6 +49,14 @@ final class SettingsTerminalSection: SettingsFormSection {
                 key: "shell-args", caption: "Shell args", blurb: "Passed to the shell (new tabs)",
                 placeholder: "optional", read: { LayoutFormat.joinArgs($0.shellArgs) }, width: 200)
         }
+        addGroup("Workspace") {
+            self.addTextRow(
+                key: "editor", caption: "Editor", blurb: "Editor for the Editor + AI + Shell preset",
+                placeholder: "nvim", read: { $0.editor ?? "" }, width: 200)
+            self.addTextRow(
+                key: "ai", caption: "AI", blurb: "AI tool for the Editor + AI + Shell preset",
+                placeholder: "claude", read: { $0.ai ?? "" }, width: 200)
+        }
     }
 
     /// Cursor style shown by index; static so the `read` closure the base stores per row doesn't

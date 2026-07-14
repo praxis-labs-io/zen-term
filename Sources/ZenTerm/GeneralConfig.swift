@@ -40,6 +40,11 @@ struct GeneralConfig: Equatable {
     var shell: String?
     var shellArgs: [String]
 
+    // Workspace preset commands — the editor / AI the "Editor + AI + Shell" preset launches.
+    // Nil → the built-in `nvim` / `claude` fallback (see AddWorkspaceOverlay).
+    var editor: String?
+    var ai: String?
+
     // Structured.
     var floats: [ToolFloat]
     var keymap: [Chord: KeyInterceptor.ReservedChord]
@@ -65,6 +70,8 @@ struct GeneralConfig: Equatable {
         reduceMotion: .system,
         shell: nil,
         shellArgs: [],
+        editor: nil,
+        ai: nil,
         floats: [],
         keymap: KeymapDefaults.map)
 
