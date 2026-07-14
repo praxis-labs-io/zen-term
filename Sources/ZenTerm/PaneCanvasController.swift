@@ -280,20 +280,41 @@ final class PaneCanvasController: NSObject {
         for host in hostByLeaf.values { host.reapplyTheme() }
     }
 
-    /// Render the focused leaf full-canvas, retaining its surface — no restart.
-    func zoomFocusedLeaf() {
+    /// Render the focused leaf full-canvas, retaining its surface — no restart. `resizesCanvas` is
+    /// passed by `TabController` when a drawer is open (so zooming even a lone pane really grows it,
+    /// dock → full) — the canvas doesn't know drawer state itself.
+    func zoomFocusedLeaf(resizesCanvas: Bool = false) {
         guard zoomedLeaf == nil else { return }
         zoomedLeaf = tree.focusedLeaf
-        reconcileAndRender()
+        rebuildIfCollapsing()
         focusActivePane()
+        popZoomTransition(resizesCanvas: resizesCanvas, growing: true)
     }
 
     /// Restore the split layout after `zoomFocusedLeaf()`.
-    func unzoom() {
+    func unzoom(resizesCanvas: Bool = false) {
         guard zoomedLeaf != nil else { return }
         zoomedLeaf = nil
-        reconcileAndRender()
+        rebuildIfCollapsing()
         focusActivePane()
+        popZoomTransition(resizesCanvas: resizesCanvas, growing: false)
+    }
+
+    /// Rebuild the canvas tree for a zoom only when it actually collapses/expands the layout — i.e.
+    /// a multi-pane split. A single-leaf canvas renders identically zoomed or not (the host fills
+    /// either way), so rebuilding would only reparent the host and flicker it with nothing to show.
+    private func rebuildIfCollapsing() {
+        if tree.leafIDs.count > 1 { reconcileAndRender() }
+    }
+
+    /// Scale-pop the rebuilt canvas root on a zoom in/out (the full-screen pane, or the restored
+    /// split). Skipped only for a true no-op — a lone pane with no drawer open, which is already
+    /// full-screen so nothing changes; a multi-pane zoom or an open drawer both make it a real
+    /// resize worth animating. Honors Reduce Motion via `Motion`.
+    private func popZoomTransition(resizesCanvas: Bool, growing: Bool) {
+        guard resizesCanvas || tree.leafIDs.count > 1, let root = canvasView.subviews.first else { return }
+        canvasView.layoutSubtreeIfNeeded()  // give root its final frame before scaling about its center
+        Motion.zoomPop(root, growing: growing)
     }
 
     /// Give panes the tab's unified focus halo (`on == true`), or yield it — used
@@ -351,15 +372,23 @@ final class PaneCanvasController: NSObject {
 
         let source = tree.focusedLeaf
         let newLeaf = mintPaneID()
+        let newSplit = mintSplitID()
         // inherit the focused pane's live cwd (falls back to last OSC-reported)
         cwdByLeaf[newLeaf] = registry.surface(for: source)?.currentDirectory ?? cwdByLeaf[source]
-        tree = tree.splitting(source, axis: axis, newLeaf: newLeaf, newSplit: mintSplitID())
+        tree = tree.splitting(source, axis: axis, newLeaf: newLeaf, newSplit: newSplit)
         reconcileAndRender()
         // `focusActivePane()` goes through `focus(_:)` (halo + first-responder +
         // `onFocusChanged`), unlike a raw `.focus()` — so a split while a drawer holds
         // unified focus re-syncs `TabController.focusedPanel` back to `.pane` instead
         // of leaving the halo stuck on the drawer.
         focusActivePane()
+        // Push the new pane in like a drawer: the source compresses (real resize) while the new pane
+        // slides in at its final size. Lay out at the final ratio first so the split knows the child
+        // sizes, then hand off. Reduce Motion keeps the instant appearance.
+        if !Motion.isReduceMotionEnabled(), let split = splitViewByID[newSplit] {
+            canvasView.layoutSubtreeIfNeeded()
+            split.animateSplitIn(duration: Motion.pageSlideDuration, timing: Motion.landingTiming)
+        }
     }
 
     /// Resize the focused pane by moving its edge in `direction`: it grows into a neighbor

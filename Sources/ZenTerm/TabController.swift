@@ -902,32 +902,61 @@ final class TabController: NSObject {
     func toggleZoom() {
         guard !isLazygitOpen else { return }  // can't zoom a panel under the float
         if isZoomed { exitZoom(); return }
+        // Every case relayouts to the final size FIRST, then pops the now-full panel — a pop before
+        // the resize would scale at the old (tiled) size and then snap to full. A pane's pop lives
+        // inside `PaneCanvasController`; a drawer's is `popZoom` here.
         switch focusedPanel {
         case .pane:
-            paneCanvas.zoomFocusedLeaf()
             zoomedPanel = .pane
+            relayoutPanels()
+            view.layoutSubtreeIfNeeded()  // canvas at full size before the pane pops
+            // A drawer being open means the canvas was tiled, so zooming even a lone pane really resizes it.
+            paneCanvas.zoomFocusedLeaf(resizesCanvas: isBottomOpen || isRightOpen)
         case .bottomDrawer:
-            guard isBottomOpen, bottomDrawerPanel != nil else { return }
-            bottomDrawerPanel?.isZoomed = true
+            guard isBottomOpen, let panel = bottomDrawerPanel else { return }
+            panel.isZoomed = true
             zoomedPanel = .bottomDrawer
+            relayoutPanels()
+            popZoom(panel, growing: true)
         case .rightDrawer:
-            guard isRightOpen, rightDrawerPanel != nil else { return }
-            rightDrawerPanel?.isZoomed = true
+            guard isRightOpen, let panel = rightDrawerPanel else { return }
+            panel.isZoomed = true
             zoomedPanel = .rightDrawer
+            relayoutPanels()
+            popZoom(panel, growing: true)
         }
-        relayoutPanels()
     }
 
     private func exitZoom() {
+        // Symmetry with `toggleZoom`: tile back to the final size first, then pop the panel there.
+        // Only the drawer that was full-screen pops back into its dock; the canvas panes just reappear.
         switch zoomedPanel {
-        case .pane: paneCanvas.unzoom()
-        case .bottomDrawer, .rightDrawer:
+        case .pane:
+            zoomedPanel = nil
+            relayoutPanels()
+            view.layoutSubtreeIfNeeded()  // canvas back to its tiled size before the pane pops
+            paneCanvas.unzoom(resizesCanvas: isBottomOpen || isRightOpen)
+        case .bottomDrawer:
             bottomDrawerPanel?.isZoomed = false
             rightDrawerPanel?.isZoomed = false
+            zoomedPanel = nil
+            relayoutPanels()
+            if let panel = bottomDrawerPanel { popZoom(panel, growing: false) }
+        case .rightDrawer:
+            bottomDrawerPanel?.isZoomed = false
+            rightDrawerPanel?.isZoomed = false
+            zoomedPanel = nil
+            relayoutPanels()
+            if let panel = rightDrawerPanel { popZoom(panel, growing: false) }
         case nil: return
         }
-        zoomedPanel = nil
-        relayoutPanels()
+    }
+
+    /// Scale-pop a view for the full-screen (zoom) transition, kept in sync with the pane zoom via
+    /// `Motion.zoomPop`. `growing` is the zoom direction (in vs out). Honors Reduce Motion.
+    private func popZoom(_ view: NSView, growing: Bool) {
+        view.superview?.layoutSubtreeIfNeeded()  // ensure the view has its final frame before scaling about its center
+        Motion.zoomPop(view, growing: growing)
     }
 
     /// Jump a drawer zoom from one edge to the other (⌘B/⌘\ while the *other* drawer is
@@ -1299,7 +1328,7 @@ final class TabController: NSObject {
         // The drawer parks below the content's bottom edge before sliding up, so clip the overflow.
         beginDrawerSlideClip()
 
-        let landing = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)  // the tab page-slide's landing
+        let landing = Motion.landingTiming
         bottomDrawerAnimationID &+= 1
         let animationID = bottomDrawerAnimationID
 
@@ -1383,7 +1412,7 @@ final class TabController: NSObject {
         // The drawer parks past the content's right edge before sliding in, so clip the overflow.
         beginDrawerSlideClip()
 
-        let landing = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)  // the tab page-slide's landing
+        let landing = Motion.landingTiming
         rightDrawerAnimationID &+= 1
         let animationID = rightDrawerAnimationID
 
