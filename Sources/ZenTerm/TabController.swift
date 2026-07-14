@@ -87,9 +87,11 @@ final class TabController: NSObject {
     /// keeps a workspace open from bursting four login shells at once. Canceled by
     /// `shutdown()` and by `showLazygit` (a `⌘G` that beats the timer supersedes it).
     private var prewarmWorkItem: DispatchWorkItem?
-    var prewarmDelay: TimeInterval = 1.0
-    /// The LRU cap over never-opened pre-warms (ZEN-55). Tests inject a private pool.
-    var prewarmPool: LazygitPrewarmPool = .shared
+    /// Debounce delay and LRU cap for the pre-warm (ZEN-55). Injected at init like
+    /// `makeSurface` — immutable so a mid-flight reassignment can't strand a pooled
+    /// entry (a stale pool would later evict a surface this tab no longer tracks).
+    private let prewarmDelay: TimeInterval
+    private let prewarmPool: LazygitPrewarmPool
 
     /// The single live ephemeral tool float (diffnav, …). Tool floats are modal and
     /// mutually exclusive, so one slot suffices. Terminated on close (not persisted).
@@ -228,10 +230,13 @@ final class TabController: NSObject {
 
     init(
         initialCWD: URL?, initialCommand: String? = nil, env: [String: String] = [:],
-        makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make
+        makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
+        prewarmPool: LazygitPrewarmPool = .shared, prewarmDelay: TimeInterval = 1.0
     ) {
         workspaceEnv = env
         self.makeSurface = makeSurface
+        self.prewarmPool = prewarmPool
+        self.prewarmDelay = prewarmDelay
         paneCanvas = PaneCanvasController(
             initialCWD: initialCWD, initialCommand: initialCommand, env: env,
             makeSurface: makeSurface)
@@ -554,15 +559,16 @@ final class TabController: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + prewarmDelay, execute: item)
     }
 
-    /// Eagerly spawn the lazygit surface in the background (no overlay shown) so the
-    /// first `⌘G` reveals an already-loaded lazygit. Only for stable-path tabs, and only
-    /// inside a repo — a plain tab's cwd drifts, and lazygit is useless off-repo anyway.
-    /// The pre-warm is admitted to the never-opened LRU pool; the surface-exists guard
-    /// must run first, so a `⌘G` that beat the timer (already live, already promoted)
-    /// is never re-admitted and made evictable. Internal for deterministic tests.
+    /// Spawn the lazygit surface in the background (no overlay shown) so the first `⌘G`
+    /// reveals an already-loaded lazygit, and admit it to the background LRU cap. Only
+    /// for stable-path tabs inside a repo — a plain tab's cwd drifts, and lazygit is
+    /// useless off-repo. The surface-exists guard runs first, so a `⌘G` that beat the
+    /// timer (already live and promoted) is never re-admitted and made evictable. Also
+    /// the visible-quit rewarm path — a used surface re-enters the cap. Internal for
+    /// deterministic tests.
     func prewarmLazygitNow() {
         guard lazygitSurface == nil else { return }
-        guard gitRepoRoot(for: focusedCWD) != nil else { return }
+        guard hasStablePath, gitRepoRoot(for: focusedCWD) != nil else { return }
         _ = ensureLazygitSurface()
         prewarmPool.admit(self) { [weak self] in self?.discardLazygitSurface() }
     }
@@ -1329,11 +1335,12 @@ extension TabController: TerminalSurfaceDelegate {
             discardLazygitSurface()  // clears the ref before terminate (re-entry no-ops)
             if wasVisible {
                 restoreUnifiedFocus()
-                // Re-warm only for a stable-path tab still inside a repo, and only after a
-                // VISIBLE quit: an instantly-exiting surface (lazygit not on PATH, or a
-                // drifted non-repo cwd) exits while hidden, so it can never spin a respawn
-                // loop. Plain tabs respawn on the next ⌘G.
-                if hasStablePath, gitRepoRoot(for: focusedCWD) != nil { _ = ensureLazygitSurface() }
+                // Re-warm only after a VISIBLE quit: an instantly-exiting surface (lazygit
+                // not on PATH, or a drifted non-repo cwd) exits while hidden, so it can never
+                // spin a respawn loop. The rewarm re-enters the background LRU cap — a used
+                // surface is a warm background surface again, not exempt (ZEN-55). Plain tabs
+                // (no stable path) respawn on the next ⌘G.
+                prewarmLazygitNow()
             }
             onOverlayStateChanged?()
             return

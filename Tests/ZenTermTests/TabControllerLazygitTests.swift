@@ -4,22 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// A seam-conforming fake recording what the controller asked of it.
-private final class FakeSurface: NSObject, TerminalSurface {
-    let view = NSView()
-    weak var delegate: TerminalSurfaceDelegate?
-    var title = ""
-    var isFocused = false
-    var lastConfig: TerminalSurfaceConfig?
-    var terminated = false
-    func start(_ config: TerminalSurfaceConfig) { lastConfig = config }
-    func focus() {}
-    func terminate() { terminated = true }
-    func paste(_ text: String) {}
-    func copySelection() -> String? { nil }
-    func scrollToBottom() {}
-}
-
 /// ZEN-55: the lazygit pre-warm is debounced off the `applyRecipe` spawn turn and
 /// capped by the never-opened LRU pool; a `⌘G`-opened surface is promoted and never
 /// evicted. Window-mounted per the house rule.
@@ -56,18 +40,19 @@ final class TabControllerLazygitTests: XCTestCase {
 
     /// A window-mounted controller over `cwd`, recording every surface it spawns.
     private func makeController(
-        cwd: URL, pool: LazygitPrewarmPool
-    ) -> (controller: TabController, spawned: () -> [FakeSurface]) {
-        var spawned: [FakeSurface] = []
+        cwd: URL, pool: LazygitPrewarmPool, delay: TimeInterval = 0, pinned: Bool = true
+    ) -> (controller: TabController, spawned: () -> [RecordingSurface]) {
+        var spawned: [RecordingSurface] = []
         let controller = TabController(
             initialCWD: cwd,
             makeSurface: {
-                let surface = FakeSurface()
+                let surface = RecordingSurface()
                 spawned.append(surface)
                 return surface
-            })
-        controller.prewarmPool = pool
-        controller.pinnedTitle = "repo"  // workspace tabs (the only pre-warm path) are pinned
+            },
+            prewarmPool: pool, prewarmDelay: delay)
+        // Only workspace tabs (pinned title) are on the pre-warm path.
+        if pinned { controller.pinnedTitle = "repo" }
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
             styleMask: [.borderless], backing: .buffered, defer: false)
@@ -79,7 +64,7 @@ final class TabControllerLazygitTests: XCTestCase {
         return (controller, { spawned })
     }
 
-    private func lazygitSurfaces(in spawned: [FakeSurface]) -> [FakeSurface] {
+    private func lazygitSurfaces(in spawned: [RecordingSurface]) -> [RecordingSurface] {
         spawned.filter { $0.lastConfig?.args == Self.lazygitArgs }
     }
 
@@ -97,8 +82,8 @@ final class TabControllerLazygitTests: XCTestCase {
 
     func test_applyRecipe_defersLazygitSpawnPastTheOpenTurn() throws {
         let repo = try makeDir("repo", git: true)
-        let (controller, spawned) = makeController(cwd: repo, pool: LazygitPrewarmPool(capacity: 3))
-        controller.prewarmDelay = 0.05
+        let pool = LazygitPrewarmPool(capacity: 3)
+        let (controller, spawned) = makeController(cwd: repo, pool: pool, delay: 0.05)
 
         controller.applyRecipe(recipe(at: repo))
         XCTAssertTrue(
@@ -108,13 +93,13 @@ final class TabControllerLazygitTests: XCTestCase {
         drainMainQueue(for: 0.2)
         let lazygits = lazygitSurfaces(in: spawned())
         XCTAssertEqual(lazygits.count, 1, "the debounced pre-warm spawns exactly one lazygit")
-        XCTAssertTrue(controller.prewarmPool.contains(controller), "a pre-warm is admitted to the pool")
+        XCTAssertTrue(pool.contains(controller), "a pre-warm is admitted to the pool")
     }
 
     func test_shutdownBeforeDelay_cancelsThePrewarm() throws {
         let repo = try makeDir("repo", git: true)
-        let (controller, spawned) = makeController(cwd: repo, pool: LazygitPrewarmPool(capacity: 3))
-        controller.prewarmDelay = 0.05
+        let (controller, spawned) = makeController(
+            cwd: repo, pool: LazygitPrewarmPool(capacity: 3), delay: 0.05)
 
         controller.applyRecipe(recipe(at: repo))
         controller.shutdown()
@@ -192,7 +177,20 @@ final class TabControllerLazygitTests: XCTestCase {
         XCTAssertEqual(pool.count, 0)
     }
 
-    func test_visibleQuitRewarm_staysPromoted() throws {
+    func test_nonStablePathTab_doesNotPrewarm() throws {
+        let repo = try makeDir("repo", git: true)
+        let pool = LazygitPrewarmPool(capacity: 3)
+        let (controller, spawned) = makeController(cwd: repo, pool: pool, pinned: false)
+
+        controller.prewarmLazygitNow()
+
+        XCTAssertTrue(
+            lazygitSurfaces(in: spawned()).isEmpty,
+            "a plain (non-pinned) tab's cwd drifts — it must not pre-warm even inside a repo")
+        XCTAssertFalse(pool.contains(controller))
+    }
+
+    func test_visibleQuitRewarm_reentersTheCap() throws {
         let pool = LazygitPrewarmPool(capacity: 1)
         let repo = try makeDir("repo", git: true)
         let (controller, spawned) = makeController(cwd: repo, pool: pool)
@@ -204,13 +202,17 @@ final class TabControllerLazygitTests: XCTestCase {
 
         let lazygits = lazygitSurfaces(in: spawned())
         XCTAssertEqual(lazygits.count, 2, "a visible quit rewarms a fresh surface")
-        XCTAssertFalse(pool.contains(controller), "the rewarmed surface stays promoted")
+        XCTAssertTrue(
+            pool.contains(controller),
+            "the rewarmed surface is a warm background surface again → back under the cap")
 
+        // Filling the cap now evicts the rewarmed surface (it is no longer exempt).
         let other = try makeDir("other", git: true)
         let (otherController, _) = makeController(cwd: other, pool: pool)
         otherController.prewarmLazygitNow()
-        XCTAssertFalse(
+        XCTAssertTrue(
             lazygits[1].terminated,
-            "filling the pool after a rewarm must not evict the promoted surface")
+            "past capacity the rewarmed background surface evicts like any other pre-warm")
+        XCTAssertFalse(pool.contains(controller))
     }
 }
