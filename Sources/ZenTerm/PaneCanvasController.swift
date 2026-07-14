@@ -406,14 +406,38 @@ final class PaneCanvasController: NSObject {
     /// Close the focused pane. Returns false when it was the last pane (caller closes the window).
     @discardableResult
     func closeFocused() -> Bool {
-        guard let next = tree.closing(tree.focusedLeaf) else { return false }
+        let dying = tree.focusedLeaf
+        guard let next = tree.closing(dying) else { return false }
+        let closing = captureDyingPane(dying)
         tree = next
         clearZoomIfLeafGone()
         reconcileAndRender()
+        dissolveClosedPane(closing)
         // See `split(_:)`: `focusActivePane()` fires `onFocusChanged` so unified focus
         // re-syncs to `.pane` instead of getting stuck on a previously focused drawer.
         focusActivePane()
         return true
+    }
+
+    /// Snapshot a pane's host + on-screen frame *before* the reconcile drops it, so
+    /// `dissolveClosedPane` can fade it out over the collapsed layout. Nil (no animation) when the
+    /// canvas isn't in a window.
+    private func captureDyingPane(_ id: PaneID) -> (host: NSView, frame: CGRect)? {
+        guard let host = hostByLeaf[id], canvasView.window != nil else { return nil }
+        return (host, host.convert(host.bounds, to: canvasView))
+    }
+
+    /// Fade + scale the just-closed pane out over the already-collapsed layout (its surviving sibling
+    /// has filled behind it) — the close-out counterpart to the split-in push. The reconcile has
+    /// terminated the surface, so this is a static pane dissolving. Honors Reduce Motion.
+    private func dissolveClosedPane(_ closing: (host: NSView, frame: CGRect)?) {
+        guard let (host, frame) = closing else { return }
+        host.removeFromSuperview()  // detach from its now-orphaned split container
+        guard !Motion.isReduceMotionEnabled() else { return }
+        host.translatesAutoresizingMaskIntoConstraints = true
+        canvasView.addSubview(host)  // back on top of the rebuilt tree
+        host.frame = frame
+        Motion.springScaleFade(host, appearing: false) { host.removeFromSuperview() }
     }
 
     @objc func copyFromSurface(_ sender: Any?) {
@@ -461,9 +485,11 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
             onLastPaneClosed?()  // last pane's shell exited → close window
             return
         }
+        let closing = captureDyingPane(id)
         tree = next
         clearZoomIfLeafGone()
         reconcileAndRender()
+        dissolveClosedPane(closing)
         registry.surface(for: tree.focusedLeaf)?.focus()
     }
 
