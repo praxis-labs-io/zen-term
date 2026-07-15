@@ -19,7 +19,12 @@ final class GhosttyHostView: NSView {
     /// text, pointing hand over a ⌘-hovered link, …). Applied through cursor rects
     /// (`resetCursorRects`) so AppKit owns when to assert it — the idiomatic mechanism, rather
     /// than fighting `NSCursor.current` with imperative `.set()` calls.
-    private var desiredCursor: NSCursor = .arrow
+    ///
+    /// Defaults to `.iBeam`, not `.arrow`: libghostty only emits `MOUSE_SHAPE` on a *change*,
+    /// so before the first one the resting state over the terminal grid must already be the
+    /// text cursor (matching ghostty's own `.horizontalText` default) — otherwise the pointer
+    /// is the plain arrow until some mode change kicks it.
+    private var desiredCursor: NSCursor = .iBeam
 
     // MARK: IME / dead-key composition state
 
