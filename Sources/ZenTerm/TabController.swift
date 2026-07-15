@@ -135,6 +135,16 @@ final class TabController: NSObject {
     /// accumulate constraints.
     private var tileConstraints: [NSLayoutConstraint] = []
 
+    /// Bumped on each animated drawer toggle so a superseded animation's completion (fired ~a beat
+    /// later) can't stomp the layout a newer toggle already owns. One counter per edge.
+    private var bottomDrawerAnimationID = 0
+    private var rightDrawerAnimationID = 0
+
+    /// How many drawer slides are mid-flight. `content` is clipped while any is running (a drawer
+    /// parks just outside the content bounds before sliding in); the clip is lifted only when the
+    /// last one finishes, so a bottom + right pair can't unclip each other early.
+    private var activeDrawerSlides = 0
+
     /// The four window-gutter content-inset constraints, kept so a config change can re-apply the
     /// gutter to this already-built tab (see `reapplyChromeLayout()`).
     private var gutterConstraints: [NSLayoutConstraint] = []
@@ -405,12 +415,15 @@ final class TabController: NSObject {
             break  // not zoomed — fall through to the normal toggle
         }
         isBottomOpen.toggle()
+        // Reduce Motion falls back to the instant constraint swap; we're already past the zoom
+        // guards above, so a plain toggle here animates the real-layout push.
+        let animate = !Motion.isReduceMotionEnabled()
         if isBottomOpen {
             _ = ensureBottomDrawerPanel()
-            relayoutPanels()  // attaches + tiles it (visibility follows open state)
+            if animate { animateBottomDrawer(opening: true) } else { relayoutPanels() }
             focusDrawer(.bottom)
         } else {
-            relayoutPanels()  // detaches it (surface stays alive)
+            if animate { animateBottomDrawer(opening: false) } else { relayoutPanels() }
             // Only restore focus if the drawer being hidden held unified focus — to the
             // other drawer if it's still open, else the pane.
             if focusedPanel == .bottomDrawer { restoreFocusAfterClosingDrawer(otherOpen: isRightOpen, other: .right) }
@@ -493,12 +506,13 @@ final class TabController: NSObject {
             break  // not zoomed — fall through to the normal toggle
         }
         isRightOpen.toggle()
+        let animate = !Motion.isReduceMotionEnabled()
         if isRightOpen {
             _ = ensureRightDrawerPanel()
-            relayoutPanels()
+            if animate { animateRightDrawer(opening: true) } else { relayoutPanels() }
             focusDrawer(.right)
         } else {
-            relayoutPanels()
+            if animate { animateRightDrawer(opening: false) } else { relayoutPanels() }
             // See `toggleBottomDrawer`: restore focus only if this drawer held it.
             if focusedPanel == .rightDrawer { restoreFocusAfterClosingDrawer(otherOpen: isBottomOpen, other: .bottom) }
         }
@@ -888,32 +902,61 @@ final class TabController: NSObject {
     func toggleZoom() {
         guard !isLazygitOpen else { return }  // can't zoom a panel under the float
         if isZoomed { exitZoom(); return }
+        // Every case relayouts to the final size FIRST, then pops the now-full panel — a pop before
+        // the resize would scale at the old (tiled) size and then snap to full. A pane's pop lives
+        // inside `PaneCanvasController`; a drawer's is `popZoom` here.
         switch focusedPanel {
         case .pane:
-            paneCanvas.zoomFocusedLeaf()
             zoomedPanel = .pane
+            relayoutPanels()
+            view.layoutSubtreeIfNeeded()  // canvas at full size before the pane pops
+            // A drawer being open means the canvas was tiled, so zooming even a lone pane really resizes it.
+            paneCanvas.zoomFocusedLeaf(resizesCanvas: isBottomOpen || isRightOpen)
         case .bottomDrawer:
-            guard isBottomOpen, bottomDrawerPanel != nil else { return }
-            bottomDrawerPanel?.isZoomed = true
+            guard isBottomOpen, let panel = bottomDrawerPanel else { return }
+            panel.isZoomed = true
             zoomedPanel = .bottomDrawer
+            relayoutPanels()
+            popZoom(panel, growing: true)
         case .rightDrawer:
-            guard isRightOpen, rightDrawerPanel != nil else { return }
-            rightDrawerPanel?.isZoomed = true
+            guard isRightOpen, let panel = rightDrawerPanel else { return }
+            panel.isZoomed = true
             zoomedPanel = .rightDrawer
+            relayoutPanels()
+            popZoom(panel, growing: true)
         }
-        relayoutPanels()
     }
 
     private func exitZoom() {
+        // Symmetry with `toggleZoom`: tile back to the final size first, then pop the panel there.
+        // Only the drawer that was full-screen pops back into its dock; the canvas panes just reappear.
         switch zoomedPanel {
-        case .pane: paneCanvas.unzoom()
-        case .bottomDrawer, .rightDrawer:
+        case .pane:
+            zoomedPanel = nil
+            relayoutPanels()
+            view.layoutSubtreeIfNeeded()  // canvas back to its tiled size before the pane pops
+            paneCanvas.unzoom(resizesCanvas: isBottomOpen || isRightOpen)
+        case .bottomDrawer:
             bottomDrawerPanel?.isZoomed = false
             rightDrawerPanel?.isZoomed = false
+            zoomedPanel = nil
+            relayoutPanels()
+            if let panel = bottomDrawerPanel { popZoom(panel, growing: false) }
+        case .rightDrawer:
+            bottomDrawerPanel?.isZoomed = false
+            rightDrawerPanel?.isZoomed = false
+            zoomedPanel = nil
+            relayoutPanels()
+            if let panel = rightDrawerPanel { popZoom(panel, growing: false) }
         case nil: return
         }
-        zoomedPanel = nil
-        relayoutPanels()
+    }
+
+    /// Scale-pop a view for the full-screen (zoom) transition, kept in sync with the pane zoom via
+    /// `Motion.zoomPop`. `growing` is the zoom direction (in vs out). Honors Reduce Motion.
+    private func popZoom(_ view: NSView, growing: Bool) {
+        view.superview?.layoutSubtreeIfNeeded()  // ensure the view has its final frame before scaling about its center
+        Motion.zoomPop(view, growing: growing)
     }
 
     /// Jump a drawer zoom from one edge to the other (⌘B/⌘\ while the *other* drawer is
@@ -1207,6 +1250,201 @@ final class TabController: NSObject {
         rightDrawerPanel?.reapplyTheme()
         lazygitOverlay?.reapplyTheme()
         activeToolFloat?.overlay.reapplyTheme()
+    }
+
+    /// Begin clipping `content` for a drawer slide (a drawer parks just outside the content bounds
+    /// before sliding in). Ref-counted so overlapping slides share one clip.
+    private func beginDrawerSlideClip() {
+        activeDrawerSlides += 1
+        SlideClip.apply(to: content)
+    }
+
+    /// Balance `beginDrawerSlideClip`; lift the clip once the last in-flight slide finishes.
+    private func endDrawerSlideClip() {
+        activeDrawerSlides = max(0, activeDrawerSlides - 1)
+        if activeDrawerSlides == 0 { SlideClip.remove(from: content) }
+    }
+
+    /// Shared drawer-slide machinery for both edges: clip `content`, park `panel` off-edge at its
+    /// final size and slide it in on the landing curve while `animate` (the canvas — and, when the
+    /// right drawer opens over an open bottom drawer, that drawer's trailing) real-resize to their
+    /// targets. On completion the last in-flight slide settles the canonical constraints; a closing
+    /// panel is detached before its transform resets so it can't flash. `isCurrent` reports whether a
+    /// newer toggle of *this* edge has superseded the slide. The caller has already installed the
+    /// final-position constraints and bumped this edge's animation id.
+    private func runDrawerSlide(
+        panel: PanelHostView, opening: Bool, parkOffset: CGVector,
+        animate: [(constraint: NSLayoutConstraint, to: CGFloat)], isCurrent: @escaping () -> Bool
+    ) {
+        beginDrawerSlideClip()
+
+        let parked = CATransform3DMakeTranslation(parkOffset.dx, parkOffset.dy, 0)
+        let restT = opening ? CATransform3DIdentity : parked  // a closed drawer ends parked off-screen
+        panel.wantsLayer = true
+        panel.layer?.transform = restT  // model at rest
+        let slideAnim = CABasicAnimation(keyPath: "transform")
+        slideAnim.fromValue = NSValue(caTransform3D: opening ? parked : CATransform3DIdentity)
+        slideAnim.toValue = NSValue(caTransform3D: restT)
+        slideAnim.duration = Motion.pageSlideDuration
+        slideAnim.timingFunction = Motion.landingTiming
+
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = Motion.pageSlideDuration
+            ctx.timingFunction = Motion.landingTiming
+            for (constraint, target) in animate { constraint.animator().constant = target }
+            panel.layer?.add(slideAnim, forKey: "drawer.slide")
+        } completionHandler: { [weak self] in
+            guard let self else { return }
+            // `activeDrawerSlides` still counts this slide (balanced last, below): 1 means it's the
+            // only one, so it's safe to settle the shared tile constraints; >1 means a sibling drawer
+            // is mid-slide and its own completion will do the final relayout — relaying out now would
+            // tear down its in-flight animation.
+            let isLastSlide = self.activeDrawerSlides <= 1
+            if isCurrent() {  // else a newer toggle of this edge owns the layout
+                if !opening { self.setAttached(panel, false) }  // detach while parked + clipped — no flash
+                panel.layer?.transform = CATransform3DIdentity
+                if isLastSlide { self.relayoutPanels() }  // settle onto the canonical multiplier constraints
+            }
+            self.endDrawerSlideClip()  // balance last, so the clip outlives the detach
+        }
+    }
+
+    /// Animate the bottom drawer open/closed with a fluid push. The canvas is a *real* resize —
+    /// panes genuinely compress upward — but the drawer *slides* in at its final size rather than
+    /// growing from zero, so its own terminal reflows once (settling its prompt) and then stays put
+    /// instead of jittering through every row count. The two stay one `panelGap` apart the whole
+    /// way: the canvas bottom rises by `slide` while the drawer translates up by `slide` on the same
+    /// curve. The drawer is parked below the content's bottom edge at the start, so `content` is
+    /// clipped for the duration to keep it from spilling over the footer. On completion it settles
+    /// onto the canonical multiplier constraints via `relayoutPanels()` (same size, no jump),
+    /// preserving window-resize proportionality. Zoom / Reduce Motion use the instant path.
+    /// `animateRightDrawer` is the horizontal twin.
+    private func animateBottomDrawer(opening: Bool) {
+        guard let bottomPanel = bottomDrawerPanel else {
+            relayoutPanels()
+            return
+        }
+        content.layoutSubtreeIfNeeded()
+        let target = max(0, content.bounds.height * bottomDrawerRatio)
+        let slide = target + ChromeMetrics.panelGap  // canvas-bottom rise == drawer travel
+
+        // Final-position constraints: the drawer fills the bottom band at full size (so its terminal
+        // reflows once, now, and holds), while the canvas is tied to the content bottom through an
+        // animatable inset we drive from full → pushed-up.
+        NSLayoutConstraint.deactivate(tileConstraints)
+        setAttached(bottomPanel, true)
+        let canvasBottomC = canvas.bottomAnchor.constraint(
+            equalTo: content.bottomAnchor, constant: opening ? 0 : -slide)
+        // `.defaultHigh` (like `relayoutPanels`) so an extremely short window relaxes the drawer
+        // instead of forcing the canvas negative and logging a broken constraint.
+        let drawerHeight = bottomPanel.heightAnchor.constraint(equalToConstant: target)
+        drawerHeight.priority = .defaultHigh
+        var cs: [NSLayoutConstraint] = [
+            canvas.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            canvas.topAnchor.constraint(equalTo: content.topAnchor),
+            canvasBottomC,
+            bottomPanel.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            bottomPanel.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            drawerHeight,
+        ]
+        // Mirror `relayoutPanels`' column split: an open right drawer bounds both the canvas and the
+        // bottom drawer's trailing edge, so the push stays inside the canvas column.
+        if isRightOpen, let rightPanel = rightDrawerPanel {
+            let width = rightPanel.widthAnchor.constraint(
+                equalTo: content.widthAnchor, multiplier: rightDrawerRatio)
+            width.priority = .defaultHigh
+            cs += [
+                rightPanel.topAnchor.constraint(equalTo: content.topAnchor),
+                rightPanel.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+                rightPanel.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+                width,
+                canvas.trailingAnchor.constraint(equalTo: rightPanel.leadingAnchor, constant: -ChromeMetrics.panelGap),
+                bottomPanel.trailingAnchor.constraint(
+                    equalTo: rightPanel.leadingAnchor, constant: -ChromeMetrics.panelGap),
+            ]
+        } else {
+            cs += [
+                canvas.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+                bottomPanel.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            ]
+        }
+        NSLayoutConstraint.activate(cs)
+        tileConstraints = cs
+        content.layoutSubtreeIfNeeded()  // drawer + canvas now sit at their final frames
+
+        // Drawer slides up (parks below); canvas bottom rises by `slide` in lockstep.
+        bottomDrawerAnimationID &+= 1
+        let id = bottomDrawerAnimationID
+        runDrawerSlide(
+            panel: bottomPanel, opening: opening, parkOffset: CGVector(dx: 0, dy: -slide),
+            animate: [(canvasBottomC, opening ? -slide : 0)],
+            isCurrent: { [weak self] in self?.bottomDrawerAnimationID == id })
+    }
+
+    /// The right-drawer twin of `animateBottomDrawer`, rotated to the horizontal axis: the drawer
+    /// slides in from the right edge at its final width (one reflow, then held) while the canvas
+    /// real-resizes leftward. When the bottom drawer is open its trailing edge rides left on the
+    /// same curve, so the right drawer visibly pushes it. Settles onto the canonical constraints on
+    /// completion. (The bottom drawer's width-follow is a real resize — it reflows.)
+    private func animateRightDrawer(opening: Bool) {
+        guard let rightPanel = rightDrawerPanel else {
+            relayoutPanels()
+            return
+        }
+        content.layoutSubtreeIfNeeded()
+        let target = max(0, content.bounds.width * rightDrawerRatio)
+        let slide = target + ChromeMetrics.panelGap  // canvas-trailing shift == drawer travel
+
+        NSLayoutConstraint.deactivate(tileConstraints)
+        setAttached(rightPanel, true)
+        let canvasTrailingC = canvas.trailingAnchor.constraint(
+            equalTo: content.trailingAnchor, constant: opening ? 0 : -slide)
+        // `.defaultHigh` (like `relayoutPanels`) so a very narrow window relaxes the drawer instead
+        // of forcing the canvas negative and logging a broken constraint.
+        let drawerWidth = rightPanel.widthAnchor.constraint(equalToConstant: target)
+        drawerWidth.priority = .defaultHigh
+        var cs: [NSLayoutConstraint] = [
+            canvas.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            canvas.topAnchor.constraint(equalTo: content.topAnchor),
+            canvasTrailingC,
+            rightPanel.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            rightPanel.topAnchor.constraint(equalTo: content.topAnchor),
+            rightPanel.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            drawerWidth,
+        ]
+        // With the bottom drawer open, its column is the canvas column: tie its bottom edge and
+        // animate its trailing left in lockstep with the canvas, so the right drawer pushes it too.
+        var bottomTrailingC: NSLayoutConstraint?
+        if isBottomOpen, let bottomPanel = bottomDrawerPanel {
+            let height = bottomPanel.heightAnchor.constraint(
+                equalTo: content.heightAnchor, multiplier: bottomDrawerRatio)
+            height.priority = .defaultHigh
+            let trailing = bottomPanel.trailingAnchor.constraint(
+                equalTo: content.trailingAnchor, constant: opening ? 0 : -slide)
+            bottomTrailingC = trailing
+            cs += [
+                bottomPanel.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+                bottomPanel.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+                height,
+                trailing,
+                canvas.bottomAnchor.constraint(equalTo: bottomPanel.topAnchor, constant: -ChromeMetrics.panelGap),
+            ]
+        } else {
+            cs.append(canvas.bottomAnchor.constraint(equalTo: content.bottomAnchor))
+        }
+        NSLayoutConstraint.activate(cs)
+        tileConstraints = cs
+        content.layoutSubtreeIfNeeded()  // drawer + canvas now sit at their final frames
+
+        // Drawer slides in from the right (parks past the right edge); canvas — and the open bottom
+        // drawer's trailing — shift left by `slide` in lockstep, so the right drawer pushes both.
+        rightDrawerAnimationID &+= 1
+        let id = rightDrawerAnimationID
+        var animate: [(constraint: NSLayoutConstraint, to: CGFloat)] = [(canvasTrailingC, opening ? -slide : 0)]
+        if let bottomTrailingC { animate.append((bottomTrailingC, opening ? -slide : 0)) }
+        runDrawerSlide(
+            panel: rightPanel, opening: opening, parkOffset: CGVector(dx: slide, dy: 0),
+            animate: animate, isCurrent: { [weak self] in self?.rightDrawerAnimationID == id })
     }
 
     private func relayoutPanels() {

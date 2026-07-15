@@ -35,6 +35,9 @@ enum Motion {
     static let haloDuration: CFTimeInterval = 0.18
     /// Canvas page-slide on a tab switch — decelerating hard so it lands.
     static let pageSlideDuration: CFTimeInterval = 0.28
+    /// Hard-decelerating ease-out — a slide lands/locks in rather than drifting. Shared by the tab
+    /// page-slide and the drawer / split push slides so they read as one motion.
+    static let landingTiming = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
     /// New-tab canvas fade-in.
     static let fadeDuration: CFTimeInterval = 0.18
     /// The opacity ramp of a scale-fade entrance. Kept short and decoupled from the
@@ -43,6 +46,9 @@ enum Motion {
     static let entranceFadeDuration: CFTimeInterval = 0.11
     /// Scale a card rests at while faded out during a scale-fade entrance.
     static let entranceScale: CGFloat = 0.97
+    /// Scale the full-screen (zoom) pop starts from — more pronounced than the card entrance so it
+    /// reads as a zoom.
+    static let zoomScale: CGFloat = 0.9
 
     // MARK: - Reduce Motion
 
@@ -107,6 +113,38 @@ enum Motion {
         }
     }
 
+    /// The full-screen (zoom) transition: a scale settle + fade on the landing ease-out. Directional
+    /// so it never overshoots — `growing` (zoom in, ending large) settles up from `zoomScale`; a
+    /// shrink (zoom out, ending small) settles *down* from just above 1, so coming from full-screen
+    /// it keeps moving inward instead of dipping under the target and bouncing back. Honors Reduce
+    /// Motion.
+    static func zoomPop(_ view: NSView, growing: Bool) {
+        view.wantsLayer = true
+        view.layoutSubtreeIfNeeded()
+        guard let layer = view.layer else { return }
+        layer.transform = CATransform3DIdentity  // model rests shown
+        layer.opacity = 1
+        if isReduceMotionEnabled() { return }
+
+        let fromScale = growing ? zoomScale : 2 - zoomScale  // below the target growing, above it shrinking
+        let scale = CABasicAnimation(keyPath: "transform")
+        scale.fromValue = NSValue(caTransform3D: centeredScale(fromScale, in: layer.bounds))
+        scale.toValue = NSValue(caTransform3D: CATransform3DIdentity)
+        scale.duration = pageSlideDuration
+        scale.timingFunction = landingTiming
+
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 0
+        fade.toValue = 1
+        fade.duration = entranceFadeDuration
+        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+
+        run(completion: nil) {
+            layer.add(scale, forKey: "zoom.transform")
+            layer.add(fade, forKey: "zoom.opacity")
+        }
+    }
+
     /// Slide `incoming` in from a horizontal offset of `dx` while `outgoing` slides out the
     /// opposite way (a page turn), then run `completion` (the caller removes the outgoing).
     /// Transform-based, so neither terminal reflows. Honors Reduce Motion.
@@ -125,14 +163,12 @@ enum Motion {
             completion()
             return
         }
-        // A hard-decelerating ease-out so the page lands/locks in rather than drifting.
-        let landing = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
         inLayer.transform = CATransform3DIdentity  // model rests on-screen
         let slideIn = CABasicAnimation(keyPath: "transform.translation.x")
         slideIn.fromValue = dx
         slideIn.toValue = 0
         slideIn.duration = duration
-        slideIn.timingFunction = landing
+        slideIn.timingFunction = landingTiming
 
         let outLayer = outgoing?.layer
         outLayer?.transform = CATransform3DMakeTranslation(-dx, 0, 0)  // model ends off-screen
@@ -140,7 +176,7 @@ enum Motion {
         slideOut.fromValue = 0
         slideOut.toValue = -dx
         slideOut.duration = duration
-        slideOut.timingFunction = landing
+        slideOut.timingFunction = landingTiming
 
         run(completion: completion) {
             inLayer.add(slideIn, forKey: "motion.slide")
