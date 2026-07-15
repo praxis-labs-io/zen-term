@@ -78,6 +78,15 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         ) { ghostty_surface_new(GhosttyApp.shared(theme: config.theme, behavior: config.behavior).app, &$0) }
 
         hostView.surfacePtr = surfacePtr
+
+        // A nil surface means `ghostty_surface_new` failed — the object stays alive but
+        // inert. Signal the chrome (which shows a toast + retry/close) and stop before the
+        // focus/layer/tick work below, which would otherwise run against a nil pointer.
+        guard surfacePtr != nil else {
+            delegate?.surfaceDidFailToStart(self)
+            return
+        }
+
         hostView.scrollMultiplier = (config.behavior ?? .default).scrollMultiplier
 
         // A fresh libghostty surface defaults to focused=true, and only `resignFirstResponder`

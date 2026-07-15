@@ -184,4 +184,67 @@ final class PaneCanvasControllerTests: XCTestCase {
         XCTAssertEqual(controller.paneCount, 1)
         XCTAssertTrue(controller.hostsForTesting[first] === survivor)
     }
+
+    // MARK: ZEN-100 — surface-creation failure
+
+    /// Window-mount a fresh controller and run its first reconcile. Returns the window so the
+    /// caller retains it for the test's duration. Unlike the shared `setUp` controller, this
+    /// lets a test wire `onSurfaceStartFailed` BEFORE `start()`, since the failure fires
+    /// synchronously during that first reconcile.
+    private func windowMounted(_ controller: PaneCanvasController) -> NSWindow {
+        let win = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        let canvas = controller.canvasView
+        canvas.frame = NSRect(x: 0, y: 0, width: 900, height: 600)
+        win.contentView?.addSubview(canvas)
+        controller.start()
+        canvas.layoutSubtreeIfNeeded()
+        return win
+    }
+
+    func test_surfaceFailsToStart_firesHook_andRetryReplaysLaunch() {
+        let surface = RecordingSurface()
+        surface.failOnStart = true
+        let controller = PaneCanvasController(makeSurface: { surface })
+        var failureCount = 0
+        var captured: (retry: () -> Void, close: () -> Void)?
+        controller.onSurfaceStartFailed = { retry, close in
+            failureCount += 1
+            captured = (retry, close)
+        }
+        let window = windowMounted(controller)
+        _ = window  // retain the host window for the test's lifetime
+        defer { controller.shutdown() }
+
+        XCTAssertEqual(surface.startCount, 1, "the pane started once")
+        XCTAssertEqual(failureCount, 1, "the dead surface fired the failure hook")
+        XCTAssertEqual(controller.paneCount, 1, "the dead pane stays put until retry/close answers")
+        guard let captured else { return XCTFail("the failure hook must hand up retry/close actions") }
+
+        // Retry replays the SAME launch on the SAME surface; a now-succeeding start must not re-fire.
+        surface.failOnStart = false
+        captured.retry()
+        XCTAssertEqual(surface.startCount, 2, "retry replays the stored launch")
+        XCTAssertEqual(failureCount, 1, "a successful retry doesn't re-fire the failure hook")
+        XCTAssertEqual(controller.paneCount, 1, "the retried pane survives")
+    }
+
+    func test_surfaceFailsToStart_closeActionDropsTheDeadPane() {
+        let surface = RecordingSurface()
+        surface.failOnStart = true
+        let controller = PaneCanvasController(makeSurface: { surface })
+        var captured: (() -> Void)?
+        controller.onSurfaceStartFailed = { _, close in captured = close }
+        var lastPaneClosed = false
+        controller.onLastPaneClosed = { lastPaneClosed = true }
+        let window = windowMounted(controller)
+        _ = window
+        defer { controller.shutdown() }
+
+        guard let close = captured else { return XCTFail("the failure hook must hand up a close action") }
+        close()
+        XCTAssertTrue(
+            lastPaneClosed, "closing the only (dead) pane routes through the normal last-pane path")
+    }
 }

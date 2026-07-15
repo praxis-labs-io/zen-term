@@ -946,6 +946,9 @@ final class WindowController: NSObject {
         // so its tints track that tab.
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
         c.onRequestToast = { [weak self] content in self?.toasts.show(content) }
+        c.onPaneStartFailed = { [weak self] retry, close in
+            self?.presentSurfaceFailureToast(retry: retry, close: close)
+        }
         // A pane click while a close confirm is up moves the confirm's target — void it.
         c.onFocusChanged = { [weak self] in self?.cancelConfirm() }
         c.onNotification = { [weak self] n in self?.agentNotified(id: id, notification: n) }
@@ -984,6 +987,33 @@ final class WindowController: NSObject {
             ToastAction(title: "Switch", kind: .destructive) { [weak self] in self?.select(id) },
         ]
         waitingToasts[id] = toasts.showSticky(content, actions: actions)
+    }
+
+    /// A pane's surface failed to start: show a sticky, non-modal notice offering to retry the
+    /// launch or close the dead pane. Each button dismisses the toast before running its action;
+    /// a failed retry re-fires this path with a fresh toast. Both roles are theme-driven via the
+    /// `.warning` variant, so no color is hardcoded.
+    private func presentSurfaceFailureToast(retry: @escaping () -> Void, close: @escaping () -> Void) {
+        let content = ToastContent(
+            variant: .warning, title: "Terminal Didn't Start",
+            message: "The terminal surface failed to launch.")
+        var toast: ToastView?
+        let actions = [
+            ToastAction(title: "Close Pane", kind: .cancel) { [weak self] in
+                if let toast { self?.toasts.dismiss(toast) }
+                close()
+            },
+            ToastAction(title: "Retry", kind: .destructive) { [weak self] in
+                if let toast { self?.toasts.dismiss(toast) }
+                retry()
+            },
+        ]
+        toast = toasts.showSticky(content, actions: actions)
+    }
+
+    /// Test hook: drive the real surface-failure toast so a test can click its actual buttons.
+    func presentSurfaceFailureToastForTesting(retry: @escaping () -> Void, close: @escaping () -> Void) {
+        presentSurfaceFailureToast(retry: retry, close: close)
     }
 
     /// Clear a tab's waiting state: dismiss its toast — which also drops the rose flag, since

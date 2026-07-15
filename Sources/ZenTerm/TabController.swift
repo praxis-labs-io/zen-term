@@ -214,6 +214,11 @@ final class TabController: NSObject {
     /// Request a transient top-right toast (e.g. `⌘G` blocked outside a git repo).
     var onRequestToast: ((ToastContent) -> Void)?
 
+    /// A pane's surface failed to start — relayed from the pane canvas. Carries the
+    /// retry/close actions so the `WindowController` (which owns the toast presenter) can
+    /// show an actionable sticky notice.
+    var onPaneStartFailed: ((@escaping () -> Void, @escaping () -> Void) -> Void)?
+
     /// The tab's focused surface changed (a pane or drawer click, or spatial nav). Lets a
     /// host void a pending close confirm whose target/modality just moved out from under it.
     var onFocusChanged: (() -> Void)?
@@ -277,6 +282,7 @@ final class TabController: NSObject {
         paneCanvas.onSocketFocus = { [weak self] dir in self?.navigate(dir) }
         paneCanvas.onZoomEnded = { [weak self] in self?.paneZoomEndedInternally() }
         paneCanvas.onNotification = { [weak self] n in self?.onNotification?(n) }
+        paneCanvas.onSurfaceStartFailed = { [weak self] retry, close in self?.onPaneStartFailed?(retry, close) }
     }
 
     /// The pane canvas ended zoom on its own (the zoomed leaf's shell exited) — clear
@@ -1622,5 +1628,51 @@ extension TabController: TerminalSurfaceDelegate {
                 if isLazygitOpen { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
             }
         }
+    }
+
+    /// A tab-owned surface (drawer, lazygit, or tool float) failed to start. Surface a passive
+    /// warning and tear it down so the next toggle spawns a fresh one — the natural retry for
+    /// these, unlike panes, which get an in-place Retry button. Panes are handled entirely in
+    /// `PaneCanvasController`; this only reacts to the four surfaces this controller owns.
+    func surfaceDidFailToStart(_ s: TerminalSurface) {
+        if s === lazygitSurface {
+            // lazygit is pre-warmed in the background, so a start failure can arrive with
+            // nothing shown — discard quietly (a later ⌘G lazily retries) and only warn if it
+            // was actually open. No re-warm: a persistently-failing start must not loop.
+            let wasVisible = isLazygitOpen
+            if let overlay = lazygitOverlay {
+                lazygitOverlay = nil
+                overlay.animateOut { overlay.removeFromSuperview() }
+            }
+            discardLazygitSurface()
+            if wasVisible {
+                warnSurfaceFailed(descriptor: "lazygit")
+                restoreUnifiedFocus()
+            }
+            onOverlayStateChanged?()
+            return
+        }
+        // Drawers and tool floats only exist after an explicit open, so always warn, then
+        // reuse `surfaceDidExit`'s teardown (clear ref, drop the view, terminate, relayout,
+        // restore focus) — no re-warm — so the next toggle spawns a fresh surface.
+        let descriptor: String
+        if s === bottomDrawerSurface {
+            descriptor = "The bottom drawer"
+        } else if s === rightDrawerSurface {
+            descriptor = "The right drawer"
+        } else if let active = activeToolFloat, s === active.surface {
+            descriptor = "This tool"
+        } else {
+            return  // not one of ours
+        }
+        warnSurfaceFailed(descriptor: descriptor)
+        surfaceDidExit(s, code: nil)
+    }
+
+    private func warnSurfaceFailed(descriptor: String) {
+        onRequestToast?(
+            ToastContent(
+                variant: .warning, title: "Terminal Didn't Start",
+                message: "\(descriptor) failed to launch. Open it again to retry."))
     }
 }
