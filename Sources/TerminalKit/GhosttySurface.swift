@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import GhosttyKit
 
 /// libghostty-backed terminal surface — the sole backend (ZEN-45, ZEN-66).
@@ -14,6 +15,12 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     var surfacePtr: ghostty_surface_t?
     private var lastTitle = ""
     private var lastCwd: URL?
+
+    /// Whether we hold macOS secure keyboard entry for this surface
+    /// (`GHOSTTY_ACTION_SECURE_INPUT`, engaged at password prompts). `Enable`/`Disable`-
+    /// `SecureEventInput` are a process-global refcount, so we track our one outstanding
+    /// enable to keep it balanced and to release it on teardown.
+    private var isSecureInputEnabled = false
 
     public weak var delegate: TerminalSurfaceDelegate?
 
@@ -165,6 +172,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     }
 
     public func terminate() {
+        releaseSecureInput()
         guard let surfacePtr else { return }
         ghostty_surface_free(surfacePtr)
         self.surfacePtr = nil
@@ -178,10 +186,19 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // Nil the host view's pointer too (it can outlive us — its superview holds a
         // strong ref, our `owner` back-ref is weak) so a stray event after free doesn't
         // call ghostty_surface_* on freed memory. Mirrors terminate().
+        releaseSecureInput()
         if let surfacePtr {
             ghostty_surface_free(surfacePtr)
             hostView.surfacePtr = nil
         }
+    }
+
+    /// Drop any secure-input lock this surface still holds so a tab closing (or the surface
+    /// being freed) mid-password-prompt never leaks a process-global secure-input hold.
+    private func releaseSecureInput() {
+        guard isSecureInputEnabled else { return }
+        isSecureInputEnabled = false
+        DisableSecureEventInput()
     }
 
     public func paste(_ text: String) {
@@ -252,9 +269,47 @@ public final class GhosttySurface: NSObject, TerminalSurface {
                 self.delegate?.surfaceDidExit(self, code: code)
             }
             return true
+        case GHOSTTY_ACTION_MOUSE_SHAPE:
+            hostView.applyMouseShape(action.action.mouse_shape)
+            return true
+        case GHOSTTY_ACTION_MOUSE_VISIBILITY:
+            hostView.setCursorHidden(action.action.mouse_visibility == GHOSTTY_MOUSE_HIDDEN)
+            return true
+        case GHOSTTY_ACTION_OPEN_URL:
+            openURL(action.action.open_url)
+            return true
+        case GHOSTTY_ACTION_SECURE_INPUT:
+            setSecureInput(for: action.action.secure_input)
+            return true
         default:
             return false
         }
+    }
+
+    /// Open a link libghostty resolved from a click / ⌘-click. Decode by `len` (not `strlen`)
+    /// so an interior NUL can't truncate the URL, mirroring `paste()`. Runs on the main thread
+    /// (like every `handle(_:)` case) and doesn't free the surface, so no deferred dispatch.
+    private func openURL(_ openURL: ghostty_action_open_url_s) {
+        guard let ptr = openURL.url else { return }
+        let string = String(
+            decoding: UnsafeRawBufferPointer(start: ptr, count: Int(openURL.len)), as: UTF8.self)
+        guard let url = URL(string: string) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    /// Engage or release macOS secure keyboard entry for a `GHOSTTY_ACTION_SECURE_INPUT`
+    /// enum, acting only on a real transition so the global refcount stays balanced. TOGGLE
+    /// flips our current state.
+    private func setSecureInput(for action: ghostty_action_secure_input_e) {
+        let enable: Bool
+        switch action {
+        case GHOSTTY_SECURE_INPUT_ON: enable = true
+        case GHOSTTY_SECURE_INPUT_OFF: enable = false
+        default: enable = !isSecureInputEnabled  // TOGGLE
+        }
+        guard enable != isSecureInputEnabled else { return }
+        isSecureInputEnabled = enable
+        if enable { EnableSecureEventInput() } else { DisableSecureEventInput() }
     }
 
     /// Map an OSC 9;4 progress report onto the seam's `TerminalProgress`.
