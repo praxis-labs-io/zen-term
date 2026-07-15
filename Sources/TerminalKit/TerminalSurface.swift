@@ -64,7 +64,9 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     func surfaceWantsFocus(_ s: TerminalSurface)
     /// The backend failed to create the underlying terminal (e.g. `ghostty_surface_new`
     /// returned nil). The surface object exists but is inert; the chrome should surface
-    /// feedback and offer retry/close rather than leave a dead blank pane.
+    /// feedback and offer retry/close rather than leave a dead blank pane. Delivered
+    /// asynchronously (never synchronously inside `start`), so a consumer that dispatches
+    /// on surface identity can rely on having finished wiring the surface into its state.
     func surfaceDidFailToStart(_ s: TerminalSurface)
 }
 

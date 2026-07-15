@@ -650,6 +650,30 @@ final class TabController: NSObject {
         surface?.terminate()
     }
 
+    /// Tear the lazygit surface down: animate any visible overlay out, drop the surface, and —
+    /// for a VISIBLE teardown — restore unified focus and (when `rewarm`) re-warm a fresh one.
+    /// Returns whether it was visible. Shared by the quit path (`surfaceDidExit`, rewarms) and
+    /// the start-failure path (no rewarm — a persistently-failing start must not spin a loop).
+    @discardableResult
+    private func teardownLazygit(rewarm: Bool) -> Bool {
+        let wasVisible = isLazygitOpen
+        if let overlay = lazygitOverlay {
+            lazygitOverlay = nil
+            overlay.animateOut { overlay.removeFromSuperview() }
+        }
+        discardLazygitSurface()  // clears the ref before terminate (re-entry no-ops)
+        if wasVisible {
+            restoreUnifiedFocus()
+            // Re-warm only after a VISIBLE quit: an instantly-exiting surface (lazygit not on
+            // PATH, or a drifted non-repo cwd) exits while hidden, so it can never spin a respawn
+            // loop. The rewarm re-enters the background LRU cap — a used surface is a warm
+            // background surface again, not exempt (ZEN-55). Plain tabs respawn on the next ⌘G.
+            if rewarm { prewarmLazygitNow() }
+        }
+        onOverlayStateChanged?()
+        return wasVisible
+    }
+
     /// Reveal the persisted surface: mount its overlay above the tab's tile and give
     /// it the tab's unified focus.
     private func showLazygit(_ surface: TerminalSurface) {
@@ -1575,24 +1599,9 @@ extension TabController: TerminalSurfaceDelegate {
             return
         }
         if s === lazygitSurface {
-            // lazygit quit (`q`): the process is gone. Animate the card out (matching a
-            // ⌘G hide) and drop the surface.
-            let wasVisible = isLazygitOpen
-            if let overlay = lazygitOverlay {
-                lazygitOverlay = nil
-                overlay.animateOut { overlay.removeFromSuperview() }
-            }
-            discardLazygitSurface()  // clears the ref before terminate (re-entry no-ops)
-            if wasVisible {
-                restoreUnifiedFocus()
-                // Re-warm only after a VISIBLE quit: an instantly-exiting surface (lazygit
-                // not on PATH, or a drifted non-repo cwd) exits while hidden, so it can never
-                // spin a respawn loop. The rewarm re-enters the background LRU cap — a used
-                // surface is a warm background surface again, not exempt (ZEN-55). Plain tabs
-                // (no stable path) respawn on the next ⌘G.
-                prewarmLazygitNow()
-            }
-            onOverlayStateChanged?()
+            // lazygit quit (`q`): the process is gone. Animate the card out (matching a ⌘G
+            // hide), drop the surface, and re-warm a fresh one for the next ⌘G.
+            teardownLazygit(rewarm: true)
             return
         }
         if s === bottomDrawerSurface {
@@ -1637,19 +1646,9 @@ extension TabController: TerminalSurfaceDelegate {
     func surfaceDidFailToStart(_ s: TerminalSurface) {
         if s === lazygitSurface {
             // lazygit is pre-warmed in the background, so a start failure can arrive with
-            // nothing shown — discard quietly (a later ⌘G lazily retries) and only warn if it
-            // was actually open. No re-warm: a persistently-failing start must not loop.
-            let wasVisible = isLazygitOpen
-            if let overlay = lazygitOverlay {
-                lazygitOverlay = nil
-                overlay.animateOut { overlay.removeFromSuperview() }
-            }
-            discardLazygitSurface()
-            if wasVisible {
-                warnSurfaceFailed(descriptor: "lazygit")
-                restoreUnifiedFocus()
-            }
-            onOverlayStateChanged?()
+            // nothing shown — tear it down (a later ⌘G lazily retries) and only warn if it was
+            // actually open. No re-warm: a persistently-failing start must not spin a loop.
+            if teardownLazygit(rewarm: false) { warnSurfaceFailed(descriptor: "lazygit") }
             return
         }
         // Drawers and tool floats only exist after an explicit open, so always warn, then

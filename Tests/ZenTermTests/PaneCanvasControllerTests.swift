@@ -203,6 +203,15 @@ final class PaneCanvasControllerTests: XCTestCase {
         return win
     }
 
+    /// Let any pending main-queue work run. The surface-failure callback is delivered
+    /// asynchronously (see `TerminalSurfaceDelegate`), and the main queue is FIFO, so a drain
+    /// enqueued after `start()` runs strictly after the failure it scheduled.
+    private func drainMainQueue() {
+        let drained = expectation(description: "main queue drained")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
+    }
+
     func test_surfaceFailsToStart_firesHook_andRetryReplaysLaunch() {
         let surface = RecordingSurface()
         surface.failOnStart = true
@@ -216,6 +225,7 @@ final class PaneCanvasControllerTests: XCTestCase {
         let window = windowMounted(controller)
         _ = window  // retain the host window for the test's lifetime
         defer { controller.shutdown() }
+        drainMainQueue()  // the failure callback is delivered async
 
         XCTAssertEqual(surface.startCount, 1, "the pane started once")
         XCTAssertEqual(failureCount, 1, "the dead surface fired the failure hook")
@@ -241,6 +251,7 @@ final class PaneCanvasControllerTests: XCTestCase {
         let window = windowMounted(controller)
         _ = window
         defer { controller.shutdown() }
+        drainMainQueue()  // the failure callback is delivered async
 
         guard let close = captured else { return XCTFail("the failure hook must hand up a close action") }
         close()

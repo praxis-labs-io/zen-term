@@ -990,9 +990,9 @@ final class WindowController: NSObject {
     }
 
     /// A pane's surface failed to start: show a sticky, non-modal notice offering to retry the
-    /// launch or close the dead pane. Each button dismisses the toast before running its action;
-    /// a failed retry re-fires this path with a fresh toast. Both roles are theme-driven via the
-    /// `.warning` variant, so no color is hardcoded.
+    /// launch or close the dead pane. Each button starts the toast's (asynchronous) dismiss and
+    /// then runs its action; a failed retry re-fires this path with a fresh toast. Both roles are
+    /// theme-driven via the `.warning` variant, so no color is hardcoded.
     private func presentSurfaceFailureToast(retry: @escaping () -> Void, close: @escaping () -> Void) {
         let content = ToastContent(
             variant: .warning, title: "Terminal Didn't Start",
