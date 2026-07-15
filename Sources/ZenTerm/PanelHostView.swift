@@ -11,10 +11,12 @@ struct PanelMeta {
 
 /// Hosts one terminal surface (a pane leaf or a drawer) inside the shared rounded/bordered
 /// chrome: the iris focus halo (accent border + soft glow) and an inner clip that keeps
-/// content within the corner radius. A drawer passes `meta` for an always-on header; a pane
-/// passes `zoomMeta` for a header that appears only while the pane is zoomed (full screen).
-/// Panes with neither look/behave exactly as the original pane-only chrome. Clicking anywhere
-/// in the panel requests focus.
+/// content within the corner radius. A drawer passes `meta` for an always-on header, and may
+/// also pass `zoomMeta` — the header content it swaps to while zoomed (e.g. its title appended
+/// with "— Full screen" and the keybind replaced by ⌘F). A pane passes only `zoomMeta` for a
+/// header that appears only while the pane is zoomed (full screen). Panes with neither
+/// look/behave exactly as the original pane-only chrome. Clicking anywhere in the panel
+/// requests focus.
 final class PanelHostView: NSView {
     private let onFocusRequest: () -> Void
     private let pane = ShadowCardView()  // focus glow gets an explicit shadowPath
@@ -23,6 +25,10 @@ final class PanelHostView: NSView {
     /// True when the header is a pane's full-screen header (shown only while zoomed); false for
     /// a drawer header (always shown). Drives whether `isZoomed` toggles the header.
     private let headerZoomOnly: Bool
+    /// A drawer's resting vs zoomed header content. `nil` for a pane (whose zoom-only header
+    /// keeps its single meta and toggles visibility instead of swapping content).
+    private let baseMeta: PanelMeta?
+    private let zoomMeta: PanelMeta?
     private var headerTopConstraints: [NSLayoutConstraint] = []
     private var contentTopToHeader: NSLayoutConstraint?
     private var contentTopToClip: NSLayoutConstraint?
@@ -30,11 +36,16 @@ final class PanelHostView: NSView {
     var isFocused: Bool = false { didSet { if oldValue != isFocused { updateHalo() } } }
 
     /// Whether this panel is the sole full-canvas panel (zoomed). A pane reveals its
-    /// full-screen header; a drawer keeps its own header, so its state is a no-op here.
+    /// full-screen header; a drawer keeps its always-on header but swaps its content to the
+    /// zoomed variant (title + ⌘F).
     var isZoomed: Bool = false {
         didSet {
-            guard oldValue != isZoomed, headerZoomOnly else { return }
-            setHeaderShown(isZoomed)
+            guard oldValue != isZoomed else { return }
+            if headerZoomOnly {
+                setHeaderShown(isZoomed)
+            } else if let headerView, let baseMeta, let zoomMeta {
+                headerView.apply(isZoomed ? zoomMeta : baseMeta)
+            }
         }
     }
 
@@ -47,6 +58,8 @@ final class PanelHostView: NSView {
         onFocusRequest: @escaping () -> Void
     ) {
         self.onFocusRequest = onFocusRequest
+        self.baseMeta = meta
+        self.zoomMeta = zoomMeta
         if let meta {
             headerView = PanelHeader(meta)
             headerZoomOnly = false
@@ -119,6 +132,10 @@ final class PanelHostView: NSView {
     /// Test hook: whether the header is present and currently shown (ZEN-65).
     var isHeaderVisibleForTesting: Bool { headerView.map { !$0.isHidden } ?? false }
 
+    /// Test hook: the header's current title + resolved keycap shortcut (ZEN-65), for asserting
+    /// the zoom content swap. Nil when there's no header.
+    var headerContentForTesting: (title: String, shortcut: String)? { headerView?.contentForTesting }
+
     /// When true the panel is transparent to the pointer — set while it dissolves out on close, so a
     /// click in the vacated region reaches the surviving pane beneath instead of this dead overlay.
     var isHitTransparent = false
@@ -170,11 +187,17 @@ final class PanelHostView: NSView {
     /// A muted small-caps title (left) and its live keybind chip (right), e.g. `BOTTOM DRAWER ⌘B`.
     /// The keybind resolves from the live keymap via `CommandCatalog`, so it tracks user rebinds.
     private final class PanelHeader: NSView {
-        private let title: String
-        private let action: KeyInterceptor.ReservedChord
+        private var title: String
+        private var action: KeyInterceptor.ReservedChord
         private let titleField = NSTextField(labelWithString: "")
         private var keycap: KeycapView
         private static let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
+
+        /// Test hook: the header's current title text + resolved keycap shortcut (ZEN-65), for
+        /// asserting the drawer's resting → zoomed swap.
+        var contentForTesting: (title: String, shortcut: String) {
+            (titleField.stringValue, CommandCatalog.spec(for: action).shortcut)
+        }
 
         init(_ meta: PanelMeta) {
             title = meta.title
@@ -195,10 +218,23 @@ final class PanelHostView: NSView {
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+        /// Swap the header to a new title + keybind (a drawer's resting → zoomed transition).
+        func apply(_ meta: PanelMeta) {
+            title = meta.title
+            action = meta.action
+            applyTitle()
+            rebuildKeycap()
+        }
+
         /// Re-apply the live title ink and rebuild the keybind chip — its shortcut is fixed at
         /// build time, so a rebind (or theme swap) is reflected by re-resolving from the keymap.
         func reapplyTheme() {
             applyTitle()
+            rebuildKeycap()
+        }
+
+        /// Rebuild the keycap from the current `action` against the live keymap.
+        private func rebuildKeycap() {
             keycap.removeFromSuperview()
             keycap = KeycapView(shortcut: CommandCatalog.spec(for: action).shortcut, showsBackground: false)
             addSubview(keycap)

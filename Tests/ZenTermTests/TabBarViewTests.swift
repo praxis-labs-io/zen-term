@@ -55,21 +55,35 @@ final class TabBarViewTests: XCTestCase {
         XCTAssertTrue(tabBar.chipsForTesting.isEmpty)
     }
 
-    func test_tabLabel_prefixesCommandGlyphForFirstNine() {
-        // Tabs 1–9 have a real ⌘N shortcut, so the number carries the ⌘ glyph (ZEN-110).
+    func test_tabLabel_isBareNumberWithNoCommandGlyph() {
+        // The inline label is a bare number for every tab now — the ⌘N shortcut moved to the
+        // hover tooltip, so the glyph never sits inline (ZEN-110).
         let one = TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, agentState: .idle)
         let nine = TabBarItem(id: TabID(9), index: 9, title: "nine", isActive: false, agentState: .idle)
-        XCTAssertTrue(TabBarView.tabLabelStringForTesting(one).hasPrefix("⌘1 "))
-        XCTAssertTrue(TabBarView.tabLabelStringForTesting(nine).hasPrefix("⌘9 "))
+        let ten = TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, agentState: .idle)
+        XCTAssertTrue(TabBarView.tabLabelStringForTesting(one).hasPrefix("1 "))
+        XCTAssertTrue(TabBarView.tabLabelStringForTesting(nine).hasPrefix("9 "))
+        XCTAssertTrue(TabBarView.tabLabelStringForTesting(ten).hasPrefix("10 "))
+        for item in [one, nine, ten] {
+            XCTAssertFalse(TabBarView.tabLabelStringForTesting(item).contains("⌘"))
+        }
     }
 
-    func test_tabLabel_bareNumberBeyondNine() {
-        // Tab 10+ has no ⌘ shortcut, so it shows a bare number — the glyph would imply a
-        // binding that doesn't exist.
-        let ten = TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, agentState: .idle)
-        let label = TabBarView.tabLabelStringForTesting(ten)
-        XCTAssertTrue(label.hasPrefix("10 "))
-        XCTAssertFalse(label.contains("⌘"))
+    func test_chipTooltip_readsFocusTabWithCommandShortcut() {
+        // The tooltip reads "Focus tab" (not the tab's name); tabs 1–9 resolve a ⌘N keycap from
+        // the live keymap, 10+ have no binding so no keycap (ZEN-110).
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        tabBar.render([
+            TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, agentState: .idle),
+            TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, agentState: .idle),
+        ])
+        let tooltips = tabBar.chipTooltipsForTesting
+        XCTAssertEqual(tooltips.count, 2)
+        XCTAssertEqual(tooltips[0].label, "Focus tab")
+        // ⌘1, resolved from the live keymap rather than hard-coded.
+        XCTAssertEqual(tooltips[0].shortcut, CommandCatalog.spec(for: .selectTab(1)).shortcut)
+        XCTAssertEqual(tooltips[1].label, "Focus tab")
+        XCTAssertNil(tooltips[1].shortcut)
     }
 
     func test_overflow_fadesWhenTabsExceedWidth() {

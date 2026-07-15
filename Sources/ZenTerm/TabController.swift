@@ -836,10 +836,16 @@ final class TabController: NSObject {
             edge == .bottom
             ? PanelMeta(title: "Bottom drawer", action: .toggleBottomDrawer)
             : PanelMeta(title: "Right drawer", action: .toggleRightDrawer)
+        // While zoomed the header swaps to the full-screen variant: its title appended and the
+        // toggle keybind replaced by ⌘F, matching the pane's full-screen header.
+        let zoomMeta =
+            edge == .bottom
+            ? PanelMeta(title: "Bottom drawer — Full screen", action: .toggleZoom)
+            : PanelMeta(title: "Right drawer — Full screen", action: .toggleZoom)
         let panel = PanelHostView(
             content: surface.view,
             background: Theme.current.chrome.background.nsColor,
-            meta: meta,
+            meta: meta, zoomMeta: zoomMeta,
             onFocusRequest: { [weak self] in self?.focusDrawer(edge) })
         panel.translatesAutoresizingMaskIntoConstraints = false
         return panel

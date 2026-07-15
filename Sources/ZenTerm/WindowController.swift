@@ -520,13 +520,15 @@ final class WindowController: NSObject {
         toolsSection.onEditFloat = { [weak self] float in self?.openToolFloatForm(editing: float) }
         let workspacesSection = SettingsWorkspacesSection()
         workspacesSection.onEditWorkspace = { [weak self] ws in self?.openWorkspaceForm(editing: ws) }
+        // Sorted by nav title so the nav reads alphabetically and stays ordered as sections are
+        // added — the array order is the on-screen order.
         let sections: [SettingsSection] = [
             SettingsAppearanceSection(),
             SettingsTerminalSection(),
             SettingsKeybindsSection(capturer: keybindCapturer),
             toolsSection,
             workspacesSection,
-        ]
+        ].sorted { $0.navTitle.localizedCaseInsensitiveCompare($1.navTitle) == .orderedAscending }
         let landingSection: SettingsSection?
         switch landing {
         case .top: landingSection = nil

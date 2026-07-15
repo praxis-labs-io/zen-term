@@ -260,7 +260,7 @@ final class PaneCanvasController: NSObject {
             content: surface.view,
             background: Theme.current.chrome.background.nsColor,
             meta: nil,
-            zoomMeta: PanelMeta(title: "Full screen", action: .toggleZoom),
+            zoomMeta: PanelMeta(title: "Terminal pane — Full screen", action: .toggleZoom),
             onFocusRequest: { [weak self] in
                 self?.focus(id)
             })

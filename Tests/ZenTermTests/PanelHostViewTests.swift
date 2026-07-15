@@ -4,8 +4,9 @@ import XCTest
 @testable import ZenTerm
 
 /// ZEN-65 replaced the floating corner icons with a real header: a drawer shows its title +
-/// keybind always; a pane shows a "Full screen" header only while zoomed. Per the house rule
-/// "GUI controls need interaction tests", these mount the panel and drive its zoom state.
+/// keybind always (swapping to a "— Full screen" ⌘F variant while zoomed); a pane shows a
+/// "Terminal pane — Full screen" header only while zoomed. Per the house rule "GUI controls
+/// need interaction tests", these mount the panel and drive its zoom state.
 final class PanelHostViewTests: XCTestCase {
     private func mount(_ panel: PanelHostView) {
         panel.translatesAutoresizingMaskIntoConstraints = true
@@ -39,6 +40,32 @@ final class PanelHostViewTests: XCTestCase {
 
         panel.isZoomed = false
         XCTAssertFalse(panel.isHeaderVisibleForTesting, "unzooming hides it again")
+    }
+
+    func test_drawerZoom_swapsHeaderToFullScreenAndCommandF() {
+        let panel = PanelHostView(
+            content: NSView(), background: Theme.current.chrome.background.nsColor,
+            meta: PanelMeta(title: "Bottom drawer", action: .toggleBottomDrawer),
+            zoomMeta: PanelMeta(title: "Bottom drawer — Full screen", action: .toggleZoom),
+            onFocusRequest: {})
+        mount(panel)
+
+        // Resting: the drawer's own title + toggle keybind.
+        XCTAssertTrue(panel.isHeaderVisibleForTesting, "a drawer's header is always shown")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "BOTTOM DRAWER")
+        let restingShortcut = panel.headerContentForTesting?.shortcut
+        XCTAssertEqual(restingShortcut, CommandCatalog.spec(for: .toggleBottomDrawer).shortcut)
+
+        // Zoomed: the header stays visible but swaps to the full-screen variant + ⌘F.
+        panel.isZoomed = true
+        XCTAssertTrue(panel.isHeaderVisibleForTesting, "a zoomed drawer keeps its header")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "BOTTOM DRAWER — FULL SCREEN")
+        XCTAssertEqual(panel.headerContentForTesting?.shortcut, CommandCatalog.spec(for: .toggleZoom).shortcut)
+
+        // Unzoom restores the resting title + keybind.
+        panel.isZoomed = false
+        XCTAssertEqual(panel.headerContentForTesting?.title, "BOTTOM DRAWER")
+        XCTAssertEqual(panel.headerContentForTesting?.shortcut, restingShortcut)
     }
 
     func test_noMeta_neverShowsHeader() {
