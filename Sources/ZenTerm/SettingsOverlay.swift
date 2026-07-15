@@ -13,6 +13,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
     private var dismiss = DismissGate()
 
     private let navStack = NSStackView()
+    private let navScroll = NSScrollView()  // scrolls the nav rows when they'd overflow the column
     private var navRows: [SettingsNavRow] = []
     private let detailContainer = NSView()
     private var selectedIndex = 0
@@ -150,25 +151,42 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
         let footer = makeNavFooter()
 
+        // The nav rows scroll when they'd overflow the column (many sections on a short window),
+        // instead of clipping or colliding with the version footer pinned below (ZEN-136). Keyboard
+        // nav scrolls the selected row into view in `selectSection`.
+        navScroll.translatesAutoresizingMaskIntoConstraints = false
+        navScroll.drawsBackground = false
+        navScroll.borderType = .noBorder
+        navScroll.hasVerticalScroller = true
+        navScroll.autohidesScrollers = true
+        navScroll.scrollerStyle = .overlay
+        navScroll.contentView = FlippedClipView()  // top-down: the list starts at the top and scrolls down
+        navScroll.documentView = navStack
+        navStack.translatesAutoresizingMaskIntoConstraints = false
+
         let root = NSView()
         root.translatesAutoresizingMaskIntoConstraints = false
-        navStack.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(navStack)
+        root.addSubview(navScroll)
         root.addSubview(footer)
         root.addSubview(divider)
         root.addSubview(detailContainer)
         NSLayoutConstraint.activate([
-            navStack.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-            navStack.topAnchor.constraint(equalTo: root.topAnchor),
-            navStack.widthAnchor.constraint(equalToConstant: 168),
+            navScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            navScroll.topAnchor.constraint(equalTo: root.topAnchor),
+            navScroll.widthAnchor.constraint(equalToConstant: 168),
+            navScroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -8),
 
-            // The version footer anchors the bottom of the nav column; the rows never overlap it.
+            // navStack is the scrolling document: full content width, height intrinsic (scrolls tall).
+            navStack.topAnchor.constraint(equalTo: navScroll.contentView.topAnchor),
+            navStack.leadingAnchor.constraint(equalTo: navScroll.contentView.leadingAnchor),
+            navStack.widthAnchor.constraint(equalTo: navScroll.contentView.widthAnchor),
+
+            // The version footer sits below the scrolling list, always pinned to the column bottom.
             footer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 22),
-            footer.trailingAnchor.constraint(lessThanOrEqualTo: navStack.trailingAnchor, constant: -12),
+            footer.trailingAnchor.constraint(lessThanOrEqualTo: navScroll.trailingAnchor, constant: -12),
             footer.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
-            navStack.bottomAnchor.constraint(lessThanOrEqualTo: footer.topAnchor),
 
-            divider.leadingAnchor.constraint(equalTo: navStack.trailingAnchor),
+            divider.leadingAnchor.constraint(equalTo: navScroll.trailingAnchor),
             divider.topAnchor.constraint(equalTo: root.topAnchor),
             divider.bottomAnchor.constraint(equalTo: root.bottomAnchor),
             divider.widthAnchor.constraint(equalToConstant: 1),
@@ -228,6 +246,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
             detail.bottomAnchor.constraint(equalTo: detailContainer.bottomAnchor),
         ])
         window?.makeFirstResponder(navRows[index])
+        navRows[index].scrollToVisible(navRows[index].bounds)  // keep the selected row on screen when the list scrolls
     }
 
     private func moveNav(_ delta: Int) {
