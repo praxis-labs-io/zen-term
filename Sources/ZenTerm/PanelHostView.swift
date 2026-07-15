@@ -24,8 +24,8 @@ final class PanelHostView: NSView {
     private let headerView: PanelHeader?
     /// The header content for the resting vs zoomed state. A pane has only `zoomMeta` (header hidden
     /// until zoomed); a drawer has both (its base header ⇄ the zoom variant). `updateHeader` picks
-    /// the meta for the current zoom state — `isZoomed ? zoomMeta : nil ?? baseMeta`, nil meta hides —
-    /// which covers both cases in one rule.
+    /// the meta for the current zoom state — `(isZoomed ? zoomMeta : nil) ?? baseMeta`, nil meta
+    /// hides — which covers both cases in one rule.
     private let baseMeta: PanelMeta?
     private let zoomMeta: PanelMeta?
     private var headerTopConstraints: [NSLayoutConstraint] = []
