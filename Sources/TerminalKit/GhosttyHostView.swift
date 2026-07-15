@@ -16,14 +16,10 @@ final class GhosttyHostView: NSView {
     private var trackingArea: NSTrackingArea?
 
     /// The cursor libghostty last asked for via `GHOSTTY_ACTION_MOUSE_SHAPE` (I-beam over
-    /// text, pointing hand over links, …). Reasserted in `cursorUpdate(with:)` because AppKit
-    /// resets `NSCursor.current` whenever the pointer crosses a tracking boundary.
+    /// text, pointing hand over a ⌘-hovered link, …). Applied through cursor rects
+    /// (`resetCursorRects`) so AppKit owns when to assert it — the idiomatic mechanism, rather
+    /// than fighting `NSCursor.current` with imperative `.set()` calls.
     private var desiredCursor: NSCursor = .arrow
-
-    /// Whether we've hidden the pointer for `GHOSTTY_ACTION_MOUSE_VISIBILITY` (typing hides
-    /// it, moving shows it). `NSCursor.hide()`/`unhide()` are a process-global refcount, so we
-    /// track our one outstanding hide to keep it balanced and to unhide on teardown.
-    private var isCursorHidden = false
 
     // MARK: IME / dead-key composition state
 
@@ -47,12 +43,6 @@ final class GhosttyHostView: NSView {
     // of reaching libghostty's selection. Opt out so click-drag here selects text; the
     // window still drags by the gutters, window inset, and chrome around the panes.
     override var mouseDownCanMoveWindow: Bool { false }
-
-    deinit {
-        // Balance any outstanding hide so a surface torn down mid-type (the pointer hidden by
-        // MOUSE_VISIBILITY) never leaks a globally invisible cursor.
-        if isCursorHidden { NSCursor.unhide() }
-    }
 
     // MARK: Size / scale
 
@@ -89,10 +79,7 @@ final class GhosttyHostView: NSView {
         if let trackingArea { removeTrackingArea(trackingArea) }
         let area = NSTrackingArea(
             rect: bounds,
-            options: [
-                .mouseMoved, .mouseEnteredAndExited, .cursorUpdate, .activeInKeyWindow,
-                .inVisibleRect,
-            ],
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
             owner: self)
         addTrackingArea(area)
         trackingArea = area
@@ -103,12 +90,14 @@ final class GhosttyHostView: NSView {
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
         if let surfacePtr { ghostty_surface_set_focus(surfacePtr, true) }
+        owner?.focusDidChange(true)
         return ok
     }
 
     override func resignFirstResponder() -> Bool {
         let ok = super.resignFirstResponder()
         if let surfacePtr { ghostty_surface_set_focus(surfacePtr, false) }
+        owner?.focusDidChange(false)
         return ok
     }
 
@@ -262,22 +251,24 @@ final class GhosttyHostView: NSView {
 
     // MARK: Cursor
 
-    override func cursorUpdate(with event: NSEvent) { desiredCursor.set() }
+    override func resetCursorRects() { addCursorRect(bounds, cursor: desiredCursor) }
 
-    /// Apply the cursor libghostty asked for (`GHOSTTY_ACTION_MOUSE_SHAPE`). libghostty fires
-    /// this in response to pointer movement, so the cursor is inside the view: `.set()` now
-    /// covers the in-place shape change, and `cursorUpdate(with:)` reasserts it on re-entry.
+    /// Apply the cursor libghostty asked for (`GHOSTTY_ACTION_MOUSE_SHAPE`). Only re-arms the
+    /// cursor rect on a real change so we don't thrash AppKit's cursor management every move.
     func applyMouseShape(_ shape: ghostty_action_mouse_shape_e) {
-        desiredCursor = Self.nsCursor(for: shape)
-        desiredCursor.set()
+        let cursor = Self.nsCursor(for: shape)
+        guard cursor != desiredCursor else { return }
+        desiredCursor = cursor
+        window?.invalidateCursorRects(for: self)
     }
 
-    /// Hide or show the pointer for `GHOSTTY_ACTION_MOUSE_VISIBILITY`, acting only on a real
-    /// transition so the global hide/unhide refcount stays balanced.
-    func setCursorHidden(_ hidden: Bool) {
-        guard hidden != isCursorHidden else { return }
-        isCursorHidden = hidden
-        if hidden { NSCursor.hide() } else { NSCursor.unhide() }
+    /// Show or hide the pointer for `GHOSTTY_ACTION_MOUSE_VISIBILITY`.
+    /// `setHiddenUntilMouseMoves` is the right primitive for mouse-hide-while-typing: it
+    /// auto-restores on the next mouse move (no balanced unhide to leak), so a surface torn
+    /// down or detached while hidden can never strand a globally invisible cursor — the fragile
+    /// case a `hide()`/`unhide()` refcount hits when the chrome detaches a persistent pane.
+    func setCursorVisible(_ visible: Bool) {
+        NSCursor.setHiddenUntilMouseMoves(!visible)
     }
 
     /// Map a libghostty mouse shape to a classic `NSCursor`. macOS 14 is our floor, so we
