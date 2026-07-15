@@ -19,6 +19,12 @@ final class WindowController: NSObject {
     private var waitingToasts: [TabID: ToastView] = [:]
     private var nextTabID = 1
 
+    /// Process-unique window id, minted once per window from a monotonic counter (never reused, even
+    /// after a window closes). `TabID`s are only unique within a window, so OS-notification identity
+    /// pairs this with the tab id — see `AgentNotifier`.
+    let windowID: Int
+    private static var nextWindowID = 1
+
     /// Opacity of the base-color tint laid over the behind-window blur. 1 = solid shell,
     /// 0 = raw system blur. Tuned for a cohesive shell that still shows depth through the
     /// gutters; the single knob for the whole transparent look. User-overridable via
@@ -103,6 +109,8 @@ final class WindowController: NSObject {
 
     init(contentRect: NSRect, initialCWD: URL?) {
         window = HostWindow(contentRect: contentRect)
+        windowID = WindowController.nextWindowID
+        WindowController.nextWindowID += 1
         let firstID = TabID(1)
         tabs = TabList(first: firstID)
         // tabBar needs `self` for callbacks; build with placeholders, wire after super.init.
@@ -862,9 +870,6 @@ final class WindowController: NSObject {
     /// Number of open tabs in this window (for the quit tally).
     var tabCount: Int { tabs.order.count }
 
-    /// True if this window owns `id` — lets `AppDelegate` route a banner click to the right window.
-    func containsTab(_ id: TabID) -> Bool { tabs.order.contains(id) }
-
     /// Bring `id` to the front (banner-click routing). Public wrapper over the private `select`.
     func selectTab(_ id: TabID) { select(id) }
 
@@ -872,7 +877,10 @@ final class WindowController: NSObject {
     /// banner pushed for it while unfocused. `clearWaiting` never fires for the active tab (it's never
     /// re-`select`ed), so this closes that gap; background tabs keep their banners until visited.
     func clearActiveTabNotification() {
-        AgentNotifier.shared.clear(tabID: tabs.activeID)
+        // Reading `tabs.activeID` traps on an empty list; a window between last-tab-close and
+        // `windowWillClose` is still in `AppDelegate.windows`, so guard before touching it.
+        guard !tabs.order.isEmpty else { return }
+        AgentNotifier.shared.clear(windowID: windowID, tabID: tabs.activeID)
     }
 
     /// Present the app-quit confirm on this (key) window. `onQuit` resolves the pending
@@ -985,7 +993,8 @@ final class WindowController: NSObject {
             if AgentNotifier.shouldPushNotification(
                 appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
             {
-                AgentNotifier.shared.notify(tabID: id, title: self.titles[id] ?? "shell", body: message)
+                AgentNotifier.shared.notify(
+                    windowID: self.windowID, tabID: id, title: self.titles[id] ?? "shell", body: message)
             }
 
             // In-app toast: background tabs only — a sticky notice on the tab you're already looking at
@@ -1049,7 +1058,7 @@ final class WindowController: NSObject {
     /// the tab is shown or closed. Re-render is left to the caller (all callers already do).
     private func clearWaiting(_ id: TabID) {
         if let toast = waitingToasts.removeValue(forKey: id) { toasts.dismiss(toast) }
-        AgentNotifier.shared.clear(tabID: id)  // also drop any OS banner pushed for this tab
+        AgentNotifier.shared.clear(windowID: windowID, tabID: id)  // also drop any OS banner for this tab
     }
 
     private func renderTabBar() {

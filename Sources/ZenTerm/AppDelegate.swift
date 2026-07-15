@@ -56,7 +56,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Agent OS-notifications: become the notification-center delegate (never prompts — only the
         // lazy `requestAuthorization` on first delivery does) and route banner clicks back to the tab.
         AgentNotifier.shared.installDelegate()
-        AgentNotifier.shared.onActivate = { [weak self] id in self?.activateTab(id) }
+        AgentNotifier.shared.onActivate = { [weak self] windowID, tabID in
+            self?.activateTab(windowID: windowID, tabID: tabID)
+        }
 
         // The "fire for any tab when unfocused" path can leave a banner for a tab that's already
         // frontmost — its `clearWaiting` never fires (the active tab is never re-selected). Reactivating
@@ -97,14 +99,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         keyController()?.handle(chord)
     }
 
-    /// A banner for `id` was clicked: bring the app forward and jump to that tab in whichever window
-    /// owns it (the same `select` the toast's "Switch" action drives). No-op if the tab has since
-    /// closed.
-    private func activateTab(_ id: TabID) {
-        guard let wc = windows.first(where: { $0.containsTab(id) }) else { return }
+    /// A banner was clicked: bring the app forward and jump to its originating tab. Routes by
+    /// `windowID` (tab ids aren't unique across windows), then `selectTab` — a no-op if the tab or
+    /// window has since closed.
+    private func activateTab(windowID: Int, tabID: TabID) {
+        guard let wc = windows.first(where: { $0.windowID == windowID }) else { return }
         NSApp.activate(ignoringOtherApps: true)
         wc.window.makeKeyAndOrderFront(nil)
-        wc.selectTab(id)
+        wc.selectTab(tabID)
     }
 
     /// The `WindowController` owning the current key window, falling back to the
