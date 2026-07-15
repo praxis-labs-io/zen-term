@@ -160,6 +160,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
         navScroll.hasVerticalScroller = true
         navScroll.autohidesScrollers = true
         navScroll.scrollerStyle = .overlay
+        navScroll.contentView = FlippedClipView()  // top-down: the list starts at the top and scrolls down
         navScroll.documentView = navStack
         navStack.translatesAutoresizingMaskIntoConstraints = false
 
