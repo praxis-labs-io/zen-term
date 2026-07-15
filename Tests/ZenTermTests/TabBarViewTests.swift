@@ -80,7 +80,8 @@ final class TabBarViewTests: XCTestCase {
         let tooltips = tabBar.chipTooltipsForTesting
         XCTAssertEqual(tooltips.count, 2)
         XCTAssertEqual(tooltips[0].label, "Focus tab")
-        XCTAssertEqual(tooltips[0].shortcut, "⌘1")
+        // ⌘1, resolved from the live keymap rather than hard-coded.
+        XCTAssertEqual(tooltips[0].shortcut, CommandCatalog.spec(for: .selectTab(1)).shortcut)
         XCTAssertEqual(tooltips[1].label, "Focus tab")
         XCTAssertNil(tooltips[1].shortcut)
     }

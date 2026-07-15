@@ -168,6 +168,10 @@ final class TabBarView: NSView {
         }
         activeTabID = newActive
         updateFade()
+        // Rebuilding the chips drops the hovered chip (its `viewDidMoveToWindow` tears the tooltip
+        // down), and the pointer hasn't moved to re-arm it — so re-establish hover on whatever chip
+        // is under the cursor. Only fires on an actual change (`renderTabBar` guards on `changed`).
+        refreshHover()
     }
 
     /// Re-apply the live chrome colors to the already-built bar after a config change — no
