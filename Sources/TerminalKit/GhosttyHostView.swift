@@ -15,6 +15,17 @@ final class GhosttyHostView: NSView {
 
     private var trackingArea: NSTrackingArea?
 
+    /// The cursor libghostty last asked for via `GHOSTTY_ACTION_MOUSE_SHAPE` (I-beam over
+    /// text, pointing hand over a ⌘-hovered link, …). Applied through cursor rects
+    /// (`resetCursorRects`) so AppKit owns when to assert it — the idiomatic mechanism, rather
+    /// than fighting `NSCursor.current` with imperative `.set()` calls.
+    ///
+    /// Defaults to `.iBeam`, not `.arrow`: libghostty only emits `MOUSE_SHAPE` on a *change*,
+    /// so before the first one the resting state over the terminal grid must already be the
+    /// text cursor (matching ghostty's own `.horizontalText` default) — otherwise the pointer
+    /// is the plain arrow until some mode change kicks it.
+    private var desiredCursor: NSCursor = .iBeam
+
     // MARK: IME / dead-key composition state
 
     /// The whole preedit (marked) text — what the input method is still composing, shown
@@ -84,12 +95,14 @@ final class GhosttyHostView: NSView {
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
         if let surfacePtr { ghostty_surface_set_focus(surfacePtr, true) }
+        owner?.focusDidChange(true)
         return ok
     }
 
     override func resignFirstResponder() -> Bool {
         let ok = super.resignFirstResponder()
         if let surfacePtr { ghostty_surface_set_focus(surfacePtr, false) }
+        owner?.focusDidChange(false)
         return ok
     }
 
@@ -239,6 +252,55 @@ final class GhosttyHostView: NSView {
         guard let surfacePtr else { return }
         let pos = convert(event.locationInWindow, from: nil)
         ghostty_surface_mouse_pos(surfacePtr, pos.x, frame.height - pos.y, event.ghosttyMods)
+    }
+
+    // MARK: Cursor
+
+    override func resetCursorRects() { addCursorRect(bounds, cursor: desiredCursor) }
+
+    /// Apply the cursor libghostty asked for (`GHOSTTY_ACTION_MOUSE_SHAPE`). Only re-arms the
+    /// cursor rect on a real change so we don't thrash AppKit's cursor management every move.
+    func applyMouseShape(_ shape: ghostty_action_mouse_shape_e) {
+        let cursor = Self.nsCursor(for: shape)
+        guard cursor != desiredCursor else { return }
+        desiredCursor = cursor
+        window?.invalidateCursorRects(for: self)
+    }
+
+    /// Show or hide the pointer for `GHOSTTY_ACTION_MOUSE_VISIBILITY`.
+    /// `setHiddenUntilMouseMoves` is the right primitive for mouse-hide-while-typing: it
+    /// auto-restores on the next mouse move (no balanced unhide to leak), so a surface torn
+    /// down or detached while hidden can never strand a globally invisible cursor — the fragile
+    /// case a `hide()`/`unhide()` refcount hits when the chrome detaches a persistent pane.
+    func setCursorVisible(_ visible: Bool) {
+        NSCursor.setHiddenUntilMouseMoves(!visible)
+    }
+
+    /// Map a libghostty mouse shape to a classic `NSCursor`. macOS 14 is our floor, so we
+    /// can't use `NSView.pointerStyle` (macOS 15+) the way ghostty's own app does. The
+    /// diagonal resizes, progress/wait, and zoom shapes have no classic cursor, so they fall
+    /// back to `.arrow` rather than reaching for a private cursor.
+    static func nsCursor(for shape: ghostty_action_mouse_shape_e) -> NSCursor {
+        switch shape {
+        case GHOSTTY_MOUSE_SHAPE_TEXT: return .iBeam
+        case GHOSTTY_MOUSE_SHAPE_VERTICAL_TEXT: return .iBeamCursorForVerticalLayout
+        case GHOSTTY_MOUSE_SHAPE_POINTER: return .pointingHand
+        case GHOSTTY_MOUSE_SHAPE_CROSSHAIR, GHOSTTY_MOUSE_SHAPE_CELL: return .crosshair
+        case GHOSTTY_MOUSE_SHAPE_NOT_ALLOWED, GHOSTTY_MOUSE_SHAPE_NO_DROP:
+            return .operationNotAllowed
+        case GHOSTTY_MOUSE_SHAPE_GRAB: return .openHand
+        case GHOSTTY_MOUSE_SHAPE_GRABBING, GHOSTTY_MOUSE_SHAPE_ALL_SCROLL: return .closedHand
+        case GHOSTTY_MOUSE_SHAPE_COPY: return .dragCopy
+        case GHOSTTY_MOUSE_SHAPE_ALIAS: return .dragLink
+        case GHOSTTY_MOUSE_SHAPE_CONTEXT_MENU: return .contextualMenu
+        case GHOSTTY_MOUSE_SHAPE_N_RESIZE, GHOSTTY_MOUSE_SHAPE_S_RESIZE,
+            GHOSTTY_MOUSE_SHAPE_NS_RESIZE, GHOSTTY_MOUSE_SHAPE_ROW_RESIZE:
+            return .resizeUpDown
+        case GHOSTTY_MOUSE_SHAPE_E_RESIZE, GHOSTTY_MOUSE_SHAPE_W_RESIZE,
+            GHOSTTY_MOUSE_SHAPE_EW_RESIZE, GHOSTTY_MOUSE_SHAPE_COL_RESIZE:
+            return .resizeLeftRight
+        default: return .arrow
+        }
     }
 
     override func scrollWheel(with event: NSEvent) {

@@ -15,6 +15,13 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     private var lastTitle = ""
     private var lastCwd: URL?
 
+    /// Whether libghostty has this surface in a password context
+    /// (`GHOSTTY_ACTION_SECURE_INPUT`). Secure keyboard entry is process-global, so we don't
+    /// drive it directly — we hand desire + focus to `SecureInput.shared`, which scopes the
+    /// global lock to focus and app-active state.
+    private var wantsSecureInput = false
+    private var secureInputID: ObjectIdentifier { ObjectIdentifier(self) }
+
     public weak var delegate: TerminalSurfaceDelegate?
 
     public var view: NSView { hostView }
@@ -165,6 +172,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     }
 
     public func terminate() {
+        SecureInput.shared.removeScoped(secureInputID)
         guard let surfacePtr else { return }
         ghostty_surface_free(surfacePtr)
         self.surfacePtr = nil
@@ -178,10 +186,17 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // Nil the host view's pointer too (it can outlive us — its superview holds a
         // strong ref, our `owner` back-ref is weak) so a stray event after free doesn't
         // call ghostty_surface_* on freed memory. Mirrors terminate().
+        SecureInput.shared.removeScoped(secureInputID)
         if let surfacePtr {
             ghostty_surface_free(surfacePtr)
             hostView.surfacePtr = nil
         }
+    }
+
+    /// Track focus for secure-input scoping. The host view calls this from its first-responder
+    /// transitions so the global lock follows the pane you're actually typing in.
+    func focusDidChange(_ focused: Bool) {
+        if wantsSecureInput { SecureInput.shared.setScoped(secureInputID, focused: focused) }
     }
 
     public func paste(_ text: String) {
@@ -252,8 +267,55 @@ public final class GhosttySurface: NSObject, TerminalSurface {
                 self.delegate?.surfaceDidExit(self, code: code)
             }
             return true
+        case GHOSTTY_ACTION_MOUSE_SHAPE:
+            hostView.applyMouseShape(action.action.mouse_shape)
+            return true
+        case GHOSTTY_ACTION_MOUSE_VISIBILITY:
+            hostView.setCursorVisible(action.action.mouse_visibility == GHOSTTY_MOUSE_VISIBLE)
+            return true
+        case GHOSTTY_ACTION_OPEN_URL:
+            openURL(action.action.open_url)
+            return true
+        case GHOSTTY_ACTION_SECURE_INPUT:
+            setSecureInput(for: action.action.secure_input)
+            return true
         default:
             return false
+        }
+    }
+
+    /// Open a link libghostty resolved from a ⌘-click. Decode by `len` (not `strlen`) so an
+    /// interior NUL can't truncate the URL, mirroring `paste()`. Runs on the main thread (like
+    /// every `handle(_:)` case) and doesn't free the surface, so no deferred dispatch.
+    private func openURL(_ openURL: ghostty_action_open_url_s) {
+        guard let ptr = openURL.url else { return }
+        let string = String(
+            decoding: UnsafeRawBufferPointer(start: ptr, count: Int(openURL.len)), as: UTF8.self)
+        // A scheme-less string is a file path, not a URL: `URL(string:)` accepts it but
+        // `NSWorkspace.open` silently no-ops on it. Expand `~` and wrap it as a file URL so
+        // clicked file paths actually open (ghostty-org/ghostty#8763).
+        let url: URL
+        if let candidate = URL(string: string), candidate.scheme != nil {
+            url = candidate
+        } else {
+            url = URL(fileURLWithPath: NSString(string: string).standardizingPath)
+        }
+        NSWorkspace.shared.open(url)
+    }
+
+    /// Update this surface's secure-input desire from a `GHOSTTY_ACTION_SECURE_INPUT` enum and
+    /// hand it to `SecureInput.shared`, which owns the process-global lock (scoping it to focus
+    /// and app-active state). TOGGLE flips our current desire.
+    private func setSecureInput(for action: ghostty_action_secure_input_e) {
+        switch action {
+        case GHOSTTY_SECURE_INPUT_ON: wantsSecureInput = true
+        case GHOSTTY_SECURE_INPUT_OFF: wantsSecureInput = false
+        default: wantsSecureInput.toggle()
+        }
+        if wantsSecureInput {
+            SecureInput.shared.setScoped(secureInputID, focused: isFocused)
+        } else {
+            SecureInput.shared.removeScoped(secureInputID)
         }
     }
 
