@@ -136,6 +136,11 @@ final class PanelHostView: NSView {
     /// the zoom content swap. Nil when there's no header.
     var headerContentForTesting: (title: String, shortcut: String)? { headerView?.contentForTesting }
 
+    /// When true the panel is transparent to the pointer — set while it dissolves out on close, so a
+    /// click in the vacated region reaches the surviving pane beneath instead of this dead overlay.
+    var isHitTransparent = false
+    override func hitTest(_ point: NSPoint) -> NSView? { isHitTransparent ? nil : super.hitTest(point) }
+
     override func mouseDown(with event: NSEvent) {
         onFocusRequest()
         super.mouseDown(with: event)

@@ -38,6 +38,10 @@ final class PaneCanvasController: NSObject {
     /// ⌥-arrow nudge never rebuilds the tree.
     private var splitViewByID: [SplitID: SplitContainerView] = [:]
 
+    /// Close-out overlays currently fading (a just-closed pane dissolving over the collapsed tree),
+    /// kept out of `rebuildViews`' teardown so a concurrent reconcile doesn't snap them away.
+    private var dissolvingHosts: [NSView] = []
+
     /// Whether panes may show their focus halo. `TabController` sets this to false
     /// when a drawer holds unified focus, so exactly one panel is haloed across the
     /// whole tab.
@@ -212,7 +216,10 @@ final class PaneCanvasController: NSObject {
     }
 
     private func rebuildViews() {
-        canvasView.subviews.forEach { $0.removeFromSuperview() }
+        // Keep any in-flight close-out dissolve overlays (re-fronted below); drop the previous tree.
+        for subview in canvasView.subviews where !dissolvingHosts.contains(where: { $0 === subview }) {
+            subview.removeFromSuperview()
+        }
         // `hostByLeaf` survives the rebuild: retained leaves keep their PanelHostView (and
         // its constraints to `content`), so a restructure only reparents hosts instead of
         // rebuilding the pane chrome. Removed leaves were already pruned in reconcile.
@@ -242,6 +249,7 @@ final class PaneCanvasController: NSObject {
             root.topAnchor.constraint(equalTo: canvasView.topAnchor),
             root.bottomAnchor.constraint(equalTo: canvasView.bottomAnchor),
         ])
+        dissolvingHosts.forEach { canvasView.addSubview($0) }  // keep the fade on top of the rebuilt tree
         updateHalo()
     }
 
@@ -280,20 +288,41 @@ final class PaneCanvasController: NSObject {
         for host in hostByLeaf.values { host.reapplyTheme() }
     }
 
-    /// Render the focused leaf full-canvas, retaining its surface — no restart.
-    func zoomFocusedLeaf() {
+    /// Render the focused leaf full-canvas, retaining its surface — no restart. `resizesCanvas` is
+    /// passed by `TabController` when a drawer is open (so zooming even a lone pane really grows it,
+    /// dock → full) — the canvas doesn't know drawer state itself.
+    func zoomFocusedLeaf(resizesCanvas: Bool = false) {
         guard zoomedLeaf == nil else { return }
         zoomedLeaf = tree.focusedLeaf
-        reconcileAndRender()
+        rebuildIfCollapsing()
         focusActivePane()
+        popZoomTransition(resizesCanvas: resizesCanvas, growing: true)
     }
 
     /// Restore the split layout after `zoomFocusedLeaf()`.
-    func unzoom() {
+    func unzoom(resizesCanvas: Bool = false) {
         guard zoomedLeaf != nil else { return }
         zoomedLeaf = nil
-        reconcileAndRender()
+        rebuildIfCollapsing()
         focusActivePane()
+        popZoomTransition(resizesCanvas: resizesCanvas, growing: false)
+    }
+
+    /// Rebuild the canvas tree for a zoom only when it actually collapses/expands the layout — i.e.
+    /// a multi-pane split. A single-leaf canvas renders identically zoomed or not (the host fills
+    /// either way), so rebuilding would only reparent the host and flicker it with nothing to show.
+    private func rebuildIfCollapsing() {
+        if tree.leafIDs.count > 1 { reconcileAndRender() }
+    }
+
+    /// Scale-pop the rebuilt canvas root on a zoom in/out (the full-screen pane, or the restored
+    /// split). Skipped only for a true no-op — a lone pane with no drawer open, which is already
+    /// full-screen so nothing changes; a multi-pane zoom or an open drawer both make it a real
+    /// resize worth animating. Honors Reduce Motion via `Motion`.
+    private func popZoomTransition(resizesCanvas: Bool, growing: Bool) {
+        guard resizesCanvas || tree.leafIDs.count > 1, let root = canvasView.subviews.first else { return }
+        canvasView.layoutSubtreeIfNeeded()  // give root its final frame before scaling about its center
+        Motion.zoomPop(root, growing: growing)
     }
 
     /// Give panes the tab's unified focus halo (`on == true`), or yield it — used
@@ -351,15 +380,23 @@ final class PaneCanvasController: NSObject {
 
         let source = tree.focusedLeaf
         let newLeaf = mintPaneID()
+        let newSplit = mintSplitID()
         // inherit the focused pane's live cwd (falls back to last OSC-reported)
         cwdByLeaf[newLeaf] = registry.surface(for: source)?.currentDirectory ?? cwdByLeaf[source]
-        tree = tree.splitting(source, axis: axis, newLeaf: newLeaf, newSplit: mintSplitID())
+        tree = tree.splitting(source, axis: axis, newLeaf: newLeaf, newSplit: newSplit)
         reconcileAndRender()
         // `focusActivePane()` goes through `focus(_:)` (halo + first-responder +
         // `onFocusChanged`), unlike a raw `.focus()` — so a split while a drawer holds
         // unified focus re-syncs `TabController.focusedPanel` back to `.pane` instead
         // of leaving the halo stuck on the drawer.
         focusActivePane()
+        // Push the new pane in like a drawer: the source compresses (real resize) while the new pane
+        // slides in at its final size. Lay out at the final ratio first so the split knows the child
+        // sizes, then hand off. Reduce Motion keeps the instant appearance.
+        if !Motion.isReduceMotionEnabled(), let split = splitViewByID[newSplit] {
+            canvasView.layoutSubtreeIfNeeded()
+            split.animateSplitIn(duration: Motion.pageSlideDuration, timing: Motion.landingTiming)
+        }
     }
 
     /// Resize the focused pane by moving its edge in `direction`: it grows into a neighbor
@@ -406,14 +443,43 @@ final class PaneCanvasController: NSObject {
     /// Close the focused pane. Returns false when it was the last pane (caller closes the window).
     @discardableResult
     func closeFocused() -> Bool {
-        guard let next = tree.closing(tree.focusedLeaf) else { return false }
+        let dying = tree.focusedLeaf
+        guard let next = tree.closing(dying) else { return false }
+        let closing = captureDyingPane(dying)
         tree = next
         clearZoomIfLeafGone()
         reconcileAndRender()
+        dissolveClosedPane(closing)
         // See `split(_:)`: `focusActivePane()` fires `onFocusChanged` so unified focus
         // re-syncs to `.pane` instead of getting stuck on a previously focused drawer.
         focusActivePane()
         return true
+    }
+
+    /// Snapshot a pane's host + on-screen frame *before* the reconcile drops it, so
+    /// `dissolveClosedPane` can fade it out over the collapsed layout. Nil (no animation) when the
+    /// canvas isn't in a window.
+    private func captureDyingPane(_ id: PaneID) -> (host: PanelHostView, frame: CGRect)? {
+        guard let host = hostByLeaf[id], canvasView.window != nil else { return nil }
+        return (host, host.convert(host.bounds, to: canvasView))
+    }
+
+    /// Fade + scale the just-closed pane out over the already-collapsed layout (its surviving sibling
+    /// has filled behind it) — the close-out counterpart to the split-in push. The reconcile has
+    /// terminated the surface, so this is a static pane dissolving. Honors Reduce Motion.
+    private func dissolveClosedPane(_ closing: (host: PanelHostView, frame: CGRect)?) {
+        guard let (host, frame) = closing else { return }
+        host.removeFromSuperview()  // detach from its now-orphaned split container
+        guard !Motion.isReduceMotionEnabled() else { return }
+        host.isHitTransparent = true  // clicks in the vacated region fall through to the survivor beneath
+        host.translatesAutoresizingMaskIntoConstraints = true
+        host.frame = frame  // before addSubview, so the autoresizing-mask constraints capture it
+        canvasView.addSubview(host)  // back on top of the rebuilt tree
+        dissolvingHosts.append(host)  // survive a concurrent reconcile's rebuild instead of snapping away
+        Motion.springScaleFade(host, appearing: false) { [weak self] in
+            host.removeFromSuperview()
+            self?.dissolvingHosts.removeAll { $0 === host }
+        }
     }
 
     @objc func copyFromSurface(_ sender: Any?) {
@@ -461,9 +527,11 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
             onLastPaneClosed?()  // last pane's shell exited → close window
             return
         }
+        let closing = captureDyingPane(id)
         tree = next
         clearZoomIfLeafGone()
         reconcileAndRender()
+        dissolveClosedPane(closing)
         registry.surface(for: tree.focusedLeaf)?.focus()
     }
 
