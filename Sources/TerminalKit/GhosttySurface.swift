@@ -78,6 +78,24 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         ) { ghostty_surface_new(GhosttyApp.shared(theme: config.theme, behavior: config.behavior).app, &$0) }
 
         hostView.surfacePtr = surfacePtr
+
+        // A nil surface means `ghostty_surface_new` failed — the object stays alive but
+        // inert. Signal the chrome (which shows a toast + retry/close) and stop before the
+        // focus/layer/tick work below, which would otherwise run against a nil pointer.
+        guard surfacePtr != nil else {
+            // Deliver on the next main-loop turn, not synchronously inside `start()`: callers
+            // wire the surface into their own state around this call (a drawer ivar assigned
+            // after `start`, the pane registry), and the chrome dispatches this callback by
+            // surface identity. A synchronous callback would run before that wiring exists —
+            // silently dropped — and before the caller finishes mounting a surface it would
+            // then have to unwind. Deferring lets construction complete first.
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.delegate?.surfaceDidFailToStart(self)
+            }
+            return
+        }
+
         hostView.scrollMultiplier = (config.behavior ?? .default).scrollMultiplier
 
         // A fresh libghostty surface defaults to focused=true, and only `resignFirstResponder`

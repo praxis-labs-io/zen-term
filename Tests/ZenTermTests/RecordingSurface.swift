@@ -10,7 +10,22 @@ final class RecordingSurface: NSObject, TerminalSurface {
     var isFocused = false
     var lastConfig: TerminalSurfaceConfig?
     var terminated = false
-    func start(_ config: TerminalSurfaceConfig) { lastConfig = config }
+    /// When set, `start` reports a creation failure to the delegate instead of succeeding, which
+    /// exercises the seam's dead-surface path (ZEN-100) without needing a real libghostty failure.
+    var failOnStart = false
+    private(set) var startCount = 0
+    func start(_ config: TerminalSurfaceConfig) {
+        startCount += 1
+        lastConfig = config
+        // Mirror the real backend's async delivery (see `TerminalSurfaceDelegate`) so tests
+        // exercise the same timing: the failure arrives after the caller has wired us up.
+        if failOnStart {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.delegate?.surfaceDidFailToStart(self)
+            }
+        }
+    }
     func focus() {}
     func terminate() { terminated = true }
     func paste(_ text: String) {}

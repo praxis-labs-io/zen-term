@@ -12,6 +12,9 @@ final class PaneCanvasController: NSObject {
     private let registry: PaneSurfaceRegistry
     private var cwdByLeaf: [PaneID: URL] = [:]
     private var hostByLeaf: [PaneID: PanelHostView] = [:]
+    /// The exact config each leaf was started with, retained so a failed surface can be
+    /// retried by replaying it. Cleared when the leaf is torn down.
+    private var launchByLeaf: [PaneID: TerminalSurfaceConfig] = [:]
     /// The `NavRegistry` token minted for each live leaf, exported to its shell as
     /// `$ZEN_PANE` and used to address the pane over the nav socket. Cleared (and
     /// unregistered) when the leaf's surface is torn down.
@@ -85,6 +88,11 @@ final class PaneCanvasController: NSObject {
     /// exited) — the owning `TabController` clears its `zoomedPanel` so zoom state and
     /// panel visibility stay in sync.
     var onZoomEnded: (() -> Void)?
+
+    /// Fired when a pane's surface fails to start (its backend couldn't create the terminal).
+    /// Hands the chrome the retry/close actions; this controller keeps the mechanics (retry
+    /// replays the stored launch on the same surface, close drops the dead leaf).
+    var onSurfaceStartFailed: ((_ retry: @escaping () -> Void, _ close: @escaping () -> Void) -> Void)?
 
     /// Drops the zoom if the zoomed leaf is no longer in the tree, notifying the owner.
     private func clearZoomIfLeafGone() {
@@ -200,15 +208,19 @@ final class PaneCanvasController: NSObject {
             // for the first pane; a split seeds the new leaf with its parent's cwd). A
             // seeded startup command (workspace preset) runs a program that drops back to
             // a shell; consume it so it never re-runs.
+            let launch: TerminalSurfaceConfig
             if let cmd = startupCommandByLeaf.removeValue(forKey: id) {
-                surface.start(ShellLaunch.program(cmd, cwd: cwdByLeaf[id], env: navEnv(token: token)))
+                launch = ShellLaunch.program(cmd, cwd: cwdByLeaf[id], env: navEnv(token: token))
             } else {
-                surface.start(ShellLaunch.shell(cwd: cwdByLeaf[id], env: navEnv(token: token)))
+                launch = ShellLaunch.shell(cwd: cwdByLeaf[id], env: navEnv(token: token))
             }
+            launchByLeaf[id] = launch
+            surface.start(launch)
         }
         for id in diff.removed {
             cwdByLeaf[id] = nil
             hostByLeaf[id] = nil
+            launchByLeaf[id] = nil
             if let token = tokenByLeaf.removeValue(forKey: id) { NavRegistry.shared.unregister(token: token) }
         }
         if !diff.removed.isEmpty { onPanesRemoved?(diff.removed) }
@@ -523,8 +535,21 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }
+        closePane(id)
+    }
+
+    func surfaceDidFailToStart(_ s: TerminalSurface) {
+        guard let id = leafID(of: s) else { return }
+        onSurfaceStartFailed?(
+            { [weak self] in self?.retryStart(id) },
+            { [weak self] in self?.closePane(id) })
+    }
+
+    /// Drop a leaf whose surface is gone (shell exited) or dead (start failed): collapse
+    /// its slot in the tree — or close the window if it was the last pane — then reconcile.
+    private func closePane(_ id: PaneID) {
         guard let next = tree.closing(id) else {
-            onLastPaneClosed?()  // last pane's shell exited → close window
+            onLastPaneClosed?()  // last pane → close window
             return
         }
         let closing = captureDyingPane(id)
@@ -533,6 +558,13 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
         reconcileAndRender()
         dissolveClosedPane(closing)
         registry.surface(for: tree.focusedLeaf)?.focus()
+    }
+
+    /// Replay the stored launch on a leaf whose surface failed to start. Re-runs on the same
+    /// surface object; a repeat failure re-fires `surfaceDidFailToStart` for a fresh notice.
+    private func retryStart(_ id: PaneID) {
+        guard let surface = registry.surface(for: id), let launch = launchByLeaf[id] else { return }
+        surface.start(launch)
     }
 
     private func leafID(of surface: TerminalSurface) -> PaneID? {

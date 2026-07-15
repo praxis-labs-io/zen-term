@@ -62,6 +62,12 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     /// (halo + first-responder) to this surface. The surface only reports the intent;
     /// the chrome stays the single owner of focus.
     func surfaceWantsFocus(_ s: TerminalSurface)
+    /// The backend failed to create the underlying terminal (e.g. `ghostty_surface_new`
+    /// returned nil). The surface object exists but is inert; the chrome should surface
+    /// feedback and offer retry/close rather than leave a dead blank pane. Delivered
+    /// asynchronously (never synchronously inside `start`), so a consumer that dispatches
+    /// on surface identity can rely on having finished wiring the surface into its state.
+    func surfaceDidFailToStart(_ s: TerminalSurface)
 }
 
 /// Default no-ops so a consumer implements only the events it cares about.
@@ -74,6 +80,7 @@ public extension TerminalSurfaceDelegate {
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {}
     func surfaceWantsClose(_ s: TerminalSurface) {}
     func surfaceWantsFocus(_ s: TerminalSurface) {}
+    func surfaceDidFailToStart(_ s: TerminalSurface) {}
 }
 
 /// The leaf contract. A backend is anything that can BE a terminal in our chrome.
