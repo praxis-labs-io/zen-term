@@ -27,11 +27,9 @@ final class IconButton: NSView {
     /// a small badge tucked inside the corner rather than sitting in the rounded-off corner region.
     private static let dotInset: CGFloat = dotDiameter / 2 + 2
 
-    /// The hover-tooltip label, and an optional resolver for its keybind glyph — evaluated at hover
-    /// time so it reflects the live keymap (ZEN-42). A branded `ChromeTooltip`, not the native
-    /// `toolTip`, which is OS-drawn and unaware of the chrome.
-    private let tooltipLabel: String
-    private let tooltipShortcut: (() -> String?)?
+    /// The hover-tooltip wiring — a branded `ChromeTooltip` (not the OS-drawn `toolTip`), evaluated at
+    /// hover time so its keybind reflects the live keymap (ZEN-42). Shared with `TabBarView.Chip`.
+    private let tooltip: TooltipHost
 
     init(
         symbol: String, size: NSSize = NSSize(width: 24, height: 24),
@@ -40,8 +38,7 @@ final class IconButton: NSView {
         onClick: @escaping () -> Void
     ) {
         self.onClick = onClick
-        tooltipLabel = label
-        tooltipShortcut = shortcut
+        tooltip = TooltipHost(label: label, shortcut: shortcut)
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
@@ -99,14 +96,14 @@ final class IconButton: NSView {
 
     override func mouseEntered(with event: NSEvent) {
         isHovered = true
-        TooltipPresenter.shared.scheduleShow(for: self, label: tooltipLabel, shortcut: tooltipShortcut?())
+        tooltip.show(from: self)
     }
     override func mouseExited(with event: NSEvent) {
         isHovered = false
-        TooltipPresenter.shared.hide(for: self)
+        tooltip.hide(from: self)
     }
     override func mouseDown(with event: NSEvent) {
-        TooltipPresenter.shared.hide(for: self)  // a click dismisses the tooltip
+        tooltip.hide(from: self)  // a click dismisses the tooltip
         onClick()
     }
     override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
@@ -115,12 +112,12 @@ final class IconButton: NSView {
     /// Drop the tooltip if this button leaves the window (e.g. the dock rebuilds its floats).
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if window == nil { TooltipPresenter.shared.hide(for: self) }
+        if window == nil { tooltip.hide(from: self) }
     }
 
     /// Test hooks for the tooltip content (ZEN-42).
-    var tooltipLabelForTesting: String { tooltipLabel }
-    var tooltipShortcutForTesting: String? { tooltipShortcut?() }
+    var tooltipLabelForTesting: String { tooltip.label }
+    var tooltipShortcutForTesting: String? { tooltip.shortcutForTesting }
 
     /// Re-apply the live chrome colors after a config change — no relaunch. `update()` already
     /// reads `Theme.current` fresh on every call; it just needs re-triggering since nothing else
