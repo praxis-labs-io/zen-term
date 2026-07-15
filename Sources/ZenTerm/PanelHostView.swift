@@ -22,11 +22,10 @@ final class PanelHostView: NSView {
     private let pane = ShadowCardView()  // focus glow gets an explicit shadowPath
     private let clip = NSView()  // inner clip so terminal content stays inside the radius
     private let headerView: PanelHeader?
-    /// True when the header is a pane's full-screen header (shown only while zoomed); false for
-    /// a drawer header (always shown). Drives whether `isZoomed` toggles the header.
-    private let headerZoomOnly: Bool
-    /// A drawer's resting vs zoomed header content. `nil` for a pane (whose zoom-only header
-    /// keeps its single meta and toggles visibility instead of swapping content).
+    /// The header content for the resting vs zoomed state. A pane has only `zoomMeta` (header hidden
+    /// until zoomed); a drawer has both (its base header ⇄ the zoom variant). `updateHeader` picks
+    /// the meta for the current zoom state — `(isZoomed ? zoomMeta : nil) ?? baseMeta`, nil meta
+    /// hides — which covers both cases in one rule.
     private let baseMeta: PanelMeta?
     private let zoomMeta: PanelMeta?
     private var headerTopConstraints: [NSLayoutConstraint] = []
@@ -41,11 +40,7 @@ final class PanelHostView: NSView {
     var isZoomed: Bool = false {
         didSet {
             guard oldValue != isZoomed else { return }
-            if headerZoomOnly {
-                setHeaderShown(isZoomed)
-            } else if let headerView, let baseMeta, let zoomMeta {
-                headerView.apply(isZoomed ? zoomMeta : baseMeta)
-            }
+            updateHeader()
         }
     }
 
@@ -60,16 +55,8 @@ final class PanelHostView: NSView {
         self.onFocusRequest = onFocusRequest
         self.baseMeta = meta
         self.zoomMeta = zoomMeta
-        if let meta {
-            headerView = PanelHeader(meta)
-            headerZoomOnly = false
-        } else if let zoomMeta {
-            headerView = PanelHeader(zoomMeta)
-            headerZoomOnly = true
-        } else {
-            headerView = nil
-            headerZoomOnly = false
-        }
+        // Construct with whichever meta exists; `updateHeader()` below sets the state-correct one.
+        headerView = (meta ?? zoomMeta).map(PanelHeader.init)
         super.init(frame: .zero)
 
         wantsLayer = true
@@ -119,7 +106,7 @@ final class PanelHostView: NSView {
             ]
             contentTopToHeader = content.topAnchor.constraint(
                 equalTo: headerView.bottomAnchor, constant: padding)
-            setHeaderShown(!headerZoomOnly)  // drawer headers show now; a pane's waits for zoom
+            updateHeader()  // drawer shows its base header now; a pane's stays hidden until zoom
         } else {
             contentTopToClip?.isActive = true
         }
@@ -144,6 +131,19 @@ final class PanelHostView: NSView {
     override func mouseDown(with event: NSEvent) {
         onFocusRequest()
         super.mouseDown(with: event)
+    }
+
+    /// Show the header with the meta for the current zoom state, or hide it when this state has none.
+    /// One rule for both kinds: a pane (base nil) hides until zoomed, then shows its zoom meta; a
+    /// drawer shows its base header and swaps to the zoom variant while zoomed.
+    private func updateHeader() {
+        guard let headerView else { return }
+        if let meta = (isZoomed ? zoomMeta : nil) ?? baseMeta {
+            headerView.apply(meta)
+            setHeaderShown(true)
+        } else {
+            setHeaderShown(false)
+        }
     }
 
     /// Swap between header-above-content and content-at-top, and hide/show the header.

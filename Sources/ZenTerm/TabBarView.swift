@@ -388,11 +388,9 @@ final class TabBarView: NSView {
         private let onMiddleClick: (() -> Void)?
         private var isHovered = false
         private let label: NSTextField
-        /// The hover-tooltip title, and an optional resolver for its keybind glyph — evaluated at
-        /// hover time so it reflects the live keymap. A branded `ChromeTooltip` (the same one the
-        /// footer dock buttons use), not the OS-drawn native `toolTip`.
-        private let tooltipLabel: String
-        private let tooltipShortcut: (() -> String?)?
+        /// The hover-tooltip wiring — a branded `ChromeTooltip` (the same one the footer dock buttons
+        /// use), evaluated at hover time so its keybind tracks the live keymap. Shared with `IconButton`.
+        private let tooltip: TooltipHost
 
         /// The width this chip wants: its label plus the 9pt inset on each side. Read from the
         /// label's intrinsic size (not `fittingSize`) so it's independent of the frame the parent
@@ -400,8 +398,8 @@ final class TabBarView: NSView {
         var fittingWidth: CGFloat { label.intrinsicContentSize.width + 18 }
 
         /// Test hooks for the tooltip content (ZEN-110), mirroring `IconButton`.
-        var tooltipLabelForTesting: String { tooltipLabel }
-        var tooltipShortcutForTesting: String? { tooltipShortcut?() }
+        var tooltipLabelForTesting: String { tooltip.label }
+        var tooltipShortcutForTesting: String? { tooltip.shortcutForTesting }
 
         init(
             attributed: NSAttributedString,
@@ -410,8 +408,7 @@ final class TabBarView: NSView {
         ) {
             self.onClick = onClick
             self.onMiddleClick = onMiddleClick
-            self.tooltipLabel = tooltipLabel
-            self.tooltipShortcut = tooltipShortcut
+            tooltip = TooltipHost(label: tooltipLabel, shortcut: tooltipShortcut)
             label = NSTextField(labelWithAttributedString: attributed)
             super.init(frame: .zero)
             wantsLayer = true
@@ -445,7 +442,7 @@ final class TabBarView: NSView {
         /// chips without firing `mouseExited`, so the old chip's tooltip would otherwise linger).
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            if window == nil { TooltipPresenter.shared.hide(for: self) }
+            if window == nil { tooltip.hide(from: self) }
         }
 
         /// Externally-driven hover (from the bar's scroll-time recompute), a no-op when unchanged.
@@ -455,15 +452,10 @@ final class TabBarView: NSView {
             guard isHovered != on else { return }
             isHovered = on
             updateBackground()
-            if on {
-                TooltipPresenter.shared.scheduleShow(
-                    for: self, label: tooltipLabel, shortcut: tooltipShortcut?())
-            } else {
-                TooltipPresenter.shared.hide(for: self)
-            }
+            if on { tooltip.show(from: self) } else { tooltip.hide(from: self) }
         }
         override func mouseDown(with event: NSEvent) {
-            TooltipPresenter.shared.hide(for: self)  // a click dismisses the tooltip
+            tooltip.hide(from: self)  // a click dismisses the tooltip
             onClick()
         }
         override func otherMouseDown(with event: NSEvent) {
