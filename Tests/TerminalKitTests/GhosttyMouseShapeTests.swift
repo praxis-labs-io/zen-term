@@ -4,30 +4,32 @@ import XCTest
 @testable import TerminalKit
 
 final class GhosttyMouseShapeTests: XCTestCase {
+    // The system cursors (`.iBeam`, `.arrow`, …) are shared singletons, so identity (`===`) is
+    // the precise check that the mapping returns exactly that cursor.
     func test_textMapsToIBeam() {
-        XCTAssertEqual(GhosttyHostView.nsCursor(for: GHOSTTY_MOUSE_SHAPE_TEXT), .iBeam)
+        XCTAssertTrue(GhosttyHostView.nsCursor(for: GHOSTTY_MOUSE_SHAPE_TEXT) === NSCursor.iBeam)
     }
 
     func test_pointerMapsToPointingHand() {
-        XCTAssertEqual(GhosttyHostView.nsCursor(for: GHOSTTY_MOUSE_SHAPE_POINTER), .pointingHand)
+        XCTAssertTrue(GhosttyHostView.nsCursor(for: GHOSTTY_MOUSE_SHAPE_POINTER) === NSCursor.pointingHand)
     }
 
     func test_notAllowedMapsToOperationNotAllowed() {
-        XCTAssertEqual(
-            GhosttyHostView.nsCursor(for: GHOSTTY_MOUSE_SHAPE_NOT_ALLOWED), .operationNotAllowed)
+        XCTAssertTrue(
+            GhosttyHostView.nsCursor(for: GHOSTTY_MOUSE_SHAPE_NOT_ALLOWED) === NSCursor.operationNotAllowed)
     }
 
     func test_horizontalResizeMapsToResizeLeftRight() {
-        XCTAssertEqual(
-            GhosttyHostView.nsCursor(for: GHOSTTY_MOUSE_SHAPE_EW_RESIZE), .resizeLeftRight)
+        XCTAssertTrue(
+            GhosttyHostView.nsCursor(for: GHOSTTY_MOUSE_SHAPE_EW_RESIZE) === NSCursor.resizeLeftRight)
     }
 
     func test_defaultMapsToArrow() {
-        XCTAssertEqual(GhosttyHostView.nsCursor(for: GHOSTTY_MOUSE_SHAPE_DEFAULT), .arrow)
+        XCTAssertTrue(GhosttyHostView.nsCursor(for: GHOSTTY_MOUSE_SHAPE_DEFAULT) === NSCursor.arrow)
     }
 
     func test_unmappedShapeFallsBackToArrow() {
         // Diagonal resizes have no classic NSCursor, so they take the .arrow fallback.
-        XCTAssertEqual(GhosttyHostView.nsCursor(for: GHOSTTY_MOUSE_SHAPE_NWSE_RESIZE), .arrow)
+        XCTAssertTrue(GhosttyHostView.nsCursor(for: GHOSTTY_MOUSE_SHAPE_NWSE_RESIZE) === NSCursor.arrow)
     }
 }
