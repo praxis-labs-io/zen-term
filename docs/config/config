@@ -98,7 +98,7 @@
 #   command  (required)  runs as `$SHELL -l -i -c <command>` at the focused cwd
 #   key      (required)  toggle chord, e.g. cmd+shift+g (see "Chord syntax" below)
 #   git      (optional)  true = only open inside a git repo         (default false)
-#   persist  (optional)  process lifetime                             (default none)
+#   persist  (optional)  process lifetime                           (default none)
 #                        none = terminate on dismiss, fresh every open
 #                        dir  = keep alive per directory (repo root if in a repo, else
 #                               the cwd); reopening elsewhere respawns
