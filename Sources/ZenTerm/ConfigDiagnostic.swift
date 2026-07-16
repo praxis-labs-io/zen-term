@@ -15,10 +15,35 @@ struct ConfigDiagnostic: Hashable {
         case keybind(KeyInterceptor.ReservedChord)
     }
 
+    /// What went wrong — the two are different claims and must not share a headline.
+    enum Problem: Hashable {
+        /// The action was left with no chord at all: something took its last one.
+        case noShortcut
+        /// A config line names a chord this keyboard can't produce. The line is dead; the action
+        /// still has its default.
+        case unusableBind
+    }
+
     var scope: Scope
+    var problem: Problem
     /// Written in the *config file's* vocabulary (`⌘⇧\ went to toggle_zoom`), not the UI's, so it
     /// names the exact token to grep for in the file the user has to edit to fix it.
     var message: String
+
+    /// The one-line claim, for a toast's title. Derived on read, never stored: it needs a float's
+    /// human title, and diagnostics are built inside `KeymapAssembler` — which runs *during* the
+    /// parse, while `GeneralConfig.current` still holds the OLD config. Resolving names there reads
+    /// the previous launch's floats and renders a float as its raw id.
+    var headline: String {
+        switch scope {
+        case .keybind(let action):
+            let title = CommandCatalog.spec(for: action).title
+            switch problem {
+            case .noShortcut: return "\(title) has no shortcut"
+            case .unusableBind: return "\(title) has an unusable shortcut"
+            }
+        }
+    }
 
     /// What a reload should announce, or nil to stay quiet. Pure and gated on `alreadyAnnounced`,
     /// extracted from the delegate's observer precisely so this decision is testable — the app
@@ -40,24 +65,18 @@ struct ConfigDiagnostic: Hashable {
     /// The notice for a set of diagnostics, or nil when there's nothing to say. A reload has to
     /// announce itself: the inline note on a Keybinds row only reaches someone already looking at
     /// that row, and a user who just broke their config by hand has no reason to go there.
-    /// Every line carries the chord and the winning token, because that pair is the whole point:
+    /// Every line carries the chord and the offending token, because that pair is the whole point:
     /// it's what the user greps for in the file. Naming only the actions would say something is
     /// wrong without saying what to go fix — and the fix always lives in the config, which is why
     /// nothing here points at Settings: a tool float has no Keybinds row to send anyone to.
     static func toast(for diagnostics: [ConfigDiagnostic]) -> ToastContent? {
         guard !diagnostics.isEmpty else { return nil }
         if diagnostics.count == 1, let only = diagnostics.first {
-            return ToastContent(
-                variant: .warning, title: "\(title(for: only.scope)) has no shortcut", message: only.message)
+            return ToastContent(variant: .warning, title: only.headline, message: only.message)
         }
         return ToastContent(
-            variant: .warning, title: "\(diagnostics.count) actions have no shortcut",
-            message: diagnostics.map { "\(title(for: $0.scope)): \($0.message)" }.joined(separator: "\n"))
+            variant: .warning, title: "\(diagnostics.count) problems in your config",
+            message: diagnostics.map { "\($0.headline): \($0.message)" }.joined(separator: "\n"))
     }
 
-    private static func title(for scope: Scope) -> String {
-        switch scope {
-        case .keybind(let action): return CommandCatalog.spec(for: action).title
-        }
-    }
 }

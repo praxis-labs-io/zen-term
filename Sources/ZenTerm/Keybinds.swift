@@ -136,16 +136,31 @@ enum KeybindParser {
 /// Also reports the displacements that cost an action its *last* chord, so the Keybinds card can
 /// say why a row has no shortcut rather than rendering a bare empty chip (ZEN-142).
 enum KeymapAssembler {
+    /// `canType` is injected so tests state the layout instead of inheriting the test machine's.
     static func assemble(
-        floats: [ToolFloat], keybinds: [(Chord, KeyInterceptor.ReservedChord)]
+        floats: [ToolFloat], keybinds: [(Chord, KeyInterceptor.ReservedChord)],
+        canType: (Chord) -> Bool = KeyboardLayout.canType
     ) -> (map: [Chord: KeyInterceptor.ReservedChord], diagnostics: [ConfigDiagnostic]) {
         var map = KeymapDefaults.map
         let floatIDs = Set(floats.map(\.id))
         var displacements: [Displacement] = []
 
+        // Drop binds no keypress on this keyboard could ever produce (`cmd+|` on a US layout — `|`
+        // needs Shift there). Dropped BEFORE `reboundActions`, so an unusable line doesn't also cost
+        // the action its default: the old behavior left it with no shortcut at all, and the dead
+        // chord in the map made it look bound. `untypeable` carries them to the diagnostics.
+        let (typeable, untypeable) = keybinds.reduce(
+            into: ([(Chord, KeyInterceptor.ReservedChord)](), [(Chord, KeyInterceptor.ReservedChord)]())
+        ) { split, bind in
+            canType(bind.0) ? split.0.append(bind) : split.1.append(bind)
+        }
+        for (chord, action) in untypeable {
+            NSLog("GeneralConfig: keybind \(action.actionToken)=\(chord.configToken) can't be typed — ignored")
+        }
+
         // A user keybind MOVES its action: drop the action's default chord(s) first, so the
         // old key is freed instead of both the default and the new chord firing it.
-        let reboundActions = keybinds.map(\.1)
+        let reboundActions = typeable.map(\.1)
         map = map.filter { entry in !reboundActions.contains(entry.value) }
 
         func set(_ chord: Chord, _ action: KeyInterceptor.ReservedChord) {
@@ -159,14 +174,28 @@ enum KeymapAssembler {
         }
 
         for float in floats { set(float.toggle, .toggleToolFloat(float.id)) }
-        for (chord, action) in keybinds {
+        for (chord, action) in typeable {
             if case .toggleToolFloat(let id) = action, !floatIDs.contains(id) {
                 NSLog("GeneralConfig: keybind action toggle_float:\(id) names no configured float — ignored")
                 continue
             }
             set(chord, action)
         }
-        return (map, diagnostics(for: displacements, in: map))
+        return (map, diagnostics(for: displacements, in: map) + untypeableDiagnostics(untypeable))
+    }
+
+    /// A config line naming a chord this keyboard can't produce. Distinct from an action left with
+    /// no shortcut: the action still has its default — it's the line that's dead — so it gets its
+    /// own headline rather than borrowing the "no shortcut" one.
+    private static func untypeableDiagnostics(
+        _ untypeable: [(Chord, KeyInterceptor.ReservedChord)]
+    ) -> [ConfigDiagnostic] {
+        untypeable.map { chord, action in
+            ConfigDiagnostic(
+                scope: .keybind(action), problem: .unusableBind,
+                message: "\(action.actionToken)=\(chord.configToken) can't be typed on your keyboard "
+                    + "— ignoring it.")
+        }
     }
 
     /// One chord write that took a chord off another action — recorded as it happens, before the
@@ -196,7 +225,7 @@ enum KeymapAssembler {
             else { return nil }
             seen.append(displacement.loser)
             return ConfigDiagnostic(
-                scope: .keybind(displacement.loser),
+                scope: .keybind(displacement.loser), problem: .noShortcut,
                 message: "\(displacement.chord.displayGlyph) went to \(winner.actionToken) in your config.")
         }
     }

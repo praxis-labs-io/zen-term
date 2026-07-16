@@ -165,13 +165,17 @@ struct Chord: Hashable {
     /// them to a display glyph, which `KeycapView` draws as an SF Symbol and `configToken`/`parse`
     /// round-trip as a single character.
     private static func glyphForSpecialKey(_ keyCode: UInt16) -> String? {
-        switch keyCode {
-        case 123: return "←"
-        case 124: return "→"
-        case 125: return "↓"
-        case 126: return "↑"
-        case 36: return "⏎"
-        default: return nil
-        }
+        specialKeyGlyphs[keyCode]
+    }
+
+    private static let specialKeyGlyphs: [UInt16: String] = [
+        123: "←", 124: "→", 125: "↓", 126: "↑", 36: "⏎",
+    ]
+
+    /// Whether a key token is one of the non-printing keys `Chord(event:)` names by keyCode. These
+    /// never come from the keyboard layout's character tables, so anything asking the layout what it
+    /// can produce has to let them through — see `KeyboardLayout.canType`.
+    static func isSpecialKeyGlyph(_ key: String) -> Bool {
+        specialKeyGlyphs.values.contains(key)
     }
 }

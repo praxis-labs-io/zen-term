@@ -26,7 +26,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     }
 
     private func diagnostic(_ action: KeyInterceptor.ReservedChord, _ message: String) -> ConfigDiagnostic {
-        ConfigDiagnostic(scope: .keybind(action), message: message)
+        ConfigDiagnostic(scope: .keybind(action), problem: .noShortcut, message: message)
     }
 
     func test_noDiagnostics_producesNoToast() {
@@ -108,7 +108,11 @@ final class ConfigDiagnosticToastTests: XCTestCase {
 
         XCTAssertEqual(GeneralConfig.current.keymapDiagnostics.map(\.scope), [.keybind(.toggleToolFloat("btop"))])
         let content = try XCTUnwrap(ConfigDiagnostic.toast(for: GeneralConfig.current.keymapDiagnostics))
+        // "BTop", the float's title — not "btop", its id. The headline has to be derived on READ:
+        // diagnostics are built inside the parse, while GeneralConfig.current still holds the old
+        // config, so resolving the name back then reads the previous launch's floats and finds none.
         XCTAssertTrue(content.title.contains("BTop"), content.title)
+        XCTAssertFalse(content.title.contains("btop has"), "fell back to the raw id: \(content.title)")
         XCTAssertTrue(content.message.contains("new_tab"), content.message)
     }
 

@@ -134,4 +134,53 @@ final class KeymapAssemblyTests: XCTestCase {
     func test_cleanConfig_reportsNoDiagnostics() {
         XCTAssertEqual(KeymapAssembler.assemble(floats: [], keybinds: []).diagnostics, [])
     }
+
+    // MARK: un-typeable binds
+    //
+    // The layout is stated, never inherited from whatever keyboard the test machine has — the whole
+    // point of the check is that the answer differs per layout.
+
+    /// A US layout: the shifted symbols need Shift; nothing produces them without it.
+    private func usLayout(_ chord: Chord) -> Bool {
+        let shiftedOnly: Set<String> = ["~", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+", "|"]
+        if !chord.shift, shiftedOnly.contains(chord.key) { return false }
+        return true
+    }
+
+    func test_bindThatCantBeTyped_isIgnoredAndLeavesTheDefaultAlone() {
+        // `cmd+|` is un-typeable on US — `|` needs Shift. Binding it anyway gave split_vertical a
+        // chord no keypress could produce AND stripped its default, leaving it with nothing.
+        let user = KeybindParser.parse("split_vertical=cmd+|")!
+        let assembled = KeymapAssembler.assemble(floats: [], keybinds: [user], canType: usLayout)
+
+        XCTAssertEqual(
+            assembled.map[Chord(command: true, shift: true, key: "\\")], .splitVertical,
+            "an unusable line must not cost the action its default")
+        XCTAssertNil(assembled.map[Chord(command: true, key: "|")], "and the dead chord isn't bound")
+        XCTAssertEqual(assembled.diagnostics.count, 1)
+        let diagnostic = assembled.diagnostics[0]
+        XCTAssertEqual(diagnostic.scope, .keybind(.splitVertical))
+        // A different claim from "has no shortcut" — the action still has its default.
+        XCTAssertTrue(diagnostic.headline.contains("unusable"), diagnostic.headline)
+        XCTAssertTrue(diagnostic.message.contains("split_vertical=cmd+|"), diagnostic.message)
+    }
+
+    func test_sameBindOnALayoutThatCanTypeIt_isBoundWithNoComplaint() {
+        // The same spec on AZERTY, where `_` is unshifted: perfectly usable, and warning about it
+        // would be slander. This is why the check asks the layout instead of guessing from the glyph.
+        let user = KeybindParser.parse("split_vertical=cmd+_")!
+        let azerty: (Chord) -> Bool = { _ in true }
+        let assembled = KeymapAssembler.assemble(floats: [], keybinds: [user], canType: azerty)
+
+        XCTAssertEqual(assembled.map[Chord(command: true, key: "_")], .splitVertical)
+        XCTAssertEqual(assembled.diagnostics, [])
+    }
+
+    func test_typeableBinds_areUnaffectedByTheCheck() {
+        // A shifted symbol on an unclaimed chord: typeable on US, so it binds and says nothing.
+        let assembled = KeymapAssembler.assemble(
+            floats: [], keybinds: [KeybindParser.parse("new_tab=cmd+shift+opt+_")!], canType: usLayout)
+        XCTAssertEqual(assembled.map[Chord(command: true, shift: true, option: true, key: "-")], .newTab)
+        XCTAssertEqual(assembled.diagnostics, [])
+    }
 }

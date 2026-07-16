@@ -49,7 +49,9 @@ final class WindowControllerToastSeamTests: XCTestCase {
 
         controller.showToast(
             ConfigDiagnostic.toast(for: [
-                ConfigDiagnostic(scope: .keybind(.splitVertical), message: "⌘⇧\\ went to toggle_zoom in your config.")
+                ConfigDiagnostic(
+                    scope: .keybind(.splitVertical), problem: .noShortcut,
+                    message: "⌘⇧\\ went to toggle_zoom in your config.")
             ])!)
 
         let toasts = toastViews(in: controller)
