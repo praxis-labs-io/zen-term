@@ -155,12 +155,16 @@ final class SettingsOverlay: NSView, ModalOverlay {
         // instead of clipping or colliding with the version footer pinned below (ZEN-136). Keyboard
         // nav scrolls the selected row into view in `selectSection`.
         navScroll.translatesAutoresizingMaskIntoConstraints = false
+        // Install the flipped clip view BEFORE `drawsBackground = false`: that property forwards to
+        // the scroll view's CURRENT clip view, so swapping the clip view afterwards resurrects the
+        // default opaque system background — an appearance-following wash over the nav column that
+        // ignores Theme.current (ZEN-27) and reads as a mismatched sidebar panel.
+        navScroll.contentView = FlippedClipView()  // top-down: the list starts at the top and scrolls down
         navScroll.drawsBackground = false
         navScroll.borderType = .noBorder
         navScroll.hasVerticalScroller = true
         navScroll.autohidesScrollers = true
         navScroll.scrollerStyle = .overlay
-        navScroll.contentView = FlippedClipView()  // top-down: the list starts at the top and scrolls down
         navScroll.documentView = navStack
         navStack.translatesAutoresizingMaskIntoConstraints = false
 
