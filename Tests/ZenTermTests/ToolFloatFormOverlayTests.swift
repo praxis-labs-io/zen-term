@@ -324,4 +324,32 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         XCTAssertEqual(sink.submitted.first?.persist, .tab)
         XCTAssertEqual(sink.submitted.first?.dir?.path, "/tmp/x")
     }
+
+    /// `/tmp/x` above is outside `$HOME`, so `abbreviatingHome` is a no-op on it and can't tell a
+    /// correct re-abbreviate from a raw `dir.path` regression. Use a home-relative fixture instead,
+    /// and touch only an unrelated field — the real scenario of an untouched `dir` surviving submit.
+    ///
+    /// Note this asserts the *prefilled field text*, not just the submitted float's `dir?.path`:
+    /// `ToolFloat.dir` is a `URL`, so `.path` is always the absolute form, and `buildFloat`'s
+    /// `expandingTildeInPath` is a no-op on an already-absolute string — so an absolute-path
+    /// regression in `prefill()` still round-trips to the identical submitted `dir?.path`. The
+    /// abbreviation is only observable in what the field displays, which is what a user actually sees
+    /// and re-saves; that's the assertion that would fail if `prefill()` regressed to raw `dir.path`.
+    func test_edit_untouchedHomeRelativeDir_prefillsAbbreviatedAndRoundTripsOnSubmit() {
+        let homeRelativePath = PathDisplay.homePath + "/notes"
+        let existing = ToolFloat(
+            id: "lg", title: "Open Lazygit", icon: "git", command: "lazygit",
+            dir: URL(fileURLWithPath: homeRelativePath), widthFraction: 0.85, heightFraction: 0.78,
+            requiresGitRepo: true, persist: .tab, toggle: Chord(command: true, key: "g"))
+        let (overlay, _, sink) = mount(editing: existing)
+
+        XCTAssertEqual(
+            field(in: overlay, placeholder: "~/notes").text, "~/notes",
+            "prefill must re-abbreviate a home-relative dir, not show the raw absolute path")
+
+        field(in: overlay, placeholder: "npm run dev").setText("lazygit --config foo")
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.dir?.path, homeRelativePath)
+    }
 }
