@@ -957,7 +957,20 @@ In `Sources/ZenTerm/ToolFloatFormOverlay.swift`'s `buildFloat()`, preserve the e
             dir: editingFloat?.dir,
 ```
 
-Then fix the test constructions: add `dir: nil` to `spec(_:persist:git:)` in `TabControllerToolFloatTests` and to every `ToolFloat(...)` in `ConfigWriterTests`. Re-run. Expected: PASS.
+Then give the `TabControllerToolFloatTests` spec helper a `dir` parameter, so the new tests can ask for a pinned float in one line instead of rebuilding the struct field-by-field:
+
+```swift
+    private func spec(
+        _ id: String, persist: ToolFloat.Persistence, git: Bool = false, dir: URL? = nil
+    ) -> ToolFloat {
+        ToolFloat(
+            id: id, title: "Open \(id)", icon: ToolFloatParser.defaultIcon, command: id, dir: dir,
+            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: git,
+            persist: persist, toggle: Chord(command: true, shift: true, key: "j"))
+    }
+```
+
+Add `dir: nil` to every `ToolFloat(...)` in `ConfigWriterTests`. Re-run. Expected: PASS.
 
 - [ ] **Step 6: Serialize `dir:`**
 
@@ -977,13 +990,8 @@ func test_dirField_pinsTheSpawnDirectory_ignoringTheFocusedCWD() throws {
     let paneDir = try makeDir("pane", git: false)
     let pinned = try makeDir("notes", git: false)
     let (controller, spawned) = makeController(cwd: paneDir)
-    var float = spec("notes", persist: .ephemeral)
-    float = ToolFloat(
-        id: float.id, title: float.title, icon: float.icon, command: float.command, dir: pinned,
-        widthFraction: float.widthFraction, heightFraction: float.heightFraction,
-        requiresGitRepo: float.requiresGitRepo, persist: float.persist, toggle: float.toggle)
 
-    controller.toggleToolFloat(float)
+    controller.toggleToolFloat(spec("notes", persist: .ephemeral, dir: pinned))
 
     XCTAssertEqual(
         floatSurfaces(spawned(), command: "notes")[0].lastConfig?.workingDirectory, pinned,
@@ -995,11 +1003,7 @@ func test_dirField_withPersistTab_survivesACWDChange() throws {
     let pinned = try makeDir("notes", git: false)
     let elsewhere = try makeDir("elsewhere", git: false)
     let (controller, spawned) = makeController(cwd: paneDir)
-    let base = spec("notes", persist: .tab)
-    let float = ToolFloat(
-        id: base.id, title: base.title, icon: base.icon, command: base.command, dir: pinned,
-        widthFraction: base.widthFraction, heightFraction: base.heightFraction,
-        requiresGitRepo: base.requiresGitRepo, persist: base.persist, toggle: base.toggle)
+    let float = spec("notes", persist: .tab, dir: pinned)
 
     controller.toggleToolFloat(float)
     controller.closeToolFloat()
