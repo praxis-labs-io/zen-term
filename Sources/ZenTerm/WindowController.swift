@@ -1211,7 +1211,9 @@ final class WindowController: NSObject {
     private func renderDock() {
         let overlay = activeController?.overlayState ?? OverlayState()
         // The shown float is window-level, so it comes from `floats`, not the active tab's state.
-        dock.render(overlay: overlay, floatID: floats.activeID, paletteOpen: modal?.kind == .commandPalette)
+        dock.render(
+            overlay: overlay, floatID: floats.activeID, paletteOpen: modal?.kind == .commandPalette,
+            isLiveInBackground: floats.isLiveInBackground)
         // Keep the poll's change-guard in sync with what's actually shown, so a tab switch to a
         // differently-busy tab re-evaluates instead of comparing against a stale value.
         lastDrawerBusy = (overlay.bottomBusy, overlay.rightBusy)

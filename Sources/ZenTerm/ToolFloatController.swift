@@ -78,6 +78,16 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// the window close over it silently.
     var hasBusy: Bool { liveFloats.values.contains { $0.surface.isBusy } }
 
+    /// Whether this float is running behind the scenes — alive, but not the one on screen. The
+    /// dock dots this, so the user can see a tool they dismissed is still going.
+    ///
+    /// Registry membership, not `surface.isBusy` (what the drawer dot uses): a `persist:window` btop
+    /// is always live, but whether it reads as "busy" depends on foreground-job accounting. Liveness
+    /// is the meaningful signal for a float, and it needs no polling — membership changes push
+    /// through `onStateChanged`, while `isBusy` has no event, which is why the drawer path polls.
+    /// Only `.directory` / `.window` floats ever register, so an `.ephemeral` float never dots.
+    func isLiveInBackground(_ id: String) -> Bool { liveFloats[id] != nil && activeID != id }
+
     /// Every live float surface, for the config-change re-theming fan-out.
     var allSurfaces: [TerminalSurface] {
         var result = liveFloats.values.map(\.surface)
@@ -208,6 +218,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     private func discard(_ id: String) {
         guard let live = liveFloats.removeValue(forKey: id) else { return }
         live.surface.terminate()
+        onStateChanged?()  // the dock dots live-in-background floats; this one is gone
     }
 
     /// Close the float. An ephemeral float's surface dies with the card; a persistent one keeps
@@ -299,6 +310,9 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         if let id = liveFloats.first(where: { $0.value.surface === s })?.key {
             liveFloats.removeValue(forKey: id)  // a hidden persistent float's tool quit
             s.terminate()
+            // The dock dots live-in-background floats, and this is the one path that ends that state
+            // without the card ever opening or closing — without it the dot outlives the process.
+            onStateChanged?()
         }
     }
 
