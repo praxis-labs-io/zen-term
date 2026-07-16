@@ -32,11 +32,11 @@ struct Chord: Hashable {
         self.option = option
         self.control = control
         self.shift = shift
-        if shift, let base = Chord.baseKeyForShiftedGlyph[key] {
-            self.key = base
-        } else {
-            self.key = key
-        }
+        // Lowercase here, not just in `parse` / `init(event:)`: a live event's key always arrives
+        // lowercased, so a `Chord(key: "G")` built directly would be a dictionary key no keypress
+        // could ever match — a bind that looks right in the map and never fires.
+        let key = key.lowercased()
+        self.key = (shift ? Chord.baseKeyForShiftedGlyph[key] : nil) ?? key
     }
 
     /// The unshifted glyph for each key a US layout shifts into a different character. One-way by

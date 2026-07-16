@@ -94,6 +94,15 @@ final class ChordTests: XCTestCase {
         XCTAssertEqual(Chord(event: plusEvent), Chord(command: true, key: "+"))
     }
 
+    func test_key_isLowercasedByInit_notJustByParse() {
+        // A live event's key always arrives lowercased, so an uppercase key built directly would be
+        // a dictionary entry no keypress could match — bound-looking and dead.
+        XCTAssertEqual(Chord(command: true, key: "G"), Chord(command: true, key: "g"))
+        XCTAssertEqual(Chord(command: true, key: "G").key, "g")
+        XCTAssertEqual(Chord(command: true, key: "G").displayGlyph, "⌘G")
+        XCTAssertEqual(Chord(command: true, key: "G").configToken, "cmd+g")
+    }
+
     func test_baseKeys_areLeftAlone() {
         // Only shifted glyphs fold. A base key keeps whatever Shift it was spelled with, so bare
         // ⌘- stays bare ⌘- (ghostty's text zoom) rather than drifting into ⌘⇧-.
