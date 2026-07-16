@@ -184,7 +184,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
         NSLayoutConstraint.activate([
             navScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             navScroll.topAnchor.constraint(equalTo: root.topAnchor),
-            navScroll.widthAnchor.constraint(equalToConstant: 168),
+            navScroll.widthAnchor.constraint(equalToConstant: Self.navWidth),
             navScroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -8),
 
             // navStack is the scrolling document: full content width, height intrinsic (scrolls tall).
@@ -193,8 +193,9 @@ final class SettingsOverlay: NSView, ModalOverlay {
             navStack.widthAnchor.constraint(equalTo: navScroll.contentView.widthAnchor),
 
             // The version footer sits below the scrolling list, always pinned to the column bottom.
-            footer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 22),
-            footer.trailingAnchor.constraint(lessThanOrEqualTo: navScroll.trailingAnchor, constant: -12),
+            footer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Self.footerLeadingInset),
+            footer.trailingAnchor.constraint(
+                lessThanOrEqualTo: navScroll.trailingAnchor, constant: -Self.footerTrailingInset),
             footer.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
 
             divider.leadingAnchor.constraint(equalTo: navScroll.trailingAnchor),
@@ -210,29 +211,52 @@ final class SettingsOverlay: NSView, ModalOverlay {
         return root
     }
 
-    /// The origami brand mark + "ZenTerm v<version>", sitting at the very bottom of the nav column.
+    /// The origami brand mark + the app version, sitting at the very bottom of the nav column.
     /// Informational only — non-interactive. The mark is the app icon's crane, tinted with the
     /// live accent; the label is muted like the section captions.
+    ///
+    /// The mark carries the brand, so the label is the bare version — no "ZenTerm" wordmark. It used
+    /// to have one, and it overflowed the column on every dev build: `bin/package-app` stamps
+    /// `<tag>-dev`, and "ZenTerm v0.0.0-dev" is 124pt of the 111pt beside the mark, so the label ran
+    /// under the divider (a plain label doesn't truncate on its own). Release builds fit, which is
+    /// why it only ever showed locally. `versionMaxWidth` + tail truncation is the backstop, so no
+    /// future version string can spill again — `SettingsNavFooterTests` measures the real one.
     private func makeNavFooter() -> NSView {
         brandMark.image = BrandMark.image("origami")
         brandMark.contentTintColor = Theme.current.chrome.accent.nsColor
         brandMark.imageScaling = .scaleProportionallyUpOrDown
         brandMark.translatesAutoresizingMaskIntoConstraints = false
 
-        versionLabel.stringValue = "ZenTerm v\(AppVersion.current)"
-        versionLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        versionLabel.stringValue = Self.versionText
+        versionLabel.font = Self.versionFont
         versionLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        versionLabel.lineBreakMode = .byTruncatingTail
 
         let stack = NSStackView(views: [brandMark, versionLabel])
         stack.orientation = .horizontal
         stack.alignment = .centerY
-        stack.spacing = 7
+        stack.spacing = Self.footerSpacing
         stack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            brandMark.widthAnchor.constraint(equalToConstant: 16),
-            brandMark.heightAnchor.constraint(equalToConstant: 16),
+            brandMark.widthAnchor.constraint(equalToConstant: Self.brandMarkSize),
+            brandMark.heightAnchor.constraint(equalToConstant: Self.brandMarkSize),
+            versionLabel.widthAnchor.constraint(lessThanOrEqualToConstant: Self.versionMaxWidth),
         ])
         return stack
+    }
+
+    /// The footer's version line, and the width it has to live in — exposed so a test can measure
+    /// the real string against the real column instead of eyeballing it.
+    static var versionText: String { "v\(AppVersion.current)" }
+    static let versionFont: NSFont = .systemFont(ofSize: 13, weight: .medium)
+    private static let brandMarkSize: CGFloat = 16
+    private static let footerSpacing: CGFloat = 7
+    private static let navWidth: CGFloat = 168
+    private static let footerLeadingInset: CGFloat = 22
+    private static let footerTrailingInset: CGFloat = 12
+    /// What's left of the nav column once the insets, the mark, and the stack spacing are taken.
+    static var versionMaxWidth: CGFloat {
+        navWidth - footerLeadingInset - footerTrailingInset - brandMarkSize - footerSpacing
     }
 
     // MARK: selection + focus
