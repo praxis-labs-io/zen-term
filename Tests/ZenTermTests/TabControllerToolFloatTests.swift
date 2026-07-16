@@ -58,6 +58,11 @@ final class TabControllerToolFloatTests: XCTestCase {
         controller.view.frame = NSRect(x: 0, y: 0, width: 900, height: 600)
         window.contentView?.addSubview(controller.view)
         controller.view.layoutSubtreeIfNeeded()
+        // Boot the first pane. `start()` is what mints the pane's surface, and `focusedCWD` reads
+        // that surface's `currentDirectory` first — so without it there is no pane, the first
+        // spawn recorded is a float, and `focusedCWD` can never move off `initialCWD`. A cwd-drift
+        // test would then silently assert nothing.
+        controller.start()
         windows.append(window)
         controllers.append(controller)
         return (controller, { spawned })
@@ -225,5 +230,68 @@ final class TabControllerToolFloatTests: XCTestCase {
 
         controller.toggleToolFloat(float)
         XCTAssertEqual(floatSurfaces(spawned(), command: "lazygit").count, 2)
+    }
+
+    // MARK: overlay slot / view re-host (regression coverage for the review-fix pass)
+
+    /// Reopening a persistent float while its old card is still springing out must re-host the
+    /// shared `surface.view` in the NEW card and drop the old one from the view tree — not leave
+    /// both fighting over the same view's constraints. Walks the real view hierarchy
+    /// (`surface.view.superview`) rather than the private `dismissingFloatOverlay`/`persistentFloats`
+    /// state, so a broken re-host would fail this test even if the bookkeeping looked fine.
+    func test_persistentFloat_reopenBeforeDismissAnimationCompletes_rehostsView_dropsOldCard() throws {
+        Motion.isReduceMotionEnabled = { false }  // force the async path so the old card is still parked
+        defer { Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion } }
+        let dir = try makeDir("plain", git: false)
+        let (controller, spawned) = makeController(cwd: dir)
+        let float = spec("btop", persist: .tab)
+
+        controller.toggleToolFloat(float)
+        let surface = floatSurfaces(spawned(), command: "btop")[0]
+        let oldOverlay = surface.view.superview?.superview
+        XCTAssertNotNil(oldOverlay, "the surface's view must be hosted inside a float card")
+
+        controller.closeToolFloat()  // persist:.tab parks the still-springing-out card
+        controller.toggleToolFloat(float)  // reopen before its exit animation finishes
+
+        let newOverlay = surface.view.superview?.superview
+        XCTAssertNotNil(newOverlay?.superview, "the view must be re-hosted in a card that's actually on screen")
+        XCTAssertTrue(oldOverlay !== newOverlay, "reopening must build a new card, not reuse the dismissing one")
+        XCTAssertNil(oldOverlay?.superview, "the old dismissing card must be detached, not left dangling on screen")
+    }
+
+    /// Reduce Motion completes `Motion.springScaleFade`'s completion synchronously (see
+    /// `MotionTests`), so `closeToolFloat` must park the outgoing overlay in `dismissingFloatOverlay`
+    /// BEFORE calling `animateOut` — parking it after would assign a strong reference the
+    /// already-run completion never gets a chance to clear, stranding the card. Proven with a weak
+    /// reference (no private-state peeking): if the card is truly dropped, every strong ref to it
+    /// is gone the instant `closeToolFloat` returns and ARC deallocates it synchronously.
+    func test_persistentFloat_dismissUnderReduceMotion_doesNotStrandTheOverlay() throws {
+        Motion.isReduceMotionEnabled = { true }
+        defer { Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion } }
+        let dir = try makeDir("plain", git: false)
+        let (controller, spawned) = makeController(cwd: dir)
+        let float = spec("btop", persist: .tab)
+
+        weak var weakOverlay: SurfaceFloatOverlay?
+        // AppKit views are autoreleased, so a weak ref doesn't clear the instant the last strong ref
+        // drops — it clears when the pool drains. Do the open/close inside the pool so the assertion
+        // measures stranding rather than autorelease timing.
+        autoreleasepool {
+            controller.toggleToolFloat(float)
+            let surface = floatSurfaces(spawned(), command: "btop")[0]
+            weakOverlay = surface.view.superview?.superview as? SurfaceFloatOverlay
+            XCTAssertNotNil(weakOverlay, "the surface's view must be hosted inside a float card")
+
+            controller.closeToolFloat()  // Reduce Motion runs `animateOut`'s completion synchronously
+        }
+
+        XCTAssertNil(
+            weakOverlay,
+            "a synchronously-completed dismiss must drop every strong ref to the card — a stray "
+                + "`dismissingFloatOverlay` assignment after the fact would strand it")
+
+        controller.toggleToolFloat(float)  // reopening after must still reuse, not respawn
+        XCTAssertEqual(floatSurfaces(spawned(), command: "btop").count, 1)
     }
 }

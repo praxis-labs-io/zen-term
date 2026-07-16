@@ -1,9 +1,9 @@
 import AppKit
 
-/// A declarative ephemeral command float. Everything variable about a float lives here;
-/// the tool-float engine on `TabController` does the rest. Floats are user-defined in
-/// `~/.config/zen-term/config` (`float = …` lines); the `toggle` chord is their single
-/// source of truth, driving both the keybinding and the palette glyph.
+/// A declarative command float whose process lifetime is set by `persist:`. Everything variable
+/// about a float lives here; the tool-float engine on `TabController` does the rest. Floats are
+/// user-defined in `~/.config/zen-term/config` (`float = …` lines); the `toggle` chord is their
+/// single source of truth, driving both the keybinding and the palette glyph.
 struct ToolFloat: Equatable {
     let id: String  // stable id, e.g. "gitdash"
     let title: String  // command-palette title, e.g. "Open GitDash"

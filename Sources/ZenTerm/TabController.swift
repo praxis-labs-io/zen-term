@@ -378,7 +378,9 @@ final class TabController: NSObject {
         activeToolFloat = nil
         dismissingFloatOverlay?.removeFromSuperview()
         dismissingFloatOverlay = nil
-        for id in persistentFloats.keys { discardPersistentFloat(id) }
+        // Snapshot the keys: `discardPersistentFloat` removes from `persistentFloats` as it goes,
+        // and iterating `.keys` directly over a dictionary being mutated mid-loop is a hazard.
+        for id in Array(persistentFloats.keys) { discardPersistentFloat(id) }
     }
 
     /// Copy from whichever panel holds unified focus: the pane canvas's own copy
@@ -616,7 +618,12 @@ final class TabController: NSObject {
         while true {
             if GitRepo.isGitRepo(dir) { return dir }
             let parent = dir.deletingLastPathComponent()
-            if parent.path == dir.path { return nil }  // reached the filesystem root
+            // Stop when the path stops SHRINKING, not when parent == dir: `deletingLastPathComponent()`
+            // is not monotonic. On a URL vended by FileManager (`homeDirectoryForCurrentUser`,
+            // `temporaryDirectory`) it walks past "/" into "/..", "/../..", … without ever repeating,
+            // so an equality check spins forever on the main thread. Identical paths from
+            // `URL(fileURLWithPath:)` terminate — the provenance decides, and callers can't see it.
+            guard parent.path.count < dir.path.count else { return nil }
             dir = parent
         }
     }
@@ -745,7 +752,7 @@ final class TabController: NSObject {
         }
     }
 
-    // MARK: tool floats (ephemeral command floats — diffnav, …)
+    // MARK: tool floats (declarative command floats whose process lifetime is set by `persist:`)
 
     /// Toggle a tool float: same id open → close; otherwise run the git guard and open.
     func toggleToolFloat(_ spec: ToolFloat) {
@@ -766,11 +773,15 @@ final class TabController: NSObject {
     /// Present `spec` in a float card: resolve its surface (retained or fresh), host it, and give
     /// it the tab's unified focus. When the tool exits, `surfaceDidExit` tears the float down.
     private func showToolFloat(_ spec: ToolFloat) {
-        // A still-springing-out card holds constraints on a persistent float's shared view — snap
-        // it away before re-hosting that view.
-        dismissingFloatOverlay?.removeFromSuperview()
-        dismissingFloatOverlay = nil
         let surface = surfaceForFloat(spec)
+        // Snap away a still-springing-out card ONLY when it holds constraints on the view we're
+        // about to re-host — otherwise let it finish its own exit. A card that isn't sharing this
+        // surface's view (a different float, or a fresh spawn) springs out normally while the new
+        // one springs in; only a shared-view re-host needs the snap.
+        if let dismissing = dismissingFloatOverlay, surface.view.isDescendant(of: dismissing) {
+            dismissing.removeFromSuperview()
+            dismissingFloatOverlay = nil
+        }
         let overlay = SurfaceFloatOverlay(
             content: surface.view,
             background: Theme.current.chrome.background.nsColor,
@@ -790,13 +801,15 @@ final class TabController: NSObject {
     }
 
     /// The surface to show for `spec`: a retained one when the float persists and still matches its
-    /// anchor, else a fresh spawn (discarding a drifted instance first). Registers persistent
-    /// floats so a later dismissal keeps them alive.
+    /// anchor, else a fresh spawn. Any other case discards the stale instance first — notably a
+    /// float whose `persist:` flipped to `none` in a live config reload, which must not reuse (and
+    /// then terminate) a surface the registry still holds.
     private func surfaceForFloat(_ spec: ToolFloat) -> TerminalSurface {
         let anchor = spec.persist == .directory ? directoryAnchor(for: focusedCWD) : nil
         if let live = persistentFloats[spec.id] {
-            if spec.persist != .directory || live.anchor?.path == anchor?.path { return live.surface }
-            discardPersistentFloat(spec.id)  // the focused dir moved to another repo → reload
+            let anchorHolds = spec.persist != .directory || live.anchor?.path == anchor?.path
+            if spec.persist != .ephemeral, anchorHolds { return live.surface }
+            discardPersistentFloat(spec.id)  // mode flipped to ephemeral, or the focused dir moved
         }
         let surface = spawnFloatSurface(spec)
         if spec.persist != .ephemeral { persistentFloats[spec.id] = (surface, anchor) }
@@ -830,15 +843,16 @@ final class TabController: NSObject {
         guard let active = activeToolFloat else { return }
         activeToolFloat = nil
         let overlay = active.overlay
+        // Park BEFORE animateOut: `Motion.springScaleFade` fires its completion synchronously under
+        // Reduce Motion, and that completion clears the slot by identity — assigning afterwards
+        // would strand an overlay no completion will ever clear. `hideLazygit` parks the same way,
+        // for the same reason.
+        if active.spec.persist != .ephemeral { dismissingFloatOverlay = overlay }
         overlay.animateOut { [weak self] in
             overlay.removeFromSuperview()
             if self?.dismissingFloatOverlay === overlay { self?.dismissingFloatOverlay = nil }
         }
-        if active.spec.persist == .ephemeral {
-            active.surface.terminate()
-        } else {
-            dismissingFloatOverlay = overlay
-        }
+        if active.spec.persist == .ephemeral { active.surface.terminate() }
         restoreUnifiedFocus()
         onOverlayStateChanged?()
     }
