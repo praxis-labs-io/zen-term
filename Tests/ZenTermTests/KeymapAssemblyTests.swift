@@ -24,6 +24,25 @@ final class KeymapAssemblyTests: XCTestCase {
         XCTAssertEqual(map[Chord(command: true, option: true, key: "r")], .reloadConfig)
     }
 
+    func test_userRebind_shiftedSymbol_bindsBothGlyphsOfThePhysicalKey() {
+        // The trap this guards: a hand-written (or captured-then-written) `split_horizontal=cmd+shift+-`
+        // parses to the base "-", but a live ⌘⇧- press decodes to "_" (charactersIgnoringModifiers
+        // applies Shift). Binding only "-" would leave the rebind dead. The assembler binds both.
+        let user = KeybindParser.parse("split_horizontal=cmd+shift+-")!
+        let map = KeymapAssembler.assemble(floats: [], keybinds: [user])
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: "-")], .splitHorizontal)  // written form
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: "_")], .splitHorizontal)  // live-event form
+    }
+
+    func test_userRebind_writtenAsShiftedGlyph_alsoBindsBase() {
+        // The mirror case: config emitted from a UI capture stores the live glyph ("_"); the base
+        // "-" sibling must come along so both spellings resolve identically.
+        let user = KeybindParser.parse("split_vertical=cmd+shift+_")!
+        let map = KeymapAssembler.assemble(floats: [], keybinds: [user])
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: "_")], .splitVertical)
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: "-")], .splitVertical)
+    }
+
     func test_floatChord_overridesBuiltin() {
         // A float claiming ⌘G displaces the built-in .toggleLazygit.
         let map = KeymapAssembler.assemble(floats: [float(id: "x", key: "cmd+g")], keybinds: [])

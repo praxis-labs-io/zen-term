@@ -149,13 +149,22 @@ enum KeymapAssembler {
         let reboundActions = keybinds.map(\.1)
         map = map.filter { entry in !reboundActions.contains(entry.value) }
 
-        func set(_ chord: Chord, _ action: KeyInterceptor.ReservedChord) {
+        func assign(_ chord: Chord, _ action: KeyInterceptor.ReservedChord) {
             if let existing = map[chord], existing != action {
                 NSLog(
                     "GeneralConfig: chord \(chord.displayGlyph) rebound from \(existing.actionToken) "
                         + "to \(action.actionToken)")
             }
             map[chord] = action
+        }
+
+        // Bind both glyphs on the chord's physical key (⌘⇧- and ⌘⇧_, ⌘⇧\ and ⌘⇧|). A config
+        // written as one spelling must still match the live event, which carries the other because
+        // charactersIgnoringModifiers applies Shift. The built-in defaults already list both by
+        // hand; this covers float chords and user keybinds the same way. See `Chord.shiftedSibling`.
+        func set(_ chord: Chord, _ action: KeyInterceptor.ReservedChord) {
+            assign(chord, action)
+            if let sibling = chord.shiftedSibling { assign(sibling, action) }
         }
 
         for float in floats { set(float.toggle, .toggleToolFloat(float.id)) }

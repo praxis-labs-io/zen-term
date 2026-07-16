@@ -96,6 +96,30 @@ struct Chord: Hashable {
         return token + (key == "+" ? "plus" : key)
     }
 
+    /// The chord for the *other* glyph on the same physical US-keyboard key — `-`↔`_`, `\`↔`|`,
+    /// `1`↔`!`, … — with identical modifiers, or `nil` if the key has no shifted twin (letters,
+    /// arrows). `charactersIgnoringModifiers` applies Shift, so a live `⌘⇧-` press arrives as `⌘⇧_`
+    /// while a keybind written (or a default authored) as `⌘⇧-` reads back as `-`. Binding both
+    /// siblings makes the two spellings one entry in practice, so the written form and the live
+    /// event resolve to the same action. See `KeymapAssembler`.
+    var shiftedSibling: Chord? {
+        guard let twin = Chord.physicalKeyTwins[key] else { return nil }
+        return Chord(command: command, shift: shift, option: option, control: control, key: twin)
+    }
+
+    /// The two glyphs that share one physical key on a US layout, mapped both ways. The source of
+    /// truth for `shiftedSibling`; excludes letters (whose shifted form is just the uppercase, which
+    /// the event decoder already lowercases) and the arrow/return glyph tokens.
+    private static let physicalKeyTwins: [String: String] = [
+        "`": "~", "~": "`", "1": "!", "!": "1", "2": "@", "@": "2",
+        "3": "#", "#": "3", "4": "$", "$": "4", "5": "%", "%": "5",
+        "6": "^", "^": "6", "7": "&", "&": "7", "8": "*", "*": "8",
+        "9": "(", "(": "9", "0": ")", ")": "0", "-": "_", "_": "-",
+        "=": "+", "+": "=", "[": "{", "{": "[", "]": "}", "}": "]",
+        "\\": "|", "|": "\\", ";": ":", ":": ";", "'": "\"", "\"": "'",
+        ",": "<", "<": ",", ".": ">", ">": ".", "/": "?", "?": "/",
+    ]
+
     /// Build the chord an `NSEvent` represents, for keymap lookup. Mirrors the modifier +
     /// `charactersIgnoringModifiers` reading `KeyInterceptor` used before it went data-driven.
     init?(event: NSEvent) {

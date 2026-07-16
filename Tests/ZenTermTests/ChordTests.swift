@@ -46,6 +46,22 @@ final class ChordTests: XCTestCase {
         XCTAssertEqual(Chord.modifierGlyph([.shift, .option]), "⇧⌥")
     }
 
+    func test_shiftedSibling_swapsGlyphOnSamePhysicalKey() {
+        // Same physical key, other glyph, same modifiers — so a keybind written as one spelling
+        // matches the live event, which carries the other (charactersIgnoringModifiers applies Shift).
+        XCTAssertEqual(
+            Chord(command: true, shift: true, key: "-").shiftedSibling,
+            Chord(command: true, shift: true, key: "_"))
+        XCTAssertEqual(
+            Chord(command: true, shift: true, key: "_").shiftedSibling,
+            Chord(command: true, shift: true, key: "-"))
+        XCTAssertEqual(
+            Chord(command: true, shift: true, key: "\\").shiftedSibling,
+            Chord(command: true, shift: true, key: "|"))
+        XCTAssertNil(Chord(command: true, key: "g").shiftedSibling)  // letters have no shifted twin
+        XCTAssertNil(Chord(command: true, key: "↑").shiftedSibling)  // arrow glyph tokens either
+    }
+
     func test_defaultTable_roundTripsThroughDisplay() {
         // Every default chord produces a non-empty glyph and re-reads its key stably.
         for chord in KeymapDefaults.map.keys {
