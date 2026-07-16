@@ -191,10 +191,7 @@ enum KeymapAssembler {
         _ untypeable: [(Chord, KeyInterceptor.ReservedChord)]
     ) -> [ConfigDiagnostic] {
         untypeable.map { chord, action in
-            ConfigDiagnostic(
-                scope: .keybind(action), problem: .unusableBind,
-                message: "\(action.actionToken)=\(chord.configToken) can't be typed on your keyboard "
-                    + "— ignoring it.")
+            ConfigDiagnostic(scope: .keybind(action), problem: .unusableBind(chord))
         }
     }
 
@@ -225,8 +222,8 @@ enum KeymapAssembler {
             else { return nil }
             seen.append(displacement.loser)
             return ConfigDiagnostic(
-                scope: .keybind(displacement.loser), problem: .noShortcut,
-                message: "\(displacement.chord.displayGlyph) went to \(winner.actionToken) in your config.")
+                scope: .keybind(displacement.loser),
+                problem: .chordTaken(displacement.chord, by: winner))
         }
     }
 }

@@ -25,8 +25,19 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    private func diagnostic(_ action: KeyInterceptor.ReservedChord, _ message: String) -> ConfigDiagnostic {
-        ConfigDiagnostic(scope: .keybind(action), problem: .noShortcut, message: message)
+    /// `action` lost `chord` to `winner`.
+    private func diagnostic(
+        _ action: KeyInterceptor.ReservedChord, lost chord: Chord, to winner: KeyInterceptor.ReservedChord
+    ) -> ConfigDiagnostic {
+        ConfigDiagnostic(scope: .keybind(action), problem: .chordTaken(chord, by: winner))
+    }
+
+    private var splitVerticalLostBackslash: ConfigDiagnostic {
+        diagnostic(.splitVertical, lost: Chord(command: true, shift: true, key: "\\"), to: .toggleZoom)
+    }
+
+    private var newTabLostCmdT: ConfigDiagnostic {
+        diagnostic(.newTab, lost: Chord(command: true, key: "t"), to: .toggleToolFloat("btop"))
     }
 
     func test_noDiagnostics_producesNoToast() {
@@ -39,26 +50,26 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     // is the one thing that can silently suppress the whole feature, so it gets a truth table.
 
     func test_announce_newConflict_speaksUp() {
-        let one = [diagnostic(.splitVertical, "⌘⇧\\ went to toggle_zoom in your config.")]
+        let one = [splitVerticalLostBackslash]
         XCTAssertNotNil(ConfigDiagnostic.announcement(for: one, alreadyAnnounced: []))
     }
 
     func test_announce_sameConflictTwice_staysQuiet() {
         // A Settings rebind reloads the config; re-announcing an unchanged conflict on every edit
         // would nag, and the Keybinds row already says it inline.
-        let one = [diagnostic(.splitVertical, "⌘⇧\\ went to toggle_zoom in your config.")]
+        let one = [splitVerticalLostBackslash]
         XCTAssertNil(ConfigDiagnostic.announcement(for: one, alreadyAnnounced: one))
     }
 
     func test_announce_aChangedConflictSet_speaksUpAgain() {
-        let before = [diagnostic(.splitVertical, "⌘⇧\\ went to toggle_zoom in your config.")]
-        let after = before + [diagnostic(.newTab, "⌘T went to toggle_float:btop in your config.")]
+        let before = [splitVerticalLostBackslash]
+        let after = before + [newTabLostCmdT]
         XCTAssertNotNil(ConfigDiagnostic.announcement(for: after, alreadyAnnounced: before))
     }
 
     func test_announce_conflictResolved_staysQuiet() {
         // Fixing the config shouldn't toast "all clear" — the chip coming back says it.
-        let before = [diagnostic(.splitVertical, "⌘⇧\\ went to toggle_zoom in your config.")]
+        let before = [splitVerticalLostBackslash]
         XCTAssertNil(ConfigDiagnostic.announcement(for: [], alreadyAnnounced: before))
     }
 
@@ -66,36 +77,47 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         XCTAssertNil(ConfigDiagnostic.announcement(for: [], alreadyAnnounced: []))
     }
 
-    func test_oneDiagnostic_namesTheActionAndTheConfigToken() throws {
-        let content = try XCTUnwrap(
-            ConfigDiagnostic.toast(for: [diagnostic(.splitVertical, "⌘⇧\\ went to toggle_zoom in your config.")]))
+    func test_oneProblem_keepsTheFullSentence() throws {
+        // A single problem has no list to be terse for, and its title isn't doing the framing a
+        // count does — so it says where this came from.
+        let content = try XCTUnwrap(ConfigDiagnostic.toast(for: [splitVerticalLostBackslash]))
         XCTAssertEqual(content.variant, .warning, "a working-but-surprising config is a warning, not a failure")
-        XCTAssertTrue(content.title.contains("Split Vertically"), content.title)
-        // The body has to carry the config-file token — that's what the user greps for to fix it.
-        XCTAssertTrue(content.message.contains("toggle_zoom"), content.message)
-        XCTAssertTrue(content.message.contains("⌘⇧\\"), content.message)
+        XCTAssertEqual(content.title, "Split Vertically has no shortcut")
+        XCTAssertEqual(content.message, "⌘⇧\\ went to toggle_zoom in your config.")
     }
 
-    func test_severalDiagnostics_countThemAndCarryEveryChordAndToken() throws {
-        let content = try XCTUnwrap(
-            ConfigDiagnostic.toast(for: [
-                diagnostic(.splitVertical, "⌘⇧\\ went to toggle_zoom in your config."),
-                diagnostic(.newTab, "⌘T went to toggle_float:btop in your config."),
-            ]))
-        XCTAssertTrue(content.title.contains("2"), content.title)
-        // Not just the action names: each line has to carry the chord and the token that took it,
-        // or the toast says something is wrong without saying what to go fix.
-        for expected in ["Split Vertically", "⌘⇧\\", "toggle_zoom", "New Tab", "⌘T", "toggle_float:btop"] {
-            XCTAssertTrue(content.message.contains(expected), "missing \(expected) in:\n\(content.message)")
-        }
+    func test_severalProblems_areOneCompactLineEach() throws {
+        let content = try XCTUnwrap(ConfigDiagnostic.toast(for: [splitVerticalLostBackslash, newTabLostCmdT]))
+        XCTAssertEqual(content.title, "2 problems in your config")
+        // One line per problem, each still carrying the chord and the token that took it — that pair
+        // is what the user greps for. Asserted verbatim because the card is a fixed 300pt: a listing
+        // that re-states what its own title just said wraps into a wall nobody reads.
+        XCTAssertEqual(
+            content.message,
+            """
+            Split Vertically — ⌘⇧\\ went to toggle_zoom
+            New Tab — ⌘T went to toggle_float:btop
+            """)
+        XCTAssertFalse(
+            content.message.contains("in your config"),
+            "the title already says it — repeating it per line is what forced the wrap")
+    }
+
+    func test_unusableBind_readsDifferentlyFromAStolenChord() {
+        // Different claims: the action still HAS its default; the config line is what's dead.
+        let unusable = ConfigDiagnostic(
+            scope: .keybind(.splitVertical), problem: .unusableBind(Chord(command: true, key: "|")))
+        XCTAssertEqual(unusable.headline, "Split Vertically has an unusable shortcut")
+        XCTAssertEqual(unusable.summary, "Split Vertically — cmd+| can't be typed")
+        XCTAssertTrue(unusable.message.contains("split_vertical=cmd+|"), unusable.message)
     }
 
     func test_announce_sameConflictsInADifferentOrder_staysQuiet() {
         // Diagnostics come out in config-line order and ConfigWriter SORTS the lines it emits, so a
         // Settings write can reorder them without changing a thing. An order-sensitive gate would
         // re-toast conflicts the user already saw.
-        let a = diagnostic(.splitVertical, "⌘⇧\\ went to toggle_zoom in your config.")
-        let b = diagnostic(.newTab, "⌘T went to toggle_float:btop in your config.")
+        let a = splitVerticalLostBackslash
+        let b = newTabLostCmdT
         XCTAssertNil(ConfigDiagnostic.announcement(for: [a, b], alreadyAnnounced: [b, a]))
     }
 
