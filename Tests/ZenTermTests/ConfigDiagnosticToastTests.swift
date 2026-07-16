@@ -33,6 +33,39 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         XCTAssertNil(ConfigDiagnostic.toast(for: []), "a clean config must stay silent")
     }
 
+    // MARK: the announce gate
+    //
+    // Every in-app write reloads too, so the toast is gated on the conflict set CHANGING. That gate
+    // is the one thing that can silently suppress the whole feature, so it gets a truth table.
+
+    func test_announce_newConflict_speaksUp() {
+        let one = [diagnostic(.splitVertical, "⌘⇧\\ went to toggle_zoom in your config.")]
+        XCTAssertNotNil(ConfigDiagnostic.announcement(for: one, alreadyAnnounced: []))
+    }
+
+    func test_announce_sameConflictTwice_staysQuiet() {
+        // A Settings rebind reloads the config; re-announcing an unchanged conflict on every edit
+        // would nag, and the Keybinds row already says it inline.
+        let one = [diagnostic(.splitVertical, "⌘⇧\\ went to toggle_zoom in your config.")]
+        XCTAssertNil(ConfigDiagnostic.announcement(for: one, alreadyAnnounced: one))
+    }
+
+    func test_announce_aChangedConflictSet_speaksUpAgain() {
+        let before = [diagnostic(.splitVertical, "⌘⇧\\ went to toggle_zoom in your config.")]
+        let after = before + [diagnostic(.newTab, "⌘T went to toggle_float:btop in your config.")]
+        XCTAssertNotNil(ConfigDiagnostic.announcement(for: after, alreadyAnnounced: before))
+    }
+
+    func test_announce_conflictResolved_staysQuiet() {
+        // Fixing the config shouldn't toast "all clear" — the chip coming back says it.
+        let before = [diagnostic(.splitVertical, "⌘⇧\\ went to toggle_zoom in your config.")]
+        XCTAssertNil(ConfigDiagnostic.announcement(for: [], alreadyAnnounced: before))
+    }
+
+    func test_announce_cleanConfigStaysQuietOnEveryReload() {
+        XCTAssertNil(ConfigDiagnostic.announcement(for: [], alreadyAnnounced: []))
+    }
+
     func test_oneDiagnostic_namesTheActionAndTheConfigToken() throws {
         let content = try XCTUnwrap(
             ConfigDiagnostic.toast(for: [diagnostic(.splitVertical, "⌘⇧\\ went to toggle_zoom in your config.")]))

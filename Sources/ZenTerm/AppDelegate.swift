@@ -116,16 +116,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Toast the config's keybind problems when they change. Lives here, not in `WindowController`:
     /// that observer runs once per open window, so three windows would mean three toasts for one
     /// reload — and the keymap these describe is app-global anyway. Routed to the key window only.
-    ///
-    /// Only on a *change*, because every in-app write reloads too (a Settings rebind, a float save):
-    /// re-announcing an unchanged conflict on each of those is noise, and a user editing keybinds is
-    /// already looking at the row that says the same thing.
+    /// The decision itself is `ConfigDiagnostic.announcement`, where it's testable.
     private func surfaceKeymapDiagnostics() {
         let diagnostics = GeneralConfig.current.keymapDiagnostics
         defer { lastKeymapDiagnostics = diagnostics }
-        guard diagnostics != lastKeymapDiagnostics, let content = ConfigDiagnostic.toast(for: diagnostics) else {
-            return
-        }
+        guard
+            let content = ConfigDiagnostic.announcement(
+                for: diagnostics, alreadyAnnounced: lastKeymapDiagnostics)
+        else { return }
         keyController()?.showToast(content)
     }
 

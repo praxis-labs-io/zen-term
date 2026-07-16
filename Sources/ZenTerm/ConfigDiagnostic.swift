@@ -20,6 +20,20 @@ struct ConfigDiagnostic: Equatable {
     /// names the exact token to grep for in the file the user has to edit to fix it.
     var message: String
 
+    /// What a reload should announce, or nil to stay quiet. Pure and gated on `alreadyAnnounced`,
+    /// extracted from the delegate's observer precisely so this decision is testable — the app
+    /// delegate can't be stood up in a test (it binds the nav socket and builds windows at launch),
+    /// and a silent-suppression bug here would leave the whole feature dead with tests still green.
+    ///
+    /// Repeats stay quiet: every in-app write reloads too (a Settings rebind, a float save), and
+    /// re-announcing an unchanged conflict on each of those is noise.
+    static func announcement(
+        for diagnostics: [ConfigDiagnostic], alreadyAnnounced: [ConfigDiagnostic]
+    ) -> ToastContent? {
+        guard diagnostics != alreadyAnnounced else { return nil }
+        return toast(for: diagnostics)
+    }
+
     /// The notice for a set of diagnostics, or nil when there's nothing to say. A reload has to
     /// announce itself: the inline note on a Keybinds row only reaches someone already looking at
     /// that row, and a user who just broke their config by hand has no reason to go there.
