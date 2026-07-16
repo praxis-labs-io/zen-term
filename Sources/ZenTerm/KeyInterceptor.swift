@@ -13,7 +13,7 @@ protocol KeybindCapturing: AnyObject {
 /// the "don't steal Ctrl+hjkl from nvim" rule — un-reserved chords are returned
 /// untouched so the terminal (and the program inside it) receives them.
 final class KeyInterceptor {
-    enum ReservedChord: Equatable {
+    enum ReservedChord: Hashable {
         case splitVertical, splitHorizontal
         case navLeft, navRight, navUp, navDown
         case closePane

@@ -76,15 +76,27 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         XCTAssertTrue(content.message.contains("⌘⇧\\"), content.message)
     }
 
-    func test_severalDiagnostics_countThemAndNameThem() throws {
+    func test_severalDiagnostics_countThemAndCarryEveryChordAndToken() throws {
         let content = try XCTUnwrap(
             ConfigDiagnostic.toast(for: [
                 diagnostic(.splitVertical, "⌘⇧\\ went to toggle_zoom in your config."),
                 diagnostic(.newTab, "⌘T went to toggle_float:btop in your config."),
             ]))
         XCTAssertTrue(content.title.contains("2"), content.title)
-        XCTAssertTrue(content.message.contains("Split Vertically"), content.message)
-        XCTAssertTrue(content.message.contains("New Tab"), content.message)
+        // Not just the action names: each line has to carry the chord and the token that took it,
+        // or the toast says something is wrong without saying what to go fix.
+        for expected in ["Split Vertically", "⌘⇧\\", "toggle_zoom", "New Tab", "⌘T", "toggle_float:btop"] {
+            XCTAssertTrue(content.message.contains(expected), "missing \(expected) in:\n\(content.message)")
+        }
+    }
+
+    func test_announce_sameConflictsInADifferentOrder_staysQuiet() {
+        // Diagnostics come out in config-line order and ConfigWriter SORTS the lines it emits, so a
+        // Settings write can reorder them without changing a thing. An order-sensitive gate would
+        // re-toast conflicts the user already saw.
+        let a = diagnostic(.splitVertical, "⌘⇧\\ went to toggle_zoom in your config.")
+        let b = diagnostic(.newTab, "⌘T went to toggle_float:btop in your config.")
+        XCTAssertNil(ConfigDiagnostic.announcement(for: [a, b], alreadyAnnounced: [b, a]))
     }
 
     func test_aFloatLosingItsChord_isSurfacedByTheToast() throws {
