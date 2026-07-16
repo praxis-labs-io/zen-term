@@ -7,6 +7,9 @@ import AppKit
 /// the container owns the keyboard.
 final class SegmentedControl: NSView {
     private(set) var selectedIndex: Int
+    /// The segment titles, in order — lets a caller find one of a form's several segmented controls
+    /// without depending on view-tree order.
+    private(set) var optionTitles: [String]
     var onChange: (Int) -> Void
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
@@ -28,6 +31,7 @@ final class SegmentedControl: NSView {
         options: [String], selectedIndex: Int = 0, notifiesOnReselect: Bool = false,
         onChange: @escaping (Int) -> Void
     ) {
+        self.optionTitles = options
         self.selectedIndex = selectedIndex
         self.notifiesOnReselect = notifiesOnReselect
         self.onChange = onChange

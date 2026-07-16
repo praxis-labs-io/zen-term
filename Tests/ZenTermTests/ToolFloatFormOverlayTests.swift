@@ -78,6 +78,12 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         descendants(of: overlay).compactMap { $0 as? FieldBox }.first { $0.placeholder == placeholder }!
     }
 
+    /// A segmented control found by its first option's title — the form has two of them.
+    private func segment(in overlay: NSView, firstOption: String) -> SegmentedControl {
+        descendants(of: overlay).compactMap { $0 as? SegmentedControl }
+            .first { $0.optionTitles.first == firstOption }!
+    }
+
     private func chip(in overlay: NSView) -> KeybindChip {
         descendants(of: overlay).compactMap { $0 as? KeybindChip }.first!
     }
@@ -257,5 +263,65 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         XCTAssertEqual(sink.submitted.first?.id, "dev")
         XCTAssertEqual(sink.submitted.first?.command, "nvim")
         XCTAssertEqual(sink.submitted.first?.toggle, Chord(command: true, shift: true, key: "d"))
+    }
+
+    func test_persistSegment_defaultsToEphemeral_andBuildsTheChosenMode() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("lg")
+        field(in: overlay, placeholder: "npm run dev").setText("lazygit")
+        capture(novelChord, in: overlay, capturer)
+
+        segment(in: overlay, firstOption: "Fresh each time").select(1)  // Per directory
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.persist, .directory)
+    }
+
+    func test_persistSegment_untouched_buildsEphemeral() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("y")
+        field(in: overlay, placeholder: "npm run dev").setText("yazi")
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.persist, .ephemeral)
+    }
+
+    func test_dirField_buildsPinnedDirectory() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("notes")
+        field(in: overlay, placeholder: "npm run dev").setText("nvim")
+        field(in: overlay, placeholder: "~/notes").setText("~/notes")
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.dir?.path, NSString(string: "~/notes").expandingTildeInPath)
+    }
+
+    func test_blankDirField_buildsNilDirectory() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("y")
+        field(in: overlay, placeholder: "npm run dev").setText("yazi")
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertNil(sink.submitted.first?.dir)
+    }
+
+    /// Editing a float must not silently flatten fields the form didn't previously expose.
+    func test_edit_prefillsPersistAndDir() {
+        let existing = ToolFloat(
+            id: "lg", title: "Open Lazygit", icon: "git", command: "lazygit",
+            dir: URL(fileURLWithPath: "/tmp/x"), widthFraction: 0.85, heightFraction: 0.78,
+            requiresGitRepo: true, persist: .tab, toggle: Chord(command: true, key: "g"))
+        let (overlay, _, sink) = mount(editing: existing)
+
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.persist, .tab)
+        XCTAssertEqual(sink.submitted.first?.dir?.path, "/tmp/x")
     }
 }

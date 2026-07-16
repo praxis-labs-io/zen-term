@@ -31,12 +31,19 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private let widthField = FieldBox(placeholder: "0.85")
     private let heightField = FieldBox(placeholder: "0.85")
     private let gitSegment = SegmentedControl(options: ["Any folder", "Git repos only"], selectedIndex: 0) { _ in }
+    /// Segment index ↔ `Persistence`. One array drives both directions so the mapping can't drift.
+    private static let persistOptions: [ToolFloat.Persistence] = [.ephemeral, .directory, .tab]
+    private let persistSegment = SegmentedControl(
+        options: ["Fresh each time", "Per directory", "Per tab"], selectedIndex: 0
+    ) { _ in }
+    private let dirField = FieldBox(placeholder: "~/notes")
 
     private var idGroup: LabeledField?
     private var titleGroup: LabeledField?
     private var iconGroup: LabeledField?
     private var chordGroup: LabeledField?
     private var commandGroup: LabeledField?
+    private var dirGroup: LabeledField?
     private var sizeGroup: LabeledField?
 
     /// Captions built directly into a stack (not wrapped by a `LabeledField`, which retains its own).
@@ -137,13 +144,13 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         header.textColor = Theme.current.chrome.foreground.nsColor
 
         let controls: [ThemeReapplying] = [
-            idField, titleField, commandField, widthField, heightField, gitSegment,
-            cancelButton, submitButton, deleteButton,
+            idField, titleField, commandField, dirField, widthField, heightField, gitSegment,
+            persistSegment, cancelButton, submitButton, deleteButton,
         ]
         controls.forEach { $0.reapplyTheme() }
         chordChip.reapplyTheme()
         iconPicker.reapplyTheme()
-        for group in [idGroup, titleGroup, iconGroup, chordGroup, commandGroup, sizeGroup] {
+        for group in [idGroup, titleGroup, iconGroup, chordGroup, commandGroup, dirGroup, sizeGroup] {
             group?.reapplyTheme()
         }
         captions.forEach { $0.reapplyTheme() }
@@ -193,6 +200,10 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         let commandGroup = LabeledField(caption: caption("COMMAND", required: true), control: commandField)
         self.commandGroup = commandGroup
 
+        wireField(dirField)
+        let dirGroup = LabeledField(caption: caption("DIRECTORY", required: false), control: dirField)
+        self.dirGroup = dirGroup
+
         // Width × Height share one row (a fraction of the tile). Width is the row's vertical stop;
         // Height is reached with Right (like an env row's value box).
         for box in [widthField, heightField] { wireField(box) }
@@ -216,6 +227,9 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
         wireSegment(gitSegment)
         let gitGroup = Self.vStack([caption("OPEN IN", required: false), gitSegment], spacing: 6)
+
+        wireSegment(persistSegment)
+        let persistGroup = Self.vStack([caption("KEEP RUNNING", required: false), persistSegment], spacing: 6)
 
         cancelButton.onTap = { [weak self] in self?.onCancel() }
         submitButton.setTitle(editingFloat == nil ? "Add Tool Float" : "Save")
@@ -246,7 +260,8 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         let footer = Self.hStack(footerViews, spacing: 8)
 
         let content = NSStackView(views: [
-            header, idGroup, titleGroup, iconGroup, chordGroup, commandGroup, sizeGroup, gitGroup, footer,
+            header, idGroup, titleGroup, iconGroup, chordGroup, commandGroup, dirGroup, sizeGroup,
+            gitGroup, persistGroup, footer,
         ])
         content.orientation = .vertical
         content.alignment = .leading
@@ -276,6 +291,10 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             heightField.setText(ToolFloatParser.fractionText(float.heightFraction))
         }
         gitSegment.setSelection(float.requiresGitRepo ? 1 : 0)
+        if let dir = float.dir { dirField.setText(PathDisplay.abbreviatingHome(dir.path)) }
+        if let index = Self.persistOptions.firstIndex(of: float.persist) {
+            persistSegment.setSelection(index)  // programmatic sync must not fire onChange
+        }
     }
 
     // MARK: chord capture
@@ -417,7 +436,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private func verticalStops() -> [NSView] {
         [
             idField.field, titleField.field, iconPicker, chordChip, commandField.field,
-            widthField.field, gitSegment, submitButton,
+            dirField.field, widthField.field, gitSegment, persistSegment, submitButton,
         ]
     }
 
@@ -473,16 +492,18 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         let command = commandField.text.trimmingCharacters(in: .whitespaces)
         guard !id.isEmpty, !command.isEmpty, let chord = capturedChord else { return nil }
         let title = titleField.text.trimmingCharacters(in: .whitespaces)
+        let pinnedDir = dirField.text.trimmingCharacters(in: .whitespaces)
         return ToolFloat(
             id: id,
             title: title.isEmpty ? ToolFloatParser.defaultTitle(forID: id) : title,
             icon: iconPicker.selected,
             command: command,
-            dir: editingFloat?.dir,
+            dir: pinnedDir.isEmpty
+                ? nil : URL(fileURLWithPath: NSString(string: pinnedDir).expandingTildeInPath).standardizedFileURL,
             widthFraction: fraction(widthField),
             heightFraction: fraction(heightField),
             requiresGitRepo: gitSegment.selectedIndex == 1,
-            persist: editingFloat?.persist ?? ToolFloatParser.defaultPersist,
+            persist: Self.persistOptions[persistSegment.selectedIndex],
             toggle: chord)
     }
 
