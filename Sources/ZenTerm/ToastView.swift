@@ -54,6 +54,10 @@ final class ToastView: ShadowCardView {
         self.init(content: content, actions: [])
     }
 
+    /// The action keycaps, retained so a live toast can re-resolve them (a tab closing under it) and
+    /// recolor them on a theme swap.
+    private var shortcutSlots: [ShortcutSlot] = []
+
     init(content: ToastContent, actions: [ToastAction], keyEquivalents: Bool = true) {
         self.hasActions = !actions.isEmpty
         self.gatesFocus = keyEquivalents && !actions.isEmpty
@@ -106,7 +110,8 @@ final class ToastView: ShadowCardView {
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
             let row = NSStackView(
-                views: actions.map { Self.button(for: $0, keyEquivalents: keyEquivalents) } + [spacer])
+                views: actions.map { Self.actionGroup(for: $0, keyEquivalents: keyEquivalents, in: self) }
+                    + [spacer])
             row.orientation = .horizontal
             row.alignment = .centerY
             row.spacing = 6
@@ -148,6 +153,53 @@ final class ToastView: ShadowCardView {
         return AppButton(title: action.title, variant: variant, keyEquivalent: keyEquivalent, onTap: action.run)
     }
 
+    /// An action's button, plus a keycap naming the chord that already triggers it — the label +
+    /// keycap row `ChromeTooltip` uses. The keycap is display ONLY: it names an app-level binding
+    /// (⌘N for a tab), so nothing is armed here and the toast stays non-modal (ZEN-106).
+    private static func actionGroup(
+        for action: ToastAction, keyEquivalents: Bool, in toast: ToastView
+    ) -> NSView {
+        let button = Self.button(for: action, keyEquivalents: keyEquivalents)
+        guard let resolve = action.shortcut else { return button }
+        let group = NSStackView(views: [button])
+        group.orientation = .horizontal
+        group.alignment = .centerY
+        group.spacing = 4
+        toast.shortcutSlots.append(ShortcutSlot(group: group, resolve: resolve))
+        toast.shortcutSlots.last?.refresh()
+        return group
+    }
+
+    /// One action's keycap slot: the row it lives in and the query for its current glyph. The glyph
+    /// isn't baked — a toast for tab 3 must stop reading "⌘3" once a tab before it closes — and
+    /// `KeycapView` bakes its own at construction, so refreshing rebuilds the keycap.
+    private final class ShortcutSlot {
+        private let group: NSStackView
+        private let resolve: () -> String
+        private var keycap: KeycapView?
+
+        init(group: NSStackView, resolve: @escaping () -> String) {
+            self.group = group
+            self.resolve = resolve
+        }
+
+        /// Re-resolve the glyph and rebuild the keycap when it changed. A no-op when it didn't, so
+        /// the common re-render (a tab switch that moves nothing) doesn't churn views.
+        func refresh() {
+            let glyph = resolve()
+            guard glyph != keycap?.shortcut else { return }
+            keycap.map { group.removeArrangedSubview($0) }
+            keycap?.removeFromSuperview()
+            keycap = nil
+            guard !glyph.isEmpty else { return }  // unbound (a tab past ⌘9) → no keycap at all
+            let cap = KeycapView(shortcut: glyph)
+            group.addArrangedSubview(cap)
+            keycap = cap
+        }
+
+        func reapplyTheme() { keycap?.reapplyTheme() }
+    }
+
     /// A modal confirm takes keyboard focus so terminal input is gated while it's up; a
     /// non-modal sticky toast never does (its buttons are click-only).
     override var acceptsFirstResponder: Bool { gatesFocus }
@@ -172,6 +224,14 @@ final class ToastView: ShadowCardView {
         layer?.borderColor = variant.border.cgColor  // neutral for info; tinted for warning/destructive
         titleLabel.textColor = Self.titleColor
         messageLabel.textColor = Self.messageColor
+        shortcutSlots.forEach { $0.reapplyTheme() }  // else the keycap ink goes stale on a theme swap
+    }
+
+    /// Re-resolve every action keycap against the live keymap and tab order. The host calls this
+    /// whenever tabs mutate: a toast is built once per notification, so one for tab 3 would keep
+    /// reading "⌘3" after tab 1 closes and point at the wrong tab.
+    func refreshShortcuts() {
+        shortcutSlots.forEach { $0.refresh() }
     }
 
     /// Spring the card in (fade + subtle scale about its center). Call after adding it.

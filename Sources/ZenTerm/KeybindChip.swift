@@ -71,7 +71,7 @@ final class KeybindChip: NSView {
     /// placeholder. Reads the rendered subview rather than a stored string, so a test can't pass
     /// while the chip actually displays something else.
     var renderedShortcutForTesting: String? {
-        (host.subviews.first as? KeycapView)?.shortcutForTesting
+        (host.subviews.first as? KeycapView)?.shortcut
     }
 
     private func placeholder(_ text: String) -> NSTextField {

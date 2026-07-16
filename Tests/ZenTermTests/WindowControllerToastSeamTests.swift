@@ -71,4 +71,66 @@ final class WindowControllerToastSeamTests: XCTestCase {
         controller.showToast(ToastContent(variant: .warning, title: "Title", message: "Body"))
         XCTAssertEqual(toastViews(in: controller).count, 1)
     }
+
+    // MARK: the claude / waiting toast (ZEN-148)
+
+    /// The keycaps a toast currently draws, read off the rendered view tree — a mirror of the
+    /// resolved string would pass while the card drew nothing.
+    private func keycaps(in toast: ToastView) -> [String] {
+        descendants(of: toast).compactMap { ($0 as? KeycapView)?.shortcut }
+    }
+
+    /// A notification arrives off the terminal's read path, so `agentNotified` hops to main before
+    /// touching the UI — the toast doesn't exist until the queue drains. This block is enqueued
+    /// after it, and the main queue is FIFO, so waiting on this is deterministic, not a sleep.
+    private func drainMainQueue() {
+        let drained = expectation(description: "main queue drained")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
+    }
+
+    /// ⌘1–⌘9 already switch tabs while a claude toast is up — it's deliberately non-modal. The
+    /// toast just never said so; now its Switch action carries the keycap.
+    func test_waitingToast_showsTheCommandKeycapForItsTab() throws {
+        let controller = makeController()
+        controller.newTabForTesting()  // tab 2, now active; tab 1 is in the background
+
+        controller.notifyAgentForTesting(tabIndex: 0, message: "needs your input")
+        drainMainQueue()
+
+        let toast = try XCTUnwrap(controller.waitingToastForTesting(tabIndex: 0))
+        XCTAssertEqual(keycaps(in: toast), ["⌘1"], "the toast for tab 1 names ⌘1")
+    }
+
+    /// Displaying a keycap must not arm a key equivalent — the ZEN-106 guarantee that a toast never
+    /// steals keys from the terminal. The binding named is the app's, not the toast's.
+    func test_waitingToast_withKeycap_stillArmsNoKeyEquivalents() throws {
+        let controller = makeController()
+        controller.newTabForTesting()
+        controller.notifyAgentForTesting(tabIndex: 0, message: "needs your input")
+        drainMainQueue()
+
+        let toast = try XCTUnwrap(controller.waitingToastForTesting(tabIndex: 0))
+        let armed = descendants(of: toast).compactMap { ($0 as? AppButton)?.keyEquivalent }
+        XCTAssertEqual(armed, ["", ""], "a sticky toast arms no Return/Esc, keycap or not")
+        XCTAssertFalse(toast.acceptsFirstResponder, "and it never takes focus from the terminal")
+    }
+
+    /// The staleness the lazy resolve exists for: a toast is built once per notification, so one
+    /// targeting tab 3 would keep reading "⌘3" after a tab before it closes and point at the wrong
+    /// tab. Every tab mutation re-renders the tab bar, which re-resolves live toasts.
+    func test_waitingToast_keycapFollowsItsTab_whenAnEarlierTabCloses() throws {
+        let controller = makeController()
+        controller.newTabForTesting()  // tab 2
+        controller.newTabForTesting()  // tab 3
+        controller.selectTabForTesting(index: 0)  // a waiting toast is for background tabs only
+        controller.notifyAgentForTesting(tabIndex: 2, message: "needs your input")
+        drainMainQueue()
+        let toast = try XCTUnwrap(controller.waitingToastForTesting(tabIndex: 2))
+        XCTAssertEqual(keycaps(in: toast), ["⌘3"])
+
+        controller.closeTabForTesting(index: 0)  // the toast's tab is now the 2nd
+
+        XCTAssertEqual(keycaps(in: toast), ["⌘2"], "the keycap must follow the tab, not go stale at ⌘3")
+    }
 }
