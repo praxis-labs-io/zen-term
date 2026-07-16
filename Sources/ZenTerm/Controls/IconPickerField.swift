@@ -23,6 +23,9 @@ final class IconPickerField: NSView, PopoverHosting {
     private var highlighted = 0
 
     private static let columns = 8
+    /// The grid's width, exposed so `IconCatalogTests` can pin the roster to the real layout
+    /// constant rather than a copy of it — the two drifting is what leaves a ragged last row.
+    static var columnsForTesting: Int { columns }
     private static let cellSize: CGFloat = 34
     private static let cellSpacing: CGFloat = 4
     private static let maxGridHeight: CGFloat = 320

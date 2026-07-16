@@ -42,15 +42,11 @@ final class IconButton: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
-        // Prefer an SF Symbol; fall back to a bundled brand mark (e.g. "github", "git")
-        // from the asset catalog — rendered as a template so it tints exactly like a symbol.
-        let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: weight)
-        if let symbolImage = NSImage(systemSymbolName: symbol, accessibilityDescription: label) {
-            icon.image = symbolImage.withSymbolConfiguration(config)
-        } else if let assetImage = BrandMark.image(symbol) {
-            assetImage.size = NSSize(width: pointSize + 2, height: pointSize + 2)
-            icon.image = assetImage
-        }
+        // An SF Symbol, else a bundled brand mark — resolved through the catalog, which owns that
+        // fallback. A brand mark is nudged a couple of points larger so a logo reads at the same
+        // optical weight as the symbols beside it. (The button carries the accessibility label
+        // itself, below, so the image needs no description of its own.)
+        icon.image = IconCatalog.image(symbol, pointSize: pointSize, weight: weight, brandSize: pointSize + 2)
         icon.imageScaling = .scaleNone
         icon.translatesAutoresizingMaskIntoConstraints = false
         addSubview(icon)
