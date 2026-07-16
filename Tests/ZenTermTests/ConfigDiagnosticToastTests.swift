@@ -94,6 +94,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
             """
             Split Vertically
               ⌘⇧\\ → toggle_zoom
+
             New Tab
               ⌘T → toggle_float:btop
             """)

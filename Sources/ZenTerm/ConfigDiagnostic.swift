@@ -112,8 +112,10 @@ struct ConfigDiagnostic: Hashable {
         if diagnostics.count == 1, let only = diagnostics.first {
             return ToastContent(variant: .warning, title: only.headline, message: only.message)
         }
+        // Blank line between entries: each is already two lines, so without a gap four lines run
+        // together and you can't see where one problem ends and the next begins.
         return ToastContent(
             variant: .warning, title: "\(diagnostics.count) problems in your config",
-            message: diagnostics.map(\.summary).joined(separator: "\n"))
+            message: diagnostics.map(\.summary).joined(separator: "\n\n"))
     }
 }
