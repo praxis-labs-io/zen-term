@@ -3,7 +3,7 @@ import XCTest
 @testable import ZenTerm
 
 /// Guards the asset-catalog wiring: the dock's brand marks must actually resolve from the
-/// bundle, else the GitHub / lazygit buttons render blank. Exercises ZenTerm's own
+/// bundle, else a float button using `icon:github`/`icon:git` renders blank. Exercises ZenTerm's own
 /// `Bundle.module` (BrandMark is compiled into ZenTerm, so it reads ZenTerm's resources).
 final class BrandMarkTests: XCTestCase {
     func test_bundledMarks_load() {

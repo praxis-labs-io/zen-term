@@ -14,7 +14,7 @@ final class KeybindParserTests: XCTestCase {
             .splitVertical, .splitHorizontal, .navLeft, .navRight, .navUp, .navDown,
             .closePane, .newTab, .newWindow, .prevTab, .nextTab,
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
-            .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .toggleLazygit,
+            .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom,
             .toggleRepoPicker, .toggleCommandPalette, .openSettings,
             .selectTab(1), .selectTab(9), .toggleToolFloat("gitdash"),
         ]
@@ -32,6 +32,12 @@ final class KeybindParserTests: XCTestCase {
 
     func test_parse_unknownAction_isNil() {
         XCTAssertNil(KeybindParser.parse("frobnicate=cmd+f"))
+    }
+
+    func test_parse_removedLazygitAction_isNil() {
+        // ZEN-140 deleted the built-in lazygit: `toggle_lazygit` must stay unparseable (the
+        // config loader logs a named migration warning pointing at the float recipe instead).
+        XCTAssertNil(KeybindParser.parse("toggle_lazygit=cmd+g"))
     }
 
     func test_parse_badChord_isNil() {

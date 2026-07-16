@@ -42,8 +42,7 @@ final class TabControllerSurfaceFailureTests: XCTestCase {
                     armedDrawer = surface
                 }
                 return surface
-            },
-            prewarmPool: LazygitPrewarmPool(capacity: 3), prewarmDelay: 0)
+            })
         self.controller = controller
 
         var toasts: [ToastContent] = []

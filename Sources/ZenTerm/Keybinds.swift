@@ -24,7 +24,6 @@ extension KeyInterceptor.ReservedChord {
         case .toggleBottomDrawer: return "toggle_bottom_drawer"
         case .toggleRightDrawer: return "toggle_right_drawer"
         case .toggleZoom: return "toggle_zoom"
-        case .toggleLazygit: return "toggle_lazygit"
         case .toggleToolFloat(let id): return "toggle_float:\(id)"
         case .toggleRepoPicker: return "toggle_repo_picker"
         case .toggleCommandPalette: return "toggle_command_palette"
@@ -55,7 +54,6 @@ extension KeyInterceptor.ReservedChord {
         case "toggle_bottom_drawer": self = .toggleBottomDrawer
         case "toggle_right_drawer": self = .toggleRightDrawer
         case "toggle_zoom": self = .toggleZoom
-        case "toggle_lazygit": self = .toggleLazygit
         case "toggle_repo_picker": self = .toggleRepoPicker
         case "toggle_command_palette": self = .toggleCommandPalette
         case "open_settings": self = .openSettings
@@ -104,7 +102,6 @@ enum KeymapDefaults {
         map[Chord(command: true, key: "n")] = .newWindow
         map[Chord(command: true, key: "b")] = .toggleBottomDrawer
         map[Chord(command: true, key: "f")] = .toggleZoom
-        map[Chord(command: true, key: "g")] = .toggleLazygit
         map[Chord(command: true, key: "p")] = .toggleCommandPalette
         map[Chord(command: true, key: ",")] = .openSettings
         map[Chord(command: true, option: true, key: "r")] = .reloadConfig

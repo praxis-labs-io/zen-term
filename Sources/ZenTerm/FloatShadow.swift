@@ -1,6 +1,6 @@
 import AppKit
 
-/// Shared styling for floating cards (the ⌘P repo picker and the lazygit float): a dark
+/// Shared styling for floating cards (the ⌘P repo picker and the tool floats): a dark
 /// elevation shadow and a subtle neutral edge, in place of a colored ring.
 enum FloatShadow {
     /// Subtle neutral hairline on the card edge (no color), for crispness over the shadow.

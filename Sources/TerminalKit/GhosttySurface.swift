@@ -64,7 +64,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // DOUBLE quotes only — single quotes would survive into arg0 (`'zsh'` != `zsh`)
         // and silently disable shell integration (cwd tracking, prompt marks → isBusy).
         // So each word is double-quoted; both the exec and the detector agree. The chrome
-        // spawns lazygit/floats as `-c "cmd; exec zsh -l -i"`, so this is load-bearing.
+        // spawns tool floats as `-c "cmd; exec zsh -l -i"`, so this is load-bearing.
         // `command == nil` lets libghostty launch the user's login shell itself.
         let command: String? = config.command.map { cmd in
             ([cmd] + config.args).map(Self.shellWordQuote).joined(separator: " ")

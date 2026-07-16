@@ -6,7 +6,7 @@ import AppKit
 /// dismiss; clicks on the content reach it, clicks in the card's inset ring are inert.
 ///
 /// Its host pins it to `content` (the tile region), so it never bleeds over the window
-/// gutters or the tab bar. Subclasses (the lazygit float, and the surface floats to come)
+/// gutters or the tab bar. Hosts (the tool floats)
 /// supply the content view and the card metrics — the base owns all the float chrome and
 /// the enter/exit motion.
 class SurfaceFloatOverlay: NSView {

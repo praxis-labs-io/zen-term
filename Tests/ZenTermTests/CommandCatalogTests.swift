@@ -5,7 +5,7 @@ import XCTest
 final class CommandCatalogTests: XCTestCase {
     /// The catalog reads `GeneralConfig.current` (floats and, through the keymap, chord
     /// displacement), so an unpinned suite varies by the developer's real config — a user float
-    /// claiming a built-in's chord (e.g. lazygit on ⌘G) strips that entry's palette glyph and
+    /// claiming a built-in's chord (e.g. zoom's ⌘F) strips that entry's palette glyph and
     /// fails the every-entry-has-a-shortcut assertion on that machine only.
     private var originalConfig = GeneralConfig.current
 
@@ -29,7 +29,7 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(
             names,
             [
-                "Open Workspace Picker", "Open Lazygit", "Settings…", "Reload Config",
+                "Open Workspace Picker", "Settings…", "Reload Config",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab",
                 "Split Horizontally", "Split Vertically",

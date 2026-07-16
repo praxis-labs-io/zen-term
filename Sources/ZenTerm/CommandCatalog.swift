@@ -45,7 +45,6 @@ enum CommandCatalog {
         case .selectTab(let n): return tab("Select Tab \(n)", glyph, chord)
         case .toggleBottomDrawer: return drawer("Toggle Bottom Drawer", glyph, chord)
         case .toggleRightDrawer: return drawer("Toggle Right Drawer", glyph, chord)
-        case .toggleLazygit: return tool("Open Lazygit", glyph, chord)
         case .toggleToolFloat(let id): return tool(ToolFloatCatalog.byID(id)?.title ?? id, glyph, chord)
         case .toggleRepoPicker: return tool("Open Workspace Picker", glyph, chord)
         case .openSettings: return config("Settings…", glyph, chord)
@@ -63,11 +62,11 @@ enum CommandCatalog {
 
     /// The ordered commands shown for a window with `tabCount` tabs, grouped by category
     /// (Tools → Config → Drawers → Tabs → Panes). Tools leads with the workspace picker, then
-    /// lazygit and the configured tool floats; Config holds Settings + Reload Config. `.selectTab`
+    /// the configured tool floats; Config holds Settings + Reload Config. `.selectTab`
     /// expands to one entry per open tab (capped at the bound ⌘1–⌘9). The command palette itself and
     /// New Window aren't shown.
     static func commands(tabCount: Int) -> [PaletteCommand] {
-        var chords: [KeyInterceptor.ReservedChord] = [.toggleRepoPicker, .toggleLazygit]
+        var chords: [KeyInterceptor.ReservedChord] = [.toggleRepoPicker]
         chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
         chords += [.openSettings, .reloadConfig]
         chords += [

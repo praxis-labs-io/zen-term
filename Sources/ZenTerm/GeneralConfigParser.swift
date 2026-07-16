@@ -72,6 +72,13 @@ enum GeneralConfigParser {
             case "keybind":
                 if let pair = KeybindParser.parse(value) {
                     keybinds.append(pair)
+                } else if value.trimmingCharacters(in: .whitespaces).hasPrefix("toggle_lazygit") {
+                    // ZEN-140 removed the built-in lazygit action; name it so the user knows
+                    // exactly what changed and how to get lazygit back, not just "unparseable".
+                    NSLog(
+                        "GeneralConfig: `toggle_lazygit` was removed — lazygit is a regular tool "
+                            + "float now; replace this keybind with a `float = id:lazygit "
+                            + "command:\"lazygit\" key:cmd+g git:true persist:dir` line — ignored")
                 } else {
                     NSLog("GeneralConfig: unparseable keybind line `\(value)` — ignored")
                 }
