@@ -92,12 +92,31 @@ In `Sources/ZenTerm/ConfigWriter.swift`, delete this sentence from `serializeFlo
 
 Remove the whole trailing clause starting at "`emptyGuard` has no grammar yet". The comment should end after the `WorkspacesWriter` quoting sentence.
 
-- [ ] **Step 7: Run the gate**
+- [ ] **Step 7: Drop `emptyGuard: nil` from the test constructions**
+
+No test *asserts* `emptyGuard`, but four test files pass it positionally when constructing a `ToolFloat`, so they won't compile until it's removed. Delete the `emptyGuard: nil,` argument from each:
+
+- `Tests/ZenTermTests/ToggleDockTests.swift:13`
+- `Tests/ZenTermTests/ToolFloatFormOverlayTests.swift:226` and `:246`
+- `Tests/ZenTermTests/ConfigWriterTests.swift:160`
+- `Tests/ZenTermTests/KeymapAssemblyTests.swift:10`
+
+No assertion changes — the argument was always `nil`.
+
+- [ ] **Step 8: Run the gate**
 
 Run: `bin/check`
-Expected: green. No test asserted `emptyGuard` (grep confirms zero references in `Tests/`), so nothing should fail.
+Expected: green.
 
-- [ ] **Step 8: Commit**
+Then confirm the deletion is total:
+
+```bash
+grep -rn "emptyGuard\|EmptyGuard" Sources/ Tests/
+```
+
+Expected: no output.
+
+- [ ] **Step 9: Commit**
 
 ```bash
 git add -A
@@ -301,7 +320,7 @@ In `Sources/ZenTerm/ConfigWriter.swift`, in `serializeFloat`, add after the `git
 Run: `swift test --filter ConfigWriterTests`
 Expected: PASS.
 
-> The existing `ConfigWriterTests` construct `ToolFloat(...)` directly and will fail to compile until each gains `persist:`. Add `persist: .ephemeral` to every existing construction — it's the default, so no existing assertion changes.
+> Four test files construct `ToolFloat(...)` directly and will fail to compile until each gains `persist:` — `ToggleDockTests.swift`, `ToolFloatFormOverlayTests.swift` (two sites), `ConfigWriterTests.swift`, `KeymapAssemblyTests.swift`. Add `persist: .ephemeral` to every one; it's the default, so no existing assertion changes. Find them all with `grep -rn "ToolFloat(" Tests/`.
 
 - [ ] **Step 10: Document the field**
 
@@ -970,7 +989,7 @@ Then give the `TabControllerToolFloatTests` spec helper a `dir` parameter, so th
     }
 ```
 
-Add `dir: nil` to every `ToolFloat(...)` in `ConfigWriterTests`. Re-run. Expected: PASS.
+Add `dir: nil` to the other test constructions — `ToggleDockTests.swift`, `ToolFloatFormOverlayTests.swift` (two sites), `ConfigWriterTests.swift`, `KeymapAssemblyTests.swift`. Find them all with `grep -rn "ToolFloat(" Tests/`. Re-run. Expected: PASS.
 
 - [ ] **Step 6: Serialize `dir:`**
 
