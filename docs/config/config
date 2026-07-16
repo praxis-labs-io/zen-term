@@ -103,15 +103,18 @@
 #   key      (required)  toggle chord, e.g. cmd+shift+g (see "Chord syntax" below)
 #   git      (optional)  true = only open inside a git repo         (default false)
 #   persist  (optional)  process lifetime                           (default none)
-#                        none = terminate on dismiss, fresh every open
-#                        dir  = keep alive per directory (repo root if in a repo, else
-#                               the cwd), scoped per tab — two tabs open on the same
-#                               directory each get their own instance; reopening
-#                               elsewhere respawns. With a pinned `dir:` the anchor is
-#                               constant, so the instance never re-anchors — the way to
-#                               keep a tool alive at a fixed place
-#                        the instance dies when the tool quits on its own (e.g. `q`) —
-#                        the next open is cold, not resumed
+#                        none   = terminate on dismiss, fresh every open
+#                        dir    = keep alive per directory (repo root if in a repo, else
+#                                 the cwd); reopening elsewhere discards it and respawns.
+#                                 With a pinned `dir:` the anchor is constant, so the
+#                                 instance never re-anchors
+#                        window = keep alive for the window, anchored where it first
+#                                 opened and never re-anchored — for tools that aren't
+#                                 about the directory you're in at all
+#                        a float is always window-level: one live instance shared by
+#                        every tab in the window, and its card stays up across a tab
+#                        switch. the instance dies when the tool quits on its own
+#                        (e.g. `q`) — the next open is cold, not resumed
 #   title    (optional)  command-palette title                      (default "Open <id>")
 #   icon     (optional)  SF Symbol name or bundled mark (github/git) (default square.on.square)
 #   width    (optional)  width as a fraction of the tab              (default 0.85)
@@ -128,8 +131,8 @@
 # other tool (height:0.78 matches the old card exactly):
 # float = id:lazygit command:"lazygit" key:cmd+g git:true persist:dir icon:git title:"Open Lazygit" height:0.78
 #
-# Example — a system monitor kept alive at home, no matter where you open it from:
-# float = id:btop command:"btop" key:cmd+shift+b persist:dir dir:~ icon:gauge
+# Example — a system monitor kept alive for the window, reachable from every tab:
+# float = id:btop command:"btop" key:cmd+shift+b persist:window icon:gauge
 
 # ─── Keybinds ────────────────────────────────────────────────────────────────
 #

@@ -27,6 +27,25 @@ pre-warm** anywhere, including ripping out lazygit's; the bespoke lazygit path i
 >   (workspace panes lose shell integration, which starves the anchor of cd signals).
 > - ZEN-140 (delete bespoke lazygit) is unchanged and remains the final PR.
 
+> **Update (2026-07-16) — ZEN-141 shipped; the whole engine went window-level.** The registry
+> didn't just move to the window: `ToolFloatController` now owns *every* float, ephemeral
+> included, and `TabController` has no float code at all. A split (persistent floats at the
+> window, ephemeral ones on the tab) would have left two shown-slots, two dismiss paths, and a
+> dock / chord gate / ⌘W-busy probe / copy-paste that each had to ask both. So:
+> - **`persist:` no longer implies scope.** Every float is one instance per id per window, its
+>   card hosted on `container`. `persist:` says only whether the process survives dismissal:
+>   `none` terminates, `dir` re-anchors on a directory change, `window` never re-anchors.
+> - **A shown float now rides a tab switch** — for all three modes, not just `window`. That's the
+>   point for `window`/`dir`, and an accepted behavior change for `none` (a yazi card used to hide
+>   with its tab).
+> - **`window` cost almost nothing**, as predicted: it's `dir` with a nil anchor, which makes the
+>   reuse check unconditional.
+> - **Re-warm-after-quit (ZEN-143) was cut** from the ticket and stays parked in Backlog in full.
+>   A tool that quits still evicts; the next open is cold.
+> - ZEN-144 (workspace `main:` panes lose shell integration) shipped alongside: `ShellLaunch.program`
+>   re-arms libghostty's ZDOTDIR redirect in its `exec` tail, mirroring `setupZsh`. Without it the
+>   `dir` anchor never sees a `cd` in a workspace tab.
+
 ## Why now
 
 ZEN-36 made tool floats ephemeral on purpose — "a diff is a point-in-time snapshot

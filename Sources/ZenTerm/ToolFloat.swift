@@ -17,10 +17,10 @@ struct ToolFloat: Equatable {
     let heightFraction: CGFloat
     let requiresGitRepo: Bool
 
-    /// How long a float's process lives, and where the live instance is kept. Scope only exists
-    /// when a float persists — an ephemeral tool spawns fresh at the focused cwd every open, so it
-    /// has no instance to scope. The raw value is the config token; the case names avoid colliding
-    /// with `Optional.none` (`.none`) and with the `dir:` field.
+    /// How long a float's process lives. Every float is window-level (ZEN-141) — one live instance
+    /// per id, shared by every tab in the window — so this says only whether that instance survives
+    /// dismissal, and what makes it stale. The raw value is the config token; the case names avoid
+    /// colliding with `Optional.none` (`.none`) and with the `dir:` field.
     enum Persistence: String {
         /// Terminate on dismiss; fresh spawn every open. Right for anything whose state goes stale
         /// (a file explorer, a scratch shell).
@@ -29,6 +29,10 @@ struct ToolFloat: Equatable {
         /// it; a different one discards and respawns. With a pinned `dir:` the anchor is constant,
         /// so the instance simply never re-anchors. Right for directory-bound tools.
         case directory = "dir"
+        /// One live instance for the window, anchored wherever it first opened and never
+        /// re-anchored. Right for tools that aren't about the directory you're in at all (a
+        /// process monitor, a music player, an email client).
+        case window
     }
 
     let persist: Persistence

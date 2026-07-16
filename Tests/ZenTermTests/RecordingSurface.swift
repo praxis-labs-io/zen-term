@@ -7,7 +7,10 @@ final class RecordingSurface: NSObject, TerminalSurface {
     let view = NSView()
     weak var delegate: TerminalSurfaceDelegate?
     var title = ""
-    var isFocused = false
+    /// Driven by `focus()`, so a test can assert who the chrome actually handed focus to (matching
+    /// the seam's own fake in `SeamTests`). Nothing un-focuses a surface through the protocol —
+    /// the chrome focuses the one that should hold it — so there's no clear path to model.
+    private(set) var isFocused = false
     var lastConfig: TerminalSurfaceConfig?
     /// Overrides the protocol extension's nil default so a test can drive cwd drift — the same
     /// property `PaneCanvasController.focusedCWD` prefers over its last OSC-reported value.
@@ -32,7 +35,7 @@ final class RecordingSurface: NSObject, TerminalSurface {
             }
         }
     }
-    func focus() {}
+    func focus() { isFocused = true }
     func terminate() { terminated = true }
     func paste(_ text: String) {}
     func copySelection() -> String? { nil }

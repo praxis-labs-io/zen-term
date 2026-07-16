@@ -4,13 +4,16 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Lifecycle tests for the tool-float engine (ZEN-77): drive `toggleToolFloat` on a window-mounted
-/// controller and assert what the `persist:` mode does to the underlying surface. Asserts through
-/// the real spawn/terminate path (`RecordingSurface.startCount` / `.terminated`) rather than the
-/// registry, because a state-only test would pass while the surface was actually being killed.
-final class TabControllerToolFloatTests: XCTestCase {
+/// Lifecycle tests for the tool-float engine (ZEN-77, lifted to window scope in ZEN-141): drive
+/// `toggle` on a window-mounted `ToolFloatController` and assert what the `persist:` mode does to
+/// the underlying surface. Asserts through the real spawn/terminate path
+/// (`RecordingSurface.startCount` / `.terminated`) rather than the registry, because a state-only
+/// test would pass while the surface was actually being killed. The window-scope claims the engine
+/// exists for — one instance across two tabs, a card that rides a tab switch — need real tabs and
+/// live in `WindowControllerToolFloatTests`.
+final class ToolFloatControllerTests: XCTestCase {
     private var windows: [NSWindow] = []
-    private var controllers: [TabController] = []
+    private var floatControllers: [ToolFloatController] = []
     private var root = FileManager.default.temporaryDirectory
 
     override func setUpWithError() throws {
@@ -21,8 +24,8 @@ final class TabControllerToolFloatTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
-        controllers.forEach { $0.shutdown() }
-        controllers = []
+        floatControllers.forEach { $0.shutdown() }
+        floatControllers = []
         windows = []
         try? FileManager.default.removeItem(at: root)
         try super.tearDownWithError()
@@ -40,30 +43,45 @@ final class TabControllerToolFloatTests: XCTestCase {
         return dir
     }
 
-    /// A window-mounted controller over `cwd`, recording every surface it spawns.
-    private func makeController(cwd: URL) -> (controller: TabController, spawned: () -> [RecordingSurface]) {
+    /// A window-mounted float engine over `cwd`, recording every surface it spawns.
+    ///
+    /// Hosts cards in a real view tree (the re-host and snap-away assertions walk
+    /// `surface.view.superview`, and `animateIn` lays out against a live window), and reaches the
+    /// "focused pane's cwd" through the same closure seam `WindowController` wires up — so
+    /// `setCWD` here stands in for a pane's shell `cd`-ing, which is exactly what the engine sees.
+    private func makeFloats(cwd: URL) -> (
+        floats: ToolFloatController, spawned: () -> [RecordingSurface], setCWD: (URL) -> Void
+    ) {
         var spawned: [RecordingSurface] = []
-        let controller = TabController(
-            initialCWD: cwd,
+        var currentCWD = cwd
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        let host = NSView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
+        window.contentView?.addSubview(host)
+        let floats = ToolFloatController(
+            presentOverlay: { overlay in
+                overlay.translatesAutoresizingMaskIntoConstraints = false
+                host.addSubview(overlay)
+                NSLayoutConstraint.activate([
+                    overlay.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+                    overlay.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+                    overlay.topAnchor.constraint(equalTo: host.topAnchor),
+                    overlay.bottomAnchor.constraint(equalTo: host.bottomAnchor),
+                ])
+            },
+            focusedCWD: { currentCWD },
+            yieldFocus: {},
+            restoreFocus: {},
             makeSurface: {
                 let surface = RecordingSurface()
                 spawned.append(surface)
                 return surface
             })
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
-            styleMask: [.borderless], backing: .buffered, defer: false)
-        controller.view.frame = NSRect(x: 0, y: 0, width: 900, height: 600)
-        window.contentView?.addSubview(controller.view)
-        controller.view.layoutSubtreeIfNeeded()
-        // Boot the first pane. `start()` is what mints the pane's surface, and `focusedCWD` reads
-        // that surface's `currentDirectory` first — so without it there is no pane, the first
-        // spawn recorded is a float, and `focusedCWD` can never move off `initialCWD`. A cwd-drift
-        // test would then silently assert nothing.
-        controller.start()
+        host.layoutSubtreeIfNeeded()
         windows.append(window)
-        controllers.append(controller)
-        return (controller, { spawned })
+        floatControllers.append(floats)
+        return (floats, { spawned }, { currentCWD = $0 })
     }
 
     private func spec(
@@ -76,46 +94,43 @@ final class TabControllerToolFloatTests: XCTestCase {
             persist: persist, toggle: Chord(command: true, shift: true, key: "j"))
     }
 
-    /// The float surfaces only — filtered by the command the spec launches, so the tab's own pane
-    /// surface never counts.
+    /// The surfaces for one float, filtered by the command its spec launches, so a test driving
+    /// two floats can tell them apart.
     private func floatSurfaces(_ spawned: [RecordingSurface], command: String) -> [RecordingSurface] {
         spawned.filter { $0.lastConfig?.args == ["-l", "-i", "-c", command] }
     }
-
-    /// The tab's initial pane surface — the one `focusedCWD` reads `currentDirectory` from.
-    private func paneSurface(_ spawned: [RecordingSurface]) -> RecordingSurface { spawned[0] }
 
     // MARK: tests
 
     func test_ephemeralFloat_terminatesOnDismiss() throws {
         let dir = try makeDir("plain", git: false)
-        let (controller, spawned) = makeController(cwd: dir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: dir)
         let float = spec("yazi", persist: .ephemeral)
 
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
         let opened = floatSurfaces(spawned(), command: "yazi")
         XCTAssertEqual(opened.count, 1)
 
-        controller.closeToolFloat()
+        floats.close()
         XCTAssertTrue(opened[0].terminated, "an ephemeral float must die on dismiss")
 
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
         XCTAssertEqual(floatSurfaces(spawned(), command: "yazi").count, 2, "reopen spawns fresh")
     }
 
     func test_dirFloat_survivesDismiss_andReusesSurfaceOnReopen() throws {
         let repo = try makeDir("repo", git: true)
-        let (controller, spawned) = makeController(cwd: repo)
+        let (floats, spawned, setCWD) = makeFloats(cwd: repo)
         let float = spec("lazygit", persist: .directory)
 
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
         let first = floatSurfaces(spawned(), command: "lazygit")
         XCTAssertEqual(first.count, 1)
 
-        controller.closeToolFloat()
+        floats.close()
         XCTAssertFalse(first[0].terminated, "a persistent float must survive dismiss")
 
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
         XCTAssertEqual(
             floatSurfaces(spawned(), command: "lazygit").count, 1, "reopen must reuse, not respawn")
         XCTAssertEqual(first[0].startCount, 1, "the retained surface must not be restarted")
@@ -124,15 +139,15 @@ final class TabControllerToolFloatTests: XCTestCase {
     func test_dirFloat_respawnsWhenAnchorChanges() throws {
         let repoA = try makeDir("a", git: true)
         let repoB = try makeDir("b", git: true)
-        let (controller, spawned) = makeController(cwd: repoA)
+        let (floats, spawned, setCWD) = makeFloats(cwd: repoA)
         let float = spec("lazygit", persist: .directory)
 
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
         let first = floatSurfaces(spawned(), command: "lazygit")[0]
-        controller.closeToolFloat()
+        floats.close()
 
-        paneSurface(spawned()).currentDirectory = repoB  // the focused pane cd'd to another repo
-        controller.toggleToolFloat(float)
+        setCWD(repoB)  // the focused pane cd'd to another repo
+        floats.toggle(float)
 
         XCTAssertTrue(first.terminated, "the stale instance must be discarded")
         let all = floatSurfaces(spawned(), command: "lazygit")
@@ -144,13 +159,13 @@ final class TabControllerToolFloatTests: XCTestCase {
         let repo = try makeDir("repo", git: true)
         let sub = repo.appendingPathComponent("src", isDirectory: true)
         try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
-        let (controller, spawned) = makeController(cwd: repo)
+        let (floats, spawned, setCWD) = makeFloats(cwd: repo)
         let float = spec("lazygit", persist: .directory)
 
-        controller.toggleToolFloat(float)
-        controller.closeToolFloat()
-        paneSurface(spawned()).currentDirectory = sub  // same repo, different subdir
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
+        floats.close()
+        setCWD(sub)  // same repo, different subdir
+        floats.toggle(float)
 
         XCTAssertEqual(
             floatSurfaces(spawned(), command: "lazygit").count, 1,
@@ -160,43 +175,43 @@ final class TabControllerToolFloatTests: XCTestCase {
     func test_dirFloat_outsideARepo_anchorsToThePlainCWD() throws {
         let dirA = try makeDir("plain-a", git: false)
         let dirB = try makeDir("plain-b", git: false)
-        let (controller, spawned) = makeController(cwd: dirA)
+        let (floats, spawned, setCWD) = makeFloats(cwd: dirA)
         let float = spec("btm", persist: .directory)
 
-        controller.toggleToolFloat(float)
-        controller.closeToolFloat()
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
+        floats.close()
+        floats.toggle(float)
         XCTAssertEqual(floatSurfaces(spawned(), command: "btm").count, 1, "same dir reuses")
 
-        controller.closeToolFloat()
-        paneSurface(spawned()).currentDirectory = dirB
-        controller.toggleToolFloat(float)
+        floats.close()
+        setCWD(dirB)
+        floats.toggle(float)
         XCTAssertEqual(floatSurfaces(spawned(), command: "btm").count, 2, "a different dir respawns")
     }
 
     func test_persistentFloat_terminatedOnShutdown() throws {
         let dir = try makeDir("plain", git: false)
-        let (controller, spawned) = makeController(cwd: dir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: dir)
 
-        controller.toggleToolFloat(spec("btop", persist: .directory))
+        floats.toggle(spec("btop", persist: .directory))
         let surface = floatSurfaces(spawned(), command: "btop")[0]
-        controller.closeToolFloat()
+        floats.close()
         XCTAssertFalse(surface.terminated)
 
-        controller.shutdown()
+        floats.shutdown()
         XCTAssertTrue(surface.terminated, "a hidden persistent float must not outlive its tab")
     }
 
     func test_persistentFloat_processExit_clearsRegistry_soNextOpenSpawnsFresh() throws {
         let dir = try makeDir("plain", git: false)
-        let (controller, spawned) = makeController(cwd: dir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: dir)
         let float = spec("lazygit", persist: .directory)
 
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
         let first = floatSurfaces(spawned(), command: "lazygit")[0]
-        controller.surfaceDidExit(first, code: 0)  // `q` inside the tool
+        floats.surfaceDidExit(first, code: 0)  // `q` inside the tool
 
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
         XCTAssertEqual(
             floatSurfaces(spawned(), command: "lazygit").count, 2,
             "a quit tool must spawn fresh on the next open, not resurrect a dead surface")
@@ -204,15 +219,15 @@ final class TabControllerToolFloatTests: XCTestCase {
 
     func test_hiddenPersistentFloat_processExit_clearsRegistry() throws {
         let dir = try makeDir("plain", git: false)
-        let (controller, spawned) = makeController(cwd: dir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: dir)
         let float = spec("lazygit", persist: .directory)
 
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
         let first = floatSurfaces(spawned(), command: "lazygit")[0]
-        controller.closeToolFloat()
-        controller.surfaceDidExit(first, code: 0)  // the tool died while hidden
+        floats.close()
+        floats.surfaceDidExit(first, code: 0)  // the tool died while hidden
 
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
         XCTAssertEqual(floatSurfaces(spawned(), command: "lazygit").count, 2)
     }
 
@@ -227,16 +242,16 @@ final class TabControllerToolFloatTests: XCTestCase {
         Motion.isReduceMotionEnabled = { false }  // force the async path so the old card is still parked
         defer { Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion } }
         let dir = try makeDir("plain", git: false)
-        let (controller, spawned) = makeController(cwd: dir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: dir)
         let float = spec("btop", persist: .directory)
 
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
         let surface = floatSurfaces(spawned(), command: "btop")[0]
         let oldOverlay = surface.view.superview?.superview
         XCTAssertNotNil(oldOverlay, "the surface's view must be hosted inside a float card")
 
-        controller.closeToolFloat()  // a persistent dismiss parks the still-springing-out card
-        controller.toggleToolFloat(float)  // reopen before its exit animation finishes
+        floats.close()  // a persistent dismiss parks the still-springing-out card
+        floats.toggle(float)  // reopen before its exit animation finishes
 
         let newOverlay = surface.view.superview?.superview
         XCTAssertNotNil(newOverlay?.superview, "the view must be re-hosted in a card that's actually on screen")
@@ -254,7 +269,7 @@ final class TabControllerToolFloatTests: XCTestCase {
         Motion.isReduceMotionEnabled = { true }
         defer { Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion } }
         let dir = try makeDir("plain", git: false)
-        let (controller, spawned) = makeController(cwd: dir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: dir)
         let float = spec("btop", persist: .directory)
 
         weak var weakOverlay: SurfaceFloatOverlay?
@@ -262,12 +277,12 @@ final class TabControllerToolFloatTests: XCTestCase {
         // drops — it clears when the pool drains. Do the open/close inside the pool so the assertion
         // measures stranding rather than autorelease timing.
         autoreleasepool {
-            controller.toggleToolFloat(float)
+            floats.toggle(float)
             let surface = floatSurfaces(spawned(), command: "btop")[0]
             weakOverlay = surface.view.superview?.superview as? SurfaceFloatOverlay
             XCTAssertNotNil(weakOverlay, "the surface's view must be hosted inside a float card")
 
-            controller.closeToolFloat()  // Reduce Motion runs `animateOut`'s completion synchronously
+            floats.close()  // Reduce Motion runs `animateOut`'s completion synchronously
         }
 
         XCTAssertNil(
@@ -275,16 +290,16 @@ final class TabControllerToolFloatTests: XCTestCase {
             "a synchronously-completed dismiss must drop every strong ref to the card — a stray "
                 + "`dismissingFloatOverlay` assignment after the fact would strand it")
 
-        controller.toggleToolFloat(float)  // reopening after must still reuse, not respawn
+        floats.toggle(float)  // reopening after must still reuse, not respawn
         XCTAssertEqual(floatSurfaces(spawned(), command: "btop").count, 1)
     }
 
     func test_dirField_pinsTheSpawnDirectory_ignoringTheFocusedCWD() throws {
         let paneDir = try makeDir("pane", git: false)
         let pinned = try makeDir("notes", git: false)
-        let (controller, spawned) = makeController(cwd: paneDir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: paneDir)
 
-        controller.toggleToolFloat(spec("notes", persist: .ephemeral, dir: pinned))
+        floats.toggle(spec("notes", persist: .ephemeral, dir: pinned))
 
         XCTAssertEqual(
             floatSurfaces(spawned(), command: "notes")[0].lastConfig?.workingDirectory, pinned,
@@ -299,15 +314,15 @@ final class TabControllerToolFloatTests: XCTestCase {
         let paneDir = try makeDir("pane", git: false)
         let pinned = try makeDir("notes", git: false)
         let elsewhere = try makeDir("elsewhere", git: false)
-        let (controller, spawned) = makeController(cwd: paneDir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: paneDir)
         let float = spec("notes", persist: .directory, dir: pinned)
 
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
         let first = floatSurfaces(spawned(), command: "notes")[0]
-        controller.closeToolFloat()
+        floats.close()
 
-        paneSurface(spawned()).currentDirectory = elsewhere  // would force a respawn without a pinned dir:
-        controller.toggleToolFloat(float)
+        setCWD(elsewhere)  // would force a respawn without a pinned dir:
+        floats.toggle(float)
 
         XCTAssertFalse(first.terminated, "a pinned dir: has a fixed identity — persist:dir can never re-anchor")
         let all = floatSurfaces(spawned(), command: "notes")
@@ -324,10 +339,10 @@ final class TabControllerToolFloatTests: XCTestCase {
     func test_gitGuard_opensWhenPinnedDirIsARepo_evenIfPaneCWDIsNot() throws {
         let paneDir = try makeDir("plain", git: false)
         let repoDir = try makeDir("repo", git: true)
-        let (controller, spawned) = makeController(cwd: paneDir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: paneDir)
         let float = spec("gitdash", persist: .ephemeral, git: true, dir: repoDir)
 
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
 
         XCTAssertEqual(
             floatSurfaces(spawned(), command: "gitdash").count, 1,
@@ -340,10 +355,10 @@ final class TabControllerToolFloatTests: XCTestCase {
     func test_gitGuard_blocksWhenPinnedDirIsNotARepo_evenIfPaneCWDIs() throws {
         let repoDir = try makeDir("repo", git: true)
         let plainDir = try makeDir("plain", git: false)
-        let (controller, spawned) = makeController(cwd: repoDir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: repoDir)
         let float = spec("gitdash", persist: .ephemeral, git: true, dir: plainDir)
 
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
 
         XCTAssertTrue(
             floatSurfaces(spawned(), command: "gitdash").isEmpty,
@@ -354,18 +369,18 @@ final class TabControllerToolFloatTests: XCTestCase {
 
     func test_pruneToolFloats_terminatesADeletedHiddenFloat_andKeepsSurvivors() throws {
         let dir = try makeDir("plain", git: false)
-        let (controller, spawned) = makeController(cwd: dir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: dir)
         let doomed = spec("dev", persist: .directory)
         let kept = spec("mon", persist: .directory)
 
-        controller.toggleToolFloat(doomed)
-        controller.closeToolFloat()
-        controller.toggleToolFloat(kept)
-        controller.closeToolFloat()
+        floats.toggle(doomed)
+        floats.close()
+        floats.toggle(kept)
+        floats.close()
         let doomedSurface = floatSurfaces(spawned(), command: "dev")[0]
         let keptSurface = floatSurfaces(spawned(), command: "mon")[0]
 
-        controller.pruneToolFloats(against: [kept])  // "dev" was deleted in Settings
+        floats.prune(against: [kept])  // "dev" was deleted in Settings
 
         XCTAssertTrue(
             doomedSurface.terminated,
@@ -375,27 +390,27 @@ final class TabControllerToolFloatTests: XCTestCase {
 
     func test_pruneToolFloats_closesAndTerminatesTheShownFloat_whenItWasDeleted() throws {
         let dir = try makeDir("plain", git: false)
-        let (controller, spawned) = makeController(cwd: dir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: dir)
         let float = spec("dev", persist: .directory)
 
-        controller.toggleToolFloat(float)
+        floats.toggle(float)
         let surface = floatSurfaces(spawned(), command: "dev")[0]
 
-        controller.pruneToolFloats(against: [])
+        floats.prune(against: [])
 
-        XCTAssertFalse(controller.isToolFloatOpen, "the card has no toggle left — close it too")
+        XCTAssertFalse(floats.isOpen, "the card has no toggle left — close it too")
         XCTAssertTrue(surface.terminated)
     }
 
     func test_editedCommand_respawnsInsteadOfReusingTheOldProcess() throws {
         let dir = try makeDir("plain", git: false)
-        let (controller, spawned) = makeController(cwd: dir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: dir)
 
-        controller.toggleToolFloat(spec("mon", persist: .directory, command: "btop"))
+        floats.toggle(spec("mon", persist: .directory, command: "btop"))
         let old = floatSurfaces(spawned(), command: "btop")[0]
-        controller.closeToolFloat()
+        floats.close()
 
-        controller.toggleToolFloat(spec("mon", persist: .directory, command: "htop"))  // Settings edit
+        floats.toggle(spec("mon", persist: .directory, command: "htop"))  // Settings edit
 
         XCTAssertTrue(old.terminated, "the instance still running the OLD command must be discarded")
         XCTAssertEqual(
@@ -405,18 +420,18 @@ final class TabControllerToolFloatTests: XCTestCase {
 
     func test_fastFloatSwitchXYX_snapsTheDisplacedCard_beforeRehostingItsView() throws {
         let dir = try makeDir("plain", git: false)
-        let (controller, spawned) = makeController(cwd: dir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: dir)
         let xSpec = spec("xtool", persist: .directory)
         let ySpec = spec("ytool", persist: .directory)
 
-        controller.toggleToolFloat(xSpec)
+        floats.toggle(xSpec)
         let xSurface = floatSurfaces(spawned(), command: "xtool")[0]
         guard let xFirstCard = xSurface.view.superview?.superview as? SurfaceFloatOverlay else {
             return XCTFail("expected X's view hosted inside a float card")
         }
 
-        controller.toggleToolFloat(ySpec)  // parks X's card, opens Y
-        controller.toggleToolFloat(xSpec)  // parks Y (displacing X's parked card), reopens X
+        floats.toggle(ySpec)  // parks X's card, opens Y
+        floats.toggle(xSpec)  // parks Y (displacing X's parked card), reopens X
 
         XCTAssertNil(
             xFirstCard.superview,
@@ -429,16 +444,16 @@ final class TabControllerToolFloatTests: XCTestCase {
 
     func test_hasBusyToolFloat_seesAHiddenBusyFloat() throws {
         let dir = try makeDir("plain", git: false)
-        let (controller, spawned) = makeController(cwd: dir)
+        let (floats, spawned, setCWD) = makeFloats(cwd: dir)
 
-        controller.toggleToolFloat(spec("dev", persist: .directory))
+        floats.toggle(spec("dev", persist: .directory))
         let surface = floatSurfaces(spawned(), command: "dev")[0]
-        controller.closeToolFloat()
+        floats.close()
 
-        XCTAssertFalse(controller.hasBusyToolFloat)
+        XCTAssertFalse(floats.hasBusy)
         surface.isBusy = true  // e.g. a build watcher doing live work while dismissed
         XCTAssertTrue(
-            controller.hasBusyToolFloat,
+            floats.hasBusy,
             "the ⌘W confirm reads this — a hidden busy float is invisible, so this flag is the only "
                 + "thing standing between close and silently killing its work")
     }
@@ -446,11 +461,11 @@ final class TabControllerToolFloatTests: XCTestCase {
     func test_gitGuardToast_namesThePinnedDir_notTheFocusedPane() throws {
         let repo = try makeDir("repo", git: true)
         let notes = try makeDir("notes", git: false)
-        let (controller, spawned) = makeController(cwd: repo)
+        let (floats, spawned, setCWD) = makeFloats(cwd: repo)
         var toasts: [ToastContent] = []
-        controller.onRequestToast = { toasts.append($0) }
+        floats.onRequestToast = { toasts.append($0) }
 
-        controller.toggleToolFloat(spec("gitdash", persist: .directory, git: true, dir: notes))
+        floats.toggle(spec("gitdash", persist: .directory, git: true, dir: notes))
 
         XCTAssertTrue(floatSurfaces(spawned(), command: "gitdash").isEmpty)
         XCTAssertEqual(toasts.count, 1)

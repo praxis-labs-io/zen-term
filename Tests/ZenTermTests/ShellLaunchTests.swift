@@ -67,13 +67,31 @@ final class ShellLaunchTests: XCTestCase {
     // MARK: program()
 
     func test_program_wrapsCommandInLoginShellThatReExecs() {
-        withConfig(shell: nil)
+        // Pin an explicit zsh: `userShell` falls back to the tester's ambient `$SHELL`, which
+        // would make the tail (and so this assertion) machine-dependent.
+        withConfig(shell: "/bin/zsh")
         let config = ShellLaunch.program("nvim .", cwd: URL(fileURLWithPath: "/work"))
-        let sh = ShellLaunch.userShell
-        XCTAssertEqual(config.command, sh)
-        // The `; exec …` tail keeps the pane alive with a fresh shell after the program quits.
-        XCTAssertEqual(config.args, ["-l", "-i", "-c", "nvim .; exec \(sh) -l -i"])
+        XCTAssertEqual(config.command, "/bin/zsh")
+        // The `; exec …` tail keeps the pane alive with a fresh shell after the program quits,
+        // and re-arms libghostty's ZDOTDIR redirect so that shell keeps integration (ZEN-144).
+        XCTAssertEqual(
+            config.args,
+            [
+                "-l", "-i", "-c",
+                "nvim .; if [[ -n \"$GHOSTTY_RESOURCES_DIR\" ]]; then "
+                    + "if [[ -n \"${ZDOTDIR+X}\" ]]; then export GHOSTTY_ZSH_ZDOTDIR=\"$ZDOTDIR\"; fi; "
+                    + "export ZDOTDIR=\"$GHOSTTY_RESOURCES_DIR/shell-integration/zsh\"; fi; "
+                    + "exec /bin/zsh -l -i",
+            ])
         XCTAssertEqual(config.workingDirectory, URL(fileURLWithPath: "/work"))
+    }
+
+    /// The re-arm is zsh-specific — libghostty's injection is per-shell and `ZDOTDIR` means
+    /// nothing to fish. A fish user keeps the plain tail rather than a broken redirect.
+    func test_program_doesNotRearmIntegration_forANonZshShell() {
+        withConfig(shell: "/usr/local/bin/fish")
+        let config = ShellLaunch.program("nvim .", cwd: nil)
+        XCTAssertEqual(config.args, ["-l", "-i", "-c", "nvim .; exec /usr/local/bin/fish -l -i"])
     }
 
     func test_program_injectsEnvAndDefaultsCwdToHome() {

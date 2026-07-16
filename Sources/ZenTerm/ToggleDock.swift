@@ -110,18 +110,19 @@ final class ToggleDock: NSView {
         }
     }
 
-    /// Mirror the active tab's overlay state (drawers, tool floats, zoom) and the window's
-    /// repo picker; split buttons are momentary and have no active state. A modal tool float
-    /// covers the whole tab, so while one is open the zoom and drawer
+    /// Mirror the active tab's overlay state (drawers, zoom), the window's shown tool float
+    /// (`floatID` — floats are window-level, so they don't ride a tab's `OverlayState`), and the
+    /// window's repo picker; split buttons are momentary and have no active state. A modal tool
+    /// float covers the whole tab, so while one is open the zoom and drawer
     /// pips dim — their state is hidden behind it and returns when it closes. Otherwise the
     /// drawer tints reflect what's visible: a zoomed pane hides both drawers (neither lit), a
     /// zoomed drawer hides its sibling (only its own lit).
-    func render(overlay: OverlayState, paletteOpen: Bool) {
+    func render(overlay: OverlayState, floatID: String?, paletteOpen: Bool) {
         paletteBtn.isActive = paletteOpen
-        for (id, btn) in toolFloatBtns { btn.isActive = overlay.activeToolFloatID == id }
+        for (id, btn) in toolFloatBtns { btn.isActive = floatID == id }
 
         // A float covers the tab, so zoom/drawer state beneath it would read as lit-but-hidden.
-        let floatCoversTab = overlay.activeToolFloatID != nil
+        let floatCoversTab = floatID != nil
         if floatCoversTab {
             zoomBtn.isActive = false
             bottomBtn.isActive = false

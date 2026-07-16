@@ -35,7 +35,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     /// segment count) can never drift out of sync — a titles array of a different length than the
     /// modes would otherwise crash on submit (index out of range) or leave a mode unselectable.
     private static let persistOptions: [(mode: ToolFloat.Persistence, title: String)] = [
-        (.ephemeral, "Fresh each time"), (.directory, "Per directory"),
+        (.ephemeral, "Fresh each time"), (.directory, "Per directory"), (.window, "Per window"),
     ]
     private let persistSegment = SegmentedControl(
         options: persistOptions.map(\.title), selectedIndex: 0
