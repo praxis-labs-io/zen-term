@@ -26,8 +26,7 @@ final class SettingsOverlayNavTests: XCTestCase {
         func reapplyTheme() {}
     }
 
-    /// A section whose single detail stop is a real `Dropdown` — the `PopoverHosting` adopter, so
-    /// Esc layering can be driven through the Settings card (ZEN-149).
+    /// A section whose single detail stop is a real `Dropdown`.
     private final class DropdownSection: SettingsSection {
         let navTitle = "Picker"
         var onExitToNav: (() -> Void)?
@@ -108,24 +107,4 @@ final class SettingsOverlayNavTests: XCTestCase {
         XCTAssertEqual(closed, 1)
     }
 
-    /// Layering, driven through the Settings card: an open dropdown takes the first Esc, the card
-    /// takes the second. `Dropdown` only ever got this right by accident before — Settings happens
-    /// to have no Esc key equivalent — and the identical `IconPickerField` code was unreachable.
-    func test_escape_withDropdownOpen_closesTheListFirst_thenTheCard() {
-        var closed = 0
-        let section = DropdownSection()
-        let window = mount(section, onClose: { closed += 1 })
-        window.makeFirstResponder(section.dropdown)
-        section.dropdown.openListForTesting()
-        XCTAssertTrue(section.dropdown.isPopoverOpen)
-
-        pressEscape(in: window)
-
-        XCTAssertFalse(section.dropdown.isPopoverOpen, "the first Esc closes the list")
-        XCTAssertEqual(closed, 0, "the first Esc must NOT close the card")
-
-        pressEscape(in: window)
-
-        XCTAssertEqual(closed, 1, "the second Esc closes the card")
-    }
 }

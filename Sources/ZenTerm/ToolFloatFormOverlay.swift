@@ -145,7 +145,11 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     /// only layer that runs before the Cancel button's own key equivalent — which used to win
     /// unconditionally and throw the whole form away with the grid open.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if ModalEscape.handle(event, in: window, close: { self.onCancel() }) { return true }
+        if ModalEscape.handle(
+            event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() }
+        ) {
+            return true
+        }
         return super.performKeyEquivalent(with: event)
     }
 
@@ -189,8 +193,8 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         picker.onChange = { [weak self] _ in self?.refreshValidity() }
         picker.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         picker.onArrowDown = { [weak self] in self?.moveVertical(1) }
-        picker.onTab = { [weak self] in self?.moveVertical(1) }
-        picker.onBacktab = { [weak self] in self?.moveVertical(-1) }
+        picker.onTab = { [weak self] in self?.moveTab(1) }
+        picker.onBacktab = { [weak self] in self?.moveTab(-1) }
         iconPicker = picker
         let iconGroup = LabeledField(caption: caption("ICON", required: false), control: picker)
         self.iconGroup = iconGroup
@@ -199,8 +203,8 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         chordChip.onReset = { [weak self] in self?.clearChord() }
         chordChip.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         chordChip.onArrowDown = { [weak self] in self?.moveVertical(1) }
-        chordChip.onTab = { [weak self] in self?.moveVertical(1) }
-        chordChip.onBacktab = { [weak self] in self?.moveVertical(-1) }
+        chordChip.onTab = { [weak self] in self?.moveTab(1) }
+        chordChip.onBacktab = { [weak self] in self?.moveTab(-1) }
         // The chip is a fixed 110pt; a bare `LabeledField` would pin that width to the whole group
         // (required) and collapse the card. Wrap it in a leading row so the group fills width while
         // the chip keeps its natural size.
@@ -227,6 +231,12 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         heightField.onChange = { [weak self] in self?.refreshValidity() }
         widthField.onArrowRight = { [weak self] in self?.focus(self?.heightField.field) }
         heightField.onArrowLeft = { [weak self] in self?.focus(self?.widthField.field) }
+        // Width × Height are one vertical stop, so Tab walks the pair in reading order — Width →
+        // Height → the next stop — instead of `moveVertical` skipping Height (which isn't a stop)
+        // and leaving it reachable only by Right.
+        widthField.onTab = { [weak self] in self?.focus(self?.heightField.field) }
+        heightField.onTab = { [weak self] in self?.moveTab(1) }
+        heightField.onBacktab = { [weak self] in self?.focus(self?.widthField.field) }
         let times = NSTextField(labelWithString: "×")
         times.font = .systemFont(ofSize: 13)
         times.textColor = Theme.current.chrome.ink(alpha: 0.4)
@@ -254,6 +264,8 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             button.isKeyboardFocusable = true
             button.onArrowUp = { [weak self] in self?.moveVertical(-1) }
             button.onArrowDown = { [weak self] in self?.moveVertical(1) }
+            button.onTab = { [weak self] in self?.moveTab(1) }
+            button.onBacktab = { [weak self] in self?.moveTab(-1) }
         }
         submitButton.onArrowLeft = { [weak self] in self?.focus(self?.cancelButton) }
         cancelButton.onArrowRight = { [weak self] in self?.focus(self?.submitButton) }
@@ -267,6 +279,8 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             deleteButton.onTap = { [weak self] in self?.onDelete?() }
             deleteButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
             deleteButton.onArrowDown = { [weak self] in self?.moveVertical(1) }
+            deleteButton.onTab = { [weak self] in self?.moveTab(1) }
+            deleteButton.onBacktab = { [weak self] in self?.moveTab(-1) }
             deleteButton.onArrowRight = { [weak self] in self?.focus(self?.cancelButton) }
             cancelButton.onArrowLeft = { [weak self] in self?.focus(self?.deleteButton) }
             footerViews = [deleteButton, spacer, cancelButton, submitButton]
@@ -461,6 +475,16 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         window?.makeFirstResponder(stops[next])
     }
 
+    /// Tab traversal: wraps at the ends where the arrows clamp, so a Tab loop never dies on the last
+    /// stop. Matches the Settings card, so the same key behaves the same way in every card.
+    private func moveTab(_ delta: Int) {
+        let stops = verticalStops()
+        let anchor = currentVerticalAnchor(in: stops).flatMap { anchor in stops.firstIndex { $0 === anchor } }
+        guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: stops.count, wrap: true)
+        else { return }
+        window?.makeFirstResponder(stops[next])
+    }
+
     /// The vertical stop representing the current focus — the focused stop itself, or the row anchor
     /// when focus is on Height (→ Width) or Cancel (→ Submit).
     private func currentVerticalAnchor(in stops: [NSView]) -> NSView? {
@@ -480,19 +504,23 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     /// Tab/Shift-Tab traverse the form's own stops, exactly like Down/Up. Without this the field
     /// editor leaked Tab to AppKit's default key-view loop while Tab on the form's buttons was
     /// consumed as advance/retreat — the same key doing two different things in one card.
+    ///
+    /// Height is deliberately NOT wired here: it isn't a vertical stop (it hangs off Width with
+    /// Right), so routing its Tab through `moveVertical` would skip straight past it and leave the
+    /// field unreachable by Tab entirely. It gets its own wiring in `buildContent`.
     private func wireField(_ box: FieldBox) {
         box.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         box.onArrowDown = { [weak self] in self?.moveVertical(1) }
-        box.onTab = { [weak self] in self?.moveVertical(1) }
-        box.onBacktab = { [weak self] in self?.moveVertical(-1) }
+        box.onTab = { [weak self] in self?.moveTab(1) }
+        box.onBacktab = { [weak self] in self?.moveTab(-1) }
         box.onSubmit = { [weak self] in self?.submit() }
     }
 
     private func wireSegment(_ segment: SegmentedControl) {
         segment.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         segment.onArrowDown = { [weak self] in self?.moveVertical(1) }
-        segment.onTab = { [weak self] in self?.moveVertical(1) }
-        segment.onBacktab = { [weak self] in self?.moveVertical(-1) }
+        segment.onTab = { [weak self] in self?.moveTab(1) }
+        segment.onBacktab = { [weak self] in self?.moveTab(-1) }
     }
 
     // MARK: submit + validation

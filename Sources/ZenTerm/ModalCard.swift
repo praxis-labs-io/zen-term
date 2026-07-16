@@ -63,31 +63,30 @@ struct DismissGate {
     }
 }
 
-/// A control that floats a popover of its own (a `Dropdown`'s list, an `IconPickerField`'s icon
-/// grid) and so gets first refusal on Esc before the card it sits in closes. Both adopters open
-/// their popover into `window.contentView` rather than into the card, so the card's subtree can't
-/// be searched for it — the host control is the handle.
-protocol PopoverHosting: NSView {
-    var isPopoverOpen: Bool { get }
-    func closePopover()
-}
-
-/// Esc for a modal card, in one place. Every card root claims Esc in `performKeyEquivalent` —
-/// the only layer that runs before a cancel button's own `"\u{1b}"` key equivalent, which used to
-/// win unconditionally and discard a half-filled form out from under an open popover.
+/// Esc for a modal card, in one place: every card root routes its Esc through here, so the rule
+/// lives once instead of in ~8 hand-written `.escape` cases that drifted apart.
+///
+/// It closes the CARD only. Layering Esc over an open popover (close the dropdown first, card
+/// second) is deliberately NOT here — see ZEN-157: two attempts at it failed in the running app,
+/// and the layer AppKit actually dispatches bare Esc to is still unestablished. A popover closes
+/// its own Esc locally, in its `keyDown`.
 enum ModalEscape {
-    /// Esc, layered: an open popover claims it first, else the card closes. The open popover is
-    /// always the first responder's — both hosts close theirs on `resignFirstResponder`, so the
-    /// window already knows which one it is and no tree walk is needed.
-    ///
-    /// A `FieldBox`'s first responder is its field editor (an `NSTextView`), not the box — the cast
-    /// simply fails and the card closes, which is what Esc in a text field should do.
-    static func handle(_ event: NSEvent, in window: NSWindow?, close: () -> Void) -> Bool {
+    /// `dismissing` is required, not defaulted: claiming Esc window-wide is only safe while the card
+    /// is actually up, and "every root remembers the guard" is the exact drift this type exists to
+    /// end. See the reasons a card declines below.
+    static func handle(_ event: NSEvent, in window: NSWindow?, dismissing: Bool, close: () -> Void)
+        -> Bool
+    {
         guard KeyboardFocus.key(for: event) == .escape else { return false }
-        if let host = window?.firstResponder as? PopoverHosting, host.isPopoverOpen {
-            host.closePopover()
-            return true
-        }
+        // 1. Already springing out. The host clears its modal slot and presents the replacement
+        //    synchronously, so for the length of the exit animation both cards sit in the
+        //    contentView — and this traversal reaches the outgoing one first (lower subview index).
+        //    Declining lets the Esc fall through to whatever replaced it: the new card, or a tool
+        //    float's live PTY, where Esc belongs to vim. `hitTest` declines clicks for this reason.
+        guard !dismissing else { return false }
+        // 2. An IME is composing: cancelling the marked text owns that Esc, and claiming it here
+        //    would discard the composition AND close the card, losing the typed query.
+        if let editor = window?.firstResponder as? NSTextView, editor.hasMarkedText() { return false }
         close()
         return true
     }

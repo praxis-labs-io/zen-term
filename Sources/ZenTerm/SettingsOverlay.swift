@@ -92,7 +92,11 @@ final class SettingsOverlay: NSView, ModalOverlay {
     /// in `keyDown`) because `performKeyEquivalent` is the only layer that runs before a button's
     /// own `"\u{1b}"` key equivalent.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if ModalEscape.handle(event, in: window, close: { self.onClose() }) { return true }
+        if ModalEscape.handle(
+            event, in: window, dismissing: dismiss.isDismissing, close: { self.onClose() }
+        ) {
+            return true
+        }
         return super.performKeyEquivalent(with: event)
     }
 
@@ -192,8 +196,12 @@ final class SettingsOverlay: NSView, ModalOverlay {
             navStack.leadingAnchor.constraint(equalTo: navScroll.contentView.leadingAnchor),
             navStack.widthAnchor.constraint(equalTo: navScroll.contentView.widthAnchor),
 
-            // The version footer sits below the scrolling list, always pinned to the column bottom.
-            footer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Self.footerLeadingInset),
+            // The version footer sits below the scrolling list, pinned to the column bottom and
+            // centered across the nav column (the mark + version read as one unit, so they center
+            // together rather than hanging off the leading edge).
+            footer.centerXAnchor.constraint(equalTo: navScroll.centerXAnchor),
+            footer.leadingAnchor.constraint(
+                greaterThanOrEqualTo: root.leadingAnchor, constant: Self.footerTrailingInset),
             footer.trailingAnchor.constraint(
                 lessThanOrEqualTo: navScroll.trailingAnchor, constant: -Self.footerTrailingInset),
             footer.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
@@ -252,11 +260,12 @@ final class SettingsOverlay: NSView, ModalOverlay {
     private static let brandMarkSize: CGFloat = 16
     private static let footerSpacing: CGFloat = 7
     private static let navWidth: CGFloat = 168
-    private static let footerLeadingInset: CGFloat = 22
+    /// Breathing room on each side of the centered footer, so a long version never touches either
+    /// the card edge or the divider.
     private static let footerTrailingInset: CGFloat = 12
-    /// What's left of the nav column once the insets, the mark, and the stack spacing are taken.
+    /// What's left of the nav column once both insets, the mark, and the stack spacing are taken.
     static var versionMaxWidth: CGFloat {
-        navWidth - footerLeadingInset - footerTrailingInset - brandMarkSize - footerSpacing
+        navWidth - footerTrailingInset * 2 - brandMarkSize - footerSpacing
     }
 
     // MARK: selection + focus

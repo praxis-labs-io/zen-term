@@ -240,7 +240,11 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// every card agrees on one Esc owner, rather than each host deciding by accident; it also
     /// covers the search field, whose `cancelOperation` used to handle this separately.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if ModalEscape.handle(event, in: window, close: { self.onDismiss() }) { return true }
+        if ModalEscape.handle(
+            event, in: window, dismissing: dismiss.isDismissing, close: { self.onDismiss() }
+        ) {
+            return true
+        }
         return super.performKeyEquivalent(with: event)
     }
 

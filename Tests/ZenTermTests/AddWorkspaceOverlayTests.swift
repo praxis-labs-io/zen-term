@@ -188,6 +188,28 @@ final class AddWorkspaceOverlayTests: XCTestCase {
         XCTAssertEqual(segment(in: overlay, containing: "Editor + AI + Shell")?.selectedIndex, 1)
     }
 
+    // MARK: Tab (ZEN-146)
+
+    /// An env row is ONE vertical stop (its KEY box), so routing the value box's Tab through
+    /// `moveVertical` jumped from KEY straight to the next row — silently skipping the value the
+    /// user was about to type. Tab walks the row in reading order instead.
+    func test_tab_walksAnEnvRow_ratherThanSkippingItsValueBox() throws {
+        let (overlay, _) = mount()
+        let addVar = try XCTUnwrap(button(in: overlay, title: "＋ Add variable"))
+        addVar.onTap()
+        let rows = descendants(of: overlay).compactMap { $0 as? EnvRow }
+        let row = try XCTUnwrap(rows.first)
+        window!.makeFirstResponder(row.keyBox.field)
+
+        row.keyBox.onTab?()
+        XCTAssertTrue(
+            KeyboardFocus.isFocused(row.valueBox.field, in: window),
+            "Tab from an env KEY must reach its own value box, not the next row")
+
+        row.valueBox.onBacktab?()
+        XCTAssertTrue(KeyboardFocus.isFocused(row.keyBox.field, in: window), "Shift-Tab returns to KEY")
+    }
+
     // MARK: Esc (ZEN-149)
 
     /// Esc closes the form from a focused text field — the case the Cancel button's key equivalent

@@ -89,6 +89,20 @@ final class WindowControllerToastSeamTests: XCTestCase {
         wait(for: [drained], timeout: 2)
     }
 
+    /// A theme that differs from the current one, loaded through the real config path (mirrors
+    /// `ReapplyThemeTests`) — so "did it recolor" compares against genuinely different values.
+    private func makeAlternateTheme() throws -> AppTheme {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-toast-theme-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        try """
+        background = #010101
+        foreground = #fefefe
+        """.write(to: dir.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
+        return ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn)
+    }
+
     /// ⌘1–⌘9 already switch tabs while a claude toast is up — it's deliberately non-modal. The
     /// toast just never said so; now its Switch action carries the keycap.
     func test_waitingToast_showsTheCommandKeycapForItsTab() throws {
@@ -114,6 +128,30 @@ final class WindowControllerToastSeamTests: XCTestCase {
         let armed = descendants(of: toast).compactMap { ($0 as? AppButton)?.keyEquivalent }
         XCTAssertEqual(armed, ["", ""], "a sticky toast arms no Return/Esc, keycap or not")
         XCTAssertFalse(toast.acceptsFirstResponder, "and it never takes focus from the terminal")
+    }
+
+    /// A sticky toast has no auto-dismiss, so one left up across a theme edit must recolor with the
+    /// chrome — the `.configDidChange` fan-out re-themed the modal and the confirm toast but never
+    /// the waiting ones, so the whole card (⌘N keycap included) stayed washed out until dismissed.
+    func test_waitingToast_reappliesTheme_whenTheConfigChanges() throws {
+        let controller = makeController()
+        controller.newTabForTesting()
+        controller.notifyAgentForTesting(tabIndex: 0, message: "needs your input")
+        drainMainQueue()
+        let toast = try XCTUnwrap(controller.waitingToastForTesting(tabIndex: 0))
+        let stale = toast.layer?.backgroundColor
+
+        let original = Theme.current
+        addTeardownBlock { Theme.setCurrentForTesting(original) }
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        NotificationCenter.default.post(name: .configDidChange, object: nil)
+        drainMainQueue()
+
+        XCTAssertNotEqual(
+            toast.layer?.backgroundColor, stale,
+            "a live waiting toast must recolor with the chrome, not keep the old theme's fill")
+        XCTAssertEqual(
+            toast.layer?.backgroundColor, Theme.current.chrome.background.nsColor.cgColor)
     }
 
     /// The staleness the lazy resolve exists for: a toast is built once per notification, so one

@@ -78,9 +78,9 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         descendants(of: overlay).compactMap { $0 as? FieldBox }.first { $0.placeholder == placeholder }!
     }
 
-    /// Press Esc the way `NSWindow.sendEvent` does — a `performKeyEquivalent` traversal of the whole
-    /// contentView subtree. Driving the root directly would skip the Cancel button's competing key
-    /// equivalent, which is the entire bug under test (ZEN-149).
+    /// Press Esc as a `performKeyEquivalent` traversal of the contentView subtree — the layer the
+    /// card root claims it at. NOTE (ZEN-157): whether AppKit really dispatches a BARE Esc this way
+    /// is unconfirmed, so a pass here is not proof the key works in the running app.
     @discardableResult
     private func pressEscape() -> Bool {
         window!.contentView!.performKeyEquivalent(with: keyDown("\u{1b}", code: 53))
@@ -425,41 +425,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
     // MARK: Esc layering (ZEN-149)
 
-    /// The bug: with the icon grid open, Esc hit the Cancel button's window-wide key equivalent —
-    /// which `NSWindow.sendEvent` runs across the whole subtree before any `keyDown` reaches the
-    /// grid — so it threw the half-filled form away instead of just closing the grid.
-    func test_escape_withIconGridOpen_closesOnlyTheGrid_andKeepsTypedFields() {
-        let (overlay, _, sink) = mount()
-        field(in: overlay, placeholder: "gitdash").setText("dev")
-        field(in: overlay, placeholder: "Open GitDash").setText("My Dashboard")
-        let picker = picker(in: overlay)
-        window!.makeFirstResponder(picker)
-        picker.openForTesting()
-        XCTAssertTrue(picker.isPopoverOpen)
-
-        XCTAssertTrue(pressEscape(), "the card root must claim Esc")
-
-        XCTAssertFalse(picker.isPopoverOpen, "the first Esc closes the grid")
-        XCTAssertEqual(sink.cancelled, 0, "the first Esc must NOT cancel the form")
-        XCTAssertEqual(overlay.superview, window!.contentView, "the form stays mounted")
-        XCTAssertEqual(field(in: overlay, placeholder: "gitdash").text, "dev", "typed fields survive")
-        XCTAssertEqual(field(in: overlay, placeholder: "Open GitDash").text, "My Dashboard")
-    }
-
-    func test_escape_afterGridClosed_cancelsTheForm() {
-        let (overlay, _, sink) = mount()
-        let picker = picker(in: overlay)
-        window!.makeFirstResponder(picker)
-        picker.openForTesting()
-        pressEscape()  // closes the grid
-
-        pressEscape()  // second Esc → the card itself
-
-        XCTAssertEqual(sink.cancelled, 1, "the second Esc cancels the form")
-    }
-
-    /// Esc from a focused text field closes the card: a `FieldBox`'s first responder is its field
-    /// editor, which isn't a `PopoverHosting`, so the layered check falls straight through.
+    /// Esc from a focused text field closes the card.
     func test_escape_fromFocusedTextField_cancelsTheForm() {
         let (overlay, _, sink) = mount()
         window!.makeFirstResponder(field(in: overlay, placeholder: "gitdash").field)
@@ -467,5 +433,40 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         pressEscape()
 
         XCTAssertEqual(sink.cancelled, 1)
+    }
+
+    // MARK: Tab (ZEN-146)
+
+    /// Height hangs off Width with Right and isn't a vertical stop, so routing its Tab through
+    /// `moveVertical` skipped it entirely and left the field unreachable by Tab. Tab walks the
+    /// Width × Height pair in reading order instead.
+    func test_tab_walksTheWidthHeightPair_ratherThanSkippingHeight() {
+        let (overlay, _, _) = mount()
+        let width = field(in: overlay, placeholder: "0.85")
+        let height = descendants(of: overlay).compactMap { $0 as? FieldBox }
+            .filter { $0.placeholder == "0.85" }[1]
+        window!.makeFirstResponder(width.field)
+
+        width.onTab?()
+        XCTAssertTrue(
+            KeyboardFocus.isFocused(height.field, in: window), "Tab from Width must reach Height")
+
+        height.onBacktab?()
+        XCTAssertTrue(KeyboardFocus.isFocused(width.field, in: window), "Shift-Tab returns to Width")
+    }
+
+    /// A dismissing card must stop claiming Esc, exactly as it stops claiming clicks (`hitTest`).
+    /// `closeModal()` clears the modal slot but leaves the card mounted until its spring-out
+    /// finishes, and the replacement card is presented synchronously — so for the length of that
+    /// animation BOTH are in the contentView, and `performKeyEquivalent` walks subviews in index
+    /// order, reaching the outgoing card first. Without this guard an Esc in that window is claimed
+    /// by the card on its way out, and acts on whatever replaced it.
+    func test_escape_whileDismissing_isNotClaimed_soItReachesWhatReplacedTheCard() {
+        let (overlay, _, sink) = mount()
+        overlay.animateOut {}  // the card is now springing out but still mounted
+
+        XCTAssertFalse(pressEscape(), "a dismissing card must let Esc pass to the card behind it")
+
+        XCTAssertEqual(sink.cancelled, 0, "and must not re-run its own cancel")
     }
 }

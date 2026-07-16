@@ -2,10 +2,10 @@ import AppKit
 
 /// A tool-float icon picker: closed, a `FieldBox`-styled button showing the current glyph + name;
 /// Return / Space / click opens a floating card holding an 8-wide grid of curated dev-tooling icons.
-/// Arrow keys move the highlight, Return picks it, Esc closes the grid (via the card root — see
-/// `ModalEscape`); clicking a cell picks it. A form focus stop — Up/Down bubble to the form while
-/// closed. Mirrors `Dropdown`'s window-child floating pattern.
-final class IconPickerField: NSView, PopoverHosting {
+/// Arrow keys move the highlight, Return picks it, Esc closes the grid; clicking a cell picks it.
+/// A form focus stop — Up/Down bubble to the form while closed. Mirrors `Dropdown`'s window-child
+/// floating pattern.
+final class IconPickerField: NSView {
     private(set) var selected: String
     var onChange: ((String) -> Void)?
     var onArrowUp: (() -> Void)?
@@ -32,8 +32,7 @@ final class IconPickerField: NSView, PopoverHosting {
     private static var restFill: NSColor { Theme.current.chrome.ink(alpha: 0.06) }
     private static var focusFill: NSColor { PaletteOverlay.selectionBackground }
 
-    /// Test hooks: open the grid and drive it without a live event loop. (`isPopoverOpen` /
-    /// `closePopover()` are the real `PopoverHosting` API — tests read those directly.)
+    /// Test hooks: open the grid and drive it without a live event loop.
     func openForTesting() { openPopover() }
     func moveHighlightForTesting(_ delta: Int) { moveHighlight(delta) }
     func commitHighlightForTesting() { commitHighlight() }
@@ -120,6 +119,7 @@ final class IconPickerField: NSView, PopoverHosting {
             case .up: moveHighlight(-Self.columns)
             case .down: moveHighlight(Self.columns)
             case .activate: commitHighlight()
+            case .escape: closePopover()
             default: break  // consume every other key while the grid is open
             }
             return
@@ -148,11 +148,10 @@ final class IconPickerField: NSView, PopoverHosting {
 
     // MARK: popover grid
 
-    // MARK: PopoverHosting
-
+    /// Test hook: whether the icon grid is open right now.
     var isPopoverOpen: Bool { popover != nil }
 
-    func closePopover() {
+    private func closePopover() {
         popover?.removeFromSuperview()
         popover = nil
         cells = []

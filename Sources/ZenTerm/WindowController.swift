@@ -220,6 +220,10 @@ final class WindowController: NSObject {
             self.renderDock()
             self.modal?.overlay.reapplyTheme()
             self.confirmToast?.reapplyTheme()
+            // Waiting toasts are sticky with no auto-dismiss, so one left up across a theme edit
+            // would otherwise keep its old card fill, ink, and ⌘N keycap — washed out over the new
+            // chrome until the user dismisses it.
+            self.waitingToasts.values.forEach { $0.reapplyTheme() }
         }
     }
 
