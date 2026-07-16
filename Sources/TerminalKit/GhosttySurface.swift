@@ -99,8 +99,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         hostView.scrollMultiplier = (config.behavior ?? .default).scrollMultiplier
 
         // A fresh libghostty surface defaults to focused=true, and only `resignFirstResponder`
-        // ever flips it false — so a surface that never becomes first responder (a pre-warmed
-        // drawer, a background pane) would keep an active/blinking cursor. Sync focus to the
+        // ever flips it false — so a surface that never becomes first responder (a hidden drawer,
+        // a background pane, a dismissed tool float) would keep an active/blinking cursor. Sync focus to the
         // real first-responder state now that the surface exists. This also covers a view that
         // became first responder before `surfacePtr` was set (the `becomeFirstResponder` true
         // was skipped under its `if let surfacePtr` guard).

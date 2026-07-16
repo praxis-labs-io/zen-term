@@ -51,8 +51,12 @@ pre-warm** anywhere, including ripping out lazygit's; the bespoke lazygit path i
 >     chord gate.
 > - **`window` cost almost nothing**, as predicted: it's `dir` with a nil anchor, which makes the
 >   reuse check unconditional.
-> - **Re-warm-after-quit (ZEN-143) was cut** from the ticket and stays parked in Backlog in full.
->   A tool that quits still evicts; the next open is cold.
+> - **Pre-warm is dead, in every form.** Re-warm-after-quit was cut from this ticket, and with it
+>   gone the last reason to keep launch-time `warm:true` alive went too — ZEN-143 is **canceled**,
+>   not parked. A tool that quits evicts; the next open is cold and that's fine, because every
+>   open after it is instant. The "no pre-warm" decision at the top of this doc is now final
+>   rather than provisional: nothing is holding the door open. Reopen only on a real, felt
+>   latency complaint.
 > - ZEN-144 (workspace `main:` panes lose shell integration) shipped alongside: `ShellLaunch.program`
 >   re-arms libghostty's ZDOTDIR redirect in its `exec` tail, mirroring `setupZsh`. Without it the
 >   `dir` anchor never sees a `cd` in a workspace tab.
