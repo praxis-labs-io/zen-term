@@ -77,4 +77,10 @@ final class KeybindRow: NSView {
         chip.render(shortcut: lastShortcut)
         chip.reapplyTheme()
     }
+
+    /// Test hook: the inline message as actually rendered — nil when the label is hidden. Reads the
+    /// label rather than a backing property, so a test can't pass while the row shows nothing.
+    var renderedMessageForTesting: String? {
+        messageLabel.isHidden ? nil : messageLabel.stringValue
+    }
 }

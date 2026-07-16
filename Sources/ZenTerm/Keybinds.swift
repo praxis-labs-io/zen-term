@@ -78,10 +78,12 @@ enum KeymapDefaults {
     static let map: [Chord: KeyInterceptor.ReservedChord] = {
         var map: [Chord: KeyInterceptor.ReservedChord] = [:]
 
-        // ⌘⇧ family — vertical split (both the shifted "|" and defensive "\\"), pane/drawer
-        // resize on HJKL, repo picker.
-        map[Chord(command: true, shift: true, key: "|")] = .splitVertical
+        // ⌘⇧ family — the splits, pane/drawer resize on HJKL, repo picker. Both splits are spelled
+        // with the *unshifted* key: `Chord` canonicalizes, so a live ⌘⇧\ event (which arrives as
+        // "|") and a live ⌘⇧- event (which arrives as "_") already fold onto these entries. ⌘⇧-
+        // rather than bare ⌘- leaves ⌘- free for ghostty's text magnification (ZEN-142).
         map[Chord(command: true, shift: true, key: "\\")] = .splitVertical
+        map[Chord(command: true, shift: true, key: "-")] = .splitHorizontal
         map[Chord(command: true, shift: true, key: "h")] = .resizeLeft
         map[Chord(command: true, shift: true, key: "l")] = .resizeRight
         map[Chord(command: true, shift: true, key: "k")] = .resizeUp
@@ -92,7 +94,6 @@ enum KeymapDefaults {
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer
         map[Chord(command: true, key: "[")] = .prevTab
         map[Chord(command: true, key: "]")] = .nextTab
-        map[Chord(command: true, key: "-")] = .splitHorizontal
         map[Chord(command: true, key: "h")] = .navLeft
         map[Chord(command: true, key: "l")] = .navRight
         map[Chord(command: true, key: "k")] = .navUp
@@ -131,12 +132,16 @@ enum KeybindParser {
 /// resolved keymap. Resolution order (later wins, a displacing write is logged): defaults →
 /// float chords → user keybinds. A `toggle_float:<id>` keybind whose id isn't a loaded float
 /// is skipped with a warning.
+///
+/// Also reports the displacements that cost an action its *last* chord, so the Keybinds card can
+/// say why a row has no shortcut rather than rendering a bare empty chip (ZEN-142).
 enum KeymapAssembler {
     static func assemble(
         floats: [ToolFloat], keybinds: [(Chord, KeyInterceptor.ReservedChord)]
-    ) -> [Chord: KeyInterceptor.ReservedChord] {
+    ) -> (map: [Chord: KeyInterceptor.ReservedChord], diagnostics: [ConfigDiagnostic]) {
         var map = KeymapDefaults.map
         let floatIDs = Set(floats.map(\.id))
+        var displacements: [Displacement] = []
 
         // A user keybind MOVES its action: drop the action's default chord(s) first, so the
         // old key is freed instead of both the default and the new chord firing it.
@@ -148,6 +153,7 @@ enum KeymapAssembler {
                 NSLog(
                     "GeneralConfig: chord \(chord.displayGlyph) rebound from \(existing.actionToken) "
                         + "to \(action.actionToken)")
+                displacements.append(Displacement(chord: chord, winner: action, loser: existing))
             }
             map[chord] = action
         }
@@ -160,7 +166,33 @@ enum KeymapAssembler {
             }
             set(chord, action)
         }
-        return map
+        return (map, diagnostics(for: displacements, in: map))
+    }
+
+    /// One chord write that took a chord off another action — recorded as it happens, before the
+    /// final map says whether the loser was left with anything else.
+    private struct Displacement {
+        let chord: Chord
+        let winner: KeyInterceptor.ReservedChord
+        let loser: KeyInterceptor.ReservedChord
+    }
+
+    /// A displacement is only worth surfacing when it took the loser's *last* chord — losing one of
+    /// two bindings is a rebind working as intended, but losing the only one leaves an action
+    /// silently unreachable. Reported once per action, naming the first chord it lost.
+    private static func diagnostics(
+        for displacements: [Displacement], in map: [Chord: KeyInterceptor.ReservedChord]
+    ) -> [ConfigDiagnostic] {
+        var seen: [KeyInterceptor.ReservedChord] = []
+        return displacements.compactMap { displacement in
+            guard !map.values.contains(displacement.loser), !seen.contains(displacement.loser) else { return nil }
+            seen.append(displacement.loser)
+            return ConfigDiagnostic(
+                severity: .warning,
+                scope: .keybind(displacement.loser),
+                message: "\(displacement.chord.displayGlyph) went to \(displacement.winner.actionToken) in your config."
+            )
+        }
     }
 }
 

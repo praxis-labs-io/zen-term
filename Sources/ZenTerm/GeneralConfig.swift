@@ -52,6 +52,9 @@ struct GeneralConfig: Equatable {
     // Structured.
     var floats: [ToolFloat]
     var keymap: [Chord: KeyInterceptor.ReservedChord]
+    /// Problems found resolving `keymap` — an action a config line or float chord left with no
+    /// shortcut. Surfaced on the action's Settings row; see `ConfigDiagnostic`.
+    var keymapDiagnostics: [ConfigDiagnostic] = []
 
     /// The commands the "Editor + AI + Shell" workspace preset falls back to when `editor` / `ai`
     /// are unset — single-sourced here so the Settings placeholders and the preset itself agree.

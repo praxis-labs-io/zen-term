@@ -83,6 +83,13 @@ final class KeybindCaptureFlowTests: XCTestCase {
         return section
     }
 
+    /// Write a config into the sandboxed root and reload — for the cases that start from a config
+    /// the user hand-wrote, rather than from the defaults.
+    private func seed(_ text: String) throws {
+        try text.write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+        AppConfig.reload()
+    }
+
     private func descendants(of view: NSView) -> [NSView] {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
@@ -196,5 +203,51 @@ final class KeybindCaptureFlowTests: XCTestCase {
 
         XCTAssertFalse(capturer.isArmed, "window close must end the armed capture")
         XCTAssertGreaterThanOrEqual(capturer.endCount, 1)
+    }
+
+    // MARK: conflict surface (ZEN-142)
+
+    func test_floatStealingAnActionsChord_showsTheReasonOnTheRow() throws {
+        // A float's `key:` silently wins over a built-in. Before ZEN-142 the New Tab row just
+        // rendered an empty chip — no chip, no reason, nothing to act on.
+        try seed("float = id:steal command:btop key:cmd+t\n")
+        _ = mountSection(FakeCapturer())
+
+        let newTab = row(for: .newTab)
+        XCTAssertNil(newTab.chip.renderedShortcutForTesting, "the stolen chord leaves the chip unbound")
+        let message = try XCTUnwrap(newTab.renderedMessageForTesting, "the row must say why it has no shortcut")
+        XCTAssertTrue(message.contains("⌘T"), message)
+        XCTAssertTrue(message.contains("toggle_float:steal"), message)
+    }
+
+    func test_rowsWithoutAConflict_showNoMessage() throws {
+        try seed("float = id:steal command:btop key:cmd+t\n")
+        _ = mountSection(FakeCapturer())
+        // The guard has to stay quiet everywhere it doesn't apply, or it's noise.
+        XCTAssertNil(row(for: .closePane).renderedMessageForTesting)
+        XCTAssertNil(row(for: .splitVertical).renderedMessageForTesting)
+    }
+
+    func test_configReload_updatesRowsOfAnOpenCard() throws {
+        try seed("float = id:steal command:btop key:cmd+t\n")
+        _ = mountSection(FakeCapturer())
+        XCTAssertNotNil(row(for: .newTab).renderedMessageForTesting)
+
+        // Fixing the config is exactly what ⌘⌥R follows, so an open card has to notice.
+        try seed("")
+
+        let drained = expectation(description: "main queue drained")  // observer runs on OperationQueue.main
+        OperationQueue.main.addOperation { drained.fulfill() }
+        wait(for: [drained], timeout: 5)
+
+        XCTAssertNil(row(for: .newTab).renderedMessageForTesting, "the resolved conflict must clear")
+        XCTAssertEqual(row(for: .newTab).chip.renderedShortcutForTesting, "⌘T", "and the chord comes back")
+    }
+
+    func test_splitRows_showTheBaseKeyGlyph() {
+        // Display ≡ config token: the chip shows what you'd type into the file (ZEN-142).
+        _ = mountSection(FakeCapturer())
+        XCTAssertEqual(row(for: .splitHorizontal).chip.renderedShortcutForTesting, "⌘⇧-")
+        XCTAssertEqual(row(for: .splitVertical).chip.renderedShortcutForTesting, "⌘⇧\\")
     }
 }

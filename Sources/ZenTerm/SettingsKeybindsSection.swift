@@ -32,8 +32,34 @@ final class SettingsKeybindsSection: SettingsSection {
     private weak var capturingRow: KeybindRow?
     private var captureCloseTimer: DispatchWorkItem?
     private let resetAllMessage = ResetFlashLabel()
+    private var configObserver: NSObjectProtocol?
 
-    init(capturer: KeybindCapturing?) { self.capturer = capturer }
+    init(capturer: KeybindCapturing?) {
+        self.capturer = capturer
+        // Pick up a reload this card didn't make — ⌘⌥R after a hand-edit, or another window's
+        // Settings write. Without it the chips and conflict messages keep showing the pre-reload
+        // config, and ⌘⌥R is exactly what a user reaches for after editing the file to clear a
+        // conflict this section just told them about.
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .configDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.refreshFromConfig()
+        }
+    }
+
+    deinit {
+        if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
+    }
+
+    /// Re-read the live keymap into the rows IN PLACE — no rebuild, for the same reason
+    /// `reapplyTheme` doesn't: `.configDidChange` is global, so rebuilding here would tear down a
+    /// capture armed in a *different* window. Skipped mid-capture, where `desired` holds an
+    /// uncommitted edit that a re-read would silently discard.
+    private func refreshFromConfig() {
+        guard capturingRow == nil, !rows.isEmpty else { return }
+        desired = reservedEntries(of: GeneralConfig.current.keymap)
+        refreshRows()
+    }
 
     func makeDetailView() -> NSView {
         desired = reservedEntries(of: GeneralConfig.current.keymap)
@@ -206,14 +232,12 @@ final class SettingsKeybindsSection: SettingsSection {
     private func reset(_ row: KeybindRow) {
         desired = desired.filter { $0.value != row.action }
         for (chord, action) in KeymapDefaults.map where action == row.action { desired[chord] = action }
-        row.showMessage(nil)
-        persist(reportingRow: row)
+        persist(reportingRow: row)  // its `refreshRows` clears or re-sets the row's message
         row.focusChip()  // keep focus on the row after the reload
     }
 
     private func resetAll() {
         desired = reservedEntries(of: KeymapDefaults.map)
-        rows.forEach { $0.showMessage(nil) }
         guard persist(reportingRow: rows.last) else { return }  // report a write error near the button
         resetAllMessage.flash("Defaults restored.")
     }
@@ -226,12 +250,13 @@ final class SettingsKeybindsSection: SettingsSection {
         do {
             try ConfigWriter.apply(keybinds: desired)
         } catch {
-            (reportingRow ?? rows.first)?.showMessage("Couldn't write config: \(error.localizedDescription)")
             // Roll the failed edit out of the in-memory map, back to what's on disk — otherwise it
             // rides along on the next successful write, silently applying an edit the user was told
-            // failed. (`refreshRows` restores the chips; it leaves the error message set.)
+            // failed.
             desired = reservedEntries(of: GeneralConfig.current.keymap)
             refreshRows()
+            // After `refreshRows`, which owns the row message and would otherwise overwrite this.
+            (reportingRow ?? rows.first)?.showMessage("Couldn't write config: \(error.localizedDescription)")
             return false
         }
         AppConfig.reload()
@@ -240,9 +265,15 @@ final class SettingsKeybindsSection: SettingsSection {
         return true
     }
 
+    /// Re-render every row from the live keymap. Owns the row message: a chip is empty either because
+    /// the action is genuinely unbound or because a config line took its last chord, and only the
+    /// second deserves an explanation. Callers that want a transient message (a write error) must set
+    /// it *after* this runs.
     private func refreshRows() {
+        let diagnostics = GeneralConfig.current.keymapDiagnostics
         for row in rows {
             row.render(currentShortcut: displayedChord(for: row.action)?.displayGlyph ?? "")
+            row.showMessage(diagnostics.first { $0.scope == .keybind(row.action) }?.message)
         }
     }
 

@@ -142,7 +142,12 @@
 #
 # Chord syntax: `+`-joined modifiers then one key, e.g. cmd+shift+g.
 #   modifiers: cmd (command/super), shift, opt (option/alt), ctrl (control)
-#   key:       a single character (letter, digit, or symbol like - \ [ ] |)
+#   key:       a single character (letter, digit, or symbol like - \ [ ])
+#
+# Write the key as it's printed *unshifted*, and add `shift` yourself: cmd+shift+-
+# rather than cmd+shift+_. Both spellings work — a shifted glyph folds onto its base
+# key (_ → shift+-, | → shift+\, plus → shift+=) — but the unshifted form is what the
+# app displays and writes back, so it's the one to reach for.
 #
 # Actions (the full set):
 #   split_horizontal   split_vertical
@@ -154,7 +159,7 @@
 #   toggle_float:<id>   (bind a second chord to one of your floats)
 #
 # Defaults (uncomment to change; these are what ships):
-# keybind = split_horizontal=cmd+-
+# keybind = split_horizontal=cmd+shift+-        # bare ⌘- stays free for ghostty's text zoom
 # keybind = split_vertical=cmd+shift+\           # ⌘⇧| on a US layout
 # keybind = nav_left=cmd+h
 # keybind = nav_down=cmd+j

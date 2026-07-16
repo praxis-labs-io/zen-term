@@ -85,8 +85,8 @@ final class KeyInterceptor {
     /// unit-testable. A miss — a nil chord or an un-reserved chord like an unbound Ctrl+hjkl —
     /// passes through to the terminal. A hit is consumed, unless the pass-through guard vetoes
     /// it (Ctrl-nav over an nvim pane), in which case it passes through too so nvim receives
-    /// the real key. The ⌘⇧\ → "|" shifted-symbol quirk is covered by the map holding both
-    /// "|" and "\\" entries, so this stays a pure lookup.
+    /// the real key. The ⌘⇧\ → "|" shifted-symbol quirk is absorbed by `Chord`'s canonicalizing
+    /// `init` — the event and the bind fold onto the same key — so this stays a pure lookup.
     func resolve(_ chord: Chord?) -> Route {
         guard let chord, let action = keymap[chord] else { return .passThrough }
         if passThroughGuard?(chord, action) == true { return .passThrough }

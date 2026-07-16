@@ -293,18 +293,33 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(ToolFloatParser.parse(value), original)
     }
 
-    func test_keybind_narrowingMultiDefaultAction_persistsAndRoundTrips() throws {
+    func test_keybind_narrowingMultiChordAction_persistsAndRoundTrips() throws {
         let dir = try makeTempDir()
-        // splitVertical ships bound to BOTH ⌘⇧| and ⌘⇧\. Narrow it to just ⌘⇧\ — a chord that
-        // happens to be one of its own defaults. A per-chord diff emits no line and lets the
-        // assembler restore both; the per-action diff must write the one surviving chord.
+        // A user can point two chords at one action, then drop one. The per-action diff has to
+        // write the whole surviving set, and narrowing back to exactly the defaults must write no
+        // line at all — leaving the extra chord behind either way would resurrect a bind the user
+        // deleted. (Pre-ZEN-142 splitVertical shipped with two default chords and this guarded
+        // that; canonicalization collapsed them to one, so the multi-chord case is now reachable
+        // only from config — which is exactly where it still has to hold.)
         var desired = KeymapDefaults.map.filter { $0.value != .splitVertical }
-        desired[Chord(command: true, shift: true, key: "\\")] = .splitVertical
+        desired[Chord(command: true, shift: true, key: "\\")] = .splitVertical  // its default
+        desired[Chord(command: true, shift: true, key: "v")] = .splitVertical  // plus an extra
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
-        let text = try read(dir)
+        var text = try read(dir)
         XCTAssertTrue(text.contains("keybind = split_vertical=cmd+shift+\\"), text)
+        XCTAssertTrue(text.contains("keybind = split_vertical=cmd+shift+v"), text)
+        XCTAssertEqual(
+            ConfigLoader.loadGeneralConfig(configRoot: dir).keymap[Chord(command: true, shift: true, key: "v")],
+            .splitVertical)
+
+        // Narrow back to the default alone: the action's set now equals the defaults, so nothing is
+        // written — and the assembler's defaults must stand on their own.
+        desired[Chord(command: true, shift: true, key: "v")] = nil
+        try ConfigWriter.apply(keybinds: desired, configRoot: dir)
+        text = try read(dir)
+        XCTAssertFalse(text.contains("split_vertical=cmd+shift+v"), text)
         let keymap = ConfigLoader.loadGeneralConfig(configRoot: dir).keymap
         XCTAssertEqual(keymap[Chord(command: true, shift: true, key: "\\")], .splitVertical)
-        XCTAssertNil(keymap[Chord(command: true, shift: true, key: "|")])  // the dropped default is gone
+        XCTAssertNil(keymap[Chord(command: true, shift: true, key: "v")])  // the dropped chord is gone
     }
 }
