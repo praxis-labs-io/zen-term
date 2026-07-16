@@ -220,6 +220,44 @@ final class KeybindCaptureFlowTests: XCTestCase {
         XCTAssertEqual(capturer.endCount, 0, "nothing was committed")
     }
 
+    func test_resetToDefault_blocksWhenAnotherActionHoldsThatDefaultChord() {
+        // Backspace-to-default is the one edit that picks its own chord, so it's the one that can
+        // walk into an occupied one. Capture blocks on conflict; this must too, or restoring a
+        // default silently evicts whatever the user deliberately put there.
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+
+        row(for: .newTab).chip.onActivate?()  // move New Tab off ⌘T, freeing it
+        capturer.feed(event(for: novelChord))
+        let cmdT = Chord(command: true, key: "t")
+        row(for: .closePane).chip.onActivate?()  // hand ⌘T to Close Pane
+        capturer.feed(event(for: cmdT))
+        XCTAssertEqual(liveKeymap[cmdT], .closePane)
+
+        row(for: .newTab).chip.onActivate?()  // Backspace New Tab → its default ⌘T is taken
+        capturer.feed(keyDown("\u{7f}", code: 51))
+
+        XCTAssertEqual(liveKeymap[cmdT], .closePane, "restoring a default must not steal an occupied chord")
+        XCTAssertEqual(liveKeymap[novelChord], .newTab, "and the blocked reset leaves New Tab as it was")
+        let message = row(for: .newTab).renderedMessageForTesting
+        XCTAssertNotNil(message, "a blocked reset has to say why")
+        XCTAssertTrue(message?.contains("Close Pane") ?? false, message ?? "nil")
+    }
+
+    func test_resetToDefault_blocksWhenAFloatHoldsTheDefaultChord() throws {
+        // The conflict check has to read the live keymap, not `desired` — `desired` excludes float
+        // toggles, so checking there would miss a float sitting on the default chord entirely.
+        try seed("float = id:steal command:btop key:cmd+t title:BTop\n")
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+
+        row(for: .newTab).chip.onActivate?()
+        capturer.feed(keyDown("\u{7f}", code: 51))  // Backspace → New Tab's default ⌘T, held by the float
+
+        XCTAssertEqual(liveKeymap[Chord(command: true, key: "t")], .toggleToolFloat("steal"))
+        XCTAssertTrue(row(for: .newTab).renderedMessageForTesting?.contains("BTop") ?? false)
+    }
+
     func test_capturingAnOccupiedShiftedSymbol_blocks() {
         // The ZEN-142 shape: ⌘⇧- arrives as "_" and must still be recognized as taken.
         let capturer = FakeCapturer()

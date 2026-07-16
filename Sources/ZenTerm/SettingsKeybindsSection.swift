@@ -240,11 +240,41 @@ final class SettingsKeybindsSection: SettingsSection {
     }
 
     /// Backspace on a focused chip: revert the action to its built-in default chord(s).
+    ///
+    /// Blocks if a default chord now belongs to something else. This is the one edit that picks its
+    /// own chord rather than the user pressing it, so it's the one that can walk into an occupied
+    /// one — and writing it anyway would silently evict a binding the user deliberately made
+    /// (assigning into `desired` overwrites the holder without a word). Capture blocks on conflict;
+    /// restoring a default is no different.
     private func reset(_ row: KeybindRow) {
+        if let (chord, owner) = defaultChordConflict(for: row.action) {
+            row.showMessage(
+                "\(chord.displayGlyph) is bound to \(CommandCatalog.spec(for: owner).title) — free it first.",
+                kind: .failure)
+            return
+        }
         desired = desired.filter { $0.value != row.action }
         for (chord, action) in KeymapDefaults.map where action == row.action { desired[chord] = action }
         persist(reportingRow: row)  // its `refreshRows` clears or re-sets the row's message
         row.focusChip()  // keep focus on the row after the reload
+    }
+
+    /// The first of an action's default chords that some *other* action holds in the live keymap,
+    /// with its holder. Read from the live keymap rather than `desired`, so a tool float's `key:`
+    /// counts too — `desired` excludes float toggles, and a float is just as stealable.
+    private func defaultChordConflict(
+        for action: KeyInterceptor.ReservedChord
+    ) -> (Chord, KeyInterceptor.ReservedChord)? {
+        KeymapDefaults.map
+            .filter { $0.value == action }
+            .keys
+            .sorted { $0.configToken < $1.configToken }  // deterministic: same chord named every time
+            .lazy
+            .compactMap { chord -> (Chord, KeyInterceptor.ReservedChord)? in
+                guard let owner = GeneralConfig.current.keymap[chord], owner != action else { return nil }
+                return (chord, owner)
+            }
+            .first
     }
 
     private func resetAll() {
