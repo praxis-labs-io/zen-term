@@ -257,26 +257,35 @@ final class SettingsKeybindsSection: SettingsSection {
 
     /// Backspace on a focused chip: revert the action to its built-in default chord(s).
     ///
-    /// Blocks if a default chord now belongs to something else. This is the one edit that picks its
-    /// own chord rather than the user pressing it, so it's the one that can walk into an occupied
-    /// one — and writing it anyway would silently evict a binding the user deliberately made
-    /// (assigning into `desired` overwrites the holder without a word). Capture blocks on conflict;
-    /// restoring a default is no different.
+    /// This is the one edit that picks its own chord rather than the user pressing it, so it's the
+    /// one that can land on an occupied one. It takes the chord — Backspace always restores the
+    /// default, and refusing deadlocks a swapped pair, where each action holds the other's default
+    /// and neither row could ever be reverted. What it must not do is take it *silently*: whatever
+    /// held the chord falls back to its own default, and its row says so.
     private func reset(_ row: KeybindRow) {
-        if let (chord, owner) = defaultChordConflict(for: row.action) {
-            // `.blocked`, not `.failure`: nothing was written, and a later reload freeing the chord
-            // is exactly what resolves this — so a refresh must be allowed to clear it, or the row
-            // keeps insisting the chord is taken after the user has freed it.
-            row.showMessage(
-                "\(chord.displayGlyph) is bound to \(CommandCatalog.spec(for: owner).title) — free it first.",
-                kind: .blocked)
-            return
-        }
         rebaseIfReloadDeferred()  // layer the reset on the reloaded set, never a pre-reload one
+        let displaced = defaultChordConflict(for: row.action)
         desired = desired.filter { $0.value != row.action }
         for (chord, action) in KeymapDefaults.map where action == row.action { desired[chord] = action }
-        persist(reportingRow: row)  // its `refreshRows` clears or re-sets the row's message
+        guard persist(reportingRow: row) else { return }  // persist reported the write error
+        if let (chord, owner) = displaced { reportDisplacement(of: owner, losing: chord, to: row.action) }
         row.focusChip()  // keep focus on the row after the reload
+    }
+
+    /// Tell the displaced action's row it lost its chord, and where it landed — after `persist`, so
+    /// its `refreshRows` doesn't clear the message before anyone reads it. A tool float has no row
+    /// here; it doesn't need one, because a float that keeps its `key:` wins the chord back on
+    /// reload and the losing action's own diagnostic explains that.
+    private func reportDisplacement(
+        of owner: KeyInterceptor.ReservedChord, losing chord: Chord, to winner: KeyInterceptor.ReservedChord
+    ) {
+        guard let ownerRow = rows.first(where: { $0.action == owner }) else { return }
+        let winnerTitle = CommandCatalog.spec(for: winner).title
+        let landed = displayedChord(for: owner)?.displayGlyph
+        ownerRow.showMessage(
+            landed.map { "\(chord.displayGlyph) went back to \(winnerTitle) — this is \($0) now." }
+                ?? "\(chord.displayGlyph) went back to \(winnerTitle).",
+            kind: .notice)
     }
 
     /// The first of an action's default chords that some *other* action holds in the live keymap,

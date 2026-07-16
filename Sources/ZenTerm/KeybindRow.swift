@@ -10,9 +10,9 @@ final class KeybindRow: NSView {
         /// A problem in the config file — the action has no shortcut and here's what took it. Owned
         /// by the section's refresh: it's true for as long as the config says so.
         case diagnostic
-        /// An edit the section refused (its default chord is taken). Transient feedback on an action
-        /// the user just took, and a refresh may well be what resolves it — so a refresh clears it.
-        case blocked
+        /// A side effect of an edit the user just made elsewhere in the card — this row's chord was
+        /// taken by another action's reset. Transient: the next refresh clears it.
+        case notice
         /// A failure of something the user just did (a config write that didn't land). Outlives a
         /// refresh, because a refresh isn't what resolves it — only a write that lands does.
         case failure
@@ -88,8 +88,8 @@ final class KeybindRow: NSView {
 
     private static func ink(for kind: MessageKind?) -> NSColor {
         switch kind {
-        case .diagnostic: return Theme.current.chrome.warning.nsColor
-        case .blocked, .failure, nil: return Theme.current.chrome.destructive.nsColor
+        case .diagnostic, .notice: return Theme.current.chrome.warning.nsColor
+        case .failure, nil: return Theme.current.chrome.destructive.nsColor
         }
     }
     func focusChip() { window?.makeFirstResponder(chip) }

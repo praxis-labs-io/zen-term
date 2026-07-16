@@ -220,10 +220,9 @@ final class KeybindCaptureFlowTests: XCTestCase {
         XCTAssertEqual(capturer.endCount, 0, "nothing was committed")
     }
 
-    func test_resetToDefault_blocksWhenAnotherActionHoldsThatDefaultChord() {
-        // Backspace-to-default is the one edit that picks its own chord, so it's the one that can
-        // walk into an occupied one. Capture blocks on conflict; this must too, or restoring a
-        // default silently evicts whatever the user deliberately put there.
+    func test_resetToDefault_takesAnOccupiedChordButSaysWhatItDisplaced() {
+        // Backspace always restores the default — what it must not do is take the chord silently,
+        // which is how a deliberate binding used to vanish with no message anywhere.
         let capturer = FakeCapturer()
         _ = mountSection(capturer)
 
@@ -237,25 +236,40 @@ final class KeybindCaptureFlowTests: XCTestCase {
         row(for: .newTab).chip.onActivate?()  // Backspace New Tab → its default ⌘T is taken
         capturer.feed(keyDown("\u{7f}", code: 51))
 
-        XCTAssertEqual(liveKeymap[cmdT], .closePane, "restoring a default must not steal an occupied chord")
-        XCTAssertEqual(liveKeymap[novelChord], .newTab, "and the blocked reset leaves New Tab as it was")
-        let message = row(for: .newTab).renderedMessageForTesting
-        XCTAssertNotNil(message, "a blocked reset has to say why")
-        XCTAssertTrue(message?.contains("Close Pane") ?? false, message ?? "nil")
+        XCTAssertEqual(liveKeymap[cmdT], .newTab, "the default is restored")
+        XCTAssertEqual(liveKeymap[Chord(command: true, key: "w")], .closePane, "the displaced action falls back")
+        let message = row(for: .closePane).renderedMessageForTesting
+        XCTAssertNotNil(message, "the displaced row must say it lost its chord")
+        XCTAssertTrue(message?.contains("⌘T") ?? false, message ?? "nil")
+        XCTAssertTrue(message?.contains("New Tab") ?? false, message ?? "nil")
+        XCTAssertEqual(row(for: .closePane).messageKind, .notice)
     }
 
-    func test_resetToDefault_blocksWhenAFloatHoldsTheDefaultChord() throws {
-        // The conflict check has to read the live keymap, not `desired` — `desired` excludes float
-        // toggles, so checking there would miss a float sitting on the default chord entirely.
-        try seed("float = id:steal command:btop key:cmd+t title:BTop\n")
+    func test_resetToDefault_swappedPair_canBeRevertedOneRowAtATime() {
+        // The deadlock a block-on-conflict reset would create: each action holds the other's
+        // default, so neither row could ever be reverted without nuking every customization.
         let capturer = FakeCapturer()
         _ = mountSection(capturer)
+        let cmdH = Chord(command: true, key: "h")
+        let cmdL = Chord(command: true, key: "l")
 
-        row(for: .newTab).chip.onActivate?()
-        capturer.feed(keyDown("\u{7f}", code: 51))  // Backspace → New Tab's default ⌘T, held by the float
+        // Build the swap the only way the UI allows — capture blocks on an occupied chord, so
+        // Nav Right has to vacate ⌘L before Nav Left can take it.
+        row(for: .navRight).chip.onActivate?()
+        capturer.feed(event(for: novelChord))  // Nav Right parks elsewhere, freeing ⌘L
+        row(for: .navLeft).chip.onActivate?()
+        capturer.feed(event(for: cmdL))  // Nav Left → ⌘L, freeing ⌘H
+        row(for: .navRight).chip.onActivate?()
+        capturer.feed(event(for: cmdH))  // Nav Right → ⌘H. Swapped.
+        XCTAssertEqual(liveKeymap[cmdH], .navRight)
+        XCTAssertEqual(liveKeymap[cmdL], .navLeft)
 
-        XCTAssertEqual(liveKeymap[Chord(command: true, key: "t")], .toggleToolFloat("steal"))
-        XCTAssertTrue(row(for: .newTab).renderedMessageForTesting?.contains("BTop") ?? false)
+        row(for: .navLeft).chip.onActivate?()  // Backspace Nav Left → wants ⌘H, held by Nav Right
+        capturer.feed(keyDown("\u{7f}", code: 51))
+
+        XCTAssertEqual(liveKeymap[cmdH], .navLeft, "Nav Left is back on its default")
+        // Nav Right falls back to its own default — which the reset just freed, so the swap unwinds.
+        XCTAssertEqual(liveKeymap[cmdL], .navRight, "and Nav Right lands on its default too")
     }
 
     func test_capturingAnOccupiedShiftedSymbol_blocks() {
@@ -352,31 +366,6 @@ final class KeybindCaptureFlowTests: XCTestCase {
         XCTAssertTrue(text.contains("nav_left=cmd+opt+h"), "a committed rebind must not delete it:\n\(text)")
         XCTAssertEqual(liveKeymap[Chord(command: true, option: true, key: "h")], .navLeft)
         XCTAssertEqual(liveKeymap[novelChord], .closePane, "and the rebind itself still lands")
-    }
-
-    func test_blockedReset_messageClearsOnceTheChordIsFreed() throws {
-        // The block is transient feedback, not a failed write: a reload that frees the chord is
-        // exactly what resolves it, so the row must stop insisting the chord is taken.
-        let capturer = FakeCapturer()
-        _ = mountSection(capturer)
-        row(for: .newTab).chip.onActivate?()
-        capturer.feed(event(for: novelChord))  // free ⌘T
-        row(for: .closePane).chip.onActivate?()
-        capturer.feed(event(for: Chord(command: true, key: "t")))  // Close Pane takes ⌘T
-
-        row(for: .newTab).chip.onActivate?()
-        capturer.feed(keyDown("\u{7f}", code: 51))  // Backspace → blocked
-        XCTAssertEqual(row(for: .newTab).messageKind, .blocked)
-
-        // Free ⌘T by hand and reload.
-        try seed("keybind = new_tab=cmd+shift+opt+ctrl+p\n")
-        let drained = expectation(description: "main queue drained")
-        OperationQueue.main.addOperation { drained.fulfill() }
-        wait(for: [drained], timeout: 5)
-
-        XCTAssertNil(
-            row(for: .newTab).renderedMessageForTesting,
-            "the block must not outlive the conflict it describes")
     }
 
     func test_configDiagnosticMessage_readsAsAWarningNotAFailure() throws {
