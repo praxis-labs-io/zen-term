@@ -35,9 +35,20 @@ pre-warm** anywhere, including ripping out lazygit's; the bespoke lazygit path i
 > - **`persist:` no longer implies scope.** Every float is one instance per id per window, its
 >   card hosted on `container`. `persist:` says only whether the process survives dismissal:
 >   `none` terminates, `dir` re-anchors on a directory change, `window` never re-anchors.
-> - **A shown float now rides a tab switch** — for all three modes, not just `window`. That's the
->   point for `window`/`dir`, and an accepted behavior change for `none` (a yazi card used to hide
->   with its tab).
+> - **A float is modal over the window: a tab change dismisses it.** The design above assumed the
+>   card would *ride* a tab switch, and that's what shipped first — daily driving killed it in
+>   minutes. A card you can't see past, over a tab that silently changed, means switching has no
+>   visible effect until you dismiss just to learn where you landed. So floats get the rule modal
+>   cards already followed (`select` → `closeModal()`): one ⌘⇧] both switches and reveals.
+>   Dismissing costs nothing now that the registry is window-level — the process lives, and
+>   reopening from the tab you landed on is instant and lands on the same instance.
+>   - The card is still hosted on `container` rather than a tab's `content`. That's what makes the
+>     dismiss animation play over the sliding canvas instead of unmounting mid-spring, and it
+>     keeps the engine free of any tab's view tree — but it is no longer load-bearing for
+>     surviving a switch, because nothing survives one.
+>   - Every tab-changing op dismisses, including the tab-bar `+` and chip clicks. Those bypass
+>     `handle(_:)` entirely, so the rule lives beside `closeModal()` in the tab ops, not in the
+>     chord gate.
 > - **`window` cost almost nothing**, as predicted: it's `dir` with a nil anchor, which makes the
 >   reuse check unconditional.
 > - **Re-warm-after-quit (ZEN-143) was cut** from the ticket and stays parked in Backlog in full.
