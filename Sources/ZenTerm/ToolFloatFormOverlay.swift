@@ -31,10 +31,14 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private let widthField = FieldBox(placeholder: "0.85")
     private let heightField = FieldBox(placeholder: "0.85")
     private let gitSegment = SegmentedControl(options: ["Any folder", "Git repos only"], selectedIndex: 0) { _ in }
-    /// Segment index ↔ `Persistence`. One array drives both directions so the mapping can't drift.
-    private static let persistOptions: [ToolFloat.Persistence] = [.ephemeral, .directory, .tab]
+    /// Segment index ↔ `Persistence` ↔ title, all derived from this one array so the mapping (and the
+    /// segment count) can never drift out of sync — a titles array of a different length than the
+    /// modes would otherwise crash on submit (index out of range) or leave a mode unselectable.
+    private static let persistOptions: [(mode: ToolFloat.Persistence, title: String)] = [
+        (.ephemeral, "Fresh each time"), (.directory, "Per directory"), (.tab, "Per tab"),
+    ]
     private let persistSegment = SegmentedControl(
-        options: ["Fresh each time", "Per directory", "Per tab"], selectedIndex: 0
+        options: persistOptions.map(\.title), selectedIndex: 0
     ) { _ in }
     private let dirField = FieldBox(placeholder: "~/notes")
 
@@ -201,6 +205,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         self.commandGroup = commandGroup
 
         wireField(dirField)
+        dirField.onChange = { [weak self] in self?.refreshValidity() }
         let dirGroup = LabeledField(caption: caption("DIRECTORY", required: false), control: dirField)
         self.dirGroup = dirGroup
 
@@ -292,7 +297,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         }
         gitSegment.setSelection(float.requiresGitRepo ? 1 : 0)
         if let dir = float.dir { dirField.setText(PathDisplay.abbreviatingHome(dir.path)) }
-        if let index = Self.persistOptions.firstIndex(of: float.persist) {
+        if let index = Self.persistOptions.firstIndex(where: { $0.mode == float.persist }) {
             persistSegment.setSelection(index)  // programmatic sync must not fire onChange
         }
     }
@@ -498,12 +503,11 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             title: title.isEmpty ? ToolFloatParser.defaultTitle(forID: id) : title,
             icon: iconPicker.selected,
             command: command,
-            dir: pinnedDir.isEmpty
-                ? nil : URL(fileURLWithPath: NSString(string: pinnedDir).expandingTildeInPath).standardizedFileURL,
+            dir: pinnedDir.isEmpty ? nil : Self.resolvedDirURL(pinnedDir),
             widthFraction: fraction(widthField),
             heightFraction: fraction(heightField),
             requiresGitRepo: gitSegment.selectedIndex == 1,
-            persist: Self.persistOptions[persistSegment.selectedIndex],
+            persist: Self.persistOptions[persistSegment.selectedIndex].mode,
             toggle: chord)
     }
 
@@ -543,6 +547,18 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         }
         flag(commandGroup, field: commandField.field, commandMessage)
 
+        // Same round-trip constraint as title/command, plus a folder-exists check (mirroring
+        // `AddWorkspaceOverlay`'s DIRECTORY field) — an empty field stays valid, since nil means
+        // "follow the pane's cwd" rather than a folder that must exist.
+        let dirText = dirField.text.trimmingCharacters(in: .whitespaces)
+        var dirMessage: String?
+        if dirText.contains("\"") {
+            dirMessage = "Can’t contain a \" character."  // the grammar has no escape
+        } else if !dirText.isEmpty, !PathDisplay.isDirectory(Self.resolvedDirURL(dirText)) {
+            dirMessage = "That folder doesn’t exist."
+        }
+        flag(dirGroup, field: dirField.field, dirMessage)
+
         if includeRequired, capturedChord == nil {
             flag(chordGroup, field: chordChip, "Set a shortcut (needs ⌘ ⇧ ⌥ or ⌃).")
         } else {
@@ -577,6 +593,13 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         let text = box.text.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty, let value = Double(text) else { return ToolFloatParser.defaultFraction }
         return ToolFloatParser.clampedFraction(value)
+    }
+
+    /// Tilde-expand and standardize a raw DIRECTORY field value into the `URL` form `ToolFloat.dir`
+    /// stores — shared by `validate` (the folder-exists check) and `buildFloat` so the two can't
+    /// resolve the same text two different ways.
+    private static func resolvedDirURL(_ text: String) -> URL {
+        URL(fileURLWithPath: NSString(string: text).expandingTildeInPath).standardizedFileURL
     }
 
     // MARK: layout helpers

@@ -311,18 +311,61 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         XCTAssertNil(sink.submitted.first?.dir)
     }
 
+    func test_dirWithQuote_blocksSubmit() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "npm run dev").setText("vim")
+        field(in: overlay, placeholder: "~/notes").setText("/tmp/a\"b")  // a `"` can't round-trip
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertTrue(sink.submitted.isEmpty, "a dir with a \" is rejected, so submit is blocked")
+    }
+
+    func test_dirField_nonexistentFolder_blocksSubmit() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "npm run dev").setText("vim")
+        field(in: overlay, placeholder: "~/notes")
+            .setText("/definitely/not/a/real/path-\(UUID().uuidString)")
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertTrue(
+            sink.submitted.isEmpty,
+            "a nonexistent DIRECTORY blocks submit, mirroring AddWorkspaceOverlay's folder check")
+    }
+
+    func test_dirField_existingFolder_allowsSubmit() {
+        let realDir = FileManager.default.temporaryDirectory
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "npm run dev").setText("vim")
+        field(in: overlay, placeholder: "~/notes").setText(realDir.path)
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.count, 1, "an existing folder must not block submit")
+    }
+
     /// Editing a float must not silently flatten fields the form didn't previously expose.
     func test_edit_prefillsPersistAndDir() {
+        // A real directory — the folder-exists check (Fix 5) would otherwise block submit on a
+        // fixture path like `/tmp/x` that doesn't actually exist.
+        let realDir = FileManager.default.temporaryDirectory
         let existing = ToolFloat(
             id: "lg", title: "Open Lazygit", icon: "git", command: "lazygit",
-            dir: URL(fileURLWithPath: "/tmp/x"), widthFraction: 0.85, heightFraction: 0.78,
+            dir: realDir, widthFraction: 0.85, heightFraction: 0.78,
             requiresGitRepo: true, persist: .tab, toggle: Chord(command: true, key: "g"))
         let (overlay, _, sink) = mount(editing: existing)
 
         submit(in: overlay)
 
         XCTAssertEqual(sink.submitted.first?.persist, .tab)
-        XCTAssertEqual(sink.submitted.first?.dir?.path, "/tmp/x")
+        XCTAssertEqual(sink.submitted.first?.dir?.path, realDir.path)
     }
 
     /// `/tmp/x` above is outside `$HOME`, so `abbreviatingHome` is a no-op on it and can't tell a

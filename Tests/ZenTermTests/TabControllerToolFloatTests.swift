@@ -354,4 +354,38 @@ final class TabControllerToolFloatTests: XCTestCase {
         XCTAssertEqual(all[0].startCount, 1, "the retained surface must not be restarted")
         XCTAssertEqual(all[0].lastConfig?.workingDirectory, pinned)
     }
+
+    // MARK: git guard checks where the float runs, not the focused pane
+
+    /// The guard in `toggleToolFloat` must check `floatCWD(spec)` — where the tool actually runs —
+    /// not the focused pane's raw cwd. A `dir:`-pinned float into a repo must open even though the
+    /// pane itself sits outside any repo.
+    func test_gitGuard_opensWhenPinnedDirIsARepo_evenIfPaneCWDIsNot() throws {
+        let paneDir = try makeDir("plain", git: false)
+        let repoDir = try makeDir("repo", git: true)
+        let (controller, spawned) = makeController(cwd: paneDir)
+        let float = spec("gitdash", persist: .ephemeral, git: true, dir: repoDir)
+
+        controller.toggleToolFloat(float)
+
+        XCTAssertEqual(
+            floatSurfaces(spawned(), command: "gitdash").count, 1,
+            "the git guard must check floatCWD (the pinned dir:), not the focused pane's raw cwd")
+    }
+
+    /// The inverse: a float pinned to a non-repo directory must be BLOCKED even though the focused
+    /// pane itself happens to sit inside a real repo — the guard exists to protect where the tool
+    /// runs, not where the pane is.
+    func test_gitGuard_blocksWhenPinnedDirIsNotARepo_evenIfPaneCWDIs() throws {
+        let repoDir = try makeDir("repo", git: true)
+        let plainDir = try makeDir("plain", git: false)
+        let (controller, spawned) = makeController(cwd: repoDir)
+        let float = spec("gitdash", persist: .ephemeral, git: true, dir: plainDir)
+
+        controller.toggleToolFloat(float)
+
+        XCTAssertTrue(
+            floatSurfaces(spawned(), command: "gitdash").isEmpty,
+            "a float pinned to a non-repo dir: must be blocked even though the pane sits in a real repo")
+    }
 }

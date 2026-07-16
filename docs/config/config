@@ -88,10 +88,11 @@
 
 # ─── Tool floats ─────────────────────────────────────────────────────────────
 #
-# Ephemeral command overlays (dock button + command-palette entry + keybinding).
-# There are NO built-in floats — define your own with `float = ` lines. Repeat
-# the key for as many as you like. A float's `key:` is the single source of truth
-# for both its chord and its palette glyph.
+# Command overlays (dock button + command-palette entry + keybinding) whose
+# process lifetime is set by `persist:` (default `none` = ephemeral, fresh every
+# open). There are NO built-in floats — define your own with `float = ` lines.
+# Repeat the key for as many as you like. A float's `key:` is the single source
+# of truth for both its chord and its palette glyph.
 #
 # Fields (whitespace-separated `field:value`; quote values with spaces):
 #   id       (required)  stable identifier, unique per float
@@ -104,8 +105,14 @@
 #   persist  (optional)  process lifetime                           (default none)
 #                        none = terminate on dismiss, fresh every open
 #                        dir  = keep alive per directory (repo root if in a repo, else
-#                               the cwd); reopening elsewhere respawns
+#                               the cwd), scoped per tab — two tabs open on the same
+#                               directory each get their own instance; reopening
+#                               elsewhere respawns
 #                        tab  = keep alive per tab, anchored at first open
+#                        either mode's instance dies when the tool quits on its own
+#                        (e.g. `q`) — the next open is cold, not resumed. `dir:` +
+#                        `persist:dir` is degenerate: a pinned directory can never
+#                        re-anchor, so it behaves as `persist:tab` (the parser warns)
 #   title    (optional)  command-palette title                      (default "Open <id>")
 #   icon     (optional)  SF Symbol name or bundled mark (github/git) (default square.on.square)
 #   width    (optional)  width as a fraction of the tab              (default 0.85)

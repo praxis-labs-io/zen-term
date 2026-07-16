@@ -761,7 +761,7 @@ final class TabController: NSObject {
     func toggleToolFloat(_ spec: ToolFloat) {
         if activeToolFloat?.spec.id == spec.id { closeToolFloat(); return }
         if activeToolFloat != nil { closeToolFloat() }  // switch floats
-        if spec.requiresGitRepo, gitRepoRoot(for: focusedCWD) == nil {
+        if spec.requiresGitRepo, gitRepoRoot(for: floatCWD(spec)) == nil {
             onRequestToast?(
                 ToastContent(
                     variant: .info,
@@ -1671,6 +1671,9 @@ extension TabController: TerminalSurfaceDelegate {
             descriptor = "The right drawer"
         } else if let active = activeToolFloat, s === active.surface {
             descriptor = "This tool"
+        } else if persistentFloats.values.contains(where: { $0.surface === s }) {
+            surfaceDidExit(s, code: nil)  // hidden: evict the dead surface, no toast to interrupt
+            return
         } else {
             return  // not one of ours
         }
