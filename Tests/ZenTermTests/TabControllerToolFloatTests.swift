@@ -175,28 +175,11 @@ final class TabControllerToolFloatTests: XCTestCase {
         XCTAssertEqual(floatSurfaces(spawned(), command: "btm").count, 2, "a different dir respawns")
     }
 
-    func test_tabFloat_doesNotRespawnWhenCWDChanges() throws {
-        let repoA = try makeDir("a", git: true)
-        let repoB = try makeDir("b", git: true)
-        let (controller, spawned) = makeController(cwd: repoA)
-        let float = spec("btop", persist: .tab)
-
-        controller.toggleToolFloat(float)
-        let first = floatSurfaces(spawned(), command: "btop")[0]
-        controller.closeToolFloat()
-
-        paneSurface(spawned()).currentDirectory = repoB
-        controller.toggleToolFloat(float)
-
-        XCTAssertFalse(first.terminated, "a tab float must not re-anchor")
-        XCTAssertEqual(floatSurfaces(spawned(), command: "btop").count, 1)
-    }
-
     func test_persistentFloat_terminatedOnShutdown() throws {
         let dir = try makeDir("plain", git: false)
         let (controller, spawned) = makeController(cwd: dir)
 
-        controller.toggleToolFloat(spec("btop", persist: .tab))
+        controller.toggleToolFloat(spec("btop", persist: .directory))
         let surface = floatSurfaces(spawned(), command: "btop")[0]
         controller.closeToolFloat()
         XCTAssertFalse(surface.terminated)
@@ -208,7 +191,7 @@ final class TabControllerToolFloatTests: XCTestCase {
     func test_persistentFloat_processExit_clearsRegistry_soNextOpenSpawnsFresh() throws {
         let dir = try makeDir("plain", git: false)
         let (controller, spawned) = makeController(cwd: dir)
-        let float = spec("lazygit", persist: .tab)
+        let float = spec("lazygit", persist: .directory)
 
         controller.toggleToolFloat(float)
         let first = floatSurfaces(spawned(), command: "lazygit")[0]
@@ -223,7 +206,7 @@ final class TabControllerToolFloatTests: XCTestCase {
     func test_hiddenPersistentFloat_processExit_clearsRegistry() throws {
         let dir = try makeDir("plain", git: false)
         let (controller, spawned) = makeController(cwd: dir)
-        let float = spec("lazygit", persist: .tab)
+        let float = spec("lazygit", persist: .directory)
 
         controller.toggleToolFloat(float)
         let first = floatSurfaces(spawned(), command: "lazygit")[0]
@@ -246,14 +229,14 @@ final class TabControllerToolFloatTests: XCTestCase {
         defer { Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion } }
         let dir = try makeDir("plain", git: false)
         let (controller, spawned) = makeController(cwd: dir)
-        let float = spec("btop", persist: .tab)
+        let float = spec("btop", persist: .directory)
 
         controller.toggleToolFloat(float)
         let surface = floatSurfaces(spawned(), command: "btop")[0]
         let oldOverlay = surface.view.superview?.superview
         XCTAssertNotNil(oldOverlay, "the surface's view must be hosted inside a float card")
 
-        controller.closeToolFloat()  // persist:.tab parks the still-springing-out card
+        controller.closeToolFloat()  // a persistent dismiss parks the still-springing-out card
         controller.toggleToolFloat(float)  // reopen before its exit animation finishes
 
         let newOverlay = surface.view.superview?.superview
@@ -273,7 +256,7 @@ final class TabControllerToolFloatTests: XCTestCase {
         defer { Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion } }
         let dir = try makeDir("plain", git: false)
         let (controller, spawned) = makeController(cwd: dir)
-        let float = spec("btop", persist: .tab)
+        let float = spec("btop", persist: .directory)
 
         weak var weakOverlay: SurfaceFloatOverlay?
         // AppKit views are autoreleased, so a weak ref doesn't clear the instant the last strong ref
@@ -309,32 +292,11 @@ final class TabControllerToolFloatTests: XCTestCase {
             "a pinned dir: must win over the focused pane's cwd")
     }
 
-    func test_dirField_withPersistTab_survivesACWDChange() throws {
-        let paneDir = try makeDir("pane", git: false)
-        let pinned = try makeDir("notes", git: false)
-        let elsewhere = try makeDir("elsewhere", git: false)
-        let (controller, spawned) = makeController(cwd: paneDir)
-        let float = spec("notes", persist: .tab, dir: pinned)
-
-        controller.toggleToolFloat(float)
-        controller.closeToolFloat()
-        paneSurface(spawned()).currentDirectory = elsewhere
-        controller.toggleToolFloat(float)
-
-        let all = floatSurfaces(spawned(), command: "notes")
-        XCTAssertEqual(all.count, 1)
-        XCTAssertEqual(
-            all[0].lastConfig?.workingDirectory, pinned,
-            "dir: must still win over the drifted pane cwd — persist:tab reusing the surface alone "
-                + "wouldn't prove dir: did anything, since a plain persist:tab float reuses too")
-    }
-
-    /// The central design claim for this task: `dir:` + `persist:dir` degenerates into exactly
-    /// `persist:tab`, because a pinned directory has a fixed identity so the re-anchor comparison
-    /// in `resolveFloatSurface` can never fire. Proven at the engine level (not just the parsed
-    /// struct) by doing exactly what would force a respawn for an unpinned `persist:dir` float —
-    /// see `test_dirFloat_respawnsWhenAnchorChanges` — and asserting it does NOT happen here.
-    func test_dirField_withPersistDirectory_degeneratesToTab_ignoringCWDChange() throws {
+    /// A pinned `dir:` gives a `persist:dir` float a FIXED identity, so the re-anchor comparison
+    /// can never fire — the intended way to keep a tool alive at one place. Proven at the engine
+    /// level by doing exactly what forces a respawn for an unpinned `persist:dir` float — see
+    /// `test_dirFloat_respawnsWhenAnchorChanges` — and asserting it does NOT happen here.
+    func test_dirField_pinnedAnchor_neverReanchorsOnCWDChange() throws {
         let paneDir = try makeDir("pane", git: false)
         let pinned = try makeDir("notes", git: false)
         let elsewhere = try makeDir("elsewhere", git: false)

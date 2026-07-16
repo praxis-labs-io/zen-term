@@ -107,12 +107,11 @@
 #                        dir  = keep alive per directory (repo root if in a repo, else
 #                               the cwd), scoped per tab — two tabs open on the same
 #                               directory each get their own instance; reopening
-#                               elsewhere respawns
-#                        tab  = keep alive per tab, anchored at first open
-#                        either mode's instance dies when the tool quits on its own
-#                        (e.g. `q`) — the next open is cold, not resumed. `dir:` +
-#                        `persist:dir` is degenerate: a pinned directory can never
-#                        re-anchor, so it behaves as `persist:tab` (the parser warns)
+#                               elsewhere respawns. With a pinned `dir:` the anchor is
+#                               constant, so the instance never re-anchors — the way to
+#                               keep a tool alive at a fixed place
+#                        the instance dies when the tool quits on its own (e.g. `q`) —
+#                        the next open is cold, not resumed
 #   title    (optional)  command-palette title                      (default "Open <id>")
 #   icon     (optional)  SF Symbol name or bundled mark (github/git) (default square.on.square)
 #   width    (optional)  width as a fraction of the tab              (default 0.85)
@@ -127,8 +126,8 @@
 # Example — a git TUI kept warm per repo (first open is cold; reopens are instant):
 # float = id:lazygit command:"lazygit" key:cmd+g git:true persist:dir icon:git title:"Open Lazygit"
 #
-# Example — a system monitor kept alive per tab, spawned at home rather than wherever you were:
-# float = id:btop command:"btop" key:cmd+shift+b persist:tab dir:~ icon:gauge
+# Example — a system monitor kept alive at home, no matter where you open it from:
+# float = id:btop command:"btop" key:cmd+shift+b persist:dir dir:~ icon:gauge
 
 # ─── Keybinds ────────────────────────────────────────────────────────────────
 #

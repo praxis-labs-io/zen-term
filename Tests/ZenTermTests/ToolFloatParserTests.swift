@@ -61,7 +61,14 @@ final class ToolFloatParserTests: XCTestCase {
     func test_persist_parsesEveryToken() {
         XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:none")?.persist, .ephemeral)
         XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:dir")?.persist, .directory)
-        XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:tab")?.persist, .tab)
+    }
+
+    /// `tab` was cut before it ever shipped (daily driving showed tab scoping is the wrong axis —
+    /// the ZEN-77 pivot). A config that says it must degrade like any unknown token, keeping the float.
+    func test_persist_tab_isNoLongerAMode_degradesToEphemeral() {
+        let float = ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:tab")
+        XCTAssertEqual(float?.persist, .ephemeral)
+        XCTAssertEqual(float?.id, "x")
     }
 
     func test_persist_caseInsensitive() {
@@ -94,9 +101,9 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertEqual(float?.dir?.path, "/tmp/my notes")
     }
 
-    /// A pinned dir has a fixed identity, so `persist:dir` can never re-anchor — it degenerates into
-    /// exactly `persist:tab`. Warn and keep the float rather than guessing.
-    func test_dirWithPersistDir_isDegenerate_butKeepsTheFloat() {
+    /// A pinned dir gives `persist:dir` a fixed identity — the instance never re-anchors. That's
+    /// the intended way to keep a tool alive at one place, so both fields parse together cleanly.
+    func test_dirWithPersistDir_pinsALivingFloat() {
         let float = ToolFloatParser.parse("id:x command:c key:cmd+shift+j dir:/tmp persist:dir")
         XCTAssertEqual(float?.persist, .directory)
         XCTAssertEqual(float?.dir?.path, "/tmp")

@@ -25,11 +25,10 @@ struct ToolFloat: Equatable {
         /// Terminate on dismiss; fresh spawn every open. Right for anything whose state goes stale
         /// (a file explorer, a scratch shell).
         case ephemeral = "none"
-        /// One live instance per directory identity, per tab — reopening in the same directory
-        /// restores it; a different one discards and respawns. Right for directory-bound tools.
+        /// One live instance per directory identity — reopening in the same directory restores
+        /// it; a different one discards and respawns. With a pinned `dir:` the anchor is constant,
+        /// so the instance simply never re-anchors. Right for directory-bound tools.
         case directory = "dir"
-        /// One live instance per tab, anchored at first-open cwd. Never re-anchors.
-        case tab
     }
 
     let persist: Persistence

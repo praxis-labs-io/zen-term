@@ -9,6 +9,24 @@ Design decisions (confirmed): "global" means **per-window**, not per-app; **no
 pre-warm** anywhere, including ripping out lazygit's; the bespoke lazygit path is
 **deleted** (lazygit becomes a config line); add a `dir:` field; delete `EmptyGuard`.
 
+> **Update (2026-07-16) — `persist:tab` cut before it ever shipped.** Daily driving the
+> ZEN-77 runbook showed tab/workspace scoping is the wrong axis: what matters is whether a
+> float is ephemeral, follows the directory, or is window-wide — never which tab it was
+> born in. The shipped model is `persist: none | dir` (this PR) plus `persist: window`
+> (ZEN-141). Read the tables below minus the `tab` row. Consequences:
+> - `dir` keeps the confirmed single-instance rule: launching from a different directory
+>   identity discards the old instance (no per-dir registry, no cap).
+> - `dir:` + `persist:dir` is no longer "degenerate" — a pinned directory is simply a
+>   fixed anchor, and is now the intended way to keep a tool alive at one place (the old
+>   parser warning is deleted).
+> - `dir` floats are per-tab scoped only as an interim mechanical fact. ZEN-141 is
+>   rescoped to a **window-level float registry**: `dir` floats lift to window scope
+>   (one instance per directory identity shared across a window's tabs, hosted on
+>   `container` per the persist:window design below) and `window` lands in the same
+>   stroke — delivered as one PR together with ZEN-143 (re-warm after quit) and ZEN-144
+>   (workspace panes lose shell integration, which starves the anchor of cd signals).
+> - ZEN-140 (delete bespoke lazygit) is unchanged and remains the final PR.
+
 ## Why now
 
 ZEN-36 made tool floats ephemeral on purpose — "a diff is a point-in-time snapshot

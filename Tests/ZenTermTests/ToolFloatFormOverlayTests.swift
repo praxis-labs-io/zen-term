@@ -359,12 +359,12 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         let existing = ToolFloat(
             id: "lg", title: "Open Lazygit", icon: "git", command: "lazygit",
             dir: realDir, widthFraction: 0.85, heightFraction: 0.78,
-            requiresGitRepo: true, persist: .tab, toggle: Chord(command: true, key: "g"))
+            requiresGitRepo: true, persist: .directory, toggle: Chord(command: true, key: "g"))
         let (overlay, _, sink) = mount(editing: existing)
 
         submit(in: overlay)
 
-        XCTAssertEqual(sink.submitted.first?.persist, .tab)
+        XCTAssertEqual(sink.submitted.first?.persist, .directory)
         XCTAssertEqual(sink.submitted.first?.dir?.path, realDir.path)
     }
 
@@ -383,7 +383,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         let existing = ToolFloat(
             id: "lg", title: "Open Lazygit", icon: "git", command: "lazygit",
             dir: URL(fileURLWithPath: homeRelativePath), widthFraction: 0.85, heightFraction: 0.78,
-            requiresGitRepo: true, persist: .tab, toggle: Chord(command: true, key: "g"))
+            requiresGitRepo: true, persist: .directory, toggle: Chord(command: true, key: "g"))
         let (overlay, _, sink) = mount(editing: existing)
 
         XCTAssertEqual(

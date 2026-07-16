@@ -101,8 +101,8 @@ final class TabController: NSObject {
 
     /// Tool floats whose process is ALIVE, keyed by float id — the persistent ones, kept across
     /// dismissal. Liveness and visibility are independent: a float can be in here while hidden.
-    /// `anchor` is the directory identity a `.directory` float was launched against; nil for `.tab`
-    /// (which never re-anchors) and for floats that aren't in here at all (`.ephemeral`).
+    /// `anchor` is the directory identity a `.directory` float was launched against (`.ephemeral`
+    /// floats are never in here at all).
     private var persistentFloats: [String: (surface: TerminalSurface, anchor: URL?)] = [:]
 
     /// A float overlay still springing out. It keeps Auto Layout constraints on a persistent

@@ -59,7 +59,7 @@ enum ToolFloatParser {
             title: fields["title"] ?? Self.defaultTitle(forID: id),
             icon: fields["icon"] ?? Self.defaultIcon,
             command: command,
-            dir: directory(fields["dir"], persist: persist, id: id),
+            dir: directory(fields["dir"], id: id),
             widthFraction: fraction(fields["width"]) ?? Self.defaultFraction,
             heightFraction: fraction(fields["height"]) ?? Self.defaultFraction,
             requiresGitRepo: fields["git"]?.lowercased() == "true",
@@ -85,16 +85,11 @@ enum ToolFloatParser {
         return value
     }
 
-    /// A float's pinned `dir:`, tilde-expanded. `dir:` + `persist:dir` is degenerate — a fixed
-    /// directory has a fixed identity, so the re-anchor can never fire and the float behaves
-    /// exactly like `persist:tab`. Warn rather than silently reinterpret the author's intent.
-    private static func directory(_ raw: String?, persist: ToolFloat.Persistence, id: String) -> URL? {
+    /// A float's pinned `dir:`, tilde-expanded. With `persist:dir` a pinned directory makes the
+    /// anchor constant, so the instance simply never re-anchors — the intended way to keep a tool
+    /// alive at a fixed place.
+    private static func directory(_ raw: String?, id: String) -> URL? {
         guard let raw, !raw.isEmpty else { return nil }
-        if persist == .directory {
-            NSLog(
-                "GeneralConfig: float `\(id)` sets both `dir:` and `persist:dir` — a pinned directory "
-                    + "never re-anchors, so this behaves as `persist:tab`")
-        }
         return URL(fileURLWithPath: NSString(string: raw).expandingTildeInPath).standardizedFileURL
     }
 
