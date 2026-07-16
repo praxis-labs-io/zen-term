@@ -89,18 +89,41 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     func test_severalProblems_areOneCompactLineEach() throws {
         let content = try XCTUnwrap(ConfigDiagnostic.toast(for: [splitVerticalLostBackslash, newTabLostCmdT]))
         XCTAssertEqual(content.title, "2 problems in your config")
-        // One line per problem, each still carrying the chord and the token that took it — that pair
-        // is what the user greps for. Asserted verbatim because the card is a fixed 300pt: a listing
-        // that re-states what its own title just said wraps into a wall nobody reads.
         XCTAssertEqual(
             content.message,
             """
-            Split Vertically — ⌘⇧\\ went to toggle_zoom
-            New Tab — ⌘T went to toggle_float:btop
+            Split Vertically
+              ⌘⇧\\ → toggle_zoom
+            New Tab
+              ⌘T → toggle_float:btop
             """)
         XCTAssertFalse(
             content.message.contains("in your config"),
-            "the title already says it — repeating it per line is what forced the wrap")
+            "the title already says it; repeating it per line is what forced the wrap")
+    }
+
+    /// Measures the copy against the card's real budget. The string assertion above can't see this:
+    /// the first version of this listing read fine as text and wrapped mid-phrase at 236pt, because
+    /// character count isn't width. Every word in a summary line pays rent here.
+    func test_summaryLines_fitTheToastWithoutWrapping() throws {
+        let realistic: [ConfigDiagnostic] = [
+            splitVerticalLostBackslash,
+            newTabLostCmdT,
+            // The wide end of what's reachable: a long action title and a long winning token.
+            diagnostic(.toggleBottomDrawer, lost: Chord(command: true, key: "b"), to: .toggleRightDrawer),
+            ConfigDiagnostic(
+                scope: .keybind(.toggleCommandPalette),
+                problem: .unusableBind(Chord(command: true, key: "|"))),
+        ]
+        for diagnostic in realistic {
+            for line in diagnostic.summary.split(separator: "\n") {
+                let width = (String(line) as NSString)
+                    .size(withAttributes: [.font: ToastView.messageFont]).width
+                XCTAssertLessThanOrEqual(
+                    width, ToastView.messageMaxWidth,
+                    "wraps at \(Int(width))pt > \(Int(ToastView.messageMaxWidth))pt: \(line)")
+            }
+        }
     }
 
     func test_unusableBind_readsDifferentlyFromAStolenChord() {
@@ -108,7 +131,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         let unusable = ConfigDiagnostic(
             scope: .keybind(.splitVertical), problem: .unusableBind(Chord(command: true, key: "|")))
         XCTAssertEqual(unusable.headline, "Split Vertically has an unusable shortcut")
-        XCTAssertEqual(unusable.summary, "Split Vertically — cmd+| can't be typed")
+        XCTAssertEqual(unusable.detail, "cmd+| can't be typed")
         XCTAssertTrue(unusable.message.contains("split_vertical=cmd+|"), unusable.message)
     }
 

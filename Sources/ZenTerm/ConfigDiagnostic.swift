@@ -42,7 +42,7 @@ struct ConfigDiagnostic: Hashable {
     }
 
     /// The action's human name — resolved on read; see the type's note.
-    private var title: String { CommandCatalog.spec(for: action).title }
+    var title: String { CommandCatalog.spec(for: action).title }
 
     /// The one-line claim, for a toast's title.
     var headline: String {
@@ -60,21 +60,27 @@ struct ConfigDiagnostic: Hashable {
         case .chordTaken(let chord, let winner):
             return "\(chord.displayGlyph) went to \(winner.actionToken) in your config."
         case .unusableBind(let chord):
-            return "\(action.actionToken)=\(chord.configToken) can't be typed on your keyboard — ignoring it."
+            return "\(action.actionToken)=\(chord.configToken) can't be typed on your keyboard. Ignoring it."
         }
     }
 
-    /// One line for a list of problems: the action, then what happened to it. Drops the "in your
-    /// config" that `message` carries — the toast's title already said it, and repeating it per line
-    /// wraps a 300pt card into a wall of text nobody reads.
-    var summary: String {
+    /// Just what happened, no subject. Terse on purpose: every word pays rent against
+    /// `ToastView.messageMaxWidth`, and "went to" spelled out costs ~30pt of a 236pt budget.
+    var detail: String {
         switch problem {
         case .chordTaken(let chord, let winner):
-            return "\(title) — \(chord.displayGlyph) went to \(winner.actionToken)"
+            return "\(chord.displayGlyph) → \(winner.actionToken)"
         case .unusableBind(let chord):
-            return "\(title) — \(chord.configToken) can't be typed"
+            return "\(chord.configToken) can't be typed"
         }
     }
+
+    /// A list entry: the action on its own line, its detail indented beneath. Two lines by
+    /// *measurement*, not preference — a long action title plus a long token is 284pt against a
+    /// 236pt column, so one line can't hold both and the wrap lands mid-phrase. Splitting it puts
+    /// the break where it belongs and keeps each line inside the card. Drops the "in your config"
+    /// that `message` carries, since the list's own title already said it.
+    var summary: String { "\(title)\n  \(detail)" }
 
     /// What a reload should announce, or nil to stay quiet. Pure and gated on `alreadyAnnounced`,
     /// extracted from the delegate's observer precisely so this decision is testable — the app

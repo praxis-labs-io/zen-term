@@ -40,6 +40,13 @@ final class ToastView: ShadowCardView {
 
     /// Fixed card width — toasts read as a consistent column rather than sizing to their text.
     private static let width: CGFloat = 300
+
+    /// The message column's wrap width (card width minus badge + gaps + insets) and its font.
+    /// Exposed so copy can be *measured* against the real budget instead of eyeballed: a line that
+    /// reads fine in a commit message wraps mid-phrase at 236pt, and asserting the string tells you
+    /// nothing about that.
+    static let messageMaxWidth: CGFloat = 236
+    static let messageFont: NSFont = .systemFont(ofSize: 12)
     private static var titleColor: NSColor { Theme.current.chrome.foreground.nsColor }
     private static var messageColor: NSColor { Theme.current.chrome.muted.nsColor }
 
@@ -84,9 +91,9 @@ final class ToastView: ShadowCardView {
         titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         titleLabel.textColor = Self.titleColor
 
-        messageLabel.font = .systemFont(ofSize: 12)
+        messageLabel.font = Self.messageFont
         messageLabel.textColor = Self.messageColor
-        messageLabel.preferredMaxLayoutWidth = 236  // card width minus badge + gaps + insets
+        messageLabel.preferredMaxLayoutWidth = Self.messageMaxWidth
 
         let col = NSStackView(views: [titleLabel, messageLabel])
         col.orientation = .vertical

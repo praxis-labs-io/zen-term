@@ -283,7 +283,7 @@ final class SettingsKeybindsSection: SettingsSection {
         let winnerTitle = CommandCatalog.spec(for: winner).title
         let landed = displayedChord(for: owner)?.displayGlyph
         ownerRow.showMessage(
-            landed.map { "\(chord.displayGlyph) went back to \(winnerTitle) — this is \($0) now." }
+            landed.map { "\(chord.displayGlyph) went back to \(winnerTitle). This is \($0) now." }
                 ?? "\(chord.displayGlyph) went back to \(winnerTitle).",
             kind: .notice)
     }
