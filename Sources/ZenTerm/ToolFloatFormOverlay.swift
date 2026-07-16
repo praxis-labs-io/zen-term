@@ -503,7 +503,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             title: title.isEmpty ? ToolFloatParser.defaultTitle(forID: id) : title,
             icon: iconPicker.selected,
             command: command,
-            dir: pinnedDir.isEmpty ? nil : Self.resolvedDirURL(pinnedDir),
+            dir: ToolFloatParser.resolveDir(pinnedDir),
             widthFraction: fraction(widthField),
             heightFraction: fraction(heightField),
             requiresGitRepo: gitSegment.selectedIndex == 1,
@@ -549,12 +549,16 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
         // Same round-trip constraint as title/command, plus a folder-exists check (mirroring
         // `AddWorkspaceOverlay`'s DIRECTORY field) — an empty field stays valid, since nil means
-        // "follow the pane's cwd" rather than a folder that must exist.
+        // "follow the pane's cwd" rather than a folder that must exist. The exists check runs on
+        // submit only (`includeRequired`): it stats the filesystem on the main thread, and a path
+        // under a dead network mount can block for seconds — per keystroke that's a beachball.
         let dirText = dirField.text.trimmingCharacters(in: .whitespaces)
         var dirMessage: String?
         if dirText.contains("\"") {
             dirMessage = "Can’t contain a \" character."  // the grammar has no escape
-        } else if !dirText.isEmpty, !PathDisplay.isDirectory(Self.resolvedDirURL(dirText)) {
+        } else if includeRequired, let dirURL = ToolFloatParser.resolveDir(dirText),
+            !PathDisplay.isDirectory(dirURL)
+        {
             dirMessage = "That folder doesn’t exist."
         }
         flag(dirGroup, field: dirField.field, dirMessage)
@@ -593,13 +597,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         let text = box.text.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty, let value = Double(text) else { return ToolFloatParser.defaultFraction }
         return ToolFloatParser.clampedFraction(value)
-    }
-
-    /// Tilde-expand and standardize a raw DIRECTORY field value into the `URL` form `ToolFloat.dir`
-    /// stores — shared by `validate` (the folder-exists check) and `buildFloat` so the two can't
-    /// resolve the same text two different ways.
-    private static func resolvedDirURL(_ text: String) -> URL {
-        URL(fileURLWithPath: NSString(string: text).expandingTildeInPath).standardizedFileURL
     }
 
     // MARK: layout helpers

@@ -102,8 +102,15 @@ final class TabController: NSObject {
     /// Tool floats whose process is ALIVE, keyed by float id — the persistent ones, kept across
     /// dismissal. Liveness and visibility are independent: a float can be in here while hidden.
     /// `anchor` is the directory identity a `.directory` float was launched against (`.ephemeral`
-    /// floats are never in here at all).
-    private var persistentFloats: [String: (surface: TerminalSurface, anchor: URL?)] = [:]
+    /// floats are never in here at all). `command`/`dir` are the spec values the instance was
+    /// SPAWNED with — a Settings edit to either is caught on the next open and respawns, instead
+    /// of silently reusing a process still running the old command.
+    private var persistentFloats: [String: (surface: TerminalSurface, anchor: URL?, command: String, dir: URL?)] = [:]
+
+    /// Whether any persistent float's process has live work — hidden ones included, which is the
+    /// point: a dismissed persistent float is invisible, and the ⌘W confirm would otherwise let
+    /// the window close over it silently.
+    var hasBusyToolFloat: Bool { persistentFloats.values.contains { $0.surface.isBusy } }
 
     /// A float overlay still springing out. It keeps Auto Layout constraints on a persistent
     /// float's shared `surface.view`, so a fast re-show must snap it away before re-hosting that
@@ -761,22 +768,36 @@ final class TabController: NSObject {
     func toggleToolFloat(_ spec: ToolFloat) {
         if activeToolFloat?.spec.id == spec.id { closeToolFloat(); return }
         if activeToolFloat != nil { closeToolFloat() }  // switch floats
-        if spec.requiresGitRepo, gitRepoRoot(for: floatCWD(spec)) == nil {
-            onRequestToast?(
-                ToastContent(
-                    variant: .info,
-                    title: spec.title,
-                    message: "This needs a Git repository. Run `git init` here, "
-                        + "or open a folder that has one."))
+        // One ancestor walk per press: the git guard and the `.directory` anchor share the same
+        // repo-root lookup, and each `isGitRepo` probe is main-thread filesystem I/O.
+        let repoRoot = gitRepoRoot(for: floatCWD(spec))
+        if spec.requiresGitRepo, repoRoot == nil {
+            onRequestToast?(gitGuardToast(for: spec))
             return
         }
-        showToolFloat(spec)
+        let anchor = spec.persist == .directory ? (repoRoot ?? floatCWD(spec)?.standardizedFileURL) : nil
+        showToolFloat(spec, anchor: anchor)
+    }
+
+    /// The `git:true` block toast. A pinned `dir:` float is gated on the PINNED directory, so the
+    /// copy must name it — "run `git init` here" would point at the focused pane, which the guard
+    /// never looked at, leaving the user un-followable advice.
+    private func gitGuardToast(for spec: ToolFloat) -> ToastContent {
+        let message: String
+        if let dir = spec.dir {
+            message =
+                "This float is pinned to \(PathDisplay.abbreviatingHome(dir.path)), "
+                + "which isn't a Git repository."
+        } else {
+            message = "This needs a Git repository. Run `git init` here, or open a folder that has one."
+        }
+        return ToastContent(variant: .info, title: spec.title, message: message)
     }
 
     /// Present `spec` in a float card: resolve its surface (retained or fresh), host it, and give
     /// it the tab's unified focus. When the tool exits, `surfaceDidExit` tears the float down.
-    private func showToolFloat(_ spec: ToolFloat) {
-        let surface = surfaceForFloat(spec)
+    private func showToolFloat(_ spec: ToolFloat, anchor: URL?) {
+        let surface = surfaceForFloat(spec, anchor: anchor)
         // Snap away a still-springing-out card ONLY when it holds constraints on the view we're
         // about to re-host — otherwise let it finish its own exit. A card that isn't sharing this
         // surface's view (a different float, or a fresh spawn) springs out normally while the new
@@ -803,20 +824,36 @@ final class TabController: NSObject {
         onOverlayStateChanged?()
     }
 
-    /// The surface to show for `spec`: a retained one when the float persists and still matches its
-    /// anchor, else a fresh spawn. Any other case discards the stale instance first — notably a
-    /// float whose `persist:` flipped to `none` in a live config reload, which must not reuse (and
-    /// then terminate) a surface the registry still holds.
-    private func surfaceForFloat(_ spec: ToolFloat) -> TerminalSurface {
-        let anchor = spec.persist == .directory ? directoryAnchor(for: floatCWD(spec)) : nil
+    /// The surface to show for `spec`: a retained one when the float persists, still matches its
+    /// anchor, AND was spawned with the same `command`/`dir` — else discard and spawn fresh. The
+    /// discard covers a `persist:` flipped to `none` in a live config reload (which must not reuse
+    /// and then terminate a surface the registry still holds), the focused dir moving, and a
+    /// Settings edit to the command or pinned dir (reusing would silently keep the OLD command's
+    /// process running, making the edit look like a no-op).
+    private func surfaceForFloat(_ spec: ToolFloat, anchor: URL?) -> TerminalSurface {
         if let live = persistentFloats[spec.id] {
             let anchorHolds = spec.persist != .directory || live.anchor?.path == anchor?.path
-            if spec.persist != .ephemeral, anchorHolds { return live.surface }
-            discardPersistentFloat(spec.id)  // mode flipped to ephemeral, or the focused dir moved
+            let spawnHolds = live.command == spec.command && live.dir == spec.dir
+            if spec.persist != .ephemeral, anchorHolds, spawnHolds { return live.surface }
+            discardPersistentFloat(spec.id)
         }
         let surface = spawnFloatSurface(spec)
-        if spec.persist != .ephemeral { persistentFloats[spec.id] = (surface, anchor) }
+        if spec.persist != .ephemeral {
+            persistentFloats[spec.id] = (surface, anchor, spec.command, spec.dir)
+        }
         return surface
+    }
+
+    /// Reconcile the registry against the catalog after a config reload. An entry whose id no
+    /// longer exists (float deleted — or renamed, which is a delete plus an add) would otherwise
+    /// keep a hidden process running with no dock button, chord, or palette entry ever able to
+    /// reach it again. A present-but-edited id is NOT discarded here: command/dir edits reconcile
+    /// lazily on the next open, so a config save never kills a hidden tool that is still reachable.
+    /// If the float currently SHOWN was deleted, close its card too — it has no toggle left.
+    func pruneToolFloats(against catalog: [ToolFloat]) {
+        let ids = Set(catalog.map(\.id))
+        if let active = activeToolFloat, !ids.contains(active.spec.id) { closeToolFloat() }
+        for id in persistentFloats.keys where !ids.contains(id) { discardPersistentFloat(id) }
     }
 
     /// Spawn `spec.command` in a fresh login+interactive shell at the focused cwd, so the user's
@@ -849,8 +886,13 @@ final class TabController: NSObject {
         // Park BEFORE animateOut: `Motion.springScaleFade` fires its completion synchronously under
         // Reduce Motion, and that completion clears the slot by identity — assigning afterwards
         // would strand an overlay no completion will ever clear. `hideLazygit` parks the same way,
-        // for the same reason.
-        if active.spec.persist != .ephemeral { dismissingFloatOverlay = overlay }
+        // for the same reason. Snap any PREVIOUSLY parked card first: the slot holds one overlay,
+        // and silently dropping a parked reference would skip the shared-view snap-away on a fast
+        // X→Y→X switch — X's old card would keep its constraints on the view being re-hosted.
+        if active.spec.persist != .ephemeral {
+            dismissingFloatOverlay?.removeFromSuperview()
+            dismissingFloatOverlay = overlay
+        }
         overlay.animateOut { [weak self] in
             overlay.removeFromSuperview()
             if self?.dismissingFloatOverlay === overlay { self?.dismissingFloatOverlay = nil }
@@ -1672,7 +1714,11 @@ extension TabController: TerminalSurfaceDelegate {
         } else if let active = activeToolFloat, s === active.surface {
             descriptor = "This tool"
         } else if persistentFloats.values.contains(where: { $0.surface === s }) {
-            surfaceDidExit(s, code: nil)  // hidden: evict the dead surface, no toast to interrupt
+            // Hidden persistent float: evict so the next open spawns fresh, but still warn — the
+            // user believes this tool is alive in the background, and a silent eviction makes the
+            // next open's cold, state-less spawn look like persistence quietly failing.
+            warnSurfaceFailed(descriptor: "A background tool")
+            surfaceDidExit(s, code: nil)
             return
         } else {
             return  // not one of ours

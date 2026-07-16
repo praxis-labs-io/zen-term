@@ -59,7 +59,7 @@ enum ToolFloatParser {
             title: fields["title"] ?? Self.defaultTitle(forID: id),
             icon: fields["icon"] ?? Self.defaultIcon,
             command: command,
-            dir: directory(fields["dir"], id: id),
+            dir: fields["dir"].flatMap(Self.resolveDir),
             widthFraction: fraction(fields["width"]) ?? Self.defaultFraction,
             heightFraction: fraction(fields["height"]) ?? Self.defaultFraction,
             requiresGitRepo: fields["git"]?.lowercased() == "true",
@@ -85,12 +85,16 @@ enum ToolFloatParser {
         return value
     }
 
-    /// A float's pinned `dir:`, tilde-expanded. With `persist:dir` a pinned directory makes the
-    /// anchor constant, so the instance simply never re-anchors — the intended way to keep a tool
-    /// alive at a fixed place.
-    private static func directory(_ raw: String?, id: String) -> URL? {
-        guard let raw, !raw.isEmpty else { return nil }
-        return URL(fileURLWithPath: NSString(string: raw).expandingTildeInPath).standardizedFileURL
+    /// One home for the `dir:` grammar: tilde-expand + standardize raw text into the URL form
+    /// `ToolFloat.dir` stores. Shared by the parser and the Settings form (the same rule as the
+    /// fraction helpers above) so the same text can't resolve two different ways — a drift would
+    /// mean a dir that validates in Settings anchors somewhere else after a config reload. With
+    /// `persist:dir` a pinned directory makes the anchor constant, so the instance never re-anchors
+    /// — the intended way to keep a tool alive at a fixed place.
+    static func resolveDir(_ text: String) -> URL? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        return URL(fileURLWithPath: NSString(string: trimmed).expandingTildeInPath).standardizedFileURL
     }
 
     /// Split on whitespace, but keep runs inside double quotes intact so a quoted value can

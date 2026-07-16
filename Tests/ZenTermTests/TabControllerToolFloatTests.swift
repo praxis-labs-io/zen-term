@@ -69,11 +69,12 @@ final class TabControllerToolFloatTests: XCTestCase {
     }
 
     private func spec(
-        _ id: String, persist: ToolFloat.Persistence, git: Bool = false, dir: URL? = nil
+        _ id: String, persist: ToolFloat.Persistence, git: Bool = false, dir: URL? = nil,
+        command: String? = nil
     ) -> ToolFloat {
         ToolFloat(
-            id: id, title: "Open \(id)", icon: ToolFloatParser.defaultIcon, command: id, dir: dir,
-            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: git,
+            id: id, title: "Open \(id)", icon: ToolFloatParser.defaultIcon, command: command ?? id,
+            dir: dir, widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: git,
             persist: persist, toggle: Chord(command: true, shift: true, key: "j"))
     }
 
@@ -349,5 +350,115 @@ final class TabControllerToolFloatTests: XCTestCase {
         XCTAssertTrue(
             floatSurfaces(spawned(), command: "gitdash").isEmpty,
             "a float pinned to a non-repo dir: must be blocked even though the pane sits in a real repo")
+    }
+
+    // MARK: config-reload reconciliation (review findings on the shipped registry)
+
+    func test_pruneToolFloats_terminatesADeletedHiddenFloat_andKeepsSurvivors() throws {
+        let dir = try makeDir("plain", git: false)
+        let (controller, spawned) = makeController(cwd: dir)
+        let doomed = spec("dev", persist: .directory)
+        let kept = spec("mon", persist: .directory)
+
+        controller.toggleToolFloat(doomed)
+        controller.closeToolFloat()
+        controller.toggleToolFloat(kept)
+        controller.closeToolFloat()
+        let doomedSurface = floatSurfaces(spawned(), command: "dev")[0]
+        let keptSurface = floatSurfaces(spawned(), command: "mon")[0]
+
+        controller.pruneToolFloats(against: [kept])  // "dev" was deleted in Settings
+
+        XCTAssertTrue(
+            doomedSurface.terminated,
+            "a deleted float's hidden process has no control left that can reach it — it must die now")
+        XCTAssertFalse(keptSurface.terminated, "a float still in the catalog keeps its instance")
+    }
+
+    func test_pruneToolFloats_closesAndTerminatesTheShownFloat_whenItWasDeleted() throws {
+        let dir = try makeDir("plain", git: false)
+        let (controller, spawned) = makeController(cwd: dir)
+        let float = spec("dev", persist: .directory)
+
+        controller.toggleToolFloat(float)
+        let surface = floatSurfaces(spawned(), command: "dev")[0]
+
+        controller.pruneToolFloats(against: [])
+
+        XCTAssertFalse(controller.isToolFloatOpen, "the card has no toggle left — close it too")
+        XCTAssertTrue(surface.terminated)
+    }
+
+    func test_editedCommand_respawnsInsteadOfReusingTheOldProcess() throws {
+        let dir = try makeDir("plain", git: false)
+        let (controller, spawned) = makeController(cwd: dir)
+
+        controller.toggleToolFloat(spec("mon", persist: .directory, command: "btop"))
+        let old = floatSurfaces(spawned(), command: "btop")[0]
+        controller.closeToolFloat()
+
+        controller.toggleToolFloat(spec("mon", persist: .directory, command: "htop"))  // Settings edit
+
+        XCTAssertTrue(old.terminated, "the instance still running the OLD command must be discarded")
+        XCTAssertEqual(
+            floatSurfaces(spawned(), command: "htop").count, 1,
+            "the edited command must actually launch — reuse here makes the Settings edit a no-op")
+    }
+
+    func test_fastFloatSwitchXYX_snapsTheDisplacedCard_beforeRehostingItsView() throws {
+        let dir = try makeDir("plain", git: false)
+        let (controller, spawned) = makeController(cwd: dir)
+        let xSpec = spec("xtool", persist: .directory)
+        let ySpec = spec("ytool", persist: .directory)
+
+        controller.toggleToolFloat(xSpec)
+        let xSurface = floatSurfaces(spawned(), command: "xtool")[0]
+        guard let xFirstCard = xSurface.view.superview?.superview as? SurfaceFloatOverlay else {
+            return XCTFail("expected X's view hosted inside a float card")
+        }
+
+        controller.toggleToolFloat(ySpec)  // parks X's card, opens Y
+        controller.toggleToolFloat(xSpec)  // parks Y (displacing X's parked card), reopens X
+
+        XCTAssertNil(
+            xFirstCard.superview,
+            "the displaced parked card must be snapped away — while attached it still holds Auto "
+                + "Layout constraints on X's shared view, which is being re-hosted into a new card")
+        XCTAssertNotNil(xSurface.view.window, "X's view must be live inside the NEW card")
+        XCTAssertFalse(
+            xSurface.view.isDescendant(of: xFirstCard), "the re-host must land in the new card, not the old")
+    }
+
+    func test_hasBusyToolFloat_seesAHiddenBusyFloat() throws {
+        let dir = try makeDir("plain", git: false)
+        let (controller, spawned) = makeController(cwd: dir)
+
+        controller.toggleToolFloat(spec("dev", persist: .directory))
+        let surface = floatSurfaces(spawned(), command: "dev")[0]
+        controller.closeToolFloat()
+
+        XCTAssertFalse(controller.hasBusyToolFloat)
+        surface.isBusy = true  // e.g. a build watcher doing live work while dismissed
+        XCTAssertTrue(
+            controller.hasBusyToolFloat,
+            "the ⌘W confirm reads this — a hidden busy float is invisible, so this flag is the only "
+                + "thing standing between close and silently killing its work")
+    }
+
+    func test_gitGuardToast_namesThePinnedDir_notTheFocusedPane() throws {
+        let repo = try makeDir("repo", git: true)
+        let notes = try makeDir("notes", git: false)
+        let (controller, spawned) = makeController(cwd: repo)
+        var toasts: [ToastContent] = []
+        controller.onRequestToast = { toasts.append($0) }
+
+        controller.toggleToolFloat(spec("gitdash", persist: .directory, git: true, dir: notes))
+
+        XCTAssertTrue(floatSurfaces(spawned(), command: "gitdash").isEmpty)
+        XCTAssertEqual(toasts.count, 1)
+        XCTAssertTrue(
+            toasts[0].message.contains(PathDisplay.abbreviatingHome(notes.path)),
+            "the guard evaluated the PINNED dir, so the toast must name it — \"run `git init` here\" "
+                + "points at the focused pane, which is a repo and irrelevant: \(toasts[0].message)")
     }
 }
