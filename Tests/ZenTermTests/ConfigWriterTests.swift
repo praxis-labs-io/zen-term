@@ -260,6 +260,39 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(ToolFloatParser.parse(String(line.dropFirst("float = ".count))), original)
     }
 
+    /// The review fix for the bug where `dir:~/notes` was silently rewritten to an absolute path:
+    /// `serializeFloat` must abbreviate a home-relative `dir` back to `~`, the same way
+    /// `WorkspacesWriter` does for workspace paths, or a synced dotfiles config breaks on every
+    /// other machine/username the moment any Settings-form edit rewrites the float's line.
+    func test_serializeFloat_dirUnderHome_abbreviatesToTilde_andRoundTrips() throws {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let dir = URL(fileURLWithPath: home.path + "/notes").standardizedFileURL
+        let original = ToolFloat(
+            id: "notes", title: "Open notes", icon: ToolFloatParser.defaultIcon, command: "vim", dir: dir,
+            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+            persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "n"))
+
+        let line = ConfigWriter.serializeFloat(original)
+        XCTAssertTrue(line.contains("dir:~/notes"), line)  // not the expanded absolute path
+
+        let value = String(line.dropFirst("float = ".count))
+        XCTAssertEqual(ToolFloatParser.parse(value), original)
+    }
+
+    func test_serializeFloat_dirOutsideHome_roundTripsUnchanged() throws {
+        let dir = URL(fileURLWithPath: "/tmp/x").standardizedFileURL
+        let original = ToolFloat(
+            id: "tmp", title: "Open tmp", icon: ToolFloatParser.defaultIcon, command: "vim", dir: dir,
+            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+            persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "t"))
+
+        let line = ConfigWriter.serializeFloat(original)
+        XCTAssertTrue(line.contains("dir:/tmp/x"), line)  // no home prefix to abbreviate
+
+        let value = String(line.dropFirst("float = ".count))
+        XCTAssertEqual(ToolFloatParser.parse(value), original)
+    }
+
     func test_keybind_narrowingMultiDefaultAction_persistsAndRoundTrips() throws {
         let dir = try makeTempDir()
         // splitVertical ships bound to BOTH ⌘⇧| and ⌘⇧\. Narrow it to just ⌘⇧\ — a chord that

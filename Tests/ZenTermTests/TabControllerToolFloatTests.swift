@@ -321,6 +321,37 @@ final class TabControllerToolFloatTests: XCTestCase {
         paneSurface(spawned()).currentDirectory = elsewhere
         controller.toggleToolFloat(float)
 
-        XCTAssertEqual(floatSurfaces(spawned(), command: "notes").count, 1)
+        let all = floatSurfaces(spawned(), command: "notes")
+        XCTAssertEqual(all.count, 1)
+        XCTAssertEqual(
+            all[0].lastConfig?.workingDirectory, pinned,
+            "dir: must still win over the drifted pane cwd — persist:tab reusing the surface alone "
+                + "wouldn't prove dir: did anything, since a plain persist:tab float reuses too")
+    }
+
+    /// The central design claim for this task: `dir:` + `persist:dir` degenerates into exactly
+    /// `persist:tab`, because a pinned directory has a fixed identity so the re-anchor comparison
+    /// in `resolveFloatSurface` can never fire. Proven at the engine level (not just the parsed
+    /// struct) by doing exactly what would force a respawn for an unpinned `persist:dir` float —
+    /// see `test_dirFloat_respawnsWhenAnchorChanges` — and asserting it does NOT happen here.
+    func test_dirField_withPersistDirectory_degeneratesToTab_ignoringCWDChange() throws {
+        let paneDir = try makeDir("pane", git: false)
+        let pinned = try makeDir("notes", git: false)
+        let elsewhere = try makeDir("elsewhere", git: false)
+        let (controller, spawned) = makeController(cwd: paneDir)
+        let float = spec("notes", persist: .directory, dir: pinned)
+
+        controller.toggleToolFloat(float)
+        let first = floatSurfaces(spawned(), command: "notes")[0]
+        controller.closeToolFloat()
+
+        paneSurface(spawned()).currentDirectory = elsewhere  // would force a respawn without a pinned dir:
+        controller.toggleToolFloat(float)
+
+        XCTAssertFalse(first.terminated, "a pinned dir: has a fixed identity — persist:dir can never re-anchor")
+        let all = floatSurfaces(spawned(), command: "notes")
+        XCTAssertEqual(all.count, 1, "reopen must reuse, not respawn, despite the pane's cwd moving")
+        XCTAssertEqual(all[0].startCount, 1, "the retained surface must not be restarted")
+        XCTAssertEqual(all[0].lastConfig?.workingDirectory, pinned)
     }
 }
