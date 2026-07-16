@@ -488,6 +488,7 @@ final class WindowController: NSObject {
     /// Replace the active tab's controller in place (same tab id/slot) with a fresh session in
     /// `cwd`, pinned to `pinnedTitle` and running `workspace`'s recipe. Used by `⌘⇧P` + Shift+Enter.
     private func replaceActiveTab(cwd: URL, pinnedTitle: String?, workspace: Workspace?) {
+        closeFloatForTabChange()  // swapping the tab out from under a modal card is the same bug
         let id = tabs.activeID
         let old = controllers[id]
         if mountedCanvas === old?.view {

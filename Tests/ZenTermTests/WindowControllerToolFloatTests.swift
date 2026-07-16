@@ -160,6 +160,28 @@ final class WindowControllerToolFloatTests: XCTestCase {
         XCTAssertTrue(cards(c).isEmpty, "clicking a tab chip must dismiss the float too")
     }
 
+    /// Every tab-changing op must dismiss the float, not just the chord path — a float surviving
+    /// into a `mount()` is what leaves the incoming tab's pane halo lit behind a card that holds
+    /// first responder (two focus owners, no way to tell where typing lands). Rather than trust
+    /// that each op remembers, pin the invariant across all of them.
+    func test_everyTabChangingOp_dismissesTheFloat() {
+        let c = makeWindow()
+        c.handle(.newTab)
+
+        let ops: [(String, () -> Void)] = [
+            ("new tab", { c.handle(.newTab) }),
+            ("next tab", { c.handle(.nextTab) }),
+            ("prev tab", { c.handle(.prevTab) }),
+            ("tab-bar click", { c.selectTabForTesting(index: 0) }),
+        ]
+        for (name, op) in ops {
+            c.handle(.toggleToolFloat("btop"))
+            XCTAssertFalse(cards(c).isEmpty, "precondition: the float should be up before \(name)")
+            op()
+            XCTAssertTrue(cards(c).isEmpty, "\(name) must dismiss the float")
+        }
+    }
+
     /// A float's agent asking for input must still reach the user (ZEN-139). The float's surface
     /// delegate moved from `TabController` — whose blanket relay every tab-owned surface got for
     /// free — to `ToolFloatController`, so this is the assertion that the relay came with it.
