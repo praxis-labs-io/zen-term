@@ -853,7 +853,8 @@ final class TabController: NSObject {
     func pruneToolFloats(against catalog: [ToolFloat]) {
         let ids = Set(catalog.map(\.id))
         if let active = activeToolFloat, !ids.contains(active.spec.id) { closeToolFloat() }
-        for id in persistentFloats.keys where !ids.contains(id) { discardPersistentFloat(id) }
+        // Snapshot the keys — the discard mutates the dictionary mid-loop (same rule as `shutdown()`).
+        for id in Array(persistentFloats.keys) where !ids.contains(id) { discardPersistentFloat(id) }
     }
 
     /// Spawn `spec.command` in a fresh login+interactive shell at the focused cwd, so the user's
