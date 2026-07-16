@@ -478,6 +478,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             title: title.isEmpty ? ToolFloatParser.defaultTitle(forID: id) : title,
             icon: iconPicker.selected,
             command: command,
+            dir: editingFloat?.dir,
             widthFraction: fraction(widthField),
             heightFraction: fraction(heightField),
             requiresGitRepo: gitSegment.selectedIndex == 1,

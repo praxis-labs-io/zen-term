@@ -156,7 +156,7 @@ final class ConfigWriterTests: XCTestCase {
         command: String, width: CGFloat = 0.85, height: CGFloat = 0.85, git: Bool = false, toggle: Chord
     ) -> ToolFloat {
         ToolFloat(
-            id: id, title: title ?? "Open \(id)", icon: icon, command: command,
+            id: id, title: title ?? "Open \(id)", icon: icon, command: command, dir: nil,
             widthFraction: width, heightFraction: height, requiresGitRepo: git,
             persist: .ephemeral, toggle: toggle)
     }
@@ -238,13 +238,13 @@ final class ConfigWriterTests: XCTestCase {
 
     func test_serializeFloat_omitsDefaultPersist_andEmitsNonDefault() {
         let lean = ToolFloat(
-            id: "dev", title: "Open dev", icon: ToolFloatParser.defaultIcon, command: "vim",
+            id: "dev", title: "Open dev", icon: ToolFloatParser.defaultIcon, command: "vim", dir: nil,
             widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
             persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
         XCTAssertEqual(ConfigWriter.serializeFloat(lean), "float = id:dev key:cmd+shift+d command:vim")
 
         let sticky = ToolFloat(
-            id: "dev", title: "Open dev", icon: ToolFloatParser.defaultIcon, command: "vim",
+            id: "dev", title: "Open dev", icon: ToolFloatParser.defaultIcon, command: "vim", dir: nil,
             widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
             persist: .directory, toggle: Chord(command: true, shift: true, key: "d"))
         XCTAssertEqual(
@@ -253,7 +253,7 @@ final class ConfigWriterTests: XCTestCase {
 
     func test_serializeFloat_persistRoundTripsThroughParser() {
         let original = ToolFloat(
-            id: "lg", title: "Open Lazygit", icon: "git", command: "lazygit",
+            id: "lg", title: "Open Lazygit", icon: "git", command: "lazygit", dir: nil,
             widthFraction: 0.85, heightFraction: 0.78, requiresGitRepo: true,
             persist: .directory, toggle: Chord(command: true, key: "g"))
         let line = ConfigWriter.serializeFloat(original)

@@ -9,7 +9,7 @@ import XCTest
 final class ToggleDockTests: XCTestCase {
     private func float(_ id: String) -> ToolFloat {
         ToolFloat(
-            id: id, title: "Open \(id)", icon: "square.on.square", command: "cmd",
+            id: id, title: "Open \(id)", icon: "square.on.square", command: "cmd", dir: nil,
             widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
             persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
     }

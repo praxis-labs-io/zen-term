@@ -222,7 +222,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
     func test_editForm_deleteButton_firesOnDelete() {
         let existing = ToolFloat(
-            id: "dev", title: "Open dev", icon: IconCatalog.defaultSymbol, command: "vim",
+            id: "dev", title: "Open dev", icon: IconCatalog.defaultSymbol, command: "vim", dir: nil,
             widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
             persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
         let (overlay, _, sink) = mount(editing: existing, withDelete: true)
@@ -242,7 +242,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
     func test_edit_prefillsAndSavesChangedCommand() {
         let existing = ToolFloat(
-            id: "dev", title: "Open dev", icon: ToolFloatParser.defaultIcon, command: "vim",
+            id: "dev", title: "Open dev", icon: ToolFloatParser.defaultIcon, command: "vim", dir: nil,
             widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
             persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
         let (overlay, _, sink) = mount(editing: existing)

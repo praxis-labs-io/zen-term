@@ -68,9 +68,11 @@ final class TabControllerToolFloatTests: XCTestCase {
         return (controller, { spawned })
     }
 
-    private func spec(_ id: String, persist: ToolFloat.Persistence, git: Bool = false) -> ToolFloat {
+    private func spec(
+        _ id: String, persist: ToolFloat.Persistence, git: Bool = false, dir: URL? = nil
+    ) -> ToolFloat {
         ToolFloat(
-            id: id, title: "Open \(id)", icon: ToolFloatParser.defaultIcon, command: id,
+            id: id, title: "Open \(id)", icon: ToolFloatParser.defaultIcon, command: id, dir: dir,
             widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: git,
             persist: persist, toggle: Chord(command: true, shift: true, key: "j"))
     }
@@ -293,5 +295,32 @@ final class TabControllerToolFloatTests: XCTestCase {
 
         controller.toggleToolFloat(float)  // reopening after must still reuse, not respawn
         XCTAssertEqual(floatSurfaces(spawned(), command: "btop").count, 1)
+    }
+
+    func test_dirField_pinsTheSpawnDirectory_ignoringTheFocusedCWD() throws {
+        let paneDir = try makeDir("pane", git: false)
+        let pinned = try makeDir("notes", git: false)
+        let (controller, spawned) = makeController(cwd: paneDir)
+
+        controller.toggleToolFloat(spec("notes", persist: .ephemeral, dir: pinned))
+
+        XCTAssertEqual(
+            floatSurfaces(spawned(), command: "notes")[0].lastConfig?.workingDirectory, pinned,
+            "a pinned dir: must win over the focused pane's cwd")
+    }
+
+    func test_dirField_withPersistTab_survivesACWDChange() throws {
+        let paneDir = try makeDir("pane", git: false)
+        let pinned = try makeDir("notes", git: false)
+        let elsewhere = try makeDir("elsewhere", git: false)
+        let (controller, spawned) = makeController(cwd: paneDir)
+        let float = spec("notes", persist: .tab, dir: pinned)
+
+        controller.toggleToolFloat(float)
+        controller.closeToolFloat()
+        paneSurface(spawned()).currentDirectory = elsewhere
+        controller.toggleToolFloat(float)
+
+        XCTAssertEqual(floatSurfaces(spawned(), command: "notes").count, 1)
     }
 }

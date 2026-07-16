@@ -148,6 +148,7 @@ enum ConfigWriter {
         }
         if float.icon != ToolFloatParser.defaultIcon { tokens.append("icon:\(quotedValue(float.icon))") }
         tokens.append("command:\(quotedValue(float.command))")
+        if let dir = float.dir { tokens.append("dir:\(quotedValue(dir.path))") }
         if float.widthFraction != ToolFloatParser.defaultFraction {
             tokens.append("width:\(ToolFloatParser.fractionText(float.widthFraction))")
         }

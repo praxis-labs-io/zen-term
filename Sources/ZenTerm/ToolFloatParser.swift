@@ -53,15 +53,17 @@ enum ToolFloatParser {
             return nil
         }
 
+        let persist = persistence(fields["persist"], id: id)
         return ToolFloat(
             id: id,
             title: fields["title"] ?? Self.defaultTitle(forID: id),
             icon: fields["icon"] ?? Self.defaultIcon,
             command: command,
+            dir: directory(fields["dir"], persist: persist, id: id),
             widthFraction: fraction(fields["width"]) ?? Self.defaultFraction,
             heightFraction: fraction(fields["height"]) ?? Self.defaultFraction,
             requiresGitRepo: fields["git"]?.lowercased() == "true",
-            persist: persistence(fields["persist"], id: id),
+            persist: persist,
             toggle: toggle)
     }
 
@@ -81,6 +83,19 @@ enum ToolFloatParser {
             return defaultPersist
         }
         return value
+    }
+
+    /// A float's pinned `dir:`, tilde-expanded. `dir:` + `persist:dir` is degenerate — a fixed
+    /// directory has a fixed identity, so the re-anchor can never fire and the float behaves
+    /// exactly like `persist:tab`. Warn rather than silently reinterpret the author's intent.
+    private static func directory(_ raw: String?, persist: ToolFloat.Persistence, id: String) -> URL? {
+        guard let raw, !raw.isEmpty else { return nil }
+        if persist == .directory {
+            NSLog(
+                "GeneralConfig: float `\(id)` sets both `dir:` and `persist:dir` — a pinned directory "
+                    + "never re-anchors, so this behaves as `persist:tab`")
+        }
+        return URL(fileURLWithPath: NSString(string: raw).expandingTildeInPath).standardizedFileURL
     }
 
     /// Split on whitespace, but keep runs inside double quotes intact so a quoted value can

@@ -96,6 +96,9 @@
 # Fields (whitespace-separated `field:value`; quote values with spaces):
 #   id       (required)  stable identifier, unique per float
 #   command  (required)  runs as `$SHELL -l -i -c <command>` at the focused cwd
+#   dir      (optional)  pinned working directory, ~ expanded   (default: focused pane's cwd)
+#                        for tools that aren't about the directory you're in (a music
+#                        player) or that mean a specific one (a notes scratchpad)
 #   key      (required)  toggle chord, e.g. cmd+shift+g (see "Chord syntax" below)
 #   git      (optional)  true = only open inside a git repo         (default false)
 #   persist  (optional)  process lifetime                           (default none)
@@ -116,6 +119,9 @@
 #
 # Example — a git TUI kept warm per repo (first open is cold; reopens are instant):
 # float = id:lazygit command:"lazygit" key:cmd+g git:true persist:dir icon:git title:"Open Lazygit"
+#
+# Example — a system monitor kept alive per tab, spawned at home rather than wherever you were:
+# float = id:btop command:"btop" key:cmd+shift+b persist:tab dir:~ icon:gauge
 
 # ─── Keybinds ────────────────────────────────────────────────────────────────
 #

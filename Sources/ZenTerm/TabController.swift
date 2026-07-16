@@ -635,6 +635,9 @@ final class TabController: NSObject {
         gitRepoRoot(for: cwd) ?? cwd?.standardizedFileURL
     }
 
+    /// Where a float's command runs: its pinned `dir:` when it has one, else the focused pane's cwd.
+    private func floatCWD(_ spec: ToolFloat) -> URL? { spec.dir ?? focusedCWD }
+
     /// The tab's lazygit surface, created on first use running `lazygit` via a login
     /// shell (so a Homebrew `lazygit` is on PATH — Epic 0's login-shell fix) in the
     /// focused pane's cwd. Mirrors `ensureBottomDrawerPanel()`.
@@ -805,7 +808,7 @@ final class TabController: NSObject {
     /// float whose `persist:` flipped to `none` in a live config reload, which must not reuse (and
     /// then terminate) a surface the registry still holds.
     private func surfaceForFloat(_ spec: ToolFloat) -> TerminalSurface {
-        let anchor = spec.persist == .directory ? directoryAnchor(for: focusedCWD) : nil
+        let anchor = spec.persist == .directory ? directoryAnchor(for: floatCWD(spec)) : nil
         if let live = persistentFloats[spec.id] {
             let anchorHolds = spec.persist != .directory || live.anchor?.path == anchor?.path
             if spec.persist != .ephemeral, anchorHolds { return live.surface }
@@ -824,7 +827,7 @@ final class TabController: NSObject {
         surface.start(
             TerminalSurfaceConfig(
                 command: ShellLaunch.userShell, args: ["-l", "-i", "-c", spec.command],
-                workingDirectory: focusedCWD, theme: Theme.current.terminal,
+                workingDirectory: floatCWD(spec), theme: Theme.current.terminal,
                 behavior: GeneralConfig.current.terminalBehavior))
         return surface
     }

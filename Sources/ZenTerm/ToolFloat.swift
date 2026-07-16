@@ -9,6 +9,10 @@ struct ToolFloat: Equatable {
     let title: String  // command-palette title, e.g. "Open GitDash"
     let icon: String  // dock icon: an SF Symbol name, or a bundled brand mark ("github", "git")
     let command: String  // runs as `$SHELL -l -i -c command` at the focused pane's cwd
+    /// A pinned working directory, or nil to follow the focused pane's cwd. For a tool that isn't
+    /// about the directory you're in (a music player, an email client) or one that means a specific
+    /// one (a notes scratchpad).
+    let dir: URL?
     let widthFraction: CGFloat
     let heightFraction: CGFloat
     let requiresGitRepo: Bool

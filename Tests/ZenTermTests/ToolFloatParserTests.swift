@@ -79,4 +79,26 @@ final class ToolFloatParserTests: XCTestCase {
     func test_persist_window_isNotYetSupported() {
         XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:window")?.persist, .ephemeral)
     }
+
+    func test_dir_defaultsToNil() {
+        XCTAssertNil(ToolFloatParser.parse("id:x command:c key:cmd+shift+j")?.dir)
+    }
+
+    func test_dir_expandsTilde() {
+        let float = ToolFloatParser.parse("id:x command:c key:cmd+shift+j dir:~/notes")
+        XCTAssertEqual(float?.dir?.path, NSString(string: "~/notes").expandingTildeInPath)
+    }
+
+    func test_dir_quotedPathWithSpaces() {
+        let float = ToolFloatParser.parse("id:x command:c key:cmd+shift+j dir:\"/tmp/my notes\"")
+        XCTAssertEqual(float?.dir?.path, "/tmp/my notes")
+    }
+
+    /// A pinned dir has a fixed identity, so `persist:dir` can never re-anchor — it degenerates into
+    /// exactly `persist:tab`. Warn and keep the float rather than guessing.
+    func test_dirWithPersistDir_isDegenerate_butKeepsTheFloat() {
+        let float = ToolFloatParser.parse("id:x command:c key:cmd+shift+j dir:/tmp persist:dir")
+        XCTAssertEqual(float?.persist, .directory)
+        XCTAssertEqual(float?.dir?.path, "/tmp")
+    }
 }
