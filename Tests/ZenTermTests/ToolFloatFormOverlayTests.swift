@@ -224,7 +224,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         let existing = ToolFloat(
             id: "dev", title: "Open dev", icon: IconCatalog.defaultSymbol, command: "vim",
             widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
-            toggle: Chord(command: true, shift: true, key: "d"))
+            persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
         let (overlay, _, sink) = mount(editing: existing, withDelete: true)
         let delete = descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Delete" }
         XCTAssertNotNil(delete, "editing an existing float shows a Delete button")
@@ -244,7 +244,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         let existing = ToolFloat(
             id: "dev", title: "Open dev", icon: ToolFloatParser.defaultIcon, command: "vim",
             widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
-            toggle: Chord(command: true, shift: true, key: "d"))
+            persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
         let (overlay, _, sink) = mount(editing: existing)
 
         XCTAssertEqual(field(in: overlay, placeholder: "gitdash").text, "dev")

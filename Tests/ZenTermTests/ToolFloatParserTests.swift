@@ -52,4 +52,31 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertNil(ToolFloatParser.parse("id:x command:foo"))  // no key
         XCTAssertNil(ToolFloatParser.parse("id:x command:foo key:nope+"))  // unparseable key
     }
+
+    func test_persist_defaultsToEphemeral() {
+        let float = ToolFloatParser.parse("id:x command:c key:cmd+shift+j")
+        XCTAssertEqual(float?.persist, .ephemeral)
+    }
+
+    func test_persist_parsesEveryToken() {
+        XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:none")?.persist, .ephemeral)
+        XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:dir")?.persist, .directory)
+        XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:tab")?.persist, .tab)
+    }
+
+    func test_persist_caseInsensitive() {
+        XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:DIR")?.persist, .directory)
+    }
+
+    /// An unknown value must not drop the whole float — the float still works, just ephemerally.
+    func test_persist_unknownValue_fallsBackToEphemeral() {
+        let float = ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:banana")
+        XCTAssertEqual(float?.persist, .ephemeral)
+        XCTAssertEqual(float?.id, "x")
+    }
+
+    /// `window` is ZEN-141. Until then it must degrade, not silently look supported.
+    func test_persist_window_isNotYetSupported() {
+        XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:window")?.persist, .ephemeral)
+    }
 }

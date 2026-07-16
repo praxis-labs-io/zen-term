@@ -481,6 +481,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             widthFraction: fraction(widthField),
             heightFraction: fraction(heightField),
             requiresGitRepo: gitSegment.selectedIndex == 1,
+            persist: editingFloat?.persist ?? ToolFloatParser.defaultPersist,
             toggle: chord)
     }
 

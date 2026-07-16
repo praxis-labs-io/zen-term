@@ -155,6 +155,7 @@ enum ConfigWriter {
             tokens.append("height:\(ToolFloatParser.fractionText(float.heightFraction))")
         }
         if float.requiresGitRepo { tokens.append("git:true") }
+        if float.persist != ToolFloatParser.defaultPersist { tokens.append("persist:\(float.persist.rawValue)") }
         return "float = " + tokens.joined(separator: " ")
     }
 

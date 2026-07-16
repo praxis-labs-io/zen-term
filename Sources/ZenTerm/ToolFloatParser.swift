@@ -11,6 +11,7 @@ enum ToolFloatParser {
     /// a field from its serialized line when the value equals the default, so the two halves can't drift.
     static let defaultIcon = "square.on.square"
     static let defaultFraction: CGFloat = 0.85
+    static let defaultPersist: ToolFloat.Persistence = .ephemeral
     static func defaultTitle(forID id: String) -> String { "Open \(id)" }
 
     /// The valid width/height range, plus the shared clamp + compact format — one home for the
@@ -60,6 +61,7 @@ enum ToolFloatParser {
             widthFraction: fraction(fields["width"]) ?? Self.defaultFraction,
             heightFraction: fraction(fields["height"]) ?? Self.defaultFraction,
             requiresGitRepo: fields["git"]?.lowercased() == "true",
+            persist: persistence(fields["persist"], id: id),
             toggle: toggle)
     }
 
@@ -68,6 +70,17 @@ enum ToolFloatParser {
     private static func fraction(_ raw: String?) -> CGFloat? {
         guard let value = raw.flatMap({ Double($0) }), value.isFinite else { return nil }
         return clampedFraction(value)
+    }
+
+    /// A float's `persist:` value. An unrecognized token warns and falls back to the default rather
+    /// than dropping the float — an ephemeral float still works, so a typo shouldn't cost the tool.
+    private static func persistence(_ raw: String?, id: String) -> ToolFloat.Persistence {
+        guard let raw else { return defaultPersist }
+        guard let value = ToolFloat.Persistence(rawValue: raw.lowercased()) else {
+            NSLog("GeneralConfig: float `\(id)` has unknown `persist:\(raw)` — using `none`")
+            return defaultPersist
+        }
+        return value
     }
 
     /// Split on whitespace, but keep runs inside double quotes intact so a quoted value can

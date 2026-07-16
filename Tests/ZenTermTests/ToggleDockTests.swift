@@ -11,7 +11,7 @@ final class ToggleDockTests: XCTestCase {
         ToolFloat(
             id: id, title: "Open \(id)", icon: "square.on.square", command: "cmd",
             widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
-            toggle: Chord(command: true, shift: true, key: "d"))
+            persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
     }
 
     private func makeDock(_ floats: [ToolFloat]) -> ToggleDock {

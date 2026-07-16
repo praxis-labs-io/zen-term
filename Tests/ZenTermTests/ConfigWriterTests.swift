@@ -157,7 +157,8 @@ final class ConfigWriterTests: XCTestCase {
     ) -> ToolFloat {
         ToolFloat(
             id: id, title: title ?? "Open \(id)", icon: icon, command: command,
-            widthFraction: width, heightFraction: height, requiresGitRepo: git, toggle: toggle)
+            widthFraction: width, heightFraction: height, requiresGitRepo: git,
+            persist: .ephemeral, toggle: toggle)
     }
 
     func test_float_serialize_roundTripsThroughParser() throws {
@@ -233,6 +234,30 @@ final class ConfigWriterTests: XCTestCase {
         // The whole line must survive the parser's comment strip (the `#` is inside quotes).
         let stripped = ConfigText.stripComment(line)
         XCTAssertEqual(ToolFloatParser.parse(String(stripped.dropFirst("float = ".count))), original)
+    }
+
+    func test_serializeFloat_omitsDefaultPersist_andEmitsNonDefault() {
+        let lean = ToolFloat(
+            id: "dev", title: "Open dev", icon: ToolFloatParser.defaultIcon, command: "vim",
+            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+            persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
+        XCTAssertEqual(ConfigWriter.serializeFloat(lean), "float = id:dev key:cmd+shift+d command:vim")
+
+        let sticky = ToolFloat(
+            id: "dev", title: "Open dev", icon: ToolFloatParser.defaultIcon, command: "vim",
+            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+            persist: .directory, toggle: Chord(command: true, shift: true, key: "d"))
+        XCTAssertEqual(
+            ConfigWriter.serializeFloat(sticky), "float = id:dev key:cmd+shift+d command:vim persist:dir")
+    }
+
+    func test_serializeFloat_persistRoundTripsThroughParser() {
+        let original = ToolFloat(
+            id: "lg", title: "Open Lazygit", icon: "git", command: "lazygit",
+            widthFraction: 0.85, heightFraction: 0.78, requiresGitRepo: true,
+            persist: .directory, toggle: Chord(command: true, key: "g"))
+        let line = ConfigWriter.serializeFloat(original)
+        XCTAssertEqual(ToolFloatParser.parse(String(line.dropFirst("float = ".count))), original)
     }
 
     func test_keybind_narrowingMultiDefaultAction_persistsAndRoundTrips() throws {

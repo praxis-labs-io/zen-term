@@ -98,6 +98,11 @@
 #   command  (required)  runs as `$SHELL -l -i -c <command>` at the focused cwd
 #   key      (required)  toggle chord, e.g. cmd+shift+g (see "Chord syntax" below)
 #   git      (optional)  true = only open inside a git repo         (default false)
+#   persist  (optional)  process lifetime                             (default none)
+#                        none = terminate on dismiss, fresh every open
+#                        dir  = keep alive per directory (repo root if in a repo, else
+#                               the cwd); reopening elsewhere respawns
+#                        tab  = keep alive per tab, anchored at first open
 #   title    (optional)  command-palette title                      (default "Open <id>")
 #   icon     (optional)  SF Symbol name or bundled mark (github/git) (default square.on.square)
 #   width    (optional)  width as a fraction of the tab              (default 0.85)
@@ -108,6 +113,9 @@
 #
 # Example — a dev server with spaces in the command:
 # float = id:dev command:"npm run dev" key:cmd+shift+d title:"Dev server"
+#
+# Example — a git TUI kept warm per repo (first open is cold; reopens are instant):
+# float = id:lazygit command:"lazygit" key:cmd+g git:true persist:dir icon:git title:"Open Lazygit"
 
 # ─── Keybinds ────────────────────────────────────────────────────────────────
 #

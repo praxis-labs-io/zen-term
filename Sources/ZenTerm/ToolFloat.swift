@@ -12,6 +12,23 @@ struct ToolFloat: Equatable {
     let widthFraction: CGFloat
     let heightFraction: CGFloat
     let requiresGitRepo: Bool
+
+    /// How long a float's process lives, and where the live instance is kept. Scope only exists
+    /// when a float persists — an ephemeral tool spawns fresh at the focused cwd every open, so it
+    /// has no instance to scope. The raw value is the config token; the case names avoid colliding
+    /// with `Optional.none` (`.none`) and with the `dir:` field.
+    enum Persistence: String {
+        /// Terminate on dismiss; fresh spawn every open. Right for anything whose state goes stale
+        /// (a file explorer, a scratch shell).
+        case ephemeral = "none"
+        /// One live instance per directory identity, per tab — reopening in the same directory
+        /// restores it; a different one discards and respawns. Right for directory-bound tools.
+        case directory = "dir"
+        /// One live instance per tab, anchored at first-open cwd. Never re-anchors.
+        case tab
+    }
+
+    let persist: Persistence
     let toggle: Chord  // the config `key:` — binds the chord AND renders the palette glyph
 
     /// Palette glyph string, e.g. "⌘⇧G" — derived from `toggle`, never authored separately.
