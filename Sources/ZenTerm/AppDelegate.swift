@@ -1,4 +1,5 @@
 import AppKit
+import TabKit
 
 /// Owns every window and routes chords/Copy/Paste to whichever is key. `⌘n` opens a
 /// new window (inheriting the key window's focused-pane cwd); every other chord goes
@@ -52,6 +53,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         socket.start()
         navSocket = socket
 
+        // Agent OS-notifications: become the notification-center delegate (never prompts — only the
+        // lazy `requestAuthorization` on first delivery does) and route banner clicks back to the tab.
+        AgentNotifier.shared.installDelegate()
+        AgentNotifier.shared.onActivate = { [weak self] windowID, tabID in
+            self?.activateTab(windowID: windowID, tabID: tabID)
+        }
+
+        // The "fire for any tab when unfocused" path can leave a banner for a tab that's already
+        // frontmost — its `clearWaiting` never fires (the active tab is never re-selected). Reactivating
+        // means the user is now looking at it, so clear each window's active-tab banner.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.windows.forEach { $0.clearActiveTabNotification() }
+        }
+
         // The one live consumer in PR1: when config changes (a keybind edit in the Settings card),
         // rebuild the interceptor's keymap so the rebind takes effect with no relaunch.
         NotificationCenter.default.addObserver(
@@ -80,6 +97,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         keyController()?.handle(chord)
+    }
+
+    /// A banner was clicked: bring the app forward and jump to its originating tab. Routes by
+    /// `windowID` (tab ids aren't unique across windows), then `selectTab` — a no-op if the tab or
+    /// window has since closed.
+    private func activateTab(windowID: Int, tabID: TabID) {
+        guard let wc = windows.first(where: { $0.windowID == windowID }) else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        wc.window.makeKeyAndOrderFront(nil)
+        wc.selectTab(tabID)
     }
 
     /// The `WindowController` owning the current key window, falling back to the

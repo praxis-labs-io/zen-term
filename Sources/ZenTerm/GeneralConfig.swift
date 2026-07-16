@@ -36,6 +36,10 @@ struct GeneralConfig: Equatable {
     // Motion.
     var reduceMotion: ReduceMotion
 
+    // Notifications — fire a macOS banner when an agent needs attention while the app is unfocused
+    // (the macOS permission is the real gate; this is the in-app opt-out).
+    var agentNotifications: Bool
+
     // Launch.
     var shell: String?
     var shellArgs: [String]
@@ -73,6 +77,7 @@ struct GeneralConfig: Equatable {
         drawerResizeStep: 40,
         maxDrawerFraction: 0.7,
         reduceMotion: .system,
+        agentNotifications: true,
         shell: nil,
         shellArgs: [],
         editor: nil,

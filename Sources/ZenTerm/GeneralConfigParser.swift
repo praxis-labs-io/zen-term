@@ -54,6 +54,8 @@ enum GeneralConfigParser {
                 if let n = parseDouble(value, key) { config.maxDrawerFraction = CGFloat(clamp(n, 0.3, 0.95, key)) }
             case "reduce-motion":
                 if let r = parseReduceMotion(value) { config.reduceMotion = r }
+            case "agent-notifications":
+                if let b = parseBool(value, key) { config.agentNotifications = b }
             case "shell":
                 if !value.isEmpty { config.shell = value }
             case "shell-args":
