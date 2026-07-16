@@ -3,6 +3,23 @@ import XCTest
 @testable import ZenTerm
 
 final class CommandCatalogTests: XCTestCase {
+    /// The catalog reads `GeneralConfig.current` (floats and, through the keymap, chord
+    /// displacement), so an unpinned suite varies by the developer's real config — a user float
+    /// claiming a built-in's chord (e.g. lazygit on ⌘G) strips that entry's palette glyph and
+    /// fails the every-entry-has-a-shortcut assertion on that machine only.
+    private var originalConfig = GeneralConfig.current
+
+    override func setUp() {
+        super.setUp()
+        originalConfig = GeneralConfig.current
+        GeneralConfig.setCurrentForTesting(.builtIn)
+    }
+
+    override func tearDown() {
+        GeneralConfig.setCurrentForTesting(originalConfig)
+        super.tearDown()
+    }
+
     func test_baseCommands_orderAndCount() {
         // User-defined tool floats are config-driven and vary by machine, so filter them out
         // and assert the fixed structural commands.

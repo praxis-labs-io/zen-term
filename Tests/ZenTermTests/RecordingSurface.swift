@@ -9,6 +9,12 @@ final class RecordingSurface: NSObject, TerminalSurface {
     var title = ""
     var isFocused = false
     var lastConfig: TerminalSurfaceConfig?
+    /// Overrides the protocol extension's nil default so a test can drive cwd drift — the same
+    /// property `PaneCanvasController.focusedCWD` prefers over its last OSC-reported value.
+    var currentDirectory: URL?
+    /// Overrides the protocol extension's false default so a test can mark a surface as having
+    /// live work — what the ⌘W confirm reads through `hasBusyToolFloat`/`hasBusyDrawer`.
+    var isBusy = false
     var terminated = false
     /// When set, `start` reports a creation failure to the delegate instead of succeeding, which
     /// exercises the seam's dead-surface path (ZEN-100) without needing a real libghostty failure.

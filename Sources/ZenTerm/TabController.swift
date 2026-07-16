@@ -93,14 +93,29 @@ final class TabController: NSObject {
     private let prewarmDelay: TimeInterval
     private let prewarmPool: LazygitPrewarmPool
 
-    /// The single live ephemeral tool float (diffnav, …). Tool floats are modal and
-    /// mutually exclusive, so one slot suffices. Terminated on close (not persisted).
+    /// The tool float currently SHOWN. Floats are modal and mutually exclusive, so one slot
+    /// suffices. Whether its surface dies on dismiss depends on `spec.persist`.
     private var activeToolFloat: (spec: ToolFloat, surface: TerminalSurface, overlay: SurfaceFloatOverlay)?
     var isToolFloatOpen: Bool { activeToolFloat != nil }
-    /// The float id whose empty-guard probe is currently deciding (async). A re-press while a
-    /// probe is in flight is ignored, so a double-tap can't spawn two overlapping floats.
-    private var probingToolFloatID: String?
     var activeToolFloatID: String? { activeToolFloat?.spec.id }
+
+    /// Tool floats whose process is ALIVE, keyed by float id — the persistent ones, kept across
+    /// dismissal. Liveness and visibility are independent: a float can be in here while hidden.
+    /// `anchor` is the directory identity a `.directory` float was launched against (`.ephemeral`
+    /// floats are never in here at all). `command`/`dir` are the spec values the instance was
+    /// SPAWNED with — a Settings edit to either is caught on the next open and respawns, instead
+    /// of silently reusing a process still running the old command.
+    private var persistentFloats: [String: (surface: TerminalSurface, anchor: URL?, command: String, dir: URL?)] = [:]
+
+    /// Whether any persistent float's process has live work — hidden ones included, which is the
+    /// point: a dismissed persistent float is invisible, and the ⌘W confirm would otherwise let
+    /// the window close over it silently.
+    var hasBusyToolFloat: Bool { persistentFloats.values.contains { $0.surface.isBusy } }
+
+    /// A float overlay still springing out. It keeps Auto Layout constraints on a persistent
+    /// float's shared `surface.view`, so a fast re-show must snap it away before re-hosting that
+    /// view in a new card — otherwise the old constraints fight the new ones.
+    private var dismissingFloatOverlay: SurfaceFloatOverlay?
 
     /// Which panel currently holds the tab's single unified focus/halo.
     private enum PanelRef: Equatable {
@@ -176,6 +191,7 @@ final class TabController: NSObject {
         result.append(
             contentsOf: [bottomDrawerSurface, rightDrawerSurface, lazygitSurface, activeToolFloat?.surface]
                 .compactMap { $0 })
+        result.append(contentsOf: persistentFloats.values.map(\.surface))
         return result
     }
 
@@ -367,6 +383,11 @@ final class TabController: NSObject {
         activeToolFloat?.overlay.removeFromSuperview()
         activeToolFloat?.surface.terminate()
         activeToolFloat = nil
+        dismissingFloatOverlay?.removeFromSuperview()
+        dismissingFloatOverlay = nil
+        // Snapshot the keys: `discardPersistentFloat` removes from `persistentFloats` as it goes,
+        // and iterating `.keys` directly over a dictionary being mutated mid-loop is a hazard.
+        for id in Array(persistentFloats.keys) { discardPersistentFloat(id) }
     }
 
     /// Copy from whichever panel holds unified focus: the pane canvas's own copy
@@ -560,7 +581,7 @@ final class TabController: NSObject {
                         + "or open a folder that has one."))
             return
         }
-        if lazygitSurface != nil, lazygitAnchor(for: focusedCWD)?.path != lazygitLaunchAnchor?.path {
+        if lazygitSurface != nil, directoryAnchor(for: focusedCWD)?.path != lazygitLaunchAnchor?.path {
             discardLazygitSurface()  // focused pane moved repos → respawn at the current cwd
         }
         showLazygit(ensureLazygitSurface())
@@ -604,16 +625,25 @@ final class TabController: NSObject {
         while true {
             if GitRepo.isGitRepo(dir) { return dir }
             let parent = dir.deletingLastPathComponent()
-            if parent.path == dir.path { return nil }  // reached the filesystem root
+            // Stop when the path stops SHRINKING, not when parent == dir: `deletingLastPathComponent()`
+            // is not monotonic. On a URL vended by FileManager (`homeDirectoryForCurrentUser`,
+            // `temporaryDirectory`) it walks past "/" into "/..", "/../..", … without ever repeating,
+            // so an equality check spins forever on the main thread. Identical paths from
+            // `URL(fileURLWithPath:)` terminate — the provenance decides, and callers can't see it.
+            guard parent.path.count < dir.path.count else { return nil }
             dir = parent
         }
     }
 
-    /// The identity lazygit is scoped to for `cwd`: the enclosing repo root (so cd'ing
-    /// between a repo's own subdirs doesn't reload), else the plain cwd.
-    private func lazygitAnchor(for cwd: URL?) -> URL? {
+    /// The directory identity a float is scoped to for `cwd`: the enclosing repo root (so cd'ing
+    /// between a repo's own subdirs doesn't reload), else the plain cwd. Deliberately defined
+    /// outside a repo too — a `persist:dir` float need not be a git tool.
+    private func directoryAnchor(for cwd: URL?) -> URL? {
         gitRepoRoot(for: cwd) ?? cwd?.standardizedFileURL
     }
+
+    /// Where a float's command runs: its pinned `dir:` when it has one, else the focused pane's cwd.
+    private func floatCWD(_ spec: ToolFloat) -> URL? { spec.dir ?? focusedCWD }
 
     /// The tab's lazygit surface, created on first use running `lazygit` via a login
     /// shell (so a Homebrew `lazygit` is on PATH — Epic 0's login-shell fix) in the
@@ -633,7 +663,7 @@ final class TabController: NSObject {
                 workingDirectory: focusedCWD, theme: Theme.current.terminal,
                 behavior: GeneralConfig.current.terminalBehavior))
         lazygitSurface = surface
-        lazygitLaunchAnchor = lazygitAnchor(for: focusedCWD)
+        lazygitLaunchAnchor = directoryAnchor(for: focusedCWD)
         return surface
     }
 
@@ -732,56 +762,50 @@ final class TabController: NSObject {
         }
     }
 
-    // MARK: tool floats (ephemeral command floats — diffnav, …)
+    // MARK: tool floats (declarative command floats whose process lifetime is set by `persist:`)
 
-    /// Toggle a tool float: same id open → close; otherwise run the guards and open a
-    /// fresh surface. Mirrors `toggleLazygit`'s plumbing but spawns fresh each time.
+    /// Toggle a tool float: same id open → close; otherwise run the git guard and open.
     func toggleToolFloat(_ spec: ToolFloat) {
         if activeToolFloat?.spec.id == spec.id { closeToolFloat(); return }
         if activeToolFloat != nil { closeToolFloat() }  // switch floats
-        if spec.requiresGitRepo, gitRepoRoot(for: focusedCWD) == nil {
-            onRequestToast?(
-                ToastContent(
-                    variant: .info,
-                    title: spec.title,
-                    message: "This needs a Git repository. Run `git init` here, "
-                        + "or open a folder that has one."))
+        // One ancestor walk per press: the git guard and the `.directory` anchor share the same
+        // repo-root lookup, and each `isGitRepo` probe is main-thread filesystem I/O.
+        let repoRoot = gitRepoRoot(for: floatCWD(spec))
+        if spec.requiresGitRepo, repoRoot == nil {
+            onRequestToast?(gitGuardToast(for: spec))
             return
         }
-        guard let guardSpec = spec.emptyGuard else {
-            showToolFloat(spec)
-            return
-        }
-        // Decide off the main thread: a `git diff`-style probe on a large repo or cold disk would
-        // otherwise beachball on the keybind press. The float animates in either way, so a
-        // sub-100ms deferred decision is invisible.
-        guard probingToolFloatID == nil else { return }  // a probe is already deciding — ignore re-press
-        probingToolFloatID = spec.id
-        probeIsEmpty(guardSpec.probe) { [weak self] isEmpty in
-            guard let self else { return }
-            self.probingToolFloatID = nil
-            guard self.activeToolFloat == nil else { return }  // a float opened while we probed
-            if isEmpty {
-                self.onRequestToast?(guardSpec.toast)
-            } else {
-                self.showToolFloat(spec)
-            }
-        }
+        let anchor = spec.persist == .directory ? (repoRoot ?? floatCWD(spec)?.standardizedFileURL) : nil
+        showToolFloat(spec, anchor: anchor)
     }
 
-    /// Spawn `spec.command` in a fresh login+interactive shell at the focused cwd (so
-    /// the user's git pager / PATH match a pane), present it in a `SurfaceFloatOverlay`,
-    /// and give it the tab's unified focus. When the command exits, `surfaceDidExit`
-    /// tears the float down.
-    private func showToolFloat(_ spec: ToolFloat) {
-        let shell = ShellLaunch.userShell
-        let surface = makeSurface()
-        surface.delegate = self
-        surface.start(
-            TerminalSurfaceConfig(
-                command: shell, args: ["-l", "-i", "-c", spec.command],
-                workingDirectory: focusedCWD, theme: Theme.current.terminal,
-                behavior: GeneralConfig.current.terminalBehavior))
+    /// The `git:true` block toast. A pinned `dir:` float is gated on the PINNED directory, so the
+    /// copy must name it — "run `git init` here" would point at the focused pane, which the guard
+    /// never looked at, leaving the user un-followable advice.
+    private func gitGuardToast(for spec: ToolFloat) -> ToastContent {
+        let message: String
+        if let dir = spec.dir {
+            message =
+                "This float is pinned to \(PathDisplay.abbreviatingHome(dir.path)), "
+                + "which isn't a Git repository."
+        } else {
+            message = "This needs a Git repository. Run `git init` here, or open a folder that has one."
+        }
+        return ToastContent(variant: .info, title: spec.title, message: message)
+    }
+
+    /// Present `spec` in a float card: resolve its surface (retained or fresh), host it, and give
+    /// it the tab's unified focus. When the tool exits, `surfaceDidExit` tears the float down.
+    private func showToolFloat(_ spec: ToolFloat, anchor: URL?) {
+        let surface = surfaceForFloat(spec, anchor: anchor)
+        // Snap away a still-springing-out card ONLY when it holds constraints on the view we're
+        // about to re-host — otherwise let it finish its own exit. A card that isn't sharing this
+        // surface's view (a different float, or a fresh spawn) springs out normally while the new
+        // one springs in; only a shared-view re-host needs the snap.
+        if let dismissing = dismissingFloatOverlay, surface.view.isDescendant(of: dismissing) {
+            dismissing.removeFromSuperview()
+            dismissingFloatOverlay = nil
+        }
         let overlay = SurfaceFloatOverlay(
             content: surface.view,
             background: Theme.current.chrome.background.nsColor,
@@ -800,61 +824,83 @@ final class TabController: NSObject {
         onOverlayStateChanged?()
     }
 
-    /// Close the float and TERMINATE its surface (ephemeral — no persistence). Clears
-    /// the slot before terminate so a synchronous `surfaceDidExit` re-entry no-ops.
+    /// The surface to show for `spec`: a retained one when the float persists, still matches its
+    /// anchor, AND was spawned with the same `command`/`dir` — else discard and spawn fresh. The
+    /// discard covers a `persist:` flipped to `none` in a live config reload (which must not reuse
+    /// and then terminate a surface the registry still holds), the focused dir moving, and a
+    /// Settings edit to the command or pinned dir (reusing would silently keep the OLD command's
+    /// process running, making the edit look like a no-op).
+    private func surfaceForFloat(_ spec: ToolFloat, anchor: URL?) -> TerminalSurface {
+        if let live = persistentFloats[spec.id] {
+            let anchorHolds = spec.persist != .directory || live.anchor?.path == anchor?.path
+            let spawnHolds = live.command == spec.command && live.dir == spec.dir
+            if spec.persist != .ephemeral, anchorHolds, spawnHolds { return live.surface }
+            discardPersistentFloat(spec.id)
+        }
+        let surface = spawnFloatSurface(spec)
+        if spec.persist != .ephemeral {
+            persistentFloats[spec.id] = (surface, anchor, spec.command, spec.dir)
+        }
+        return surface
+    }
+
+    /// Reconcile the registry against the catalog after a config reload. An entry whose id no
+    /// longer exists (float deleted — or renamed, which is a delete plus an add) would otherwise
+    /// keep a hidden process running with no dock button, chord, or palette entry ever able to
+    /// reach it again. A present-but-edited id is NOT discarded here: command/dir edits reconcile
+    /// lazily on the next open, so a config save never kills a hidden tool that is still reachable.
+    /// If the float currently SHOWN was deleted, close its card too — it has no toggle left.
+    func pruneToolFloats(against catalog: [ToolFloat]) {
+        let ids = Set(catalog.map(\.id))
+        if let active = activeToolFloat, !ids.contains(active.spec.id) { closeToolFloat() }
+        // Snapshot the keys — the discard mutates the dictionary mid-loop (same rule as `shutdown()`).
+        for id in Array(persistentFloats.keys) where !ids.contains(id) { discardPersistentFloat(id) }
+    }
+
+    /// Spawn `spec.command` in a fresh login+interactive shell at the focused cwd, so the user's
+    /// PATH and pager match a pane's.
+    private func spawnFloatSurface(_ spec: ToolFloat) -> TerminalSurface {
+        let surface = makeSurface()
+        surface.delegate = self
+        surface.start(
+            TerminalSurfaceConfig(
+                command: ShellLaunch.userShell, args: ["-l", "-i", "-c", spec.command],
+                workingDirectory: floatCWD(spec), theme: Theme.current.terminal,
+                behavior: GeneralConfig.current.terminalBehavior))
+        return surface
+    }
+
+    /// Drop a persistent float's surface. Clears the ref BEFORE terminate so a synchronous
+    /// `surfaceDidExit` re-entry can't resurrect the entry this is removing.
+    private func discardPersistentFloat(_ id: String) {
+        guard let live = persistentFloats.removeValue(forKey: id) else { return }
+        live.surface.terminate()
+    }
+
+    /// Close the float. An ephemeral float's surface dies with the card; a persistent one keeps
+    /// running and only loses its card. Clears the slot before terminate so a synchronous
+    /// `surfaceDidExit` re-entry no-ops.
     func closeToolFloat() {
         guard let active = activeToolFloat else { return }
         activeToolFloat = nil
         let overlay = active.overlay
-        overlay.animateOut { overlay.removeFromSuperview() }
-        active.surface.terminate()
+        // Park BEFORE animateOut: `Motion.springScaleFade` fires its completion synchronously under
+        // Reduce Motion, and that completion clears the slot by identity — assigning afterwards
+        // would strand an overlay no completion will ever clear. `hideLazygit` parks the same way,
+        // for the same reason. Snap any PREVIOUSLY parked card first: the slot holds one overlay,
+        // and silently dropping a parked reference would skip the shared-view snap-away on a fast
+        // X→Y→X switch — X's old card would keep its constraints on the view being re-hosted.
+        if active.spec.persist != .ephemeral {
+            dismissingFloatOverlay?.removeFromSuperview()
+            dismissingFloatOverlay = overlay
+        }
+        overlay.animateOut { [weak self] in
+            overlay.removeFromSuperview()
+            if self?.dismissingFloatOverlay === overlay { self?.dismissingFloatOverlay = nil }
+        }
+        if active.spec.persist == .ephemeral { active.surface.terminate() }
         restoreUnifiedFocus()
         onOverlayStateChanged?()
-    }
-
-    /// The empty-guard probe's watchdog timeout — a pathological probe is terminated after this so
-    /// it can't run forever. On timeout (or any error) we fail open (show the float).
-    private static let probeTimeout: TimeInterval = 2
-
-    /// Run `probe` as a plain (non-login) shell at the focused cwd; exit 0 ⇒ nothing to show.
-    /// Used by a float's `emptyGuard` to toast instead of opening an empty float. Runs entirely on
-    /// a background queue — the main thread is never blocked — and calls `completion` on the main
-    /// queue. Bounded by a `probeTimeout` watchdog and fail-open (isEmpty == false) on any
-    /// error/timeout so it never wrongly guards.
-    private func probeIsEmpty(_ probe: String, completion: @escaping (Bool) -> Void) {
-        let shell = ShellLaunch.userShell
-        let cwd = focusedCWD ?? ShellLaunch.defaultCWD
-        DispatchQueue.global(qos: .userInitiated).async {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: shell)
-            process.arguments = ["-c", probe]
-            process.currentDirectoryURL = cwd
-            process.standardOutput = FileHandle.nullDevice
-            process.standardError = FileHandle.nullDevice
-            do {
-                try process.run()
-            } catch {
-                DispatchQueue.main.async { completion(false) }  // couldn't probe → open the float
-                return
-            }
-            // Reap on a separate worker and wait on it with a timeout, so a probe that ignores
-            // SIGTERM can NEVER wedge the decision: on timeout we fail open immediately (isEmpty
-            // == false) and best-effort terminate, while the reaper keeps waiting to collect the
-            // child. `completion` fires exactly once, so `probingToolFloatID` is always cleared.
-            let finished = DispatchSemaphore(value: 0)
-            DispatchQueue.global(qos: .userInitiated).async {
-                process.waitUntilExit()
-                finished.signal()
-            }
-            let isEmpty: Bool
-            if finished.wait(timeout: .now() + Self.probeTimeout) == .timedOut {
-                process.terminate()
-                isEmpty = false
-            } else {
-                isEmpty = process.terminationStatus == 0
-            }
-            DispatchQueue.main.async { completion(isEmpty) }
-        }
     }
 
     // MARK: tiling
@@ -1590,12 +1636,19 @@ extension TabController: TerminalSurfaceDelegate {
     /// `PaneCanvasController`; this only reacts to the two drawer surfaces.
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         if let active = activeToolFloat, s === active.surface {
-            // The tool ran to completion / quit (`q` in diffnav) → close the float.
+            // The tool ran to completion / quit (`q` in lazygit) → close the float and forget it,
+            // so the next open spawns fresh rather than resurrecting a dead surface.
             activeToolFloat = nil
+            persistentFloats.removeValue(forKey: active.spec.id)
             active.overlay.animateOut { active.overlay.removeFromSuperview() }
             active.surface.terminate()
             restoreUnifiedFocus()
             onOverlayStateChanged?()
+            return
+        }
+        if let id = persistentFloats.first(where: { $0.value.surface === s })?.key {
+            persistentFloats.removeValue(forKey: id)  // a hidden persistent float's tool quit
+            s.terminate()
             return
         }
         if s === lazygitSurface {
@@ -1661,6 +1714,13 @@ extension TabController: TerminalSurfaceDelegate {
             descriptor = "The right drawer"
         } else if let active = activeToolFloat, s === active.surface {
             descriptor = "This tool"
+        } else if persistentFloats.values.contains(where: { $0.surface === s }) {
+            // Hidden persistent float: evict so the next open spawns fresh, but still warn — the
+            // user believes this tool is alive in the background, and a silent eviction makes the
+            // next open's cold, state-less spawn look like persistence quietly failing.
+            warnSurfaceFailed(descriptor: "A background tool")
+            surfaceDidExit(s, code: nil)
+            return
         } else {
             return  // not one of ours
         }

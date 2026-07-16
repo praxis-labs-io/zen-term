@@ -88,16 +88,30 @@
 
 # ─── Tool floats ─────────────────────────────────────────────────────────────
 #
-# Ephemeral command overlays (dock button + command-palette entry + keybinding).
-# There are NO built-in floats — define your own with `float = ` lines. Repeat
-# the key for as many as you like. A float's `key:` is the single source of truth
-# for both its chord and its palette glyph.
+# Command overlays (dock button + command-palette entry + keybinding) whose
+# process lifetime is set by `persist:` (default `none` = ephemeral, fresh every
+# open). There are NO built-in floats — define your own with `float = ` lines.
+# Repeat the key for as many as you like. A float's `key:` is the single source
+# of truth for both its chord and its palette glyph.
 #
 # Fields (whitespace-separated `field:value`; quote values with spaces):
 #   id       (required)  stable identifier, unique per float
 #   command  (required)  runs as `$SHELL -l -i -c <command>` at the focused cwd
+#   dir      (optional)  pinned working directory, ~ expanded   (default: focused pane's cwd)
+#                        for tools that aren't about the directory you're in (a music
+#                        player) or that mean a specific one (a notes scratchpad)
 #   key      (required)  toggle chord, e.g. cmd+shift+g (see "Chord syntax" below)
 #   git      (optional)  true = only open inside a git repo         (default false)
+#   persist  (optional)  process lifetime                           (default none)
+#                        none = terminate on dismiss, fresh every open
+#                        dir  = keep alive per directory (repo root if in a repo, else
+#                               the cwd), scoped per tab — two tabs open on the same
+#                               directory each get their own instance; reopening
+#                               elsewhere respawns. With a pinned `dir:` the anchor is
+#                               constant, so the instance never re-anchors — the way to
+#                               keep a tool alive at a fixed place
+#                        the instance dies when the tool quits on its own (e.g. `q`) —
+#                        the next open is cold, not resumed
 #   title    (optional)  command-palette title                      (default "Open <id>")
 #   icon     (optional)  SF Symbol name or bundled mark (github/git) (default square.on.square)
 #   width    (optional)  width as a fraction of the tab              (default 0.85)
@@ -108,6 +122,12 @@
 #
 # Example — a dev server with spaces in the command:
 # float = id:dev command:"npm run dev" key:cmd+shift+d title:"Dev server"
+#
+# Example — a git TUI kept warm per repo (first open is cold; reopens are instant):
+# float = id:lazygit command:"lazygit" key:cmd+g git:true persist:dir icon:git title:"Open Lazygit"
+#
+# Example — a system monitor kept alive at home, no matter where you open it from:
+# float = id:btop command:"btop" key:cmd+shift+b persist:dir dir:~ icon:gauge
 
 # ─── Keybinds ────────────────────────────────────────────────────────────────
 #

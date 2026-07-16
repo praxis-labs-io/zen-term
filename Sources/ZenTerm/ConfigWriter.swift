@@ -140,8 +140,7 @@ enum ConfigWriter {
     /// `command`) are always emitted; an optional field is omitted when it equals the parser's default
     /// (shared via `ToolFloatParser`, so the two halves can't drift), keeping a plain float's line
     /// lean. A value with whitespace or a `#` is quoted — the same rule `WorkspacesWriter` uses — so
-    /// the parser's comment strip and whitespace tokenizer don't split it. `emptyGuard` has no grammar
-    /// yet (the parser always reads it as nil), so it isn't serialized.
+    /// the parser's comment strip and whitespace tokenizer don't split it.
     static func serializeFloat(_ float: ToolFloat) -> String {
         var tokens = ["id:\(quotedValue(float.id))", "key:\(float.toggle.configToken)"]
         if float.title != ToolFloatParser.defaultTitle(forID: float.id) {
@@ -149,6 +148,7 @@ enum ConfigWriter {
         }
         if float.icon != ToolFloatParser.defaultIcon { tokens.append("icon:\(quotedValue(float.icon))") }
         tokens.append("command:\(quotedValue(float.command))")
+        if let dir = float.dir { tokens.append("dir:\(quotedValue(PathDisplay.abbreviatingHome(dir.path)))") }
         if float.widthFraction != ToolFloatParser.defaultFraction {
             tokens.append("width:\(ToolFloatParser.fractionText(float.widthFraction))")
         }
@@ -156,6 +156,7 @@ enum ConfigWriter {
             tokens.append("height:\(ToolFloatParser.fractionText(float.heightFraction))")
         }
         if float.requiresGitRepo { tokens.append("git:true") }
+        if float.persist != ToolFloatParser.defaultPersist { tokens.append("persist:\(float.persist.rawValue)") }
         return "float = " + tokens.joined(separator: " ")
     }
 

@@ -52,4 +52,60 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertNil(ToolFloatParser.parse("id:x command:foo"))  // no key
         XCTAssertNil(ToolFloatParser.parse("id:x command:foo key:nope+"))  // unparseable key
     }
+
+    func test_persist_defaultsToEphemeral() {
+        let float = ToolFloatParser.parse("id:x command:c key:cmd+shift+j")
+        XCTAssertEqual(float?.persist, .ephemeral)
+    }
+
+    func test_persist_parsesEveryToken() {
+        XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:none")?.persist, .ephemeral)
+        XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:dir")?.persist, .directory)
+    }
+
+    /// `tab` was cut before it ever shipped (daily driving showed tab scoping is the wrong axis —
+    /// the ZEN-77 pivot). A config that says it must degrade like any unknown token, keeping the float.
+    func test_persist_tab_isNoLongerAMode_degradesToEphemeral() {
+        let float = ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:tab")
+        XCTAssertEqual(float?.persist, .ephemeral)
+        XCTAssertEqual(float?.id, "x")
+    }
+
+    func test_persist_caseInsensitive() {
+        XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:DIR")?.persist, .directory)
+    }
+
+    /// An unknown value must not drop the whole float — the float still works, just ephemerally.
+    func test_persist_unknownValue_fallsBackToEphemeral() {
+        let float = ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:banana")
+        XCTAssertEqual(float?.persist, .ephemeral)
+        XCTAssertEqual(float?.id, "x")
+    }
+
+    /// `window` is ZEN-141. Until then it must degrade, not silently look supported.
+    func test_persist_window_isNotYetSupported() {
+        XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:window")?.persist, .ephemeral)
+    }
+
+    func test_dir_defaultsToNil() {
+        XCTAssertNil(ToolFloatParser.parse("id:x command:c key:cmd+shift+j")?.dir)
+    }
+
+    func test_dir_expandsTilde() {
+        let float = ToolFloatParser.parse("id:x command:c key:cmd+shift+j dir:~/notes")
+        XCTAssertEqual(float?.dir?.path, NSString(string: "~/notes").expandingTildeInPath)
+    }
+
+    func test_dir_quotedPathWithSpaces() {
+        let float = ToolFloatParser.parse("id:x command:c key:cmd+shift+j dir:\"/tmp/my notes\"")
+        XCTAssertEqual(float?.dir?.path, "/tmp/my notes")
+    }
+
+    /// A pinned dir gives `persist:dir` a fixed identity — the instance never re-anchors. That's
+    /// the intended way to keep a tool alive at one place, so both fields parse together cleanly.
+    func test_dirWithPersistDir_pinsALivingFloat() {
+        let float = ToolFloatParser.parse("id:x command:c key:cmd+shift+j dir:/tmp persist:dir")
+        XCTAssertEqual(float?.persist, .directory)
+        XCTAssertEqual(float?.dir?.path, "/tmp")
+    }
 }

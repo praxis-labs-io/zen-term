@@ -181,7 +181,12 @@ final class WindowController: NSObject {
             }
             self.tabBar.reapplyTheme()
             // A float add / edit / remove changes the catalog — rebuild the dock's per-float buttons
-            // (not just recolor) so the toolbar reflects it live, then restore active states.
+            // (not just recolor) so the toolbar reflects it live, then restore active states. Prune
+            // each tab's persistent-float registry against the same catalog: a deleted float's
+            // hidden process would otherwise keep running with no control able to ever reach it.
+            for controller in self.controllers.values {
+                controller.pruneToolFloats(against: ToolFloatCatalog.all)
+            }
             self.dock.setToolFloats(ToolFloatCatalog.all)
             self.dock.reapplyTheme()
             self.renderDock()
@@ -914,8 +919,11 @@ final class WindowController: NSObject {
         let lastPane = active.isSinglePane
         let busy = active.focusedPaneIsBusy
 
-        // Only the last-pane path consults drawers, so probe them lazily (2 syscalls).
-        let running = lastPane ? (busy || active.hasBusyDrawer) : busy
+        // Only the last-pane path consults drawers and hidden persistent floats, so probe them
+        // lazily. Hidden floats matter precisely because they're invisible: a dismissed
+        // `persist:` tool keeps running with no on-screen trace, and this confirm is the only
+        // thing standing between ⌘W and silently killing its live work.
+        let running = lastPane ? (busy || active.hasBusyDrawer || active.hasBusyToolFloat) : busy
         let needsConfirm: Bool
         if lastPane {
             let closesWindow = tabs.order.count == 1

@@ -1,32 +1,41 @@
 import AppKit
 
-/// A declarative ephemeral command float. Everything variable about a float lives here;
-/// the tool-float engine on `TabController` does the rest. Floats are user-defined in
-/// `~/.config/zen-term/config` (`float = …` lines); the `toggle` chord is their single
-/// source of truth, driving both the keybinding and the palette glyph.
+/// A declarative command float whose process lifetime is set by `persist:`. Everything variable
+/// about a float lives here; the tool-float engine on `TabController` does the rest. Floats are
+/// user-defined in `~/.config/zen-term/config` (`float = …` lines); the `toggle` chord is their
+/// single source of truth, driving both the keybinding and the palette glyph.
 struct ToolFloat: Equatable {
     let id: String  // stable id, e.g. "gitdash"
     let title: String  // command-palette title, e.g. "Open GitDash"
     let icon: String  // dock icon: an SF Symbol name, or a bundled brand mark ("github", "git")
     let command: String  // runs as `$SHELL -l -i -c command` at the focused pane's cwd
+    /// A pinned working directory, or nil to follow the focused pane's cwd. For a tool that isn't
+    /// about the directory you're in (a music player, an email client) or one that means a specific
+    /// one (a notes scratchpad).
+    let dir: URL?
     let widthFraction: CGFloat
     let heightFraction: CGFloat
     let requiresGitRepo: Bool
-    let emptyGuard: EmptyGuard?
+
+    /// How long a float's process lives, and where the live instance is kept. Scope only exists
+    /// when a float persists — an ephemeral tool spawns fresh at the focused cwd every open, so it
+    /// has no instance to scope. The raw value is the config token; the case names avoid colliding
+    /// with `Optional.none` (`.none`) and with the `dir:` field.
+    enum Persistence: String {
+        /// Terminate on dismiss; fresh spawn every open. Right for anything whose state goes stale
+        /// (a file explorer, a scratch shell).
+        case ephemeral = "none"
+        /// One live instance per directory identity — reopening in the same directory restores
+        /// it; a different one discards and respawns. With a pinned `dir:` the anchor is constant,
+        /// so the instance simply never re-anchors. Right for directory-bound tools.
+        case directory = "dir"
+    }
+
+    let persist: Persistence
     let toggle: Chord  // the config `key:` — binds the chord AND renders the palette glyph
 
     /// Palette glyph string, e.g. "⌘⇧G" — derived from `toggle`, never authored separately.
     var shortcut: String { toggle.displayGlyph }
-}
-
-/// A pre-open probe: `probe` runs at the focused cwd; if it exits 0 (nothing to show), the
-/// float doesn't open and `toast` is surfaced instead. The probe runs in a plain,
-/// **non-login/non-interactive** shell (`$SHELL -c`) so it doesn't pay rc-sourcing latency —
-/// so its command must be on the default `PATH`, not only wired up by a login/`.zshrc` — and
-/// is bounded by a short timeout, failing open (the float opens) on timeout or error.
-struct EmptyGuard: Equatable {
-    let probe: String
-    let toast: ToastContent
 }
 
 /// The active tool floats — the ones the user declared in their config. There are no

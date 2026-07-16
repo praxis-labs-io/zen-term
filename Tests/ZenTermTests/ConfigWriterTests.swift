@@ -156,8 +156,9 @@ final class ConfigWriterTests: XCTestCase {
         command: String, width: CGFloat = 0.85, height: CGFloat = 0.85, git: Bool = false, toggle: Chord
     ) -> ToolFloat {
         ToolFloat(
-            id: id, title: title ?? "Open \(id)", icon: icon, command: command,
-            widthFraction: width, heightFraction: height, requiresGitRepo: git, emptyGuard: nil, toggle: toggle)
+            id: id, title: title ?? "Open \(id)", icon: icon, command: command, dir: nil,
+            widthFraction: width, heightFraction: height, requiresGitRepo: git,
+            persist: .ephemeral, toggle: toggle)
     }
 
     func test_float_serialize_roundTripsThroughParser() throws {
@@ -233,6 +234,63 @@ final class ConfigWriterTests: XCTestCase {
         // The whole line must survive the parser's comment strip (the `#` is inside quotes).
         let stripped = ConfigText.stripComment(line)
         XCTAssertEqual(ToolFloatParser.parse(String(stripped.dropFirst("float = ".count))), original)
+    }
+
+    func test_serializeFloat_omitsDefaultPersist_andEmitsNonDefault() {
+        let lean = ToolFloat(
+            id: "dev", title: "Open dev", icon: ToolFloatParser.defaultIcon, command: "vim", dir: nil,
+            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+            persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
+        XCTAssertEqual(ConfigWriter.serializeFloat(lean), "float = id:dev key:cmd+shift+d command:vim")
+
+        let sticky = ToolFloat(
+            id: "dev", title: "Open dev", icon: ToolFloatParser.defaultIcon, command: "vim", dir: nil,
+            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+            persist: .directory, toggle: Chord(command: true, shift: true, key: "d"))
+        XCTAssertEqual(
+            ConfigWriter.serializeFloat(sticky), "float = id:dev key:cmd+shift+d command:vim persist:dir")
+    }
+
+    func test_serializeFloat_persistRoundTripsThroughParser() {
+        let original = ToolFloat(
+            id: "lg", title: "Open Lazygit", icon: "git", command: "lazygit", dir: nil,
+            widthFraction: 0.85, heightFraction: 0.78, requiresGitRepo: true,
+            persist: .directory, toggle: Chord(command: true, key: "g"))
+        let line = ConfigWriter.serializeFloat(original)
+        XCTAssertEqual(ToolFloatParser.parse(String(line.dropFirst("float = ".count))), original)
+    }
+
+    /// The review fix for the bug where `dir:~/notes` was silently rewritten to an absolute path:
+    /// `serializeFloat` must abbreviate a home-relative `dir` back to `~`, the same way
+    /// `WorkspacesWriter` does for workspace paths, or a synced dotfiles config breaks on every
+    /// other machine/username the moment any Settings-form edit rewrites the float's line.
+    func test_serializeFloat_dirUnderHome_abbreviatesToTilde_andRoundTrips() throws {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let dir = URL(fileURLWithPath: home.path + "/notes").standardizedFileURL
+        let original = ToolFloat(
+            id: "notes", title: "Open notes", icon: ToolFloatParser.defaultIcon, command: "vim", dir: dir,
+            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+            persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "n"))
+
+        let line = ConfigWriter.serializeFloat(original)
+        XCTAssertTrue(line.contains("dir:~/notes"), line)  // not the expanded absolute path
+
+        let value = String(line.dropFirst("float = ".count))
+        XCTAssertEqual(ToolFloatParser.parse(value), original)
+    }
+
+    func test_serializeFloat_dirOutsideHome_roundTripsUnchanged() throws {
+        let dir = URL(fileURLWithPath: "/tmp/x").standardizedFileURL
+        let original = ToolFloat(
+            id: "tmp", title: "Open tmp", icon: ToolFloatParser.defaultIcon, command: "vim", dir: dir,
+            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+            persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "t"))
+
+        let line = ConfigWriter.serializeFloat(original)
+        XCTAssertTrue(line.contains("dir:/tmp/x"), line)  // no home prefix to abbreviate
+
+        let value = String(line.dropFirst("float = ".count))
+        XCTAssertEqual(ToolFloatParser.parse(value), original)
     }
 
     func test_keybind_narrowingMultiDefaultAction_persistsAndRoundTrips() throws {

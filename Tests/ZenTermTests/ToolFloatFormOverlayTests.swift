@@ -78,6 +78,12 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         descendants(of: overlay).compactMap { $0 as? FieldBox }.first { $0.placeholder == placeholder }!
     }
 
+    /// A segmented control found by its first option's title — the form has two of them.
+    private func segment(in overlay: NSView, firstOption: String) -> SegmentedControl {
+        descendants(of: overlay).compactMap { $0 as? SegmentedControl }
+            .first { $0.optionTitles.first == firstOption }!
+    }
+
     private func chip(in overlay: NSView) -> KeybindChip {
         descendants(of: overlay).compactMap { $0 as? KeybindChip }.first!
     }
@@ -222,9 +228,9 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
     func test_editForm_deleteButton_firesOnDelete() {
         let existing = ToolFloat(
-            id: "dev", title: "Open dev", icon: IconCatalog.defaultSymbol, command: "vim",
-            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false, emptyGuard: nil,
-            toggle: Chord(command: true, shift: true, key: "d"))
+            id: "dev", title: "Open dev", icon: IconCatalog.defaultSymbol, command: "vim", dir: nil,
+            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+            persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
         let (overlay, _, sink) = mount(editing: existing, withDelete: true)
         let delete = descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Delete" }
         XCTAssertNotNil(delete, "editing an existing float shows a Delete button")
@@ -242,9 +248,9 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
     func test_edit_prefillsAndSavesChangedCommand() {
         let existing = ToolFloat(
-            id: "dev", title: "Open dev", icon: ToolFloatParser.defaultIcon, command: "vim",
-            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false, emptyGuard: nil,
-            toggle: Chord(command: true, shift: true, key: "d"))
+            id: "dev", title: "Open dev", icon: ToolFloatParser.defaultIcon, command: "vim", dir: nil,
+            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+            persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
         let (overlay, _, sink) = mount(editing: existing)
 
         XCTAssertEqual(field(in: overlay, placeholder: "gitdash").text, "dev")
@@ -257,5 +263,151 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         XCTAssertEqual(sink.submitted.first?.id, "dev")
         XCTAssertEqual(sink.submitted.first?.command, "nvim")
         XCTAssertEqual(sink.submitted.first?.toggle, Chord(command: true, shift: true, key: "d"))
+    }
+
+    func test_persistSegment_defaultsToEphemeral_andBuildsTheChosenMode() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("lg")
+        field(in: overlay, placeholder: "npm run dev").setText("lazygit")
+        capture(novelChord, in: overlay, capturer)
+
+        segment(in: overlay, firstOption: "Fresh each time").select(1)  // Per directory
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.persist, .directory)
+    }
+
+    func test_persistSegment_untouched_buildsEphemeral() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("y")
+        field(in: overlay, placeholder: "npm run dev").setText("yazi")
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.persist, .ephemeral)
+    }
+
+    /// A real directory under the actual `$HOME`, so a home-relative fixture survives the
+    /// submit-time folder-exists check on ANY machine. A fixture named after a directory that
+    /// happens to exist on one dev machine (`~/notes`) is a test that only passes there — CI's
+    /// runner has no such folder, submit blocks, and `dir` silently comes back nil.
+    private func makeHomeRelativeDir() throws -> URL {
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("zenterm-form-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        return dir
+    }
+
+    func test_dirField_buildsPinnedDirectory() throws {
+        let home = try makeHomeRelativeDir()
+        let tilde = PathDisplay.abbreviatingHome(home.path)  // "~/zenterm-form-test-…"
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("notes")
+        field(in: overlay, placeholder: "npm run dev").setText("nvim")
+        field(in: overlay, placeholder: "~/notes").setText(tilde)
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.dir?.path, home.standardizedFileURL.path)
+    }
+
+    func test_blankDirField_buildsNilDirectory() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("y")
+        field(in: overlay, placeholder: "npm run dev").setText("yazi")
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertNil(sink.submitted.first?.dir)
+    }
+
+    func test_dirWithQuote_blocksSubmit() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "npm run dev").setText("vim")
+        field(in: overlay, placeholder: "~/notes").setText("/tmp/a\"b")  // a `"` can't round-trip
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertTrue(sink.submitted.isEmpty, "a dir with a \" is rejected, so submit is blocked")
+    }
+
+    func test_dirField_nonexistentFolder_blocksSubmit() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "npm run dev").setText("vim")
+        field(in: overlay, placeholder: "~/notes")
+            .setText("/definitely/not/a/real/path-\(UUID().uuidString)")
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertTrue(
+            sink.submitted.isEmpty,
+            "a nonexistent DIRECTORY blocks submit, mirroring AddWorkspaceOverlay's folder check")
+    }
+
+    func test_dirField_existingFolder_allowsSubmit() {
+        let realDir = FileManager.default.temporaryDirectory
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "npm run dev").setText("vim")
+        field(in: overlay, placeholder: "~/notes").setText(realDir.path)
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.count, 1, "an existing folder must not block submit")
+    }
+
+    /// Editing a float must not silently flatten fields the form didn't previously expose.
+    func test_edit_prefillsPersistAndDir() {
+        // A real directory — the folder-exists check (Fix 5) would otherwise block submit on a
+        // fixture path like `/tmp/x` that doesn't actually exist.
+        let realDir = FileManager.default.temporaryDirectory
+        let existing = ToolFloat(
+            id: "lg", title: "Open Lazygit", icon: "git", command: "lazygit",
+            dir: realDir, widthFraction: 0.85, heightFraction: 0.78,
+            requiresGitRepo: true, persist: .directory, toggle: Chord(command: true, key: "g"))
+        let (overlay, _, sink) = mount(editing: existing)
+
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.persist, .directory)
+        XCTAssertEqual(sink.submitted.first?.dir?.path, realDir.path)
+    }
+
+    /// `/tmp/x` above is outside `$HOME`, so `abbreviatingHome` is a no-op on it and can't tell a
+    /// correct re-abbreviate from a raw `dir.path` regression. Use a home-relative fixture instead,
+    /// and touch only an unrelated field — the real scenario of an untouched `dir` surviving submit.
+    ///
+    /// Note this asserts the *prefilled field text*, not just the submitted float's `dir?.path`:
+    /// `ToolFloat.dir` is a `URL`, so `.path` is always the absolute form, and `buildFloat`'s
+    /// `expandingTildeInPath` is a no-op on an already-absolute string — so an absolute-path
+    /// regression in `prefill()` still round-trips to the identical submitted `dir?.path`. The
+    /// abbreviation is only observable in what the field displays, which is what a user actually sees
+    /// and re-saves; that's the assertion that would fail if `prefill()` regressed to raw `dir.path`.
+    func test_edit_untouchedHomeRelativeDir_prefillsAbbreviatedAndRoundTripsOnSubmit() throws {
+        let home = try makeHomeRelativeDir()
+        let tilde = PathDisplay.abbreviatingHome(home.path)
+        let existing = ToolFloat(
+            id: "lg", title: "Open Lazygit", icon: "git", command: "lazygit",
+            dir: home, widthFraction: 0.85, heightFraction: 0.78,
+            requiresGitRepo: true, persist: .directory, toggle: Chord(command: true, key: "g"))
+        let (overlay, _, sink) = mount(editing: existing)
+
+        XCTAssertEqual(
+            field(in: overlay, placeholder: "~/notes").text, tilde,
+            "prefill must re-abbreviate a home-relative dir, not show the raw absolute path")
+
+        field(in: overlay, placeholder: "npm run dev").setText("lazygit --config foo")
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.dir?.path, home.standardizedFileURL.path)
     }
 }

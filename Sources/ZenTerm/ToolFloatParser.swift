@@ -11,6 +11,7 @@ enum ToolFloatParser {
     /// a field from its serialized line when the value equals the default, so the two halves can't drift.
     static let defaultIcon = "square.on.square"
     static let defaultFraction: CGFloat = 0.85
+    static let defaultPersist: ToolFloat.Persistence = .ephemeral
     static func defaultTitle(forID id: String) -> String { "Open \(id)" }
 
     /// The valid width/height range, plus the shared clamp + compact format — one home for the
@@ -52,15 +53,17 @@ enum ToolFloatParser {
             return nil
         }
 
+        let persist = persistence(fields["persist"], id: id)
         return ToolFloat(
             id: id,
             title: fields["title"] ?? Self.defaultTitle(forID: id),
             icon: fields["icon"] ?? Self.defaultIcon,
             command: command,
+            dir: fields["dir"].flatMap(Self.resolveDir),
             widthFraction: fraction(fields["width"]) ?? Self.defaultFraction,
             heightFraction: fraction(fields["height"]) ?? Self.defaultFraction,
             requiresGitRepo: fields["git"]?.lowercased() == "true",
-            emptyGuard: nil,
+            persist: persist,
             toggle: toggle)
     }
 
@@ -69,6 +72,29 @@ enum ToolFloatParser {
     private static func fraction(_ raw: String?) -> CGFloat? {
         guard let value = raw.flatMap({ Double($0) }), value.isFinite else { return nil }
         return clampedFraction(value)
+    }
+
+    /// A float's `persist:` value. An unrecognized token warns and falls back to the default rather
+    /// than dropping the float — an ephemeral float still works, so a typo shouldn't cost the tool.
+    private static func persistence(_ raw: String?, id: String) -> ToolFloat.Persistence {
+        guard let raw else { return defaultPersist }
+        guard let value = ToolFloat.Persistence(rawValue: raw.lowercased()) else {
+            NSLog("GeneralConfig: float `\(id)` has unknown `persist:\(raw)` — using `none`")
+            return defaultPersist
+        }
+        return value
+    }
+
+    /// One home for the `dir:` grammar: tilde-expand + standardize raw text into the URL form
+    /// `ToolFloat.dir` stores. Shared by the parser and the Settings form (the same rule as the
+    /// fraction helpers above) so the same text can't resolve two different ways — a drift would
+    /// mean a dir that validates in Settings anchors somewhere else after a config reload. With
+    /// `persist:dir` a pinned directory makes the anchor constant, so the instance never re-anchors
+    /// — the intended way to keep a tool alive at a fixed place.
+    static func resolveDir(_ text: String) -> URL? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        return URL(fileURLWithPath: NSString(string: trimmed).expandingTildeInPath).standardizedFileURL
     }
 
     /// Split on whitespace, but keep runs inside double quotes intact so a quoted value can
