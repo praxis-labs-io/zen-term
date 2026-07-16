@@ -11,9 +11,10 @@ struct DropdownItem: Equatable {
 
 /// A keyboard-navigable themed dropdown: a compact button showing the current item; Return/Space/
 /// click opens a floating list of rows (grouped headers, trailing notes, a check on the active one).
-/// Up/Down move the highlight, Return selects, Esc closes. As a form focus stop it bubbles Up/Down
-/// at the list's closed state to the section (like `SegmentedControl`). Styling mirrors `FieldBox`.
-final class Dropdown: NSView {
+/// Up/Down move the highlight, Return selects, Esc closes (via the card root — see `ModalEscape`).
+/// As a form focus stop it bubbles Up/Down at the list's closed state to the section (like
+/// `SegmentedControl`). Styling mirrors `FieldBox`.
+final class Dropdown: NSView, PopoverHosting {
     private(set) var selectedIndex: Int
     private var items: [DropdownItem]
     private let onChange: (Int) -> Void
@@ -23,7 +24,6 @@ final class Dropdown: NSView {
     var onArrowLeft: (() -> Void)?
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
-    var onEsc: (() -> Void)?
 
     private let titleLabel = NSTextField(labelWithString: "")
     /// Retained (not a throwaway init-local) so `reapplyTheme()` can re-tint it on a theme swap.
@@ -44,8 +44,8 @@ final class Dropdown: NSView {
 
     /// Test hooks: open the floating list and inspect it (there is no other public list API). The
     /// list open-path has no GUI test seam otherwise, and shipped once rendering at zero size.
+    /// (`isPopoverOpen` / `closePopover()` are the real `PopoverHosting` API — tests read those.)
     func openListForTesting() { openList() }
-    var isListOpenForTesting: Bool { listCard != nil }
     var listCardSizeForTesting: NSSize { listCard?.frame.size ?? .zero }
     /// Test hook: drive the highlight the way an arrow key would.
     func moveHighlightForTesting(_ delta: Int) { moveHighlight(delta) }
@@ -147,7 +147,6 @@ final class Dropdown: NSView {
             case .up: moveHighlight(-1)
             case .down: moveHighlight(1)
             case .activate: commitHighlight()  // return / enter / space
-            case .escape: closeList()
             default: break  // consume every other key while the list is open
             }
             return
@@ -158,10 +157,14 @@ final class Dropdown: NSView {
         case .down: onArrowDown?()
         case .left where onArrowLeft != nil: onArrowLeft?()
         case .tab(let shift): shift ? onBacktab?() : onTab?()
-        case .escape where onEsc != nil: onEsc?()
         default: super.keyDown(with: event)
         }
     }
+
+    // MARK: PopoverHosting
+
+    var isPopoverOpen: Bool { listCard != nil }
+    func closePopover() { closeList() }
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)

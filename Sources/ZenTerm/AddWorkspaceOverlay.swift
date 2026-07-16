@@ -66,7 +66,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private let envStack = NSStackView()
     private let envError = NSTextField(labelWithString: "")
     private let addVarButton = AppButton(title: "＋ Add variable", variant: .muted)
-    private let cancelButton = AppButton(title: "Cancel", variant: .secondary, keyEquivalent: "\u{1b}")
+    private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let addButton = AppButton(
         title: "Add Workspace", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
     private let deleteButton = AppButton(title: "Delete", variant: .destructive)
@@ -140,6 +140,14 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         dismiss.isDismissing ? nil : super.hitTest(point)
+    }
+
+    /// The card root owns Esc: any open popover closes first, else the form cancels. Claimed here
+    /// (not in `keyDown`) because `performKeyEquivalent` is the only layer that runs before the
+    /// Cancel button's own key equivalent.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if ModalEscape.handle(event, in: window, close: { self.onCancel() }) { return true }
+        return super.performKeyEquivalent(with: event)
     }
 
     /// Re-apply the form's theme-dependent colors after a live theme change, IN PLACE — unlike
@@ -238,7 +246,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             deleteButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
             deleteButton.onArrowDown = { [weak self] in self?.moveVertical(1) }
             deleteButton.onArrowRight = { [weak self] in self?.focus(self?.cancelButton) }
-            deleteButton.onEsc = { [weak self] in self?.onCancel() }
             cancelButton.onArrowLeft = { [weak self] in self?.focus(self?.deleteButton) }
             footerViews = [deleteButton, spacer, cancelButton, addButton]
         }
@@ -319,7 +326,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         box.onChange = { [weak self] in self?.refreshValidity() }
         box.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         box.onArrowDown = { [weak self] in self?.moveVertical(1) }
-        box.onEsc = { [weak self] in self?.onCancel() }
         box.onSubmit = { [weak self] in self?.submit() }
     }
 

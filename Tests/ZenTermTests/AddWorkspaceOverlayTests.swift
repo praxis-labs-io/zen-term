@@ -61,6 +61,18 @@ final class AddWorkspaceOverlayTests: XCTestCase {
         }
     }
 
+    /// Press Esc the way `NSWindow.sendEvent` does — a `performKeyEquivalent` traversal of the
+    /// contentView subtree, which is where the card root claims it (ZEN-149). Driving the root
+    /// directly would skip the Cancel button's key equivalent, which is the point of the traversal.
+    @discardableResult
+    private func pressEscape() -> Bool {
+        let esc = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+            isARepeat: false, keyCode: 53)!
+        return window!.contentView!.performKeyEquivalent(with: esc)
+    }
+
     /// Override the configured preset editor / AI for one test, restoring `current` on teardown.
     private func setPresetConfig(editor: String, ai: String) {
         let original = GeneralConfig.current
@@ -174,5 +186,30 @@ final class AddWorkspaceOverlayTests: XCTestCase {
         let (overlay, _) = mount(editing: ws)
 
         XCTAssertEqual(segment(in: overlay, containing: "Editor + AI + Shell")?.selectedIndex, 1)
+    }
+
+    // MARK: Esc (ZEN-149)
+
+    /// Esc closes the form from a focused text field — the case the Cancel button's key equivalent
+    /// used to cover by accident, now owned by the card root.
+    func test_escape_fromFocusedTextField_cancelsTheForm() {
+        let (overlay, sink) = mount()
+        window!.makeFirstResponder(field(in: overlay, placeholder: "Workspace name").field)
+
+        XCTAssertTrue(pressEscape(), "the card root must claim Esc")
+
+        XCTAssertEqual(sink.cancelled, 1)
+    }
+
+    /// The dead-Esc site: `wireSegment` never wired `onEsc`, so Esc on a focused segmented control
+    /// only worked because the Cancel button's key equivalent caught it. The root now owns it.
+    func test_escape_fromFocusedSegmentedControl_cancelsTheForm() throws {
+        let (overlay, sink) = mount()
+        let layout = try XCTUnwrap(segment(in: overlay, containing: "Editor + AI + Shell"))
+        window!.makeFirstResponder(layout)
+
+        pressEscape()
+
+        XCTAssertEqual(sink.cancelled, 1)
     }
 }

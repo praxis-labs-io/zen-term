@@ -25,9 +25,6 @@ final class AppButton: NSButton {
     var onArrowDown: (() -> Void)?
     var onArrowLeft: (() -> Void)?
     var onArrowRight: (() -> Void)?
-    /// Esc while focused (opt-in, like the arrows) — used by the Settings card so Esc closes from
-    /// any focused button, not only the nav rows.
-    var onEsc: (() -> Void)?
     /// Draw the accent focus outline without being first responder — used by `SegmentedControl`
     /// to outline its selected segment while the control (not the segment) holds focus.
     var showsFocusOutline = false { didSet { restyle() } }
@@ -121,7 +118,6 @@ final class AppButton: NSButton {
         // Tab / Shift-Tab advance and retreat like Down / Up — and stay consumed here so focus
         // can't jump the key-view loop out of the card's 2D model.
         case .tab(let shift): shift ? onArrowUp?() : onArrowDown?()
-        case .escape where onEsc != nil: onEsc?()
         case .activate: fire()  // return / enter / space → activate
         default: super.keyDown(with: event)
         }

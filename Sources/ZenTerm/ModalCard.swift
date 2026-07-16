@@ -63,6 +63,36 @@ struct DismissGate {
     }
 }
 
+/// A control that floats a popover of its own (a `Dropdown`'s list, an `IconPickerField`'s icon
+/// grid) and so gets first refusal on Esc before the card it sits in closes. Both adopters open
+/// their popover into `window.contentView` rather than into the card, so the card's subtree can't
+/// be searched for it — the host control is the handle.
+protocol PopoverHosting: NSView {
+    var isPopoverOpen: Bool { get }
+    func closePopover()
+}
+
+/// Esc for a modal card, in one place. Every card root claims Esc in `performKeyEquivalent` —
+/// the only layer that runs before a cancel button's own `"\u{1b}"` key equivalent, which used to
+/// win unconditionally and discard a half-filled form out from under an open popover.
+enum ModalEscape {
+    /// Esc, layered: an open popover claims it first, else the card closes. The open popover is
+    /// always the first responder's — both hosts close theirs on `resignFirstResponder`, so the
+    /// window already knows which one it is and no tree walk is needed.
+    ///
+    /// A `FieldBox`'s first responder is its field editor (an `NSTextView`), not the box — the cast
+    /// simply fails and the card closes, which is what Esc in a text field should do.
+    static func handle(_ event: NSEvent, in window: NSWindow?, close: () -> Void) -> Bool {
+        guard KeyboardFocus.key(for: event) == .escape else { return false }
+        if let host = window?.firstResponder as? PopoverHosting, host.isPopoverOpen {
+            host.closePopover()
+            return true
+        }
+        close()
+        return true
+    }
+}
+
 /// A transparent backdrop filling the tile region; a click anywhere on it (outside the card)
 /// dismisses. No dimming — the terminal stays visible behind the card.
 final class BackdropView: NSView {

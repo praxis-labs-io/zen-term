@@ -78,6 +78,18 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         descendants(of: overlay).compactMap { $0 as? FieldBox }.first { $0.placeholder == placeholder }!
     }
 
+    /// Press Esc the way `NSWindow.sendEvent` does — a `performKeyEquivalent` traversal of the whole
+    /// contentView subtree. Driving the root directly would skip the Cancel button's competing key
+    /// equivalent, which is the entire bug under test (ZEN-149).
+    @discardableResult
+    private func pressEscape() -> Bool {
+        window!.contentView!.performKeyEquivalent(with: keyDown("\u{1b}", code: 53))
+    }
+
+    private func picker(in overlay: NSView) -> IconPickerField {
+        descendants(of: overlay).compactMap { $0 as? IconPickerField }.first!
+    }
+
     /// A segmented control found by its first option's title — the form has two of them.
     private func segment(in overlay: NSView, firstOption: String) -> SegmentedControl {
         descendants(of: overlay).compactMap { $0 as? SegmentedControl }
@@ -213,13 +225,13 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         field(in: overlay, placeholder: "npm run dev").setText("vim")
         capture(novelChord, in: overlay, capturer)
 
-        let picker = descendants(of: overlay).compactMap { $0 as? IconPickerField }.first!
+        let picker = picker(in: overlay)
         XCTAssertEqual(picker.selected, IconCatalog.defaultSymbol)
         picker.openForTesting()
-        XCTAssertTrue(picker.isPopoverOpenForTesting)
+        XCTAssertTrue(picker.isPopoverOpen)
         picker.moveHighlightForTesting(1)  // default (index 0) → the next curated icon
         picker.commitHighlightForTesting()
-        XCTAssertFalse(picker.isPopoverOpenForTesting, "committing closes the grid")
+        XCTAssertFalse(picker.isPopoverOpen, "committing closes the grid")
         XCTAssertEqual(picker.selected, IconCatalog.all[1])
 
         submit(in: overlay)
@@ -409,5 +421,51 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         submit(in: overlay)
 
         XCTAssertEqual(sink.submitted.first?.dir?.path, home.standardizedFileURL.path)
+    }
+
+    // MARK: Esc layering (ZEN-149)
+
+    /// The bug: with the icon grid open, Esc hit the Cancel button's window-wide key equivalent —
+    /// which `NSWindow.sendEvent` runs across the whole subtree before any `keyDown` reaches the
+    /// grid — so it threw the half-filled form away instead of just closing the grid.
+    func test_escape_withIconGridOpen_closesOnlyTheGrid_andKeepsTypedFields() {
+        let (overlay, _, sink) = mount()
+        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "Open GitDash").setText("My Dashboard")
+        let picker = picker(in: overlay)
+        window!.makeFirstResponder(picker)
+        picker.openForTesting()
+        XCTAssertTrue(picker.isPopoverOpen)
+
+        XCTAssertTrue(pressEscape(), "the card root must claim Esc")
+
+        XCTAssertFalse(picker.isPopoverOpen, "the first Esc closes the grid")
+        XCTAssertEqual(sink.cancelled, 0, "the first Esc must NOT cancel the form")
+        XCTAssertEqual(overlay.superview, window!.contentView, "the form stays mounted")
+        XCTAssertEqual(field(in: overlay, placeholder: "gitdash").text, "dev", "typed fields survive")
+        XCTAssertEqual(field(in: overlay, placeholder: "Open GitDash").text, "My Dashboard")
+    }
+
+    func test_escape_afterGridClosed_cancelsTheForm() {
+        let (overlay, _, sink) = mount()
+        let picker = picker(in: overlay)
+        window!.makeFirstResponder(picker)
+        picker.openForTesting()
+        pressEscape()  // closes the grid
+
+        pressEscape()  // second Esc → the card itself
+
+        XCTAssertEqual(sink.cancelled, 1, "the second Esc cancels the form")
+    }
+
+    /// Esc from a focused text field closes the card: a `FieldBox`'s first responder is its field
+    /// editor, which isn't a `PopoverHosting`, so the layered check falls straight through.
+    func test_escape_fromFocusedTextField_cancelsTheForm() {
+        let (overlay, _, sink) = mount()
+        window!.makeFirstResponder(field(in: overlay, placeholder: "gitdash").field)
+
+        pressEscape()
+
+        XCTAssertEqual(sink.cancelled, 1)
     }
 }

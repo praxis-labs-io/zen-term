@@ -8,7 +8,6 @@ import AppKit
 final class SettingsKeybindsSection: SettingsSection {
     var navTitle: String { "Keybinds" }
     var onExitToNav: (() -> Void)?
-    var onClose: (() -> Void)?
 
     /// Editable actions grouped by category (float toggles are excluded — they're file-only).
     private static let groups: [(String, [KeyInterceptor.ReservedChord])] = [
@@ -116,7 +115,6 @@ final class SettingsKeybindsSection: SettingsSection {
                 row.chip.onArrowUp = { [weak self, weak row] in row.map { self?.moveFocus(from: $0.chip, delta: -1) } }
                 row.chip.onArrowDown = { [weak self, weak row] in row.map { self?.moveFocus(from: $0.chip, delta: 1) } }
                 row.chip.onExitToNav = { [weak self] in self?.onExitToNav?() }
-                row.chip.onEsc = { [weak self] in self?.onClose?() }
                 rows.append(row)
                 rowsStack.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalTo: rowsStack.widthAnchor).isActive = true
@@ -131,7 +129,6 @@ final class SettingsKeybindsSection: SettingsSection {
             self.moveFocus(from: self.resetAllButton, delta: -1)
         }
         resetAllButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
-        resetAllButton.onEsc = { [weak self] in self?.onClose?() }
         resetAllButton.onTap = { [weak self] in self?.resetAll() }
         let resetRow = SettingsDetail.trailingRow(resetAllButton)
         rowsStack.addArrangedSubview(resetRow)

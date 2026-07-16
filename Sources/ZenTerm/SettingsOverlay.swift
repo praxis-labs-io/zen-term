@@ -87,6 +87,14 @@ final class SettingsOverlay: NSView, ModalOverlay {
     }
     override func hitTest(_ point: NSPoint) -> NSView? { dismiss.isDismissing ? nil : super.hitTest(point) }
 
+    /// The card root owns Esc: an open dropdown closes first, else the card does. Claimed here (not
+    /// in `keyDown`) because `performKeyEquivalent` is the only layer that runs before a button's
+    /// own `"\u{1b}"` key equivalent.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if ModalEscape.handle(event, in: window, close: { self.onClose() }) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+
     /// Re-apply the card's theme-dependent colors after a live theme change: the retained shell
     /// (card fill/border, heading, divider), the nav rows, and every section IN PLACE — never via
     /// `selectSection`, which would call `sectionWillHide()` on the current section even though its
@@ -132,12 +140,10 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
         for (index, section) in sections.enumerated() {
             section.onExitToNav = { [weak self] in self?.focusNav() }
-            section.onClose = { [weak self] in self?.onClose() }
             let row = SettingsNavRow(title: section.navTitle) { [weak self] in self?.selectSection(index) }
             row.onArrowUp = { [weak self] in self?.moveNav(-1) }
             row.onArrowDown = { [weak self] in self?.moveNav(1) }
             row.onEnterDetail = { [weak self] in self?.enterDetail() }
-            row.onEsc = { [weak self] in self?.onClose() }
             navRows.append(row)
             navStack.addArrangedSubview(row)
             row.widthAnchor.constraint(equalTo: navStack.widthAnchor, constant: -24).isActive = true

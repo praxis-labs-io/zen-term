@@ -24,7 +24,6 @@ extension AppButton: ThemeReapplying {}
 class SettingsFormSection: SettingsSection {
     var navTitle: String { "" }
     var onExitToNav: (() -> Void)?
-    var onClose: (() -> Void)?
 
     private let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
     private let resetAllMessage = ResetFlashLabel()
@@ -70,7 +69,6 @@ class SettingsFormSection: SettingsSection {
         resetAllButton.isKeyboardFocusable = true
         resetAllButton.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         resetAllButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
-        resetAllButton.onEsc = { [weak self] in self?.onClose?() }
         resetAllButton.onTap = { [weak self] in self?.resetAll() }
         let resetRow = SettingsDetail.trailingRow(resetAllButton)
         stack.addArrangedSubview(resetRow)
@@ -259,24 +257,20 @@ class SettingsFormSection: SettingsSection {
             box.onArrowLeft = { [weak self] in self?.onExitToNav?() }  // Left at cursor-start → nav
             box.onTab = { [weak self] in self?.moveFocus(1) }
             box.onBacktab = { [weak self] in self?.onExitToNav?() }
-            box.onEsc = { [weak self] in self?.onClose?() }
         case let seg as SegmentedControl:
             seg.onArrowUp = { [weak self] in self?.moveFocus(-1) }
             seg.onArrowDown = { [weak self] in self?.moveFocus(1) }
             seg.onTab = { [weak self] in self?.moveFocus(1) }
             seg.onBacktab = { [weak self] in self?.onExitToNav?() }
-            seg.onEsc = { [weak self] in self?.onClose?() }
         case let dropdown as Dropdown:
             dropdown.onArrowUp = { [weak self] in self?.moveFocus(-1) }
             dropdown.onArrowDown = { [weak self] in self?.moveFocus(1) }
             dropdown.onTab = { [weak self] in self?.moveFocus(1) }
             dropdown.onBacktab = { [weak self] in self?.onExitToNav?() }
-            dropdown.onEsc = { [weak self] in self?.onClose?() }
         case let button as AppButton:
             button.onArrowUp = { [weak self] in self?.moveFocus(-1) }
             button.onArrowDown = { [weak self] in self?.moveFocus(1) }
             button.onArrowLeft = { [weak self] in self?.onExitToNav?() }
-            button.onEsc = { [weak self] in self?.onClose?() }
         default:
             break
         }

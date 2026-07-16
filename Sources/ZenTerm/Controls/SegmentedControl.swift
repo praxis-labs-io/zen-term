@@ -15,7 +15,6 @@ final class SegmentedControl: NSView {
     var onArrowDown: (() -> Void)?
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
-    var onEsc: (() -> Void)?
 
     private var segments: [AppButton] = []
     /// The segment row, kept so `intrinsicContentSize` can report the content width — without an
@@ -127,7 +126,6 @@ final class SegmentedControl: NSView {
         case .down, .activate: onArrowDown?()  // down / return / enter / space → next field
         case .tab(let shift) where onTab != nil || onBacktab != nil:
             shift ? onBacktab?() : onTab?()  // ⇧tab / tab
-        case .escape where onEsc != nil: onEsc?()
         default: super.keyDown(with: event)
         }
     }

@@ -9,7 +9,6 @@ import AppKit
 final class SettingsToolsSection: SettingsSection {
     var navTitle: String { "Tools" }
     var onExitToNav: (() -> Void)?
-    var onClose: (() -> Void)?
     /// Set by the host: open the add / edit form. `nil` adds a new float; a value edits that one.
     var onEditFloat: ((ToolFloat?) -> Void)?
 
@@ -33,7 +32,6 @@ final class SettingsToolsSection: SettingsSection {
         addButton.isKeyboardFocusable = true
         addButton.onArrowUp = { [weak self] in self?.moveFocus(from: self?.addButton, delta: -1) }
         addButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
-        addButton.onEsc = { [weak self] in self?.onClose?() }
         addButton.onTap = { [weak self] in self?.onEditFloat?(nil) }
 
         populateRows()
@@ -80,7 +78,6 @@ final class SettingsToolsSection: SettingsSection {
                 row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
                 row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
                 row.onExitToNav = { [weak self] in self?.onExitToNav?() }
-                row.onEsc = { [weak self] in self?.onClose?() }
                 rows.append(row)
                 stack.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -111,7 +108,6 @@ final class ToolFloatRow: NSView {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onExitToNav: (() -> Void)?
-    var onEsc: (() -> Void)?
 
     private let iconView = NSImageView()
     private let titleLabel: NSTextField
@@ -185,7 +181,6 @@ final class ToolFloatRow: NSView {
         case .up: onArrowUp?()
         case .down: onArrowDown?()
         case .left: onExitToNav?()
-        case .escape: onEsc?()
         default: super.keyDown(with: event)
         }
     }

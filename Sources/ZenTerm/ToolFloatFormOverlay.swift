@@ -63,7 +63,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private var hintBackdrop: NSView?
     private var captureCloseTimer: DispatchWorkItem?
 
-    private let cancelButton = AppButton(title: "Cancel", variant: .secondary, keyEquivalent: "\u{1b}")
+    private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let submitButton = AppButton(
         title: "", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
     private let deleteButton = AppButton(title: "Delete", variant: .destructive)
@@ -140,6 +140,15 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
+    /// The card root owns Esc: an open icon grid closes first (leaving every typed field intact),
+    /// else the form cancels. Claimed here (not in `keyDown`) because `performKeyEquivalent` is the
+    /// only layer that runs before the Cancel button's own key equivalent — which used to win
+    /// unconditionally and throw the whole form away with the grid open.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if ModalEscape.handle(event, in: window, close: { self.onCancel() }) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+
     /// Re-apply the form's theme-dependent colors after a live theme change, IN PLACE — this form
     /// holds uncommitted typed values a rebuild would lose, so nothing here is rebuilt, only
     /// recolored. Every leaf control conforms to `ThemeReapplying`, so they recolor as one group.
@@ -180,7 +189,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         picker.onChange = { [weak self] _ in self?.refreshValidity() }
         picker.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         picker.onArrowDown = { [weak self] in self?.moveVertical(1) }
-        picker.onEsc = { [weak self] in self?.onCancel() }
         iconPicker = picker
         let iconGroup = LabeledField(caption: caption("ICON", required: false), control: picker)
         self.iconGroup = iconGroup
@@ -189,7 +197,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         chordChip.onReset = { [weak self] in self?.clearChord() }
         chordChip.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         chordChip.onArrowDown = { [weak self] in self?.moveVertical(1) }
-        chordChip.onEsc = { [weak self] in self?.onCancel() }
         // The chip is a fixed 110pt; a bare `LabeledField` would pin that width to the whole group
         // (required) and collapse the card. Wrap it in a leading row so the group fills width while
         // the chip keeps its natural size.
@@ -243,7 +250,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             button.isKeyboardFocusable = true
             button.onArrowUp = { [weak self] in self?.moveVertical(-1) }
             button.onArrowDown = { [weak self] in self?.moveVertical(1) }
-            button.onEsc = { [weak self] in self?.onCancel() }
         }
         submitButton.onArrowLeft = { [weak self] in self?.focus(self?.cancelButton) }
         cancelButton.onArrowRight = { [weak self] in self?.focus(self?.submitButton) }
@@ -258,7 +264,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             deleteButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
             deleteButton.onArrowDown = { [weak self] in self?.moveVertical(1) }
             deleteButton.onArrowRight = { [weak self] in self?.focus(self?.cancelButton) }
-            deleteButton.onEsc = { [weak self] in self?.onCancel() }
             cancelButton.onArrowLeft = { [weak self] in self?.focus(self?.deleteButton) }
             footerViews = [deleteButton, spacer, cancelButton, submitButton]
         }
@@ -471,14 +476,12 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private func wireField(_ box: FieldBox) {
         box.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         box.onArrowDown = { [weak self] in self?.moveVertical(1) }
-        box.onEsc = { [weak self] in self?.onCancel() }
         box.onSubmit = { [weak self] in self?.submit() }
     }
 
     private func wireSegment(_ segment: SegmentedControl) {
         segment.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         segment.onArrowDown = { [weak self] in self?.moveVertical(1) }
-        segment.onEsc = { [weak self] in self?.onCancel() }
     }
 
     // MARK: submit + validation
