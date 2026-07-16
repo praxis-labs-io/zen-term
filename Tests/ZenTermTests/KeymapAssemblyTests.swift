@@ -16,6 +16,11 @@ final class KeymapAssemblyTests: XCTestCase {
         // The ⌘⇧\ shifted-symbol quirk: both "|" and "\\" map to splitVertical.
         XCTAssertEqual(map[Chord(command: true, shift: true, key: "|")], .splitVertical)
         XCTAssertEqual(map[Chord(command: true, shift: true, key: "\\")], .splitVertical)
+        // Horizontal split is ⌘⇧- (ZEN-142) — bare ⌘- is left free for ghostty text magnification.
+        // Like ⌘⇧\, the shifted-symbol quirk means a live event decodes to "_", so both map.
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: "_")], .splitHorizontal)
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: "-")], .splitHorizontal)
+        XCTAssertNil(map[Chord(command: true, key: "-")])
         XCTAssertEqual(map[Chord(command: true, option: true, key: "r")], .reloadConfig)
     }
 

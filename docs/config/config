@@ -129,7 +129,7 @@
 #   toggle_float:<id>   (bind a second chord to one of your floats)
 #
 # Defaults (uncomment to change; these are what ships):
-# keybind = split_horizontal=cmd+-
+# keybind = split_horizontal=cmd+shift+-        # bare ⌘- stays free for ghostty text zoom
 # keybind = split_vertical=cmd+shift+\           # ⌘⇧| on a US layout
 # keybind = nav_left=cmd+h
 # keybind = nav_down=cmd+j

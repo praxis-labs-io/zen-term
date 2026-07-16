@@ -80,10 +80,14 @@ enum KeymapDefaults {
     static let map: [Chord: KeyInterceptor.ReservedChord] = {
         var map: [Chord: KeyInterceptor.ReservedChord] = [:]
 
-        // ⌘⇧ family — vertical split (both the shifted "|" and defensive "\\"), pane/drawer
-        // resize on HJKL, repo picker.
+        // ⌘⇧ family — vertical split (both the shifted "|" and defensive "\\"), horizontal split
+        // (both the shifted "_" and defensive "-"; ⌘⇧- leaves bare ⌘- free for ghostty's text
+        // magnification), pane/drawer resize on HJKL, repo picker. The "_"/"|" entries carry the
+        // load: charactersIgnoringModifiers applies Shift, so a live ⌘⇧- event decodes to "_".
         map[Chord(command: true, shift: true, key: "|")] = .splitVertical
         map[Chord(command: true, shift: true, key: "\\")] = .splitVertical
+        map[Chord(command: true, shift: true, key: "_")] = .splitHorizontal
+        map[Chord(command: true, shift: true, key: "-")] = .splitHorizontal
         map[Chord(command: true, shift: true, key: "h")] = .resizeLeft
         map[Chord(command: true, shift: true, key: "l")] = .resizeRight
         map[Chord(command: true, shift: true, key: "k")] = .resizeUp
@@ -94,7 +98,6 @@ enum KeymapDefaults {
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer
         map[Chord(command: true, key: "[")] = .prevTab
         map[Chord(command: true, key: "]")] = .nextTab
-        map[Chord(command: true, key: "-")] = .splitHorizontal
         map[Chord(command: true, key: "h")] = .navLeft
         map[Chord(command: true, key: "l")] = .navRight
         map[Chord(command: true, key: "k")] = .navUp

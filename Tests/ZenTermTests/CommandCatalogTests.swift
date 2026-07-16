@@ -70,6 +70,13 @@ final class CommandCatalogTests: XCTestCase {
         if case .reloadConfig = entry!.chord {} else { XCTFail("expected .reloadConfig") }
     }
 
+    func test_splitHorizontally_showsShiftMinusGlyph() {
+        // ZEN-142: horizontal split moved to ⌘⇧-. The action holds both the shifted "_" (what a
+        // live event decodes to) and the base "-"; the palette must show the base glyph, not ⌘⇧_.
+        let entry = CommandCatalog.commands(tabCount: 0).first { $0.title == "Split Horizontally" }
+        XCTAssertEqual(entry?.shortcut, "⌘⇧-")
+    }
+
     func test_everyEntry_hasTitle_andShortcut() {
         // Every palette command has a default key binding, so each shows its glyph. (The one former
         // exception, `.addWorkspace`, was unbound and is no longer in the palette — ZEN-112.)

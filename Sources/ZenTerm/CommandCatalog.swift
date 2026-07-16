@@ -56,9 +56,17 @@ enum CommandCatalog {
         }
     }
 
-    /// The glyph currently bound to an action, from the live keymap — empty if unbound.
+    /// The glyph currently bound to an action, from the live keymap — empty if unbound. When an
+    /// action holds several chords (the shifted-symbol pairs: split_vertical on "|"/"\\",
+    /// split_horizontal on "_"/"-"), pick the deterministic first by `configToken` so the palette
+    /// shows the base glyph (⌘⇧- , ⌘⇧\) rather than an arbitrary — and uglier (⌘⇧_) — sibling.
+    /// Mirrors `SettingsKeybindsSection.displayedChord`.
     private static func displayGlyph(for chord: KeyInterceptor.ReservedChord) -> String {
-        GeneralConfig.current.keymap.first { $0.value == chord }?.key.displayGlyph ?? ""
+        GeneralConfig.current.keymap
+            .filter { $0.value == chord }
+            .map(\.key)
+            .sorted { $0.configToken < $1.configToken }
+            .first?.displayGlyph ?? ""
     }
 
     /// The ordered commands shown for a window with `tabCount` tabs, grouped by category
