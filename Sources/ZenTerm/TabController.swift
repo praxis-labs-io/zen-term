@@ -93,11 +93,22 @@ final class TabController: NSObject {
     private let prewarmDelay: TimeInterval
     private let prewarmPool: LazygitPrewarmPool
 
-    /// The single live ephemeral tool float (diffnav, …). Tool floats are modal and
-    /// mutually exclusive, so one slot suffices. Terminated on close (not persisted).
+    /// The tool float currently SHOWN. Floats are modal and mutually exclusive, so one slot
+    /// suffices. Whether its surface dies on dismiss depends on `spec.persist`.
     private var activeToolFloat: (spec: ToolFloat, surface: TerminalSurface, overlay: SurfaceFloatOverlay)?
     var isToolFloatOpen: Bool { activeToolFloat != nil }
     var activeToolFloatID: String? { activeToolFloat?.spec.id }
+
+    /// Tool floats whose process is ALIVE, keyed by float id — the persistent ones, kept across
+    /// dismissal. Liveness and visibility are independent: a float can be in here while hidden.
+    /// `anchor` is the directory identity a `.directory` float was launched against; nil for `.tab`
+    /// (which never re-anchors) and for floats that aren't in here at all (`.ephemeral`).
+    private var persistentFloats: [String: (surface: TerminalSurface, anchor: URL?)] = [:]
+
+    /// A float overlay still springing out. It keeps Auto Layout constraints on a persistent
+    /// float's shared `surface.view`, so a fast re-show must snap it away before re-hosting that
+    /// view in a new card — otherwise the old constraints fight the new ones.
+    private var dismissingFloatOverlay: SurfaceFloatOverlay?
 
     /// Which panel currently holds the tab's single unified focus/halo.
     private enum PanelRef: Equatable {
@@ -173,6 +184,7 @@ final class TabController: NSObject {
         result.append(
             contentsOf: [bottomDrawerSurface, rightDrawerSurface, lazygitSurface, activeToolFloat?.surface]
                 .compactMap { $0 })
+        result.append(contentsOf: persistentFloats.values.map(\.surface))
         return result
     }
 
@@ -364,6 +376,9 @@ final class TabController: NSObject {
         activeToolFloat?.overlay.removeFromSuperview()
         activeToolFloat?.surface.terminate()
         activeToolFloat = nil
+        dismissingFloatOverlay?.removeFromSuperview()
+        dismissingFloatOverlay = nil
+        for id in persistentFloats.keys { discardPersistentFloat(id) }
     }
 
     /// Copy from whichever panel holds unified focus: the pane canvas's own copy
@@ -557,7 +572,7 @@ final class TabController: NSObject {
                         + "or open a folder that has one."))
             return
         }
-        if lazygitSurface != nil, lazygitAnchor(for: focusedCWD)?.path != lazygitLaunchAnchor?.path {
+        if lazygitSurface != nil, directoryAnchor(for: focusedCWD)?.path != lazygitLaunchAnchor?.path {
             discardLazygitSurface()  // focused pane moved repos → respawn at the current cwd
         }
         showLazygit(ensureLazygitSurface())
@@ -606,9 +621,10 @@ final class TabController: NSObject {
         }
     }
 
-    /// The identity lazygit is scoped to for `cwd`: the enclosing repo root (so cd'ing
-    /// between a repo's own subdirs doesn't reload), else the plain cwd.
-    private func lazygitAnchor(for cwd: URL?) -> URL? {
+    /// The directory identity a float is scoped to for `cwd`: the enclosing repo root (so cd'ing
+    /// between a repo's own subdirs doesn't reload), else the plain cwd. Deliberately defined
+    /// outside a repo too — a `persist:dir` float need not be a git tool.
+    private func directoryAnchor(for cwd: URL?) -> URL? {
         gitRepoRoot(for: cwd) ?? cwd?.standardizedFileURL
     }
 
@@ -630,7 +646,7 @@ final class TabController: NSObject {
                 workingDirectory: focusedCWD, theme: Theme.current.terminal,
                 behavior: GeneralConfig.current.terminalBehavior))
         lazygitSurface = surface
-        lazygitLaunchAnchor = lazygitAnchor(for: focusedCWD)
+        lazygitLaunchAnchor = directoryAnchor(for: focusedCWD)
         return surface
     }
 
@@ -747,19 +763,14 @@ final class TabController: NSObject {
         showToolFloat(spec)
     }
 
-    /// Spawn `spec.command` in a fresh login+interactive shell at the focused cwd (so
-    /// the user's git pager / PATH match a pane), present it in a `SurfaceFloatOverlay`,
-    /// and give it the tab's unified focus. When the command exits, `surfaceDidExit`
-    /// tears the float down.
+    /// Present `spec` in a float card: resolve its surface (retained or fresh), host it, and give
+    /// it the tab's unified focus. When the tool exits, `surfaceDidExit` tears the float down.
     private func showToolFloat(_ spec: ToolFloat) {
-        let shell = ShellLaunch.userShell
-        let surface = makeSurface()
-        surface.delegate = self
-        surface.start(
-            TerminalSurfaceConfig(
-                command: shell, args: ["-l", "-i", "-c", spec.command],
-                workingDirectory: focusedCWD, theme: Theme.current.terminal,
-                behavior: GeneralConfig.current.terminalBehavior))
+        // A still-springing-out card holds constraints on a persistent float's shared view — snap
+        // it away before re-hosting that view.
+        dismissingFloatOverlay?.removeFromSuperview()
+        dismissingFloatOverlay = nil
+        let surface = surfaceForFloat(spec)
         let overlay = SurfaceFloatOverlay(
             content: surface.view,
             background: Theme.current.chrome.background.nsColor,
@@ -778,14 +789,56 @@ final class TabController: NSObject {
         onOverlayStateChanged?()
     }
 
-    /// Close the float and TERMINATE its surface (ephemeral — no persistence). Clears
-    /// the slot before terminate so a synchronous `surfaceDidExit` re-entry no-ops.
+    /// The surface to show for `spec`: a retained one when the float persists and still matches its
+    /// anchor, else a fresh spawn (discarding a drifted instance first). Registers persistent
+    /// floats so a later dismissal keeps them alive.
+    private func surfaceForFloat(_ spec: ToolFloat) -> TerminalSurface {
+        let anchor = spec.persist == .directory ? directoryAnchor(for: focusedCWD) : nil
+        if let live = persistentFloats[spec.id] {
+            if spec.persist != .directory || live.anchor?.path == anchor?.path { return live.surface }
+            discardPersistentFloat(spec.id)  // the focused dir moved to another repo → reload
+        }
+        let surface = spawnFloatSurface(spec)
+        if spec.persist != .ephemeral { persistentFloats[spec.id] = (surface, anchor) }
+        return surface
+    }
+
+    /// Spawn `spec.command` in a fresh login+interactive shell at the focused cwd, so the user's
+    /// PATH and pager match a pane's.
+    private func spawnFloatSurface(_ spec: ToolFloat) -> TerminalSurface {
+        let surface = makeSurface()
+        surface.delegate = self
+        surface.start(
+            TerminalSurfaceConfig(
+                command: ShellLaunch.userShell, args: ["-l", "-i", "-c", spec.command],
+                workingDirectory: focusedCWD, theme: Theme.current.terminal,
+                behavior: GeneralConfig.current.terminalBehavior))
+        return surface
+    }
+
+    /// Drop a persistent float's surface. Clears the ref BEFORE terminate so a synchronous
+    /// `surfaceDidExit` re-entry can't resurrect the entry this is removing.
+    private func discardPersistentFloat(_ id: String) {
+        guard let live = persistentFloats.removeValue(forKey: id) else { return }
+        live.surface.terminate()
+    }
+
+    /// Close the float. An ephemeral float's surface dies with the card; a persistent one keeps
+    /// running and only loses its card. Clears the slot before terminate so a synchronous
+    /// `surfaceDidExit` re-entry no-ops.
     func closeToolFloat() {
         guard let active = activeToolFloat else { return }
         activeToolFloat = nil
         let overlay = active.overlay
-        overlay.animateOut { overlay.removeFromSuperview() }
-        active.surface.terminate()
+        overlay.animateOut { [weak self] in
+            overlay.removeFromSuperview()
+            if self?.dismissingFloatOverlay === overlay { self?.dismissingFloatOverlay = nil }
+        }
+        if active.spec.persist == .ephemeral {
+            active.surface.terminate()
+        } else {
+            dismissingFloatOverlay = overlay
+        }
         restoreUnifiedFocus()
         onOverlayStateChanged?()
     }
@@ -1523,12 +1576,19 @@ extension TabController: TerminalSurfaceDelegate {
     /// `PaneCanvasController`; this only reacts to the two drawer surfaces.
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         if let active = activeToolFloat, s === active.surface {
-            // The tool ran to completion / quit (`q` in diffnav) → close the float.
+            // The tool ran to completion / quit (`q` in lazygit) → close the float and forget it,
+            // so the next open spawns fresh rather than resurrecting a dead surface.
             activeToolFloat = nil
+            persistentFloats.removeValue(forKey: active.spec.id)
             active.overlay.animateOut { active.overlay.removeFromSuperview() }
             active.surface.terminate()
             restoreUnifiedFocus()
             onOverlayStateChanged?()
+            return
+        }
+        if let id = persistentFloats.first(where: { $0.value.surface === s })?.key {
+            persistentFloats.removeValue(forKey: id)  // a hidden persistent float's tool quit
+            s.terminate()
             return
         }
         if s === lazygitSurface {
