@@ -288,16 +288,30 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         XCTAssertEqual(sink.submitted.first?.persist, .ephemeral)
     }
 
-    func test_dirField_buildsPinnedDirectory() {
+    /// A real directory under the actual `$HOME`, so a home-relative fixture survives the
+    /// submit-time folder-exists check on ANY machine. A fixture named after a directory that
+    /// happens to exist on one dev machine (`~/notes`) is a test that only passes there — CI's
+    /// runner has no such folder, submit blocks, and `dir` silently comes back nil.
+    private func makeHomeRelativeDir() throws -> URL {
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("zenterm-form-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        return dir
+    }
+
+    func test_dirField_buildsPinnedDirectory() throws {
+        let home = try makeHomeRelativeDir()
+        let tilde = PathDisplay.abbreviatingHome(home.path)  // "~/zenterm-form-test-…"
         let (overlay, capturer, sink) = mount()
         field(in: overlay, placeholder: "gitdash").setText("notes")
         field(in: overlay, placeholder: "npm run dev").setText("nvim")
-        field(in: overlay, placeholder: "~/notes").setText("~/notes")
+        field(in: overlay, placeholder: "~/notes").setText(tilde)
         capture(novelChord, in: overlay, capturer)
 
         submit(in: overlay)
 
-        XCTAssertEqual(sink.submitted.first?.dir?.path, NSString(string: "~/notes").expandingTildeInPath)
+        XCTAssertEqual(sink.submitted.first?.dir?.path, home.standardizedFileURL.path)
     }
 
     func test_blankDirField_buildsNilDirectory() {
@@ -378,21 +392,22 @@ final class ToolFloatFormOverlayTests: XCTestCase {
     /// regression in `prefill()` still round-trips to the identical submitted `dir?.path`. The
     /// abbreviation is only observable in what the field displays, which is what a user actually sees
     /// and re-saves; that's the assertion that would fail if `prefill()` regressed to raw `dir.path`.
-    func test_edit_untouchedHomeRelativeDir_prefillsAbbreviatedAndRoundTripsOnSubmit() {
-        let homeRelativePath = PathDisplay.homePath + "/notes"
+    func test_edit_untouchedHomeRelativeDir_prefillsAbbreviatedAndRoundTripsOnSubmit() throws {
+        let home = try makeHomeRelativeDir()
+        let tilde = PathDisplay.abbreviatingHome(home.path)
         let existing = ToolFloat(
             id: "lg", title: "Open Lazygit", icon: "git", command: "lazygit",
-            dir: URL(fileURLWithPath: homeRelativePath), widthFraction: 0.85, heightFraction: 0.78,
+            dir: home, widthFraction: 0.85, heightFraction: 0.78,
             requiresGitRepo: true, persist: .directory, toggle: Chord(command: true, key: "g"))
         let (overlay, _, sink) = mount(editing: existing)
 
         XCTAssertEqual(
-            field(in: overlay, placeholder: "~/notes").text, "~/notes",
+            field(in: overlay, placeholder: "~/notes").text, tilde,
             "prefill must re-abbreviate a home-relative dir, not show the raw absolute path")
 
         field(in: overlay, placeholder: "npm run dev").setText("lazygit --config foo")
         submit(in: overlay)
 
-        XCTAssertEqual(sink.submitted.first?.dir?.path, homeRelativePath)
+        XCTAssertEqual(sink.submitted.first?.dir?.path, home.standardizedFileURL.path)
     }
 }
