@@ -78,6 +78,18 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         descendants(of: overlay).compactMap { $0 as? FieldBox }.first { $0.placeholder == placeholder }!
     }
 
+    /// Press Esc as a `performKeyEquivalent` traversal of the contentView subtree — the layer the
+    /// card root claims it at. NOTE (ZEN-157): whether AppKit really dispatches a BARE Esc this way
+    /// is unconfirmed, so a pass here is not proof the key works in the running app.
+    @discardableResult
+    private func pressEscape() -> Bool {
+        window!.contentView!.performKeyEquivalent(with: keyDown("\u{1b}", code: 53))
+    }
+
+    private func picker(in overlay: NSView) -> IconPickerField {
+        descendants(of: overlay).compactMap { $0 as? IconPickerField }.first!
+    }
+
     /// A segmented control found by its first option's title — the form has two of them.
     private func segment(in overlay: NSView, firstOption: String) -> SegmentedControl {
         descendants(of: overlay).compactMap { $0 as? SegmentedControl }
@@ -213,13 +225,13 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         field(in: overlay, placeholder: "npm run dev").setText("vim")
         capture(novelChord, in: overlay, capturer)
 
-        let picker = descendants(of: overlay).compactMap { $0 as? IconPickerField }.first!
+        let picker = picker(in: overlay)
         XCTAssertEqual(picker.selected, IconCatalog.defaultSymbol)
         picker.openForTesting()
-        XCTAssertTrue(picker.isPopoverOpenForTesting)
+        XCTAssertTrue(picker.isPopoverOpen)
         picker.moveHighlightForTesting(1)  // default (index 0) → the next curated icon
         picker.commitHighlightForTesting()
-        XCTAssertFalse(picker.isPopoverOpenForTesting, "committing closes the grid")
+        XCTAssertFalse(picker.isPopoverOpen, "committing closes the grid")
         XCTAssertEqual(picker.selected, IconCatalog.all[1])
 
         submit(in: overlay)
@@ -409,5 +421,52 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         submit(in: overlay)
 
         XCTAssertEqual(sink.submitted.first?.dir?.path, home.standardizedFileURL.path)
+    }
+
+    // MARK: Esc layering (ZEN-149)
+
+    /// Esc from a focused text field closes the card.
+    func test_escape_fromFocusedTextField_cancelsTheForm() {
+        let (overlay, _, sink) = mount()
+        window!.makeFirstResponder(field(in: overlay, placeholder: "gitdash").field)
+
+        pressEscape()
+
+        XCTAssertEqual(sink.cancelled, 1)
+    }
+
+    // MARK: Tab (ZEN-146)
+
+    /// Height hangs off Width with Right and isn't a vertical stop, so routing its Tab through
+    /// `moveVertical` skipped it entirely and left the field unreachable by Tab. Tab walks the
+    /// Width × Height pair in reading order instead.
+    func test_tab_walksTheWidthHeightPair_ratherThanSkippingHeight() {
+        let (overlay, _, _) = mount()
+        let width = field(in: overlay, placeholder: "0.85")
+        let height = descendants(of: overlay).compactMap { $0 as? FieldBox }
+            .filter { $0.placeholder == "0.85" }[1]
+        window!.makeFirstResponder(width.field)
+
+        width.onTab?()
+        XCTAssertTrue(
+            KeyboardFocus.isFocused(height.field, in: window), "Tab from Width must reach Height")
+
+        height.onBacktab?()
+        XCTAssertTrue(KeyboardFocus.isFocused(width.field, in: window), "Shift-Tab returns to Width")
+    }
+
+    /// A dismissing card must stop claiming Esc, exactly as it stops claiming clicks (`hitTest`).
+    /// `closeModal()` clears the modal slot but leaves the card mounted until its spring-out
+    /// finishes, and the replacement card is presented synchronously — so for the length of that
+    /// animation BOTH are in the contentView, and `performKeyEquivalent` walks subviews in index
+    /// order, reaching the outgoing card first. Without this guard an Esc in that window is claimed
+    /// by the card on its way out, and acts on whatever replaced it.
+    func test_escape_whileDismissing_isNotClaimed_soItReachesWhatReplacedTheCard() {
+        let (overlay, _, sink) = mount()
+        overlay.animateOut {}  // the card is now springing out but still mounted
+
+        XCTAssertFalse(pressEscape(), "a dismissing card must let Esc pass to the card behind it")
+
+        XCTAssertEqual(sink.cancelled, 0, "and must not re-run its own cancel")
     }
 }

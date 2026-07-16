@@ -2,14 +2,16 @@ import AppKit
 
 /// A tool-float icon picker: closed, a `FieldBox`-styled button showing the current glyph + name;
 /// Return / Space / click opens a floating card holding an 8-wide grid of curated dev-tooling icons.
-/// Arrow keys move the highlight, Return picks it, Esc closes; clicking a cell picks it. A form focus
-/// stop — Up/Down bubble to the form while closed. Mirrors `Dropdown`'s window-child floating pattern.
+/// Arrow keys move the highlight, Return picks it, Esc closes the grid; clicking a cell picks it.
+/// A form focus stop — Up/Down bubble to the form while closed. Mirrors `Dropdown`'s window-child
+/// floating pattern.
 final class IconPickerField: NSView {
     private(set) var selected: String
     var onChange: ((String) -> Void)?
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
-    var onEsc: (() -> Void)?
+    var onTab: (() -> Void)?
+    var onBacktab: (() -> Void)?
 
     private let glyph = NSImageView()
     private let nameLabel = NSTextField(labelWithString: "")
@@ -21,6 +23,9 @@ final class IconPickerField: NSView {
     private var highlighted = 0
 
     private static let columns = 8
+    /// The grid's width, exposed so `IconCatalogTests` can pin the roster to the real layout
+    /// constant rather than a copy of it — the two drifting is what leaves a ragged last row.
+    static var columnsForTesting: Int { columns }
     private static let cellSize: CGFloat = 34
     private static let cellSpacing: CGFloat = 4
     private static let maxGridHeight: CGFloat = 320
@@ -28,7 +33,6 @@ final class IconPickerField: NSView {
     private static var focusFill: NSColor { PaletteOverlay.selectionBackground }
 
     /// Test hooks: open the grid and drive it without a live event loop.
-    var isPopoverOpenForTesting: Bool { popover != nil }
     func openForTesting() { openPopover() }
     func moveHighlightForTesting(_ delta: Int) { moveHighlight(delta) }
     func commitHighlightForTesting() { commitHighlight() }
@@ -124,7 +128,8 @@ final class IconPickerField: NSView {
         case .activate: openPopover()
         case .up: onArrowUp?()
         case .down: onArrowDown?()
-        case .escape where onEsc != nil: onEsc?()
+        case .tab(let shift) where onTab != nil || onBacktab != nil:
+            shift ? onBacktab?() : onTab?()
         default: super.keyDown(with: event)
         }
     }
@@ -143,6 +148,16 @@ final class IconPickerField: NSView {
 
     // MARK: popover grid
 
+    /// Test hook: whether the icon grid is open right now.
+    var isPopoverOpen: Bool { popover != nil }
+
+    private func closePopover() {
+        popover?.removeFromSuperview()
+        popover = nil
+        cells = []
+        restyle()
+    }
+
     private func openPopover() {
         guard popover == nil, let contentView = window?.contentView else { return }
         highlighted = max(0, symbols.firstIndex(of: selected) ?? 0)
@@ -151,13 +166,6 @@ final class IconPickerField: NSView {
         popover = card
         positionPopover()
         refreshHighlight()
-        restyle()
-    }
-
-    private func closePopover() {
-        popover?.removeFromSuperview()
-        popover = nil
-        cells = []
         restyle()
     }
 

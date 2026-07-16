@@ -11,6 +11,14 @@ import XCTest
 /// `NSApp.currentEvent` is nil in a test, so the Return handler can't read live modifiers —
 /// the Shift+Enter (replace) path is driven through the `activate(index:modifiers:)` seam directly.
 final class PaletteInteractionTests: XCTestCase {
+    /// Retained so a mounted overlay's window outlives the mount call (Esc is dispatched through it).
+    private var window: NSWindow?
+
+    override func tearDown() {
+        window = nil
+        super.tearDown()
+    }
+
     private func makeWindow() -> NSWindow {
         NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
@@ -52,17 +60,30 @@ final class PaletteInteractionTests: XCTestCase {
         overlay.control(searchField(in: overlay), textView: NSTextView(), doCommandBy: selector)
     }
 
-    private func mount(_ overlay: PaletteOverlay) {
+    @discardableResult
+    private func mount(_ overlay: PaletteOverlay) -> NSWindow {
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)
         overlay.frame = NSRect(x: 0, y: 0, width: 560, height: 420)
+        self.window = window
+        return window
+    }
+
+    /// Press Esc the way `NSWindow.sendEvent` does — a `performKeyEquivalent` traversal of the
+    /// contentView subtree, which is where the card root claims it (ZEN-149).
+    @discardableResult
+    private func pressEscape(in window: NSWindow) -> Bool {
+        let esc = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+            isARepeat: false, keyCode: 53)!
+        return window.contentView!.performKeyEquivalent(with: esc)
     }
 
     private static let moveDown = #selector(NSResponder.moveDown(_:))
     private static let moveUp = #selector(NSResponder.moveUp(_:))
     private static let insertNewline = #selector(NSResponder.insertNewline(_:))
-    private static let cancel = #selector(NSResponder.cancelOperation(_:))
 
     // MARK: command palette
 
@@ -140,11 +161,17 @@ final class PaletteInteractionTests: XCTestCase {
         XCTAssertEqual(ran, .closePane)
     }
 
+    /// Esc dismisses from the search field — the palette's initial first responder. Driven through
+    /// the real key-equivalent traversal, since ZEN-149 moved Esc from the field editor's
+    /// `cancelOperation` up to the card root, where every card now owns it.
     func test_commandPalette_escDismisses() {
         var dismissed = false
         let overlay = makeCommandPalette(onDismiss: { dismissed = true })
-        mount(overlay)
-        XCTAssertTrue(send(Self.cancel, to: overlay))
+        let window = mount(overlay)
+        window.makeFirstResponder(searchField(in: overlay))
+
+        XCTAssertTrue(pressEscape(in: window), "the card root must claim Esc")
+
         XCTAssertTrue(dismissed)
     }
 

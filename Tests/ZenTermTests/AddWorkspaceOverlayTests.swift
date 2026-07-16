@@ -61,6 +61,18 @@ final class AddWorkspaceOverlayTests: XCTestCase {
         }
     }
 
+    /// Press Esc the way `NSWindow.sendEvent` does — a `performKeyEquivalent` traversal of the
+    /// contentView subtree, which is where the card root claims it (ZEN-149). Driving the root
+    /// directly would skip the Cancel button's key equivalent, which is the point of the traversal.
+    @discardableResult
+    private func pressEscape() -> Bool {
+        let esc = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+            isARepeat: false, keyCode: 53)!
+        return window!.contentView!.performKeyEquivalent(with: esc)
+    }
+
     /// Override the configured preset editor / AI for one test, restoring `current` on teardown.
     private func setPresetConfig(editor: String, ai: String) {
         let original = GeneralConfig.current
@@ -174,5 +186,52 @@ final class AddWorkspaceOverlayTests: XCTestCase {
         let (overlay, _) = mount(editing: ws)
 
         XCTAssertEqual(segment(in: overlay, containing: "Editor + AI + Shell")?.selectedIndex, 1)
+    }
+
+    // MARK: Tab (ZEN-146)
+
+    /// An env row is ONE vertical stop (its KEY box), so routing the value box's Tab through
+    /// `moveVertical` jumped from KEY straight to the next row — silently skipping the value the
+    /// user was about to type. Tab walks the row in reading order instead.
+    func test_tab_walksAnEnvRow_ratherThanSkippingItsValueBox() throws {
+        let (overlay, _) = mount()
+        let addVar = try XCTUnwrap(button(in: overlay, title: "＋ Add variable"))
+        addVar.onTap()
+        let rows = descendants(of: overlay).compactMap { $0 as? EnvRow }
+        let row = try XCTUnwrap(rows.first)
+        window!.makeFirstResponder(row.keyBox.field)
+
+        row.keyBox.onTab?()
+        XCTAssertTrue(
+            KeyboardFocus.isFocused(row.valueBox.field, in: window),
+            "Tab from an env KEY must reach its own value box, not the next row")
+
+        row.valueBox.onBacktab?()
+        XCTAssertTrue(KeyboardFocus.isFocused(row.keyBox.field, in: window), "Shift-Tab returns to KEY")
+    }
+
+    // MARK: Esc (ZEN-149)
+
+    /// Esc closes the form from a focused text field — the case the Cancel button's key equivalent
+    /// used to cover by accident, now owned by the card root.
+    func test_escape_fromFocusedTextField_cancelsTheForm() {
+        let (overlay, sink) = mount()
+        window!.makeFirstResponder(field(in: overlay, placeholder: "Workspace name").field)
+
+        XCTAssertTrue(pressEscape(), "the card root must claim Esc")
+
+        XCTAssertEqual(sink.cancelled, 1)
+    }
+
+    /// The dead-Esc site: `wireSegment` never wired `onEsc`, so Esc on a focused segmented control
+    /// only worked because the Cancel button's key equivalent caught it. The root now owns it.
+    func test_escape_fromFocusedSegmentedControl_cancelsTheForm() throws {
+        let (overlay, sink) = mount()
+        let layout = try XCTUnwrap(segment(in: overlay, containing: "Editor + AI + Shell"))
+        window!.makeFirstResponder(layout)
+
+        pressEscape()
+
+        XCTAssertEqual(sink.cancelled, 1)
     }
 }

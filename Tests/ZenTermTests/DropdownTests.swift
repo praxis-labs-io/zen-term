@@ -41,7 +41,7 @@ final class DropdownTests: XCTestCase {
 
         dropdown.openListForTesting()
 
-        XCTAssertTrue(dropdown.isListOpenForTesting)
+        XCTAssertTrue(dropdown.isPopoverOpen)
         // The regression: the card must have real size, not collapse to ~zero (invisible list).
         XCTAssertGreaterThan(dropdown.listCardSizeForTesting.height, 0)
         XCTAssertGreaterThan(dropdown.listCardSizeForTesting.width, 0)

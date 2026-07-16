@@ -5,9 +5,6 @@ import AppKit
 /// monospaced text. Shares the chrome's rounded-6 box idiom with `IconButton` and the
 /// tab-bar `Chip`: faint fill, muted ink. Shown at a command-palette row's trailing edge.
 final class KeycapView: NSView {
-    /// Test hook: the chord this keycap was built to draw.
-    var shortcutForTesting: String { shortcut }
-
     /// Glyphs that map to an SF Symbol — modifiers plus the navigation keys used in the
     /// footer hints. Everything else (letters, digits, and punctuation keys like `- | [ ]
     /// \`) has no clean symbol and stays as text.
@@ -18,7 +15,9 @@ final class KeycapView: NSView {
     ]
     private static var ink: NSColor { Theme.current.chrome.ink(alpha: 0.55) }
 
-    private let shortcut: String
+    /// The chord this keycap draws. Baked at construction (every token colors itself then), so a
+    /// host whose glyph can change re-reads this and rebuilds rather than mutating in place.
+    let shortcut: String
     private let showsBackground: Bool
     /// The glyph-token row, retained so `reapplyTheme()` can rebuild it — every token bakes its
     /// ink/tint color in at construction (there's nothing to mutate in place).

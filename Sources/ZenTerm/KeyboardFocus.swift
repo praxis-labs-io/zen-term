@@ -47,13 +47,18 @@ enum KeyboardFocus {
         return responder === view
     }
 
-    /// The next index when stepping `delta` from `from` within `count` stops, clamped at the
-    /// ends (nil = no move). With no anchor (`from == nil`), a forward step lands on the first
-    /// stop and a backward step on the last.
-    static func step(from: Int?, delta: Int, count: Int) -> Int? {
+    /// The next index when stepping `delta` from `from` within `count` stops (nil = no move). With
+    /// no anchor (`from == nil`), a forward step lands on the first stop and a backward step on the
+    /// last.
+    ///
+    /// `wrap` decides the ends: arrows clamp (holding Down at the last row shouldn't teleport to the
+    /// top), while Tab wraps — a Tab loop that stops dead at the last stop reads as broken.
+    static func step(from: Int?, delta: Int, count: Int, wrap: Bool = false) -> Int? {
         guard count > 0 else { return nil }
         guard let from else { return delta > 0 ? 0 : count - 1 }
         let next = from + delta
-        return (0..<count).contains(next) ? next : nil
+        if (0..<count).contains(next) { return next }
+        guard wrap else { return nil }
+        return ((next % count) + count) % count  // Swift's % keeps the sign; normalize to 0..<count
     }
 }

@@ -63,6 +63,35 @@ struct DismissGate {
     }
 }
 
+/// Esc for a modal card, in one place: every card root routes its Esc through here, so the rule
+/// lives once instead of in ~8 hand-written `.escape` cases that drifted apart.
+///
+/// It closes the CARD only. Layering Esc over an open popover (close the dropdown first, card
+/// second) is deliberately NOT here — see ZEN-157: two attempts at it failed in the running app,
+/// and the layer AppKit actually dispatches bare Esc to is still unestablished. A popover closes
+/// its own Esc locally, in its `keyDown`.
+enum ModalEscape {
+    /// `dismissing` is required, not defaulted: claiming Esc window-wide is only safe while the card
+    /// is actually up, and "every root remembers the guard" is the exact drift this type exists to
+    /// end. See the reasons a card declines below.
+    static func handle(_ event: NSEvent, in window: NSWindow?, dismissing: Bool, close: () -> Void)
+        -> Bool
+    {
+        guard KeyboardFocus.key(for: event) == .escape else { return false }
+        // 1. Already springing out. The host clears its modal slot and presents the replacement
+        //    synchronously, so for the length of the exit animation both cards sit in the
+        //    contentView — and this traversal reaches the outgoing one first (lower subview index).
+        //    Declining lets the Esc fall through to whatever replaced it: the new card, or a tool
+        //    float's live PTY, where Esc belongs to vim. `hitTest` declines clicks for this reason.
+        guard !dismissing else { return false }
+        // 2. An IME is composing: cancelling the marked text owns that Esc, and claiming it here
+        //    would discard the composition AND close the card, losing the typed query.
+        if let editor = window?.firstResponder as? NSTextView, editor.hasMarkedText() { return false }
+        close()
+        return true
+    }
+}
+
 /// A transparent backdrop filling the tile region; a click anywhere on it (outside the card)
 /// dismisses. No dimming — the terminal stays visible behind the card.
 final class BackdropView: NSView {

@@ -2,8 +2,9 @@ import AppKit
 
 /// The Settings card — a `ModalOverlay` like the palettes (shared card + backdrop + spring), with
 /// a left nav of sections and a right detail pane. Keyboard-driven, arrows primary: Up/Down move
-/// within the nav (and Tab/Shift-Tab advance/retreat rows in the detail pane), Right/Tab enter the
-/// detail pane, Left returns to the nav, Esc closes. Config edits in each section apply live.
+/// within the nav, Right/Tab enter the detail pane, Left returns to the nav, Esc closes (owned by
+/// the card root — see `ModalEscape`). In the detail pane Tab/Shift-Tab advance/retreat stops,
+/// wrapping forward at the last and exiting to the nav from the first. Config edits apply live.
 final class SettingsOverlay: NSView, ModalOverlay {
     private let sections: [SettingsSection]
     private let capturer: KeybindCapturing?
@@ -87,6 +88,18 @@ final class SettingsOverlay: NSView, ModalOverlay {
     }
     override func hitTest(_ point: NSPoint) -> NSView? { dismiss.isDismissing ? nil : super.hitTest(point) }
 
+    /// The card root owns Esc: an open dropdown closes first, else the card does. Claimed here (not
+    /// in `keyDown`) because `performKeyEquivalent` is the only layer that runs before a button's
+    /// own `"\u{1b}"` key equivalent.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if ModalEscape.handle(
+            event, in: window, dismissing: dismiss.isDismissing, close: { self.onClose() }
+        ) {
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
     /// Re-apply the card's theme-dependent colors after a live theme change: the retained shell
     /// (card fill/border, heading, divider), the nav rows, and every section IN PLACE — never via
     /// `selectSection`, which would call `sectionWillHide()` on the current section even though its
@@ -132,12 +145,10 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
         for (index, section) in sections.enumerated() {
             section.onExitToNav = { [weak self] in self?.focusNav() }
-            section.onClose = { [weak self] in self?.onClose() }
             let row = SettingsNavRow(title: section.navTitle) { [weak self] in self?.selectSection(index) }
             row.onArrowUp = { [weak self] in self?.moveNav(-1) }
             row.onArrowDown = { [weak self] in self?.moveNav(1) }
             row.onEnterDetail = { [weak self] in self?.enterDetail() }
-            row.onEsc = { [weak self] in self?.onClose() }
             navRows.append(row)
             navStack.addArrangedSubview(row)
             row.widthAnchor.constraint(equalTo: navStack.widthAnchor, constant: -24).isActive = true
@@ -177,7 +188,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
         NSLayoutConstraint.activate([
             navScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             navScroll.topAnchor.constraint(equalTo: root.topAnchor),
-            navScroll.widthAnchor.constraint(equalToConstant: 168),
+            navScroll.widthAnchor.constraint(equalToConstant: Self.navWidth),
             navScroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -8),
 
             // navStack is the scrolling document: full content width, height intrinsic (scrolls tall).
@@ -185,9 +196,14 @@ final class SettingsOverlay: NSView, ModalOverlay {
             navStack.leadingAnchor.constraint(equalTo: navScroll.contentView.leadingAnchor),
             navStack.widthAnchor.constraint(equalTo: navScroll.contentView.widthAnchor),
 
-            // The version footer sits below the scrolling list, always pinned to the column bottom.
-            footer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 22),
-            footer.trailingAnchor.constraint(lessThanOrEqualTo: navScroll.trailingAnchor, constant: -12),
+            // The version footer sits below the scrolling list, pinned to the column bottom and
+            // centered across the nav column (the mark + version read as one unit, so they center
+            // together rather than hanging off the leading edge).
+            footer.centerXAnchor.constraint(equalTo: navScroll.centerXAnchor),
+            footer.leadingAnchor.constraint(
+                greaterThanOrEqualTo: root.leadingAnchor, constant: Self.footerTrailingInset),
+            footer.trailingAnchor.constraint(
+                lessThanOrEqualTo: navScroll.trailingAnchor, constant: -Self.footerTrailingInset),
             footer.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
 
             divider.leadingAnchor.constraint(equalTo: navScroll.trailingAnchor),
@@ -203,29 +219,53 @@ final class SettingsOverlay: NSView, ModalOverlay {
         return root
     }
 
-    /// The origami brand mark + "ZenTerm v<version>", sitting at the very bottom of the nav column.
+    /// The origami brand mark + the app version, sitting at the very bottom of the nav column.
     /// Informational only — non-interactive. The mark is the app icon's crane, tinted with the
     /// live accent; the label is muted like the section captions.
+    ///
+    /// The mark carries the brand, so the label is the bare version — no "ZenTerm" wordmark. It used
+    /// to have one, and it overflowed the column on every dev build: `bin/package-app` stamps
+    /// `<tag>-dev`, and "ZenTerm v0.0.0-dev" is 124pt of the 111pt beside the mark, so the label ran
+    /// under the divider (a plain label doesn't truncate on its own). Release builds fit, which is
+    /// why it only ever showed locally. `versionMaxWidth` + tail truncation is the backstop, so no
+    /// future version string can spill again — `SettingsNavFooterTests` measures the real one.
     private func makeNavFooter() -> NSView {
         brandMark.image = BrandMark.image("origami")
         brandMark.contentTintColor = Theme.current.chrome.accent.nsColor
         brandMark.imageScaling = .scaleProportionallyUpOrDown
         brandMark.translatesAutoresizingMaskIntoConstraints = false
 
-        versionLabel.stringValue = "ZenTerm v\(AppVersion.current)"
-        versionLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        versionLabel.stringValue = Self.versionText
+        versionLabel.font = Self.versionFont
         versionLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        versionLabel.lineBreakMode = .byTruncatingTail
 
         let stack = NSStackView(views: [brandMark, versionLabel])
         stack.orientation = .horizontal
         stack.alignment = .centerY
-        stack.spacing = 7
+        stack.spacing = Self.footerSpacing
         stack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            brandMark.widthAnchor.constraint(equalToConstant: 16),
-            brandMark.heightAnchor.constraint(equalToConstant: 16),
+            brandMark.widthAnchor.constraint(equalToConstant: Self.brandMarkSize),
+            brandMark.heightAnchor.constraint(equalToConstant: Self.brandMarkSize),
+            versionLabel.widthAnchor.constraint(lessThanOrEqualToConstant: Self.versionMaxWidth),
         ])
         return stack
+    }
+
+    /// The footer's version line, and the width it has to live in — exposed so a test can measure
+    /// the real string against the real column instead of eyeballing it.
+    static var versionText: String { "v\(AppVersion.current)" }
+    static let versionFont: NSFont = .systemFont(ofSize: 13, weight: .medium)
+    private static let brandMarkSize: CGFloat = 16
+    private static let footerSpacing: CGFloat = 7
+    private static let navWidth: CGFloat = 168
+    /// Breathing room on each side of the centered footer, so a long version never touches either
+    /// the card edge or the divider.
+    private static let footerTrailingInset: CGFloat = 12
+    /// What's left of the nav column once both insets, the mark, and the stack spacing are taken.
+    static var versionMaxWidth: CGFloat {
+        navWidth - footerTrailingInset * 2 - brandMarkSize - footerSpacing
     }
 
     // MARK: selection + focus

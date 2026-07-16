@@ -83,6 +83,13 @@ final class ToggleDock: NSView {
     var bottomActivityForTesting: Bool { bottomBtn.showsActivity }
     var rightActivityForTesting: Bool { rightBtn.showsActivity }
 
+    /// Test hook: the ids of the per-float buttons currently showing their live-in-background dot
+    /// (ZEN-150). Reads the button's real state, not a mirror, so it can't pass while the dot is
+    /// actually dark.
+    var dottedToolFloatIDsForTesting: Set<String> {
+        Set(toolFloatBtns.filter { $0.value.showsActivity }.keys)
+    }
+
     /// Test hook: whether the fixed new-tab button is mounted (ZEN-115 moved it from the tab strip
     /// into the dock, so it must always be present regardless of tab overflow).
     var hasNewTabButtonForTesting: Bool {
@@ -117,9 +124,19 @@ final class ToggleDock: NSView {
     /// pips dim — their state is hidden behind it and returns when it closes. Otherwise the
     /// drawer tints reflect what's visible: a zoomed pane hides both drawers (neither lit), a
     /// zoomed drawer hides its sibling (only its own lit).
-    func render(overlay: OverlayState, floatID: String?, paletteOpen: Bool) {
+    ///
+    /// `isLiveInBackground` dots a float whose tool is still running while its card is dismissed —
+    /// the only trace a hidden persistent float has. Passed as a query rather than a set so the
+    /// "live but not shown" rule keeps one definition, on the controller that owns the registry.
+    func render(
+        overlay: OverlayState, floatID: String?, paletteOpen: Bool,
+        isLiveInBackground: (String) -> Bool = { _ in false }
+    ) {
         paletteBtn.isActive = paletteOpen
-        for (id, btn) in toolFloatBtns { btn.isActive = floatID == id }
+        for (id, btn) in toolFloatBtns {
+            btn.isActive = floatID == id
+            btn.showsActivity = isLiveInBackground(id)
+        }
 
         // A float covers the tab, so zoom/drawer state beneath it would read as lit-but-hidden.
         let floatCoversTab = floatID != nil

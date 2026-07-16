@@ -220,6 +220,10 @@ final class WindowController: NSObject {
             self.renderDock()
             self.modal?.overlay.reapplyTheme()
             self.confirmToast?.reapplyTheme()
+            // Waiting toasts are sticky with no auto-dismiss, so one left up across a theme edit
+            // would otherwise keep its old card fill, ink, and ⌘N keycap — washed out over the new
+            // chrome until the user dismisses it.
+            self.waitingToasts.values.forEach { $0.reapplyTheme() }
         }
     }
 
@@ -1145,7 +1149,12 @@ final class WindowController: NSObject {
                 self.clearWaiting(id)
                 self.renderTabBar()  // "Dismiss" also drops the rose flag
             },
-            ToastAction(title: "Switch", kind: .destructive) { [weak self] in self?.select(id) },
+            // ⌘N already switches while this toast is up (it's non-modal and arms no key
+            // equivalents) — the keycap just says so. Resolved lazily, never baked.
+            ToastAction(
+                title: "Switch", kind: .destructive,
+                shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" }
+            ) { [weak self] in self?.select(id) },
         ]
         waitingToasts[id] = toasts.showSticky(content, actions: actions)
     }
@@ -1177,6 +1186,27 @@ final class WindowController: NSObject {
         presentSurfaceFailureToast(retry: retry, close: close)
     }
 
+    /// Test hooks: drive the claude/waiting toast — the real `agentNotified` path (a background
+    /// tab's agent asking for input), and the tab it targets — so a test can assert its ⌘N keycap
+    /// against a live tab order instead of a hand-built toast.
+    func notifyAgentForTesting(tabIndex: Int, message: String) {
+        guard tabs.order.indices.contains(tabIndex) else { return }
+        agentNotified(
+            id: tabs.order[tabIndex], notification: TerminalNotification(title: "claude", body: message))
+    }
+
+    func waitingToastForTesting(tabIndex: Int) -> ToastView? {
+        guard tabs.order.indices.contains(tabIndex) else { return nil }
+        return waitingToasts[tabs.order[tabIndex]]
+    }
+
+    /// Test hook: open `count` extra tabs, so a test can drive tab-order changes under a live toast.
+    func newTabForTesting() { handle(.newTab) }
+    func closeTabForTesting(index: Int) {
+        guard tabs.order.indices.contains(index) else { return }
+        closeTab(tabs.order[index])
+    }
+
     /// Test hook: the tab-bar chip click path (`onSelect` → `select`), which bypasses `handle(_:)`
     /// — so a test can prove the modal gates hold for the mouse, not just the keyboard.
     func selectTabForTesting(index: Int) {
@@ -1204,6 +1234,19 @@ final class WindowController: NSObject {
                 agentState: waitingToasts[id] != nil ? .waiting : .idle)
         }
         tabBar.render(items)
+        // A waiting toast is built once per notification, but its ⌘N keycap names the target tab's
+        // CURRENT index — so re-resolve every live toast here, the one path every tab mutation
+        // already runs through. Otherwise a toast for tab 3 keeps reading "⌘3" after tab 1 closes.
+        waitingToasts.values.forEach { $0.refreshShortcuts() }
+    }
+
+    /// The chord that switches to `id` right now, for a waiting toast's keycap: the tab's live
+    /// index resolved against the live keymap, so it tracks both rebinds and tab moves. Empty for a
+    /// tab past ⌘9 (unbound) or one that's since closed — the keycap is then omitted entirely.
+    /// Mirrors `TabBarView`'s tooltip lookup.
+    private func selectTabShortcut(for id: TabID) -> String {
+        guard let index = tabs.order.firstIndex(of: id).map({ $0 + 1 }), index <= 9 else { return "" }
+        return CommandCatalog.spec(for: .selectTab(index)).shortcut
     }
 
     /// Mirror the active tab's overlay state + the window's command-palette state onto the
@@ -1211,7 +1254,9 @@ final class WindowController: NSObject {
     private func renderDock() {
         let overlay = activeController?.overlayState ?? OverlayState()
         // The shown float is window-level, so it comes from `floats`, not the active tab's state.
-        dock.render(overlay: overlay, floatID: floats.activeID, paletteOpen: modal?.kind == .commandPalette)
+        dock.render(
+            overlay: overlay, floatID: floats.activeID, paletteOpen: modal?.kind == .commandPalette,
+            isLiveInBackground: floats.isLiveInBackground)
         // Keep the poll's change-guard in sync with what's actually shown, so a tab switch to a
         // differently-busy tab re-evaluates instead of comparing against a stale value.
         lastDrawerBusy = (overlay.bottomBusy, overlay.rightBusy)

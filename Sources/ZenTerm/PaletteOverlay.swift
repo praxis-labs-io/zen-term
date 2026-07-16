@@ -236,6 +236,18 @@ class PaletteOverlay: NSView, ModalOverlay {
         dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
+    /// The card root owns Esc — inherited by both palettes. Claimed in `performKeyEquivalent` so
+    /// every card agrees on one Esc owner, rather than each host deciding by accident; it also
+    /// covers the search field, whose `cancelOperation` used to handle this separately.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if ModalEscape.handle(
+            event, in: window, dismissing: dismiss.isDismissing, close: { self.onDismiss() }
+        ) {
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
     /// Re-apply the card's theme-dependent colors after a live theme change: the retained shell
     /// (card fill/border, search glyph, search field text, divider, empty label, footer hints),
     /// then re-render the rows for the CURRENT query so per-row content (title/shortcut ink,
@@ -409,8 +421,6 @@ extension PaletteOverlay: NSTextFieldDelegate {
             moveSelection(-1); return true
         case #selector(NSResponder.moveDown(_:)):
             moveSelection(1); return true
-        case #selector(NSResponder.cancelOperation(_:)):
-            onDismiss(); return true
         case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)):
             guard rowViews.indices.contains(selected), isSelectable(at: selected) else { return true }
             activate(index: selected, modifiers: NSApp.currentEvent?.modifierFlags ?? [])

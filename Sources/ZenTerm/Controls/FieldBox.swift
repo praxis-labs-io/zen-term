@@ -2,8 +2,9 @@ import AppKit
 
 /// A rounded input box wrapping a borderless text field. On focus its fill lifts to the palettes'
 /// muted accent and its edge outlines with the accent. Forwards edits and keyboard navigation
-/// (arrows / Return / Esc / ⌘Return) to the host, and — while empty — a click to `onEmptyClick`
-/// (the folder picker). A shared form-control primitive.
+/// (arrows / Return / ⌘Return) to the host, and — while empty — a click to `onEmptyClick`
+/// (the folder picker). Esc belongs to the card root (see `ModalEscape`), not to the field.
+/// A shared form-control primitive.
 final class FieldBox: NSView, NSTextFieldDelegate {
     let field = ClickField()
     var onChange: (() -> Void)?
@@ -15,7 +16,6 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     var onArrowRight: (() -> Void)?
     /// Return in this field; defaults to `onArrowDown` (advance) when unset.
     var onEnter: (() -> Void)?
-    var onEsc: (() -> Void)?
     /// Tab / Shift-Tab out of the field (opt-in, default nil) — the Layout section uses them to move
     /// to the next / previous focus stop. Unset elsewhere, so the field keeps default tab behavior.
     var onTab: (() -> Void)?
@@ -132,8 +132,6 @@ final class FieldBox: NSView, NSTextFieldDelegate {
             } else {
                 (onEnter ?? onArrowDown)?()
             }
-        case #selector(NSResponder.cancelOperation(_:)):
-            onEsc?()
         case #selector(NSResponder.insertTab(_:)):
             guard let onTab else { return false }
             onTab()

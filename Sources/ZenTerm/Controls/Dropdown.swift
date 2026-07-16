@@ -11,8 +11,9 @@ struct DropdownItem: Equatable {
 
 /// A keyboard-navigable themed dropdown: a compact button showing the current item; Return/Space/
 /// click opens a floating list of rows (grouped headers, trailing notes, a check on the active one).
-/// Up/Down move the highlight, Return selects, Esc closes. As a form focus stop it bubbles Up/Down
-/// at the list's closed state to the section (like `SegmentedControl`). Styling mirrors `FieldBox`.
+/// Up/Down move the highlight, Return selects, Esc closes the list. As a form focus stop it bubbles
+/// Up/Down at the list's closed state to the section (like `SegmentedControl`). Styling mirrors
+/// `FieldBox`.
 final class Dropdown: NSView {
     private(set) var selectedIndex: Int
     private var items: [DropdownItem]
@@ -23,7 +24,6 @@ final class Dropdown: NSView {
     var onArrowLeft: (() -> Void)?
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
-    var onEsc: (() -> Void)?
 
     private let titleLabel = NSTextField(labelWithString: "")
     /// Retained (not a throwaway init-local) so `reapplyTheme()` can re-tint it on a theme swap.
@@ -45,7 +45,6 @@ final class Dropdown: NSView {
     /// Test hooks: open the floating list and inspect it (there is no other public list API). The
     /// list open-path has no GUI test seam otherwise, and shipped once rendering at zero size.
     func openListForTesting() { openList() }
-    var isListOpenForTesting: Bool { listCard != nil }
     var listCardSizeForTesting: NSSize { listCard?.frame.size ?? .zero }
     /// Test hook: drive the highlight the way an arrow key would.
     func moveHighlightForTesting(_ delta: Int) { moveHighlight(delta) }
@@ -158,10 +157,12 @@ final class Dropdown: NSView {
         case .down: onArrowDown?()
         case .left where onArrowLeft != nil: onArrowLeft?()
         case .tab(let shift): shift ? onBacktab?() : onTab?()
-        case .escape where onEsc != nil: onEsc?()
         default: super.keyDown(with: event)
         }
     }
+
+    /// Test hook: whether the floating list is open right now.
+    var isPopoverOpen: Bool { listCard != nil }
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)

@@ -66,7 +66,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private let envStack = NSStackView()
     private let envError = NSTextField(labelWithString: "")
     private let addVarButton = AppButton(title: "＋ Add variable", variant: .muted)
-    private let cancelButton = AppButton(title: "Cancel", variant: .secondary, keyEquivalent: "\u{1b}")
+    private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let addButton = AppButton(
         title: "Add Workspace", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
     private let deleteButton = AppButton(title: "Delete", variant: .destructive)
@@ -140,6 +140,18 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         dismiss.isDismissing ? nil : super.hitTest(point)
+    }
+
+    /// The card root owns Esc: any open popover closes first, else the form cancels. Claimed here
+    /// (not in `keyDown`) because `performKeyEquivalent` is the only layer that runs before the
+    /// Cancel button's own key equivalent.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if ModalEscape.handle(
+            event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() }
+        ) {
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
     }
 
     /// Re-apply the form's theme-dependent colors after a live theme change, IN PLACE — unlike
@@ -222,6 +234,8 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             button.isKeyboardFocusable = true
             button.onArrowUp = { [weak self] in self?.moveVertical(-1) }
             button.onArrowDown = { [weak self] in self?.moveVertical(1) }
+            button.onTab = { [weak self] in self?.moveTab(1) }
+            button.onBacktab = { [weak self] in self?.moveTab(-1) }
         }
         // Add · Cancel are a horizontal pair — Left/Right move between them (matching the layout).
         addButton.onArrowLeft = { [weak self] in self?.focus(self?.cancelButton) }
@@ -237,8 +251,9 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             deleteButton.onTap = { [weak self] in self?.onDelete?() }
             deleteButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
             deleteButton.onArrowDown = { [weak self] in self?.moveVertical(1) }
+            deleteButton.onTab = { [weak self] in self?.moveTab(1) }
+            deleteButton.onBacktab = { [weak self] in self?.moveTab(-1) }
             deleteButton.onArrowRight = { [weak self] in self?.focus(self?.cancelButton) }
-            deleteButton.onEsc = { [weak self] in self?.onCancel() }
             cancelButton.onArrowLeft = { [weak self] in self?.focus(self?.deleteButton) }
             footerViews = [deleteButton, spacer, cancelButton, addButton]
         }
@@ -301,6 +316,16 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         window?.makeFirstResponder(stops[next])
     }
 
+    /// Tab traversal: wraps at the ends where the arrows clamp, so a Tab loop never dies on the last
+    /// stop. Matches the Settings card, so the same key behaves the same way in every card.
+    private func moveTab(_ delta: Int) {
+        let stops = verticalStops()
+        let anchor = currentVerticalAnchor(in: stops).flatMap { anchor in stops.firstIndex { $0 === anchor } }
+        guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: stops.count, wrap: true)
+        else { return }
+        window?.makeFirstResponder(stops[next])
+    }
+
     /// The vertical stop that represents the current focus — the focused stop itself, or, when the
     /// focus is on an env row's value box or remove button, that row's KEY field (its row anchor).
     private func currentVerticalAnchor(in stops: [NSView]) -> NSView? {
@@ -315,17 +340,23 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
 
     private func isFocused(_ view: NSView) -> Bool { KeyboardFocus.isFocused(view, in: window) }
 
+    /// Tab/Shift-Tab traverse the form's own stops, exactly like Down/Up. Without this the field
+    /// editor leaked Tab to AppKit's default key-view loop while Tab on the form's buttons was
+    /// consumed as advance/retreat — the same key doing two different things in one card.
     private func wireField(_ box: FieldBox) {
         box.onChange = { [weak self] in self?.refreshValidity() }
         box.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         box.onArrowDown = { [weak self] in self?.moveVertical(1) }
-        box.onEsc = { [weak self] in self?.onCancel() }
+        box.onTab = { [weak self] in self?.moveTab(1) }
+        box.onBacktab = { [weak self] in self?.moveTab(-1) }
         box.onSubmit = { [weak self] in self?.submit() }
     }
 
     private func wireSegment(_ segment: SegmentedControl) {
         segment.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         segment.onArrowDown = { [weak self] in self?.moveVertical(1) }
+        segment.onTab = { [weak self] in self?.moveTab(1) }
+        segment.onBacktab = { [weak self] in self?.moveTab(-1) }
     }
 
     // MARK: actions
@@ -370,6 +401,12 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         row.valueBox.onArrowRight = { [weak self, weak row] in self?.focus(row?.removeButton) }
         row.valueBox.onEnter = { [weak self, weak row] in self?.focus(row?.removeButton) }
         row.removeButton.onArrowLeft = { [weak self, weak row] in self?.focus(row?.valueBox.field) }
+        // A row is ONE vertical stop (its KEY box), so Tab walks the pair in reading order — KEY →
+        // value → the next row — rather than `moveVertical` jumping from KEY straight to the next
+        // row and silently skipping the value the user was about to type.
+        row.keyBox.onTab = { [weak self, weak row] in self?.focus(row?.valueBox.field) }
+        row.valueBox.onTab = { [weak self] in self?.moveTab(1) }
+        row.valueBox.onBacktab = { [weak self, weak row] in self?.focus(row?.keyBox.field) }
         envRows.append(row)
         envStack.addArrangedSubview(row)
         row.widthAnchor.constraint(equalTo: envStack.widthAnchor).isActive = true

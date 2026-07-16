@@ -3,12 +3,12 @@ import AppKit
 /// One left-nav entry in the Settings card: a selectable, keyboard-focusable label. Focus reads
 /// as an accent background fill — the same highlight the command palette and repo picker rows use
 /// (`PaletteOverlay.selectionBackground`), not a border — over a subtler selected-section fill.
-/// Keyboard follows the shared 2D model (Up/Down move, Right/Tab enter the detail pane, Esc closes).
+/// Keyboard follows the shared 2D model (Up/Down move, Right/Tab enter the detail pane; Esc closes
+/// the card, owned by the card root — see `ModalEscape`).
 final class SettingsNavRow: NSView {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onEnterDetail: (() -> Void)?
-    var onEsc: (() -> Void)?
 
     private let label = NSTextField(labelWithString: "")
     private let onActivate: () -> Void
@@ -67,10 +67,9 @@ final class SettingsNavRow: NSView {
 
     override func keyDown(with event: NSEvent) {
         switch KeyboardFocus.key(for: event) {
-        case .up: onArrowUp?()
+        case .up, .tab(shift: true): onArrowUp?()  // Shift-Tab retreats a row, like Up
         case .down: onArrowDown?()
-        case .right, .tab: onEnterDetail?()  // Right or Tab enters the detail pane
-        case .escape: onEsc?()
+        case .right, .tab(shift: false): onEnterDetail?()  // Right or Tab enters the detail pane
         default: super.keyDown(with: event)
         }
     }

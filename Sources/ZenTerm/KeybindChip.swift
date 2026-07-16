@@ -4,14 +4,16 @@ import AppKit
 /// chips share one width so the shortcuts read as a uniform column; the chord sits centered inside.
 /// At rest it looks like a plain `KeycapView`; focused it gains an accent ring; capturing it takes an
 /// accent fill (the section shows a branded popover). Return / Space / click begins capture,
-/// Backspace reverts to the default, Up/Down move rows, Left exits to nav, Esc closes the card.
+/// Backspace reverts to the default, Up/Down move rows, Left exits to nav; Esc closes the card
+/// (owned by the card root — see `ModalEscape`).
 final class KeybindChip: NSView {
     var onActivate: (() -> Void)?  // Return / Space / click → begin capture
     var onReset: (() -> Void)?  // Backspace → revert to default
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
+    var onTab: (() -> Void)?
+    var onBacktab: (() -> Void)?
     var onExitToNav: (() -> Void)?
-    var onEsc: (() -> Void)?
 
     /// One width for every shortcut input, so they line up as a column rather than sizing to content.
     static let width: CGFloat = 110
@@ -69,7 +71,7 @@ final class KeybindChip: NSView {
     /// placeholder. Reads the rendered subview rather than a stored string, so a test can't pass
     /// while the chip actually displays something else.
     var renderedShortcutForTesting: String? {
-        (host.subviews.first as? KeycapView)?.shortcutForTesting
+        (host.subviews.first as? KeycapView)?.shortcut
     }
 
     private func placeholder(_ text: String) -> NSTextField {
@@ -93,7 +95,8 @@ final class KeybindChip: NSView {
         case .up: onArrowUp?()
         case .down: onArrowDown?()
         case .left: onExitToNav?()  // left → nav
-        case .escape: onEsc?()  // capture-cancel is handled by the capturer, not here
+        case .tab(let shift) where onTab != nil || onBacktab != nil:
+            shift ? onBacktab?() : onTab?()
         default: super.keyDown(with: event)
         }
     }

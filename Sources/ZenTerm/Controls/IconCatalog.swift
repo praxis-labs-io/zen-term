@@ -6,19 +6,23 @@ import AppKit
 enum IconCatalog {
     static let defaultSymbol = "square.on.square"
 
-    /// 40 symbols → a tidy 8×5 grid. A float's custom (non-catalog) symbol is shown alongside these
-    /// by the picker so editing never loses it.
+    /// 40 symbols → a tidy 8×5 grid, so the last row is never ragged (`columns = 8` in
+    /// `IconPickerField`, and `IconCatalogTests` pins the multiple). A float's custom (non-catalog)
+    /// symbol is shown alongside these by the picker so editing never loses it.
+    ///
+    /// Grouped by metaphor, roughly a row at a time: shell/code/build/debug, config/metrics,
+    /// infra/data/docs, files/comms, run/VCS/auth — brand marks last.
     static let all: [String] = [
         "square.on.square", "terminal", "chevron.left.forwardslash.chevron.right", "curlybraces",
-        "hammer", "wrench.and.screwdriver", "ladybug", "ant",
-        "gearshape", "slider.horizontal.3", "chart.bar", "chart.line.uptrend.xyaxis",
-        "gauge", "speedometer", "cpu", "memorychip",
-        "server.rack", "externaldrive", "cylinder.split.1x2", "tablecells",
-        "network", "globe", "cloud", "shippingbox",
-        "cube", "puzzlepiece", "doc.text", "list.bullet.rectangle",
-        "magnifyingglass", "folder", "tray.full", "checklist",
-        "bolt", "play.rectangle", "arrow.triangle.branch", "arrow.triangle.pull",
-        "key", "lock", "git", "github",
+        "hammer", "wrench.and.screwdriver", "ladybug", "gearshape",
+        "slider.horizontal.3", "chart.bar", "chart.line.uptrend.xyaxis", "gauge",
+        "cpu", "memorychip", "server.rack", "externaldrive",
+        "cylinder.split.1x2", "tablecells", "network", "globe",
+        "shippingbox", "puzzlepiece", "doc.text", "note.text",
+        "list.bullet.rectangle", "magnifyingglass", "folder", "tray.full",
+        "checklist", "envelope", "bubble.left.and.bubble.right", "bolt",
+        "play.rectangle", "arrow.triangle.branch", "arrow.triangle.pull", "key",
+        "lock", "git", "github", "spotify",
     ]
 
     /// A humanized, sentence-case label for a symbol — the picker shows this instead of the raw
@@ -42,17 +46,32 @@ enum IconCatalog {
         "play.rectangle": "Run",
         "arrow.triangle.branch": "Git branch",
         "arrow.triangle.pull": "Pull request",
+        "note.text": "Notes",
+        "bubble.left.and.bubble.right": "Chat",
+        "envelope": "Email",  // humanizes to "Envelope" on its own; the metaphor is mail
         "git": "Git",
         "github": "GitHub",
+        "spotify": "Spotify",
     ]
 
-    /// Resolve a symbol to an image: an SF Symbol, else a bundled brand mark ("git", "github").
-    static func image(_ symbol: String, pointSize: CGFloat = 14) -> NSImage? {
-        let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .medium)
+    /// Resolve a symbol to an image: an SF Symbol, else a bundled brand mark ("git", "github",
+    /// "spotify"). The one place this fallback lives — `IconButton` renders the same catalog and
+    /// used to carry its own copy. SF Symbol first, so a brand-mark name must never collide with a
+    /// real symbol (none do).
+    ///
+    /// A brand mark is a plain SVG with no symbol metadata, so a `SymbolConfiguration` does nothing
+    /// to it: `brandSize` sizes it explicitly, and leaving it nil keeps the SVG's natural size.
+    static func image(
+        _ symbol: String, pointSize: CGFloat = 14, weight: NSFont.Weight = .medium,
+        brandSize: CGFloat? = nil
+    ) -> NSImage? {
+        let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: weight)
         if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) {
             return image.withSymbolConfiguration(config)
         }
-        return BrandMark.image(symbol)
+        guard let brand = BrandMark.image(symbol) else { return nil }
+        if let brandSize { brand.size = NSSize(width: brandSize, height: brandSize) }
+        return brand
     }
 
     /// The proper Git logo (the bundled `git` brand mark), sized as a small inline badge. Shared by

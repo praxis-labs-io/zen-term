@@ -474,4 +474,71 @@ final class ToolFloatControllerTests: XCTestCase {
             "the guard evaluated the PINNED dir, so the toast must name it — \"run `git init` here\" "
                 + "points at the focused pane, which is a repo and irrelevant: \(toasts[0].message)")
     }
+
+    // MARK: live-in-background (ZEN-150)
+
+    func test_isLiveInBackground_trueOnlyWhileLiveAndHidden() throws {
+        let dir = try makeDir("plain", git: false)
+        let (floats, _, _) = makeFloats(cwd: dir)
+        let float = spec("btop", persist: .window)
+
+        XCTAssertFalse(floats.isLiveInBackground("btop"), "never launched → nothing to dot")
+
+        floats.toggle(float)  // shown
+        XCTAssertFalse(floats.isLiveInBackground("btop"), "the float on screen is not 'in background'")
+
+        floats.close()  // hidden, process still alive
+        XCTAssertTrue(floats.isLiveInBackground("btop"), "live but dismissed → dot it")
+
+        floats.toggle(float)  // shown again
+        XCTAssertFalse(floats.isLiveInBackground("btop"))
+    }
+
+    /// An `.ephemeral` float never enters the registry — its process dies with the card, so there
+    /// is no background state to dot.
+    func test_isLiveInBackground_ephemeralFloat_neverDots() throws {
+        let dir = try makeDir("plain", git: false)
+        let (floats, _, _) = makeFloats(cwd: dir)
+        let float = spec("yazi", persist: .ephemeral)
+
+        floats.toggle(float)
+        floats.close()
+
+        XCTAssertFalse(floats.isLiveInBackground("yazi"))
+    }
+
+    /// The stale dot: a hidden float's tool quitting is the one path that ends live-in-background
+    /// without the card opening or closing, and it never fired `onStateChanged` — so the dock kept
+    /// dotting a tool that had already exited.
+    func test_hiddenFloatExits_clearsLiveInBackground_andNotifies() throws {
+        let dir = try makeDir("plain", git: false)
+        let (floats, spawned, _) = makeFloats(cwd: dir)
+        var stateChanges = 0
+        floats.toggle(spec("btop", persist: .window))
+        floats.close()
+        XCTAssertTrue(floats.isLiveInBackground("btop"))
+        floats.onStateChanged = { stateChanges += 1 }  // count only the exit
+
+        let surface = try XCTUnwrap(floatSurfaces(spawned(), command: "btop").first)
+        surface.delegate?.surfaceDidExit(surface, code: 0)  // the user quit the tool from inside
+
+        XCTAssertFalse(floats.isLiveInBackground("btop"), "the tool exited — nothing left to dot")
+        XCTAssertEqual(stateChanges, 1, "the dock must be told, or the dot outlives the process")
+    }
+
+    /// A float deleted in Settings is pruned from the registry; the dock must re-render or it keeps
+    /// a dot for a float that no longer has a button at all.
+    func test_prune_clearsLiveInBackground_andNotifies() throws {
+        let dir = try makeDir("plain", git: false)
+        let (floats, _, _) = makeFloats(cwd: dir)
+        var stateChanges = 0
+        floats.toggle(spec("btop", persist: .window))
+        floats.close()
+        floats.onStateChanged = { stateChanges += 1 }
+
+        floats.prune(against: [])  // the float was deleted in Settings
+
+        XCTAssertFalse(floats.isLiveInBackground("btop"))
+        XCTAssertEqual(stateChanges, 1)
+    }
 }

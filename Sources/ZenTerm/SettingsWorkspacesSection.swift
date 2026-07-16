@@ -9,7 +9,6 @@ import AppKit
 final class SettingsWorkspacesSection: SettingsSection {
     var navTitle: String { "Workspaces" }
     var onExitToNav: (() -> Void)?
-    var onClose: (() -> Void)?
     /// Set by the host: open the add / edit form. `nil` adds a new workspace; a value edits that one.
     var onEditWorkspace: ((Workspace?) -> Void)?
 
@@ -33,7 +32,8 @@ final class SettingsWorkspacesSection: SettingsSection {
         addButton.isKeyboardFocusable = true
         addButton.onArrowUp = { [weak self] in self?.moveFocus(from: self?.addButton, delta: -1) }
         addButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
-        addButton.onEsc = { [weak self] in self?.onClose?() }
+        addButton.onTab = { [weak self] in self?.moveTab(from: self?.addButton, delta: 1) }
+        addButton.onBacktab = { [weak self] in self?.moveTab(from: self?.addButton, delta: -1) }
         addButton.onTap = { [weak self] in self?.onEditWorkspace?(nil) }
 
         populateRows()
@@ -81,8 +81,9 @@ final class SettingsWorkspacesSection: SettingsSection {
                 row.onActivate = { [weak self, weak row] in row.map { self?.onEditWorkspace?($0.workspace) } }
                 row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
                 row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
+                row.onTab = { [weak self, weak row] in self?.moveTab(from: row, delta: 1) }
+                row.onBacktab = { [weak self, weak row] in self?.moveTab(from: row, delta: -1) }
                 row.onExitToNav = { [weak self] in self?.onExitToNav?() }
-                row.onEsc = { [weak self] in self?.onClose?() }
                 rows.append(row)
                 stack.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -102,18 +103,33 @@ final class SettingsWorkspacesSection: SettingsSection {
         guard let anchor = stops.firstIndex(where: { $0 === view }) else { return }
         SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta) { $0 }
     }
+
+    /// Tab traversal, which differs from the arrows at the ends: Tab wraps from the last stop back
+    /// to the first, and Shift-Tab retreats one stop, exiting to the nav only from the first —
+    /// mirroring how Left exits.
+    private func moveTab(from view: NSView?, delta: Int) {
+        guard let view else { return }
+        let stops = rows + [addButton]
+        guard let anchor = stops.firstIndex(where: { $0 === view }) else { return }
+        if delta < 0, anchor == 0 {
+            onExitToNav?()
+            return
+        }
+        SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta, wrap: true) { $0 }
+    }
 }
 
 /// One Workspaces row: a workspace's title and its folder path subtitle. The whole row is one focus
-/// stop — Return / click opens the edit form (where delete lives), Up/Down move rows, Left exits to
-/// nav, Esc closes. Mirrors `ToolFloatRow` (workspaces have no shortcut, so there's no keycap).
+/// stop — Return / click opens the edit form (where delete lives), Up/Down (and Tab/Shift-Tab) move
+/// rows, Left exits to nav. Mirrors `ToolFloatRow` (workspaces have no shortcut, so no keycap).
 final class WorkspaceRow: NSView {
     let workspace: Workspace
     var onActivate: (() -> Void)?
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
+    var onTab: (() -> Void)?
+    var onBacktab: (() -> Void)?
     var onExitToNav: (() -> Void)?
-    var onEsc: (() -> Void)?
 
     private let titleLabel: NSTextField
     private let subtitleLabel: NSTextField
@@ -190,7 +206,8 @@ final class WorkspaceRow: NSView {
         case .up: onArrowUp?()
         case .down: onArrowDown?()
         case .left: onExitToNav?()
-        case .escape: onEsc?()
+        case .tab(let shift) where onTab != nil || onBacktab != nil:
+            shift ? onBacktab?() : onTab?()
         default: super.keyDown(with: event)
         }
     }
