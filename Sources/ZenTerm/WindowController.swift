@@ -39,6 +39,31 @@ final class WindowController: NSObject {
     /// above the canvas on first use; window-level so it's shared by every tab.
     private lazy var toasts = ToastPresenter(
         host: container, topInset: ChromeMetrics.windowGutter + 12, trailingInset: ChromeMetrics.windowGutter + 12)
+
+    /// The window's tool floats (ZEN-141). Window-level, not per-tab: one live instance per float
+    /// id is shared by every tab, and the card hosts on `container` so a tab switch doesn't
+    /// unmount it. Lazy so `container`, `tabBar`, and the tab machinery all exist before the
+    /// closures below can run.
+    private lazy var floats: ToolFloatController = {
+        let controller = ToolFloatController(
+            presentOverlay: { [weak self] overlay in self?.presentWindowFloat(overlay) },
+            focusedCWD: { [weak self] in self?.activeController?.focusedCWD },
+            yieldFocus: { [weak self] in self?.activeController?.yieldFocusToFloat() },
+            restoreFocus: { [weak self] in self?.activeController?.restoreUnifiedFocus() })
+        controller.onStateChanged = { [weak self] in self?.renderDock() }
+        controller.onRequestToast = { [weak self] content in self?.toasts.show(content) }
+        controller.onNotification = { [weak self] n, spec in self?.floatNotified(n, from: spec) }
+        return controller
+    }()
+
+    /// The shown float card's gutter insets, retained so a live `window-gutter` change re-insets
+    /// it (`reapplyFloatLayout`). Nil until the first float opens.
+    private var floatGutter:
+        (
+            leading: NSLayoutConstraint, trailing: NSLayoutConstraint, top: NSLayoutConstraint,
+            bottom: NSLayoutConstraint
+        )?
+
     private let tabBar: TabBarView
     private let dock: ToggleDock
     private var mountedCanvas: NSView?
@@ -173,18 +198,18 @@ final class WindowController: NSObject {
                 controller.reapplyChromeLayout()
                 controller.reapplyChromeColors()
             }
-            for surface in self.controllers.values.flatMap({ $0.allSurfaces }) {
+            self.floats.reapplyTheme()
+            self.reapplyFloatLayout()  // a gutter change must re-inset an OPEN card too
+            for surface in self.controllers.values.flatMap({ $0.allSurfaces }) + self.floats.allSurfaces {
                 surface.applyAppearance(
                     theme: Theme.current.terminal, behavior: GeneralConfig.current.terminalBehavior)
             }
             self.tabBar.reapplyTheme()
             // A float add / edit / remove changes the catalog — rebuild the dock's per-float buttons
             // (not just recolor) so the toolbar reflects it live, then restore active states. Prune
-            // each tab's persistent-float registry against the same catalog: a deleted float's
-            // hidden process would otherwise keep running with no control able to ever reach it.
-            for controller in self.controllers.values {
-                controller.pruneToolFloats(against: ToolFloatCatalog.all)
-            }
+            // the float registry against the same catalog: a deleted float's hidden process would
+            // otherwise keep running with no control able to ever reach it.
+            self.floats.prune(against: ToolFloatCatalog.all)
             self.dock.setToolFloats(ToolFloatCatalog.all)
             self.dock.reapplyTheme()
             self.renderDock()
@@ -218,6 +243,10 @@ final class WindowController: NSObject {
 
         container.frame = content.bounds
         container.autoresizingMask = [.width, .height]
+        // Layer-back the container for the same reason the tabs' `content` is: a tool-float card
+        // hosted here (ZEN-141) is layer-backed, and one dropped into a non-layer-backed parent
+        // after layout doesn't render its drop shadow.
+        container.wantsLayer = true
         content.addSubview(container)
 
         tabBar.translatesAutoresizingMaskIntoConstraints = false
@@ -281,7 +310,9 @@ final class WindowController: NSObject {
         // drawer commands `applyRecipe` reveals after `start()`, and `env` is injected into
         // every surface. A plain tab (⌘t / first tab) passes no workspace → a bare shell.
         let mainCommand = ws?.main.flatMap { $0 == "shell" ? nil : $0 }
-        let c = TabController(initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:])
+        let c = TabController(
+            initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:],
+            isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false })
         c.rightDrawerCommand = ws?.right
         c.bottomDrawerCommand = ws?.bottom
         // Bind title + last-pane-exit to this controller's id at call sites that
@@ -309,14 +340,14 @@ final class WindowController: NSObject {
     /// re-mounts it doesn't delete the now-active terminal.
     private func mount(_ transition: MountTransition) {
         guard let c = activeController, mountedCanvas !== c.view else {
-            activeController?.restoreKeyFocus()  // same canvas: just refresh focus/dock
+            restoreFocusToActive()  // same canvas: just refresh focus/dock
             renderDock()
             return
         }
         let outgoing = mountedCanvas
         pinCanvas(c.view)
         mountedCanvas = c.view
-        c.restoreKeyFocus()  // float-aware: keeps focus on the modal float when open
+        restoreFocusToActive()  // a shown float keeps focus; it rides the tab switch
         renderDock()  // dock mirrors the newly-active tab's overlay state
 
         switch transition {
@@ -350,18 +381,90 @@ final class WindowController: NSObject {
         canvas.layer?.removeAllAnimations()
         canvas.layer?.transform = CATransform3DIdentity
         canvas.layer?.opacity = 1
+        // Mount at the BACK of the container, not "just below the tab bar": a canvas is the
+        // backdrop every piece of window-level chrome sits on top of. Restacking it relative to
+        // `tabBar` lands it above anything else ALSO hosted just below the tab bar — i.e. a float
+        // card (ZEN-141), which a tab change dismisses but which spends that moment springing out.
+        // Without this the incoming canvas covers the outgoing card and the dismiss just vanishes.
+        // (The dock and the toast stack are added above `tabBar`, so they were never at risk.)
         if canvas.superview === container {
-            container.addSubview(canvas, positioned: .below, relativeTo: tabBar)  // just restack
+            container.addSubview(canvas, positioned: .below, relativeTo: nil)  // just restack
             return
         }
         canvas.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(canvas, positioned: .below, relativeTo: tabBar)
+        container.addSubview(canvas, positioned: .below, relativeTo: nil)
         NSLayoutConstraint.activate([
             canvas.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             canvas.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             canvas.topAnchor.constraint(equalTo: container.topAnchor),
             canvas.bottomAnchor.constraint(equalTo: tabBar.topAnchor),
         ])
+    }
+
+    /// Dismiss a shown tool float because the tab underneath is about to change — the same rule
+    /// every modal card already follows (`closeModal()` sits beside each call to this).
+    ///
+    /// A float is modal over the window, so letting the tab change behind it would leave the user
+    /// typing into a card while the world they can't see moved; they'd have to dismiss just to
+    /// learn where they landed. Closing it means one ⌘⇧] both switches AND reveals. Nothing is
+    /// lost: the registry is window-level, so a `dir`/`window` float keeps running and reopening
+    /// from the new tab is instant and lands on the same instance. An ephemeral float dies and
+    /// respawns fresh at the new tab's cwd — which is exactly what `persist:none` means.
+    private func closeFloatForTabChange() { floats.close() }
+
+    /// Hand keyboard focus back to whatever should hold it: the shown tool float, else the active
+    /// tab's focused panel. The float wins because it's modal over the window — without this, a
+    /// tab switch or a dismissed modal card would steal first responder to the pane sitting behind
+    /// a still-visible card.
+    private func restoreFocusToActive() {
+        if floats.isOpen { floats.refocus() } else { activeController?.restoreUnifiedFocus() }
+    }
+
+    /// Host a tool-float card at window level, over the active tab's tile region (ZEN-141).
+    ///
+    /// Hosting on `container` — the same window-level layer `ToastPresenter` uses — rather than
+    /// the active tab's `presentTileOverlay` is the whole point: a tab-hosted card unmounts with
+    /// its tab, which is exactly why `closeModal()` has to run before any tab-bar op. A float has
+    /// to survive a tab switch, so it can't live there.
+    ///
+    /// The constraints reproduce `presentTileOverlay`'s rect exactly, because `SurfaceFloatOverlay`
+    /// resolves its width/height fractions against its OWN bounds — the host rect *is* the
+    /// geometry, and a naive pin to `container` would silently resize every float and slide it over
+    /// the tab bar. A tab's canvas is `container` minus the tab-bar row (`pinCanvas`), and its
+    /// `content` insets that by `windowGutter` on all four sides; this is that composition,
+    /// flattened.
+    ///
+    /// Inserted below `tabBar` — above every canvas (`pinCanvas` keeps those at the back) but
+    /// below the tab strip, the dock, and the toast stack. That last one is the reason this isn't
+    /// a plain top-of-stack `addSubview`: the ⌘W guard toast ("Close btop first to close a pane")
+    /// fires precisely while a card is up, and a card stacked over the toasts would swallow it.
+    private func presentWindowFloat(_ overlay: NSView) {
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(overlay, positioned: .below, relativeTo: tabBar)
+        let gutter = ChromeMetrics.windowGutter
+        // Retained so a live `window-gutter` edit can re-inset an OPEN card. The tab-hosted path
+        // this replaced got that for free (it pinned to `content`, whose own gutter constraints
+        // `reapplyChromeLayout()` updates); baking the constant in and walking away would leave a
+        // shown float at the old inset while every tab behind it resized (ZEN-89's bug class).
+        let insets = (
+            leading: overlay.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: gutter),
+            trailing: overlay.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -gutter),
+            top: overlay.topAnchor.constraint(equalTo: container.topAnchor, constant: gutter),
+            bottom: overlay.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -gutter)
+        )
+        floatGutter = insets
+        NSLayoutConstraint.activate([insets.leading, insets.trailing, insets.top, insets.bottom])
+    }
+
+    /// Re-inset the shown float card after a `window-gutter` change. Constraints belonging to a
+    /// dismissed card die with it, so a stale entry here is harmless — it's replaced on next open.
+    private func reapplyFloatLayout() {
+        guard let floatGutter else { return }
+        let gutter = ChromeMetrics.windowGutter
+        floatGutter.leading.constant = gutter
+        floatGutter.trailing.constant = -gutter
+        floatGutter.top.constant = gutter
+        floatGutter.bottom.constant = -gutter
     }
 
     // MARK: tab ops
@@ -376,6 +479,7 @@ final class WindowController: NSObject {
     /// cwd, no pin, and no workspace (a bare shell).
     private func addTab(cwd: URL?, pinnedTitle: String?, workspace: Workspace? = nil) {
         closeModal()  // the "+" button is reachable while a palette is up
+        closeFloatForTabChange()
         let id = mintTabID()
         tabs.add(id)
         installController(id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace)
@@ -384,6 +488,7 @@ final class WindowController: NSObject {
     /// Replace the active tab's controller in place (same tab id/slot) with a fresh session in
     /// `cwd`, pinned to `pinnedTitle` and running `workspace`'s recipe. Used by `⌘⇧P` + Shift+Enter.
     private func replaceActiveTab(cwd: URL, pinnedTitle: String?, workspace: Workspace?) {
+        closeFloatForTabChange()  // swapping the tab out from under a modal card is the same bug
         let id = tabs.activeID
         let old = controllers[id]
         if mountedCanvas === old?.view {
@@ -411,6 +516,7 @@ final class WindowController: NSObject {
     private func select(_ id: TabID, slideFrom: SlideEdge? = nil) {
         closeModal()  // a tab-bar click must not orphan a modal palette
         guard tabs.order.contains(id), id != tabs.activeID else { return }
+        closeFloatForTabChange()
         clearWaiting(id)  // seeing the tab clears its rose flag + dismisses its bell toast
         cancelConfirm()  // switching tabs voids a pending close confirm (its target moved)
         let oldIndex = tabs.order.firstIndex(of: tabs.activeID) ?? 0
@@ -434,6 +540,7 @@ final class WindowController: NSObject {
     /// closing the window when it was the last tab.
     private func closeTab(_ id: TabID) {
         closeModal()  // the "×" button is reachable while a palette is up
+        closeFloatForTabChange()
         cancelConfirm()  // a middle-click close voids a pending confirm on another tab
         let survived = tabs.close(id)
         let controller = controllers[id]
@@ -474,7 +581,7 @@ final class WindowController: NSObject {
         guard let overlay = modal?.overlay else { return }
         modal = nil
         overlay.animateOut { overlay.removeFromSuperview() }
-        activeController?.restoreKeyFocus()
+        restoreFocusToActive()
         renderDock()
     }
 
@@ -752,7 +859,7 @@ final class WindowController: NSObject {
         confirmToast = nil
         confirmOnCancel = nil
         toasts.dismiss(toast)
-        activeController?.restoreKeyFocus()  // hand focus back to the pane
+        restoreFocusToActive()  // hand focus back to the pane (or the float over it)
         renderDock()
     }
 
@@ -796,15 +903,16 @@ final class WindowController: NSObject {
                 return
             }
         }
-        // A tool float is modal over its tab: its own toggle closes it (another float's toggle
-        // switches — `toggleToolFloat` handles both), a modal card's toggle closes it and opens
+        // A tool float is modal over the window: its own toggle closes it (another float's toggle
+        // switches — `floats.toggle` handles both), a modal card's toggle closes it and opens
         // that instead, ⌘W is guarded with a brief note (it never reaches the pane behind the
-        // float); split/nav/drawer/zoom are swallowed; cross-tab/window chords still act.
-        if active?.isToolFloatOpen == true {
+        // float); split/nav/drawer/zoom are swallowed; cross-tab/window chords still act — the
+        // card is window-hosted, so it rides a tab switch instead of unmounting with its tab.
+        if floats.isOpen {
             switch chord {
             case .closePane:
                 let name =
-                    active?.activeToolFloatID.flatMap(ToolFloatCatalog.byID)
+                    floats.activeID.flatMap(ToolFloatCatalog.byID)
                     .map { $0.title.replacingOccurrences(of: "Open ", with: "") } ?? "the tool"
                 toasts.show(
                     ToastContent(
@@ -812,7 +920,7 @@ final class WindowController: NSObject {
                         message: "Close \(name) first to close a pane."))
                 return
             case .toggleCommandPalette, .toggleRepoPicker, .openSettings:
-                active?.closeToolFloat()  // close it, then fall through to open the other
+                floats.close()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
             default:
@@ -843,7 +951,7 @@ final class WindowController: NSObject {
         case .toggleRightDrawer: active?.toggleRightDrawer()
         case .toggleZoom: active?.toggleZoom()
         case .toggleToolFloat(let id):
-            if let spec = ToolFloatCatalog.byID(id) { active?.toggleToolFloat(spec) }
+            if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
@@ -900,8 +1008,9 @@ final class WindowController: NSObject {
         // Only the last-pane path consults drawers and hidden persistent floats, so probe them
         // lazily. Hidden floats matter precisely because they're invisible: a dismissed
         // `persist:` tool keeps running with no on-screen trace, and this confirm is the only
-        // thing standing between ⌘W and silently killing its live work.
-        let running = lastPane ? (busy || active.hasBusyDrawer || active.hasBusyToolFloat) : busy
+        // thing standing between ⌘W and silently killing its live work. Floats are window-wide
+        // (ZEN-141), so this now sees one opened from any tab, not just the active one.
+        let running = lastPane ? (busy || active.hasBusyDrawer || floats.hasBusy) : busy
         let needsConfirm: Bool
         if lastPane {
             let closesWindow = tabs.order.count == 1
@@ -933,10 +1042,16 @@ final class WindowController: NSObject {
         }
     }
 
-    // MARK: copy/paste — routed to the active tab's controller
+    // MARK: copy/paste — routed to the shown tool float, else the active tab's controller
 
-    @objc func copyFromSurface(_ sender: Any?) { activeController?.copyFromSurface(sender) }
-    @objc func pasteToSurface(_ sender: Any?) { activeController?.pasteToSurface(sender) }
+    // A shown float is modal over the window, so it owns the clipboard verbs; a persistent float's
+    // surface outlives its card, so gate on visibility (`isOpen`), not on the registry.
+    @objc func copyFromSurface(_ sender: Any?) {
+        if floats.isOpen { floats.copyFromSurface(sender) } else { activeController?.copyFromSurface(sender) }
+    }
+    @objc func pasteToSurface(_ sender: Any?) {
+        if floats.isOpen { floats.pasteToSurface(sender) } else { activeController?.pasteToSurface(sender) }
+    }
 
     // MARK: wiring
 
@@ -966,6 +1081,24 @@ final class WindowController: NSObject {
     /// permission or waiting for input) → flag its number rose and show the notification's own
     /// message, unless it's the tab you're already looking at. A repeat refreshes the toast in
     /// place, so "needs permission" updates to "waiting for input" without stacking.
+    /// A tool float's agent wants attention. Floats are window-level, so unlike a pane or drawer
+    /// this has no owning tab: it gets the OS banner (the "I walked away" case, named for the
+    /// float rather than a tab it doesn't belong to) but not the in-app rose flag, which is a
+    /// per-tab signal — lighting the active tab would point at a surface that isn't the source.
+    /// Clicking the banner raises this window on its current tab.
+    private func floatNotified(_ notification: TerminalNotification, from spec: ToolFloat) {
+        // The notification arrives off the terminal's read path; only touch the UI on main.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.tabs.order.isEmpty,
+                AgentNotifier.shouldPushNotification(
+                    appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
+            else { return }
+            AgentNotifier.shared.notify(
+                windowID: self.windowID, tabID: self.tabs.activeID, title: spec.title,
+                body: notification.body.isEmpty ? notification.title : notification.body)
+        }
+    }
+
     private func agentNotified(id: TabID, notification: TerminalNotification) {
         // The notification arrives off the terminal's read path; only touch the UI on main.
         DispatchQueue.main.async { [weak self] in
@@ -1039,6 +1172,16 @@ final class WindowController: NSObject {
         presentSurfaceFailureToast(retry: retry, close: close)
     }
 
+    /// Test hook: the tab-bar chip click path (`onSelect` → `select`), which bypasses `handle(_:)`
+    /// — so a test can prove the modal gates hold for the mouse, not just the keyboard.
+    func selectTabForTesting(index: Int) {
+        guard tabs.order.indices.contains(index) else { return }
+        select(tabs.order[index])
+    }
+
+    /// Test hook: the window's float engine, for asserting the relays wired onto it.
+    var floatsForTesting: ToolFloatController { floats }
+
     /// Clear a tab's waiting state: dismiss its toast — which also drops the rose flag, since
     /// the flag is derived from the toast's presence (`waitingToasts[id] != nil`). Called when
     /// the tab is shown or closed. Re-render is left to the caller (all callers already do).
@@ -1062,7 +1205,8 @@ final class WindowController: NSObject {
     /// dock's active tints. Called on tab switch, overlay toggles, and palette open/close.
     private func renderDock() {
         let overlay = activeController?.overlayState ?? OverlayState()
-        dock.render(overlay: overlay, paletteOpen: modal?.kind == .commandPalette)
+        // The shown float is window-level, so it comes from `floats`, not the active tab's state.
+        dock.render(overlay: overlay, floatID: floats.activeID, paletteOpen: modal?.kind == .commandPalette)
         // Keep the poll's change-guard in sync with what's actually shown, so a tab switch to a
         // differently-busy tab re-evaluates instead of comparing against a stale value.
         lastDrawerBusy = (overlay.bottomBusy, overlay.rightBusy)
@@ -1093,6 +1237,7 @@ final class WindowController: NSObject {
         titlePoll = nil
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
         configObserver = nil
+        floats.shutdown()  // the window owns its floats, including the hidden persistent ones
         for c in controllers.values { c.shutdown() }
         controllers.removeAll()
         onClosed?()

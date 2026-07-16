@@ -40,11 +40,36 @@ enum ShellLaunch {
         let sh = userShell
         return TerminalSurfaceConfig(
             command: sh,
-            args: ["-l", "-i", "-c", "\(command); exec \(sh) -l -i"],
+            args: ["-l", "-i", "-c", "\(command); \(zshIntegrationRearm(for: sh))exec \(sh) -l -i"],
             workingDirectory: cwd ?? defaultCWD,
             environment: env,
             theme: Theme.current.terminal,
             behavior: GeneralConfig.current.terminalBehavior
         )
+    }
+
+    /// Re-arm libghostty's zsh integration for the shell the `exec` tail leaves behind (ZEN-144).
+    ///
+    /// libghostty injects integration by pointing `ZDOTDIR` at its own dir, and its `.zshenv`
+    /// *restores* the user's `ZDOTDIR` before their rc files run — so only the shell libghostty
+    /// spawned is injected, and the one we `exec` over it is not. An uninjected shell never emits
+    /// OSC 7, so the pane reports its seed cwd forever: floats stop following the directory, ⌘T
+    /// inherits the wrong dir, and prompt marks never fire. This restages the redirect so the
+    /// `exec`'d shell is injected exactly as the first one was, mirroring `setupZsh` in
+    /// libghostty's `termio/shell_integration.zig`:
+    ///
+    /// - `GHOSTTY_ZSH_ZDOTDIR` is set **only if** `ZDOTDIR` already is — `.zshenv` tests whether
+    ///   it's *set*, not non-empty, so assigning it unconditionally would export `ZDOTDIR=""` to
+    ///   users who had none instead of leaving it unset.
+    /// - Nothing happens without `GHOSTTY_RESOURCES_DIR`; `GhosttyApp` skips that `setenv` when
+    ///   the resource staging is missing, and an unguarded redirect would point `ZDOTDIR` at
+    ///   `/shell-integration/zsh` and break rc loading outright.
+    /// - Non-zsh shells are left alone: libghostty's own injection is shell-specific, and a
+    ///   `ZDOTDIR` means nothing to fish or bash.
+    private static func zshIntegrationRearm(for shell: String) -> String {
+        guard URL(fileURLWithPath: shell).lastPathComponent == "zsh" else { return "" }
+        return "if [[ -n \"$GHOSTTY_RESOURCES_DIR\" ]]; then "
+            + "if [[ -n \"${ZDOTDIR+X}\" ]]; then export GHOSTTY_ZSH_ZDOTDIR=\"$ZDOTDIR\"; fi; "
+            + "export ZDOTDIR=\"$GHOSTTY_RESOURCES_DIR/shell-integration/zsh\"; fi; "
     }
 }

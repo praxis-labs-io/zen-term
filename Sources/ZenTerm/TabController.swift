@@ -8,12 +8,12 @@ enum DrawerEdge { case bottom, right }
 /// Which panel is filling the tab (zoomed), for the footer dock's zoom tint.
 enum ZoomedPanel: Equatable { case pane, bottomDrawer, rightDrawer }
 
-/// A tab's overlay open-state (drawers + tool floats + zoom), produced by `TabController`
-/// and mirrored by the footer toggle dock's active tints.
+/// A tab's overlay open-state (drawers + zoom), produced by `TabController` and mirrored by the
+/// footer toggle dock's active tints. Tool floats are window-level (ZEN-141), so the shown float
+/// isn't part of a tab's state — the dock takes it from `ToolFloatController` instead.
 struct OverlayState: Equatable {
     var isBottomOpen = false
     var isRightOpen = false
-    var activeToolFloatID: String?
     var zoomed: ZoomedPanel?
     /// Whether each drawer's shell has a live process — drives the footer dock's activity dot
     /// when the drawer is hidden (ZEN-107).
@@ -67,29 +67,10 @@ final class TabController: NSObject {
     private var isRightOpen = false { didSet { onOverlayStateChanged?() } }
     private var rightDrawerToken: Int?
 
-    /// The tool float currently SHOWN. Floats are modal and mutually exclusive, so one slot
-    /// suffices. Whether its surface dies on dismiss depends on `spec.persist`.
-    private var activeToolFloat: (spec: ToolFloat, surface: TerminalSurface, overlay: SurfaceFloatOverlay)?
-    var isToolFloatOpen: Bool { activeToolFloat != nil }
-    var activeToolFloatID: String? { activeToolFloat?.spec.id }
-
-    /// Tool floats whose process is ALIVE, keyed by float id — the persistent ones, kept across
-    /// dismissal. Liveness and visibility are independent: a float can be in here while hidden.
-    /// `anchor` is the directory identity a `.directory` float was launched against (`.ephemeral`
-    /// floats are never in here at all). `command`/`dir` are the spec values the instance was
-    /// SPAWNED with — a Settings edit to either is caught on the next open and respawns, instead
-    /// of silently reusing a process still running the old command.
-    private var persistentFloats: [String: (surface: TerminalSurface, anchor: URL?, command: String, dir: URL?)] = [:]
-
-    /// Whether any persistent float's process has live work — hidden ones included, which is the
-    /// point: a dismissed persistent float is invisible, and the ⌘W confirm would otherwise let
-    /// the window close over it silently.
-    var hasBusyToolFloat: Bool { persistentFloats.values.contains { $0.surface.isBusy } }
-
-    /// A float overlay still springing out. It keeps Auto Layout constraints on a persistent
-    /// float's shared `surface.view`, so a fast re-show must snap it away before re-hosting that
-    /// view in a new card — otherwise the old constraints fight the new ones.
-    private var dismissingFloatOverlay: SurfaceFloatOverlay?
+    /// Whether the window's modal tool float is covering this tab (ZEN-141 lifted the float
+    /// engine to `WindowController`, so the tab has to ask). Drives the guards that must not act
+    /// on a panel hidden behind a modal card.
+    private let isToolFloatOpen: () -> Bool
 
     /// Which panel currently holds the tab's single unified focus/halo.
     private enum PanelRef: Equatable {
@@ -158,15 +139,11 @@ final class TabController: NSObject {
     var isSinglePane: Bool { paneCanvas.paneCount == 1 }
 
     /// Every live terminal surface this tab owns: the split-pane surfaces (via the canvas) plus
-    /// the auxiliary drawer/tool-float surfaces. Used to re-theme all surfaces live on a
-    /// config change.
+    /// the auxiliary drawer surfaces. Used to re-theme all surfaces live on a config change.
+    /// Tool floats belong to the window, not the tab — `ToolFloatController.allSurfaces` covers
+    /// them in the same fan-out.
     var allSurfaces: [TerminalSurface] {
-        var result = paneCanvas.allSurfaces
-        result.append(
-            contentsOf: [bottomDrawerSurface, rightDrawerSurface, activeToolFloat?.surface]
-                .compactMap { $0 })
-        result.append(contentsOf: persistentFloats.values.map(\.surface))
-        return result
+        paneCanvas.allSurfaces + [bottomDrawerSurface, rightDrawerSurface].compactMap { $0 }
     }
 
     /// Whether the focused main-canvas pane has a running process.
@@ -189,12 +166,12 @@ final class TabController: NSObject {
         bottomDrawerSurface?.isBusy == true || rightDrawerSurface?.isBusy == true
     }
 
-    /// The tab's overlay open-state (drawers + tool floats), for the footer dock's active
-    /// tints; fired via `onOverlayStateChanged` whenever one of them toggles.
+    /// The tab's overlay open-state (drawers + zoom), for the footer dock's active tints; fired
+    /// via `onOverlayStateChanged` whenever one of them toggles. The shown tool float isn't in
+    /// here — it belongs to the window, and the dock reads it from there.
     var overlayState: OverlayState {
         OverlayState(
             isBottomOpen: isBottomOpen, isRightOpen: isRightOpen,
-            activeToolFloatID: activeToolFloatID,
             zoomed: zoomedPanel.map(\.asZoomed),
             bottomBusy: bottomDrawerSurface?.isBusy == true,
             rightBusy: rightDrawerSurface?.isBusy == true)
@@ -235,9 +212,11 @@ final class TabController: NSObject {
 
     init(
         initialCWD: URL?, initialCommand: String? = nil, env: [String: String] = [:],
+        isToolFloatOpen: @escaping () -> Bool = { false },
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make
     ) {
         workspaceEnv = env
+        self.isToolFloatOpen = isToolFloatOpen
         self.makeSurface = makeSurface
         paneCanvas = PaneCanvasController(
             initialCWD: initialCWD, initialCommand: initialCommand, env: env,
@@ -321,15 +300,13 @@ final class TabController: NSObject {
         ])
     }
 
-    /// Restore keyboard focus when this tab is (re)mounted: the modal tool float if
-    /// open — it must keep first-responder, it's modal over the whole tab — otherwise
-    /// whichever panel held the tab's unified focus (pane or a drawer). Without the
-    /// float check, remounting steals focus to the pane hidden behind the still-visible
-    /// float; without honoring `focusedPanel`, remounting a tab that was focused on a
-    /// drawer wrongly drops focus onto the central pane.
-    func restoreKeyFocus() {
-        if let active = activeToolFloat { active.surface.focus(); return }
-        restoreUnifiedFocus()
+    /// Drop the tab's unified focus (halo + first responder) — the window's modal float is taking
+    /// it. `focusedPanel` is deliberately left alone, so closing the card restores focus to
+    /// whichever panel had it.
+    func yieldFocusToFloat() {
+        paneCanvas.setPanesFocused(false)
+        bottomDrawerPanel?.isFocused = false
+        rightDrawerPanel?.isFocused = false
     }
 
     func shutdown() {
@@ -340,26 +317,13 @@ final class TabController: NSObject {
         rightDrawerSurface?.terminate()
         rightDrawerSurface = nil
         unregisterDrawerToken(.rightDrawer)
-        activeToolFloat?.overlay.removeFromSuperview()
-        activeToolFloat?.surface.terminate()
-        activeToolFloat = nil
-        dismissingFloatOverlay?.removeFromSuperview()
-        dismissingFloatOverlay = nil
-        // Snapshot the keys: `discardPersistentFloat` removes from `persistentFloats` as it goes,
-        // and iterating `.keys` directly over a dictionary being mutated mid-loop is a hazard.
-        for id in Array(persistentFloats.keys) { discardPersistentFloat(id) }
     }
 
     /// Copy from whichever panel holds unified focus: the pane canvas's own copy
     /// path, or — for a focused drawer — its surface's selection straight to the
     /// pasteboard (mirrors `PaneCanvasController.copyFromSurface`).
     @objc func copyFromSurface(_ sender: Any?) {
-        // While the modal float is open, copy targets it, not the panel underneath.
-        // A persistent surface outlives its card, so gate on visibility (`isToolFloatOpen`).
-        guard
-            let surface = (isToolFloatOpen ? activeToolFloat?.surface : nil)
-                ?? focusedDrawerSurface
-        else {
+        guard let surface = focusedDrawerSurface else {
             paneCanvas.copyFromSurface(sender)
             return
         }
@@ -371,12 +335,7 @@ final class TabController: NSObject {
     /// Paste into whichever panel holds unified focus (mirrors
     /// `PaneCanvasController.pasteToSurface` for the drawer case).
     @objc func pasteToSurface(_ sender: Any?) {
-        // While the modal float is open, paste targets it, not the panel underneath.
-        // A persistent surface outlives its card, so gate on visibility (`isToolFloatOpen`).
-        guard
-            let surface = (isToolFloatOpen ? activeToolFloat?.surface : nil)
-                ?? focusedDrawerSurface
-        else {
+        guard let surface = focusedDrawerSurface else {
             paneCanvas.pasteToSurface(sender)
             return
         }
@@ -518,159 +477,17 @@ final class TabController: NSObject {
         return panel
     }
 
-    // MARK: tool floats (declarative command floats whose process lifetime is set by `persist:`)
-
-    /// Where a float's command runs: its pinned `dir:` when it has one, else the focused pane's cwd.
-    private func floatCWD(_ spec: ToolFloat) -> URL? { spec.dir ?? focusedCWD }
-
-    /// Re-focus whichever panel held the tab's unified focus before the float opened
-    /// (the float focuses its own surface without changing `focusedPanel`), restoring
-    /// both the halo and keyboard first-responder.
-    private func restoreUnifiedFocus() {
+    /// Restore the tab's unified focus — halo and keyboard first-responder — to whichever panel
+    /// holds `focusedPanel`. Called when the tab is (re)mounted, and by the window when its modal
+    /// float closes (the float takes focus via `yieldFocusToFloat` without touching
+    /// `focusedPanel`, so the panel that had it gets it back). Honoring `focusedPanel` is what
+    /// keeps a tab that was focused on a drawer from wrongly landing on the central pane.
+    func restoreUnifiedFocus() {
         switch focusedPanel {
         case .pane: paneCanvas.focusActivePane()
         case .bottomDrawer: focusDrawer(.bottom)
         case .rightDrawer: focusDrawer(.right)
         }
-    }
-
-    /// Toggle a tool float: same id open → close; otherwise run the git guard and open.
-    func toggleToolFloat(_ spec: ToolFloat) {
-        if activeToolFloat?.spec.id == spec.id { closeToolFloat(); return }
-        if activeToolFloat != nil { closeToolFloat() }  // switch floats
-        // One ancestor walk per press: the git guard and the `.directory` anchor share the same
-        // repo-root lookup, and each `isGitRepo` probe is main-thread filesystem I/O.
-        let repoRoot = GitRepo.repoRoot(for: floatCWD(spec))
-        if spec.requiresGitRepo, repoRoot == nil {
-            onRequestToast?(gitGuardToast(for: spec))
-            return
-        }
-        let anchor = spec.persist == .directory ? (repoRoot ?? floatCWD(spec)?.standardizedFileURL) : nil
-        showToolFloat(spec, anchor: anchor)
-    }
-
-    /// The `git:true` block toast. A pinned `dir:` float is gated on the PINNED directory, so the
-    /// copy must name it — "run `git init` here" would point at the focused pane, which the guard
-    /// never looked at, leaving the user un-followable advice.
-    private func gitGuardToast(for spec: ToolFloat) -> ToastContent {
-        let message: String
-        if let dir = spec.dir {
-            message =
-                "This float is pinned to \(PathDisplay.abbreviatingHome(dir.path)), "
-                + "which isn't a Git repository."
-        } else {
-            message = "This needs a Git repository. Run `git init` here, or open a folder that has one."
-        }
-        return ToastContent(variant: .info, title: spec.title, message: message)
-    }
-
-    /// Present `spec` in a float card: resolve its surface (retained or fresh), host it, and give
-    /// it the tab's unified focus. When the tool exits, `surfaceDidExit` tears the float down.
-    private func showToolFloat(_ spec: ToolFloat, anchor: URL?) {
-        let surface = surfaceForFloat(spec, anchor: anchor)
-        // Snap away a still-springing-out card ONLY when it holds constraints on the view we're
-        // about to re-host — otherwise let it finish its own exit. A card that isn't sharing this
-        // surface's view (a different float, or a fresh spawn) springs out normally while the new
-        // one springs in; only a shared-view re-host needs the snap.
-        if let dismissing = dismissingFloatOverlay, surface.view.isDescendant(of: dismissing) {
-            dismissing.removeFromSuperview()
-            dismissingFloatOverlay = nil
-        }
-        let overlay = SurfaceFloatOverlay(
-            content: surface.view,
-            background: Theme.current.chrome.background.nsColor,
-            widthFraction: spec.widthFraction,
-            heightFraction: spec.heightFraction,
-            contentInset: 10,
-            cornerRadius: 14,
-            onDismiss: { [weak self] in self?.closeToolFloat() })
-        presentTileOverlay(overlay)
-        activeToolFloat = (spec, surface, overlay)
-        paneCanvas.setPanesFocused(false)
-        bottomDrawerPanel?.isFocused = false
-        rightDrawerPanel?.isFocused = false
-        surface.focus()
-        overlay.animateIn()
-        onOverlayStateChanged?()
-    }
-
-    /// The surface to show for `spec`: a retained one when the float persists, still matches its
-    /// anchor, AND was spawned with the same `command`/`dir` — else discard and spawn fresh. The
-    /// discard covers a `persist:` flipped to `none` in a live config reload (which must not reuse
-    /// and then terminate a surface the registry still holds), the focused dir moving, and a
-    /// Settings edit to the command or pinned dir (reusing would silently keep the OLD command's
-    /// process running, making the edit look like a no-op).
-    private func surfaceForFloat(_ spec: ToolFloat, anchor: URL?) -> TerminalSurface {
-        if let live = persistentFloats[spec.id] {
-            let anchorHolds = spec.persist != .directory || live.anchor?.path == anchor?.path
-            let spawnHolds = live.command == spec.command && live.dir == spec.dir
-            if spec.persist != .ephemeral, anchorHolds, spawnHolds { return live.surface }
-            discardPersistentFloat(spec.id)
-        }
-        let surface = spawnFloatSurface(spec)
-        if spec.persist != .ephemeral {
-            persistentFloats[spec.id] = (surface, anchor, spec.command, spec.dir)
-        }
-        return surface
-    }
-
-    /// Reconcile the registry against the catalog after a config reload. An entry whose id no
-    /// longer exists (float deleted — or renamed, which is a delete plus an add) would otherwise
-    /// keep a hidden process running with no dock button, chord, or palette entry ever able to
-    /// reach it again. A present-but-edited id is NOT discarded here: command/dir edits reconcile
-    /// lazily on the next open, so a config save never kills a hidden tool that is still reachable.
-    /// If the float currently SHOWN was deleted, close its card too — it has no toggle left.
-    func pruneToolFloats(against catalog: [ToolFloat]) {
-        let ids = Set(catalog.map(\.id))
-        if let active = activeToolFloat, !ids.contains(active.spec.id) { closeToolFloat() }
-        // Snapshot the keys — the discard mutates the dictionary mid-loop (same rule as `shutdown()`).
-        for id in Array(persistentFloats.keys) where !ids.contains(id) { discardPersistentFloat(id) }
-    }
-
-    /// Spawn `spec.command` in a fresh login+interactive shell at the focused cwd, so the user's
-    /// PATH and pager match a pane's.
-    private func spawnFloatSurface(_ spec: ToolFloat) -> TerminalSurface {
-        let surface = makeSurface()
-        surface.delegate = self
-        surface.start(
-            TerminalSurfaceConfig(
-                command: ShellLaunch.userShell, args: ["-l", "-i", "-c", spec.command],
-                workingDirectory: floatCWD(spec), theme: Theme.current.terminal,
-                behavior: GeneralConfig.current.terminalBehavior))
-        return surface
-    }
-
-    /// Drop a persistent float's surface. Clears the ref BEFORE terminate so a synchronous
-    /// `surfaceDidExit` re-entry can't resurrect the entry this is removing.
-    private func discardPersistentFloat(_ id: String) {
-        guard let live = persistentFloats.removeValue(forKey: id) else { return }
-        live.surface.terminate()
-    }
-
-    /// Close the float. An ephemeral float's surface dies with the card; a persistent one keeps
-    /// running and only loses its card. Clears the slot before terminate so a synchronous
-    /// `surfaceDidExit` re-entry no-ops.
-    func closeToolFloat() {
-        guard let active = activeToolFloat else { return }
-        activeToolFloat = nil
-        let overlay = active.overlay
-        // Park BEFORE animateOut: `Motion.springScaleFade` fires its completion synchronously under
-        // Reduce Motion, and that completion clears the slot by identity — assigning afterwards
-        // would strand an overlay no completion will ever clear.
-        // Snap any PREVIOUSLY parked card first: the slot holds one overlay,
-        // and silently dropping a parked reference would skip the shared-view snap-away on a fast
-        // X→Y→X switch — X's old card would keep its constraints on the view being re-hosted.
-        if active.spec.persist != .ephemeral {
-            dismissingFloatOverlay?.removeFromSuperview()
-            dismissingFloatOverlay = overlay
-        }
-        overlay.animateOut { [weak self] in
-            overlay.removeFromSuperview()
-            if self?.dismissingFloatOverlay === overlay { self?.dismissingFloatOverlay = nil }
-        }
-        if active.spec.persist == .ephemeral { active.surface.terminate() }
-        restoreUnifiedFocus()
-        onOverlayStateChanged?()
     }
 
     // MARK: tiling
@@ -752,7 +569,7 @@ final class TabController: NSObject {
     /// Zoom the focused panel to fill the tab (others hidden), or unzoom if already
     /// zoomed. For a pane, the pane canvas also renders just the focused leaf.
     func toggleZoom() {
-        guard !isToolFloatOpen else { return }  // can't zoom a panel under the float
+        guard !isToolFloatOpen() else { return }  // can't zoom a panel under the float
         if isZoomed { exitZoom(); return }
         // Every case relayouts to the final size FIRST, then pops the now-full panel — a pop before
         // the resize would scale at the old (tiled) size and then snap to full. A pane's pop lives
@@ -1100,7 +917,6 @@ final class TabController: NSObject {
         paneCanvas.reapplyChromeColors()
         bottomDrawerPanel?.reapplyTheme()
         rightDrawerPanel?.reapplyTheme()
-        activeToolFloat?.overlay.reapplyTheme()
     }
 
     /// Begin clipping `content` for a drawer slide (a drawer parks just outside the content bounds
@@ -1404,22 +1220,6 @@ extension TabController: TerminalSurfaceDelegate {
     /// toggle lazily spawns a fresh one. Panes have their own exit handling in
     /// `PaneCanvasController`; this only reacts to the two drawer surfaces.
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
-        if let active = activeToolFloat, s === active.surface {
-            // The tool ran to completion / quit (`q` in lazygit) → close the float and forget it,
-            // so the next open spawns fresh rather than resurrecting a dead surface.
-            activeToolFloat = nil
-            persistentFloats.removeValue(forKey: active.spec.id)
-            active.overlay.animateOut { active.overlay.removeFromSuperview() }
-            active.surface.terminate()
-            restoreUnifiedFocus()
-            onOverlayStateChanged?()
-            return
-        }
-        if let id = persistentFloats.first(where: { $0.value.surface === s })?.key {
-            persistentFloats.removeValue(forKey: id)  // a hidden persistent float's tool quit
-            s.terminate()
-            return
-        }
         if s === bottomDrawerSurface {
             if zoomedPanel == .bottomDrawer { zoomedPanel = nil }  // don't leave zoom stuck
             bottomDrawerPanel?.removeFromSuperview()
@@ -1436,7 +1236,7 @@ extension TabController: TerminalSurfaceDelegate {
             // it must keep focus, so only re-point `focusedPanel` to the pane (the
             // now-gone drawer) so closing the float later restores focus correctly.
             if focusedPanel == .bottomDrawer {
-                if isToolFloatOpen { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
+                if isToolFloatOpen() { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
             }
         } else if s === rightDrawerSurface {
             if zoomedPanel == .rightDrawer { zoomedPanel = nil }  // don't leave zoom stuck
@@ -1450,33 +1250,24 @@ extension TabController: TerminalSurfaceDelegate {
             // See the bottom-drawer branch above: keep the modal float focused if open,
             // otherwise restore keyboard focus + unified halo/routing to the pane.
             if focusedPanel == .rightDrawer {
-                if isToolFloatOpen { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
+                if isToolFloatOpen() { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
             }
         }
     }
 
-    /// A tab-owned surface (drawer or tool float) failed to start. Surface a passive
-    /// warning and tear it down so the next toggle spawns a fresh one — the natural retry for
-    /// these, unlike panes, which get an in-place Retry button. Panes are handled entirely in
-    /// `PaneCanvasController`; this only reacts to the surfaces this controller owns.
+    /// A drawer surface failed to start. Surface a passive warning and tear it down so the next
+    /// toggle spawns a fresh one — the natural retry for a drawer, unlike panes, which get an
+    /// in-place Retry button. Panes are handled entirely in `PaneCanvasController` and floats in
+    /// `ToolFloatController`; this only reacts to the surfaces this controller owns.
     func surfaceDidFailToStart(_ s: TerminalSurface) {
-        // Drawers and tool floats only exist after an explicit open, so always warn, then
-        // reuse `surfaceDidExit`'s teardown (clear ref, drop the view, terminate, relayout,
-        // restore focus) — no re-warm — so the next toggle spawns a fresh surface.
+        // A drawer only exists after an explicit open, so always warn, then reuse
+        // `surfaceDidExit`'s teardown (clear ref, drop the view, terminate, relayout, restore
+        // focus) so the next toggle spawns a fresh surface.
         let descriptor: String
         if s === bottomDrawerSurface {
             descriptor = "The bottom drawer"
         } else if s === rightDrawerSurface {
             descriptor = "The right drawer"
-        } else if let active = activeToolFloat, s === active.surface {
-            descriptor = "This tool"
-        } else if persistentFloats.values.contains(where: { $0.surface === s }) {
-            // Hidden persistent float: evict so the next open spawns fresh, but still warn — the
-            // user believes this tool is alive in the background, and a silent eviction makes the
-            // next open's cold, state-less spawn look like persistence quietly failing.
-            warnSurfaceFailed(descriptor: "A background tool")
-            surfaceDidExit(s, code: nil)
-            return
         } else {
             return  // not one of ours
         }

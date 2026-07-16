@@ -39,13 +39,13 @@ final class ToggleDockTests: XCTestCase {
 
         var overlay = OverlayState()
         overlay.bottomBusy = true
-        dock.render(overlay: overlay, paletteOpen: false)
+        dock.render(overlay: overlay, floatID: nil, paletteOpen: false)
         XCTAssertTrue(dock.bottomActivityForTesting, "a busy bottom drawer must dot its toggle")
         XCTAssertFalse(dock.rightActivityForTesting)
 
         overlay.bottomBusy = false
         overlay.rightBusy = true
-        dock.render(overlay: overlay, paletteOpen: false)
+        dock.render(overlay: overlay, floatID: nil, paletteOpen: false)
         XCTAssertFalse(dock.bottomActivityForTesting)
         XCTAssertTrue(dock.rightActivityForTesting)
     }
@@ -56,13 +56,13 @@ final class ToggleDockTests: XCTestCase {
         var overlay = OverlayState()
         overlay.isBottomOpen = true
         overlay.bottomBusy = true
-        dock.render(overlay: overlay, paletteOpen: false)
+        dock.render(overlay: overlay, floatID: nil, paletteOpen: false)
         XCTAssertTrue(dock.bottomActivityForTesting)
     }
 
     func test_render_noDotWhenIdle() {
         let dock = makeDock([])
-        dock.render(overlay: OverlayState(), paletteOpen: false)
+        dock.render(overlay: OverlayState(), floatID: nil, paletteOpen: false)
         XCTAssertFalse(dock.bottomActivityForTesting)
         XCTAssertFalse(dock.rightActivityForTesting)
     }

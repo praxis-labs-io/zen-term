@@ -82,9 +82,11 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertEqual(float?.id, "x")
     }
 
-    /// `window` is ZEN-141. Until then it must degrade, not silently look supported.
-    func test_persist_window_isNotYetSupported() {
-        XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:window")?.persist, .ephemeral)
+    /// ZEN-141 landed `window`, so it must now parse rather than degrade to `none` — the mode is
+    /// what keeps a tool alive for the whole window, and silently ephemeral would look like
+    /// persistence failing.
+    func test_persist_window_parses() {
+        XCTAssertEqual(ToolFloatParser.parse("id:x command:c key:cmd+shift+j persist:window")?.persist, .window)
     }
 
     func test_dir_defaultsToNil() {

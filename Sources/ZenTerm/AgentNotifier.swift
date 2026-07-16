@@ -18,12 +18,16 @@ final class AgentNotifier: NSObject {
     /// window + tab so the app can jump to it. Set by `AppDelegate`.
     var onActivate: ((Int, TabID) -> Void)?
 
-    /// Notifications need a real app bundle: `UNUserNotificationCenter.current()` throws when
-    /// `Bundle.main.bundleIdentifier` is nil. `bin/run` (`swift run ZenTerm`, the mid-flight dev
-    /// build) is a bare executable with no bundle id, so every entry point no-ops there — keeping that
-    /// workflow crash-free. Packaged builds (`bin/package-app`, the daily driver) carry the id and
-    /// deliver for real.
-    private let isBundled = Bundle.main.bundleIdentifier != nil
+    /// Notifications need a real app bundle: `UNUserNotificationCenter.current()` throws
+    /// (`bundleProxyForCurrentProcess is nil`) for a process that isn't one. `bin/run`
+    /// (`swift run ZenTerm`, the mid-flight dev build) is a bare executable, so every entry point
+    /// no-ops there — keeping that workflow crash-free. Packaged builds (`bin/package-app`, the
+    /// daily driver) deliver for real.
+    ///
+    /// This tests for an actual `.app`, not for a bundle *identifier*: the xctest host has an id
+    /// while not being an app bundle, so an id check reads as "bundled" and then throws — which is
+    /// exactly what it did the first time a test drove a tab switch.
+    private let isBundled = Bundle.main.bundleURL.pathExtension == "app"
 
     /// Cached once a grant is observed, so steady-state deliveries skip the `getNotificationSettings`
     /// round-trip to the notification daemon. Main-thread only. A grant never silently downgrades; if

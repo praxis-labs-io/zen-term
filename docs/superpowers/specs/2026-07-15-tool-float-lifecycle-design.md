@@ -27,6 +27,36 @@ pre-warm** anywhere, including ripping out lazygit's; the bespoke lazygit path i
 >   (workspace panes lose shell integration, which starves the anchor of cd signals).
 > - ZEN-140 (delete bespoke lazygit) is unchanged and remains the final PR.
 
+> **Update (2026-07-16) — ZEN-141 shipped; the whole engine went window-level.** The registry
+> didn't just move to the window: `ToolFloatController` now owns *every* float, ephemeral
+> included, and `TabController` has no float code at all. A split (persistent floats at the
+> window, ephemeral ones on the tab) would have left two shown-slots, two dismiss paths, and a
+> dock / chord gate / ⌘W-busy probe / copy-paste that each had to ask both. So:
+> - **`persist:` no longer implies scope.** Every float is one instance per id per window, its
+>   card hosted on `container`. `persist:` says only whether the process survives dismissal:
+>   `none` terminates, `dir` re-anchors on a directory change, `window` never re-anchors.
+> - **A float is modal over the window: a tab change dismisses it.** The design above assumed the
+>   card would *ride* a tab switch, and that's what shipped first — daily driving killed it in
+>   minutes. A card you can't see past, over a tab that silently changed, means switching has no
+>   visible effect until you dismiss just to learn where you landed. So floats get the rule modal
+>   cards already followed (`select` → `closeModal()`): one ⌘⇧] both switches and reveals.
+>   Dismissing costs nothing now that the registry is window-level — the process lives, and
+>   reopening from the tab you landed on is instant and lands on the same instance.
+>   - The card is still hosted on `container` rather than a tab's `content`. That's what makes the
+>     dismiss animation play over the sliding canvas instead of unmounting mid-spring, and it
+>     keeps the engine free of any tab's view tree — but it is no longer load-bearing for
+>     surviving a switch, because nothing survives one.
+>   - Every tab-changing op dismisses, including the tab-bar `+` and chip clicks. Those bypass
+>     `handle(_:)` entirely, so the rule lives beside `closeModal()` in the tab ops, not in the
+>     chord gate.
+> - **`window` cost almost nothing**, as predicted: it's `dir` with a nil anchor, which makes the
+>   reuse check unconditional.
+> - **Re-warm-after-quit (ZEN-143) was cut** from the ticket and stays parked in Backlog in full.
+>   A tool that quits still evicts; the next open is cold.
+> - ZEN-144 (workspace `main:` panes lose shell integration) shipped alongside: `ShellLaunch.program`
+>   re-arms libghostty's ZDOTDIR redirect in its `exec` tail, mirroring `setupZsh`. Without it the
+>   `dir` anchor never sees a `cd` in a workspace tab.
+
 ## Why now
 
 ZEN-36 made tool floats ephemeral on purpose — "a diff is a point-in-time snapshot
