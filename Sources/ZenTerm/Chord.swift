@@ -13,26 +13,31 @@ struct Chord: Hashable {
     /// `"\\"`, `"-"`. A shifted glyph (`"|"`, `"_"`, `"!"`) never survives `init`; see `shift`.
     var key: String
 
-    /// Canonicalizes: a glyph a US key only produces with Shift held folds onto its base key with
-    /// `shift` set, so one physical key has exactly one spelling. `charactersIgnoringModifiers`
+    /// Canonicalizes: **with Shift held**, a glyph that a US key produces only via Shift folds onto
+    /// its base key, so one physical key has exactly one spelling. `charactersIgnoringModifiers`
     /// applies Shift, so a live ⌘⇧- press arrives as `_` while the config spells the same chord
-    /// `cmd+shift+-` — folding both onto ⇧`-` makes them the same dictionary key, which is what
-    /// lets the keymap hold one entry per binding instead of one per spelling. It also rescues a
-    /// hand-written `cmd+|`, which no US keyboard can produce without Shift.
+    /// `cmd+shift+-` — folding both onto ⇧`-` makes them the same dictionary key, which is what lets
+    /// the keymap hold one entry per binding instead of one per spelling.
+    ///
+    /// The Shift condition is load-bearing, not a formality: the table is US-only, and on other
+    /// layouts these glyphs are reachable *without* Shift (`_` is an unshifted key on AZERTY, `+` on
+    /// German QWERTZ). Folding on the glyph alone would give such a keypress a Shift its user never
+    /// held and land it on ⌘⇧- — the split_horizontal default — swallowing a keystroke the terminal
+    /// should have received. Gating on Shift means a non-US layout can at worst mis-*label* a chord,
+    /// never invent one.
     init(command: Bool = false, shift: Bool = false, option: Bool = false, control: Bool = false, key: String) {
         self.command = command
         self.option = option
         self.control = control
-        if let base = Chord.baseKeyForShiftedGlyph[key] {
-            self.shift = true
+        self.shift = shift
+        if shift, let base = Chord.baseKeyForShiftedGlyph[key] {
             self.key = base
         } else {
-            self.shift = shift
             self.key = key
         }
     }
 
-    /// The unshifted glyph for every key a US layout shifts into a different character. One-way by
+    /// The unshifted glyph for each key a US layout shifts into a different character. One-way by
     /// design (shifted → base): the base key is the canonical spelling, so nothing maps back.
     private static let baseKeyForShiftedGlyph: [String: String] = [
         "~": "`", "!": "1", "@": "2", "#": "3", "$": "4", "%": "5",
@@ -62,9 +67,8 @@ struct Chord: Hashable {
             case "ctrl", "control": control = true
             default:
                 if key != nil { return nil }  // two non-modifier tokens → ambiguous
-                // `+` is the token separator, so it can't travel literally; ghostty spells it
-                // `plus`, and configs in the wild do too. Accepted as an input alias only —
-                // `init` folds `+` onto ⇧`=`, so `configToken` emits `cmd+shift+=` on the way out.
+                // `+` is the token separator, so the plus key travels as the word `plus`
+                // (ghostty's spelling too) — translate it back here. See `configToken`.
                 key = (token == "plus") ? "+" : token
             }
         }
@@ -109,8 +113,8 @@ struct Chord: Hashable {
 
     /// The config-file word form the writer emits (`cmd+shift+g`) — modifiers in the
     /// repo's order (cmd, shift, opt, ctrl) then the key. A *projection* of `parse`, not its
-    /// inverse: several spellings canonicalize to one chord (`cmd+shift+_`, `cmd+shift+-` and
-    /// `cmd+_` all emit `cmd+shift+-`), so a re-parse of the output is stable from here on.
+    /// inverse: with Shift held, several spellings fold to one chord (`cmd+shift+_` and
+    /// `cmd+shift+-` both emit `cmd+shift+-`), so a re-parse of the output is stable from here on.
     /// Mirrors `displayGlyph`'s glyph form.
     var configToken: String {
         var token = ""
@@ -118,8 +122,10 @@ struct Chord: Hashable {
         if shift { token += "shift+" }
         if option { token += "opt+" }
         if control { token += "ctrl+" }
-        // No escaping needed for the `+` separator: `key` is canonical, and `+` folds onto ⇧`=`.
-        return token + key
+        // The plus key can't travel literally — `+` is the token separator, so `cmd++` would parse
+        // as a stray empty token. Emit the word `plus`; `parse` maps it back. Only reachable
+        // unshifted (⇧+ folds to ⇧=): a layout where `+` needs no Shift, or an explicit `cmd+plus`.
+        return token + (key == "+" ? "plus" : key)
     }
 
     /// Build the chord an `NSEvent` represents, for keymap lookup. Mirrors the modifier +
@@ -141,6 +147,16 @@ struct Chord: Hashable {
             option: flags.contains(.option),
             control: flags.contains(.control),
             key: key)
+    }
+
+    /// The chord to show for an action, or nil when it's unbound. An action can hold several chords
+    /// (a user binding two), and dictionary order is arbitrary — picking the lowest `configToken`
+    /// keeps the palette, the dock tooltip, and the Settings chip naming the same one, instead of
+    /// disagreeing with each other and drifting between launches.
+    static func displayed(
+        _ action: KeyInterceptor.ReservedChord, in keymap: [Chord: KeyInterceptor.ReservedChord]
+    ) -> Chord? {
+        keymap.filter { $0.value == action }.keys.min { $0.configToken < $1.configToken }
     }
 
     /// Keys whose `charactersIgnoringModifiers` is a non-printing character render as tofu (□) — map

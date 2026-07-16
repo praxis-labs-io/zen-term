@@ -76,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             self?.keys.setKeymap(GeneralConfig.current.keymap)
             MotionConfig.apply(GeneralConfig.current.reduceMotion)  // re-install the reduce-motion override
+            self?.surfaceKeymapDiagnostics()
         }
 
         NSApp.activate(ignoringOtherApps: true)
@@ -107,6 +108,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         wc.window.makeKeyAndOrderFront(nil)
         wc.selectTab(tabID)
+    }
+
+    /// The keymap problems announced on the last reload — so an unchanged set stays quiet.
+    private var lastKeymapDiagnostics: [ConfigDiagnostic] = []
+
+    /// Toast the config's keybind problems when they change. Lives here, not in `WindowController`:
+    /// that observer runs once per open window, so three windows would mean three toasts for one
+    /// reload — and the keymap these describe is app-global anyway. Routed to the key window only.
+    ///
+    /// Only on a *change*, because every in-app write reloads too (a Settings rebind, a float save):
+    /// re-announcing an unchanged conflict on each of those is noise, and a user editing keybinds is
+    /// already looking at the row that says the same thing.
+    private func surfaceKeymapDiagnostics() {
+        let diagnostics = GeneralConfig.current.keymapDiagnostics
+        defer { lastKeymapDiagnostics = diagnostics }
+        guard diagnostics != lastKeymapDiagnostics, let content = ConfigDiagnostic.toast(for: diagnostics) else {
+            return
+        }
+        keyController()?.showToast(content)
     }
 
     /// The `WindowController` owning the current key window, falling back to the

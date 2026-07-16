@@ -205,6 +205,33 @@ final class KeybindCaptureFlowTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(capturer.endCount, 1)
     }
 
+    func test_capturingAnOccupiedChord_blocksAndLeavesTheOriginalBound() {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        let occupied = Chord(command: true, key: "t")  // New Tab's default
+        XCTAssertEqual(liveKeymap[occupied], .newTab)
+
+        row(for: .closePane).chip.onActivate?()
+        capturer.feed(event(for: occupied))
+
+        XCTAssertEqual(liveKeymap[occupied], .newTab, "the original action must keep its chord")
+        XCTAssertNotEqual(liveKeymap[occupied], .closePane, "the occupied chord must not be taken")
+        XCTAssertTrue(capturer.isArmed, "a blocked chord leaves capture armed")
+        XCTAssertEqual(capturer.endCount, 0, "nothing was committed")
+    }
+
+    func test_capturingAnOccupiedShiftedSymbol_blocks() {
+        // The ZEN-142 shape: ⌘⇧- arrives as "_" and must still be recognized as taken.
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        row(for: .closePane).chip.onActivate?()
+
+        capturer.feed(keyDown("_", code: 0, flags: [.command, .shift]))
+
+        XCTAssertEqual(liveKeymap[Chord(command: true, shift: true, key: "-")], .splitHorizontal)
+        XCTAssertTrue(capturer.isArmed, "an occupied shifted-symbol chord must block too")
+    }
+
     // MARK: conflict surface (ZEN-142)
 
     func test_floatStealingAnActionsChord_showsTheReasonOnTheRow() throws {
@@ -242,6 +269,38 @@ final class KeybindCaptureFlowTests: XCTestCase {
 
         XCTAssertNil(row(for: .newTab).renderedMessageForTesting, "the resolved conflict must clear")
         XCTAssertEqual(row(for: .newTab).chip.renderedShortcutForTesting, "⌘T", "and the chord comes back")
+    }
+
+    func test_reloadDuringCapture_isDeferred_soALaterWriteKeepsItsLines() throws {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        row(for: .closePane).chip.onActivate?()  // arm a capture
+
+        // A hand-edit + reload lands mid-capture (another window's ⌘⌥R).
+        try seed("keybind = nav_left=cmd+opt+h\n")
+        let drained = expectation(description: "main queue drained")
+        OperationQueue.main.addOperation { drained.fulfill() }
+        wait(for: [drained], timeout: 5)
+
+        capturer.feed(keyDown("\u{1b}", code: 53))  // Esc → capture ends, the deferred reload replays
+
+        // Now edit an unrelated row. `ConfigWriter` regenerates the WHOLE keybind block from
+        // `desired`, so if the reload was dropped rather than deferred, `desired` never learned about
+        // nav_left and this write silently deletes the user's hand-written line.
+        row(for: .newTab).chip.onActivate?()
+        capturer.feed(event(for: novelChord))
+
+        let text = try String(contentsOf: tempRoot.appendingPathComponent("config"), encoding: .utf8)
+        XCTAssertTrue(text.contains("nav_left=cmd+opt+h"), "an unrelated rebind must not delete it:\n\(text)")
+        XCTAssertEqual(liveKeymap[Chord(command: true, option: true, key: "h")], .navLeft)
+    }
+
+    func test_configDiagnosticMessage_readsAsAWarningNotAFailure() throws {
+        // A config that works but surprises isn't the same as a write that failed; rendering both in
+        // destructive red teaches the user to read a working config as breakage.
+        try seed("float = id:steal command:btop key:cmd+t\n")
+        _ = mountSection(FakeCapturer())
+        XCTAssertEqual(row(for: .newTab).messageKind, .diagnostic)
     }
 
     func test_splitRows_showTheBaseKeyGlyph() {

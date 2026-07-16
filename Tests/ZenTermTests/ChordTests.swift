@@ -66,12 +66,32 @@ final class ChordTests: XCTestCase {
         XCTAssertEqual(Chord.parse("cmd+shift+!"), Chord.parse("cmd+shift+1"))
     }
 
-    func test_shiftedGlyphWithoutShift_gainsShift() {
-        // `cmd+|` is un-typeable — no US keyboard produces "|" without Shift — so today it's a bind
-        // that silently never fires. Canonicalizing infers the Shift the glyph already implies.
+    func test_shiftedGlyphWithoutShift_isLeftExactlyAsWritten() {
+        // The fold requires Shift. It's tempting to infer it — "|" is un-typeable without Shift on
+        // US, so `cmd+|` looks like a chord worth rescuing — but the table is US-only, and inferring
+        // Shift from the glyph breaks layouts where these keys are unshifted. See
+        // `test_unshiftedGlyphOnANonUSLayout_isNotFoldedIntoAShiftedDefault`.
         let piped = Chord.parse("cmd+|")
-        XCTAssertEqual(piped, Chord(command: true, shift: true, key: "\\"))
-        XCTAssertEqual(piped?.configToken, "cmd+shift+\\")
+        XCTAssertEqual(piped, Chord(command: true, key: "|"))
+        XCTAssertFalse(piped!.shift)
+    }
+
+    func test_unshiftedGlyphOnANonUSLayout_isNotFoldedIntoAShiftedDefault() {
+        // On AZERTY `_` is an UNSHIFTED key. Typing ⌘_ there must reach the terminal — folding it to
+        // ⌘⇧- would fire split_horizontal and swallow the keystroke, a chord the user never pressed.
+        let event = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "_", charactersIgnoringModifiers: "_", isARepeat: false, keyCode: 0)!
+        let chord = Chord(event: event)
+        XCTAssertEqual(chord, Chord(command: true, key: "_"))
+        XCTAssertFalse(chord!.shift, "Shift must never be inferred from the glyph alone")
+        XCTAssertNil(KeymapDefaults.map[chord!], "must not land on the ⌘⇧- split default")
+
+        // Same shape on German QWERTZ, where `+` is unshifted.
+        let plusEvent = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "+", charactersIgnoringModifiers: "+", isARepeat: false, keyCode: 0)!
+        XCTAssertEqual(Chord(event: plusEvent), Chord(command: true, key: "+"))
     }
 
     func test_baseKeys_areLeftAlone() {
@@ -98,16 +118,23 @@ final class ChordTests: XCTestCase {
         }
     }
 
-    func test_plusKey_isAcceptedAsAnAliasAndEmittedAsShiftEquals() {
-        // `+` is `shift+=`, so it canonicalizes away rather than needing the `plus` escape on the
-        // way out. `plus` stays a valid INPUT spelling (ghostty's, and configs in the wild).
-        let plus = Chord(command: true, shift: true, key: "+")
-        XCTAssertEqual(plus.key, "=")
-        XCTAssertEqual(plus.configToken, "cmd+shift+=")
-        XCTAssertEqual(Chord.parse("cmd+shift+plus"), plus)
-        XCTAssertEqual(Chord.parse("cmd+shift+="), plus)
-        XCTAssertEqual(Chord.parse(plus.configToken), plus)  // stable on re-read
-        XCTAssertNil(Chord.parse("cmd+shift++"))  // the raw form is still rejected
+    func test_plusKey_roundTrips_shiftedAndUnshifted() {
+        // Shifted, `+` folds onto ⇧= — on US that's the only way to type it, so ⌘⇧+ and ⌘⇧= are one
+        // chord and the `plus` escape isn't needed on the way out.
+        let shifted = Chord(command: true, shift: true, key: "+")
+        XCTAssertEqual(shifted.key, "=")
+        XCTAssertEqual(shifted.configToken, "cmd+shift+=")
+        XCTAssertEqual(Chord.parse("cmd+shift+plus"), shifted)
+        XCTAssertEqual(Chord.parse("cmd+shift+="), shifted)
+
+        // Unshifted, `+` survives as itself (a layout where it needs no Shift, or a literal
+        // `cmd+plus`), so `configToken` still has to escape it — `cmd++` would parse as a stray
+        // empty token and the binding would be lost on the next write.
+        let bare = Chord(command: true, key: "+")
+        XCTAssertEqual(bare.key, "+")
+        XCTAssertEqual(bare.configToken, "cmd+plus")
+        XCTAssertEqual(Chord.parse(bare.configToken), bare)  // stable on re-read
+        XCTAssertNil(Chord.parse("cmd++"))  // the raw form is still rejected
     }
 
     /// A real keypress, built the way macOS reports one: `charactersIgnoringModifiers` applies

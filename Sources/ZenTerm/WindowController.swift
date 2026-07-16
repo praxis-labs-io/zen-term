@@ -40,6 +40,11 @@ final class WindowController: NSObject {
     private lazy var toasts = ToastPresenter(
         host: container, topInset: ChromeMetrics.windowGutter + 12, trailingInset: ChromeMetrics.windowGutter + 12)
 
+    /// Surface a notice in this window. The seam for app-global notices (`AppDelegate` routes
+    /// config problems to one window this way) — the presenter itself stays private so nothing
+    /// outside can reach into this window's toast stack.
+    func showToast(_ content: ToastContent) { toasts.show(content) }
+
     /// The window's tool floats (ZEN-141). Window-level, not per-tab: one live instance per float
     /// id is shared by every tab, and the card hosts on `container` so a tab switch doesn't
     /// unmount it. Lazy so `container`, `tabBar`, and the tab machinery all exist before the

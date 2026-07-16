@@ -5,11 +5,22 @@ import AppKit
 /// Up/Down move between rows, Left exits to the nav, Esc closes the card. An inline message under the
 /// row carries validation / conflict text.
 final class KeybindRow: NSView {
+    /// Why the row is showing a message, which decides both its ink and who may clear it.
+    enum MessageKind: Equatable {
+        /// A problem in the config file — the action has no shortcut and here's what took it. Owned
+        /// by the section's refresh: it's true for as long as the config says so.
+        case diagnostic
+        /// A failure of something the user just did (a config write that didn't land). Outlives a
+        /// refresh, because the refresh isn't what resolved it.
+        case failure
+    }
+
     let action: KeyInterceptor.ReservedChord
     let chip = KeybindChip()
     /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it in place.
     private let titleLabel: NSTextField
     private let messageLabel = NSTextField(labelWithString: "")
+    private(set) var messageKind: MessageKind?
     /// The last shortcut string handed to `render` — kept so `reapplyTheme()` can re-render the
     /// chip (rebuilding its `KeycapView` glyphs against the new theme) without the section having
     /// to resupply it.
@@ -60,9 +71,23 @@ final class KeybindRow: NSView {
         chip.render(shortcut: currentShortcut)
     }
     func setCapturing(_ capturing: Bool) { chip.setCapturing(capturing) }
-    func showMessage(_ text: String?) {
+
+    /// Show (or clear, with nil) the row's inline message. A `.diagnostic` reads as a warning — the
+    /// config is doing what it says, just not what the user wanted — while a `.failure` reads
+    /// destructive. Rendering a working config in the same red as "couldn't write config" would
+    /// teach the user to read both as breakage.
+    func showMessage(_ text: String?, kind: MessageKind = .failure) {
         messageLabel.stringValue = text ?? ""
         messageLabel.isHidden = (text == nil)
+        messageKind = (text == nil) ? nil : kind
+        messageLabel.textColor = KeybindRow.ink(for: messageKind)
+    }
+
+    private static func ink(for kind: MessageKind?) -> NSColor {
+        switch kind {
+        case .diagnostic: return Theme.current.chrome.warning.nsColor
+        case .failure, nil: return Theme.current.chrome.destructive.nsColor
+        }
     }
     func focusChip() { window?.makeFirstResponder(chip) }
 
@@ -73,7 +98,7 @@ final class KeybindRow: NSView {
     /// which `render(shortcut:)` never touches.
     func reapplyTheme() {
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
-        messageLabel.textColor = Theme.current.chrome.destructive.nsColor
+        messageLabel.textColor = KeybindRow.ink(for: messageKind)
         chip.render(shortcut: lastShortcut)
         chip.reapplyTheme()
     }

@@ -91,7 +91,6 @@ final class KeymapAssemblyTests: XCTestCase {
         XCTAssertFalse(assembled.map.values.contains(.newTab))  // left with no chord at all
         XCTAssertEqual(assembled.diagnostics.count, 1)
         XCTAssertEqual(assembled.diagnostics.first?.scope, .keybind(.newTab))
-        XCTAssertEqual(assembled.diagnostics.first?.severity, .warning)
         // Names the config token to grep for, not the UI title.
         XCTAssertTrue(
             assembled.diagnostics.first!.message.contains("toggle_float:x"), assembled.diagnostics.first!.message)
@@ -102,6 +101,21 @@ final class KeymapAssemblyTests: XCTestCase {
         let assembled = KeymapAssembler.assemble(
             floats: [], keybinds: [KeybindParser.parse("toggle_zoom=cmd+shift+\\")!])
         XCTAssertEqual(assembled.diagnostics.map(\.scope), [.keybind(.splitVertical)])
+    }
+
+    func test_diagnostic_namesTheActionThatActuallyHoldsTheChord() {
+        // Two lines claim ⌘⇧\; last wins, so new_window ends up holding it. The message tells the
+        // user which config line to go edit — naming toggle_zoom (which merely passed through on the
+        // way) would send them to fix a line that no longer has the chord.
+        let assembled = KeymapAssembler.assemble(
+            floats: [],
+            keybinds: [
+                KeybindParser.parse("toggle_zoom=cmd+shift+\\")!,
+                KeybindParser.parse("new_window=cmd+shift+\\")!,
+            ])
+        XCTAssertEqual(assembled.map[Chord(command: true, shift: true, key: "\\")], .newWindow)
+        let message = assembled.diagnostics.first { $0.scope == .keybind(.splitVertical) }?.message
+        XCTAssertEqual(message, "⌘⇧\\ went to new_window in your config.")
     }
 
     func test_displacementLeavingAnotherChord_isNotADiagnostic() {

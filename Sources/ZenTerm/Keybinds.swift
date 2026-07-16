@@ -180,18 +180,23 @@ enum KeymapAssembler {
     /// A displacement is only worth surfacing when it took the loser's *last* chord — losing one of
     /// two bindings is a rebind working as intended, but losing the only one leaves an action
     /// silently unreachable. Reported once per action, naming the first chord it lost.
+    ///
+    /// The winner is read back from the finished `map`, not from what was recorded at write time: a
+    /// third line can take the same chord off the recorder's winner (last-wins), and the message
+    /// names the token the user has to go edit — pointing at a line that no longer holds the chord
+    /// would send them to fix the wrong one.
     private static func diagnostics(
         for displacements: [Displacement], in map: [Chord: KeyInterceptor.ReservedChord]
     ) -> [ConfigDiagnostic] {
         var seen: [KeyInterceptor.ReservedChord] = []
         return displacements.compactMap { displacement in
-            guard !map.values.contains(displacement.loser), !seen.contains(displacement.loser) else { return nil }
+            guard !map.values.contains(displacement.loser), !seen.contains(displacement.loser),
+                let winner = map[displacement.chord]
+            else { return nil }
             seen.append(displacement.loser)
             return ConfigDiagnostic(
-                severity: .warning,
                 scope: .keybind(displacement.loser),
-                message: "\(displacement.chord.displayGlyph) went to \(displacement.winner.actionToken) in your config."
-            )
+                message: "\(displacement.chord.displayGlyph) went to \(winner.actionToken) in your config.")
         }
     }
 }

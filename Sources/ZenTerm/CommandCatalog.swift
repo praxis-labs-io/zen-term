@@ -55,16 +55,9 @@ enum CommandCatalog {
         }
     }
 
-    /// The glyph currently bound to an action, from the live keymap — empty if unbound. An action
-    /// can hold several chords (a user binding two), and dictionary order is arbitrary, so pick the
-    /// deterministic first by `configToken` rather than letting the palette show a different glyph
-    /// between launches. Mirrors `SettingsKeybindsSection.displayedChord`.
+    /// The glyph currently bound to an action, from the live keymap — empty if unbound.
     private static func displayGlyph(for chord: KeyInterceptor.ReservedChord) -> String {
-        GeneralConfig.current.keymap
-            .filter { $0.value == chord }
-            .map(\.key)
-            .sorted { $0.configToken < $1.configToken }
-            .first?.displayGlyph ?? ""
+        Chord.displayed(chord, in: GeneralConfig.current.keymap)?.displayGlyph ?? ""
     }
 
     /// The ordered commands shown for a window with `tabCount` tabs, grouped by category
