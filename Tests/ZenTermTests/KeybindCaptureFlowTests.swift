@@ -333,6 +333,52 @@ final class KeybindCaptureFlowTests: XCTestCase {
         XCTAssertEqual(liveKeymap[Chord(command: true, option: true, key: "h")], .navLeft)
     }
 
+    func test_reloadDuringCapture_isRebasedBeforeACommittedRebindWrites() throws {
+        // The sibling test presses Esc, which routes through hideHint's replay. COMMITTING the
+        // capture instead writes 0.7s BEFORE that timer fires, so the replay is too late — the edit
+        // has to be layered on the reloaded set at commit time, not after.
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        row(for: .closePane).chip.onActivate?()  // arm a capture
+
+        try seed("keybind = nav_left=cmd+opt+h\n")  // a foreign reload lands mid-capture
+        let drained = expectation(description: "main queue drained")
+        OperationQueue.main.addOperation { drained.fulfill() }
+        wait(for: [drained], timeout: 5)
+
+        capturer.feed(event(for: novelChord))  // commit, rather than cancel
+
+        let text = try String(contentsOf: tempRoot.appendingPathComponent("config"), encoding: .utf8)
+        XCTAssertTrue(text.contains("nav_left=cmd+opt+h"), "a committed rebind must not delete it:\n\(text)")
+        XCTAssertEqual(liveKeymap[Chord(command: true, option: true, key: "h")], .navLeft)
+        XCTAssertEqual(liveKeymap[novelChord], .closePane, "and the rebind itself still lands")
+    }
+
+    func test_blockedReset_messageClearsOnceTheChordIsFreed() throws {
+        // The block is transient feedback, not a failed write: a reload that frees the chord is
+        // exactly what resolves it, so the row must stop insisting the chord is taken.
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        row(for: .newTab).chip.onActivate?()
+        capturer.feed(event(for: novelChord))  // free ⌘T
+        row(for: .closePane).chip.onActivate?()
+        capturer.feed(event(for: Chord(command: true, key: "t")))  // Close Pane takes ⌘T
+
+        row(for: .newTab).chip.onActivate?()
+        capturer.feed(keyDown("\u{7f}", code: 51))  // Backspace → blocked
+        XCTAssertEqual(row(for: .newTab).messageKind, .blocked)
+
+        // Free ⌘T by hand and reload.
+        try seed("keybind = new_tab=cmd+shift+opt+ctrl+p\n")
+        let drained = expectation(description: "main queue drained")
+        OperationQueue.main.addOperation { drained.fulfill() }
+        wait(for: [drained], timeout: 5)
+
+        XCTAssertNil(
+            row(for: .newTab).renderedMessageForTesting,
+            "the block must not outlive the conflict it describes")
+    }
+
     func test_configDiagnosticMessage_readsAsAWarningNotAFailure() throws {
         // A config that works but surprises isn't the same as a write that failed; rendering both in
         // destructive red teaches the user to read a working config as breakage.

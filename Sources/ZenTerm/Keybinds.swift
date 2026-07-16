@@ -153,7 +153,7 @@ enum KeymapAssembler {
                 NSLog(
                     "GeneralConfig: chord \(chord.displayGlyph) rebound from \(existing.actionToken) "
                         + "to \(action.actionToken)")
-                displacements.append(Displacement(chord: chord, winner: action, loser: existing))
+                displacements.append(Displacement(chord: chord, loser: existing))
             }
             map[chord] = action
         }
@@ -170,10 +170,11 @@ enum KeymapAssembler {
     }
 
     /// One chord write that took a chord off another action — recorded as it happens, before the
-    /// final map says whether the loser was left with anything else.
+    /// final map says whether the loser was left with anything else. Deliberately does NOT record
+    /// the winner: a later write can take the same chord off it, so the only trustworthy answer is
+    /// read back from the finished map. Storing one here would invite exactly the bug that cost.
     private struct Displacement {
         let chord: Chord
-        let winner: KeyInterceptor.ReservedChord
         let loser: KeyInterceptor.ReservedChord
     }
 

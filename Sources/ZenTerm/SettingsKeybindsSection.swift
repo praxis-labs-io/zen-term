@@ -64,12 +64,27 @@ final class SettingsKeybindsSection: SettingsSection {
     private func refreshFromConfig() {
         guard !rows.isEmpty else { return }
         guard capturingRow == nil else {
-            hasMissedConfigReload = true
+            // Only a FOREIGN reload is worth deferring. This card's own write reloads too, and
+            // `desired` already equals what it just wrote — flagging that would replay a refresh we
+            // did a moment ago, and would blur the flag's meaning from "someone else changed the
+            // config" into "a reload happened".
+            hasMissedConfigReload = reservedEntries(of: GeneralConfig.current.keymap) != desired
             return
         }
         hasMissedConfigReload = false
         desired = reservedEntries(of: GeneralConfig.current.keymap)
         refreshRows()
+    }
+
+    /// Re-read `desired` from the live keymap when a reload was deferred, BEFORE an edit is layered
+    /// on top of it. `desired` is the whole set `ConfigWriter` regenerates the keybind block from,
+    /// so an edit applied to a pre-reload set writes that staleness to disk — deleting the very
+    /// lines the reload brought in. `hideHint`'s replay is too late for that: `commitRebind` writes
+    /// 0.7s before its close timer runs.
+    private func rebaseIfReloadDeferred() {
+        guard hasMissedConfigReload else { return }
+        hasMissedConfigReload = false
+        desired = reservedEntries(of: GeneralConfig.current.keymap)
     }
 
     func makeDetailView() -> NSView {
@@ -214,6 +229,7 @@ final class SettingsKeybindsSection: SettingsSection {
     /// Apply a validated rebind, flash a success line, and close the popover after a short delay.
     private func commitRebind(_ row: KeybindRow, to chord: Chord) {
         capturer?.endCapture()
+        rebaseIfReloadDeferred()  // layer this edit on the reloaded set, never a pre-reload one
         desired = desired.filter { $0.value != row.action }
         desired[chord] = row.action
         guard persist(reportingRow: row) else {  // write failed — persist showed the error; don't claim success
@@ -248,11 +264,15 @@ final class SettingsKeybindsSection: SettingsSection {
     /// restoring a default is no different.
     private func reset(_ row: KeybindRow) {
         if let (chord, owner) = defaultChordConflict(for: row.action) {
+            // `.blocked`, not `.failure`: nothing was written, and a later reload freeing the chord
+            // is exactly what resolves this — so a refresh must be allowed to clear it, or the row
+            // keeps insisting the chord is taken after the user has freed it.
             row.showMessage(
                 "\(chord.displayGlyph) is bound to \(CommandCatalog.spec(for: owner).title) — free it first.",
-                kind: .failure)
+                kind: .blocked)
             return
         }
+        rebaseIfReloadDeferred()  // layer the reset on the reloaded set, never a pre-reload one
         desired = desired.filter { $0.value != row.action }
         for (chord, action) in KeymapDefaults.map where action == row.action { desired[chord] = action }
         persist(reportingRow: row)  // its `refreshRows` clears or re-sets the row's message

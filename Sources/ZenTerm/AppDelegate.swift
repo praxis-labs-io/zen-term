@@ -29,6 +29,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         MainMenu.install(copyPaste: nil)  // Copy/Paste route via the responder chain
         newWindow(initialCWD: nil, centered: true)
+        // Announce a config that's already broken at launch, not just one broken later. Someone who
+        // hand-edited their config and quit has no reason to open Settings → Keybinds — they're
+        // exactly who this is for. It also seeds the change-gate, so a pre-existing conflict can't
+        // ambush them later, attached to an unrelated edit that didn't cause it.
+        surfaceKeymapDiagnostics()
 
         keys.onReservedChord = { [weak self] chord in self?.route(chord) }
         // Seamless-nav opt-in: let a `Ctrl`-nav chord fall through to a pane running nvim so
@@ -119,12 +124,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The decision itself is `ConfigDiagnostic.announcement`, where it's testable.
     private func surfaceKeymapDiagnostics() {
         let diagnostics = GeneralConfig.current.keymapDiagnostics
-        defer { lastKeymapDiagnostics = diagnostics }
         guard
             let content = ConfigDiagnostic.announcement(
                 for: diagnostics, alreadyAnnounced: lastKeymapDiagnostics)
-        else { return }
-        keyController()?.showToast(content)
+        else {
+            lastKeymapDiagnostics = diagnostics
+            return
+        }
+        // Record it as announced only once a window has actually shown it. `keyController()` is nil
+        // when the key window isn't one of ours (an open panel), and marking an undelivered notice
+        // as announced would let the change-gate swallow it forever.
+        guard let controller = keyController() else { return }
+        controller.showToast(content)
+        lastKeymapDiagnostics = diagnostics
     }
 
     /// The `WindowController` owning the current key window, falling back to the

@@ -9,8 +9,10 @@ struct Chord: Hashable {
     var shift: Bool
     var option: Bool
     var control: Bool
-    /// Canonical, lowercased single key token — always the key's *unshifted* glyph: `"g"`, `"1"`,
-    /// `"\\"`, `"-"`. A shifted glyph (`"|"`, `"_"`, `"!"`) never survives `init`; see `shift`.
+    /// Lowercased single key token: `"g"`, `"1"`, `"\\"`, `"-"`. Canonical *whenever Shift is set* —
+    /// there it's always the unshifted glyph, because `init` folds `"|"` onto `⇧"\\"`. Without
+    /// Shift the token is whatever was given: `cmd+|` stays `"|"`, since the fold table is US-only
+    /// and these glyphs are unshifted on other layouts. Don't assume a base glyph; see `init`.
     var key: String
 
     /// Canonicalizes: **with Shift held**, a glyph that a US key produces only via Shift folds onto
