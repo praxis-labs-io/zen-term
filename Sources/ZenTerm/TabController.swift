@@ -300,13 +300,6 @@ final class TabController: NSObject {
         ])
     }
 
-    /// Restore keyboard focus when this tab is (re)mounted: whichever panel held the tab's
-    /// unified focus (pane or a drawer). Without honoring `focusedPanel`, remounting a tab that
-    /// was focused on a drawer wrongly drops focus onto the central pane. A shown tool float must
-    /// keep first responder instead — it's modal over the window — so `WindowController` doesn't
-    /// call this while one is up.
-    func restoreKeyFocus() { restoreUnifiedFocus() }
-
     /// Drop the tab's unified focus (halo + first responder) — the window's modal float is taking
     /// it. `focusedPanel` is deliberately left alone, so closing the card restores focus to
     /// whichever panel had it.
@@ -484,9 +477,11 @@ final class TabController: NSObject {
         return panel
     }
 
-    /// Re-focus whichever panel held the tab's unified focus before the window's modal float
-    /// opened (the float focuses its own surface without changing `focusedPanel`), restoring both
-    /// the halo and keyboard first-responder.
+    /// Restore the tab's unified focus — halo and keyboard first-responder — to whichever panel
+    /// holds `focusedPanel`. Called when the tab is (re)mounted, and by the window when its modal
+    /// float closes (the float takes focus via `yieldFocusToFloat` without touching
+    /// `focusedPanel`, so the panel that had it gets it back). Honoring `focusedPanel` is what
+    /// keeps a tab that was focused on a drawer from wrongly landing on the central pane.
     func restoreUnifiedFocus() {
         switch focusedPanel {
         case .pane: paneCanvas.focusActivePane()

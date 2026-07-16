@@ -35,10 +35,11 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// dismissal. Liveness and visibility are independent: a float can be in here while hidden.
     /// `anchor` is the directory identity a `.directory` float was launched against (`.ephemeral`
     /// floats are never in here at all; a `.window` float's anchor is nil, which is exactly what
-    /// makes it never re-anchor). `command`/`dir` are the spec values the instance was SPAWNED
-    /// with — a Settings edit to either is caught on the next open and respawns, instead of
-    /// silently reusing a process still running the old command.
-    private var liveFloats: [String: (surface: TerminalSurface, anchor: URL?, command: String, dir: URL?)] = [:]
+    /// makes it never re-anchor). `spec` is the one the instance was SPAWNED with — a Settings
+    /// edit to its `command`/`dir` is caught on the next open and respawns, instead of silently
+    /// reusing a process still running the old command; its `title` names a hidden float in the
+    /// notifications and warnings it can still raise.
+    private var liveFloats: [String: (surface: TerminalSurface, anchor: URL?, spec: ToolFloat)] = [:]
 
     /// A float overlay still springing out. It keeps Auto Layout constraints on a persistent
     /// float's shared `surface.view`, so a fast re-show must snap it away before re-hosting that
@@ -49,6 +50,10 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     var onStateChanged: (() -> Void)?
     /// Request a transient top-right toast (e.g. a `git:true` float opened outside a repo).
     var onRequestToast: ((ToastContent) -> Void)?
+    /// A float's tool posted a desktop notification (an agent asking for input), with the float it
+    /// came from so the banner can name it. Relayed for hidden floats too — that's the case that
+    /// needs it most: a dismissed `persist:` agent has no on-screen trace at all.
+    var onNotification: ((TerminalNotification, ToolFloat) -> Void)?
 
     init(
         presentOverlay: @escaping (SurfaceFloatOverlay) -> Void,
@@ -161,13 +166,13 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     private func surfaceForFloat(_ spec: ToolFloat, anchor: URL?) -> TerminalSurface {
         if let live = liveFloats[spec.id] {
             let anchorHolds = spec.persist != .directory || live.anchor?.path == anchor?.path
-            let spawnHolds = live.command == spec.command && live.dir == spec.dir
+            let spawnHolds = live.spec.command == spec.command && live.spec.dir == spec.dir
             if spec.persist != .ephemeral, anchorHolds, spawnHolds { return live.surface }
             discard(spec.id)
         }
         let surface = spawn(spec)
         if spec.persist != .ephemeral {
-            liveFloats[spec.id] = (surface, anchor, spec.command, spec.dir)
+            liveFloats[spec.id] = (surface, anchor, spec)
         }
         return surface
     }
@@ -261,6 +266,23 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     }
 
     // MARK: TerminalSurfaceDelegate
+
+    /// A float's tool posted a desktop notification (a `claude` float asking for input) — relay it
+    /// as this window's attention signal, same as a pane or a drawer.
+    ///
+    /// Before ZEN-141 floats were tab-owned, so `TabController`'s blanket relay carried this for
+    /// free; owning the delegate here means owning this too, or an agent float's request is
+    /// silently dropped (ZEN-139).
+    func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
+        guard let spec = spec(for: s) else { return }
+        onNotification?(n, spec)
+    }
+
+    /// The spec behind a live surface — the shown card's, or a hidden persistent float's.
+    private func spec(for s: TerminalSurface) -> ToolFloat? {
+        if let active = activeFloat, s === active.surface { return active.spec }
+        return liveFloats.values.first { $0.surface === s }?.spec
+    }
 
     /// A float's tool ran to completion / quit (`q` in lazygit) → close the card and forget the
     /// instance, so the next open spawns fresh rather than resurrecting a dead surface.

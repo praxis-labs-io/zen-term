@@ -24,6 +24,11 @@ final class WindowControllerToolFloatTests: XCTestCase {
         try super.setUpWithError()
         originalOverride = TerminalSurfaceFactory.makeOverride
         originalConfig = GeneralConfig.current
+        // Reduce Motion runs `animateOut`'s completion synchronously, so a dismissed card is out of
+        // the view tree by the time an assertion reads it — otherwise these race the spring and see
+        // a card that's on its way out. The animation itself is `MotionTests`' subject, not this
+        // suite's; here it's only in the way.
+        Motion.isReduceMotionEnabled = { true }
         // The real ghostty backend needs a live libghostty app, which a test bundle has no
         // business spinning up — inject a headless stub surface instead, and record every spawn.
         TerminalSurfaceFactory.makeOverride = { [weak self] in
@@ -47,6 +52,7 @@ final class WindowControllerToolFloatTests: XCTestCase {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         spawned = []
+        Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         try? FileManager.default.removeItem(at: root)
@@ -107,27 +113,71 @@ final class WindowControllerToolFloatTests: XCTestCase {
         XCTAssertFalse(all[0].terminated)
     }
 
-    /// The hazard this ticket is built around: the card hosts on the window's `container`, so
-    /// switching tabs beneath an open float leaves it mounted, on screen, and holding focus.
-    /// Hosted on the active tab's `content` (the old path), the switch unmounts it — the card
-    /// vanishes while the engine still believes it's shown, and every chord stays gated behind an
-    /// invisible float.
-    func test_shownFloat_survivesATabSwitch() {
+    /// A float is modal over the window, so the tab underneath must not change behind it — the
+    /// same rule every modal card follows (`select` → `closeModal()`). Switching dismisses the
+    /// card and reveals the new tab in one keystroke, instead of leaving the user typing into a
+    /// card while the world they can't see moved.
+    func test_tabSwitch_dismissesTheFloat() {
         let c = makeWindow()
         c.handle(.newTab)  // two tabs, second active
-
         c.handle(.toggleToolFloat("btop"))
-        guard let card = cards(c).first else { return XCTFail("expected a float card on screen") }
+        XCTAssertEqual(cards(c).count, 1, "the float should be up before the switch")
+
+        c.handle(.prevTab)
+
+        XCTAssertTrue(cards(c).isEmpty, "a tab switch must dismiss the card, not change tabs behind it")
+    }
+
+    /// Dismissed by a tab switch, but NOT killed: the registry is the window's, so the process
+    /// survives and reopening from the tab you landed on is instant and lands on the same
+    /// instance. That's the whole point of lifting the registry — without it, this flow would
+    /// re-pay btop's startup on every tab change.
+    func test_tabSwitch_dismissesButKeepsAPersistentFloatAlive() {
+        let c = makeWindow()
+        c.handle(.newTab)
+        c.handle(.toggleToolFloat("btop"))
         let surface = floatSurfaces(command: "btop")[0]
 
-        c.handle(.prevTab)  // switch out from under the open card
+        c.handle(.prevTab)
+        XCTAssertFalse(surface.terminated, "a persistent float must survive the dismiss")
 
-        XCTAssertEqual(cards(c).count, 1, "the card must still be in the window's view tree")
-        XCTAssertNotNil(card.window, "the card must still be on screen, not unmounted with its tab")
-        XCTAssertTrue(
-            surface.view.isDescendant(of: card),
-            "the float's surface must still be hosted in its card after the switch")
-        XCTAssertTrue(surface.isFocused, "the float is modal — a tab switch must not steal its focus")
+        c.handle(.toggleToolFloat("btop"))  // reopen from the tab we landed on
+        let all = floatSurfaces(command: "btop")
+        XCTAssertEqual(all.count, 1, "reopening after a tab switch must reuse the window's instance")
+        XCTAssertEqual(all[0].startCount, 1, "the shared surface must not be restarted")
+    }
+
+    /// The tab bar sits below the card and stays clickable, so a chip click is a second way into
+    /// a tab change — it must honor the same rule the chord does. The "+" button deliberately
+    /// bypasses `handle(_:)` entirely, which is exactly why this can't be gated there.
+    func test_tabBarClicks_dismissTheFloat() {
+        let c = makeWindow()
+        c.handle(.newTab)
+        c.handle(.toggleToolFloat("btop"))
+
+        c.selectTabForTesting(index: 0)  // a tab-bar chip click, not a chord
+
+        XCTAssertTrue(cards(c).isEmpty, "clicking a tab chip must dismiss the float too")
+    }
+
+    /// A float's agent asking for input must still reach the user (ZEN-139). The float's surface
+    /// delegate moved from `TabController` — whose blanket relay every tab-owned surface got for
+    /// free — to `ToolFloatController`, so this is the assertion that the relay came with it.
+    /// A dismissed `persist:` agent has no on-screen trace at all, which is the case that needs
+    /// the banner most.
+    func test_floatNotification_isRelayed_evenWhileHidden() {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat("btop"))
+        let surface = floatSurfaces(command: "btop")[0]
+        c.handle(.toggleToolFloat("btop"))  // dismissed; still alive in the registry
+
+        var relayed: [(TerminalNotification, ToolFloat)] = []
+        c.floatsForTesting.onNotification = { relayed.append(($0, $1)) }
+        surface.delegate?.surface(
+            surface, didPostNotification: TerminalNotification(title: "Claude", body: "needs input"))
+
+        XCTAssertEqual(relayed.count, 1, "a hidden float's notification must not be dropped")
+        XCTAssertEqual(relayed.first?.1.id, "btop", "the banner needs the float it came from to name it")
     }
 
     /// `persist:window` anchors where it first opened and never re-anchors: it's for tools that
