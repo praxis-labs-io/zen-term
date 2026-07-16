@@ -10,7 +10,7 @@ final class ToggleDockTests: XCTestCase {
     private func float(_ id: String) -> ToolFloat {
         ToolFloat(
             id: id, title: "Open \(id)", icon: "square.on.square", command: "cmd",
-            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false, emptyGuard: nil,
+            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
             toggle: Chord(command: true, shift: true, key: "d"))
     }
 

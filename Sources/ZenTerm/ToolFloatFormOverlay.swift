@@ -4,8 +4,7 @@ import AppKit
 /// float's fields — id, title, icon, shortcut, command, size, and a git-only toggle — builds a
 /// `ToolFloat`, and hands it to `onSubmit` (the host writes it via `ConfigWriter` + reloads, so the
 /// dock button, ⌘P entry, and its keybind appear with no restart). A `ModalOverlay` like the
-/// palettes and `AddWorkspaceOverlay`, which it mirrors; `emptyGuard` has no config grammar yet, so
-/// it isn't editable here (an existing float's guard, always nil today, is preserved untouched).
+/// palettes and `AddWorkspaceOverlay`, which it mirrors.
 ///
 /// Fully keyboard-driven: Up/Down move between fields, the shortcut chip captures a chord (Return to
 /// arm, then press keys; Backspace clears), Return advances, ⌘Return submits, Esc cancels. Every
@@ -482,7 +481,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             widthFraction: fraction(widthField),
             heightFraction: fraction(heightField),
             requiresGitRepo: gitSegment.selectedIndex == 1,
-            emptyGuard: editingFloat?.emptyGuard,  // not editable here; preserve (nil today)
             toggle: chord)
     }
 

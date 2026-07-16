@@ -140,8 +140,7 @@ enum ConfigWriter {
     /// `command`) are always emitted; an optional field is omitted when it equals the parser's default
     /// (shared via `ToolFloatParser`, so the two halves can't drift), keeping a plain float's line
     /// lean. A value with whitespace or a `#` is quoted — the same rule `WorkspacesWriter` uses — so
-    /// the parser's comment strip and whitespace tokenizer don't split it. `emptyGuard` has no grammar
-    /// yet (the parser always reads it as nil), so it isn't serialized.
+    /// the parser's comment strip and whitespace tokenizer don't split it.
     static func serializeFloat(_ float: ToolFloat) -> String {
         var tokens = ["id:\(quotedValue(float.id))", "key:\(float.toggle.configToken)"]
         if float.title != ToolFloatParser.defaultTitle(forID: float.id) {

@@ -60,7 +60,6 @@ enum ToolFloatParser {
             widthFraction: fraction(fields["width"]) ?? Self.defaultFraction,
             heightFraction: fraction(fields["height"]) ?? Self.defaultFraction,
             requiresGitRepo: fields["git"]?.lowercased() == "true",
-            emptyGuard: nil,
             toggle: toggle)
     }
 

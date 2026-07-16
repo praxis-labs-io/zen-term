@@ -12,21 +12,10 @@ struct ToolFloat: Equatable {
     let widthFraction: CGFloat
     let heightFraction: CGFloat
     let requiresGitRepo: Bool
-    let emptyGuard: EmptyGuard?
     let toggle: Chord  // the config `key:` — binds the chord AND renders the palette glyph
 
     /// Palette glyph string, e.g. "⌘⇧G" — derived from `toggle`, never authored separately.
     var shortcut: String { toggle.displayGlyph }
-}
-
-/// A pre-open probe: `probe` runs at the focused cwd; if it exits 0 (nothing to show), the
-/// float doesn't open and `toast` is surfaced instead. The probe runs in a plain,
-/// **non-login/non-interactive** shell (`$SHELL -c`) so it doesn't pay rc-sourcing latency —
-/// so its command must be on the default `PATH`, not only wired up by a login/`.zshrc` — and
-/// is bounded by a short timeout, failing open (the float opens) on timeout or error.
-struct EmptyGuard: Equatable {
-    let probe: String
-    let toast: ToastContent
 }
 
 /// The active tool floats — the ones the user declared in their config. There are no

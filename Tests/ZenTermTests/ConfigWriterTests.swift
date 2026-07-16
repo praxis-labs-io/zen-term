@@ -157,7 +157,7 @@ final class ConfigWriterTests: XCTestCase {
     ) -> ToolFloat {
         ToolFloat(
             id: id, title: title ?? "Open \(id)", icon: icon, command: command,
-            widthFraction: width, heightFraction: height, requiresGitRepo: git, emptyGuard: nil, toggle: toggle)
+            widthFraction: width, heightFraction: height, requiresGitRepo: git, toggle: toggle)
     }
 
     func test_float_serialize_roundTripsThroughParser() throws {

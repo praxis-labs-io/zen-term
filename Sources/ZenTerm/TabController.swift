@@ -97,9 +97,6 @@ final class TabController: NSObject {
     /// mutually exclusive, so one slot suffices. Terminated on close (not persisted).
     private var activeToolFloat: (spec: ToolFloat, surface: TerminalSurface, overlay: SurfaceFloatOverlay)?
     var isToolFloatOpen: Bool { activeToolFloat != nil }
-    /// The float id whose empty-guard probe is currently deciding (async). A re-press while a
-    /// probe is in flight is ignored, so a double-tap can't spawn two overlapping floats.
-    private var probingToolFloatID: String?
     var activeToolFloatID: String? { activeToolFloat?.spec.id }
 
     /// Which panel currently holds the tab's single unified focus/halo.
@@ -734,8 +731,7 @@ final class TabController: NSObject {
 
     // MARK: tool floats (ephemeral command floats — diffnav, …)
 
-    /// Toggle a tool float: same id open → close; otherwise run the guards and open a
-    /// fresh surface. Mirrors `toggleLazygit`'s plumbing but spawns fresh each time.
+    /// Toggle a tool float: same id open → close; otherwise run the git guard and open.
     func toggleToolFloat(_ spec: ToolFloat) {
         if activeToolFloat?.spec.id == spec.id { closeToolFloat(); return }
         if activeToolFloat != nil { closeToolFloat() }  // switch floats
@@ -748,25 +744,7 @@ final class TabController: NSObject {
                         + "or open a folder that has one."))
             return
         }
-        guard let guardSpec = spec.emptyGuard else {
-            showToolFloat(spec)
-            return
-        }
-        // Decide off the main thread: a `git diff`-style probe on a large repo or cold disk would
-        // otherwise beachball on the keybind press. The float animates in either way, so a
-        // sub-100ms deferred decision is invisible.
-        guard probingToolFloatID == nil else { return }  // a probe is already deciding — ignore re-press
-        probingToolFloatID = spec.id
-        probeIsEmpty(guardSpec.probe) { [weak self] isEmpty in
-            guard let self else { return }
-            self.probingToolFloatID = nil
-            guard self.activeToolFloat == nil else { return }  // a float opened while we probed
-            if isEmpty {
-                self.onRequestToast?(guardSpec.toast)
-            } else {
-                self.showToolFloat(spec)
-            }
-        }
+        showToolFloat(spec)
     }
 
     /// Spawn `spec.command` in a fresh login+interactive shell at the focused cwd (so
@@ -810,51 +788,6 @@ final class TabController: NSObject {
         active.surface.terminate()
         restoreUnifiedFocus()
         onOverlayStateChanged?()
-    }
-
-    /// The empty-guard probe's watchdog timeout — a pathological probe is terminated after this so
-    /// it can't run forever. On timeout (or any error) we fail open (show the float).
-    private static let probeTimeout: TimeInterval = 2
-
-    /// Run `probe` as a plain (non-login) shell at the focused cwd; exit 0 ⇒ nothing to show.
-    /// Used by a float's `emptyGuard` to toast instead of opening an empty float. Runs entirely on
-    /// a background queue — the main thread is never blocked — and calls `completion` on the main
-    /// queue. Bounded by a `probeTimeout` watchdog and fail-open (isEmpty == false) on any
-    /// error/timeout so it never wrongly guards.
-    private func probeIsEmpty(_ probe: String, completion: @escaping (Bool) -> Void) {
-        let shell = ShellLaunch.userShell
-        let cwd = focusedCWD ?? ShellLaunch.defaultCWD
-        DispatchQueue.global(qos: .userInitiated).async {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: shell)
-            process.arguments = ["-c", probe]
-            process.currentDirectoryURL = cwd
-            process.standardOutput = FileHandle.nullDevice
-            process.standardError = FileHandle.nullDevice
-            do {
-                try process.run()
-            } catch {
-                DispatchQueue.main.async { completion(false) }  // couldn't probe → open the float
-                return
-            }
-            // Reap on a separate worker and wait on it with a timeout, so a probe that ignores
-            // SIGTERM can NEVER wedge the decision: on timeout we fail open immediately (isEmpty
-            // == false) and best-effort terminate, while the reaper keeps waiting to collect the
-            // child. `completion` fires exactly once, so `probingToolFloatID` is always cleared.
-            let finished = DispatchSemaphore(value: 0)
-            DispatchQueue.global(qos: .userInitiated).async {
-                process.waitUntilExit()
-                finished.signal()
-            }
-            let isEmpty: Bool
-            if finished.wait(timeout: .now() + Self.probeTimeout) == .timedOut {
-                process.terminate()
-                isEmpty = false
-            } else {
-                isEmpty = process.terminationStatus == 0
-            }
-            DispatchQueue.main.async { completion(isEmpty) }
-        }
     }
 
     // MARK: tiling

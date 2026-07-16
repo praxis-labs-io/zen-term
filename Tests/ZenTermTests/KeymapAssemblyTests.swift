@@ -7,7 +7,7 @@ final class KeymapAssemblyTests: XCTestCase {
         ToolFloat(
             id: id, title: "Open \(id)", icon: "square.on.square", command: "run",
             widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
-            emptyGuard: nil, toggle: Chord.parse(key)!)
+            toggle: Chord.parse(key)!)
     }
 
     func test_defaultsPresent() {
