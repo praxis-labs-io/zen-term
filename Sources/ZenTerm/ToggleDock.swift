@@ -1,7 +1,7 @@
 import AppKit
 
 /// The global footer toggle dock (bottom-right of the tab-bar row): a row of `IconButton`s
-/// — split-h, split-v │ bottom drawer, right drawer, zoom │ repo picker, lazygit, one per
+/// — split-h, split-v │ bottom drawer, right drawer, zoom │ repo picker, one per
 /// `ToolFloatCatalog` entry — grouped by thin dividers. Active toggles tint iris. Buttons
 /// fire injected closures (routed through the window's chord handler, so they respect the
 /// modals). `render` mirrors the active tab's overlay state plus the window's repo-picker
@@ -11,7 +11,6 @@ final class ToggleDock: NSView {
     private let bottomBtn: IconButton
     private let rightBtn: IconButton
     private let zoomBtn: IconButton
-    private let lazygitBtn: IconButton
     private var toolFloatBtns: [String: IconButton] = [:]
     /// Every button + divider in the dock, retained so `reapplyTheme()` can re-color them all
     /// after a config change (some, like split-h/v and the dividers, have no other stored
@@ -31,7 +30,6 @@ final class ToggleDock: NSView {
         onSplitH: @escaping () -> Void, onSplitV: @escaping () -> Void,
         onPalette: @escaping () -> Void, onBottom: @escaping () -> Void,
         onRight: @escaping () -> Void, onZoom: @escaping () -> Void,
-        onLazygit: @escaping () -> Void,
         toolFloats: [ToolFloat], onToolFloat: @escaping (ToolFloat) -> Void
     ) {
         self.onToolFloat = onToolFloat
@@ -51,10 +49,9 @@ final class ToggleDock: NSView {
         bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", .toggleBottomDrawer, onBottom)
         rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", .toggleRightDrawer, onRight)
         zoomBtn = button("arrow.up.left.and.arrow.down.right", "Toggle zoom", .toggleZoom, onZoom)
-        lazygitBtn = button("git", "Toggle lazygit", .toggleLazygit, onLazygit)  // bundled git mark
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        allButtons = [newTab, splitH, splitV, bottomBtn, rightBtn, zoomBtn, paletteBtn, lazygitBtn]
+        allButtons = [newTab, splitH, splitV, bottomBtn, rightBtn, zoomBtn, paletteBtn]
         let dividerA = Self.divider()
         let dividerB = Self.divider()
         dividers = [dividerA, dividerB]
@@ -64,7 +61,7 @@ final class ToggleDock: NSView {
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
         // New-tab leads the "create" cluster (new tab + splits), sitting just past the tab strip.
-        for view in [newTab, splitH, splitV, dividerA, bottomBtn, rightBtn, zoomBtn, dividerB, paletteBtn, lazygitBtn] {
+        for view in [newTab, splitH, splitV, dividerA, bottomBtn, rightBtn, zoomBtn, dividerB, paletteBtn] {
             stack.addArrangedSubview(view)
         }
         addSubview(stack)
@@ -113,19 +110,18 @@ final class ToggleDock: NSView {
         }
     }
 
-    /// Mirror the active tab's overlay state (drawers, lazygit, zoom) and the window's
-    /// repo picker; split buttons are momentary and have no active state. A modal float
-    /// (lazygit / tool float) covers the whole tab, so while one is open the zoom and drawer
+    /// Mirror the active tab's overlay state (drawers, tool floats, zoom) and the window's
+    /// repo picker; split buttons are momentary and have no active state. A modal tool float
+    /// covers the whole tab, so while one is open the zoom and drawer
     /// pips dim — their state is hidden behind it and returns when it closes. Otherwise the
     /// drawer tints reflect what's visible: a zoomed pane hides both drawers (neither lit), a
     /// zoomed drawer hides its sibling (only its own lit).
     func render(overlay: OverlayState, paletteOpen: Bool) {
         paletteBtn.isActive = paletteOpen
-        lazygitBtn.isActive = overlay.isLazygitOpen
         for (id, btn) in toolFloatBtns { btn.isActive = overlay.activeToolFloatID == id }
 
         // A float covers the tab, so zoom/drawer state beneath it would read as lit-but-hidden.
-        let floatCoversTab = overlay.isLazygitOpen || overlay.activeToolFloatID != nil
+        let floatCoversTab = overlay.activeToolFloatID != nil
         if floatCoversTab {
             zoomBtn.isActive = false
             bottomBtn.isActive = false

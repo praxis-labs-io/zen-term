@@ -17,7 +17,7 @@ final class ToggleDockTests: XCTestCase {
     private func makeDock(_ floats: [ToolFloat]) -> ToggleDock {
         ToggleDock(
             onNewTab: {}, onSplitH: {}, onSplitV: {}, onPalette: {}, onBottom: {}, onRight: {},
-            onZoom: {}, onLazygit: {}, toolFloats: floats, onToolFloat: { _ in })
+            onZoom: {}, toolFloats: floats, onToolFloat: { _ in })
     }
 
     func test_setToolFloats_rebuildsButtonsForCatalog() {

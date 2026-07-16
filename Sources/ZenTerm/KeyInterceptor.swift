@@ -24,7 +24,6 @@ final class KeyInterceptor {
         case toggleBottomDrawer
         case toggleRightDrawer
         case toggleZoom
-        case toggleLazygit
         case toggleToolFloat(String)  // associated value = ToolFloat.id
         case toggleRepoPicker
         case toggleCommandPalette

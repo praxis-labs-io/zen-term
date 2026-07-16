@@ -40,8 +40,7 @@ final class TabControllerToolFloatTests: XCTestCase {
         return dir
     }
 
-    /// A window-mounted controller over `cwd`, recording every surface it spawns. Left unpinned so
-    /// the lazygit pre-warm path (gated on `pinnedTitle != nil`) never fires and pollutes `spawned`.
+    /// A window-mounted controller over `cwd`, recording every surface it spawns.
     private func makeController(cwd: URL) -> (controller: TabController, spawned: () -> [RecordingSurface]) {
         var spawned: [RecordingSurface] = []
         let controller = TabController(
@@ -50,8 +49,7 @@ final class TabControllerToolFloatTests: XCTestCase {
                 let surface = RecordingSurface()
                 spawned.append(surface)
                 return surface
-            },
-            prewarmPool: LazygitPrewarmPool(capacity: 3), prewarmDelay: 0)
+            })
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
             styleMask: [.borderless], backing: .buffered, defer: false)

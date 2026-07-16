@@ -123,8 +123,10 @@
 # Example — a dev server with spaces in the command:
 # float = id:dev command:"npm run dev" key:cmd+shift+d title:"Dev server"
 #
-# Example — a git TUI kept warm per repo (first open is cold; reopens are instant):
-# float = id:lazygit command:"lazygit" key:cmd+g git:true persist:dir icon:git title:"Open Lazygit"
+# Example — lazygit kept warm per repo (first open is cold; reopens are instant).
+# This is the recipe for the old built-in ⌘G lazygit, now a regular float like any
+# other tool (height:0.78 matches the old card exactly):
+# float = id:lazygit command:"lazygit" key:cmd+g git:true persist:dir icon:git title:"Open Lazygit" height:0.78
 #
 # Example — a system monitor kept alive at home, no matter where you open it from:
 # float = id:btop command:"btop" key:cmd+shift+b persist:dir dir:~ icon:gauge
@@ -145,7 +147,7 @@
 #   resize_left  resize_right  resize_up  resize_down
 #   new_tab  new_window  prev_tab  next_tab  select_tab_1 … select_tab_9
 #   toggle_bottom_drawer  toggle_right_drawer  toggle_zoom
-#   toggle_lazygit  toggle_repo_picker  toggle_command_palette  open_settings
+#   toggle_repo_picker  toggle_command_palette  open_settings
 #   toggle_float:<id>   (bind a second chord to one of your floats)
 #
 # Defaults (uncomment to change; these are what ships):
@@ -167,7 +169,6 @@
 # keybind = toggle_bottom_drawer=cmd+b
 # keybind = toggle_right_drawer=cmd+\
 # keybind = toggle_zoom=cmd+f
-# keybind = toggle_lazygit=cmd+g
 # keybind = toggle_repo_picker=cmd+shift+p
 # keybind = toggle_command_palette=cmd+p
 # keybind = open_settings=cmd+,

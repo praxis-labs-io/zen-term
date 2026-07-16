@@ -8,12 +8,11 @@ enum DrawerEdge { case bottom, right }
 /// Which panel is filling the tab (zoomed), for the footer dock's zoom tint.
 enum ZoomedPanel: Equatable { case pane, bottomDrawer, rightDrawer }
 
-/// A tab's overlay open-state (drawers + lazygit + zoom), produced by `TabController`
+/// A tab's overlay open-state (drawers + tool floats + zoom), produced by `TabController`
 /// and mirrored by the footer toggle dock's active tints.
 struct OverlayState: Equatable {
     var isBottomOpen = false
     var isRightOpen = false
-    var isLazygitOpen = false
     var activeToolFloatID: String?
     var zoomed: ZoomedPanel?
     /// Whether each drawer's shell has a live process — drives the footer dock's activity dot
@@ -23,7 +22,7 @@ struct OverlayState: Equatable {
 }
 
 /// One tab: owns the pane tree (`PaneCanvasController`) and the per-tab overlay
-/// surfaces (drawers, lazygit) and zoom. `view` is the tab's container that
+/// surfaces (drawers, tool floats) and zoom. `view` is the tab's container that
 /// `WindowController` mounts. `content` is the tab's tile region (inset from `view`
 /// to clear the traffic lights and match the pane gutter); the pane canvas and any
 /// open drawers tile within it as sibling panels — right drawer as a full-height
@@ -67,31 +66,6 @@ final class TabController: NSObject {
     private var rightDrawerPanel: PanelHostView?
     private var isRightOpen = false { didSet { onOverlayStateChanged?() } }
     private var rightDrawerToken: Int?
-
-    // The lazygit float. Like the drawers, its surface is PERSISTENT: created once
-    // (pre-warmed in the background for repo/workspace tabs, else lazily on the first
-    // ⌘G) and kept alive for the tab's lifetime — dismiss only hides it. The overlay,
-    // not the surface, tracks visibility, so `isLazygitOpen` still means "shown/modal".
-    private var lazygitSurface: TerminalSurface?
-    private var lazygitOverlay: LazygitOverlay?
-    /// An overlay still springing out after `hideLazygit`. It keeps Auto Layout constraints
-    /// to the shared `lazygitSurface.view` until its exit animation finishes, so a fast
-    /// re-show must snap it away first (see `showLazygit`) before reparenting that view.
-    private var lazygitDismissingOverlay: LazygitOverlay?
-    /// The git repo root (or plain cwd) the live `lazygitSurface` was launched against.
-    /// `⌘G` reloads the surface when the focused pane has since moved to a different
-    /// repo/dir, so lazygit tracks the pane instead of showing a stale directory.
-    private var lazygitLaunchAnchor: URL?
-    var isLazygitOpen: Bool { lazygitOverlay != nil }
-    /// The pending debounced pre-warm (ZEN-55): scheduling off the `applyRecipe` turn
-    /// keeps a workspace open from bursting four login shells at once. Canceled by
-    /// `shutdown()` and by `showLazygit` (a `⌘G` that beats the timer supersedes it).
-    private var prewarmWorkItem: DispatchWorkItem?
-    /// Debounce delay and LRU cap for the pre-warm (ZEN-55). Injected at init like
-    /// `makeSurface` — immutable so a mid-flight reassignment can't strand a pooled
-    /// entry (a stale pool would later evict a surface this tab no longer tracks).
-    private let prewarmDelay: TimeInterval
-    private let prewarmPool: LazygitPrewarmPool
 
     /// The tool float currently SHOWN. Floats are modal and mutually exclusive, so one slot
     /// suffices. Whether its surface dies on dismiss depends on `spec.persist`.
@@ -184,12 +158,12 @@ final class TabController: NSObject {
     var isSinglePane: Bool { paneCanvas.paneCount == 1 }
 
     /// Every live terminal surface this tab owns: the split-pane surfaces (via the canvas) plus
-    /// the auxiliary drawer/lazygit/tool-float surfaces. Used to re-theme all surfaces live on a
+    /// the auxiliary drawer/tool-float surfaces. Used to re-theme all surfaces live on a
     /// config change.
     var allSurfaces: [TerminalSurface] {
         var result = paneCanvas.allSurfaces
         result.append(
-            contentsOf: [bottomDrawerSurface, rightDrawerSurface, lazygitSurface, activeToolFloat?.surface]
+            contentsOf: [bottomDrawerSurface, rightDrawerSurface, activeToolFloat?.surface]
                 .compactMap { $0 })
         result.append(contentsOf: persistentFloats.values.map(\.surface))
         return result
@@ -215,12 +189,12 @@ final class TabController: NSObject {
         bottomDrawerSurface?.isBusy == true || rightDrawerSurface?.isBusy == true
     }
 
-    /// The tab's overlay open-state (drawers + lazygit), for the footer dock's active
+    /// The tab's overlay open-state (drawers + tool floats), for the footer dock's active
     /// tints; fired via `onOverlayStateChanged` whenever one of them toggles.
     var overlayState: OverlayState {
         OverlayState(
             isBottomOpen: isBottomOpen, isRightOpen: isRightOpen,
-            isLazygitOpen: isLazygitOpen, activeToolFloatID: activeToolFloatID,
+            activeToolFloatID: activeToolFloatID,
             zoomed: zoomedPanel.map(\.asZoomed),
             bottomBusy: bottomDrawerSurface?.isBusy == true,
             rightBusy: rightDrawerSurface?.isBusy == true)
@@ -261,13 +235,10 @@ final class TabController: NSObject {
 
     init(
         initialCWD: URL?, initialCommand: String? = nil, env: [String: String] = [:],
-        makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
-        prewarmPool: LazygitPrewarmPool = .shared, prewarmDelay: TimeInterval = 1.0
+        makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make
     ) {
         workspaceEnv = env
         self.makeSurface = makeSurface
-        self.prewarmPool = prewarmPool
-        self.prewarmDelay = prewarmDelay
         paneCanvas = PaneCanvasController(
             initialCWD: initialCWD, initialCommand: initialCommand, env: env,
             makeSurface: makeSurface)
@@ -276,7 +247,7 @@ final class TabController: NSObject {
         super.init()
 
         content.translatesAutoresizingMaskIntoConstraints = false
-        // Layer-back the tile container so the floats added into it later (⌘P picker, lazygit)
+        // Layer-back the tile container so the floats added into it later (⌘P picker, tool floats)
         // composite their drop shadows — a layer-backed view dropped into a non-layer-backed
         // parent after layout doesn't render its shadow.
         content.wantsLayer = true
@@ -322,10 +293,10 @@ final class TabController: NSObject {
     func focusActivePane() { paneCanvas.focusActivePane() }
 
     /// Apply a workspace's open recipe: reveal only the drawers the recipe names (each running
-    /// its configured command, via `rightDrawerCommand`/`bottomDrawerCommand` set before this),
-    /// land focus on the requested region, and pre-warm lazygit for the stable cwd. Called once
-    /// right after `start()` for a workspace-opened tab. A recipe naming no drawers leaves a
-    /// single pane with both drawers collapsed — the minimal default.
+    /// its configured command, via `rightDrawerCommand`/`bottomDrawerCommand` set before this)
+    /// and land focus on the requested region. Called once right after `start()` for a
+    /// workspace-opened tab. A recipe naming no drawers leaves a single pane with both drawers
+    /// collapsed — the minimal default.
     func applyRecipe(_ ws: Workspace) {
         if ws.right != nil, !isRightOpen { toggleRightDrawer() }
         if ws.bottom != nil, !isBottomOpen { toggleBottomDrawer() }
@@ -334,11 +305,10 @@ final class TabController: NSObject {
         case .bottom where isBottomOpen: focusDrawer(.bottom)
         default: focusActivePane()  // main, or a named drawer the recipe didn't open
         }
-        schedulePrewarmLazygit()  // workspace tab has a stable cwd → pre-warm so the first ⌘G is instant
     }
 
     /// Present a modal overlay filling the tab's tile region — same scoping as the
-    /// lazygit float (pinned to `content`, above the canvas and any drawers). Used by
+    /// tool floats (pinned to `content`, above the canvas and any drawers). Used by
     /// `WindowController` to host the window-level `⌘P` repo picker over the active tab.
     func presentTileOverlay(_ overlay: NSView) {
         overlay.translatesAutoresizingMaskIntoConstraints = false
@@ -351,21 +321,18 @@ final class TabController: NSObject {
         ])
     }
 
-    /// Restore keyboard focus when this tab is (re)mounted: the modal lazygit float if
+    /// Restore keyboard focus when this tab is (re)mounted: the modal tool float if
     /// open — it must keep first-responder, it's modal over the whole tab — otherwise
     /// whichever panel held the tab's unified focus (pane or a drawer). Without the
     /// float check, remounting steals focus to the pane hidden behind the still-visible
     /// float; without honoring `focusedPanel`, remounting a tab that was focused on a
     /// drawer wrongly drops focus onto the central pane.
     func restoreKeyFocus() {
-        if isLazygitOpen { lazygitSurface?.focus(); return }
         if let active = activeToolFloat { active.surface.focus(); return }
         restoreUnifiedFocus()
     }
 
     func shutdown() {
-        prewarmWorkItem?.cancel()
-        prewarmWorkItem = nil
         paneCanvas.shutdown()
         bottomDrawerSurface?.terminate()
         bottomDrawerSurface = nil
@@ -373,13 +340,6 @@ final class TabController: NSObject {
         rightDrawerSurface?.terminate()
         rightDrawerSurface = nil
         unregisterDrawerToken(.rightDrawer)
-        lazygitOverlay?.removeFromSuperview()
-        lazygitOverlay = nil
-        lazygitDismissingOverlay?.removeFromSuperview()
-        lazygitDismissingOverlay = nil
-        // `discardLazygitSurface` clears the ref before terminate, so a synchronous exit
-        // re-entry can't re-warm a fresh surface that this teardown would then orphan.
-        discardLazygitSurface()
         activeToolFloat?.overlay.removeFromSuperview()
         activeToolFloat?.surface.terminate()
         activeToolFloat = nil
@@ -395,10 +355,9 @@ final class TabController: NSObject {
     /// pasteboard (mirrors `PaneCanvasController.copyFromSurface`).
     @objc func copyFromSurface(_ sender: Any?) {
         // While the modal float is open, copy targets it, not the panel underneath.
-        // The surface persists while hidden, so gate on visibility (`isLazygitOpen`).
+        // A persistent surface outlives its card, so gate on visibility (`isToolFloatOpen`).
         guard
-            let surface = (isLazygitOpen ? lazygitSurface : nil)
-                ?? (isToolFloatOpen ? activeToolFloat?.surface : nil)
+            let surface = (isToolFloatOpen ? activeToolFloat?.surface : nil)
                 ?? focusedDrawerSurface
         else {
             paneCanvas.copyFromSurface(sender)
@@ -413,10 +372,9 @@ final class TabController: NSObject {
     /// `PaneCanvasController.pasteToSurface` for the drawer case).
     @objc func pasteToSurface(_ sender: Any?) {
         // While the modal float is open, paste targets it, not the panel underneath.
-        // The surface persists while hidden, so gate on visibility (`isLazygitOpen`).
+        // A persistent surface outlives its card, so gate on visibility (`isToolFloatOpen`).
         guard
-            let surface = (isLazygitOpen ? lazygitSurface : nil)
-                ?? (isToolFloatOpen ? activeToolFloat?.surface : nil)
+            let surface = (isToolFloatOpen ? activeToolFloat?.surface : nil)
                 ?? focusedDrawerSurface
         else {
             paneCanvas.pasteToSurface(sender)
@@ -560,196 +518,10 @@ final class TabController: NSObject {
         return panel
     }
 
-    // MARK: lazygit float (⌘G)
-
-    /// Toggle the lazygit float. When open, `⌘G` (and `⌘W`, and a backdrop click)
-    /// hide it — the surface stays alive, so reopening is instant and preserves
-    /// lazygit's view-state. When closed, it reveals the surface, first reloading it
-    /// if the focused pane has moved to a different repo/dir since it was launched (so
-    /// lazygit tracks the pane, never a stale directory). Overlays zoom without exiting
-    /// it — closing the float leaves the panel underneath still zoomed.
-    func toggleLazygit() {
-        if isLazygitOpen { hideLazygit(); return }
-        guard gitRepoRoot(for: focusedCWD) != nil else {
-            // lazygit is git-only: outside a repo it just dumps its "not a git repository"
-            // prompt, so block it and say why instead.
-            onRequestToast?(
-                ToastContent(
-                    variant: .info,
-                    title: "Open Lazygit",
-                    message: "lazygit needs a Git repository. Run `git init` here, "
-                        + "or open a folder that has one."))
-            return
-        }
-        if lazygitSurface != nil, directoryAnchor(for: focusedCWD)?.path != lazygitLaunchAnchor?.path {
-            discardLazygitSurface()  // focused pane moved repos → respawn at the current cwd
-        }
-        showLazygit(ensureLazygitSurface())
-    }
-
-    /// Schedule the background pre-warm after `prewarmDelay` (ZEN-55): the delay keeps
-    /// the lazygit login shell out of `applyRecipe`'s spawn turn (which already opens the
-    /// main pane and up to two drawers), so a workspace open doesn't burst four shells.
-    private func schedulePrewarmLazygit() {
-        prewarmWorkItem?.cancel()
-        let item = DispatchWorkItem { [weak self] in
-            self?.prewarmWorkItem = nil
-            self?.prewarmLazygitNow()
-        }
-        prewarmWorkItem = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + prewarmDelay, execute: item)
-    }
-
-    /// Spawn the lazygit surface in the background (no overlay shown) so the first `⌘G`
-    /// reveals an already-loaded lazygit, and admit it to the background LRU cap. Only
-    /// for stable-path tabs inside a repo — a plain tab's cwd drifts, and lazygit is
-    /// useless off-repo. The surface-exists guard runs first, so a `⌘G` that beat the
-    /// timer (already live and promoted) is never re-admitted and made evictable. Also
-    /// the visible-quit rewarm path — a used surface re-enters the cap. Internal for
-    /// deterministic tests.
-    func prewarmLazygitNow() {
-        guard lazygitSurface == nil else { return }
-        guard hasStablePath, gitRepoRoot(for: focusedCWD) != nil else { return }
-        _ = ensureLazygitSurface()
-        prewarmPool.admit(self) { [weak self] in self?.discardLazygitSurface() }
-    }
-
-    /// A repo/workspace tab (opened via `⌘⇧P`, so `pinnedTitle` is set) has a fixed
-    /// repo path worth keeping lazygit warm for. A plain `⌘t` tab does not.
-    private var hasStablePath: Bool { pinnedTitle != nil }
-
-    /// The enclosing git repo root for `cwd` — walks up looking for `GitRepo.isGitRepo` — or
-    /// nil when `cwd` isn't inside a repo.
-    private func gitRepoRoot(for cwd: URL?) -> URL? {
-        guard var dir = cwd?.standardizedFileURL else { return nil }
-        while true {
-            if GitRepo.isGitRepo(dir) { return dir }
-            let parent = dir.deletingLastPathComponent()
-            // Stop when the path stops SHRINKING, not when parent == dir: `deletingLastPathComponent()`
-            // is not monotonic. On a URL vended by FileManager (`homeDirectoryForCurrentUser`,
-            // `temporaryDirectory`) it walks past "/" into "/..", "/../..", … without ever repeating,
-            // so an equality check spins forever on the main thread. Identical paths from
-            // `URL(fileURLWithPath:)` terminate — the provenance decides, and callers can't see it.
-            guard parent.path.count < dir.path.count else { return nil }
-            dir = parent
-        }
-    }
-
-    /// The directory identity a float is scoped to for `cwd`: the enclosing repo root (so cd'ing
-    /// between a repo's own subdirs doesn't reload), else the plain cwd. Deliberately defined
-    /// outside a repo too — a `persist:dir` float need not be a git tool.
-    private func directoryAnchor(for cwd: URL?) -> URL? {
-        gitRepoRoot(for: cwd) ?? cwd?.standardizedFileURL
-    }
+    // MARK: tool floats (declarative command floats whose process lifetime is set by `persist:`)
 
     /// Where a float's command runs: its pinned `dir:` when it has one, else the focused pane's cwd.
     private func floatCWD(_ spec: ToolFloat) -> URL? { spec.dir ?? focusedCWD }
-
-    /// The tab's lazygit surface, created on first use running `lazygit` via a login
-    /// shell (so a Homebrew `lazygit` is on PATH — Epic 0's login-shell fix) in the
-    /// focused pane's cwd. Mirrors `ensureBottomDrawerPanel()`.
-    private func ensureLazygitSurface() -> TerminalSurface {
-        if let existing = lazygitSurface { return existing }
-        let shell = ShellLaunch.userShell
-        let surface = makeSurface()
-        surface.delegate = self
-        // `-l -i`: a login AND interactive shell, so it sources BOTH profile files and
-        // `.zshrc` — matching how lazygit runs when typed in a pane. Without `-i`, a
-        // login-only shell skips `.zshrc`, so env it sets (e.g. XDG_CONFIG_HOME →
-        // lazygit's config path, COLORTERM) is missing and lazygit renders different colors.
-        surface.start(
-            TerminalSurfaceConfig(
-                command: shell, args: ["-l", "-i", "-c", "lazygit"],
-                workingDirectory: focusedCWD, theme: Theme.current.terminal,
-                behavior: GeneralConfig.current.terminalBehavior))
-        lazygitSurface = surface
-        lazygitLaunchAnchor = directoryAnchor(for: focusedCWD)
-        return surface
-    }
-
-    /// Terminate and drop the persisted surface. The ref is cleared BEFORE `terminate()`
-    /// so a synchronous exit re-entry into `surfaceDidExit` is a no-op. Next reveal
-    /// recreates it at the then-current cwd.
-    private func discardLazygitSurface() {
-        // No-ops when this discard IS a pool eviction — the pool drops the entry
-        // before running the evict closure.
-        prewarmPool.remove(self)
-        let surface = lazygitSurface
-        lazygitSurface = nil
-        lazygitLaunchAnchor = nil
-        surface?.terminate()
-    }
-
-    /// Tear the lazygit surface down: animate any visible overlay out, drop the surface, and —
-    /// for a VISIBLE teardown — restore unified focus and (when `rewarm`) re-warm a fresh one.
-    /// Returns whether it was visible. Shared by the quit path (`surfaceDidExit`, rewarms) and
-    /// the start-failure path (no rewarm — a persistently-failing start must not spin a loop).
-    @discardableResult
-    private func teardownLazygit(rewarm: Bool) -> Bool {
-        let wasVisible = isLazygitOpen
-        if let overlay = lazygitOverlay {
-            lazygitOverlay = nil
-            overlay.animateOut { overlay.removeFromSuperview() }
-        }
-        discardLazygitSurface()  // clears the ref before terminate (re-entry no-ops)
-        if wasVisible {
-            restoreUnifiedFocus()
-            // Re-warm only after a VISIBLE quit: an instantly-exiting surface (lazygit not on
-            // PATH, or a drifted non-repo cwd) exits while hidden, so it can never spin a respawn
-            // loop. The rewarm re-enters the background LRU cap — a used surface is a warm
-            // background surface again, not exempt (ZEN-55). Plain tabs respawn on the next ⌘G.
-            if rewarm { prewarmLazygitNow() }
-        }
-        onOverlayStateChanged?()
-        return wasVisible
-    }
-
-    /// Reveal the persisted surface: mount its overlay above the tab's tile and give
-    /// it the tab's unified focus.
-    private func showLazygit(_ surface: TerminalSurface) {
-        // The user opened `⌘G`: promote the surface out of the never-opened pool — an
-        // actually-used lazygit is never evicted — and drop any pending pre-warm.
-        prewarmWorkItem?.cancel()
-        prewarmWorkItem = nil
-        prewarmPool.remove(self)
-        // A prior overlay springing out still constrains `surface.view`; snap it away now so
-        // reparenting into the new card doesn't leave the old card's constraints dangling.
-        lazygitDismissingOverlay?.removeFromSuperview()
-        lazygitDismissingOverlay = nil
-        let overlay = LazygitOverlay(
-            content: surface.view,
-            background: Theme.current.chrome.background.nsColor,
-            onDismiss: { [weak self] in self?.hideLazygit() })
-        // Pin over the tile region (not `view`): covers only the tab's working area — never
-        // the window gutters or the tab bar — above the canvas and any open drawers.
-        presentTileOverlay(overlay)
-        lazygitOverlay = overlay
-        // Focus reads only on the float: clear the underlying panels' halos (keep
-        // `focusedPanel` so hide can restore it).
-        paneCanvas.setPanesFocused(false)
-        bottomDrawerPanel?.isFocused = false
-        rightDrawerPanel?.isFocused = false
-        surface.focus()
-        overlay.animateIn()
-        onOverlayStateChanged?()  // lazygit now open → refresh the dock
-    }
-
-    /// Hide the float without killing lazygit — the surface persists for the next
-    /// reveal. Dismiss paths (`⌘G`, `⌘W`, backdrop click) all land here.
-    private func hideLazygit() {
-        guard let overlay = lazygitOverlay else { return }
-        // Nil the ref now so the modal gate lifts immediately (focus/dock update this
-        // turn); the surface stays alive — only the card animates out and is removed.
-        lazygitOverlay = nil
-        // Hold the outgoing overlay until its exit finishes; a fast re-show snaps it early.
-        lazygitDismissingOverlay = overlay
-        overlay.animateOut { [weak self] in
-            overlay.removeFromSuperview()
-            if self?.lazygitDismissingOverlay === overlay { self?.lazygitDismissingOverlay = nil }
-        }
-        restoreUnifiedFocus()  // the float held keyboard focus; hand it back to its panel
-        onOverlayStateChanged?()  // lazygit now closed → refresh the dock
-    }
 
     /// Re-focus whichever panel held the tab's unified focus before the float opened
     /// (the float focuses its own surface without changing `focusedPanel`), restoring
@@ -762,15 +534,13 @@ final class TabController: NSObject {
         }
     }
 
-    // MARK: tool floats (declarative command floats whose process lifetime is set by `persist:`)
-
     /// Toggle a tool float: same id open → close; otherwise run the git guard and open.
     func toggleToolFloat(_ spec: ToolFloat) {
         if activeToolFloat?.spec.id == spec.id { closeToolFloat(); return }
         if activeToolFloat != nil { closeToolFloat() }  // switch floats
         // One ancestor walk per press: the git guard and the `.directory` anchor share the same
         // repo-root lookup, and each `isGitRepo` probe is main-thread filesystem I/O.
-        let repoRoot = gitRepoRoot(for: floatCWD(spec))
+        let repoRoot = GitRepo.repoRoot(for: floatCWD(spec))
         if spec.requiresGitRepo, repoRoot == nil {
             onRequestToast?(gitGuardToast(for: spec))
             return
@@ -886,8 +656,8 @@ final class TabController: NSObject {
         let overlay = active.overlay
         // Park BEFORE animateOut: `Motion.springScaleFade` fires its completion synchronously under
         // Reduce Motion, and that completion clears the slot by identity — assigning afterwards
-        // would strand an overlay no completion will ever clear. `hideLazygit` parks the same way,
-        // for the same reason. Snap any PREVIOUSLY parked card first: the slot holds one overlay,
+        // would strand an overlay no completion will ever clear.
+        // Snap any PREVIOUSLY parked card first: the slot holds one overlay,
         // and silently dropping a parked reference would skip the shared-view snap-away on a fast
         // X→Y→X switch — X's old card would keep its constraints on the view being re-hosted.
         if active.spec.persist != .ephemeral {
@@ -982,7 +752,7 @@ final class TabController: NSObject {
     /// Zoom the focused panel to fill the tab (others hidden), or unzoom if already
     /// zoomed. For a pane, the pane canvas also renders just the focused leaf.
     func toggleZoom() {
-        guard !isLazygitOpen else { return }  // can't zoom a panel under the float
+        guard !isToolFloatOpen else { return }  // can't zoom a panel under the float
         if isZoomed { exitZoom(); return }
         // Every case relayouts to the final size FIRST, then pops the now-full panel — a pop before
         // the resize would scale at the old (tiled) size and then snap to full. A pane's pop lives
@@ -1330,7 +1100,6 @@ final class TabController: NSObject {
         paneCanvas.reapplyChromeColors()
         bottomDrawerPanel?.reapplyTheme()
         rightDrawerPanel?.reapplyTheme()
-        lazygitOverlay?.reapplyTheme()
         activeToolFloat?.overlay.reapplyTheme()
     }
 
@@ -1621,7 +1390,7 @@ final class TabController: NSObject {
 
 extension TabController: TerminalSurfaceDelegate {
     /// A click landed in one of the tab's drawer surfaces — give that drawer unified
-    /// focus. The lazygit float is modal and already holds focus, so it's ignored.
+    /// focus. A tool float is modal and already holds focus, so it's ignored.
     func surfaceWantsFocus(_ s: TerminalSurface) {
         if s === bottomDrawerSurface { focusDrawer(.bottom) } else if s === rightDrawerSurface { focusDrawer(.right) }
     }
@@ -1651,12 +1420,6 @@ extension TabController: TerminalSurfaceDelegate {
             s.terminate()
             return
         }
-        if s === lazygitSurface {
-            // lazygit quit (`q`): the process is gone. Animate the card out (matching a ⌘G
-            // hide), drop the surface, and re-warm a fresh one for the next ⌘G.
-            teardownLazygit(rewarm: true)
-            return
-        }
         if s === bottomDrawerSurface {
             if zoomedPanel == .bottomDrawer { zoomedPanel = nil }  // don't leave zoom stuck
             bottomDrawerPanel?.removeFromSuperview()
@@ -1673,7 +1436,7 @@ extension TabController: TerminalSurfaceDelegate {
             // it must keep focus, so only re-point `focusedPanel` to the pane (the
             // now-gone drawer) so closing the float later restores focus correctly.
             if focusedPanel == .bottomDrawer {
-                if isLazygitOpen { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
+                if isToolFloatOpen { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
             }
         } else if s === rightDrawerSurface {
             if zoomedPanel == .rightDrawer { zoomedPanel = nil }  // don't leave zoom stuck
@@ -1687,23 +1450,16 @@ extension TabController: TerminalSurfaceDelegate {
             // See the bottom-drawer branch above: keep the modal float focused if open,
             // otherwise restore keyboard focus + unified halo/routing to the pane.
             if focusedPanel == .rightDrawer {
-                if isLazygitOpen { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
+                if isToolFloatOpen { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
             }
         }
     }
 
-    /// A tab-owned surface (drawer, lazygit, or tool float) failed to start. Surface a passive
+    /// A tab-owned surface (drawer or tool float) failed to start. Surface a passive
     /// warning and tear it down so the next toggle spawns a fresh one — the natural retry for
     /// these, unlike panes, which get an in-place Retry button. Panes are handled entirely in
-    /// `PaneCanvasController`; this only reacts to the four surfaces this controller owns.
+    /// `PaneCanvasController`; this only reacts to the surfaces this controller owns.
     func surfaceDidFailToStart(_ s: TerminalSurface) {
-        if s === lazygitSurface {
-            // lazygit is pre-warmed in the background, so a start failure can arrive with
-            // nothing shown — tear it down (a later ⌘G lazily retries) and only warn if it was
-            // actually open. No re-warm: a persistently-failing start must not spin a loop.
-            if teardownLazygit(rewarm: false) { warnSurfaceFailed(descriptor: "lazygit") }
-            return
-        }
         // Drawers and tool floats only exist after an explicit open, so always warn, then
         // reuse `surfaceDidExit`'s teardown (clear ref, drop the view, terminate, relayout,
         // restore focus) — no re-warm — so the next toggle spawns a fresh surface.

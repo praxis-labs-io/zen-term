@@ -20,9 +20,9 @@ final class KeymapAssemblyTests: XCTestCase {
     }
 
     func test_floatChord_overridesBuiltin() {
-        // A float claiming ⌘G displaces the built-in .toggleLazygit.
-        let map = KeymapAssembler.assemble(floats: [float(id: "x", key: "cmd+g")], keybinds: [])
-        XCTAssertEqual(map[Chord(command: true, key: "g")], .toggleToolFloat("x"))
+        // A float claiming ⌘F displaces the built-in .toggleZoom.
+        let map = KeymapAssembler.assemble(floats: [float(id: "x", key: "cmd+f")], keybinds: [])
+        XCTAssertEqual(map[Chord(command: true, key: "f")], .toggleToolFloat("x"))
     }
 
     func test_userKeybind_overridesFloatChord() {

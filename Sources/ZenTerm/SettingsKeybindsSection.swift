@@ -17,7 +17,7 @@ final class SettingsKeybindsSection: SettingsSection {
         ("Resize", [.resizeLeft, .resizeDown, .resizeUp, .resizeRight]),
         ("Tabs", [.newTab, .newWindow, .prevTab, .nextTab] + (1...9).map { .selectTab($0) }),
         ("Drawers", [.toggleBottomDrawer, .toggleRightDrawer, .toggleZoom]),
-        ("Surfaces & Tools", [.toggleLazygit, .toggleRepoPicker, .toggleCommandPalette, .openSettings]),
+        ("Surfaces & Tools", [.toggleRepoPicker, .toggleCommandPalette, .openSettings]),
     ]
 
     private let capturer: KeybindCapturing?

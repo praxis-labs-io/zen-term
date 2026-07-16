@@ -128,13 +128,12 @@ final class WindowController: NSObject {
         var onBottom: () -> Void = {}
         var onRight: () -> Void = {}
         var onZoom: () -> Void = {}
-        var onLazygit: () -> Void = {}
         var onToolFloat: (ToolFloat) -> Void = { _ in }
         dock = ToggleDock(
             onNewTab: { onNewTab() },
             onSplitH: { onSplitH() }, onSplitV: { onSplitV() },
             onPalette: { onPalette() }, onBottom: { onBottom() },
-            onRight: { onRight() }, onZoom: { onZoom() }, onLazygit: { onLazygit() },
+            onRight: { onRight() }, onZoom: { onZoom() },
             toolFloats: ToolFloatCatalog.all, onToolFloat: { onToolFloat($0) })
         super.init()
         nextTabID = 2
@@ -153,7 +152,6 @@ final class WindowController: NSObject {
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
         onZoom = { [weak self] in self?.handle(.toggleZoom) }
-        onLazygit = { [weak self] in self?.handle(.toggleLazygit) }
         onToolFloat = { [weak self] spec in self?.handle(.toggleToolFloat(spec.id)) }
 
         let first = makeController(cwd: initialCWD)
@@ -782,8 +780,8 @@ final class WindowController: NSObject {
         // equivalents, never here.
         if isConfirmOpen { return }
         // A modal card (repo picker / command palette / Add-Workspace form) is modal over the
-        // window: its own toggle closes it, another surface's toggle (another card, lazygit, a
-        // tool float) closes it and opens that instead — a live switch between all the modal
+        // window: its own toggle closes it, another surface's toggle (another card, a tool
+        // float) closes it and opens that instead — a live switch between all the modal
         // cards; every other chord is swallowed. Its arrow/Enter/Esc keys aren't chords — they
         // go to the card's field editor, never here.
         if let modal {
@@ -792,35 +790,16 @@ final class WindowController: NSObject {
                 return
             }
             switch chord {
-            case .toggleRepoPicker, .toggleCommandPalette, .openSettings,
-                .toggleLazygit, .toggleToolFloat:
+            case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat:
                 closeModal()  // close the current card, then open the requested surface below
             default:
                 return
             }
         }
-        // The lazygit float is modal over its tab. ⌘G closes it; another surface's toggle
-        // (a tool float, either palette) closes it and opens that instead — a live switch.
-        // ⌘W is guarded with a brief note (it never reaches the pane behind the float);
-        // split/nav/drawer/zoom are swallowed; cross-tab/window chords still act.
-        if active?.isLazygitOpen == true {
-            switch chord {
-            case .closePane:
-                toasts.show(
-                    ToastContent(
-                        variant: .info, title: "Close Pane",
-                        message: "Close lazygit first to close a pane."))
-                return
-            case .toggleToolFloat, .toggleCommandPalette, .toggleRepoPicker, .openSettings:
-                active?.toggleLazygit()  // close lazygit, then fall through to open the other
-            case .toggleLazygit, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
-                break
-            default:
-                return
-            }
-        }
-        // Tool floats are modal like lazygit: their own toggle closes them, another surface's
-        // toggle switches to it, ⌘W is guarded, cross-tab/window chords still act.
+        // A tool float is modal over its tab: its own toggle closes it (another float's toggle
+        // switches — `toggleToolFloat` handles both), a modal card's toggle closes it and opens
+        // that instead, ⌘W is guarded with a brief note (it never reaches the pane behind the
+        // float); split/nav/drawer/zoom are swallowed; cross-tab/window chords still act.
         if active?.isToolFloatOpen == true {
             switch chord {
             case .closePane:
@@ -832,7 +811,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Close Pane",
                         message: "Close \(name) first to close a pane."))
                 return
-            case .toggleLazygit, .toggleCommandPalette, .toggleRepoPicker, .openSettings:
+            case .toggleCommandPalette, .toggleRepoPicker, .openSettings:
                 active?.closeToolFloat()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
                 break
@@ -863,7 +842,6 @@ final class WindowController: NSObject {
         case .toggleBottomDrawer: active?.toggleBottomDrawer()
         case .toggleRightDrawer: active?.toggleRightDrawer()
         case .toggleZoom: active?.toggleZoom()
-        case .toggleLazygit: active?.toggleLazygit()
         case .toggleToolFloat(let id):
             if let spec = ToolFloatCatalog.byID(id) { active?.toggleToolFloat(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
