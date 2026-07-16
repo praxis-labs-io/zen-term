@@ -67,9 +67,9 @@ final class SettingsNavRow: NSView {
 
     override func keyDown(with event: NSEvent) {
         switch KeyboardFocus.key(for: event) {
-        case .up: onArrowUp?()
+        case .up, .tab(shift: true): onArrowUp?()  // Shift-Tab retreats a row, like Up
         case .down: onArrowDown?()
-        case .right, .tab: onEnterDetail?()  // Right or Tab enters the detail pane
+        case .right, .tab(shift: false): onEnterDetail?()  // Right or Tab enters the detail pane
         default: super.keyDown(with: event)
         }
     }

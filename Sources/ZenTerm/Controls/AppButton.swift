@@ -25,6 +25,11 @@ final class AppButton: NSButton {
     var onArrowDown: (() -> Void)?
     var onArrowLeft: (() -> Void)?
     var onArrowRight: (() -> Void)?
+    /// Tab / Shift-Tab, when the host wants them to differ from Down / Up — the Settings sections do
+    /// (Tab wraps at the last stop; Shift-Tab retreats, exiting to the nav only from the first).
+    /// Unset elsewhere, so the forms keep Tab as a plain advance/retreat through their stops.
+    var onTab: (() -> Void)?
+    var onBacktab: (() -> Void)?
     /// Draw the accent focus outline without being first responder — used by `SegmentedControl`
     /// to outline its selected segment while the control (not the segment) holds focus.
     var showsFocusOutline = false { didSet { restyle() } }
@@ -115,9 +120,15 @@ final class AppButton: NSButton {
         case .down: onArrowDown?()
         case .left where onArrowLeft != nil: onArrowLeft?()
         case .right where onArrowRight != nil: onArrowRight?()
-        // Tab / Shift-Tab advance and retreat like Down / Up — and stay consumed here so focus
-        // can't jump the key-view loop out of the card's 2D model.
-        case .tab(let shift): shift ? onArrowUp?() : onArrowDown?()
+        // Tab / Shift-Tab advance and retreat like Down / Up unless the host wires them apart — and
+        // stay consumed here either way, so focus can't jump the key-view loop out of the card's 2D
+        // model.
+        case .tab(let shift):
+            if shift {
+                (onBacktab ?? onArrowUp)?()
+            } else {
+                (onTab ?? onArrowDown)?()
+            }
         case .activate: fire()  // return / enter / space → activate
         default: super.keyDown(with: event)
         }

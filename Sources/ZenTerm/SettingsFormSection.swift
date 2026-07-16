@@ -69,6 +69,8 @@ class SettingsFormSection: SettingsSection {
         resetAllButton.isKeyboardFocusable = true
         resetAllButton.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         resetAllButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+        resetAllButton.onTab = { [weak self] in self?.moveTab(1) }
+        resetAllButton.onBacktab = { [weak self] in self?.moveTab(-1) }
         resetAllButton.onTap = { [weak self] in self?.resetAll() }
         let resetRow = SettingsDetail.trailingRow(resetAllButton)
         stack.addArrangedSubview(resetRow)
@@ -246,31 +248,33 @@ class SettingsFormSection: SettingsSection {
         row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
 
-    /// Wire a control's Up/Down (move rows), Tab/⇧Tab (advance / return to nav), Left-at-boundary
-    /// (nav), and Esc (close) through the section. There's no per-row reset stop — a blank field is
-    /// the default — so Tab simply advances to the next control.
+    /// Wire a control's Up/Down (move rows), Tab/⇧Tab (advance / retreat), and Left-at-boundary
+    /// (nav) through the section. There's no per-row reset stop — a blank field is the default — so
+    /// Tab simply advances to the next control. Esc belongs to the card root (see `ModalEscape`).
     private func wireControlKeyboard(_ control: NSView) {
         switch control {
         case let box as FieldBox:
             box.onArrowUp = { [weak self] in self?.moveFocus(-1) }
             box.onArrowDown = { [weak self] in self?.moveFocus(1) }
             box.onArrowLeft = { [weak self] in self?.onExitToNav?() }  // Left at cursor-start → nav
-            box.onTab = { [weak self] in self?.moveFocus(1) }
-            box.onBacktab = { [weak self] in self?.onExitToNav?() }
+            box.onTab = { [weak self] in self?.moveTab(1) }
+            box.onBacktab = { [weak self] in self?.moveTab(-1) }
         case let seg as SegmentedControl:
             seg.onArrowUp = { [weak self] in self?.moveFocus(-1) }
             seg.onArrowDown = { [weak self] in self?.moveFocus(1) }
-            seg.onTab = { [weak self] in self?.moveFocus(1) }
-            seg.onBacktab = { [weak self] in self?.onExitToNav?() }
+            seg.onTab = { [weak self] in self?.moveTab(1) }
+            seg.onBacktab = { [weak self] in self?.moveTab(-1) }
         case let dropdown as Dropdown:
             dropdown.onArrowUp = { [weak self] in self?.moveFocus(-1) }
             dropdown.onArrowDown = { [weak self] in self?.moveFocus(1) }
-            dropdown.onTab = { [weak self] in self?.moveFocus(1) }
-            dropdown.onBacktab = { [weak self] in self?.onExitToNav?() }
+            dropdown.onTab = { [weak self] in self?.moveTab(1) }
+            dropdown.onBacktab = { [weak self] in self?.moveTab(-1) }
         case let button as AppButton:
             button.onArrowUp = { [weak self] in self?.moveFocus(-1) }
             button.onArrowDown = { [weak self] in self?.moveFocus(1) }
             button.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+            button.onTab = { [weak self] in self?.moveTab(1) }
+            button.onBacktab = { [weak self] in self?.moveTab(-1) }
         default:
             break
         }
@@ -376,6 +380,22 @@ class SettingsFormSection: SettingsSection {
         let window = visible.first?.window
         let anchor = visible.firstIndex { KeyboardFocus.isFocused($0, in: window) }
         SettingsDetail.moveFocus(stops: visible, from: anchor, delta: delta) { [rows] target in
+            rows.first { target.isDescendant(of: $0) } ?? target
+        }
+    }
+
+    /// Tab traversal, which differs from the arrows at the ends: Tab wraps from the last stop back
+    /// to the first (a Tab loop that stops dead reads as broken), and Shift-Tab retreats one stop,
+    /// exiting to the nav only from the first — mirroring how Left exits.
+    private func moveTab(_ delta: Int) {
+        let visible = stops.filter { !$0.isHidden }
+        let window = visible.first?.window
+        let anchor = visible.firstIndex { KeyboardFocus.isFocused($0, in: window) }
+        if delta < 0, anchor == 0 {
+            onExitToNav?()
+            return
+        }
+        SettingsDetail.moveFocus(stops: visible, from: anchor, delta: delta, wrap: true) { [rows] target in
             rows.first { target.isDescendant(of: $0) } ?? target
         }
     }

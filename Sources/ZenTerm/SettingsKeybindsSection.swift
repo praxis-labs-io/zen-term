@@ -114,6 +114,8 @@ final class SettingsKeybindsSection: SettingsSection {
                 row.chip.onReset = { [weak self, weak row] in row.map { self?.reset($0) } }
                 row.chip.onArrowUp = { [weak self, weak row] in row.map { self?.moveFocus(from: $0.chip, delta: -1) } }
                 row.chip.onArrowDown = { [weak self, weak row] in row.map { self?.moveFocus(from: $0.chip, delta: 1) } }
+                row.chip.onTab = { [weak self, weak row] in row.map { self?.moveTab(from: $0.chip, delta: 1) } }
+                row.chip.onBacktab = { [weak self, weak row] in row.map { self?.moveTab(from: $0.chip, delta: -1) } }
                 row.chip.onExitToNav = { [weak self] in self?.onExitToNav?() }
                 rows.append(row)
                 rowsStack.addArrangedSubview(row)
@@ -129,6 +131,14 @@ final class SettingsKeybindsSection: SettingsSection {
             self.moveFocus(from: self.resetAllButton, delta: -1)
         }
         resetAllButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+        resetAllButton.onTab = { [weak self] in
+            guard let self else { return }
+            self.moveTab(from: self.resetAllButton, delta: 1)
+        }
+        resetAllButton.onBacktab = { [weak self] in
+            guard let self else { return }
+            self.moveTab(from: self.resetAllButton, delta: -1)
+        }
         resetAllButton.onTap = { [weak self] in self?.resetAll() }
         let resetRow = SettingsDetail.trailingRow(resetAllButton)
         rowsStack.addArrangedSubview(resetRow)
@@ -436,6 +446,21 @@ final class SettingsKeybindsSection: SettingsSection {
         // Scroll the whole row when the destination is a row's chip so the row's inline message
         // shows too; otherwise the stop itself.
         SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta) { [rows] target in
+            rows.first { $0.chip === target } ?? target
+        }
+    }
+
+    /// Tab traversal, which differs from the arrows at the ends: Tab wraps from the last stop back
+    /// to the first, and Shift-Tab retreats one stop, exiting to the nav only from the first —
+    /// mirroring how Left exits.
+    private func moveTab(from view: NSView, delta: Int) {
+        let stops = rows.map(\.chip) + [resetAllButton]
+        guard let anchor = stops.firstIndex(where: { $0 === view }) else { return }
+        if delta < 0, anchor == 0 {
+            onExitToNav?()
+            return
+        }
+        SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta, wrap: true) { [rows] target in
             rows.first { $0.chip === target } ?? target
         }
     }

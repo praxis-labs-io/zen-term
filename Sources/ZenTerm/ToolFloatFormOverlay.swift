@@ -189,6 +189,8 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         picker.onChange = { [weak self] _ in self?.refreshValidity() }
         picker.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         picker.onArrowDown = { [weak self] in self?.moveVertical(1) }
+        picker.onTab = { [weak self] in self?.moveVertical(1) }
+        picker.onBacktab = { [weak self] in self?.moveVertical(-1) }
         iconPicker = picker
         let iconGroup = LabeledField(caption: caption("ICON", required: false), control: picker)
         self.iconGroup = iconGroup
@@ -197,6 +199,8 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         chordChip.onReset = { [weak self] in self?.clearChord() }
         chordChip.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         chordChip.onArrowDown = { [weak self] in self?.moveVertical(1) }
+        chordChip.onTab = { [weak self] in self?.moveVertical(1) }
+        chordChip.onBacktab = { [weak self] in self?.moveVertical(-1) }
         // The chip is a fixed 110pt; a bare `LabeledField` would pin that width to the whole group
         // (required) and collapse the card. Wrap it in a leading row so the group fills width while
         // the chip keeps its natural size.
@@ -473,15 +477,22 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         window?.makeFirstResponder(view)
     }
 
+    /// Tab/Shift-Tab traverse the form's own stops, exactly like Down/Up. Without this the field
+    /// editor leaked Tab to AppKit's default key-view loop while Tab on the form's buttons was
+    /// consumed as advance/retreat — the same key doing two different things in one card.
     private func wireField(_ box: FieldBox) {
         box.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         box.onArrowDown = { [weak self] in self?.moveVertical(1) }
+        box.onTab = { [weak self] in self?.moveVertical(1) }
+        box.onBacktab = { [weak self] in self?.moveVertical(-1) }
         box.onSubmit = { [weak self] in self?.submit() }
     }
 
     private func wireSegment(_ segment: SegmentedControl) {
         segment.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         segment.onArrowDown = { [weak self] in self?.moveVertical(1) }
+        segment.onTab = { [weak self] in self?.moveVertical(1) }
+        segment.onBacktab = { [weak self] in self?.moveVertical(-1) }
     }
 
     // MARK: submit + validation

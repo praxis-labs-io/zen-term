@@ -11,6 +11,8 @@ final class KeybindChip: NSView {
     var onReset: (() -> Void)?  // Backspace → revert to default
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
+    var onTab: (() -> Void)?
+    var onBacktab: (() -> Void)?
     var onExitToNav: (() -> Void)?
 
     /// One width for every shortcut input, so they line up as a column rather than sizing to content.
@@ -93,6 +95,8 @@ final class KeybindChip: NSView {
         case .up: onArrowUp?()
         case .down: onArrowDown?()
         case .left: onExitToNav?()  // left → nav
+        case .tab(let shift) where onTab != nil || onBacktab != nil:
+            shift ? onBacktab?() : onTab?()
         default: super.keyDown(with: event)
         }
     }

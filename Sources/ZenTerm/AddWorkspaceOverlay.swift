@@ -322,16 +322,23 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
 
     private func isFocused(_ view: NSView) -> Bool { KeyboardFocus.isFocused(view, in: window) }
 
+    /// Tab/Shift-Tab traverse the form's own stops, exactly like Down/Up. Without this the field
+    /// editor leaked Tab to AppKit's default key-view loop while Tab on the form's buttons was
+    /// consumed as advance/retreat — the same key doing two different things in one card.
     private func wireField(_ box: FieldBox) {
         box.onChange = { [weak self] in self?.refreshValidity() }
         box.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         box.onArrowDown = { [weak self] in self?.moveVertical(1) }
+        box.onTab = { [weak self] in self?.moveVertical(1) }
+        box.onBacktab = { [weak self] in self?.moveVertical(-1) }
         box.onSubmit = { [weak self] in self?.submit() }
     }
 
     private func wireSegment(_ segment: SegmentedControl) {
         segment.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         segment.onArrowDown = { [weak self] in self?.moveVertical(1) }
+        segment.onTab = { [weak self] in self?.moveVertical(1) }
+        segment.onBacktab = { [weak self] in self?.moveVertical(-1) }
     }
 
     // MARK: actions

@@ -10,6 +10,8 @@ final class IconPickerField: NSView, PopoverHosting {
     var onChange: ((String) -> Void)?
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
+    var onTab: (() -> Void)?
+    var onBacktab: (() -> Void)?
 
     private let glyph = NSImageView()
     private let nameLabel = NSTextField(labelWithString: "")
@@ -123,6 +125,8 @@ final class IconPickerField: NSView, PopoverHosting {
         case .activate: openPopover()
         case .up: onArrowUp?()
         case .down: onArrowDown?()
+        case .tab(let shift) where onTab != nil || onBacktab != nil:
+            shift ? onBacktab?() : onTab?()
         default: super.keyDown(with: event)
         }
     }
