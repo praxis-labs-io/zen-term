@@ -520,13 +520,6 @@ final class TabController: NSObject {
 
     // MARK: tool floats (declarative command floats whose process lifetime is set by `persist:`)
 
-    /// The directory identity a float is scoped to for `cwd`: the enclosing repo root (so cd'ing
-    /// between a repo's own subdirs doesn't reload), else the plain cwd. Deliberately defined
-    /// outside a repo too — a `persist:dir` float need not be a git tool.
-    private func directoryAnchor(for cwd: URL?) -> URL? {
-        GitRepo.repoRoot(for: cwd) ?? cwd?.standardizedFileURL
-    }
-
     /// Where a float's command runs: its pinned `dir:` when it has one, else the focused pane's cwd.
     private func floatCWD(_ spec: ToolFloat) -> URL? { spec.dir ?? focusedCWD }
 
