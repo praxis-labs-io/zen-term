@@ -78,10 +78,12 @@ enum KeymapDefaults {
     static let map: [Chord: KeyInterceptor.ReservedChord] = {
         var map: [Chord: KeyInterceptor.ReservedChord] = [:]
 
-        // ⌘⇧ family — vertical split (both the shifted "|" and defensive "\\"), pane/drawer
-        // resize on HJKL, repo picker.
-        map[Chord(command: true, shift: true, key: "|")] = .splitVertical
+        // ⌘⇧ family — the splits, pane/drawer resize on HJKL, repo picker. Both splits are spelled
+        // with the *unshifted* key: `Chord` canonicalizes, so a live ⌘⇧\ event (which arrives as
+        // "|") and a live ⌘⇧- event (which arrives as "_") already fold onto these entries. ⌘⇧-
+        // rather than bare ⌘- leaves ⌘- free for ghostty's text magnification (ZEN-142).
         map[Chord(command: true, shift: true, key: "\\")] = .splitVertical
+        map[Chord(command: true, shift: true, key: "-")] = .splitHorizontal
         map[Chord(command: true, shift: true, key: "h")] = .resizeLeft
         map[Chord(command: true, shift: true, key: "l")] = .resizeRight
         map[Chord(command: true, shift: true, key: "k")] = .resizeUp
@@ -92,7 +94,6 @@ enum KeymapDefaults {
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer
         map[Chord(command: true, key: "[")] = .prevTab
         map[Chord(command: true, key: "]")] = .nextTab
-        map[Chord(command: true, key: "-")] = .splitHorizontal
         map[Chord(command: true, key: "h")] = .navLeft
         map[Chord(command: true, key: "l")] = .navRight
         map[Chord(command: true, key: "k")] = .navUp
@@ -131,16 +132,35 @@ enum KeybindParser {
 /// resolved keymap. Resolution order (later wins, a displacing write is logged): defaults →
 /// float chords → user keybinds. A `toggle_float:<id>` keybind whose id isn't a loaded float
 /// is skipped with a warning.
+///
+/// Also reports the displacements that cost an action its *last* chord, so the Keybinds card can
+/// say why a row has no shortcut rather than rendering a bare empty chip (ZEN-142).
 enum KeymapAssembler {
+    /// `canType` is injected so tests state the layout instead of inheriting the test machine's.
     static func assemble(
-        floats: [ToolFloat], keybinds: [(Chord, KeyInterceptor.ReservedChord)]
-    ) -> [Chord: KeyInterceptor.ReservedChord] {
+        floats: [ToolFloat], keybinds: [(Chord, KeyInterceptor.ReservedChord)],
+        canType: (Chord) -> Bool = KeyboardLayout.canType
+    ) -> (map: [Chord: KeyInterceptor.ReservedChord], diagnostics: [ConfigDiagnostic]) {
         var map = KeymapDefaults.map
         let floatIDs = Set(floats.map(\.id))
+        var displacements: [Displacement] = []
+
+        // Drop binds no keypress on this keyboard could ever produce (`cmd+|` on a US layout — `|`
+        // needs Shift there). Dropped BEFORE `reboundActions`, so an unusable line doesn't also cost
+        // the action its default: the old behavior left it with no shortcut at all, and the dead
+        // chord in the map made it look bound. `untypeable` carries them to the diagnostics.
+        let (typeable, untypeable) = keybinds.reduce(
+            into: ([(Chord, KeyInterceptor.ReservedChord)](), [(Chord, KeyInterceptor.ReservedChord)]())
+        ) { split, bind in
+            canType(bind.0) ? split.0.append(bind) : split.1.append(bind)
+        }
+        for (chord, action) in untypeable {
+            NSLog("GeneralConfig: keybind \(action.actionToken)=\(chord.configToken) can't be typed — ignored")
+        }
 
         // A user keybind MOVES its action: drop the action's default chord(s) first, so the
         // old key is freed instead of both the default and the new chord firing it.
-        let reboundActions = keybinds.map(\.1)
+        let reboundActions = typeable.map(\.1)
         map = map.filter { entry in !reboundActions.contains(entry.value) }
 
         func set(_ chord: Chord, _ action: KeyInterceptor.ReservedChord) {
@@ -148,19 +168,63 @@ enum KeymapAssembler {
                 NSLog(
                     "GeneralConfig: chord \(chord.displayGlyph) rebound from \(existing.actionToken) "
                         + "to \(action.actionToken)")
+                displacements.append(Displacement(chord: chord, loser: existing))
             }
             map[chord] = action
         }
 
         for float in floats { set(float.toggle, .toggleToolFloat(float.id)) }
-        for (chord, action) in keybinds {
+        for (chord, action) in typeable {
             if case .toggleToolFloat(let id) = action, !floatIDs.contains(id) {
                 NSLog("GeneralConfig: keybind action toggle_float:\(id) names no configured float — ignored")
                 continue
             }
             set(chord, action)
         }
-        return map
+        return (map, diagnostics(for: displacements, in: map) + untypeableDiagnostics(untypeable))
+    }
+
+    /// A config line naming a chord this keyboard can't produce. Distinct from an action left with
+    /// no shortcut: the action still has its default — it's the line that's dead — so it gets its
+    /// own headline rather than borrowing the "no shortcut" one.
+    private static func untypeableDiagnostics(
+        _ untypeable: [(Chord, KeyInterceptor.ReservedChord)]
+    ) -> [ConfigDiagnostic] {
+        untypeable.map { chord, action in
+            ConfigDiagnostic(scope: .keybind(action), problem: .unusableBind(chord))
+        }
+    }
+
+    /// One chord write that took a chord off another action — recorded as it happens, before the
+    /// final map says whether the loser was left with anything else. Deliberately does NOT record
+    /// the winner: a later write can take the same chord off it, so the only trustworthy answer is
+    /// read back from the finished map. Storing one here would invite exactly the bug that cost.
+    private struct Displacement {
+        let chord: Chord
+        let loser: KeyInterceptor.ReservedChord
+    }
+
+    /// A displacement is only worth surfacing when it took the loser's *last* chord — losing one of
+    /// two bindings is a rebind working as intended, but losing the only one leaves an action
+    /// silently unreachable. Reported once per action, naming the first chord it lost.
+    ///
+    /// The winner is read back from the finished `map`, not from what was recorded at write time: a
+    /// third line can take the same chord off the recorder's winner (last-wins), and the message
+    /// names the token the user has to go edit — pointing at a line that no longer holds the chord
+    /// would send them to fix the wrong one.
+    private static func diagnostics(
+        for displacements: [Displacement], in map: [Chord: KeyInterceptor.ReservedChord]
+    ) -> [ConfigDiagnostic] {
+        var seen: [KeyInterceptor.ReservedChord] = []
+        return displacements.compactMap { displacement in
+            guard !map.values.contains(displacement.loser), !seen.contains(displacement.loser),
+                let winner = map[displacement.chord]
+            else { return nil }
+            seen.append(displacement.loser)
+            return ConfigDiagnostic(
+                scope: .keybind(displacement.loser),
+                problem: .chordTaken(displacement.chord, by: winner))
+        }
     }
 }
 

@@ -81,7 +81,9 @@ enum GeneralConfigParser {
         }
 
         config.floats = floats
-        config.keymap = KeymapAssembler.assemble(floats: floats, keybinds: keybinds)
+        let assembled = KeymapAssembler.assemble(floats: floats, keybinds: keybinds)
+        config.keymap = assembled.map
+        config.keymapDiagnostics = assembled.diagnostics
         return config
     }
 

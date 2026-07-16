@@ -57,7 +57,7 @@ enum CommandCatalog {
 
     /// The glyph currently bound to an action, from the live keymap — empty if unbound.
     private static func displayGlyph(for chord: KeyInterceptor.ReservedChord) -> String {
-        GeneralConfig.current.keymap.first { $0.value == chord }?.key.displayGlyph ?? ""
+        Chord.displayed(chord, in: GeneralConfig.current.keymap)?.displayGlyph ?? ""
     }
 
     /// The ordered commands shown for a window with `tabCount` tabs, grouped by category

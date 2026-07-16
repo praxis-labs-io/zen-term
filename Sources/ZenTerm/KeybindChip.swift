@@ -65,6 +65,13 @@ final class KeybindChip: NSView {
     /// border, unlike the inner glyph, aren't rebuilt by `render(shortcut:)`).
     func reapplyTheme() { restyle() }
 
+    /// Test hook: the chord the chip is currently drawing, or nil when it's showing the unbound
+    /// placeholder. Reads the rendered subview rather than a stored string, so a test can't pass
+    /// while the chip actually displays something else.
+    var renderedShortcutForTesting: String? {
+        (host.subviews.first as? KeycapView)?.shortcutForTesting
+    }
+
     private func placeholder(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: 12)

@@ -5,6 +5,9 @@ import AppKit
 /// monospaced text. Shares the chrome's rounded-6 box idiom with `IconButton` and the
 /// tab-bar `Chip`: faint fill, muted ink. Shown at a command-palette row's trailing edge.
 final class KeycapView: NSView {
+    /// Test hook: the chord this keycap was built to draw.
+    var shortcutForTesting: String { shortcut }
+
     /// Glyphs that map to an SF Symbol — modifiers plus the navigation keys used in the
     /// footer hints. Everything else (letters, digits, and punctuation keys like `- | [ ]
     /// \`) has no clean symbol and stays as text.

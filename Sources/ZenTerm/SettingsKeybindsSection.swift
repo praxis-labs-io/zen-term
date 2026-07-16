@@ -32,8 +32,60 @@ final class SettingsKeybindsSection: SettingsSection {
     private weak var capturingRow: KeybindRow?
     private var captureCloseTimer: DispatchWorkItem?
     private let resetAllMessage = ResetFlashLabel()
+    private var configObserver: NSObjectProtocol?
+    /// A `.configDidChange` that arrived while a capture was armed, replayed once it ends.
+    private var hasMissedConfigReload = false
 
-    init(capturer: KeybindCapturing?) { self.capturer = capturer }
+    init(capturer: KeybindCapturing?) {
+        self.capturer = capturer
+        // Pick up a reload this card didn't make — ⌘⌥R after a hand-edit, or another window's
+        // Settings write. Without it the chips and conflict messages keep showing the pre-reload
+        // config, and ⌘⌥R is exactly what a user reaches for after editing the file to clear a
+        // conflict this section just told them about.
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .configDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.refreshFromConfig()
+        }
+    }
+
+    deinit {
+        if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
+    }
+
+    /// Re-read the live keymap into the rows IN PLACE — no rebuild, for the same reason
+    /// `reapplyTheme` doesn't: `.configDidChange` is global, so rebuilding here would tear down a
+    /// capture armed in a *different* window.
+    ///
+    /// A reload that lands mid-capture is *deferred*, not dropped. `desired` is the whole set
+    /// `ConfigWriter` rewrites the keybind block from, so leaving it stale past the capture means
+    /// the next successful write regenerates that block from pre-reload state — silently deleting
+    /// keybind lines the reload had just brought in.
+    private func refreshFromConfig() {
+        guard !rows.isEmpty else { return }
+        guard capturingRow == nil else {
+            // Only a FOREIGN reload is worth deferring. This card's own write reloads too, and
+            // `desired` already equals what it just wrote — flagging that would replay a refresh we
+            // did a moment ago, and would blur the flag's meaning from "someone else changed the
+            // config" into "a reload happened".
+            hasMissedConfigReload = reservedEntries(of: GeneralConfig.current.keymap) != desired
+            return
+        }
+        hasMissedConfigReload = false
+        desired = reservedEntries(of: GeneralConfig.current.keymap)
+        refreshRows()
+    }
+
+    /// Re-read `desired` from the live keymap when a reload was deferred, BEFORE an edit is layered
+    /// on top of it. `desired` is the whole set `ConfigWriter` regenerates the keybind block from,
+    /// so an edit applied to a pre-reload set writes that staleness to disk — deleting the very
+    /// lines the reload brought in. `hideHint`'s replay is too late for that: `commitRebind` writes
+    /// 0.7s before its close timer runs.
+    private func rebaseIfReloadDeferred() {
+        guard hasMissedConfigReload else { return }
+        hasMissedConfigReload = false
+        desired = reservedEntries(of: GeneralConfig.current.keymap)
+    }
 
     func makeDetailView() -> NSView {
         desired = reservedEntries(of: GeneralConfig.current.keymap)
@@ -177,6 +229,7 @@ final class SettingsKeybindsSection: SettingsSection {
     /// Apply a validated rebind, flash a success line, and close the popover after a short delay.
     private func commitRebind(_ row: KeybindRow, to chord: Chord) {
         capturer?.endCapture()
+        rebaseIfReloadDeferred()  // layer this edit on the reloaded set, never a pre-reload one
         desired = desired.filter { $0.value != row.action }
         desired[chord] = row.action
         guard persist(reportingRow: row) else {  // write failed — persist showed the error; don't claim success
@@ -203,17 +256,58 @@ final class SettingsKeybindsSection: SettingsSection {
     }
 
     /// Backspace on a focused chip: revert the action to its built-in default chord(s).
+    ///
+    /// This is the one edit that picks its own chord rather than the user pressing it, so it's the
+    /// one that can land on an occupied one. It takes the chord — Backspace always restores the
+    /// default, and refusing deadlocks a swapped pair, where each action holds the other's default
+    /// and neither row could ever be reverted. What it must not do is take it *silently*: whatever
+    /// held the chord falls back to its own default, and its row says so.
     private func reset(_ row: KeybindRow) {
+        rebaseIfReloadDeferred()  // layer the reset on the reloaded set, never a pre-reload one
+        let displaced = defaultChordConflict(for: row.action)
         desired = desired.filter { $0.value != row.action }
         for (chord, action) in KeymapDefaults.map where action == row.action { desired[chord] = action }
-        row.showMessage(nil)
-        persist(reportingRow: row)
+        guard persist(reportingRow: row) else { return }  // persist reported the write error
+        if let (chord, owner) = displaced { reportDisplacement(of: owner, losing: chord, to: row.action) }
         row.focusChip()  // keep focus on the row after the reload
+    }
+
+    /// Tell the displaced action's row it lost its chord, and where it landed — after `persist`, so
+    /// its `refreshRows` doesn't clear the message before anyone reads it. A tool float has no row
+    /// here; it doesn't need one, because a float that keeps its `key:` wins the chord back on
+    /// reload and the losing action's own diagnostic explains that.
+    private func reportDisplacement(
+        of owner: KeyInterceptor.ReservedChord, losing chord: Chord, to winner: KeyInterceptor.ReservedChord
+    ) {
+        guard let ownerRow = rows.first(where: { $0.action == owner }) else { return }
+        let winnerTitle = CommandCatalog.spec(for: winner).title
+        let landed = displayedChord(for: owner)?.displayGlyph
+        ownerRow.showMessage(
+            landed.map { "\(chord.displayGlyph) went back to \(winnerTitle). This is \($0) now." }
+                ?? "\(chord.displayGlyph) went back to \(winnerTitle).",
+            kind: .notice)
+    }
+
+    /// The first of an action's default chords that some *other* action holds in the live keymap,
+    /// with its holder. Read from the live keymap rather than `desired`, so a tool float's `key:`
+    /// counts too — `desired` excludes float toggles, and a float is just as stealable.
+    private func defaultChordConflict(
+        for action: KeyInterceptor.ReservedChord
+    ) -> (Chord, KeyInterceptor.ReservedChord)? {
+        KeymapDefaults.map
+            .filter { $0.value == action }
+            .keys
+            .sorted { $0.configToken < $1.configToken }  // deterministic: same chord named every time
+            .lazy
+            .compactMap { chord -> (Chord, KeyInterceptor.ReservedChord)? in
+                guard let owner = GeneralConfig.current.keymap[chord], owner != action else { return nil }
+                return (chord, owner)
+            }
+            .first
     }
 
     private func resetAll() {
         desired = reservedEntries(of: KeymapDefaults.map)
-        rows.forEach { $0.showMessage(nil) }
         guard persist(reportingRow: rows.last) else { return }  // report a write error near the button
         resetAllMessage.flash("Defaults restored.")
     }
@@ -226,23 +320,37 @@ final class SettingsKeybindsSection: SettingsSection {
         do {
             try ConfigWriter.apply(keybinds: desired)
         } catch {
-            (reportingRow ?? rows.first)?.showMessage("Couldn't write config: \(error.localizedDescription)")
             // Roll the failed edit out of the in-memory map, back to what's on disk — otherwise it
             // rides along on the next successful write, silently applying an edit the user was told
-            // failed. (`refreshRows` restores the chips; it leaves the error message set.)
+            // failed.
             desired = reservedEntries(of: GeneralConfig.current.keymap)
             refreshRows()
+            (reportingRow ?? rows.first)?.showMessage(
+                "Couldn't write config: \(error.localizedDescription)", kind: .failure)
             return false
         }
         AppConfig.reload()
+        // This write landed, so any earlier write failure is resolved — `refreshRows` won't clear it
+        // (a failure outlives a refresh by design), so retract it here where we know it's stale.
+        rows.filter { $0.messageKind == .failure }.forEach { $0.showMessage(nil) }
         desired = reservedEntries(of: GeneralConfig.current.keymap)
         refreshRows()
         return true
     }
 
+    /// Re-render every row from the live keymap. Owns each row's `.diagnostic` message: a chip is
+    /// empty either because the action is genuinely unbound or because a config line took its last
+    /// chord, and only the second deserves an explanation.
+    ///
+    /// A `.failure` message is left alone — it reports a write that didn't land, which a refresh
+    /// doesn't resolve. Clearing it here would let an unrelated reload (a theme change in another
+    /// window) silently retract "couldn't write config" while the edit is still not on disk.
     private func refreshRows() {
+        let diagnostics = GeneralConfig.current.keymapDiagnostics
         for row in rows {
             row.render(currentShortcut: displayedChord(for: row.action)?.displayGlyph ?? "")
+            guard row.messageKind != .failure else { continue }
+            row.showMessage(diagnostics.first { $0.scope == .keybind(row.action) }?.message, kind: .diagnostic)
         }
     }
 
@@ -293,12 +401,15 @@ final class SettingsKeybindsSection: SettingsSection {
         bubble.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
     }
 
+    /// The single place a capture ends (Esc, Delete, a commit's close timer, a backdrop click), so
+    /// it's where a reload deferred during that capture gets replayed.
     private func hideHint() {
         hintBubble?.removeFromSuperview()
         hintBubble = nil
         hintBackdrop?.removeFromSuperview()
         hintBackdrop = nil
         capturingRow = nil
+        if hasMissedConfigReload { refreshFromConfig() }
     }
 
     /// The modifier-only glyph for the live preview while keys are still being held (⌘, ⌘⇧, …) —
@@ -315,9 +426,10 @@ final class SettingsKeybindsSection: SettingsSection {
         map.filter { if case .toggleToolFloat = $0.value { return false } else { return true } }
     }
 
-    /// The chord shown for an action — the deterministic first of its `desired` chords by token.
+    /// The chord shown for an action — from `desired` (the in-progress edit set), not the live
+    /// keymap, so an unsaved edit renders. Same pick as the palette's: see `Chord.displayed`.
     private func displayedChord(for action: KeyInterceptor.ReservedChord) -> Chord? {
-        desired.filter { $0.value == action }.map(\.key).sorted { $0.configToken < $1.configToken }.first
+        Chord.displayed(action, in: desired)
     }
 
     /// Move keyboard focus between the vertical stops (each row's chip, then "Reset all").
