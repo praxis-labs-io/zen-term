@@ -106,7 +106,7 @@ cp icon/AppIcon.icns "$STAGE/Contents/Resources/AppIcon.icns"
 NOTICES="Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md"
 [[ -f "$NOTICES" ]] || {
     echo "✗ $NOTICES is missing" >&2
-    echo "  it is a license obligation, not an optional file — see ZEN-167" >&2
+    echo "  it is a license obligation, not an optional file (see ZEN-167)" >&2
     exit 1
 }
 cp "$NOTICES" "$STAGE/Contents/Resources/THIRD-PARTY-NOTICES.md"

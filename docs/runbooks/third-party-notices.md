@@ -1,4 +1,4 @@
-# Third-party notices — re-probe after a ghostty pin move
+# Third-party notices: re-probe after a ghostty pin move
 
 `Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md` lists what ZenTerm actually ships. **What gets linked is a
 property of the build, not of `build.zig.zon`**, so the pin moving is what makes this file
@@ -92,6 +92,10 @@ something new and it needs an OFL/MIT notice.
 License texts come from the Zig dependency cache (`~/.cache/zig/p/<hash>/`), keyed by the
 hashes in `vendor/ghostty/pkg/*/build.zig.zon`. Copy them verbatim: do not retype or
 summarize a license. Check the copyright years moved too, not just the terms.
+
+One exception to "verbatim": decode any stray HTML entities. Breakpad's vendored copy of the
+APSL block carries `&apos;` where the published license has an apostrophe; a `grep -n '&[a-z]*;'`
+over the result catches these, and they should read as the plain character.
 
 ## 5. Confirm the notices still open
 
