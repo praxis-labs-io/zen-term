@@ -199,6 +199,12 @@ if [[ -z "$NOTES_FILE" ]]; then
 fi
 
 rm -rf "$APP" "$DIST/ZenTerm.zip" "$DIST/dmg-root" "$DMG"
+# Build the release product from a clean slate so the published app can't inherit
+# local build-dir residue. A stale bundle once rode a *.bundle glob into a signed,
+# notarized, published app (ZEN-168); package-app now rejects surprise bundles, and
+# clearing the release products here keeps a legitimate release from tripping that
+# guard on old residue while guaranteeing the artifact matches a clean checkout.
+rm -rf .build/release
 bin/package-app --version "$VERSION" --identity "$IDENTITY" --dest "$DIST"
 
 echo "▸ Notarizing app"

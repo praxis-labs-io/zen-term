@@ -58,8 +58,37 @@ cp icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # SwiftPM resource bundles (brand SVGs, ghostty runtime resources). Bundle.module
 # resolves them via Bundle.main.resourceURL, so they must ride along in the .app —
 # a bare executable copy would fatalError on first Bundle.module access.
+#
+# Name the bundles explicitly. A *.bundle glob copies whatever residue sits in the
+# build dir: a stale SwiftTerm_SwiftTerm.bundle from the Epic 0 era once got signed,
+# notarized, and shipped to users that way (ZEN-168). Only TerminalKit (ghostty
+# runtime resources) and ZenTerm (brand marks, themes) declare resources, so those
+# are the only two bundles a correct build produces.
+EXPECTED_BUNDLES=(ZenTerm_TerminalKit.bundle ZenTerm_ZenTerm.bundle)
+
+# Any bundle we didn't name is a surprise, and a surprise in the bundle set is
+# exactly the signal we missed. Fail rather than ship it.
+shopt -s nullglob
 for bundle in .build/release/*.bundle; do
-    cp -R "$bundle" "$APP/Contents/Resources/"
+    base="$(basename "$bundle")"
+    expected=0
+    for name in "${EXPECTED_BUNDLES[@]}"; do
+        [[ "$base" == "$name" ]] && { expected=1; break; }
+    done
+    [[ "$expected" -eq 1 ]] || {
+        echo "✗ unexpected bundle in .build/release: $base" >&2
+        echo "  packaging ships only ${EXPECTED_BUNDLES[*]}; investigate before releasing." >&2
+        exit 1
+    }
+done
+shopt -u nullglob
+
+# Copy exactly the expected bundles, failing loudly on a missing one rather than
+# shipping a partial app.
+for name in "${EXPECTED_BUNDLES[@]}"; do
+    src=".build/release/$name"
+    [[ -d "$src" ]] || { echo "✗ expected bundle missing: $src" >&2; exit 1; }
+    cp -R "$src" "$APP/Contents/Resources/"
 done
 
 cat > "$APP/Contents/Info.plist" <<PLIST
