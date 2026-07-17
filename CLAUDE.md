@@ -34,22 +34,37 @@ debugger/Instruments session).
 
 **Verify before claiming done:** `bin/check` fully green (not just build +
 test — format-lint and swiftlint are part of the gate and CI enforces them).
-**AppKit controls get window-based interaction tests, not state-only tests** —
-assert the control by driving it in a real window, because a test that only
-checks the backing view-model passes while the control is dead (that's exactly
-how a fully broken dropdown shipped past two reviews). **The event has to be real
-too:** AppKit puts `.function` **and** `.numericPad` on every arrow `keyDown`, so
-a synthesized `modifierFlags: .option` is a keystroke macOS never sends — that
-shipped a ⌥-arrow reorder that did *nothing* in the app, past four green tests
-and a mutation check, because both only ever exercised the fake event (ZEN-145).
-Build synthesized events the way AppKit delivers them, and match modifiers
-against the reservable set (`[.command, .shift, .option, .control]`) rather than
-`.deviceIndependentFlagsMask`, which keeps those extra bits and so never compares
-equal to a bare modifier. A keyboard path also crosses `KeyInterceptor`'s event
-monitor *before* the responder chain, which no view-level test covers — so hand a
-new chord to the runbook even when it looks fully tested. Reserve the manual
-runbook for that, and for genuinely visual behavior (motion, layout, color) no
-test can assert.
+
+**Test what can be silently dead. Show the rest.** A test earns its keep where a
+thing can be broken while looking fine. Anything you'd catch by glancing at the
+screen goes to the runbook: Drew is at the machine and would rather look than read
+an assertion.
+
+- **AppKit controls get window-based interaction tests, not state-only tests** —
+  drive the control in a real window, because a test that only checks the backing
+  view-model passes while the control is dead (that's exactly how a fully broken
+  dropdown shipped past two reviews).
+- **The event has to be real too:** AppKit puts `.function` **and** `.numericPad`
+  on every arrow `keyDown`, so a synthesized `modifierFlags: .option` is a
+  keystroke macOS never sends — that shipped a ⌥-arrow reorder that did *nothing*
+  in the app, past four green tests and a mutation check, because both only ever
+  exercised the fake event (ZEN-145). Build synthesized events the way AppKit
+  delivers them, and match modifiers against the reservable set (`[.command,
+  .shift, .option, .control]`) rather than `.deviceIndependentFlagsMask`, which
+  keeps those extra bits and so never compares equal to a bare modifier.
+- **A new chord goes to the runbook** even when it looks fully tested — a keyboard
+  path crosses `KeyInterceptor`'s event monitor *before* the responder chain, and
+  no view-level test covers that.
+
+**Layout, placement, motion and color are the runbook's, not a test's.** Where a
+view sits, how a card reads, whether a keycap landed in the right corner: show it,
+don't assert it. A frame-measuring test costs more than it catches, and goes green
+just as happily when the thing looks wrong. Build it, run `swift run ZenTerm`, and
+hand it over.
+
+**The one exception is a budget the eye can't check:** copy against a fixed wrap
+column (`ToastView.messageFont` / `messageMaxWidth`) wraps mid-phrase invisibly, so
+measure that. It's about text fitting a known width — not about where a view sits.
 
 ## Releasing
 
