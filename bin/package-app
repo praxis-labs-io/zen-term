@@ -99,6 +99,18 @@ mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources"
 cp "$BIN" "$STAGE/Contents/MacOS/ZenTerm"
 cp icon/AppIcon.icns "$STAGE/Contents/Resources/AppIcon.icns"
 
+# Third-party license notices (ZEN-167). The file is a SwiftPM resource, so it already rides
+# inside ZenTerm_ZenTerm.bundle and the app menu opens it from there. This second copy sits at
+# the top of Contents/Resources so the license file is plainly visible to anyone inspecting the
+# app, which is the form several of these licenses (FTL, BSD-2, libpng, OFL, ISC) ask for.
+NOTICES="Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md"
+[[ -f "$NOTICES" ]] || {
+    echo "✗ $NOTICES is missing" >&2
+    echo "  it is a license obligation, not an optional file (see ZEN-167)" >&2
+    exit 1
+}
+cp "$NOTICES" "$STAGE/Contents/Resources/THIRD-PARTY-NOTICES.md"
+
 for bundle in "${EXPECTED_BUNDLES[@]}"; do
     cp -R ".build/release/$bundle" "$STAGE/Contents/Resources/"
 done
