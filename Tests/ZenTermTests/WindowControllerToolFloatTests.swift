@@ -63,7 +63,7 @@ final class WindowControllerToolFloatTests: XCTestCase {
 
     private static func spec(_ id: String, persist: ToolFloat.Persistence) -> ToolFloat {
         ToolFloat(
-            id: id, title: "Open \(id)", icon: ToolFloatParser.defaultIcon, command: id, dir: nil,
+            id: id, order: 0, title: id, icon: ToolFloatParser.defaultIcon, command: id, dir: nil,
             widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false, persist: persist,
             toggle: Chord(command: true, shift: true, key: id == "btop" ? "b" : "g"))
     }

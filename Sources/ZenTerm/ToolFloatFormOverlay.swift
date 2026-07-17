@@ -1,10 +1,14 @@
 import AppKit
 
 /// The add / edit form for a tool float, opened from the Settings → Tools section. It collects a
-/// float's fields — id, title, icon, shortcut, command, size, and a git-only toggle — builds a
+/// float's fields — title, icon, shortcut, command, size, and a git-only toggle — builds a
 /// `ToolFloat`, and hands it to `onSubmit` (the host writes it via `ConfigWriter` + reloads, so the
 /// dock button, ⌘P entry, and its keybind appear with no restart). A `ModalOverlay` like the
 /// palettes and `AddWorkspaceOverlay`, which it mirrors.
+///
+/// There is no id field: a float's id is `slug(title)`, so the title is the only name the user gives
+/// it (ZEN-145). `existingIDs` is therefore a set of slugs — the form rejects a title that collides
+/// with one, which is what keeps the config's last-wins rule from ever silently eating a float.
 ///
 /// Fully keyboard-driven: Up/Down move between fields, the shortcut chip captures a chord (Return to
 /// arm, then press keys; Backspace clears), Return advances, ⌘Return submits, Esc cancels. Every
@@ -23,7 +27,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it in place.
     private let header = NSTextField(labelWithString: "")
 
-    private let idField = FieldBox(placeholder: "gitdash")
     private let titleField = FieldBox(placeholder: "Open GitDash")
     private var iconPicker: IconPickerField!
     private let chordChip = KeybindChip()
@@ -42,7 +45,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     ) { _ in }
     private let dirField = FieldBox(placeholder: "~/notes")
 
-    private var idGroup: LabeledField?
     private var titleGroup: LabeledField?
     private var iconGroup: LabeledField?
     private var chordGroup: LabeledField?
@@ -121,7 +123,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
     // MARK: ModalOverlay
 
-    func focusInitialResponder() { window?.makeFirstResponder(idField.field) }
+    func focusInitialResponder() { window?.makeFirstResponder(titleField.field) }
 
     func animateIn() {
         superview?.layoutSubtreeIfNeeded()  // resolve the card's frame before scaling about its center
@@ -161,13 +163,13 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         header.textColor = Theme.current.chrome.foreground.nsColor
 
         let controls: [ThemeReapplying] = [
-            idField, titleField, commandField, dirField, widthField, heightField, gitSegment,
+            titleField, commandField, dirField, widthField, heightField, gitSegment,
             persistSegment, cancelButton, submitButton, deleteButton,
         ]
         controls.forEach { $0.reapplyTheme() }
         chordChip.reapplyTheme()
         iconPicker.reapplyTheme()
-        for group in [idGroup, titleGroup, iconGroup, chordGroup, commandGroup, dirGroup, sizeGroup] {
+        for group in [titleGroup, iconGroup, chordGroup, commandGroup, dirGroup, sizeGroup] {
             group?.reapplyTheme()
         }
         captions.forEach { $0.reapplyTheme() }
@@ -180,13 +182,9 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         header.textColor = Theme.current.chrome.foreground.nsColor
         header.stringValue = editingFloat == nil ? "New Tool Float" : "Edit Tool Float"
 
-        wireField(idField)
-        idField.onChange = { [weak self] in self?.refreshValidity() }
-        let idGroup = LabeledField(caption: caption("ID", required: true), control: idField)
-        self.idGroup = idGroup
-
         wireField(titleField)
-        let titleGroup = LabeledField(caption: caption("TITLE", required: false), control: titleField)
+        titleField.onChange = { [weak self] in self?.refreshValidity() }
+        let titleGroup = LabeledField(caption: caption("TITLE", required: true), control: titleField)
         self.titleGroup = titleGroup
 
         let picker = IconPickerField(selected: editingFloat?.icon ?? IconCatalog.defaultSymbol)
@@ -288,7 +286,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         let footer = Self.hStack(footerViews, spacing: 8)
 
         let content = NSStackView(views: [
-            header, idGroup, titleGroup, iconGroup, chordGroup, commandGroup, dirGroup, sizeGroup,
+            header, titleGroup, iconGroup, chordGroup, commandGroup, dirGroup, sizeGroup,
             gitGroup, persistGroup, footer,
         ])
         content.orientation = .vertical
@@ -307,8 +305,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private func prefill() {
         chordChip.render(shortcut: "")
         guard let float = editingFloat else { return }
-        idField.setText(float.id)
-        if float.title != ToolFloatParser.defaultTitle(forID: float.id) { titleField.setText(float.title) }
+        titleField.setText(float.title)
         capturedChord = float.toggle
         chordChip.render(shortcut: float.toggle.displayGlyph)
         commandField.setText(float.command)
@@ -463,7 +460,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     /// Right, and Cancel from Submit with Left — neither is its own vertical stop.
     private func verticalStops() -> [NSView] {
         [
-            idField.field, titleField.field, iconPicker, chordChip, commandField.field,
+            titleField.field, iconPicker, chordChip, commandField.field,
             dirField.field, widthField.field, gitSegment, persistSegment, submitButton,
         ]
     }
@@ -535,14 +532,15 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     }
 
     private func buildFloat() -> ToolFloat? {
-        let id = idField.text.trimmingCharacters(in: .whitespaces)
-        let command = commandField.text.trimmingCharacters(in: .whitespaces)
-        guard !id.isEmpty, !command.isEmpty, let chord = capturedChord else { return nil }
         let title = titleField.text.trimmingCharacters(in: .whitespaces)
+        let command = commandField.text.trimmingCharacters(in: .whitespaces)
+        let id = ToolFloatParser.slug(forTitle: title)
+        guard !id.isEmpty, !command.isEmpty, let chord = capturedChord else { return nil }
         let pinnedDir = dirField.text.trimmingCharacters(in: .whitespaces)
         return ToolFloat(
             id: id,
-            title: title.isEmpty ? ToolFloatParser.defaultTitle(forID: id) : title,
+            order: editingFloat?.order ?? Self.nextOrder(),
+            title: title,
             icon: iconPicker.selected,
             command: command,
             dir: ToolFloatParser.resolveDir(pinnedDir),
@@ -551,6 +549,13 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             requiresGitRepo: gitSegment.selectedIndex == 1,
             persist: Self.persistOptions[persistSegment.selectedIndex].mode,
             toggle: chord)
+    }
+
+    /// A new float lands at the end of the dock; editing keeps the float's existing slot. Reads the
+    /// live catalog rather than a passed-in value for the same reason `chordConflict` does — the form
+    /// is built fresh on every open, so the config it reads is the config it's about to be written to.
+    private static func nextOrder() -> Int {
+        (GeneralConfig.current.floats.map(\.order).max() ?? 0) + 1
     }
 
     /// Update every field's inline message and return the first offending field to focus (nil when
@@ -564,21 +569,24 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             if message != nil, firstInvalid == nil { firstInvalid = field }
         }
 
-        let id = idField.text.trimmingCharacters(in: .whitespaces)
-        var idMessage: String?
-        if !id.isEmpty, id.contains(where: { $0.isWhitespace || "\"#".contains($0) }) {
-            idMessage = "Can’t contain spaces, \" or #."
-        } else if !id.isEmpty, existingIDs.contains(id) {
-            idMessage = "A tool float with this id already exists."
-        } else if includeRequired, id.isEmpty {
-            idMessage = "Enter an id."
-        }
-        flag(idGroup, field: idField.field, idMessage)
-
-        // A `"` in the title can't round-trip — `serializeFloat` quotes it and the parser has no
-        // escape, so it corrupts or drops the float on reload. Reject it, like id and command.
+        // The title is the float's whole identity now: it names the tool AND slugs to the id that keys
+        // its keybind, its live instance, and its config line. So the checks a bare label wouldn't
+        // need — a `"` can't round-trip (`serializeFloat` quotes it and the parser has no escape, so
+        // it corrupts or drops the float on reload); a title of pure emoji or punctuation slugs to
+        // nothing, leaving a float nothing could address; and two titles that slug alike would collide,
+        // where the config's last-wins rule silently eats one.
         let title = titleField.text.trimmingCharacters(in: .whitespaces)
-        flag(titleGroup, field: titleField.field, title.contains("\"") ? "Can’t contain a \" character." : nil)
+        var titleMessage: String?
+        if title.contains("\"") {
+            titleMessage = "Can’t contain a \" character."
+        } else if !title.isEmpty, ToolFloatParser.slug(forTitle: title).isEmpty {
+            titleMessage = "Needs at least one letter or number."
+        } else if !title.isEmpty, existingIDs.contains(ToolFloatParser.slug(forTitle: title)) {
+            titleMessage = "A tool float with this title already exists."
+        } else if includeRequired, title.isEmpty {
+            titleMessage = "Enter a title."
+        }
+        flag(titleGroup, field: titleField.field, titleMessage)
 
         let command = commandField.text.trimmingCharacters(in: .whitespaces)
         var commandMessage: String?

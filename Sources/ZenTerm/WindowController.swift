@@ -645,6 +645,7 @@ final class WindowController: NSObject {
         if modal?.kind == .settings { closeModal(); return }
         let toolsSection = SettingsToolsSection()
         toolsSection.onEditFloat = { [weak self] float in self?.openToolFloatForm(editing: float) }
+        toolsSection.onReorder = { [weak self] floats in self?.reorderToolFloats(floats) }
         let workspacesSection = SettingsWorkspacesSection()
         workspacesSection.onEditWorkspace = { [weak self] ws in self?.openWorkspaceForm(editing: ws) }
         // Sorted by nav title so the nav reads alphabetically and stays ordered as sections are
@@ -674,9 +675,11 @@ final class WindowController: NSObject {
     }
 
     /// Open the tool-float add / edit form from the Tools section (`nil` adds, a value edits). Closes
-    /// the Settings card first — one modal slot — mirroring the picker → Add-Workspace hand-off; the
-    /// form's own id-collision check excludes the float being edited. On save or cancel it hands back
-    /// to Settings → Tools (the section it was launched from).
+    /// the Settings card first — one modal slot — mirroring the picker → Add-Workspace hand-off. On
+    /// save or cancel it hands back to Settings → Tools (the section it was launched from).
+    ///
+    /// `existingIDs` is the slug of every *other* float, which the form rejects a colliding title
+    /// against; subtracting the edited float's own id is what lets a re-save keep its title.
     private func openToolFloatForm(editing float: ToolFloat?) {
         closeModal()
         let existingIDs = Set(GeneralConfig.current.floats.map(\.id)).subtracting(float.map { [$0.id] } ?? [])
@@ -726,6 +729,24 @@ final class WindowController: NSObject {
         }
         AppConfig.reload()
         reopenSettingsOnTools()
+    }
+
+    /// Persist a new float order (`floats` arrives in the user's intended order), then reload so the
+    /// dock reorders live behind the open Settings card.
+    ///
+    /// Unlike add / edit / delete this doesn't `reopenSettingsOnTools()` — the card is already open and
+    /// rebuilding it would throw away the user's place in the list mid-⌥↓.
+    private func reorderToolFloats(_ floats: [ToolFloat]) {
+        do {
+            try ConfigWriter.applyFloatOrder(floats)
+        } catch {
+            toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Couldn't Reorder Tool Floats",
+                    message: "Failed to update the config file: \(error.localizedDescription)"))
+            return
+        }
+        AppConfig.reload()
     }
 
     /// Close the tool-float form and reopen the Settings card on its Tools section — the "back" for

@@ -136,16 +136,19 @@ enum ConfigWriter {
     // MARK: floats
 
     /// Serialize a `ToolFloat` into its full `float = …` line — the inverse of `ToolFloatParser`,
-    /// round-tripping its quote-aware `field:value` grammar. The required fields (`id`, `key`,
-    /// `command`) are always emitted; an optional field is omitted when it equals the parser's default
-    /// (shared via `ToolFloatParser`, so the two halves can't drift), keeping a plain float's line
-    /// lean. A value with whitespace or a `#` is quoted — the same rule `WorkspacesWriter` uses — so
-    /// the parser's comment strip and whitespace tokenizer don't split it.
+    /// round-tripping its quote-aware `field:value` grammar. The required fields (`title`, `key`,
+    /// `command`) are always emitted, plus `order:` — it's the field that makes the list editable by
+    /// hand, so it's always there to edit. An optional field is omitted when it equals the parser's
+    /// default (shared via `ToolFloatParser`, so the two halves can't drift), keeping a plain float's
+    /// line lean. `id` is never written: it's `slug(title)`, and storing it would be storing a
+    /// restatement of the title that could drift from it. A value with whitespace or a `#` is quoted —
+    /// the same rule `WorkspacesWriter` uses — so the parser's comment strip and whitespace tokenizer
+    /// don't split it.
     static func serializeFloat(_ float: ToolFloat) -> String {
-        var tokens = ["id:\(quotedValue(float.id))", "key:\(float.toggle.configToken)"]
-        if float.title != ToolFloatParser.defaultTitle(forID: float.id) {
-            tokens.append("title:\(quotedValue(float.title))")
-        }
+        var tokens = [
+            "order:\(float.order)", "title:\(quotedValue(float.title))",
+            "key:\(float.toggle.configToken)",
+        ]
         if float.icon != ToolFloatParser.defaultIcon { tokens.append("icon:\(quotedValue(float.icon))") }
         tokens.append("command:\(quotedValue(float.command))")
         if let dir = float.dir { tokens.append("dir:\(quotedValue(PathDisplay.abbreviatingHome(dir.path)))") }
@@ -158,6 +161,23 @@ enum ConfigWriter {
         if float.requiresGitRepo { tokens.append("git:true") }
         if float.persist != ToolFloatParser.defaultPersist { tokens.append("persist:\(float.persist.rawValue)") }
         return "float = " + tokens.joined(separator: " ")
+    }
+
+    /// Persist `floats` in the order given, stamping `order:` across all of them, 1…N. Stamping every
+    /// float (not just the ones that moved) is what lets a config with no `order:` fields at all — the
+    /// only kind that existed before ZEN-145 — become a full contiguous sequence on the first reorder,
+    /// instead of a mix where some floats sort by an explicit number and the rest by line position.
+    ///
+    /// No line moves: every id is unchanged, so each float's line is rewritten where it already sits
+    /// and only its number changes. That's the whole reason order is a field rather than line order —
+    /// the file stays yours, comments and all.
+    static func applyFloatOrder(_ floats: [ToolFloat], configRoot: URL = ConfigLoader.defaultRoot) throws {
+        let resequenced = floats.enumerated().map { index, float -> ToolFloat in
+            var float = float
+            float.order = index + 1
+            return float
+        }
+        try apply(floatUpserts: resequenced, configRoot: configRoot)
     }
 
     /// Replace each upsert's `float =` line in place (matched by `id:`, preserving any trailing
@@ -184,13 +204,13 @@ enum ConfigWriter {
         }
     }
 
-    /// The `id:` of an active `float =` line, else nil (not a float line, or its id is missing). Reads
-    /// through `ToolFloatParser.fields` so line-matching uses the very tokenizer the parser does.
+    /// The id of an active `float =` line, else nil (not a float line, or it carries no usable title).
+    /// Resolves through `ToolFloatParser.identity` — the same tokenizer *and* the same title→slug rule
+    /// `parse` uses — so the writer can never disagree with the parser about which float a line is.
     private static func floatID(of line: String) -> String? {
         guard activeAssignmentKey(line) == "float", let equals = line.firstIndex(of: "=") else { return nil }
         let value = ConfigText.stripComment(String(line[line.index(after: equals)...]))
-        let id = ToolFloatParser.fields(value)["id"] ?? ""
-        return id.isEmpty ? nil : id
+        return ToolFloatParser.identity(fields: ToolFloatParser.fields(value))
     }
 
     /// Quote a value that carries whitespace or a `#` so the parser's comment strip and tokenizer

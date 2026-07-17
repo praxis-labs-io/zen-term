@@ -70,8 +70,8 @@ final class SettingsTabTraversalTests: XCTestCase {
     }
 
     private let twoFloats = """
-        float = id:dev key:cmd+shift+d command:vim
-        float = id:top key:cmd+shift+t command:htop
+        float = title:dev key:cmd+shift+d command:vim
+        float = title:top key:cmd+shift+t command:htop
         """
 
     // MARK: Tools rows — a stop that ignored Tab entirely

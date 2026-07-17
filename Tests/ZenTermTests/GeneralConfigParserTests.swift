@@ -115,7 +115,7 @@ final class GeneralConfigParserTests: XCTestCase {
     }
 
     func test_hashInsideQuotedCommand_survives() {
-        let config = parse("float = id:x command:\"echo # hi\" key:cmd+shift+x\n")
+        let config = parse("float = title:x command:\"echo # hi\" key:cmd+shift+x\n")
         XCTAssertEqual(config.floats.first?.command, "echo # hi")
     }
 
@@ -128,7 +128,7 @@ final class GeneralConfigParserTests: XCTestCase {
     func test_floatsAndKeybinds_populateStructuredFields() {
         let config = parse(
             """
-            float = id:gitdash command:gd key:cmd+shift+g
+            float = title:gitdash command:gd key:cmd+shift+g
             keybind = toggle_command_palette=cmd+f
             """)
         XCTAssertEqual(config.floats.map(\.id), ["gitdash"])
@@ -140,10 +140,63 @@ final class GeneralConfigParserTests: XCTestCase {
     func test_duplicateFloatID_lastWins() {
         let config = parse(
             """
-            float = id:x command:one key:cmd+shift+a
-            float = id:x command:two key:cmd+shift+b
+            float = title:x command:one key:cmd+shift+a
+            float = title:x command:two key:cmd+shift+b
             """)
         XCTAssertEqual(config.floats.count, 1)
         XCTAssertEqual(config.floats.first?.command, "two")
+    }
+
+    // MARK: float order (ZEN-145)
+
+    /// `config.floats` is the single array the dock, ⌘P, and Settings → Tools all read, so this sort
+    /// is what "reorder" actually means end to end.
+    func test_floats_sortByOrderField() {
+        let config = parse(
+            """
+            float = order:3 title:c command:c key:cmd+shift+c
+            float = order:1 title:a command:a key:cmd+shift+a
+            float = order:2 title:b command:b key:cmd+shift+b
+            """)
+        XCTAssertEqual(config.floats.map(\.id), ["a", "b", "c"])
+    }
+
+    /// A config written before `order:` existed must be untouched by it: no `order:` anywhere means
+    /// the floats keep the order their lines appear in.
+    func test_floats_withoutOrder_keepFileOrder() {
+        let config = parse(
+            """
+            float = title:c command:c key:cmd+shift+c
+            float = title:a command:a key:cmd+shift+a
+            float = title:b command:b key:cmd+shift+b
+            """)
+        XCTAssertEqual(config.floats.map(\.id), ["c", "a", "b"])
+    }
+
+    /// Swift's sort isn't stable, so a shared `order:` has to be broken by line order explicitly —
+    /// otherwise the dock could silently shuffle between launches of an unchanged config.
+    func test_floats_tiedOrder_brokenByFileOrder_deterministically() {
+        let text = """
+            float = order:1 title:a command:a key:cmd+shift+a
+            float = order:1 title:b command:b key:cmd+shift+b
+            float = order:1 title:c command:c key:cmd+shift+c
+            """
+        for _ in 0..<50 {
+            XCTAssertEqual(parse(text).floats.map(\.id), ["a", "b", "c"])
+        }
+    }
+
+    /// A half-numbered config — what you get by hand-editing one line of a config Settings hasn't
+    /// reordered yet. An unnumbered float's order *is* its line position, so numbers and positions
+    /// sort on one scale: here `a` is pushed behind the two unnumbered floats holding positions 1 and
+    /// 2, rather than numbered floats forming a separate group that jumps the queue.
+    func test_floats_mixedOrderAndUnordered_sortOnOneScale() {
+        let config = parse(
+            """
+            float = order:5 title:a command:a key:cmd+shift+a
+            float = title:b command:b key:cmd+shift+b
+            float = title:c command:c key:cmd+shift+c
+            """)
+        XCTAssertEqual(config.floats.map(\.id), ["b", "c", "a"])
     }
 }

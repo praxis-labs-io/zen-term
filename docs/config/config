@@ -94,8 +94,17 @@
 # Repeat the key for as many as you like. A float's `key:` is the single source
 # of truth for both its chord and its palette glyph.
 #
+# A float has no id to author: its `title:` is its name, and Settings derives the
+# rest. (The id a `toggle_float:` keybind needs is just the title lowercased, with
+# each run of anything that isn't a letter or number turned into a single dash:
+# "Open GitDash" -> open-gitdash.)
+#
 # Fields (whitespace-separated `field:value`; quote values with spaces):
-#   id       (required)  stable identifier, unique per float
+#   title    (required)  name in the palette, Settings, and the dock tooltip;
+#                        must be unique, and must hold a letter or number
+#   order    (optional)  position in the dock, palette, and Settings — low to high
+#                        (default: the order the `float =` lines appear in here).
+#                        Settings writes these for you when you reorder with ⌥↑/⌥↓
 #   command  (required)  runs as `$SHELL -l -i -c <command>` at the focused cwd
 #   dir      (optional)  pinned working directory, ~ expanded   (default: focused pane's cwd)
 #                        for tools that aren't about the directory you're in (a music
@@ -115,24 +124,23 @@
 #                        every tab in the window, and its card stays up across a tab
 #                        switch. the instance dies when the tool quits on its own
 #                        (e.g. `q`) — the next open is cold, not resumed
-#   title    (optional)  command-palette title                      (default "Open <id>")
 #   icon     (optional)  SF Symbol name or bundled mark (github/git) (default square.on.square)
 #   width    (optional)  width as a fraction of the tab              (default 0.85)
 #   height   (optional)  height as a fraction of the tab            (default 0.85)
 #
 # Example — the GitHub dashboard TUI on ⌘⇧G:
-# float = id:gitdash command:"gd" key:cmd+shift+g git:false title:"Open GitDash" icon:github
+# float = order:1 title:"Open GitDash" command:"gd" key:cmd+shift+g git:false icon:github
 #
 # Example — a dev server with spaces in the command:
-# float = id:dev command:"npm run dev" key:cmd+shift+d title:"Dev server"
+# float = order:2 title:"Dev server" command:"npm run dev" key:cmd+shift+d
 #
 # Example — lazygit kept warm per repo (first open is cold; reopens are instant).
 # This is the recipe for the old built-in ⌘G lazygit, now a regular float like any
 # other tool (height:0.78 matches the old card exactly):
-# float = id:lazygit command:"lazygit" key:cmd+g git:true persist:dir icon:git title:"Open Lazygit" height:0.78
+# float = order:3 title:"Open Lazygit" command:"lazygit" key:cmd+g git:true persist:dir icon:git height:0.78
 #
 # Example — a system monitor kept alive for the window, reachable from every tab:
-# float = id:btop command:"btop" key:cmd+shift+b persist:window icon:gauge
+# float = order:4 title:BTop command:"btop" key:cmd+shift+b persist:window icon:gauge
 
 # ─── Keybinds ────────────────────────────────────────────────────────────────
 #
