@@ -1,0 +1,332 @@
+# Architecture
+
+What ZenTerm is, as it exists today. If a change makes this wrong, the change
+fixes this file.
+
+ZenTerm is the chrome around a terminal. Ghostty renders text and runs shells;
+everything else here is ours. 116 Swift files, roughly 17.7k lines.
+
+## The seam (load-bearing)
+
+`TerminalSurface` (`Sources/TerminalKit/TerminalSurface.swift`) is the whole
+contract, in 137 lines. A surface is anything that can *be* a terminal inside our
+chrome: it vends an `NSView`, a title, a cwd, and a busy flag, and it takes
+`start`, `focus`, `terminate`, `paste`, `copySelection`, `applyAppearance`.
+
+Four types travel with it: `TerminalSurfaceConfig` (spawn params),
+`TerminalSurfaceDelegate` (nine events out, all defaulted to no-ops),
+`TerminalTheme`, and `TerminalBehavior`.
+
+**The rule:** if only one backend can do a thing, it stays below the seam. The
+protocol grows only to hold what the chrome needs from *any* terminal.
+
+Two contract details that are not decoration:
+
+- **`setFocused` is not `focus()`.** The chrome drives cursor focus from its own
+  single-focus model rather than the AppKit responder chain, which doesn't
+  propagate reliably while many pane views are reparented in one pass (rapid
+  splits).
+- **`surfaceDidFailToStart` must be delivered asynchronously**, never
+  synchronously inside `start`, so a consumer dispatching on surface identity has
+  finished wiring the surface into its state first. `GhosttySurface.swift:92`
+  honors this with a `DispatchQueue.main.async`.
+
+## Targets
+
+```
+GhosttyKit (binaryTarget: Frameworks/GhosttyKit.xcframework)
+     ↑
+TerminalKit          the ONLY target that may import GhosttyKit
+     ↑
+  PaneKit            seam types only, never the backend
+     ↑
+  ZenTerm            the chrome
+     ↑
+  TabKit             pure: no AppKit, no backend
+```
+
+**Nothing lints this. The package graph does.** `ZenTerm` has no dependency on
+`GhosttyKit`, so `import GhosttyKit` in the chrome is a compile error.
+`import GhosttyKit` appears in exactly five files, all under `Sources/TerminalKit/`.
+
+Two more guards: `TerminalSurfaceFactory.make()` is the one place the chrome asks
+for a terminal, and `Tests/TerminalKitTests/SeamTests.swift` asserts the factory
+returns a `GhosttySurface` while proving the protocol is implementable with zero
+backend (`SpySurface`).
+
+`PaneKit` and `TabKit` import no AppKit. TabKit imports nothing at all.
+
+**GhosttyKit and its resources are gitignored and built per machine**
+(`bin/build-ghosttykit`). A fresh worktree needs `Frameworks/GhosttyKit.xcframework`
+and `Sources/TerminalKit/Resources/ghostty-resources` symlinked in or the build
+fails.
+
+## The backend
+
+`GhosttySurface` + `GhosttyApp` + `GhosttyHostView` + `GhosttyHostViewIME` +
+`GhosttyConfigWriter`, all in `TerminalKit`.
+
+- **libghostty config is app-global.** One `ghostty_app_t` per process.
+  `applyAppearance` on any surface calls `GhosttyApp.shared.updateConfig`, deduped
+  by generated config text, so N surfaces cause one real swap. A consequence:
+  **there is no per-surface theming.** Every pane shares one theme.
+- **libghostty accepts config only from files.** `GhosttyConfigWriter` writes to
+  `$TMPDIR/zenterm-ghostty-config-<pid>`. It deliberately does *not* call
+  `ghostty_config_load_default_files`, so a user's `~/.config/ghostty` cannot skew
+  ZenTerm's appearance.
+- **`GHOSTTY_RESOURCES_DIR` is force-overridden.** Launching ZenTerm from inside
+  Ghostty.app would otherwise inherit a mismatched version's shell integration and
+  terminfo.
+- **`isBusy` is `ghostty_surface_needs_confirm_quit`**, which means "the cursor is
+  not at a prompt," from OSC 133 marks. A shell ghostty cannot integrate reads
+  busy, conservatively.
+- **Re-entrancy:** actions that make the chrome free a surface defer to
+  `DispatchQueue.main.async`. Doing it synchronously inside `ghostty_app_tick` is a
+  re-entrant use-after-free.
+
+## The pane tree
+
+`PaneKit`, six files, no AppKit, no global mutable state. Ids come from callers,
+so everything is deterministic and testable.
+
+```swift
+public indirect enum PaneNode {
+    case leaf(PaneID)
+    case split(id: SplitID, axis: SplitAxis, ratio: Double, a: PaneNode, b: PaneNode)
+}
+```
+
+`PaneTree` is a value type: every edit returns a new tree. `.vertical` means side
+by side, `.horizontal` means stacked.
+
+**How a running shell survives a restructure.** This is the core mechanism and it
+has two halves:
+
+1. `PaneSurfaceRegistry.apply(diff)` terminates removed leaves, creates new ones,
+   and **touches nothing retained**. A retained leaf keeps its shell, scrollback,
+   and first-responder state.
+2. `PaneCanvasController.rebuildViews()` keeps `hostByLeaf` across the rebuild, so
+   a restructure reparents existing hosts instead of rebuilding pane chrome.
+
+The chain: `split()` mints ids and seeds the new leaf's cwd from the source's live
+`currentDirectory`, then `tree.splitting(...)`, then `reconcileAndRender()`, which
+diffs `registry.ids` against `tree.leafIDs` and applies.
+
+`closing(_:)` returns **nil to mean "closed the only leaf"**, which is how the
+caller knows to close the tab or window.
+
+`PaneCanvasController` (573 lines) owns the tree, the registry, per-leaf state,
+and is the `TerminalSurfaceDelegate` for every pane. Notable:
+
+- **Zoom touches nothing.** `zoomedLeaf` only changes what `rebuildViews()` puts
+  at the root. The tree, registry, and surfaces are untouched.
+- **Resize swaps one constraint in place** so nothing detaches and focus survives
+  key-repeat. It clamps using the split's *rendered* extent, which the pure tree
+  cannot know. `minSplitExtent` is 240pt.
+- `launchByLeaf` retains the exact config so `retryStart(id)` can replay it on the
+  same surface after a failed start.
+
+## Tabs and windows
+
+`TabKit` is two pure files. `TabList` holds `order` + `activeIndex`, and its
+invariant is that it **always holds at least one tab**: `close` returns false the
+moment it would empty the list, at which point the caller closes the window.
+`activeID` traps on an empty list, which is why every access in `WindowController`
+goes through the nil-guarded `activeController`.
+
+`WindowController` (1320 lines) owns one window: its `TabList`, its
+`TabController`s, the toast presenter, the tool floats, the single modal slot, the
+tab bar, and the dock. `TabController` (1284 lines) owns one tab: a
+`PaneCanvasController` plus the two drawers.
+
+**Inactive tabs are detached but retained**, so their shells keep running. Only
+the active tab's view is mounted. The canvas mounts at the *back* of the container
+(`.below, relativeTo: nil`) because it is the backdrop all window chrome sits on.
+
+**Hidden drawers are detached, not `isHidden`.** A hidden view kept in the layout
+collapses to 0x0, which resizes its PTY to zero columns and crashes size-sensitive
+TUIs.
+
+`TabID` is unique only within a window, so OS-notification identity is the
+`(windowID, tabID)` pair. `windowID` is process-unique, monotonic, never reused.
+
+**No native macOS tabs**: `tabbingMode = .disallowed`.
+
+**Title polling.** Shells report cwd changes without OSC 7, so there is no push
+event on `cd`. A 1.5s timer polls, and re-renders only when a title changed. The
+same tick polls drawer busy state.
+
+`tearDown()` is idempotent and is the single path for both the last-tab cascade
+and the native close button. It cancels any pending confirm (or the app hangs
+mid-quit) and ends any armed keybind capture (or the app-wide interceptor is
+stranded in capture mode, swallowing every keystroke in every window).
+
+## Chrome
+
+| Surface | Owner | Scope |
+|---|---|---|
+| Bottom drawer, right drawer | `TabController` | per tab |
+| Zoom | `TabController` + `PaneCanvasController` | per tab |
+| Tool floats | `ToolFloatController` | per window |
+| Settings, command palette, workspace picker | `WindowController.modal` | per window |
+| Toasts, confirms | `ToastPresenter` | per window |
+
+**Drawers are tiled, not floating.** The right drawer is a full-height column; the
+bottom drawer sits under the canvas in the remaining left column, so the two never
+overlap. Sizes are fractions applied as multiplier constraints, so a drawer stays
+proportional through window resizes exactly like a pane. Every drawer constraint is
+`.defaultHigh` rather than required, so a tiny window relaxes it instead of forcing
+a negative canvas size.
+
+Drawer animation resizes the canvas for real while the drawer **slides in at its
+final size**, so its terminal reflows once and settles instead of jittering through
+every row count.
+
+**Zoom is strict.** While zoomed, split, nav, resize, and drawer toggles are
+blocked with a toast rather than ignored. Order matters: relayout to final size
+first, then pop.
+
+**Modal cards share one slot.** `ModalKind` plus a single `modal` property. A chord
+for a different card closes the current one and falls through, so cards switch
+live.
+
+**Tool floats are window-level, not app-level**, because a surface is one `NSView`
+and can live in one view hierarchy: an app-global instance would physically yank
+the float out of window A when opened in window B. `ToolFloatController` holds no
+reference to any `TabController` and reaches the active tab through four injected
+closures. Liveness and visibility are independent: `activeFloat` is the one shown,
+`liveFloats` are the ones alive.
+
+**Every silent no-op is a toast.** Zoom-blocked commands, dead nav directions,
+git-guarded floats, ⌘W over a float. Both toast paths throttle at 3s per verb
+because held chords auto-repeat.
+
+## Key handling
+
+**`KeyInterceptor` is a local `NSEvent` monitor**, app-wide, owned by
+`AppDelegate`. It resolves and consumes chords **before the responder chain**. This
+is the single most important thing to know when testing: a control's own `keyDown`
+test can be green while the key never reaches it in the running app.
+
+Order: capture mode (Settings recording) diverts and consumes everything, including
+bound chords. Otherwise `flagsChanged` passes through, and `keyDown` bails
+immediately if it carries no modifier (a reserved chord always has one) before
+allocating a `Chord`.
+
+**`Chord` canonicalization** is the sharpest rule in the codebase. A shifted glyph
+folds onto its base key **only when Shift is set**, because
+`charactersIgnoringModifiers` applies Shift: a live ⌘⇧- arrives as `_` while the
+config spells `cmd+shift+-`. The Shift gate is load-bearing, not a formality: the
+fold table is US-only, and `_` is unshifted on AZERTY. Folding on glyph alone would
+give a keypress a Shift its user never held. **A non-US layout can at worst
+mislabel a chord, never invent one.**
+
+Defaults (`KeymapDefaults.map`): ⌘⇧\ and ⌘⇧- split, ⌘HJKL nav, ⌘⇧HJKL resize, ⌘W
+close pane, ⌘T new tab, ⌘N new window, ⌘[ ⌘] tabs, ⌘1-9 select, ⌘B bottom drawer,
+⌘\ right drawer, ⌘F zoom, ⌘P command palette, ⌘⇧P workspace picker, ⌘, settings,
+⌘⌥R reload. ⌘⇧- rather than bare ⌘- leaves ⌘- free for ghostty's text
+magnification. **No tool float is built in**; a float's chord comes from its own
+`key:` field.
+
+`KeymapAssembler.assemble` resolves defaults, then float chords, then user
+keybinds, later winning. **A user keybind moves its action**: the action's default
+chords are dropped first, so the old key is freed rather than both firing.
+
+**The modal gate cascade** in `WindowController.handle(_:)` runs confirm, then
+modal card, then tool float, then dispatch. ⌘N and ⌘⌥R bypass it entirely
+(`AppDelegate.route`) and re-implement the gate by hand, because they are app-global
+rather than window-scoped. Copy and paste take a third path through the responder
+chain.
+
+**The nav socket** backs [zen-navigator.nvim](https://github.com/Drucial/zen-navigator.nvim).
+`NavSocketServer` listens on `~/Library/Application Support/ZenTerm/nav.<pid>.sock`
+and exports it as `$ZEN_SOCK`. **Per-pid, not a well-known path**: a shared path let
+a dev build bind over the installed app's socket and delete it on quit, leaving
+every nvim deaf until relaunch. Failure is silent and non-fatal, because ⌘-nav never
+depends on it. The wire contract is `docs/nvim-navigator-protocol.md`.
+`NavGuard.shouldPassThrough` passes through only Ctrl-nav, never ⌘-nav, so default
+pane nav is untouched whether or not the pane runs nvim.
+
+## Config
+
+Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`, matching ghostty's
+resolution. Four files: `config`, `workspaces`, `theme`, `themes/<name>`.
+
+**Nothing here can crash the app.** A missing file yields the built-in default, an
+unreadable one logs and falls back, a typo'd value falls back per key, and an
+out-of-range number is clamped. Every adjustment logs one warning.
+
+**A fresh install writes nothing to disk.** `~/.config/zen-term/` does not exist
+until the first save from Settings. There are no built-in tool floats and no
+workspaces, so the ⌘⇧P picker shows only its `＋ Add workspace` row.
+`ToolFloatCatalog.all` is `GeneralConfig.current.floats` and nothing else.
+
+`docs/config/config` ships **fully commented out**, and `ReferenceConfigTests`
+asserts that parsing it yields exactly `.builtIn`, so copying it is a clean slate.
+
+**Live reload works because most call sites re-read.** `GeneralConfig.current` and
+`Theme.current` are process-global mutable statics, and things like
+`ChromeMetrics.panelGap` are computed properties that read them on every access.
+The exceptions are already-built constraints and already-started shells, which is
+exactly what `reapplyChromeLayout` and `applyAppearance` exist to fix up. **A
+surface's shell is fixed for its life.**
+
+`AppConfig.reload()` is the entire save-reload-apply seam, and its order is
+load-bearing: general config first, then theme (which reads the general font), then
+post `.configDidChange`. `GeneralConfig` reads nothing from `Theme`, so the one-way
+dependency `Theme.current -> GeneralConfig.current` holds and they cannot deadlock.
+
+**External hand-edits are picked up on demand only, via ⌘⌥R. There is no file
+watcher.**
+
+Both writers do a whole-file read-modify-rewrite over `ConfigFileIO`, which
+centralizes two guards: never treat an unreadable existing file as empty (the
+rewrite would erase the user's config), and write through symlinks (a config
+symlinked into a dotfiles repo must keep pointing there). `ConfigWriter` preserves
+comments, blank lines, and unknown keys verbatim.
+
+**Theming is derived, never hardcoded.** `ChromeThemeDeriver` maps ANSI slots onto
+eight chrome roles: info is ansi[4], warning ansi[3], destructive ansi[1], accent
+ansi[5], attention ansi[6], muted a blend of fg and bg. Fifteen themes ship bundled;
+a user file shadows a bundled one of the same name. See CLAUDE.md for the rule that
+the chrome never hardcodes a color.
+
+## Invariants that will bite you
+
+- **Closures capture by id, never by object.** A closure stored on a controller
+  that captures the controller retains it forever.
+- **Unified focus is chrome-owned, not AppKit's.** Exactly one panel per tab holds
+  the halo and first responder. `TabController.focusedPanel` is the source of truth
+  and is pushed explicitly.
+- **`HostWindow.isReleasedWhenClosed = false`.** Without it AppKit also releases the
+  window on close, underflowing the retain count and crashing in the close-time
+  CoreAnimation commit.
+- **`ShellLaunch.program` re-arms zsh's `ZDOTDIR`.** libghostty injects shell
+  integration by pointing `ZDOTDIR` at its own directory and restores the user's
+  before their rc files run, so an `exec`'d shell is not injected: no OSC 7, cwd
+  frozen at the seed forever, prompt marks never fire, `isBusy` breaks. The re-arm
+  restages the redirect.
+- **`GitRepo.repoRoot` terminates on the path not shrinking**, not on
+  `parent == dir`. `deletingLastPathComponent()` is not monotonic on a
+  FileManager-vended URL: it walks past `/` forever, and an equality check spins the
+  main thread.
+- **Swift's sort is not stable**, so floats sort by `(order, lineIndex)`.
+- **Never block the main thread.** See CLAUDE.md.
+
+## What does not exist
+
+Do not describe these as features, and do not assume them when reading:
+
+- **No left sidebar.** Two drawers: bottom and right.
+- **No second backend.** libghostty is the only one. The DEBUG-only `makeOverride`
+  seam exists for headless test stubs.
+- **No built-in lazygit, gitdash, or any built-in tool float.** Every float is a
+  user-authored `float =` line.
+- **No web panes.** Every leaf is a `TerminalSurface` over a PTY.
+- **No session or layout restore.** Nothing persists the pane tree, tab list, or
+  window frames. Every launch is one tab, one pane.
+- **No tab drag-to-reorder**, no config file watcher, no scrollback search.
+- **Three seam events are emitted with zero consumers**: `surfaceDidRingBell`,
+  `progressDidChange`, and `surfaceWantsClose`. The backend translates all three,
+  but nothing in the chrome implements them. Pane exit runs entirely through
+  `surfaceDidExit`.
