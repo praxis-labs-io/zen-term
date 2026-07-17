@@ -128,8 +128,10 @@ The parts that get violated most:
   not keybind). The vocabulary table is in the doc.
 - Confirmations state the consequence and never ask "Are you sure?".
 
-`docs/brand-voice.md` is mirrored into the website and releases repos. Edit it
-here, then copy it out.
+`docs/brand-voice.md` lives here (the source) and is mirrored into the website
+repo. Edit it here, then copy it out. **It does not go in `zen-term-releases`**:
+that repo is public, and how we talk about ZenTerm is guidance for whoever writes
+the copy, not something a user downloading the app should be handed.
 
 ## Colors — always theme-driven (ZEN-27)
 
