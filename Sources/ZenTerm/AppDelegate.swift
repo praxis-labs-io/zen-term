@@ -96,13 +96,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.activate(ignoringOtherApps: true)
-
-        #if DEBUG
-            // TEMPORARY (ZEN-118): eyeball the update card in a dev build. Removed before ship.
-            if ProcessInfo.processInfo.environment["ZEN_UPDATE_PREVIEW"] != nil {
-                UpdateCardPreview.start(keyController: { [weak self] in self?.keyController() })
-            }
-        #endif
     }
 
     /// Route a chord: `⌘n` makes a new window, `.reloadConfig` re-reads config + theme from
