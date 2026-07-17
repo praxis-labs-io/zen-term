@@ -36,3 +36,22 @@ end-to-end key path is manual:
       ZenTerm pane nav.
 - [ ] **Nav socket absent.** Launch without the nvim integration configured and confirm
       `⌘`-based pane nav still works (the socket is opt-in; `⌘`-nav never depends on it).
+
+## Card chords that cross `KeyInterceptor`
+
+`KeyInterceptor` is a local `NSEvent` monitor: it resolves and consumes chords **before**
+the responder chain, so a control's own `keyDown` tests can be green while the key never
+reaches it in the running app. Nothing at the view level covers that hop. ZEN-145 shipped
+a ⌥↑/⌥↓ reorder that did nothing in the app past four green tests — the tests synthesized
+an event AppKit never sends (see CLAUDE.md). Any **new chord on a modal card** gets a hand
+check here, however well unit-tested it looks.
+
+- [ ] **⌥↑ / ⌥↓ reorder tool floats.** Settings (`⌘,`) → Tools, focus a row, hold ⌥ and
+      press ↓ → the float moves down, the dock reorders live *behind* the open card, and
+      focus stays on the float that moved (so ⌥↓⌥↓ walks the same one down). ⌥↑ on the
+      top row does nothing — it must not wrap to the bottom.
+- [ ] **Plain ↑/↓ still move focus** between rows without reordering. The modifier is the
+      only difference, and `KeyboardFocus.key(for:)` decodes the keyCode without it.
+- [ ] **The order sticks.** Relaunch and confirm the new order holds, that
+      `~/.config/zen-term/config` now carries `order:` on every float line, and that
+      comments and unrelated keys in that file did not move.
