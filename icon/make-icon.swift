@@ -134,7 +134,12 @@ let origamiCenter = CGPoint(
 let origamiExtent = max(origamiXs.max()! - origamiXs.min()!, origamiYs.max()! - origamiYs.min()!)
 
 // MARK: - Draw at a given pixel size
-func drawIcon(size: CGFloat) -> CGImage {
+/// `square` fills the frame edge to edge with an opaque tile instead of the squircle.
+/// The app icon needs the squircle and its transparent margin (macOS aligns icons on a
+/// shared grid); an avatar host that rounds and borders the image itself does not, and
+/// transparent corners inside its rounding read as a gap. The mark keeps the same share
+/// of the tile in both, so they look like the same icon.
+func drawIcon(size: CGFloat, square: Bool = false) -> CGImage {
     let px = Int(size)
     let space = CGColorSpaceCreateDeviceRGB()
     let ctx = CGContext(
@@ -147,16 +152,19 @@ func drawIcon(size: CGFloat) -> CGImage {
 
     // Tile
     let center = CGPoint(x: L(512), y: L(512))
-    let tile = squircle(center: center, radius: L(412))
+    let tile = square
+        ? CGPath(rect: CGRect(x: 0, y: 0, width: L(1024), height: L(1024)), transform: nil)
+        : squircle(center: center, radius: L(412))
     ctx.saveGState()
     ctx.addPath(tile)
     ctx.clip()
 
-    // Vertical background gradient
+    // Vertical background gradient, run to the tile's own edges
     let bg = CGGradient(
         colorsSpace: space, colors: [bgTop, bgBottom] as CFArray, locations: [0, 1])!
     ctx.drawLinearGradient(
-        bg, start: CGPoint(x: L(512), y: L(924)), end: CGPoint(x: L(512), y: L(100)), options: [])
+        bg, start: CGPoint(x: L(512), y: L(square ? 1024 : 924)),
+        end: CGPoint(x: L(512), y: L(square ? 0 : 100)), options: [])
 
     // Soft iris glow behind the mark, centered
     let glow = CGGradient(
@@ -170,7 +178,9 @@ func drawIcon(size: CGFloat) -> CGImage {
     // scaled so its larger dimension fits `430` in icon space (Lucide's y-down grid is
     // flipped into the icon's y-up space). Stroke is lightened to 1.5/24 (below Lucide's
     // 2/24 default) so the crane's fold lines don't crowd at small sizes.
-    let k = L(430) / origamiExtent
+    // The square tile is wider than the squircle (1024 vs 824), so the mark scales with it
+    // to hold the same share of the tile.
+    let k = L(square ? 430 * 1024 / 824 : 430) / origamiExtent
     func P(_ p: CGPoint) -> CGPoint {
         CGPoint(x: L(512) + (p.x - origamiCenter.x) * k, y: L(512) - (p.y - origamiCenter.y) * k)
     }
@@ -188,20 +198,44 @@ func drawIcon(size: CGFloat) -> CGImage {
 
     ctx.restoreGState()
 
-    // Inner rim highlight — the subtle sheen that reads as depth
-    ctx.addPath(tile)
-    ctx.setStrokeColor(rgb(0xFFFFFF, 0.06))
-    ctx.setLineWidth(L(3))
-    ctx.strokePath()
+    // Inner rim highlight — the subtle sheen that reads as depth. Skipped on the square
+    // tile: it traces the tile edge, where the host's own rounding would clip it anyway.
+    if !square {
+        ctx.addPath(tile)
+        ctx.setStrokeColor(rgb(0xFFFFFF, 0.06))
+        ctx.setLineWidth(L(3))
+        ctx.strokePath()
+    }
 
     return ctx.makeImage()!
 }
 
-// MARK: - Emit the iconset
+func writePNG(_ image: CGImage, px: Int, to url: URL) throws {
+    let rep = NSBitmapImageRep(cgImage: image)
+    rep.size = NSSize(width: px, height: px)
+    try rep.representation(using: .png, properties: [:])!.write(to: url)
+}
+
+// MARK: - Emit
 guard CommandLine.arguments.count > 1 else {
-    FileHandle.standardError.write(Data("usage: make-icon.swift <output.iconset>\n".utf8))
+    FileHandle.standardError.write(
+        Data("usage: make-icon.swift <output.iconset> | --avatar <output.png>\n".utf8))
     exit(1)
 }
+
+// Avatar: one opaque 1024 PNG for hosts that round and border the image themselves
+// (GitHub org/user, Linear, Slack). Not part of the app bundle.
+if CommandLine.arguments[1] == "--avatar" {
+    guard CommandLine.arguments.count > 2 else {
+        FileHandle.standardError.write(Data("usage: make-icon.swift --avatar <output.png>\n".utf8))
+        exit(1)
+    }
+    let out = URL(fileURLWithPath: CommandLine.arguments[2])
+    try writePNG(drawIcon(size: 1024, square: true), px: 1024, to: out)
+    print("✓ wrote \(out.path)")
+    exit(0)
+}
+
 let outDir = URL(fileURLWithPath: CommandLine.arguments[1])
 try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
 
