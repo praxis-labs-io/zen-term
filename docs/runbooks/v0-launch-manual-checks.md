@@ -11,19 +11,21 @@ The ghostty IME path (`GhosttyHostViewIME` preedit state machine) has **zero aut
 coverage**. Verify by hand.
 
 **Read this before the dead-key check.** `macos-option-as-alt` defaults to `true`
-(`TerminalBehavior.swift`), which sends Option as Meta and so bypasses macOS accent
-composing entirely. That is deliberate: `⌥f`/`⌥b` word-nav in readline and Meta chords in
-vim/emacs beat accents for this audience. Under the default, `⌥e` `e` correctly produces a
-plain `e`, and the preedit machinery never runs. Verify both halves:
+(`Sources/TerminalKit/TerminalBehavior.swift`, documented for users in `docs/config/config`),
+which sends Option as Meta and so bypasses macOS accent composing entirely. That is
+deliberate: `⌥f`/`⌥b` word-nav in readline and Meta chords in vim/emacs beat accents for
+this audience. Under the default, `⌥e` `e` correctly produces a plain `e`, and the preedit
+machinery never runs. Verify both halves:
 
 - [ ] **Option as Alt, on (the shipped default).** With `macos-option-as-alt = true`, type
       `⌥e` then `e` → a plain `e`, no accent, no underlined preedit. In a shell, `⌥f` and
-      `⌥b` jump forward and back a word. This is the default a friends-release user gets.
+      `⌥b` jump forward and back a word. This is what a new user gets.
 - [ ] **Option dead keys, with Option as Alt off.** Set Settings (`⌘,`) → Terminal →
       Option as Alt → Off (it applies in place, no relaunch). Type `⌥e` then `e` → `é`.
       Type `⌥u` then `u` → `ü`. Type `⌥e` then space → a bare `´`. The preedit accent
       renders underlined, then resolves on the second keystroke, with no doubled or
-      dropped characters. Restore the setting afterward if you dogfood with it on.
+      dropped characters. Set it back to On when you're done, or you lose `⌥f`/`⌥b`
+      word-nav in every shell.
 - [ ] **CJK IME (Pinyin / Kotoeri).** Switch to a Chinese or Japanese input source,
       type a syllable, and confirm the candidate window appears anchored at the cursor,
       arrow/number selection commits the right glyph, and Esc cancels the preedit
