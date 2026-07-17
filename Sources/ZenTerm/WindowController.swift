@@ -49,8 +49,12 @@ final class WindowController: NSObject {
     /// presents into the key window this way and re-homes here if its prior host closes.
     func presentUpdateCard(_ card: UpdateCardView) { toasts.present(card: card) }
 
-    /// Remove the update card this window is hosting.
-    func dismissUpdateCard(_ card: UpdateCardView) { toasts.remove(card: card) }
+    /// Remove the update card this window is hosting. Arm dismissal first so a click landing on the
+    /// card while it springs out can't fire a stale Sparkle reply.
+    func dismissUpdateCard(_ card: UpdateCardView) {
+        card.beginDismissal()
+        toasts.remove(card: card)
+    }
 
     /// The window's tool floats (ZEN-141). Window-level, not per-tab: one live instance per float
     /// id is shared by every tab, and the card hosts on `container` so a tab switch doesn't

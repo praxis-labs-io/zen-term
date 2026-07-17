@@ -28,6 +28,11 @@ final class UpdateProgressBar: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// A fixed 4pt bar. Vending the height intrinsically (rather than a self-owned height
+    /// constraint the card re-adds each rebuild) keeps the download hot path from leaking
+    /// constraints; width comes from a constraint to the card's column.
+    override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: 4) }
+
     override func layout() {
         super.layout()
         apply()

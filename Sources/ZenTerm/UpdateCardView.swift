@@ -137,10 +137,17 @@ final class UpdateCardView: ShadowCardView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Morph the card to a new state in place (same card, rebuilt content). `actions` is refreshed
-    /// too so a re-home keeps the live Sparkle reply closures.
-    func update(to state: State, actions: Actions) {
-        self.state = state
+    /// too so a re-home keeps the live Sparkle reply closures. A downloading → downloading tick just
+    /// advances the bar: download data arrives in hundreds of chunks, and rebuilding the whole body
+    /// each time would churn Auto Layout on a hot path.
+    func update(to newState: State, actions: Actions) {
         self.actions = actions
+        if case .downloading = state, case .downloading(let fraction) = newState {
+            state = newState
+            progressBar.fraction = fraction
+            return
+        }
+        state = newState
         render()
     }
 
@@ -152,7 +159,7 @@ final class UpdateCardView: ShadowCardView {
         buttonRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
         switch state {
-        case .available(let version, let current, let notes, let notesURL):
+        case .available(_, let current, let notes, let notesURL):
             addBodyLabel(current, color: Theme.current.chrome.muted.nsColor)
             if !notes.isEmpty {
                 addBodyLabel(
@@ -165,7 +172,6 @@ final class UpdateCardView: ShadowCardView {
                 }
                 bodyColumn.addArrangedSubview(link)
             }
-            _ = version  // in the title; kept named for readability
             addButton("Install", variant: .primary) { [weak self] in self?.actions.install() }
             addButton("Later", variant: .secondary) { [weak self] in self?.actions.later() }
             addButton("Skip", variant: .secondary) { [weak self] in self?.actions.skip() }
@@ -173,8 +179,9 @@ final class UpdateCardView: ShadowCardView {
         case .downloading(let fraction):
             progressBar.fraction = fraction
             bodyColumn.addArrangedSubview(progressBar)
+            // Width tracks the column; the bar's own intrinsic height (4pt) sizes it vertically, so
+            // no self-owned height constraint is re-added (and leaked) on each rebuild.
             progressBar.widthAnchor.constraint(equalTo: bodyColumn.widthAnchor).isActive = true
-            progressBar.heightAnchor.constraint(equalToConstant: 4).isActive = true
 
         case .ready(let version):
             addBodyLabel(
@@ -233,24 +240,18 @@ final class UpdateCardView: ShadowCardView {
         render()  // labels/buttons re-read Theme.current as they rebuild
     }
 
-    // MARK: - Motion (mirrors ToastView)
+    // MARK: - Interaction
 
+    /// Set when the card is being removed (a re-home or a dismiss). `ToastPresenter.remove` springs
+    /// the card out via `Motion` directly, so there's no animateOut hook to arm this — the removal
+    /// path (`WindowController.dismissUpdateCard`) calls `beginDismissal()` instead, and `hitTest`
+    /// reads it so a click landing on the fading card can't fire a stale Sparkle reply.
     private var isDismissing = false
 
-    func animateIn() {
-        superview?.layoutSubtreeIfNeeded()
-        Motion.springScaleFade(self, appearing: true)
-    }
-
-    func animateOut(completion: @escaping () -> Void) {
-        guard !isDismissing else { return }
-        isDismissing = true
-        Motion.springScaleFade(self, appearing: false, completion: completion)
-    }
+    func beginDismissal() { isDismissing = true }
 
     /// Non-modal: never first responder, so terminal input is never gated behind the card. A body
-    /// click does nothing (the buttons answer); an outgoing card ignores hits so a fast re-home
-    /// can't fire a stale button.
+    /// click does nothing (the buttons answer); a card being removed ignores hits.
     override var acceptsFirstResponder: Bool { false }
     override func hitTest(_ point: NSPoint) -> NSView? { isDismissing ? nil : super.hitTest(point) }
 }

@@ -63,8 +63,12 @@ final class UpdateCardTests: XCTestCase {
             ["one", "two"])
     }
 
-    func test_bullets_keepsUnmarkedNonEmptyLines() {
-        XCTAssertEqual(ZenUpdateDriver.bullets(from: "A plain line"), ["A plain line"])
+    func test_bullets_dropsUnmarkedLinesAndHeaders() {
+        // The appcast <description> is the whole notes file, prose and headers included; only the
+        // marked bullets belong on the card.
+        XCTAssertEqual(
+            ZenUpdateDriver.bullets(from: "## Requirements\nmacOS 14 or later.\n- The real bullet"),
+            ["The real bullet"])
     }
 
     func test_bullets_capsAtSix() {
@@ -74,6 +78,18 @@ final class UpdateCardTests: XCTestCase {
 
     func test_bullets_nilDescription_isEmpty() {
         XCTAssertEqual(ZenUpdateDriver.bullets(from: nil), [])
+    }
+
+    // MARK: - Sparkle reply fires exactly once
+
+    func test_fireOnce_repliesOnlyOnce() {
+        final class Counter: @unchecked Sendable { var n = 0 }
+        let counter = Counter()
+        let choose = ZenUpdateDriver.fireOnce { _ in counter.n += 1 }
+        choose(.install)
+        choose(.skip)  // a second tap (double-click, or Install then Skip) must be swallowed
+        choose(.dismiss)
+        XCTAssertEqual(counter.n, 1)
     }
 
     // MARK: - Helpers

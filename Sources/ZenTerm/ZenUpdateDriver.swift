@@ -19,6 +19,11 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     private var expectedLength: UInt64?
     private var receivedLength: UInt64 = 0
 
+    /// The version being installed, captured from the appcast item at `showUpdateFound`. The later
+    /// `showReady` callback carries no appcast item, so without this the ready card would name
+    /// `AppVersion.current` — the old, still-running version — instead of the update's target.
+    private var pendingVersion: String?
+
     // MARK: - Permission / check (no card)
 
     func show(
@@ -41,10 +46,12 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         state: SPUUserUpdateState,
         reply: @escaping @Sendable (SPUUserUpdateChoice) -> Void
     ) {
+        pendingVersion = appcastItem.displayVersionString
+        let choose = Self.fireOnce(reply)
         var actions = UpdateCardView.Actions()
-        actions.install = { reply(.install) }
-        actions.later = { reply(.dismiss) }
-        actions.skip = { reply(.skip) }
+        actions.install = { choose(.install) }
+        actions.later = { choose(.dismiss) }
+        actions.skip = { choose(.skip) }
         actions.whatsNew = { NSWorkspace.shared.open($0) }
         controller?.present(
             state: .available(
@@ -105,11 +112,12 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     // MARK: - Ready → the relaunch card
 
     func showReady(toInstallAndRelaunch reply: @escaping @Sendable (SPUUserUpdateChoice) -> Void) {
+        let choose = Self.fireOnce(reply)
         var actions = UpdateCardView.Actions()
-        actions.relaunch = { reply(.install) }
-        actions.later = { reply(.dismiss) }
+        actions.relaunch = { choose(.install) }
+        actions.later = { choose(.dismiss) }
         controller?.present(
-            state: .ready(version: AppVersion.current), actions: actions)
+            state: .ready(version: pendingVersion ?? AppVersion.current), actions: actions)
     }
 
     func showInstallingUpdate(
@@ -138,9 +146,25 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         return Double(receivedLength) / Double(expectedLength)
     }
 
-    /// Split the appcast `<description>` (curated markdown bullets) into plain bullet strings. The
-    /// release pipeline drops the notes file in as-is, so we strip a leading "- " / "* " and cap the
-    /// list — "What's new" links the full notes for anyone who wants them.
+    /// Wrap a Sparkle reply so it fires at most once. Every button on the card closes over the same
+    /// one-shot reply and all three stay live until the card morphs, so a double-tap (or Install then
+    /// Skip) would otherwise call reply twice and break Sparkle's exactly-once contract. Sparkle
+    /// invokes the driver on the main thread and taps land there too, so the plain flag is safe.
+    static func fireOnce(
+        _ reply: @escaping @Sendable (SPUUserUpdateChoice) -> Void
+    ) -> (SPUUserUpdateChoice) -> Void {
+        var fired = false
+        return { choice in
+            guard !fired else { return }
+            fired = true
+            reply(choice)
+        }
+    }
+
+    /// Pull the bulleted lines out of the appcast `<description>`. The release pipeline drops the
+    /// whole curated notes file in as-is, so this keeps only lines marked "- " / "* " (stripped) and
+    /// ignores headers and prose — "What's new" links the full notes for anyone who wants them. Capped
+    /// so a long changelog can't grow the card without bound.
     static func bullets(from description: String?) -> [String] {
         guard let description else { return [] }
         return
@@ -148,9 +172,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
             .split(separator: "\n")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .compactMap { line -> String? in
-                guard line.hasPrefix("- ") || line.hasPrefix("* ") else {
-                    return line.isEmpty ? nil : line
-                }
+                guard line.hasPrefix("- ") || line.hasPrefix("* ") else { return nil }
                 return String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces)
             }
             .filter { !$0.isEmpty }
