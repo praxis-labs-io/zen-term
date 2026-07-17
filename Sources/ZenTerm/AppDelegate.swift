@@ -177,6 +177,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         keyController()?.pasteToSurface(sender)
     }
 
+    /// The standard About panel sources its version from `Info.plist` alone, so an unpackaged
+    /// `swift run` build showed no version at all while the Settings footer read `0.0.0+src`. Hand
+    /// it `AppVersion`, so both places agree on one string. The build number stays conditional:
+    /// there's no honest fallback for it, and an empty one renders as a bare "()".
+    @objc func showAbout(_ sender: Any?) {
+        var options: [NSApplication.AboutPanelOptionKey: Any] = [.applicationVersion: AppVersion.current]
+        if let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
+            options[.version] = build
+        }
+        NSApp.orderFrontStandardAboutPanel(options: options)
+    }
+
+    /// Opens the third-party notices in their own window (`AcknowledgementsWindow`), reached from
+    /// the app menu under About. A dedicated window rather than the About panel's credits: the full
+    /// license text is a long read that reads as a wall of noise crammed into the About box.
+    @objc func showAcknowledgements(_ sender: Any?) {
+        AcknowledgementsWindow.shared.show()
+    }
+
     /// While a modal overlay (a palette or the Add-Workspace form) is up, Copy/Paste must act on
     /// its focused text field, not the terminal hidden behind it (else ⌘V would inject the
     /// clipboard into that shell).

@@ -14,7 +14,13 @@ enum MainMenu {
         appItem.submenu = appMenu
         appMenu.addItem(
             withTitle: "About zen-term",
-            action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            action: #selector(AppDelegate.showAbout(_:)),
+            keyEquivalent: "")
+        // Acknowledgements sits with About — it's app info (who we credit), not a Help topic. Nil
+        // target routes it through the responder chain to the app delegate, like About.
+        appMenu.addItem(
+            withTitle: "Acknowledgements…",
+            action: #selector(AppDelegate.showAcknowledgements(_:)),
             keyEquivalent: "")
         appMenu.addItem(.separator())
         let hide = NSMenuItem(
