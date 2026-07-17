@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Cut a signed, notarized public ZenTerm release.
-# Usage: bin/release X.Y.Z [--notes-file FILE] [--skip-checks]
+# Usage: bin/release [X.Y.Z | major | minor | patch] [--notes-file FILE] [--skip-checks]
+#   (no version)  patch-bump the last release tag; 0.1.0 if there are no tags yet
+#   major|minor|patch  bump that component of the last release tag
+#   X.Y.Z         release exactly this version
 #   --notes-file  release notes markdown (default: curated git-log scaffold in $EDITOR)
 #   --skip-checks skip the bin/check gate
 #
@@ -17,12 +20,41 @@ NOTARY_PROFILE="zenterm-notary"
 RELEASES_REPO="Drucial/zen-term-releases"
 DIST="dist"
 
-VERSION="${1:-}"
-[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-    echo "usage: bin/release X.Y.Z [--notes-file FILE] [--skip-checks]" >&2
-    exit 1
-}
-shift
+USAGE="usage: bin/release [X.Y.Z | major | minor | patch] [--notes-file FILE] [--skip-checks]"
+VERSION=""
+BUMP="patch"
+if [[ $# -gt 0 && "$1" != -* ]]; then
+    case "$1" in
+        major | minor | patch) BUMP="$1" ;;
+        *)
+            [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "$USAGE" >&2; exit 1; }
+            VERSION="$1" ;;
+    esac
+    shift
+fi
+
+if [[ -z "$VERSION" ]]; then
+    LAST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+    if [[ -z "$LAST_TAG" ]]; then
+        VERSION="0.1.0"
+        echo "▸ No release tags yet, seeding $VERSION"
+    elif [[ "$(git rev-parse "$LAST_TAG^{commit}")" == "$(git rev-parse HEAD)" ]]; then
+        # The last tag already points at HEAD, so this is a rerun of an interrupted
+        # release rather than a new one. Bumping here would strand that tag and its
+        # half-published release; reusing the version lets the resume paths below
+        # (tag / notes / release reuse) find the prior run's state.
+        VERSION="${LAST_TAG#v}"
+        echo "▸ $LAST_TAG is already on HEAD, resuming that release"
+    else
+        IFS=. read -r MAJOR MINOR PATCH <<< "${LAST_TAG#v}"
+        case "$BUMP" in
+            major) VERSION="$((MAJOR + 1)).0.0" ;;
+            minor) VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
+            patch) VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+        esac
+        echo "▸ $BUMP bump from $LAST_TAG → v$VERSION"
+    fi
+fi
 
 NOTES_FILE=""
 SKIP_CHECKS=0

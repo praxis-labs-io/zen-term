@@ -26,9 +26,10 @@ final class SettingsNavFooterTests: XCTestCase {
     }
 
     func test_versionLine_fitsTheNavColumn_forEveryVersionShapeWeShip() {
-        // A release tag, a dev build (the shape that overflowed), and a two-digit dev build — the
-        // versions `bin/package-app` can actually produce.
-        for version in ["0.1.0", "0.0.0-dev", "0.10.12-dev", "1.0.0-beta.1"] {
+        // The versions `bin/package-app` can actually produce: a release tag, a daily driver N
+        // merges past one, the untagged and `swift run` fallbacks, and a two-digit build with a
+        // three-digit merge count (the widest shape the "+N" scheme can reach).
+        for version in ["0.1.0", "0.1.0+7", "0.0.0+121", "0.0.0+src", "0.10.12+123", "1.0.0-beta.1"] {
             let text = "v\(version)"
             XCTAssertLessThanOrEqual(
                 width(text), SettingsOverlay.versionMaxWidth,

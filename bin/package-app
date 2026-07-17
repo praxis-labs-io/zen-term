@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Package ZenTerm as a standalone .app.
 # Usage: bin/package-app [--version X.Y.Z] [--identity "NAME"] [--dest DIR]
-#   --version   CFBundleShortVersionString (default: latest tag + "-dev", or 0.0.0-dev)
+#   --version   CFBundleShortVersionString (default: latest tag + "+<commits since>")
 #   --identity  codesign identity (default "-" = ad-hoc, for daily driving)
 #   --dest      output directory (default ~/Applications)
 set -euo pipefail
@@ -25,11 +25,21 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$VERSION" ]]; then
-    LAST_TAG="$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)"
-    VERSION="${LAST_TAG:-0.0.0}-dev"
+    # A daily driver names the release it descends from: "0.1.0+7" is seven merged
+    # changes past v0.1.0. Feature branches squash-merge, so the count reads as
+    # PRs rather than raw commits. The bare "-dev" this replaced was identical on
+    # every build between two releases, so a dogfood bug report couldn't name one.
+    LAST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+    if [[ -n "$LAST_TAG" ]]; then
+        AHEAD="$(git rev-list --count "${LAST_TAG}..HEAD" 2>/dev/null || echo 0)"
+        VERSION="${LAST_TAG#v}+${AHEAD}"
+    else
+        VERSION="0.0.0+$(git rev-list --count HEAD 2>/dev/null || echo 0)"
+    fi
 fi
-# Monotonic build number (commit count on the current branch) — unique per
-# release commit and Sparkle-compatible, unlike a short SHA.
+# Monotonic build number (commit count on the current branch): unique per release
+# commit and Sparkle-compatible, unlike a short SHA. Deliberately NOT the "+N"
+# above, which resets to 0 at every tag and so would go backwards for Sparkle.
 BUILD="$(git rev-list --count HEAD 2>/dev/null || echo 0)"
 
 APP="$DEST/ZenTerm.app"

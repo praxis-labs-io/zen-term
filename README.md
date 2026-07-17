@@ -56,9 +56,11 @@ the full flow.
 bin/package-app        # release build → ad-hoc-signed ZenTerm.app in ~/Applications
 ```
 
-Dev builds stamp `<latest-tag>-dev` as their version and the commit count as
-the build number. Flags: `--version X.Y.Z`, `--identity "NAME"` (Developer ID
-signing with hardened runtime), `--dest DIR`.
+Dev builds stamp the release they descend from plus the number of merges since
+it (`0.1.0+7`, or `0.0.0+<count>` before the first tag), and the commit count as
+the build number. Since branches squash-merge, that `+7` counts merged PRs, so a
+dogfood bug report names an exact build. Flags: `--version X.Y.Z`,
+`--identity "NAME"` (Developer ID signing with hardened runtime), `--dest DIR`.
 
 ## Release
 
@@ -66,6 +68,40 @@ Releases are cut locally by `bin/release` and published to the public
 [zen-term-releases](https://github.com/Drucial/zen-term-releases) repo, since
 Releases on this private repo can't be downloaded publicly. arm64-only. The
 git tag `vX.Y.Z` on this repo is the version source of truth.
+
+### Version numbers
+
+Releases follow [semantic versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
+Each component answers a different question for someone deciding whether to
+update.
+
+| Bump | Example | Means |
+|---|---|---|
+| **patch** | `0.1.0` → `0.1.1` | Fixes only. Nothing new, nothing moved. Safe. |
+| **minor** | `0.1.0` → `0.2.0` | New features, nothing existing broke. |
+| **major** | `0.9.0` → `1.0.0` | Something people relied on changed or went away. |
+
+For an app rather than a library, "breaking" means the things a user built a
+habit or a config around: a chord that no longer does what it did, a config key
+that's been renamed or dropped, a default that flipped. New features are a minor
+bump no matter how large they are.
+
+**The leading zero is the point.** `0.x.y` is the convention for "this is real,
+but I'm not promising it's stable yet" — it's why the first release is `0.1.0`
+rather than `1.0.0`, and it buys the freedom to change chords and config keys
+during v0 without owing anyone a major bump. Reaching `1.0.0` is a statement:
+you'd hand this to a stranger and stand behind it, and from then on breaking
+their config costs you a major bump. Take the time you want getting there.
+
+Two rules that aren't negotiable, because a published tag is permanent:
+
+- **Never reuse a version.** Even for a release that failed halfway. (Rerunning
+  `bin/release` handles this correctly on its own — see below.)
+- **Never go backwards.** Versions only ascend.
+
+So: bug-fix round after the friends release → `bin/release` (0.1.1). Shipped the
+command palette → `bin/release minor` (0.2.0). Both are automatic; you only name
+a version by hand to skip ahead deliberately.
 
 ### One-time setup
 
@@ -83,8 +119,15 @@ git tag `vX.Y.Z` on this repo is the version source of truth.
 ### Cutting a release
 
 ```sh
-bin/release 0.1.0
+bin/release              # patch-bump the last tag (0.1.0 if there are none yet)
+bin/release minor        # or major / patch
+bin/release 1.2.3        # or name the version outright
 ```
+
+The version is derived from the last release tag unless you name one. One
+exception: if that tag already points at HEAD, the script resumes *that* release
+instead of bumping, so rerunning after a failure can't strand a half-published
+tag.
 
 From a clean `main` in sync with origin, the script runs preflight (cert,
 notary profile, tag/release collision, GhosttyKit present), gates on
@@ -97,10 +140,10 @@ runtime, notarizes and staples the app and the DMG, verifies with
 Flags: `--notes-file FILE` to skip the editor pass, `--skip-checks` to skip
 the `bin/check` gate.
 
-A failed run is safe to rerun with the same version: curated notes survive, a
-tag already at HEAD is reused, and a release created without its DMG gets the
-asset uploaded instead of erroring. Notarization rejections print the
-`notarytool log` command to inspect.
+A failed run is safe to rerun: the version resolves back to the same one,
+curated notes survive, a tag already at HEAD is reused, and a release created
+without its DMG gets the asset uploaded instead of erroring. Notarization
+rejections print the `notarytool log` command to inspect.
 
 ### Deferred distribution work
 

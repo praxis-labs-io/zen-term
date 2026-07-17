@@ -42,13 +42,23 @@ test can assert.
 
 ## Releasing
 
-Public releases are cut locally with `bin/release X.Y.Z` — preflight (clean
+Public releases are cut locally with `bin/release` — preflight (clean
 main, cert, notary profile, releases repo) → `bin/check` → assemble + Developer
 ID sign (`bin/package-app`) → notarize + staple app and DMG → verify gates →
 curated notes → tag `vX.Y.Z` on this repo → publish the DMG to the **public**
 `Drucial/zen-term-releases` repo (this repo is private, so its own Releases
 aren't downloadable). arm64-only; version source of truth is the git tag.
-`bin/package-app` alone still produces the ad-hoc-signed daily-driver build.
+
+**Versioning is automatic**: bare `bin/release` patch-bumps the last tag (semver;
+see the README's "Version numbers" for which bump to pick), `bin/release
+major|minor|patch` picks a component, `bin/release X.Y.Z` names one outright. A
+tag already at HEAD means resume that release, not bump — that's what keeps a
+rerun after a failed run from stranding a half-published tag, so don't "fix" it.
+
+`bin/package-app` alone still produces the ad-hoc-signed daily-driver build, and
+stamps `<last-tag>+<merges since>` (e.g. `0.1.0+7`) so a dogfood bug report names
+an exact build. `CFBundleVersion` stays the total commit count: it must be
+globally monotonic for Sparkle, and `+N` resets at every tag.
 
 One-time setup: a "Developer ID Application" cert in the keychain, and
 `xcrun notarytool store-credentials zenterm-notary --apple-id <id> --team-id
