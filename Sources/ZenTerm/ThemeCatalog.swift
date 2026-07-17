@@ -66,6 +66,6 @@ enum ThemeCatalog {
 
     /// The bundled resource URL for a token, or nil if it isn't a bundled theme.
     static func bundledURL(for token: String) -> URL? {
-        Bundle.module.url(forResource: token, withExtension: "ghostty", subdirectory: "Themes")
+        ZenTermResources.bundle.url(forResource: token, withExtension: "ghostty", subdirectory: "Themes")
     }
 }

@@ -46,9 +46,13 @@ BUILD="$(git rev-list --count HEAD 2>/dev/null || echo 0)"
 APP="$DEST/ZenTerm.app"
 BIN=".build/release/ZenTerm"
 
-# SwiftPM resource bundles (brand SVGs, ghostty runtime resources). Bundle.module
-# resolves them via Bundle.main.resourceURL, so they must ride along in the .app —
-# a bare executable copy would fatalError on first Bundle.module access.
+# SwiftPM resource bundles (brand SVGs, ghostty runtime resources). They ride in
+# Contents/Resources, which is Bundle.main.resourceURL at runtime — the location
+# `Bundle.zenResourceBundle` looks in first. (The SwiftPM-generated Bundle.module
+# accessor for a statically-linked executable target instead looks at the .app
+# *root* plus a build-machine-absolute .build path; codesign refuses loose content
+# at the root, so the bundles cannot live where that accessor expects. See
+# Bundle+ZenResource.swift — that resolver is why these belong in Contents/Resources.)
 #
 # A `*.bundle` glob over .build/release once signed, notarized and published a dead
 # SwiftTerm bundle to users in v0.1.0, long after libghostty became the sole backend
