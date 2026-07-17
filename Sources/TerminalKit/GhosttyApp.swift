@@ -148,7 +148,8 @@ final class GhosttyApp {
     /// silently mismatching shell-integration scripts and terminfo.
     private static func useBundledResources() {
         guard
-            let dir = Bundle.module.resourceURL?
+            let dir = Bundle.zenResourceBundle(named: "ZenTerm_TerminalKit", fallback: .module)
+                .resourceURL?
                 .appendingPathComponent("ghostty-resources/ghostty").path,
             FileManager.default.fileExists(atPath: dir)
         else {

@@ -1,4 +1,5 @@
 import Foundation
+import TerminalKit
 
 /// One selectable theme in the picker: the built-in default (nil name = no `theme` key), a
 /// bundled catalog entry, or a user file in `~/.config/zen-term/themes/`.
@@ -66,6 +67,7 @@ enum ThemeCatalog {
 
     /// The bundled resource URL for a token, or nil if it isn't a bundled theme.
     static func bundledURL(for token: String) -> URL? {
-        Bundle.module.url(forResource: token, withExtension: "ghostty", subdirectory: "Themes")
+        Bundle.zenResourceBundle(named: "ZenTerm_ZenTerm", fallback: .module)
+            .url(forResource: token, withExtension: "ghostty", subdirectory: "Themes")
     }
 }

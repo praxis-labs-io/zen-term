@@ -1,4 +1,5 @@
 import AppKit
+import TerminalKit
 
 /// Loads a bundled brand mark (e.g. "github", "git") — a monochrome SVG in `Resources/` —
 /// as a template image, so `IconButton` can show real logos SF Symbols don't ship. The SVG
@@ -7,7 +8,8 @@ import AppKit
 enum BrandMark {
     static func image(_ name: String) -> NSImage? {
         guard
-            let url = Bundle.module.url(forResource: name, withExtension: "svg", subdirectory: "Resources"),
+            let url = Bundle.zenResourceBundle(named: "ZenTerm_ZenTerm", fallback: .module)
+                .url(forResource: name, withExtension: "svg", subdirectory: "Resources"),
             let image = NSImage(contentsOf: url)
         else { return nil }
         image.isTemplate = true
