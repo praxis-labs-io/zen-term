@@ -174,6 +174,18 @@ xcrun --find notarytool >/dev/null && xcrun --find stapler >/dev/null \
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null \
     || { echo "✗ notary profile '$NOTARY_PROFILE' missing or invalid (see CLAUDE.md → Releasing)" >&2; exit 1; }
 
+# Sparkle's EdDSA signing key (ZEN-118). Resolve the pinned Sparkle artifact so sign_update exists,
+# then prove the private key is reachable in the keychain — a missing key must fail here, beside the
+# other credential checks, not after the multi-minute notarize waits. One-time setup: `generate_keys`.
+swift package resolve >/dev/null 2>&1 || true
+SIGN_UPDATE="$(find .build/artifacts -type f -name sign_update 2>/dev/null | head -1)"
+[[ -n "$SIGN_UPDATE" ]] \
+    || { echo "✗ sign_update not found — 'swift package resolve' should fetch the Sparkle artifact" >&2; exit 1; }
+SIGN_PROBE="$(mktemp)"
+"$SIGN_UPDATE" "$SIGN_PROBE" >/dev/null 2>&1 \
+    || { echo "✗ sign_update can't reach the Sparkle EdDSA key — run generate_keys (see CLAUDE.md → Releasing)" >&2; rm -f "$SIGN_PROBE"; exit 1; }
+rm -f "$SIGN_PROBE"
+
 [[ -d Frameworks/GhosttyKit.xcframework ]] \
     || { echo "✗ GhosttyKit.xcframework missing — run bin/build-ghosttykit" >&2; exit 1; }
 
@@ -227,6 +239,39 @@ xcrun stapler validate "$APP"
 spctl -a -t open --context context:primary-signature -vv "$DMG"
 xcrun stapler validate "$DMG"
 
+# Appcast (ZEN-118). The EdDSA signature is taken here, on the final DMG: `stapler staple` above
+# rewrote its bytes, so a signature taken any earlier wouldn't match what users download. The
+# sparkle:version is read back out of the built app's plist rather than recomputing the commit
+# count — two places deriving one number is how they drift. The curated notes go into the
+# description CDATA as-is (nothing else consumes this feed), and releaseNotesLink points at the
+# release page, which is the card's "What's new".
+echo "▸ Appcast"
+BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")"
+ED_ATTRS="$("$SIGN_UPDATE" "$DMG")"  # sparkle:edSignature="…" length="…"
+APPCAST="$DIST/appcast.xml"
+DMG_NAME="$(basename "$DMG")"
+PUBDATE="$(date -u '+%a, %d %b %Y %H:%M:%S +0000')"
+cat > "$APPCAST" <<XML
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>ZenTerm</title>
+    <item>
+      <title>ZenTerm $VERSION</title>
+      <pubDate>$PUBDATE</pubDate>
+      <sparkle:version>$BUILD</sparkle:version>
+      <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:releaseNotesLink>https://github.com/$RELEASES_REPO/releases/tag/$TAG</sparkle:releaseNotesLink>
+      <description><![CDATA[
+$(cat "$NOTES_FILE")
+]]></description>
+      <enclosure url="https://github.com/$RELEASES_REPO/releases/latest/download/$DMG_NAME" $ED_ATTRS type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>
+XML
+
 echo "▸ Tagging + publishing"
 if [[ "$TAG_AT_HEAD" -eq 0 ]]; then
     git tag -a "$TAG" -m "ZenTerm $TAG"
@@ -234,11 +279,13 @@ fi
 if [[ -z "$REMOTE_TAG_SHA" ]]; then
     git push origin "$TAG"
 fi
+# The appcast rides alongside the DMG so `latest/download/appcast.xml` (SUFeedURL) resolves for
+# already-installed copies checking in.
 if [[ "$RELEASE_EXISTS" -eq 1 ]]; then
-    gh release upload "$TAG" --repo "$RELEASES_REPO" --clobber "$DMG"
+    gh release upload "$TAG" --repo "$RELEASES_REPO" --clobber "$DMG" "$APPCAST"
 else
     gh release create "$TAG" --repo "$RELEASES_REPO" \
-        --title "ZenTerm $VERSION" --notes-file "$NOTES_FILE" "$DMG"
+        --title "ZenTerm $VERSION" --notes-file "$NOTES_FILE" "$DMG" "$APPCAST"
 fi
 
 echo "✓ ZenTerm $VERSION released: https://github.com/$RELEASES_REPO/releases/tag/$TAG"
