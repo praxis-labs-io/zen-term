@@ -21,39 +21,20 @@ RELEASES_REPO="Drucial/zen-term-releases"
 DIST="dist"
 
 USAGE="usage: bin/release [X.Y.Z | major | minor | patch] [--notes-file FILE] [--skip-checks]"
+SEMVER_RE='^[0-9]+\.[0-9]+\.[0-9]+$'
+# Only vX.Y.Z is a release. Any other tag reachable from HEAD (a checkpoint, a
+# vendor pin) must not reach the bump arithmetic below.
+RELEASE_TAG_GLOB='v[0-9]*.[0-9]*.[0-9]*'
 VERSION=""
-BUMP="patch"
+BUMP=""
 if [[ $# -gt 0 && "$1" != -* ]]; then
     case "$1" in
         major | minor | patch) BUMP="$1" ;;
         *)
-            [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "$USAGE" >&2; exit 1; }
+            [[ "$1" =~ $SEMVER_RE ]] || { echo "$USAGE" >&2; exit 1; }
             VERSION="$1" ;;
     esac
     shift
-fi
-
-if [[ -z "$VERSION" ]]; then
-    LAST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
-    if [[ -z "$LAST_TAG" ]]; then
-        VERSION="0.1.0"
-        echo "▸ No release tags yet, seeding $VERSION"
-    elif [[ "$(git rev-parse "$LAST_TAG^{commit}")" == "$(git rev-parse HEAD)" ]]; then
-        # The last tag already points at HEAD, so this is a rerun of an interrupted
-        # release rather than a new one. Bumping here would strand that tag and its
-        # half-published release; reusing the version lets the resume paths below
-        # (tag / notes / release reuse) find the prior run's state.
-        VERSION="${LAST_TAG#v}"
-        echo "▸ $LAST_TAG is already on HEAD, resuming that release"
-    else
-        IFS=. read -r MAJOR MINOR PATCH <<< "${LAST_TAG#v}"
-        case "$BUMP" in
-            major) VERSION="$((MAJOR + 1)).0.0" ;;
-            minor) VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
-            patch) VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
-        esac
-        echo "▸ $BUMP bump from $LAST_TAG → v$VERSION"
-    fi
 fi
 
 NOTES_FILE=""
@@ -68,9 +49,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-TAG="v$VERSION"
 APP="$DIST/ZenTerm.app"
-DMG="$DIST/ZenTerm-$VERSION-arm64.dmg"
 
 echo "▸ Preflight"
 [[ -z "$(git status --porcelain)" ]] || { echo "✗ working tree not clean" >&2; exit 1; }
@@ -78,6 +57,65 @@ echo "▸ Preflight"
 git fetch origin main --quiet
 [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] \
     || { echo "✗ local main is not in sync with origin/main" >&2; exit 1; }
+
+# Tags drive the version resolution below, so a stale local tag set (a shallow
+# clone, a release cut from another checkout) would resolve behind what's already
+# published and ship backwards. Fetching them can legitimately fail: a local tag
+# pointing somewhere origin disagrees with is a real conflict, and git reports it
+# as "would clobber existing tag". Catch it, because under `set -e` an unhandled
+# non-zero here kills the run with no explanation at all.
+git fetch origin --tags --quiet || {
+    echo "✗ couldn't fetch tags: a local tag disagrees with origin" >&2
+    echo "  reconcile before releasing, e.g. git tag -d <tag> && git fetch origin --tags" >&2
+    exit 1
+}
+
+LAST_TAG="$(git describe --tags --abbrev=0 --match "$RELEASE_TAG_GLOB" 2>/dev/null || true)"
+
+if [[ -z "$VERSION" ]]; then
+    if [[ -z "$LAST_TAG" ]]; then
+        # Bumping needs something to bump. Guessing here would burn a permanent
+        # version on a first release, so make the user say what they mean.
+        [[ -z "$BUMP" ]] || {
+            echo "✗ no release tags yet, so there is nothing to $BUMP-bump" >&2
+            echo "  run bare 'bin/release' to seed 0.1.0, or name a version" >&2
+            exit 1
+        }
+        VERSION="0.1.0"
+        echo "▸ No release tags yet, seeding $VERSION"
+    elif [[ "$(git rev-parse "$LAST_TAG^{commit}")" == "$(git rev-parse HEAD)" ]]; then
+        # The last tag already points at HEAD, so this is a rerun of an interrupted
+        # release rather than a new one. Bumping here would strand that tag and its
+        # half-published release; reusing the version lets the resume paths below
+        # (tag / notes / release reuse) find the prior run's state.
+        VERSION="${LAST_TAG#v}"
+        echo "▸ $LAST_TAG is already on HEAD, resuming that release"
+    else
+        IFS=. read -r MAJOR MINOR PATCH <<< "${LAST_TAG#v}"
+        case "${BUMP:-patch}" in
+            major) VERSION="$((MAJOR + 1)).0.0" ;;
+            minor) VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
+            patch) VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+        esac
+        echo "▸ ${BUMP:-patch} bump from $LAST_TAG → v$VERSION"
+    fi
+fi
+
+# Whatever produced it (bump arithmetic, a resumed tag, the CLI), this string is
+# about to become a permanent public tag. Check it once, here, where every path
+# converges.
+[[ "$VERSION" =~ $SEMVER_RE ]] || { echo "✗ resolved version '$VERSION' is not X.Y.Z" >&2; exit 1; }
+
+# A published version can never be reused or walked back, so refuse to descend
+# even when the user named the version by hand. Resuming the tag at HEAD is the
+# one legitimate non-ascending case, and it's equal rather than lower.
+if [[ -n "$LAST_TAG" && "$VERSION" != "${LAST_TAG#v}" ]]; then
+    [[ "$(printf '%s\n%s\n' "${LAST_TAG#v}" "$VERSION" | sort -V | head -1)" == "${LAST_TAG#v}" ]] \
+        || { echo "✗ $VERSION is not above the last release $LAST_TAG" >&2; exit 1; }
+fi
+
+TAG="v$VERSION"
+DMG="$DIST/ZenTerm-$VERSION-arm64.dmg"
 
 if [[ -n "$NOTES_FILE" ]]; then
     # The script cd'd to the repo root; resolve a relative path against the
@@ -145,12 +183,14 @@ if [[ "$SKIP_CHECKS" -eq 0 ]]; then
 fi
 
 # Notes are curated BEFORE the multi-minute notarization waits, and a prior
-# partial run's curated notes are reused rather than wiped.
+# partial run's curated notes are reused rather than wiped. The filename carries
+# the version: an abandoned 0.2.0 run must not hand its feature notes to a later
+# 0.1.1, which is what a shared notes.md did.
 mkdir -p "$DIST"
 if [[ -z "$NOTES_FILE" ]]; then
-    NOTES_FILE="$DIST/notes.md"
+    NOTES_FILE="$DIST/notes-$VERSION.md"
     if [[ ! -s "$NOTES_FILE" ]]; then
-        PREV="$(git describe --tags --abbrev=0 --exclude "$TAG" 2>/dev/null || true)"
+        PREV="$(git describe --tags --abbrev=0 --match "$RELEASE_TAG_GLOB" --exclude "$TAG" 2>/dev/null || true)"
         git log ${PREV:+"$PREV.."}HEAD --pretty='- %s' > "$NOTES_FILE"
     fi
     # Curate before publishing — private-repo commit subjects go public here.

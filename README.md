@@ -56,11 +56,11 @@ the full flow.
 bin/package-app        # release build → ad-hoc-signed ZenTerm.app in ~/Applications
 ```
 
-Dev builds stamp the release they descend from plus the number of merges since
-it (`0.1.0+7`, or `0.0.0+<count>` before the first tag), and the commit count as
-the build number. Since branches squash-merge, that `+7` counts merged PRs, so a
-dogfood bug report names an exact build. Flags: `--version X.Y.Z`,
-`--identity "NAME"` (Developer ID signing with hardened runtime), `--dest DIR`.
+Dev builds stamp the release they descend from plus the commit count since it
+(`0.1.0+7`, or `0.0.0+<count>` before the first tag), and the total commit count
+as the build number. `+7` is seven commits past `v0.1.0`, so a dogfood bug report
+names an exact build. Flags: `--version X.Y.Z`, `--identity "NAME"` (Developer ID
+signing with hardened runtime), `--dest DIR`.
 
 ## Release
 
@@ -140,10 +140,12 @@ runtime, notarizes and staples the app and the DMG, verifies with
 Flags: `--notes-file FILE` to skip the editor pass, `--skip-checks` to skip
 the `bin/check` gate.
 
-A failed run is safe to rerun: the version resolves back to the same one,
-curated notes survive, a tag already at HEAD is reused, and a release created
-without its DMG gets the asset uploaded instead of erroring. Notarization
-rejections print the `notarytool log` command to inspect.
+**Rerun a failed run the same way you invoked it** (`bin/release minor` again,
+not bare). The version only resolves back to the same one if you pass the same
+argument, since nothing records which bump an interrupted run intended until the
+tag exists. Once it does, any invocation resumes it. Curated notes survive per
+version, and a release created without its DMG gets the asset uploaded instead of
+erroring. Notarization rejections print the `notarytool log` command to inspect.
 
 ### Deferred distribution work
 
