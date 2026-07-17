@@ -64,12 +64,10 @@ echo "▸ Building release…"
 rm -rf .build/release/*.bundle
 swift build -c release
 
-# The bundle set is asserted both ways, before anything is written to $APP. After
-# the wipe these describe the manifest, not residue: a missing bundle means the
-# build didn't emit one we ship, and an unexpected bundle means Package.swift grew
-# one nobody told this script about. Both are worth stopping for, and both must
-# stop *before* the rm -rf below — $APP defaults to the installed daily driver, and
-# exiting after it would leave an unsigned, Info.plist-less shell in its place.
+# The bundle set is asserted both ways. After the wipe these describe the manifest,
+# not residue: a missing bundle means the build didn't emit one we ship (a partial
+# app would fatalError on first Bundle.module access), and an unexpected bundle
+# means Package.swift grew one nobody told this script about.
 for bundle in "${EXPECTED_BUNDLES[@]}"; do
     [[ -d ".build/release/$bundle" ]] || {
         echo "✗ expected resource bundle missing: .build/release/$bundle" >&2
@@ -88,17 +86,24 @@ for path in .build/release/*.bundle; do
     exit 1
 done
 
+# Assembled and signed off to the side, then swapped in at the end. $APP defaults
+# to the installed daily driver, so building in place means any failure between the
+# delete and the signature (a missing icon, an expired cert) leaves an unlaunchable
+# shell where a working terminal used to be. Staging keeps the installed app whole
+# until there is a complete signed one to replace it with. Same directory, so the
+# swap is a rename rather than a copy.
 echo "▸ Assembling $APP"
-rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/ZenTerm"
-cp icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+STAGE="$DEST/.ZenTerm.app.partial"
+rm -rf "$STAGE"
+mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources"
+cp "$BIN" "$STAGE/Contents/MacOS/ZenTerm"
+cp icon/AppIcon.icns "$STAGE/Contents/Resources/AppIcon.icns"
 
 for bundle in "${EXPECTED_BUNDLES[@]}"; do
-    cp -R ".build/release/$bundle" "$APP/Contents/Resources/"
+    cp -R ".build/release/$bundle" "$STAGE/Contents/Resources/"
 done
 
-cat > "$APP/Contents/Info.plist" <<PLIST
+cat > "$STAGE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -125,10 +130,15 @@ PLIST
 # by the outer signature.
 if [[ "$IDENTITY" == "-" ]]; then
     echo "▸ Ad-hoc signing"
-    codesign --force --sign - "$APP"
+    codesign --force --sign - "$STAGE"
 else
     echo "▸ Signing with hardened runtime: $IDENTITY"
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP"
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$STAGE"
 fi
+
+# The only point where the installed app is at risk, and by now the replacement is
+# complete and signed.
+rm -rf "$APP"
+mv "$STAGE" "$APP"
 
 echo "✓ $APP  (v${VERSION} build ${BUILD})"
