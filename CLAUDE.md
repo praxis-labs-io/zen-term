@@ -16,8 +16,11 @@ answers something the code and the tickets don't. A shipped epic's plan describe
 intent the code already superseded, so leaving it in place only leaves something
 that can be wrong.
 
-The record is **Linear** (projects, tickets, PR links) and git. `docs/` is not a
-second copy of it.
+That plan or spec is the exception: local working scratch, cleaned after
+implementation and never committed. Everything else in `docs/` is durable
+reference that stays true as the code changes: architecture, brand-voice, config,
+runbooks, onboarding, release notes. The epic's record, its projects, tickets, and
+PR links, is **Linear** and git, so `docs/` doesn't re-copy that history.
 
 ## Build / run / test
 
@@ -86,6 +89,12 @@ version is re-checked against the semver regex (an unfiltered describe hands a
 version resolves **after** `git fetch --tags`, because a stale local tag set
 otherwise publishes below what's already released. A version is also refused if
 it doesn't ascend past the last tag, including one named by hand.
+
+**Notes live in `docs/release-notes/vX.Y.Z.md`**, one file per version, curated
+from the git log into copy for the person downloading (`docs/brand-voice.md`, the
+"Release notes" surface). Write the file, then cut the release pointed at it:
+`bin/release --notes-file docs/release-notes/vX.Y.Z.md`. Bare `bin/release` opens
+`$EDITOR` on a raw scaffold instead, which is a starting point, not the notes.
 
 `bin/package-app` alone still produces the ad-hoc-signed daily-driver build, and
 stamps `<last-tag>+<commits since>` (e.g. `0.1.0+7`) so a dogfood bug report names
