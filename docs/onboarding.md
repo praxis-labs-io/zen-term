@@ -9,7 +9,7 @@ through all of it.
 ## Install
 
 1. Download `ZenTerm-<version>-arm64.dmg` from the
-   [releases page](https://github.com/Drucial/zen-term-releases/releases).
+   [releases page](https://github.com/zen-term/zen-term-releases/releases).
 2. Open it and drag **ZenTerm** onto **Applications**.
 3. Launch it.
 
@@ -108,7 +108,7 @@ Out of the box these are two separate motions. `⌘H` `⌘J` `⌘K` `⌘L` moves
 ZenTerm panes, and Neovim's own `Ctrl-hjkl` moves between Neovim splits. You
 switch between two sets of keys depending on where focus happens to be.
 
-[zen-navigator.nvim](https://github.com/Drucial/zen-navigator.nvim) joins them.
+[zen-navigator.nvim](https://github.com/zen-term/zen-navigator.nvim) joins them.
 Press `Ctrl-h` at the left edge of your Neovim splits and focus crosses into the
 ZenTerm pane beside it. From a shell pane, `Ctrl-h` walks back into Neovim and
 keeps going through its splits. It is the `vim-tmux-navigator` idea, without
@@ -120,7 +120,7 @@ diverts a chord ZenTerm already treats as pane nav.
 **1. Install the plugin.** With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
-{ "Drucial/zen-navigator.nvim", event = "VeryLazy", opts = {} }
+{ "zen-term/zen-navigator.nvim", event = "VeryLazy", opts = {} }
 ```
 
 **2. Give ZenTerm the chord to hand off.** Add these to
@@ -184,8 +184,8 @@ replacing the app. Drew will tell you when there is one.
 
 Everything in Settings is a plain text file in `~/.config/zen-term/`, and the app
 picks up hand-edits. Annotated references for every option ship with the release:
-[`config`](https://github.com/Drucial/zen-term-releases/blob/main/docs/config/config)
+[`config`](https://github.com/zen-term/zen-term-releases/blob/main/docs/config/config)
 covers appearance, behavior, tools, and shortcuts, and
-[`workspaces`](https://github.com/Drucial/zen-term-releases/blob/main/docs/config/workspaces)
+[`workspaces`](https://github.com/zen-term/zen-term-releases/blob/main/docs/config/workspaces)
 covers workspaces. Copy them to `~/.config/zen-term/` if you want. Copying
 changes nothing on its own, since every line starts commented out.

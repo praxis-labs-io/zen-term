@@ -57,7 +57,7 @@ Public releases are cut locally with `bin/release` — preflight (clean
 main, cert, notary profile, releases repo) → `bin/check` → assemble + Developer
 ID sign (`bin/package-app`) → notarize + staple app and DMG → verify gates →
 curated notes → tag `vX.Y.Z` on this repo → publish the DMG to the **public**
-`Drucial/zen-term-releases` repo (this repo is private, so its own Releases
+`zen-term/zen-term-releases` repo (this repo is private, so its own Releases
 aren't downloadable). arm64-only; version source of truth is the git tag.
 
 **Versioning is automatic**: bare `bin/release` patch-bumps the last tag (semver;

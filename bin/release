@@ -17,7 +17,7 @@ INVOKER_PWD="$PWD"
 cd "$(dirname "$0")/.."
 
 NOTARY_PROFILE="zenterm-notary"
-RELEASES_REPO="Drucial/zen-term-releases"
+RELEASES_REPO="zen-term/zen-term-releases"
 DIST="dist"
 
 USAGE="usage: bin/release [X.Y.Z | major | minor | patch] [--notes-file FILE] [--skip-checks]"

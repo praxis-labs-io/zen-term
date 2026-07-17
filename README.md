@@ -3,7 +3,7 @@
 Native macOS terminal where the chrome is the product: floating panes, drawers,
 and keyboard-first navigation over a swappable terminal core. Swift + SwiftPM +
 AppKit, no Xcode project. This repo is private; public builds ship through
-[zen-term-releases](https://github.com/Drucial/zen-term-releases).
+[zen-term-releases](https://github.com/zen-term/zen-term-releases).
 
 **Requires:** macOS 14+, Apple Silicon, full Xcode (the release toolchain needs
 `notarytool`/`stapler` and the Metal compiler, not just the CLT).
@@ -21,7 +21,7 @@ history of how any of it got built is in Linear and git, not in `docs/`.
 ## First-time setup
 
 ```sh
-git clone https://github.com/Drucial/zen-term.git && cd zen-term
+git clone https://github.com/zen-term/zen-term.git && cd zen-term
 bin/build-ghosttykit   # inits the vendor/ghostty submodule, fetches Zig,
                        # builds GhosttyKit.xcframework + runtime resources
 brew install swiftlint # bin/check needs it
@@ -65,7 +65,7 @@ signing with hardened runtime), `--dest DIR`.
 ## Release
 
 Releases are cut locally by `bin/release` and published to the public
-[zen-term-releases](https://github.com/Drucial/zen-term-releases) repo, since
+[zen-term-releases](https://github.com/zen-term/zen-term-releases) repo, since
 Releases on this private repo can't be downloaded publicly. arm64-only. The
 git tag `vX.Y.Z` on this repo is the version source of truth.
 

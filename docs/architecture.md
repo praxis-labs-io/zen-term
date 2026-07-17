@@ -238,7 +238,7 @@ modal card, then tool float, then dispatch. ⌘N and ⌘⌥R bypass it entirely
 rather than window-scoped. Copy and paste take a third path through the responder
 chain.
 
-**The nav socket** backs [zen-navigator.nvim](https://github.com/Drucial/zen-navigator.nvim).
+**The nav socket** backs [zen-navigator.nvim](https://github.com/zen-term/zen-navigator.nvim).
 `NavSocketServer` listens on `~/Library/Application Support/ZenTerm/nav.<pid>.sock`
 and exports it as `$ZEN_SOCK`. **Per-pid, not a well-known path**: a shared path let
 a dev build bind over the installed app's socket and delete it on quit, leaving
