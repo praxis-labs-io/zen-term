@@ -289,7 +289,7 @@ final class KeybindCaptureFlowTests: XCTestCase {
     func test_floatStealingAnActionsChord_showsTheReasonOnTheRow() throws {
         // A float's `key:` silently wins over a built-in. Before ZEN-142 the New Tab row just
         // rendered an empty chip — no chip, no reason, nothing to act on.
-        try seed("float = id:steal command:btop key:cmd+t\n")
+        try seed("float = title:steal command:btop key:cmd+t\n")
         _ = mountSection(FakeCapturer())
 
         let newTab = row(for: .newTab)
@@ -300,7 +300,7 @@ final class KeybindCaptureFlowTests: XCTestCase {
     }
 
     func test_rowsWithoutAConflict_showNoMessage() throws {
-        try seed("float = id:steal command:btop key:cmd+t\n")
+        try seed("float = title:steal command:btop key:cmd+t\n")
         _ = mountSection(FakeCapturer())
         // The guard has to stay quiet everywhere it doesn't apply, or it's noise.
         XCTAssertNil(row(for: .closePane).renderedMessageForTesting)
@@ -308,7 +308,7 @@ final class KeybindCaptureFlowTests: XCTestCase {
     }
 
     func test_configReload_updatesRowsOfAnOpenCard() throws {
-        try seed("float = id:steal command:btop key:cmd+t\n")
+        try seed("float = title:steal command:btop key:cmd+t\n")
         _ = mountSection(FakeCapturer())
         XCTAssertNotNil(row(for: .newTab).renderedMessageForTesting)
 
@@ -371,7 +371,7 @@ final class KeybindCaptureFlowTests: XCTestCase {
     func test_configDiagnosticMessage_readsAsAWarningNotAFailure() throws {
         // A config that works but surprises isn't the same as a write that failed; rendering both in
         // destructive red teaches the user to read a working config as breakage.
-        try seed("float = id:steal command:btop key:cmd+t\n")
+        try seed("float = title:steal command:btop key:cmd+t\n")
         _ = mountSection(FakeCapturer())
         XCTAssertEqual(row(for: .newTab).messageKind, .diagnostic)
     }

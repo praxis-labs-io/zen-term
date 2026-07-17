@@ -89,7 +89,7 @@ final class ToolFloatControllerTests: XCTestCase {
         command: String? = nil
     ) -> ToolFloat {
         ToolFloat(
-            id: id, title: "Open \(id)", icon: ToolFloatParser.defaultIcon, command: command ?? id,
+            id: id, order: 0, title: id, icon: ToolFloatParser.defaultIcon, command: command ?? id,
             dir: dir, widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: git,
             persist: persist, toggle: Chord(command: true, shift: true, key: "j"))
     }

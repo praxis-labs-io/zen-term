@@ -5,7 +5,7 @@ import XCTest
 final class KeymapAssemblyTests: XCTestCase {
     private func float(id: String, key: String) -> ToolFloat {
         ToolFloat(
-            id: id, title: "Open \(id)", icon: "square.on.square", command: "run", dir: nil,
+            id: id, order: 0, title: id, icon: "square.on.square", command: "run", dir: nil,
             widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
             persist: .ephemeral, toggle: Chord.parse(key)!)
     }

@@ -148,7 +148,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     func test_aFloatLosingItsChord_isSurfacedByTheToast() throws {
         // Tool floats have no Keybinds row (they're file-only), so the inline note can never reach
         // them — the toast is the only thing that can tell a user their float toggle went dead.
-        try "float = id:btop command:btop key:cmd+y title:BTop\nkeybind = new_tab=cmd+y\n"
+        try "float = title:btop command:btop key:cmd+y title:BTop\nkeybind = new_tab=cmd+y\n"
             .write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         AppConfig.reload()
 

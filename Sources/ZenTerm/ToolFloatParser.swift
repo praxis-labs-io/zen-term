@@ -4,7 +4,7 @@ import Foundation
 /// Parses a single `float =` value into a `ToolFloat`. Grammar: whitespace-separated
 /// `field:value` tokens, quote-aware so a command may contain spaces
 /// (`command:"npm run dev"`). Each token splits on its FIRST `:`. Best-effort: a line
-/// missing a required field (`id`, `key`, `command`) or with an unparseable `key:` is
+/// missing a required field (`title`, `key`, `command`) or with an unparseable `key:` is
 /// dropped with a warning; optional fields fall back to sensible defaults.
 enum ToolFloatParser {
     /// The defaults an omitted optional field falls back to — shared with `ConfigWriter`, which omits
@@ -12,7 +12,6 @@ enum ToolFloatParser {
     static let defaultIcon = "square.on.square"
     static let defaultFraction: CGFloat = 0.85
     static let defaultPersist: ToolFloat.Persistence = .ephemeral
-    static func defaultTitle(forID id: String) -> String { "Open \(id)" }
 
     /// The valid width/height range, plus the shared clamp + compact format — one home for the
     /// fraction grammar so the parser, the `float =` writer, and the Settings form can't disagree on
@@ -23,9 +22,37 @@ enum ToolFloatParser {
     }
     static func fractionText(_ value: CGFloat) -> String { String(format: "%g", Double(value)) }
 
+    /// A float's stable id, derived from its title: lowercased, with every run of non-alphanumerics
+    /// collapsed to a single `-` and the ends trimmed ("Open GitDash" → "open-gitdash"). Unicode-aware
+    /// (`isLetter` / `isNumber`), so a non-ASCII title slugs to itself rather than to nothing. Empty
+    /// only when the title holds no letters or numbers at all (an emoji-only title) — callers reject
+    /// that rather than mint an unaddressable float.
+    static func slug(forTitle title: String) -> String {
+        var slug = ""
+        var pendingSeparator = false
+        for character in title.lowercased() {
+            guard character.isLetter || character.isNumber else {
+                pendingSeparator = true
+                continue
+            }
+            if pendingSeparator, !slug.isEmpty { slug.append("-") }  // never leads with a `-`
+            pendingSeparator = false
+            slug.append(character)
+        }
+        return slug
+    }
+
+    /// The id a parsed `float =` line resolves to, else nil when it carries no usable title. `parse`
+    /// and `ConfigWriter`'s line matching both go through this, so the writer can never disagree with
+    /// the parser about which float a line *is* — the one invariant the whole scheme rests on.
+    static func identity(fields: [String: String]) -> String? {
+        let id = slug(forTitle: fields["title"] ?? "")
+        return id.isEmpty ? nil : id
+    }
+
     /// Split a `float =` value into its `field:value` map — quote-aware, each token split on its
     /// first `:`, values unquoted. The read half of the grammar `ConfigWriter.serializeFloat` writes;
-    /// `ConfigWriter` also uses it to read a line's `id:` when matching a float to replace/remove.
+    /// `ConfigWriter` also uses it to read a line's `title:` when matching a float to replace/remove.
     static func fields(_ value: String) -> [String: String] {
         var fields: [String: String] = [:]
         for token in tokenize(value) {
@@ -37,11 +64,14 @@ enum ToolFloatParser {
         return fields
     }
 
-    static func parse(_ value: String) -> ToolFloat? {
+    /// `fallbackOrder` is the float's line order in the file, used when the line has no `order:` —
+    /// so a config that has never been reordered reads exactly as it did before `order:` existed.
+    static func parse(_ value: String, fallbackOrder: Int = 0) -> ToolFloat? {
         let fields = fields(value)
 
-        guard let id = fields["id"], !id.isEmpty else {
-            NSLog("GeneralConfig: float line missing required `id:` — ignored")
+        let title = fields["title"] ?? ""
+        guard let id = identity(fields: fields) else {
+            NSLog("GeneralConfig: float line needs a `title:` with at least one letter or number — ignored")
             return nil
         }
         guard let command = fields["command"], !command.isEmpty else {
@@ -56,7 +86,8 @@ enum ToolFloatParser {
         let persist = persistence(fields["persist"], id: id)
         return ToolFloat(
             id: id,
-            title: fields["title"] ?? Self.defaultTitle(forID: id),
+            order: fields["order"].flatMap { Int($0) } ?? fallbackOrder,
+            title: title,
             icon: fields["icon"] ?? Self.defaultIcon,
             command: command,
             dir: fields["dir"].flatMap(Self.resolveDir),

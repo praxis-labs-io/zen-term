@@ -76,8 +76,15 @@ final class ToggleDock: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Test hook: the ids of the per-float buttons currently mounted in the dock.
-    var toolFloatButtonIDsForTesting: Set<String> { Set(toolFloatBtns.keys) }
+    /// Test hook: the ids of the per-float buttons currently mounted in the dock, **left to right**.
+    /// Read off the arranged subviews rather than `toolFloatBtns`, so it reports the order the user
+    /// actually sees — a dictionary's keys couldn't, and the float order is the thing under test
+    /// (ZEN-145).
+    var toolFloatButtonIDsForTesting: [String] {
+        stack.arrangedSubviews.compactMap { view in
+            toolFloatBtns.first { $0.value === view }?.key
+        }
+    }
 
     /// Test hooks: whether each drawer toggle currently shows its busy activity dot (ZEN-107).
     var bottomActivityForTesting: Bool { bottomBtn.showsActivity }

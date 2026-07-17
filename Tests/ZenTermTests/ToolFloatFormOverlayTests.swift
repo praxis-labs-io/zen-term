@@ -78,6 +78,20 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         descendants(of: overlay).compactMap { $0 as? FieldBox }.first { $0.placeholder == placeholder }!
     }
 
+    /// An existing float as the config would produce one: the id is always `slug(title)`, never set
+    /// beside it, so an edit-mode test can't start from a float that could never have been loaded.
+    private func existingFloat(
+        title: String, command: String = "vim", icon: String = ToolFloatParser.defaultIcon,
+        dir: URL? = nil, height: CGFloat = 0.85, git: Bool = false, order: Int = 1,
+        persist: ToolFloat.Persistence = .ephemeral,
+        toggle: Chord = Chord(command: true, shift: true, key: "d")
+    ) -> ToolFloat {
+        ToolFloat(
+            id: ToolFloatParser.slug(forTitle: title), order: order, title: title, icon: icon,
+            command: command, dir: dir, widthFraction: 0.85, heightFraction: height,
+            requiresGitRepo: git, persist: persist, toggle: toggle)
+    }
+
     /// Press Esc as a `performKeyEquivalent` traversal of the contentView subtree — the layer the
     /// card root claims it at. NOTE (ZEN-157): whether AppKit really dispatches a BARE Esc this way
     /// is unconfirmed, so a pass here is not proof the key works in the running app.
@@ -120,13 +134,13 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         overlay.layoutSubtreeIfNeeded()
         // The card is 460 (clamped to 0.92× a 480 host), so a full-width field should be ~400, not
         // collapsed to its intrinsic content. Guards the "form is super narrow" regression.
-        let idField = field(in: overlay, placeholder: "gitdash")
-        XCTAssertGreaterThan(idField.frame.width, 300, "form fields should fill the card, not collapse")
+        let titleField = field(in: overlay, placeholder: "Open GitDash")
+        XCTAssertGreaterThan(titleField.frame.width, 300, "form fields should fill the card, not collapse")
     }
 
     func test_fillAndSubmit_buildsFloatFromControls() {
         let (overlay, capturer, sink) = mount()
-        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "Open GitDash").setText("dev")
         field(in: overlay, placeholder: "npm run dev").setText("npm run dev")
         capture(novelChord, in: overlay, capturer)
 
@@ -134,10 +148,10 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
         XCTAssertEqual(sink.submitted.count, 1)
         let float = sink.submitted.first
-        XCTAssertEqual(float?.id, "dev")
+        XCTAssertEqual(float?.title, "dev")
+        XCTAssertEqual(float?.id, "dev", "the id is the title's slug — the user never types one")
         XCTAssertEqual(float?.command, "npm run dev")
         XCTAssertEqual(float?.toggle, novelChord)
-        XCTAssertEqual(float?.title, "Open dev")  // blank title → derived default
         XCTAssertEqual(float?.icon, ToolFloatParser.defaultIcon)
         XCTAssertEqual(float?.widthFraction, ToolFloatParser.defaultFraction)
         XCTAssertEqual(float?.requiresGitRepo, false)
@@ -153,7 +167,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
     func test_missingChord_blocksSubmit() {
         let (overlay, _, sink) = mount()
-        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "Open GitDash").setText("dev")
         field(in: overlay, placeholder: "npm run dev").setText("vim")
 
         submit(in: overlay)
@@ -163,7 +177,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
     func test_emptyCommand_blocksSubmit() {
         let (overlay, capturer, sink) = mount()
-        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "Open GitDash").setText("dev")
         capture(novelChord, in: overlay, capturer)
 
         submit(in: overlay)
@@ -173,7 +187,6 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
     func test_titleWithQuote_blocksSubmit() {
         let (overlay, capturer, sink) = mount()
-        field(in: overlay, placeholder: "gitdash").setText("dev")
         field(in: overlay, placeholder: "npm run dev").setText("vim")
         field(in: overlay, placeholder: "Open GitDash").setText("Say \" hi")  // a `"` can't round-trip
         capture(novelChord, in: overlay, capturer)
@@ -194,12 +207,12 @@ final class ToolFloatFormOverlayTests: XCTestCase {
             AppConfig.reload()
             try? FileManager.default.removeItem(at: tempRoot)
         }
-        try "float = id:existing command:htop key:cmd+shift+g\n"
+        try "float = title:existing command:htop key:cmd+shift+g\n"
             .write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         AppConfig.reload()
 
         let (overlay, capturer, sink) = mount()  // a new float
-        field(in: overlay, placeholder: "gitdash").setText("new")
+        field(in: overlay, placeholder: "Open GitDash").setText("new")
         field(in: overlay, placeholder: "npm run dev").setText("vim")
         capture(Chord(command: true, shift: true, key: "g"), in: overlay, capturer)  // conflicts
 
@@ -208,20 +221,83 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         XCTAssertTrue(sink.submitted.isEmpty, "a shortcut already in use is rejected, so submit is blocked")
     }
 
-    func test_duplicateID_blocksSubmit() {
+    /// Two floats whose titles slug alike would collide on id, and the config's last-wins rule would
+    /// silently eat one. The form is what prevents that (ZEN-145).
+    func test_duplicateTitle_blocksSubmit() {
         let (overlay, capturer, sink) = mount(existingIDs: ["dev"])
-        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "Open GitDash").setText("dev")
         field(in: overlay, placeholder: "npm run dev").setText("vim")
         capture(novelChord, in: overlay, capturer)
 
         submit(in: overlay)
 
-        XCTAssertTrue(sink.submitted.isEmpty, "an id already in use → submit is blocked")
+        XCTAssertTrue(sink.submitted.isEmpty, "a title already in use → submit is blocked")
+    }
+
+    /// The collision is on the *slug*, not the raw string — "Dev" and "dev" are different titles that
+    /// would fight over the same id, and only checking raw equality would let one through.
+    func test_titleCollidingOnlyAfterSlugging_blocksSubmit() {
+        let (overlay, capturer, sink) = mount(existingIDs: ["dev-server"])
+        field(in: overlay, placeholder: "Open GitDash").setText("Dev Server")
+        field(in: overlay, placeholder: "npm run dev").setText("vim")
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertTrue(sink.submitted.isEmpty, "a title that slugs onto an existing id is blocked")
+    }
+
+    func test_emptyTitle_blocksSubmit() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "npm run dev").setText("vim")
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertTrue(sink.submitted.isEmpty, "no title → no id to key the float by → submit is blocked")
+    }
+
+    /// A title of pure emoji slugs to nothing, so the float would have no id at all — the dock button,
+    /// its keybind, and its config line would have nothing to key off.
+    func test_titleWithNoLettersOrNumbers_blocksSubmit() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "Open GitDash").setText("🎉")
+        field(in: overlay, placeholder: "npm run dev").setText("vim")
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertTrue(sink.submitted.isEmpty, "a title with nothing to slug → submit is blocked")
+    }
+
+    /// A new float lands at the end of the dock rather than silently taking slot 0.
+    func test_newFloat_getsNextOrder() throws {
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-form-order-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        ConfigLoader.defaultRootOverrideForTesting = tempRoot
+        defer {
+            ConfigLoader.defaultRootOverrideForTesting = nil
+            AppConfig.reload()
+            try? FileManager.default.removeItem(at: tempRoot)
+        }
+        try "float = order:4 title:existing command:htop key:cmd+shift+h\n"
+            .write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+        AppConfig.reload()
+
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "Open GitDash").setText("new")
+        field(in: overlay, placeholder: "npm run dev").setText("vim")
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.order, 5, "a new float goes after the highest existing order")
     }
 
     func test_iconPicker_pickFromGrid_appliesToBuiltFloat() {
         let (overlay, capturer, sink) = mount()
-        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "Open GitDash").setText("dev")
         field(in: overlay, placeholder: "npm run dev").setText("vim")
         capture(novelChord, in: overlay, capturer)
 
@@ -239,10 +315,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
     }
 
     func test_editForm_deleteButton_firesOnDelete() {
-        let existing = ToolFloat(
-            id: "dev", title: "Open dev", icon: IconCatalog.defaultSymbol, command: "vim", dir: nil,
-            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
-            persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
+        let existing = existingFloat(title: "dev", icon: IconCatalog.defaultSymbol)
         let (overlay, _, sink) = mount(editing: existing, withDelete: true)
         let delete = descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Delete" }
         XCTAssertNotNil(delete, "editing an existing float shows a Delete button")
@@ -259,13 +332,10 @@ final class ToolFloatFormOverlayTests: XCTestCase {
     }
 
     func test_edit_prefillsAndSavesChangedCommand() {
-        let existing = ToolFloat(
-            id: "dev", title: "Open dev", icon: ToolFloatParser.defaultIcon, command: "vim", dir: nil,
-            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
-            persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
+        let existing = existingFloat(title: "dev")
         let (overlay, _, sink) = mount(editing: existing)
 
-        XCTAssertEqual(field(in: overlay, placeholder: "gitdash").text, "dev")
+        XCTAssertEqual(field(in: overlay, placeholder: "Open GitDash").text, "dev")
         XCTAssertEqual(field(in: overlay, placeholder: "npm run dev").text, "vim")
 
         field(in: overlay, placeholder: "npm run dev").setText("nvim")
@@ -277,9 +347,24 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         XCTAssertEqual(sink.submitted.first?.toggle, Chord(command: true, shift: true, key: "d"))
     }
 
+    /// Renaming is the one path that changes a float's id — the host turns that into a remove of the
+    /// old line plus an upsert of the new one. An edit that keeps the title keeps the id, so an
+    /// untouched float's keybind and live instance are never disturbed.
+    func test_edit_changedTitle_reSlugsID_andKeepsOrder() {
+        let existing = existingFloat(title: "dev", order: 3)
+        let (overlay, _, sink) = mount(editing: existing)
+
+        field(in: overlay, placeholder: "Open GitDash").setText("Dev Server")
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.title, "Dev Server")
+        XCTAssertEqual(sink.submitted.first?.id, "dev-server")
+        XCTAssertEqual(sink.submitted.first?.order, 3, "a rename must not move the float in the dock")
+    }
+
     func test_persistSegment_defaultsToEphemeral_andBuildsTheChosenMode() {
         let (overlay, capturer, sink) = mount()
-        field(in: overlay, placeholder: "gitdash").setText("lg")
+        field(in: overlay, placeholder: "Open GitDash").setText("lg")
         field(in: overlay, placeholder: "npm run dev").setText("lazygit")
         capture(novelChord, in: overlay, capturer)
 
@@ -291,7 +376,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
     func test_persistSegment_untouched_buildsEphemeral() {
         let (overlay, capturer, sink) = mount()
-        field(in: overlay, placeholder: "gitdash").setText("y")
+        field(in: overlay, placeholder: "Open GitDash").setText("y")
         field(in: overlay, placeholder: "npm run dev").setText("yazi")
         capture(novelChord, in: overlay, capturer)
 
@@ -316,7 +401,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         let home = try makeHomeRelativeDir()
         let tilde = PathDisplay.abbreviatingHome(home.path)  // "~/zenterm-form-test-…"
         let (overlay, capturer, sink) = mount()
-        field(in: overlay, placeholder: "gitdash").setText("notes")
+        field(in: overlay, placeholder: "Open GitDash").setText("notes")
         field(in: overlay, placeholder: "npm run dev").setText("nvim")
         field(in: overlay, placeholder: "~/notes").setText(tilde)
         capture(novelChord, in: overlay, capturer)
@@ -328,7 +413,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
     func test_blankDirField_buildsNilDirectory() {
         let (overlay, capturer, sink) = mount()
-        field(in: overlay, placeholder: "gitdash").setText("y")
+        field(in: overlay, placeholder: "Open GitDash").setText("y")
         field(in: overlay, placeholder: "npm run dev").setText("yazi")
         capture(novelChord, in: overlay, capturer)
 
@@ -339,7 +424,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
     func test_dirWithQuote_blocksSubmit() {
         let (overlay, capturer, sink) = mount()
-        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "Open GitDash").setText("dev")
         field(in: overlay, placeholder: "npm run dev").setText("vim")
         field(in: overlay, placeholder: "~/notes").setText("/tmp/a\"b")  // a `"` can't round-trip
         capture(novelChord, in: overlay, capturer)
@@ -351,7 +436,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
     func test_dirField_nonexistentFolder_blocksSubmit() {
         let (overlay, capturer, sink) = mount()
-        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "Open GitDash").setText("dev")
         field(in: overlay, placeholder: "npm run dev").setText("vim")
         field(in: overlay, placeholder: "~/notes")
             .setText("/definitely/not/a/real/path-\(UUID().uuidString)")
@@ -367,7 +452,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
     func test_dirField_existingFolder_allowsSubmit() {
         let realDir = FileManager.default.temporaryDirectory
         let (overlay, capturer, sink) = mount()
-        field(in: overlay, placeholder: "gitdash").setText("dev")
+        field(in: overlay, placeholder: "Open GitDash").setText("dev")
         field(in: overlay, placeholder: "npm run dev").setText("vim")
         field(in: overlay, placeholder: "~/notes").setText(realDir.path)
         capture(novelChord, in: overlay, capturer)
@@ -382,10 +467,9 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         // A real directory — the folder-exists check (Fix 5) would otherwise block submit on a
         // fixture path like `/tmp/x` that doesn't actually exist.
         let realDir = FileManager.default.temporaryDirectory
-        let existing = ToolFloat(
-            id: "lg", title: "Open Lazygit", icon: "git", command: "lazygit",
-            dir: realDir, widthFraction: 0.85, heightFraction: 0.78,
-            requiresGitRepo: true, persist: .directory, toggle: Chord(command: true, key: "g"))
+        let existing = existingFloat(
+            title: "Open Lazygit", command: "lazygit", icon: "git", dir: realDir, height: 0.78,
+            git: true, persist: .directory, toggle: Chord(command: true, key: "g"))
         let (overlay, _, sink) = mount(editing: existing)
 
         submit(in: overlay)
@@ -407,10 +491,9 @@ final class ToolFloatFormOverlayTests: XCTestCase {
     func test_edit_untouchedHomeRelativeDir_prefillsAbbreviatedAndRoundTripsOnSubmit() throws {
         let home = try makeHomeRelativeDir()
         let tilde = PathDisplay.abbreviatingHome(home.path)
-        let existing = ToolFloat(
-            id: "lg", title: "Open Lazygit", icon: "git", command: "lazygit",
-            dir: home, widthFraction: 0.85, heightFraction: 0.78,
-            requiresGitRepo: true, persist: .directory, toggle: Chord(command: true, key: "g"))
+        let existing = existingFloat(
+            title: "Open Lazygit", command: "lazygit", icon: "git", dir: home, height: 0.78,
+            git: true, persist: .directory, toggle: Chord(command: true, key: "g"))
         let (overlay, _, sink) = mount(editing: existing)
 
         XCTAssertEqual(
@@ -428,7 +511,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
     /// Esc from a focused text field closes the card.
     func test_escape_fromFocusedTextField_cancelsTheForm() {
         let (overlay, _, sink) = mount()
-        window!.makeFirstResponder(field(in: overlay, placeholder: "gitdash").field)
+        window!.makeFirstResponder(field(in: overlay, placeholder: "Open GitDash").field)
 
         pressEscape()
 

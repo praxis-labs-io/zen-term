@@ -11,6 +11,7 @@ enum GeneralConfigParser {
     static func parse(_ text: String, fallback: GeneralConfig) -> GeneralConfig {
         var config = fallback
         var floats: [ToolFloat] = []
+        var floatLineIndex = 0
         var keybinds: [(Chord, KeyInterceptor.ReservedChord)] = []
 
         for rawLine in text.split(whereSeparator: \.isNewline) {
@@ -65,10 +66,13 @@ enum GeneralConfigParser {
             case "ai":
                 if !value.isEmpty { config.ai = value }
             case "float":
-                if let float = ToolFloatParser.parse(value) {
+                if let float = ToolFloatParser.parse(value, fallbackOrder: floatLineIndex) {
                     floats.removeAll { $0.id == float.id }  // last declaration of an id wins
                     floats.append(float)
                 }
+                // Counts every float line, parsed or not, so a dropped line leaves a gap rather than
+                // shifting the floats below it out of file order.
+                floatLineIndex += 1
             case "keybind":
                 if let pair = KeybindParser.parse(value) {
                     keybinds.append(pair)
@@ -80,11 +84,21 @@ enum GeneralConfigParser {
             }
         }
 
-        config.floats = floats
-        let assembled = KeymapAssembler.assemble(floats: floats, keybinds: keybinds)
+        let ordered = sortedByOrder(floats)
+        config.floats = ordered
+        let assembled = KeymapAssembler.assemble(floats: ordered, keybinds: keybinds)
         config.keymap = assembled.map
         config.keymapDiagnostics = assembled.diagnostics
         return config
+    }
+
+    /// Dock / palette / Settings order — one array, so all three surfaces stay in agreement. The key
+    /// is the config `order:` with the float's line order as the tie-break: Swift's sort isn't stable,
+    /// so two floats sharing an `order:` would otherwise be free to shuffle between launches.
+    private static func sortedByOrder(_ floats: [ToolFloat]) -> [ToolFloat] {
+        floats.enumerated()
+            .sorted { ($0.element.order, $0.offset) < ($1.element.order, $1.offset) }
+            .map(\.element)
     }
 
     /// A keybind line that didn't parse. `toggle_lazygit` gets a named migration warning —
@@ -107,7 +121,7 @@ enum GeneralConfigParser {
         let chord = bound.flatMap { $0.isEmpty ? nil : $0 } ?? "cmd+g"
         NSLog(
             "GeneralConfig: `toggle_lazygit` was removed — lazygit is a regular tool float now; "
-                + "replace this keybind with: float = id:lazygit command:\"lazygit\" "
+                + "replace this keybind with: float = command:\"lazygit\" "
                 + "key:\(chord) git:true persist:dir icon:git title:\"Open Lazygit\" "
                 + "height:0.78 — ignored")
     }

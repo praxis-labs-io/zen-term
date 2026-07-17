@@ -7,9 +7,11 @@ import XCTest
 /// change the toolbar's per-float buttons, not just recolor them. The bug shipped because the
 /// config-change fan-out only re-themed the dock; the button set was built once and never rebuilt.
 final class ToggleDockTests: XCTestCase {
-    private func float(_ id: String) -> ToolFloat {
+    /// `title` doubles as the id — a real float's id is always `slug(title)`, and a factory that let
+    /// the two diverge would be building a float the config could never produce.
+    private func float(_ id: String, order: Int = 0) -> ToolFloat {
         ToolFloat(
-            id: id, title: "Open \(id)", icon: "square.on.square", command: "cmd", dir: nil,
+            id: id, order: order, title: id, icon: "square.on.square", command: "cmd", dir: nil,
             widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
             persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
     }
@@ -32,6 +34,16 @@ final class ToggleDockTests: XCTestCase {
 
         dock.setToolFloats([])  // remove all
         XCTAssertTrue(dock.toolFloatButtonIDsForTesting.isEmpty)
+    }
+
+    /// The dock renders the catalog in array order, left to right — it does no sorting of its own, so
+    /// a reorder in Settings reaches the toolbar only if this holds (ZEN-145).
+    func test_setToolFloats_rendersButtonsInCatalogOrder() {
+        let dock = makeDock([float("dev", order: 1), float("top", order: 2), float("notes", order: 3)])
+        XCTAssertEqual(dock.toolFloatButtonIDsForTesting, ["dev", "top", "notes"])
+
+        dock.setToolFloats([float("notes", order: 1), float("dev", order: 2), float("top", order: 3)])
+        XCTAssertEqual(dock.toolFloatButtonIDsForTesting, ["notes", "dev", "top"])
     }
 
     func test_render_showsActivityDotForBusyDrawer() {

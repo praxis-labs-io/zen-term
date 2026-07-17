@@ -1,8 +1,9 @@
 import AppKit
 
-/// The Tools settings section: the configured tool floats, with add / edit. Each float is a focusable
-/// `ToolFloatRow` — Return / click opens the edit form (delete lives there), Up/Down move between
-/// rows, Left exits to the nav, Esc closes the card. A trailing "Add tool float" button opens a blank
+/// The Tools settings section: the configured tool floats, with add / edit / reorder. Each float is a
+/// focusable `ToolFloatRow` — Return / click opens the edit form (delete lives there), Up/Down move
+/// between rows, ⌥Up/⌥Down move the float itself (the order the dock, ⌘P, and this list all read),
+/// Left exits to the nav, Esc closes the card. A trailing "Add tool float" button opens a blank
 /// form. Add / edit route out through `onEditFloat`; the host presents `ToolFloatFormOverlay`, which
 /// writes on submit / delete and reloads, so the dock button, ⌘P entry, and keybind update with no
 /// restart.
@@ -11,6 +12,10 @@ final class SettingsToolsSection: SettingsSection {
     var onExitToNav: (() -> Void)?
     /// Set by the host: open the add / edit form. `nil` adds a new float; a value edits that one.
     var onEditFloat: ((ToolFloat?) -> Void)?
+    /// Set by the host: persist a new float order. The array order *is* the intent — the host stamps
+    /// `order:` from it and reloads, and this section then rebuilds from the reloaded config, so a
+    /// reorder follows the same write → reload → rebuild path as an add / edit / delete.
+    var onReorder: (([ToolFloat]) -> Void)?
 
     private var rows: [ToolFloatRow] = []
     private let addButton = AppButton(title: "＋ Add tool float", variant: .muted)
@@ -19,6 +24,7 @@ final class SettingsToolsSection: SettingsSection {
     /// just let `reapplyTheme` recolor whichever pair is currently mounted.
     private weak var caption: NSTextField?
     private weak var emptyHint: NSTextField?
+    private weak var reorderHint: NSTextField?
     private var rowsStack: NSStackView?
 
     func makeDetailView() -> NSView {
@@ -45,11 +51,33 @@ final class SettingsToolsSection: SettingsSection {
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(alpha: 0.4)
         emptyHint?.textColor = Theme.current.chrome.ink(alpha: 0.5)
+        reorderHint?.textColor = Theme.current.chrome.ink(alpha: 0.35)
         rows.forEach { $0.reapplyTheme() }
         addButton.reapplyTheme()
     }
 
     // MARK: rows
+
+    /// The group caption with an optional hint pinned to its trailing edge.
+    private static func headerRow(caption: NSTextField, hint: NSTextField?) -> NSView {
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let row = NSStackView(views: [caption, spacer] + (hint.map { [$0] } ?? []))
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 8
+        row.translatesAutoresizingMaskIntoConstraints = false
+        return row
+    }
+
+    private func makeReorderHint() -> NSTextField {
+        let hint = NSTextField(labelWithString: "⌥↑ ⌥↓ to reorder")
+        hint.font = .systemFont(ofSize: 10, weight: .medium)
+        hint.textColor = Theme.current.chrome.ink(alpha: 0.35)
+        hint.setContentHuggingPriority(.required, for: .horizontal)
+        reorderHint = hint
+        return hint
+    }
 
     /// Fill the rows stack from the live config. The list refreshes after an add / edit / delete
     /// because the form hands back to a freshly-built Settings → Tools (no in-place mutation here).
@@ -60,10 +88,14 @@ final class SettingsToolsSection: SettingsSection {
 
         let caption = SettingsDetail.groupCaption("Tool floats")
         self.caption = caption
-        stack.addArrangedSubview(caption)
-        caption.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
         let floats = GeneralConfig.current.floats
+        // ⌥↑/⌥↓ is invisible without this — nothing else on the row says a float can move. Only shown
+        // with something to reorder, so it never advertises a keystroke that would do nothing.
+        let header = Self.headerRow(caption: caption, hint: floats.count > 1 ? makeReorderHint() : nil)
+        stack.addArrangedSubview(header)
+        header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
         if floats.isEmpty {
             let hint = NSTextField(labelWithString: "No tool floats yet. Add one to get a dock button and a shortcut.")
             hint.font = .systemFont(ofSize: 12)
@@ -79,6 +111,8 @@ final class SettingsToolsSection: SettingsSection {
                 row.onActivate = { [weak self, weak row] in row.map { self?.onEditFloat?($0.float) } }
                 row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
                 row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
+                row.onMoveUp = { [weak self, weak row] in self?.move(row, delta: -1) }
+                row.onMoveDown = { [weak self, weak row] in self?.move(row, delta: 1) }
                 row.onTab = { [weak self, weak row] in self?.moveTab(from: row, delta: 1) }
                 row.onBacktab = { [weak self, weak row] in self?.moveTab(from: row, delta: -1) }
                 row.onExitToNav = { [weak self] in self?.onExitToNav?() }
@@ -87,12 +121,39 @@ final class SettingsToolsSection: SettingsSection {
                 row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
             }
         }
-        stack.setCustomSpacing(10, after: caption)
+        stack.setCustomSpacing(10, after: header)
 
         let addRow = SettingsDetail.trailingRow(addButton)
         stack.addArrangedSubview(addRow)
         addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
+    }
+
+    /// Move a float one slot and persist the whole list in its new order, then rebuild and keep focus
+    /// on the row that moved so ⌥↓⌥↓ walks a float down without re-finding it.
+    ///
+    /// Deferred to the next runloop turn because the rebuild *frees this row*: `populateRows` drops
+    /// the last reference to it while its own `keyDown` is still on the stack. (The edit path gets away
+    /// with a synchronous callback only because modal teardown is animated.)
+    private func move(_ row: ToolFloatRow?, delta: Int) {
+        guard let row else { return }
+        var floats = GeneralConfig.current.floats
+        guard let from = floats.firstIndex(where: { $0.id == row.float.id }) else { return }
+        let to = from + delta
+        guard floats.indices.contains(to) else { return }  // already at an end
+        floats.swapAt(from, to)
+
+        let movedID = row.float.id
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.onReorder?(floats)
+            // Unconditional: on a failed write the config is unchanged, so the rebuild simply puts the
+            // row back where it was rather than leaving the list lying about the file.
+            self.populateRows()
+            guard let moved = self.rows.first(where: { $0.float.id == movedID }) else { return }
+            moved.window?.makeFirstResponder(moved)
+            moved.scrollToVisible(moved.bounds)
+        }
     }
 
     private func moveFocus(from view: NSView?, delta: Int) {
@@ -117,17 +178,24 @@ final class SettingsToolsSection: SettingsSection {
     }
 }
 
-/// One Tools row: a float's icon, title, an id · command subtitle, and its shortcut keycap. The whole
-/// row is one focus stop — Return / click opens the edit form (where delete lives), Up/Down (and
-/// Tab/Shift-Tab) move rows, Left exits to nav. Mirrors `KeybindRow`.
+/// One Tools row: a float's icon, title, its command, and its shortcut keycap. The whole row is one
+/// focus stop — Return / click opens the edit form (where delete lives), Up/Down (and Tab/Shift-Tab)
+/// move rows, ⌥Up/⌥Down reorder the float itself, Left exits to nav. Mirrors `KeybindRow`.
 final class ToolFloatRow: NSView {
     let float: ToolFloat
     var onActivate: (() -> Void)?
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
+    var onMoveUp: (() -> Void)?
+    var onMoveDown: (() -> Void)?
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
     var onExitToNav: (() -> Void)?
+
+    /// The modifiers a shortcut can be built from — the rest of `modifierFlags` is incidental to the
+    /// physical key (`.function` / `.numericPad` ride along on every arrow) and must be masked out
+    /// before asking "was Option the only modifier held?".
+    private static let reservableModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
 
     private let iconView = NSImageView()
     private let titleLabel: NSTextField
@@ -138,7 +206,7 @@ final class ToolFloatRow: NSView {
     init(float: ToolFloat) {
         self.float = float
         titleLabel = NSTextField(labelWithString: float.title)
-        subtitleLabel = NSTextField(labelWithString: "\(float.id) · \(float.command)")
+        subtitleLabel = NSTextField(labelWithString: float.command)
         keycap = KeycapView(shortcut: float.shortcut)
 
         super.init(frame: .zero)
@@ -196,7 +264,21 @@ final class ToolFloatRow: NSView {
     override func drawFocusRingMask() {}
 
     override func keyDown(with event: NSEvent) {
-        switch KeyboardFocus.key(for: event) {
+        let key = KeyboardFocus.key(for: event)
+        // ⌥Up/⌥Down reorder the float instead of moving focus. `KeyboardFocus.key(for:)` decodes the
+        // keyCode alone, so ⌥↑ arrives indistinguishable from a plain `.up` — the modifier check has
+        // to happen here. Compare against the *reservable* modifiers only (as `KeyInterceptor` does):
+        // AppKit tags every arrow event with `.function` and `.numericPad`, so masking with
+        // `deviceIndependentFlagsMask` keeps those bits and the comparison never matches a real ⌥↑.
+        // Requiring Option to be the only reservable modifier still keeps ⌥⌘↑ out of the reorder.
+        if event.modifierFlags.intersection(Self.reservableModifiers) == .option {
+            switch key {
+            case .up: onMoveUp?(); return
+            case .down: onMoveDown?(); return
+            default: break
+            }
+        }
+        switch key {
         case .activate: onActivate?()
         case .up: onArrowUp?()
         case .down: onArrowDown?()
