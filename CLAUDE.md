@@ -217,10 +217,11 @@ on a remote existing:
 4. **Triage** — fix / mitigate / ignore every finding, **no tech debt**. Residual
    work becomes a Linear ticket (ZenTerm team), never an in-code `TODO`. Re-run
    the local check after fixes.
-5. **Close out** — move the Linear ticket to **In Review**
-   (`c8f755f6-5c17-4bdd-b41f-9161166fdb19`); mark the PR ready if one exists.
-   Done is reached on merge (auto-linked via the issue id), or by hand on a
-   local-only ship.
+5. **Close out** — mark the PR ready for review. Linear moves the ticket to **In
+   Review** itself once it's ready (auto-linked via the issue id), so don't set
+   that status by hand. On a **local-only** ship there's no PR to trigger it, so
+   move it yourself (`c8f755f6-5c17-4bdd-b41f-9161166fdb19`). Done is reached on
+   merge, or by hand on a local-only ship.
 
-Status flow the agent drives: **In Progress** on pickup → **In Review** at ship.
-Backlog → Todo → In Progress moves are yours.
+Status flow the agent drives: **In Progress** on pickup. **In Review** and **Done**
+follow the PR on their own. Backlog → Todo → In Progress moves are yours.
