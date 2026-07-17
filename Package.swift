@@ -66,7 +66,9 @@ let package = Package(
             ],
             // swift build links Sparkle.framework but doesn't embed it; the shipped bundle carries
             // it under Contents/Frameworks (bin/package-app), so the binary must resolve it there.
-            // A `swift run` build has no ../Frameworks — bin/run supplies DYLD_FRAMEWORK_PATH instead.
+            // A `swift run`/`swift test` build has no ../Frameworks, but SwiftPM copies the framework
+            // beside the built binary and @loader_path (also on the rpath) resolves it, so dev builds
+            // need no extra setup.
             linkerSettings: [
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
             ]
