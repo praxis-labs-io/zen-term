@@ -77,6 +77,32 @@ One-time setup: a "Developer ID Application" cert in the keychain, and
 - Per global rules: no `TODO`/`FIXME`/`HACK` markers — fix it now, or file a
   Linear ticket for genuinely out-of-scope work.
 
+## Copy: read `docs/brand-voice.md` first (load-bearing)
+
+**Any word a person outside the project reads is governed by
+`docs/brand-voice.md`.** That includes in-app copy (toasts, empty states, button
+labels, Settings captions, error messages), `docs/config/*` (users open those
+files), the README, release notes, and anything in `zen-term-website` or
+`zen-term-releases`. Read it before writing or editing user-facing copy, not
+after.
+
+The parts that get violated most:
+
+- **No em-dashes. Anywhere**, including inside quotes. Plenty of good writing
+  uses them, which is why this is the rule that drifts back.
+- **No hype words, no adverbs.** The app's user-facing copy currently contains
+  zero instances of "seamless", "powerful", "beautiful", or "just works". That's
+  a property worth keeping, not an accident.
+- **Positioning:** ZenTerm is "a terminal for the modern era", a modern shell for
+  a great terminal (ghostty), for terminal devs of all kinds. The agentic bent is
+  a lean, never the frame. Do not write "the terminal for the agentic era".
+- **One word per concept** (pane not split, workspace not project/repo, shortcut
+  not keybind). The vocabulary table is in the doc.
+- Confirmations state the consequence and never ask "Are you sure?".
+
+`docs/brand-voice.md` is mirrored into the website and releases repos. Edit it
+here, then copy it out.
+
 ## Colors — always theme-driven (ZEN-27)
 
 The chrome must **never hardcode a color**. A hardcoded color won't follow a
