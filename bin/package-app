@@ -46,23 +46,64 @@ BUILD="$(git rev-list --count HEAD 2>/dev/null || echo 0)"
 APP="$DEST/ZenTerm.app"
 BIN=".build/release/ZenTerm"
 
-echo "▸ Building release…"
-swift build -c release
-
-echo "▸ Assembling $APP"
-rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/ZenTerm"
-cp icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-
 # SwiftPM resource bundles (brand SVGs, ghostty runtime resources). Bundle.module
 # resolves them via Bundle.main.resourceURL, so they must ride along in the .app —
 # a bare executable copy would fatalError on first Bundle.module access.
-for bundle in .build/release/*.bundle; do
-    cp -R "$bundle" "$APP/Contents/Resources/"
+#
+# A `*.bundle` glob over .build/release once signed, notarized and published a dead
+# SwiftTerm bundle to users in v0.1.0, long after libghostty became the sole backend
+# (ZEN-168): `swift build` never prunes .build, so a dropped dependency leaves its
+# bundle there forever and the glob swept it into the app. Clearing the bundles
+# first is what makes that impossible rather than merely detected — the build
+# re-emits exactly the set Package.swift declares, so the app follows the manifest
+# instead of whatever this machine happens to have built. Cheap: re-emitting a
+# bundle is a resource copy, not a relink.
+EXPECTED_BUNDLES=(ZenTerm_TerminalKit.bundle ZenTerm_ZenTerm.bundle)
+
+echo "▸ Building release…"
+rm -rf .build/release/*.bundle
+swift build -c release
+
+# The bundle set is asserted both ways. After the wipe these describe the manifest,
+# not residue: a missing bundle means the build didn't emit one we ship (a partial
+# app would fatalError on first Bundle.module access), and an unexpected bundle
+# means Package.swift grew one nobody told this script about.
+for bundle in "${EXPECTED_BUNDLES[@]}"; do
+    [[ -d ".build/release/$bundle" ]] || {
+        echo "✗ expected resource bundle missing: .build/release/$bundle" >&2
+        echo "  a partial app would fatalError on first Bundle.module access" >&2
+        exit 1
+    }
 done
 
-cat > "$APP/Contents/Info.plist" <<PLIST
+for path in .build/release/*.bundle; do
+    found="$(basename "$path")"
+    for expected in "${EXPECTED_BUNDLES[@]}"; do
+        [[ "$found" == "$expected" ]] && continue 2
+    done
+    echo "✗ Package.swift emits a resource bundle this script doesn't ship: $found" >&2
+    echo "  add it to EXPECTED_BUNDLES" >&2
+    exit 1
+done
+
+# Assembled and signed off to the side, then swapped in at the end. $APP defaults
+# to the installed daily driver, so building in place means any failure between the
+# delete and the signature (a missing icon, an expired cert) leaves an unlaunchable
+# shell where a working terminal used to be. Staging keeps the installed app whole
+# until there is a complete signed one to replace it with. Same directory, so the
+# swap is a rename rather than a copy.
+echo "▸ Assembling $APP"
+STAGE="$DEST/.ZenTerm.app.partial"
+rm -rf "$STAGE"
+mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources"
+cp "$BIN" "$STAGE/Contents/MacOS/ZenTerm"
+cp icon/AppIcon.icns "$STAGE/Contents/Resources/AppIcon.icns"
+
+for bundle in "${EXPECTED_BUNDLES[@]}"; do
+    cp -R ".build/release/$bundle" "$STAGE/Contents/Resources/"
+done
+
+cat > "$STAGE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -89,10 +130,15 @@ PLIST
 # by the outer signature.
 if [[ "$IDENTITY" == "-" ]]; then
     echo "▸ Ad-hoc signing"
-    codesign --force --sign - "$APP"
+    codesign --force --sign - "$STAGE"
 else
     echo "▸ Signing with hardened runtime: $IDENTITY"
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP"
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$STAGE"
 fi
+
+# The only point where the installed app is at risk, and by now the replacement is
+# complete and signed.
+rm -rf "$APP"
+mv "$STAGE" "$APP"
 
 echo "✓ $APP  (v${VERSION} build ${BUILD})"
