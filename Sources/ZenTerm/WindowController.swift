@@ -45,6 +45,13 @@ final class WindowController: NSObject {
     /// outside can reach into this window's toast stack.
     func showToast(_ content: ToastContent) { toasts.show(content) }
 
+    /// Host the app-global update card in this window's toast stack (ZEN-118). `UpdateController`
+    /// presents into the key window this way and re-homes here if its prior host closes.
+    func presentUpdateCard(_ card: UpdateCardView) { toasts.present(card: card) }
+
+    /// Remove the update card this window is hosting.
+    func dismissUpdateCard(_ card: UpdateCardView) { toasts.remove(card: card) }
+
     /// The window's tool floats (ZEN-141). Window-level, not per-tab: one live instance per float
     /// id is shared by every tab, and the card hosts on `container` so a tab switch doesn't
     /// unmount it. Lazy so `container`, `tabBar`, and the tab machinery all exist before the

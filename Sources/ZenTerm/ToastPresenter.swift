@@ -64,6 +64,26 @@ final class ToastPresenter {
         return toast
     }
 
+    /// Present a caller-built card in the stack (no auto-dismiss, no built-in close affordance). The
+    /// caller owns its content and lifetime; used by the app-global update card, which morphs in
+    /// place across states and is torn down via `remove(_:)` when the flow ends.
+    func present(card: ShadowCardView) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        stack.addArrangedSubview(card)
+        card.superview?.layoutSubtreeIfNeeded()  // resolve the frame before scaling about its center
+        Motion.springScaleFade(card, appearing: true)
+    }
+
+    /// Spring a caller-built card back out and remove it. Pairs with `present(card:)`.
+    func remove(card: ShadowCardView) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        Motion.springScaleFade(card, appearing: false) { [weak self, weak card] in
+            guard let self, let card else { return }
+            self.stack.removeArrangedSubview(card)
+            card.removeFromSuperview()
+        }
+    }
+
     /// Dismiss a toast now (spring out + remove). Idempotent.
     func dismiss(_ toast: ToastView) {
         // `animateOut` is idempotent, so a click + the auto-dismiss timer can't double-remove.
