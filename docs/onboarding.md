@@ -102,6 +102,44 @@ A tool float is a command on a shortcut, floating over your work.
 ⌘G now floats lazygit over your work and closes it again. The float stays warm,
 so reopening it is instant. The same works for `btop`, a dev server, or `gh dash`.
 
+## Neovim: one motion across splits and panes
+
+Out of the box these are two separate motions. `⌘H` `⌘J` `⌘K` `⌘L` moves between
+ZenTerm panes, and Neovim's own `Ctrl-hjkl` moves between Neovim splits. You
+switch between two sets of keys depending on where focus happens to be.
+
+[zen-navigator.nvim](https://github.com/Drucial/zen-navigator.nvim) joins them.
+Press `Ctrl-h` at the left edge of your Neovim splits and focus crosses into the
+ZenTerm pane beside it. From a shell pane, `Ctrl-h` walks back into Neovim and
+keeps going through its splits. It is the `vim-tmux-navigator` idea, without
+tmux.
+
+It is opt-in and takes two steps. Both are required, because the plugin only
+diverts a chord ZenTerm already treats as pane nav.
+
+**1. Install the plugin.** With [lazy.nvim](https://github.com/folke/lazy.nvim):
+
+```lua
+{ "Drucial/zen-navigator.nvim", event = "VeryLazy", opts = {} }
+```
+
+**2. Give ZenTerm the chord to hand off.** Add these to
+`~/.config/zen-term/config`, or set them in Settings → Keybinds:
+
+```
+keybind = nav_left=ctrl+h
+keybind = nav_down=ctrl+j
+keybind = nav_up=ctrl+k
+keybind = nav_right=ctrl+l
+```
+
+The tradeoff: `Ctrl-hjkl` now belongs to pane nav, so other TUIs in a shell pane
+(htop, less) lose those keys. That is the same tradeoff tmux and kitty make.
+`⌘H` `⌘J` `⌘K` `⌘L` keeps working regardless, and is never affected.
+
+Outside ZenTerm the plugin falls back to a plain `wincmd`, so the same Neovim
+config works anywhere.
+
 ## Change how it looks
 
 **Themes:** press ⌘, and choose **Appearance**. Fifteen ship with the app,
