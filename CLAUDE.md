@@ -5,8 +5,19 @@ dependency behind the `TerminalSurface` seam.** Swift + SwiftPM + AppKit over
 libghostty (the sole backend, embedded as `GhosttyKit`). Global workflow rules in
 `~/.claude/CLAUDE.md` apply; this file only adds what's specific to zen-term.
 
-Design source of truth: `docs/superpowers/specs/` (architecture + epic charters)
-and `docs/superpowers/plans/` (per-epic implementation plans).
+**Everything in `docs/` describes what is true today.** `docs/architecture.md` is
+the one architecture doc. If a change makes it wrong, the change fixes it.
+
+A spec or plan belongs in `docs/` **while the work is in flight**. It exists to
+work out implementation details and to fill out the tickets, and it is spent once
+the tickets and the code exist. When the epic ships: fold anything architectural
+into `docs/architecture.md`, then delete the plan, or archive it if it still
+answers something the code and the tickets don't. A shipped epic's plan describes
+intent the code already superseded, so leaving it in place only leaves something
+that can be wrong.
+
+The record is **Linear** (projects, tickets, PR links) and git. `docs/` is not a
+second copy of it.
 
 ## Build / run / test
 
@@ -161,9 +172,12 @@ team.
 
 ## Epics → Linear (just-in-time, not up front)
 
-- Epics are documented **locally first** — the charters in the design spec plus a
-  per-epic plan. That local pair is the durable record and does not depend on
-  Linear.
+- **Linear is the record.** The project, its tickets, and their PR links are the
+  durable history of an epic. Don't write a second copy into `docs/`.
+- **A spec or plan is scratch**, for working out implementation details and for
+  writing the tickets from. It lives in `docs/` while the epic is in flight, and
+  gets cleaned up when the epic ships: fold anything architectural into
+  `docs/architecture.md`, then delete or archive it.
 - **An epic IS a Linear Project — never an issue.** Task tickets belong directly
   to the project. There is no "epic tracking issue"; the project + its child
   tickets are the whole structure.
