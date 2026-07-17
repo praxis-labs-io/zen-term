@@ -94,24 +94,47 @@ final class ToastView: ShadowCardView {
         // via their buttons (or Esc).
         titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         titleLabel.textColor = Self.titleColor
+        // The title shares its row with the keycap now, and it's a tab title — arbitrary length.
+        // Truncate it rather than let it push the keycap off the card's edge.
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         messageLabel.font = Self.messageFont
         messageLabel.textColor = Self.messageColor
         messageLabel.preferredMaxLayoutWidth = Self.messageMaxWidth
 
-        let col = NSStackView(views: [titleLabel, messageLabel])
+        // Title leading, keycaps trailing, with a spacer holding them apart. The keycap names an
+        // app-level binding rather than labelling a button (ZEN-106 — the toast arms nothing), so
+        // the card's top-right corner reads as "this toast's chord" instead of implying the button
+        // beside it has a key equivalent.
+        let headerSpacer = NSView()
+        headerSpacer.setContentHuggingPriority(.init(rawValue: 1), for: .horizontal)
+        headerSpacer.setContentCompressionResistancePriority(.init(rawValue: 1), for: .horizontal)
+        let header = NSStackView(views: [titleLabel, headerSpacer])
+        header.orientation = .horizontal
+        header.alignment = .centerY
+        header.spacing = 6
+
+        let col = NSStackView(views: [header, messageLabel])
         col.orientation = .vertical
         col.alignment = .leading
         col.spacing = 3
         messageLabel.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
+        header.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
+
+        // Appended after the spacer, so a keycap lands on the trailing edge.
+        for resolve in actions.compactMap(\.shortcut) {
+            let slot = ShortcutSlot(group: header, resolve: resolve)
+            shortcutSlots.append(slot)
+            slot.refresh()
+        }
 
         if !actions.isEmpty {
             // Small buttons hugging the leading edge (a trailing spacer absorbs the slack).
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
             let row = NSStackView(
-                views: actions.map { Self.actionGroup(for: $0, keyEquivalents: keyEquivalents, in: self) }
-                    + [spacer])
+                views: actions.map { Self.button(for: $0, keyEquivalents: keyEquivalents) } + [spacer])
             row.orientation = .horizontal
             row.alignment = .centerY
             row.spacing = 6
@@ -151,23 +174,6 @@ final class ToastView: ShadowCardView {
         let variant: AppButton.Variant = action.kind == .destructive ? .destructive : .secondary
         let keyEquivalent = keyEquivalents ? (action.kind == .destructive ? "\r" : "\u{1b}") : ""
         return AppButton(title: action.title, variant: variant, keyEquivalent: keyEquivalent, onTap: action.run)
-    }
-
-    /// An action's button, plus a keycap naming the chord that already triggers it — the label +
-    /// keycap row `ChromeTooltip` uses. The keycap is display ONLY: it names an app-level binding
-    /// (⌘N for a tab), so nothing is armed here and the toast stays non-modal (ZEN-106).
-    private static func actionGroup(
-        for action: ToastAction, keyEquivalents: Bool, in toast: ToastView
-    ) -> NSView {
-        let button = Self.button(for: action, keyEquivalents: keyEquivalents)
-        guard let resolve = action.shortcut else { return button }
-        let group = NSStackView(views: [button])
-        group.orientation = .horizontal
-        group.alignment = .centerY
-        group.spacing = 4
-        toast.shortcutSlots.append(ShortcutSlot(group: group, resolve: resolve))
-        toast.shortcutSlots.last?.refresh()
-        return group
     }
 
     /// One action's keycap slot: the row it lives in and the query for its current glyph. The glyph
