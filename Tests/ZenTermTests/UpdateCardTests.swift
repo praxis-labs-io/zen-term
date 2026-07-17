@@ -80,6 +80,20 @@ final class UpdateCardTests: XCTestCase {
         XCTAssertEqual(ZenUpdateDriver.bullets(from: nil), [])
     }
 
+    // MARK: - The title is theme-driven (ZEN-27), not a system color
+
+    func test_title_usesThemeForeground_notASystemColor() {
+        // A title left at NSColor.labelColor follows effectiveAppearance, not Theme.current, and
+        // washes out to invisible on a light theme (it shipped that way once). Pin it to the theme.
+        let card = UpdateCardView(
+            state: .available(version: "9.9.9", current: "You're on 1.0", notes: [], notesURL: nil),
+            actions: .init())
+        let title = firstTextField(in: card) { $0.contains("9.9.9") }
+        XCTAssertEqual(
+            title?.textColor, Theme.current.chrome.foreground.nsColor,
+            "the title must use the theme foreground, not a system color")
+    }
+
     // MARK: - Sparkle reply fires exactly once
 
     func test_fireOnce_repliesOnlyOnce() {

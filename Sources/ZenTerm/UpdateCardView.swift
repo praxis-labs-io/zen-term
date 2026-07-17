@@ -107,6 +107,10 @@ final class UpdateCardView: ShadowCardView {
         header.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         bodyColumn.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         buttonRow.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
+        // Give the title row the badge's height so its centered title lines up with the badge's
+        // center. Without this the row hugs the title's ~16pt and, top-aligned against the 28pt
+        // badge, the title sits high instead of centered on the icon.
+        header.heightAnchor.constraint(equalToConstant: Self.badgeSize).isActive = true
 
         let root = NSStackView(views: [badgeFill, col])
         root.orientation = .horizontal
@@ -227,6 +231,9 @@ final class UpdateCardView: ShadowCardView {
     private func applyColors() {
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         layer?.borderColor = FloatShadow.edge.cgColor
+        // Theme-drive the title, or it falls back to NSColor.labelColor, which follows
+        // effectiveAppearance (not Theme.current) and washes out to invisible on a light theme.
+        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         let accent = Theme.current.chrome.accent.nsColor
         badgeFill.layer?.backgroundColor = accent.withAlphaComponent(0.15).cgColor
         iconView.contentTintColor = accent
