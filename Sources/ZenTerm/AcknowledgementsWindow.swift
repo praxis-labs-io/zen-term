@@ -1,5 +1,4 @@
 import AppKit
-import TerminalKit
 
 /// A standalone window listing the third-party notices, opened from the app menu under About. Its
 /// own window rather than the About panel's credits: the full license text is a long read that
@@ -77,8 +76,8 @@ final class AcknowledgementsWindow {
 
     private static func notices() -> String {
         guard
-            let url = Bundle.zenResourceBundle(named: "ZenTerm_ZenTerm", fallback: .module)
-                .url(forResource: "THIRD-PARTY-NOTICES", withExtension: "md", subdirectory: "Resources"),
+            let url = ZenTermResources.bundle.url(
+                forResource: "THIRD-PARTY-NOTICES", withExtension: "md", subdirectory: "Resources"),
             let markdown = try? String(contentsOf: url, encoding: .utf8)
         else { return "" }
         return Acknowledgements.plainText(fromMarkdown: markdown)

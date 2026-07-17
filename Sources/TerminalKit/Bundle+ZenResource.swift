@@ -26,7 +26,21 @@ extension Bundle {
     public static func zenResourceBundle(named name: String, fallback: @autoclosure () -> Bundle)
         -> Bundle
     {
-        for root in [Bundle.main.resourceURL, Bundle.main.bundleURL] {
+        zenResourceBundle(
+            named: name,
+            searchRoots: [Bundle.main.resourceURL, Bundle.main.bundleURL],
+            fallback: fallback())
+    }
+
+    /// The `searchRoots` seam exists so the packaged-app resolution path is
+    /// directly testable: under `swift test`, `Bundle.main` is the xctest host, so
+    /// the public entry point's real roots always miss and `fallback` (`.module`)
+    /// silently rescues — a broken probe order or wrong subpath would ship green.
+    /// Tests drive this overload with fixture roots to exercise the primary path.
+    static func zenResourceBundle(
+        named name: String, searchRoots: [URL?], fallback: @autoclosure () -> Bundle
+    ) -> Bundle {
+        for root in searchRoots {
             if let url = root?.appendingPathComponent("\(name).bundle"),
                 let bundle = Bundle(url: url)
             {
