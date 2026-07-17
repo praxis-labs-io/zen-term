@@ -1,0 +1,20 @@
+import Foundation
+import TerminalKit
+
+/// ZenTerm's own SwiftPM resource bundle (brand-mark SVGs, the bundled theme
+/// catalog, third-party license notices).
+///
+/// `bundleName` is `<PackageName>_<TargetName>`, matching what the generated
+/// `Bundle.module` accessor hardcodes and what `bin/package-app`'s
+/// `EXPECTED_BUNDLES` asserts. It is a hand-maintained literal because the accessor
+/// can't be asked for the name without risking its `fatalError` in a packaged app
+/// (see TerminalKit's `Bundle+ZenResource.swift`); `ZenTermResourcesTests` asserts
+/// it matches the actually-emitted bundle so a rename or SwiftPM scheme change fails
+/// the gate rather than re-shipping the ZEN-175 launch crash.
+enum ZenTermResources {
+    static let bundleName = "ZenTerm_ZenTerm"
+
+    /// Resolved once, from `Contents/Resources` in a packaged app (never the fataling
+    /// `Bundle.module`, which only ever resolved on the build machine).
+    static let bundle: Bundle = Bundle.zenResourceBundle(named: bundleName, fallback: .module)
+}

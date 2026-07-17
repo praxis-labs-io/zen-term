@@ -76,7 +76,7 @@ final class AcknowledgementsWindow {
 
     private static func notices() -> String {
         guard
-            let url = Bundle.module.url(
+            let url = ZenTermResources.bundle.url(
                 forResource: "THIRD-PARTY-NOTICES", withExtension: "md", subdirectory: "Resources"),
             let markdown = try? String(contentsOf: url, encoding: .utf8)
         else { return "" }

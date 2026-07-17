@@ -148,7 +148,7 @@ final class GhosttyApp {
     /// silently mismatching shell-integration scripts and terminfo.
     private static func useBundledResources() {
         guard
-            let dir = Bundle.module.resourceURL?
+            let dir = TerminalKitResources.bundle.resourceURL?
                 .appendingPathComponent("ghostty-resources/ghostty").path,
             FileManager.default.fileExists(atPath: dir)
         else {

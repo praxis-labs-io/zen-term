@@ -7,7 +7,8 @@ import AppKit
 enum BrandMark {
     static func image(_ name: String) -> NSImage? {
         guard
-            let url = Bundle.module.url(forResource: name, withExtension: "svg", subdirectory: "Resources"),
+            let url = ZenTermResources.bundle.url(
+                forResource: name, withExtension: "svg", subdirectory: "Resources"),
             let image = NSImage(contentsOf: url)
         else { return nil }
         image.isTemplate = true
