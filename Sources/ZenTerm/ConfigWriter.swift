@@ -180,12 +180,20 @@ enum ConfigWriter {
         try apply(floatUpserts: resequenced, configRoot: configRoot)
     }
 
-    /// Replace each upsert's `float =` line in place (matched by `id:`, preserving any trailing
-    /// comment), or insert it after the last existing float line (else append). Removals run first,
-    /// dropping every float line whose id is in the set. Only float lines are touched; comments,
-    /// blanks, and every other key survive verbatim.
+    /// Replace each upsert's `float =` line in place (matched by id, preserving any trailing comment),
+    /// or insert it into the slot a removal just vacated, else after the last existing float line, else
+    /// append. Removals run first, dropping every float line whose id is in the set. Only float lines
+    /// are touched; comments, blanks, and every other key survive verbatim.
+    ///
+    /// The vacated slot is what makes **rename** keep its place. A rename arrives as remove(old) +
+    /// upsert(new) in one call, and since the new id was never in the file there's no line to replace —
+    /// so it would otherwise land at the end of the block. That silently moves the float: on reload,
+    /// floats with no `order:` of their own take their order from line position, so the ones that were
+    /// below it inherit the slot it left and it slides down the dock (ZEN-145).
     private static func applyFloats(upserts: [ToolFloat], removals: Set<String>, in lines: inout [String]) {
+        var vacated: Int?
         if !removals.isEmpty {
+            vacated = lines.firstIndex { floatID(of: $0).map(removals.contains) ?? false }
             lines.removeAll { floatID(of: $0).map(removals.contains) ?? false }
         }
         for float in upserts {
@@ -196,6 +204,9 @@ enum ConfigWriter {
                 } else {
                     lines[index] = rendered
                 }
+            } else if let slot = vacated, slot <= lines.count {
+                lines.insert(rendered, at: slot)
+                vacated = nil  // one rename, one slot — a second new float goes to the end as usual
             } else if let lastFloat = lines.lastIndex(where: { floatID(of: $0) != nil }) {
                 lines.insert(rendered, at: lastFloat + 1)  // group with the existing float lines
             } else {

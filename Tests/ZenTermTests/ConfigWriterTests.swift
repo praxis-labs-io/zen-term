@@ -291,6 +291,33 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertTrue(text.contains("float = order:2 title:b"), text)
     }
 
+    /// A rename must not move the float. It's a remove(old) + upsert(new) in one write, and the new
+    /// line has no existing line to replace — so if it lands at the end of the block, the floats that
+    /// never had an `order:` inherit the line positions it used to hold and the renamed float silently
+    /// slides down the dock, the palette, and Settings.
+    func test_float_rename_keepsItsPositionInTheDock() throws {
+        let dir = try makeTempDir()
+        try seed(
+            """
+            float = title:a command:a key:cmd+shift+a
+            float = title:b command:b key:cmd+shift+b
+            float = title:c command:c key:cmd+shift+c
+
+            """, in: dir)
+        let loaded = ConfigLoader.loadGeneralConfig(configRoot: dir).floats
+        XCTAssertEqual(loaded.map(\.id), ["a", "b", "c"])
+
+        // Exactly what `submitToolFloat` does for a rename: same order, new title, old id removed.
+        let renamed = float(
+            title: "a2", order: loaded[0].order, command: "a",
+            toggle: Chord(command: true, shift: true, key: "a"))
+        try ConfigWriter.apply(floatUpserts: [renamed], floatRemovals: ["a"], configRoot: dir)
+
+        XCTAssertEqual(
+            ConfigLoader.loadGeneralConfig(configRoot: dir).floats.map(\.id), ["a2", "b", "c"],
+            "renaming a float must not move it")
+    }
+
     func test_float_roundTripsThroughLoader() throws {
         let dir = try makeTempDir()
         try ConfigWriter.apply(

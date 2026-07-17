@@ -24,6 +24,7 @@ final class SettingsToolsSection: SettingsSection {
     /// just let `reapplyTheme` recolor whichever pair is currently mounted.
     private weak var caption: NSTextField?
     private weak var emptyHint: NSTextField?
+    private weak var reorderHint: NSTextField?
     private var rowsStack: NSStackView?
 
     func makeDetailView() -> NSView {
@@ -50,11 +51,33 @@ final class SettingsToolsSection: SettingsSection {
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(alpha: 0.4)
         emptyHint?.textColor = Theme.current.chrome.ink(alpha: 0.5)
+        reorderHint?.textColor = Theme.current.chrome.ink(alpha: 0.35)
         rows.forEach { $0.reapplyTheme() }
         addButton.reapplyTheme()
     }
 
     // MARK: rows
+
+    /// The group caption with an optional hint pinned to its trailing edge.
+    private static func headerRow(caption: NSTextField, hint: NSTextField?) -> NSView {
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let row = NSStackView(views: [caption, spacer] + (hint.map { [$0] } ?? []))
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 8
+        row.translatesAutoresizingMaskIntoConstraints = false
+        return row
+    }
+
+    private func makeReorderHint() -> NSTextField {
+        let hint = NSTextField(labelWithString: "⌥↑ ⌥↓ to reorder")
+        hint.font = .systemFont(ofSize: 10, weight: .medium)
+        hint.textColor = Theme.current.chrome.ink(alpha: 0.35)
+        hint.setContentHuggingPriority(.required, for: .horizontal)
+        reorderHint = hint
+        return hint
+    }
 
     /// Fill the rows stack from the live config. The list refreshes after an add / edit / delete
     /// because the form hands back to a freshly-built Settings → Tools (no in-place mutation here).
@@ -65,10 +88,14 @@ final class SettingsToolsSection: SettingsSection {
 
         let caption = SettingsDetail.groupCaption("Tool floats")
         self.caption = caption
-        stack.addArrangedSubview(caption)
-        caption.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
         let floats = GeneralConfig.current.floats
+        // ⌥↑/⌥↓ is invisible without this — nothing else on the row says a float can move. Only shown
+        // with something to reorder, so it never advertises a keystroke that would do nothing.
+        let header = Self.headerRow(caption: caption, hint: floats.count > 1 ? makeReorderHint() : nil)
+        stack.addArrangedSubview(header)
+        header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
         if floats.isEmpty {
             let hint = NSTextField(labelWithString: "No tool floats yet. Add one to get a dock button and a shortcut.")
             hint.font = .systemFont(ofSize: 12)
@@ -94,7 +121,7 @@ final class SettingsToolsSection: SettingsSection {
                 row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
             }
         }
-        stack.setCustomSpacing(10, after: caption)
+        stack.setCustomSpacing(10, after: header)
 
         let addRow = SettingsDetail.trailingRow(addButton)
         stack.addArrangedSubview(addRow)
@@ -164,6 +191,11 @@ final class ToolFloatRow: NSView {
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
     var onExitToNav: (() -> Void)?
+
+    /// The modifiers a shortcut can be built from — the rest of `modifierFlags` is incidental to the
+    /// physical key (`.function` / `.numericPad` ride along on every arrow) and must be masked out
+    /// before asking "was Option the only modifier held?".
+    private static let reservableModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
 
     private let iconView = NSImageView()
     private let titleLabel: NSTextField
@@ -235,8 +267,11 @@ final class ToolFloatRow: NSView {
         let key = KeyboardFocus.key(for: event)
         // ⌥Up/⌥Down reorder the float instead of moving focus. `KeyboardFocus.key(for:)` decodes the
         // keyCode alone, so ⌥↑ arrives indistinguishable from a plain `.up` — the modifier check has
-        // to happen here. Match Option *exactly*, so ⌥⌘↑ isn't eaten as a reorder.
-        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .option {
+        // to happen here. Compare against the *reservable* modifiers only (as `KeyInterceptor` does):
+        // AppKit tags every arrow event with `.function` and `.numericPad`, so masking with
+        // `deviceIndependentFlagsMask` keeps those bits and the comparison never matches a real ⌥↑.
+        // Requiring Option to be the only reservable modifier still keeps ⌥⌘↑ out of the reorder.
+        if event.modifierFlags.intersection(Self.reservableModifiers) == .option {
             switch key {
             case .up: onMoveUp?(); return
             case .down: onMoveDown?(); return

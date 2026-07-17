@@ -64,17 +64,22 @@ final class SettingsToolsSectionTests: XCTestCase {
         float = title:top key:cmd+shift+t command:htop
         """
 
-    /// An arrow keyDown with Option held — the real event the reorder path decodes, not a direct call
-    /// to the row's closure, so a wiring or modifier-matching mistake actually fails the test.
-    private func optionArrow(_ keyCode: UInt16) -> NSEvent {
+    /// An arrow keyDown, built the way AppKit really delivers one.
+    ///
+    /// `.function` and `.numericPad` are NOT decoration: macOS sets both on every arrow event, and
+    /// omitting them is how the first cut of this test passed against a reorder that was dead in the
+    /// app — the code masked with `deviceIndependentFlagsMask`, which keeps those bits, and compared
+    /// for equality with `.option`. A synthesized event has to carry them or it isn't testing the
+    /// keystroke the user actually makes.
+    private func arrow(_ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags = []) -> NSEvent {
         NSEvent.keyEvent(
-            with: .keyDown, location: .zero, modifierFlags: .option, timestamp: 0, windowNumber: 0,
-            context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false,
-            keyCode: keyCode)!
+            with: .keyDown, location: .zero, modifierFlags: modifiers.union([.function, .numericPad]),
+            timestamp: 0, windowNumber: 0, context: nil, characters: "",
+            charactersIgnoringModifiers: "", isARepeat: false, keyCode: keyCode)!
     }
 
-    private var optionDown: NSEvent { optionArrow(125) }
-    private var optionUp: NSEvent { optionArrow(126) }
+    private var optionDown: NSEvent { arrow(125, .option) }
+    private var optionUp: NSEvent { arrow(126, .option) }
 
     /// The section defers its write to the next runloop turn (it rebuilds the very row whose `keyDown`
     /// is still on the stack), so a test has to let that turn happen before asserting.
@@ -210,20 +215,42 @@ final class SettingsToolsSectionTests: XCTestCase {
         let dev = try XCTUnwrap(rows(in: detail).first { $0.float.id == "dev" })
         window?.makeFirstResponder(dev)
 
-        dev.keyDown(with: optionArrow(125).plainCopy())
+        dev.keyDown(with: arrow(125))  // bare Down — still carries .function/.numericPad
         settleReorder()
 
         XCTAssertEqual(configuredFloatIDs(), ["dev", "top"], "a bare Down must not reorder")
         XCTAssertEqual((window?.firstResponder as? ToolFloatRow)?.float.id, "top", "it moves focus instead")
     }
-}
 
-extension NSEvent {
-    /// The same key event with every modifier dropped.
-    fileprivate func plainCopy() -> NSEvent {
-        NSEvent.keyEvent(
-            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
-            context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false,
-            keyCode: keyCode)!
+    /// ⌥⌘↓ is a different chord and must not reorder — the guard is "Option and nothing else", which a
+    /// plain `contains(.option)` would get wrong in the other direction.
+    func test_optionCommandArrow_doesNotReorder() throws {
+        try seed(twoFloats)
+        let section = SettingsToolsSection()
+        wireReorder(section)
+        let detail = mount(section)
+
+        rows(in: detail).first { $0.float.id == "dev" }?.keyDown(with: arrow(125, [.option, .command]))
+        settleReorder()
+
+        XCTAssertEqual(configuredFloatIDs(), ["dev", "top"])
+    }
+
+    // MARK: reorder affordance
+
+    /// ⌥↑/⌥↓ is otherwise undiscoverable — nothing on a row suggests a float can move.
+    func test_reorderHint_shownOnlyWhenThereIsSomethingToReorder() throws {
+        try seed(twoFloats)
+        XCTAssertNotNil(hintLabel(in: mount(SettingsToolsSection())), "two floats → the hint is shown")
+
+        try seed("float = title:dev key:cmd+shift+d command:vim")
+        XCTAssertNil(
+            hintLabel(in: mount(SettingsToolsSection())),
+            "one float → no hint, rather than advertising a keystroke that would do nothing")
+    }
+
+    private func hintLabel(in view: NSView) -> NSTextField? {
+        descendants(of: view).compactMap { $0 as? NSTextField }
+            .first { $0.stringValue.localizedCaseInsensitiveContains("reorder") }
     }
 }
