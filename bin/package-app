@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Package ZenTerm as a standalone .app.
-# Usage: bin/package-app [--version X.Y.Z] [--identity "NAME"] [--dest DIR]
+# Usage: bin/package-app [--version X.Y.Z] [--identity "NAME"] [--dest DIR] [--variant dev|release]
 #   --version   CFBundleShortVersionString (default: latest tag + "+<commits since>")
 #   --identity  codesign identity (default "-" = ad-hoc, for daily driving)
 #   --dest      output directory (default ~/Applications)
+#   --variant   dev (default): "ZenTerm Dev", com.drucial.ZenTerm.dev, dev icon, no Sparkle feed.
+#               release: "ZenTerm", com.drucial.ZenTerm, release icon, public Sparkle feed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -154,7 +156,7 @@ SPARKLE="$STAGE/Contents/Frameworks/Sparkle.framework"
 rm -rf "$SPARKLE/Versions/B/XPCServices" "$SPARKLE/XPCServices"
 
 # Dev omits every Sparkle key: with no feed the updater never checks, which is
-# correct — a dev build is replaced by re-running this script, not by an update.
+# correct. A dev build is replaced by re-running this script, not by an update.
 # The framework is still embedded and signed below; only the feed config differs.
 SPARKLE_KEYS=""
 if [[ "$VARIANT" == "release" ]]; then
