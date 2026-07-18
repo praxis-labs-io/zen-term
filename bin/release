@@ -189,6 +189,14 @@ rm -f "$SIGN_PROBE"
 [[ -d Frameworks/GhosttyKit.xcframework ]] \
     || { echo "✗ GhosttyKit.xcframework missing: run bin/build-ghosttykit" >&2; exit 1; }
 
+# The DMG window is styled by bin/make-dmg, which needs the committed background art and a
+# terminal authorized to control Finder. Both are checked here, up front, so a missing asset
+# or a denied Automation prompt fails preflight rather than after the multi-minute notarize.
+[[ -s icon/dmg-background.tiff ]] \
+    || { echo "✗ icon/dmg-background.tiff missing: regenerate with icon/make-dmg-background.sh" >&2; exit 1; }
+osascript -e 'tell application "Finder" to get version' >/dev/null 2>&1 \
+    || { echo "✗ terminal not authorized to control Finder (needed to style the DMG): grant it in System Settings > Privacy & Security > Automation" >&2; exit 1; }
+
 if [[ "$SKIP_CHECKS" -eq 0 ]]; then
     echo "▸ Gate: bin/check"
     bin/check
@@ -227,11 +235,7 @@ xcrun notarytool submit "$DIST/ZenTerm.zip" --keychain-profile "$NOTARY_PROFILE"
 xcrun stapler staple "$APP"
 
 echo "▸ Building DMG"
-STAGE="$DIST/dmg-root"
-mkdir -p "$STAGE"
-cp -R "$APP" "$STAGE/"
-ln -s /Applications "$STAGE/Applications"
-hdiutil create -volname "ZenTerm $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+bin/make-dmg --app "$APP" --version "$VERSION" --dest "$DIST"
 codesign --force --timestamp --sign "$IDENTITY" "$DMG"
 
 echo "▸ Notarizing DMG"

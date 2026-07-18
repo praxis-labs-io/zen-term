@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# Build the branded, styled ZenTerm installer DMG from an already-built .app.
+# Usage: bin/make-dmg --app PATH --version X.Y.Z --dest DIR
+#   --app      path to the built ZenTerm.app (dev or release variant)
+#   --version  X.Y.Z, used for the volume name and the DMG filename
+#   --dest     output directory; writes <dest>/ZenTerm-<version>-arm64.dmg
+#
+# Produces a STYLED but UNSIGNED DMG: matching Rosé Pine background, 128px icons, the
+# app → Applications arrow row, toolbar and status bar hidden. bin/release calls this,
+# then signs / notarizes / staples the result. It also stands alone so the installer
+# window can be iterated visually (open the DMG and look) without the release path.
+#
+# Styling drives Finder over AppleScript, so this needs a real GUI login session (it
+# runs locally, never headless CI). Background art: icon/dmg-background.tiff, regenerated
+# by icon/make-dmg-background.sh.
+set -euo pipefail
+# Resolve the repo root from the script location, but do NOT cd into it: --app/--dest are
+# caller paths and must stay relative to the caller's working directory.
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+APP=""
+VERSION=""
+DEST=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --app | --version | --dest)
+            [[ $# -ge 2 ]] || { echo "✗ missing value for $1" >&2; exit 1; }
+            case "$1" in
+                --app) APP="$2" ;;
+                --version) VERSION="$2" ;;
+                --dest) DEST="$2" ;;
+            esac
+            shift 2 ;;
+        *) echo "✗ unknown argument: $1" >&2; exit 1 ;;
+    esac
+done
+
+[[ -n "$APP" && -d "$APP" ]] || { echo "✗ --app must point at a .app bundle" >&2; exit 1; }
+[[ -n "$VERSION" ]] || { echo "✗ --version is required" >&2; exit 1; }
+[[ -n "$DEST" ]] || { echo "✗ --dest is required" >&2; exit 1; }
+BG="$REPO_ROOT/icon/dmg-background.tiff"
+[[ -f "$BG" ]] || { echo "✗ missing $BG (regenerate with icon/make-dmg-background.sh)" >&2; exit 1; }
+
+APP_NAME="$(basename "$APP")"  # "ZenTerm.app" for release, "ZenTerm Dev.app" for a dev test
+# bin/release mirrors this filename as its own $DMG to sign/notarize/upload; keep them in step.
+DMG="$DEST/ZenTerm-$VERSION-arm64.dmg"
+STAGE="$DEST/dmg-root"
+TMP_DMG="$DEST/dmg-rw.dmg"
+VOLNAME="ZenTerm $VERSION"
+
+# Window geometry: must match the background art authored in make-dmg-background.swift.
+WIN_W=660
+WIN_H=400
+WIN_LEFT=200
+WIN_TOP=120
+
+rm -rf "$STAGE" "$TMP_DMG" "$DMG"
+mkdir -p "$STAGE/.background"
+cp -R "$APP" "$STAGE/"
+# The Applications drop target is named a single space so Finder draws no visible label:
+# macOS can't recolor that label off the dark background and the red /Applications icon
+# plus the baked instruction already say what it is. The app keeps its own "ZenTerm" label.
+APPS_ITEM=" "
+ln -s /Applications "$STAGE/$APPS_ITEM"
+cp "$BG" "$STAGE/.background/background.tiff"
+
+echo "▸ Creating writable image"
+hdiutil create -volname "$VOLNAME" -srcfolder "$STAGE" -fs HFS+ -format UDRW -ov "$TMP_DMG" >/dev/null
+
+echo "▸ Mounting"
+ATTACH="$(hdiutil attach -readwrite -noverify -noautoopen "$TMP_DMG")"
+MOUNTLINE="$(grep '/Volumes/' <<< "$ATTACH" | head -1)"
+# The mountpoint path can contain spaces; strip the device and filesystem-type columns.
+MOUNTPOINT="$(sed -E 's#^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+##' <<< "$MOUNTLINE")"
+MOUNTED_VOL="$(basename "$MOUNTPOINT")"  # what Finder actually named it (may differ on collision)
+[[ -d "$MOUNTPOINT" ]] || { echo "✗ mount failed" >&2; exit 1; }
+
+automation_help() {
+    echo "  Grant your terminal control of Finder in System Settings > Privacy & Security" >&2
+    echo "  > Automation, then re-run." >&2
+}
+
+echo "▸ Styling window"
+# The close, open, update dance is what makes Finder commit the styled .DS_Store: a single
+# pass often leaves the settings in memory only, so the frozen image ends up unstyled.
+# Guard the osascript itself: if Automation is denied, it errors and set -e would otherwise
+# abort with a raw AppleScript message before the .DS_Store check below could explain it.
+if ! osascript <<EOF
+tell application "Finder"
+    tell disk "$MOUNTED_VOL"
+        open
+        set current view of container window to icon view
+        set opts to the icon view options of container window
+        set arrangement of opts to not arranged
+        set icon size of opts to 128
+        set text size of opts to 13
+        set background picture of opts to file ".background:background.tiff"
+        set position of item "$APP_NAME" of container window to {170, 200}
+        set position of item "$APPS_ITEM" of container window to {490, 200}
+        set toolbar visible of container window to false
+        set statusbar visible of container window to false
+        set the bounds of container window to {$WIN_LEFT, $WIN_TOP, $WIN_LEFT + $WIN_W, $WIN_TOP + $WIN_H}
+        update without registering applications
+        close
+        open
+        -- Re-hide the chrome and re-set bounds: reopening the window resets these to the
+        -- volume defaults, so the values only stick if they are re-applied after the reopen.
+        set toolbar visible of container window to false
+        set statusbar visible of container window to false
+        set the bounds of container window to {$WIN_LEFT, $WIN_TOP, $WIN_LEFT + $WIN_W, $WIN_TOP + $WIN_H}
+        update without registering applications
+        delay 3
+    end tell
+end tell
+EOF
+then
+    echo "✗ Finder styling failed: osascript could not drive Finder." >&2
+    automation_help
+    hdiutil detach "$MOUNTPOINT" >/dev/null 2>&1 || true
+    exit 1
+fi
+
+# Prove Finder actually committed the styling before we freeze the image. A missing
+# .DS_Store means the frozen DMG would be the generic default, so fail loudly instead.
+if [[ ! -s "$MOUNTPOINT/.DS_Store" ]]; then
+    echo "✗ Finder did not write a styled .DS_Store, so the DMG would be unstyled." >&2
+    automation_help
+    hdiutil detach "$MOUNTPOINT" >/dev/null 2>&1 || true
+    exit 1
+fi
+chmod -Rf go-w "$MOUNTPOINT" 2>/dev/null || true
+sync
+
+echo "▸ Detaching"
+for attempt in 1 2 3 4 5; do
+    if hdiutil detach "$MOUNTPOINT" >/dev/null 2>&1; then break; fi
+    if [[ $attempt -eq 5 ]]; then echo "✗ could not detach $MOUNTPOINT" >&2; exit 1; fi
+    sleep 2
+done
+
+echo "▸ Compressing"
+hdiutil convert "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG" >/dev/null
+rm -rf "$STAGE" "$TMP_DMG"
+echo "✓ $DMG"
