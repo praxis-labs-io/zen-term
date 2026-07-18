@@ -102,6 +102,13 @@ an exact build. It counts **commits, not PRs**: main carries direct-to-main
 commits alongside squash-merges. `CFBundleVersion` stays the total commit count:
 it must be globally monotonic for Sparkle, and `+N` resets at every tag.
 
+`bin/package-app` defaults to the `dev` **variant**: it builds "ZenTerm Dev"
+(`com.drucial.ZenTerm.dev`, its own icon, no Sparkle feed) to `~/Applications`, so
+the daily driver runs beside the installed release without either one hiding the
+other in Raycast or the Dock. `bin/release` passes `--variant release` for the
+shipping identity ("ZenTerm", `com.drucial.ZenTerm`, release icon, public
+appcast). Both variants read the same `~/.config/zen-term` config.
+
 One-time setup: a "Developer ID Application" cert in the keychain, and
 `xcrun notarytool store-credentials zenterm-notary --apple-id <id> --team-id
 <team>` with an app-specific password.
