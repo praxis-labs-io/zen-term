@@ -177,8 +177,14 @@ If something felt awkward rather than broken, say that too.
 
 ## Updates
 
-There is no auto-update yet. A new version means downloading the DMG again and
-replacing the app. Drew will tell you when there is one.
+ZenTerm updates itself. When a new version ships, a card appears top-right: the
+version, what changed, and Install. It downloads and installs in place, then
+offers to relaunch. Skip a version and it stays skipped. Choose Later and ZenTerm
+offers it again at its next check.
+
+One catch, this first time only: updating from a build older than this one still
+means downloading the DMG by hand, because that older build shipped without the
+updater. After this, updates come to you.
 
 ## Editing config by hand
 

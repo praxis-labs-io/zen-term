@@ -119,6 +119,22 @@ for bundle in "${EXPECTED_BUNDLES[@]}"; do
     cp -R ".build/release/$bundle" "$STAGE/Contents/Resources/"
 done
 
+# Sparkle.framework (ZEN-118). `swift build` links it but doesn't embed it, so it rides here under
+# Contents/Frameworks — the binary's @executable_path/../Frameworks rpath resolves it at launch.
+# ditto (not cp -R) so the framework's Versions symlink structure stays intact, which codesign
+# requires. The Downloader/Installer XPC services are only used by sandboxed apps; ZenTerm isn't
+# sandboxed and doesn't set SUEnableInstallerLauncher, so drop them rather than sign + notarize dead
+# code (both the real dir and its top-level symlink, or the symlink would dangle).
+FRAMEWORK=".build/release/Sparkle.framework"
+[[ -d "$FRAMEWORK" ]] || {
+    echo "✗ $FRAMEWORK missing — swift build -c release should have emitted it beside the binary" >&2
+    exit 1
+}
+mkdir -p "$STAGE/Contents/Frameworks"
+ditto "$FRAMEWORK" "$STAGE/Contents/Frameworks/Sparkle.framework"
+SPARKLE="$STAGE/Contents/Frameworks/Sparkle.framework"
+rm -rf "$SPARKLE/Versions/B/XPCServices" "$SPARKLE/XPCServices"
+
 cat > "$STAGE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -137,20 +153,32 @@ cat > "$STAGE/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
+  <key>SUFeedURL</key><string>https://github.com/zen-term/zen-term-releases/releases/latest/download/appcast.xml</string>
+  <key>SUPublicEDKey</key><string>M0c0MPZrd8TSeoMNjZi+sNBpEi7t5nYnB6t41Bsm/TU=</string>
+  <key>SUEnableAutomaticChecks</key><true/>
+  <key>SUScheduledCheckInterval</key><integer>86400</integer>
 </dict>
 </plist>
 PLIST
 
-# No --deep and no nested-code signing: GhosttyKit is a static library linked
-# into the executable, and the SwiftPM .bundles are code-free resources sealed
-# by the outer signature.
+# Sign inside-out: the embedded Sparkle.framework (ZEN-118) is the first nested code this app has
+# carried, so its helper tool, updater app, and the framework itself must each be signed before the
+# outer app — the outer signature seals them, and bin/release's `codesign --verify --strict --deep`
+# now genuinely exercises all of it. GhosttyKit stays a static library linked into the executable,
+# and the SwiftPM .bundles are code-free resources sealed by the outer signature. Hardened runtime +
+# secure timestamp only on the Developer ID path; ad-hoc gets neither (it can't timestamp) but still
+# must sign the nested Mach-O, or the daily-driver build won't launch on arm64.
+SIGN=(codesign --force --sign "$IDENTITY")
 if [[ "$IDENTITY" == "-" ]]; then
-    echo "▸ Ad-hoc signing"
-    codesign --force --sign - "$STAGE"
+    echo "▸ Ad-hoc signing (nested Sparkle + app)"
 else
     echo "▸ Signing with hardened runtime: $IDENTITY"
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$STAGE"
+    SIGN+=(--options runtime --timestamp)
 fi
+"${SIGN[@]}" "$SPARKLE/Versions/B/Autoupdate"
+"${SIGN[@]}" "$SPARKLE/Versions/B/Updater.app"
+"${SIGN[@]}" "$SPARKLE"
+"${SIGN[@]}" "$STAGE"
 
 # The only point where the installed app is at risk, and by now the replacement is
 # complete and signed.

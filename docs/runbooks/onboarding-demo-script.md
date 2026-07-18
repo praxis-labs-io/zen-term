@@ -108,7 +108,6 @@ you lose the room to it.
 
 Do not show or promise:
 
-- Auto-updates. They do not exist (ZEN-118). Say re-download.
 - The web pane spike (ZEN-73), the Linear and GitHub integrations (ZEN-31), or
   anything else on the board. A roadmap in the present tense is a lie you have
   to walk back.

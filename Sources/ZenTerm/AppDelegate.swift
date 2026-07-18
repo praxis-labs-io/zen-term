@@ -14,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// True between a ⌘Q that raised the quit confirm and its reply, so a second ⌘Q can't
     /// stack a second quit dialog — while a non-quit (close-pane) confirm never blocks ⌘Q.
     private var quitConfirmPending = false
+    /// In-app auto-updates (ZEN-118). Nil in an unpackaged dev build, where the updater is inert.
+    private var updateController: UpdateController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Terminals repeat a held key rather than popping macOS's press-and-hold accent
@@ -82,6 +84,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.keys.setKeymap(GeneralConfig.current.keymap)
             MotionConfig.apply(GeneralConfig.current.reduceMotion)  // re-install the reduce-motion override
             self?.surfaceKeymapDiagnostics()
+            self?.updateController?.reapplyTheme()  // recolor a live update card — it's outside any window's toast list
+        }
+
+        // Auto-updates (ZEN-118). Inert in an unpackaged dev build (no SUFeedURL). The card is
+        // app-global, so hand the updater a resolver for the current key window's controller.
+        if UpdateController.isSupported {
+            let controller = UpdateController(keyController: { [weak self] in self?.keyController() })
+            controller.start()
+            updateController = controller
         }
 
         NSApp.activate(ignoringOtherApps: true)
