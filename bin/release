@@ -199,6 +199,11 @@ fi
 # the version: an abandoned 0.2.0 run must not hand its feature notes to a later
 # 0.1.1, which is what a shared notes.md did.
 mkdir -p "$DIST"
+# The signed app assembled here shares com.drucial.ZenTerm with the installed
+# release. Left indexed, Spotlight registers it with LaunchServices and Raycast
+# surfaces the build artifact instead of /Applications, so a fresh install
+# "doesn't show up". This marker keeps everything under dist/ out of the index.
+touch "$DIST/.metadata_never_index"
 if [[ -z "$NOTES_FILE" ]]; then
     NOTES_FILE="$DIST/notes-$VERSION.md"
     if [[ ! -s "$NOTES_FILE" ]]; then
@@ -211,7 +216,7 @@ if [[ -z "$NOTES_FILE" ]]; then
 fi
 
 rm -rf "$APP" "$DIST/ZenTerm.zip" "$DIST/dmg-root" "$DMG"
-bin/package-app --version "$VERSION" --identity "$IDENTITY" --dest "$DIST"
+bin/package-app --version "$VERSION" --identity "$IDENTITY" --dest "$DIST" --variant release
 
 echo "▸ Notarizing app"
 ditto -c -k --keepParent "$APP" "$DIST/ZenTerm.zip"
