@@ -1,6 +1,6 @@
 #!/usr/bin/env swift
 // Renders the ZenTerm app icon into a .iconset directory, one PNG per size.
-// Source of truth for the icon — regenerate with `icon/make-icon.sh`.
+// Source of truth for the icon: regenerate with `icon/make-icon.sh`.
 // Palette is Rosé Pine Moon (the app's theme): deep indigo tile, iris accent.
 import AppKit
 
@@ -22,7 +22,7 @@ let bgTop = rgb(0x221E33)  // deep-indigo tile, both variants
 let bgBottom = rgb(0x141120)
 let badgeSurface = rgb(0x393552)  // Rosé Pine Moon overlay: the "Dev" chip fill
 
-// MARK: - Squircle (superellipse, n≈5 — the Apple corner feel)
+// MARK: - Squircle (superellipse, n≈5, the Apple corner feel)
 func squircle(center c: CGPoint, radius a: CGFloat) -> CGPath {
     let n: CGFloat = 5, steps = 720
     let path = CGMutablePath()
@@ -206,7 +206,7 @@ func drawIcon(size: CGFloat, square: Bool = false) -> CGImage {
 
     ctx.restoreGState()
 
-    // Inner rim highlight — the subtle sheen that reads as depth. Skipped on the square
+    // Inner rim highlight: the subtle sheen that reads as depth. Skipped on the square
     // tile: it traces the tile edge, where the host's own rounding would clip it anyway.
     if !square {
         ctx.addPath(tile)

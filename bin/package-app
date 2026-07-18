@@ -67,18 +67,18 @@ APP="$DEST/$APP_BASENAME"
 BIN=".build/release/ZenTerm"
 
 # SwiftPM resource bundles (brand SVGs, ghostty runtime resources). They ride in
-# Contents/Resources, which is Bundle.main.resourceURL at runtime — the location
+# Contents/Resources, which is Bundle.main.resourceURL at runtime: the location
 # `Bundle.zenResourceBundle` looks in first. (The SwiftPM-generated Bundle.module
 # accessor for a statically-linked executable target instead looks at the .app
 # *root* plus a build-machine-absolute .build path; codesign refuses loose content
 # at the root, so the bundles cannot live where that accessor expects. See
-# Bundle+ZenResource.swift — that resolver is why these belong in Contents/Resources.)
+# Bundle+ZenResource.swift: that resolver is why these belong in Contents/Resources.)
 #
 # A `*.bundle` glob over .build/release once signed, notarized and published a dead
 # SwiftTerm bundle to users in v0.1.0, long after libghostty became the sole backend
 # (ZEN-168): `swift build` never prunes .build, so a dropped dependency leaves its
 # bundle there forever and the glob swept it into the app. Clearing the bundles
-# first is what makes that impossible rather than merely detected — the build
+# first is what makes that impossible rather than merely detected. The build
 # re-emits exactly the set Package.swift declares, so the app follows the manifest
 # instead of whatever this machine happens to have built. Cheap: re-emitting a
 # bundle is a resource copy, not a relink.
@@ -140,14 +140,14 @@ for bundle in "${EXPECTED_BUNDLES[@]}"; do
 done
 
 # Sparkle.framework (ZEN-118). `swift build` links it but doesn't embed it, so it rides here under
-# Contents/Frameworks — the binary's @executable_path/../Frameworks rpath resolves it at launch.
+# Contents/Frameworks: the binary's @executable_path/../Frameworks rpath resolves it at launch.
 # ditto (not cp -R) so the framework's Versions symlink structure stays intact, which codesign
 # requires. The Downloader/Installer XPC services are only used by sandboxed apps; ZenTerm isn't
 # sandboxed and doesn't set SUEnableInstallerLauncher, so drop them rather than sign + notarize dead
 # code (both the real dir and its top-level symlink, or the symlink would dangle).
 FRAMEWORK=".build/release/Sparkle.framework"
 [[ -d "$FRAMEWORK" ]] || {
-    echo "✗ $FRAMEWORK missing — swift build -c release should have emitted it beside the binary" >&2
+    echo "✗ $FRAMEWORK missing: swift build -c release should have emitted it beside the binary" >&2
     exit 1
 }
 mkdir -p "$STAGE/Contents/Frameworks"
@@ -191,7 +191,7 @@ PLIST
 
 # Sign inside-out: the embedded Sparkle.framework (ZEN-118) is the first nested code this app has
 # carried, so its helper tool, updater app, and the framework itself must each be signed before the
-# outer app — the outer signature seals them, and bin/release's `codesign --verify --strict --deep`
+# outer app: the outer signature seals them, and bin/release's `codesign --verify --strict --deep`
 # now genuinely exercises all of it. GhosttyKit stays a static library linked into the executable,
 # and the SwiftPM .bundles are code-free resources sealed by the outer signature. Hardened runtime +
 # secure timestamp only on the Developer ID path; ad-hoc gets neither (it can't timestamp) but still
