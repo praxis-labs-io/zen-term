@@ -239,7 +239,12 @@ guard CommandLine.arguments.count > 1 else {
     exit(1)
 }
 let out = URL(fileURLWithPath: CommandLine.arguments[1])
-let scale = CommandLine.arguments.count > 2 ? CGFloat(Double(CommandLine.arguments[2]) ?? 1) : 1
+let scaleArg = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : "1"
+guard let scaleValue = Double(scaleArg), scaleValue > 0 else {
+    FileHandle.standardError.write(Data("✗ scale must be a positive number (1 or 2)\n".utf8))
+    exit(1)
+}
+let scale = CGFloat(scaleValue)
 let image = render(scale: scale)
 let rep = NSBitmapImageRep(cgImage: image)
 rep.size = NSSize(width: BASE_W, height: BASE_H)  // points, so the PNG carries its 1x size
