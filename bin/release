@@ -10,7 +10,7 @@
 # One-time setup (see CLAUDE.md "Releasing"): Developer ID Application cert in
 # the keychain, `xcrun notarytool store-credentials zenterm-notary`, and the
 # public releases repo. Safe to rerun after a partial failure with the same
-# version — tagging, notes curation, and release creation each detect and reuse
+# version: tagging, notes curation, and release creation each detect and reuse
 # the prior run's state.
 set -euo pipefail
 INVOKER_PWD="$PWD"
@@ -123,7 +123,7 @@ if [[ -n "$NOTES_FILE" ]]; then
     [[ "$NOTES_FILE" == /* ]] || NOTES_FILE="$INVOKER_PWD/$NOTES_FILE"
     [[ -f "$NOTES_FILE" ]] || { echo "✗ notes file not found: $NOTES_FILE" >&2; exit 1; }
 else
-    [[ -t 0 ]] || { echo "✗ no TTY for the \$EDITOR notes pass — pass --notes-file" >&2; exit 1; }
+    [[ -t 0 ]] || { echo "✗ no TTY for the \$EDITOR notes pass: pass --notes-file" >&2; exit 1; }
 fi
 
 # A tag may exist from a failed prior run of this same release; that's fine as
@@ -145,8 +145,8 @@ gh auth status >/dev/null || { echo "✗ gh not authenticated" >&2; exit 1; }
 gh repo view "$RELEASES_REPO" >/dev/null || { echo "✗ can't reach $RELEASES_REPO" >&2; exit 1; }
 
 # Distinguish "release absent" (proceed), "release exists without our DMG"
-# (partial prior run — upload into it), and "release exists with the DMG"
-# (already shipped) — without letting a transient gh failure pass as absent.
+# (partial prior run: upload into it), and "release exists with the DMG"
+# (already shipped), without letting a transient gh failure pass as absent.
 RELEASE_EXISTS=0
 set +e
 RELEASE_ASSETS="$(gh release view "$TAG" --repo "$RELEASES_REPO" --json assets --jq '.assets[].name' 2>&1)"
@@ -170,24 +170,24 @@ IDENTITY="$(security find-identity -v -p codesigning | awk -F'"' '/Developer ID 
 }
 
 xcrun --find notarytool >/dev/null && xcrun --find stapler >/dev/null \
-    || { echo "✗ notarytool/stapler missing — full Xcode required, not just CLT" >&2; exit 1; }
+    || { echo "✗ notarytool/stapler missing: full Xcode required, not just CLT" >&2; exit 1; }
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null \
     || { echo "✗ notary profile '$NOTARY_PROFILE' missing or invalid (see CLAUDE.md → Releasing)" >&2; exit 1; }
 
 # Sparkle's EdDSA signing key (ZEN-118). Resolve the pinned Sparkle artifact so sign_update exists,
-# then prove the private key is reachable in the keychain — a missing key must fail here, beside the
+# then prove the private key is reachable in the keychain: a missing key must fail here, beside the
 # other credential checks, not after the multi-minute notarize waits. One-time setup: `generate_keys`.
 swift package resolve >/dev/null 2>&1 || true
 SIGN_UPDATE="$(find .build/artifacts -type f -name sign_update 2>/dev/null | head -1)"
 [[ -n "$SIGN_UPDATE" ]] \
-    || { echo "✗ sign_update not found — 'swift package resolve' should fetch the Sparkle artifact" >&2; exit 1; }
+    || { echo "✗ sign_update not found: 'swift package resolve' should fetch the Sparkle artifact" >&2; exit 1; }
 SIGN_PROBE="$(mktemp)"
 "$SIGN_UPDATE" "$SIGN_PROBE" >/dev/null 2>&1 \
-    || { echo "✗ sign_update can't reach the Sparkle EdDSA key — run generate_keys (see CLAUDE.md → Releasing)" >&2; rm -f "$SIGN_PROBE"; exit 1; }
+    || { echo "✗ sign_update can't reach the Sparkle EdDSA key: run generate_keys (see CLAUDE.md → Releasing)" >&2; rm -f "$SIGN_PROBE"; exit 1; }
 rm -f "$SIGN_PROBE"
 
 [[ -d Frameworks/GhosttyKit.xcframework ]] \
-    || { echo "✗ GhosttyKit.xcframework missing — run bin/build-ghosttykit" >&2; exit 1; }
+    || { echo "✗ GhosttyKit.xcframework missing: run bin/build-ghosttykit" >&2; exit 1; }
 
 if [[ "$SKIP_CHECKS" -eq 0 ]]; then
     echo "▸ Gate: bin/check"
@@ -199,24 +199,31 @@ fi
 # the version: an abandoned 0.2.0 run must not hand its feature notes to a later
 # 0.1.1, which is what a shared notes.md did.
 mkdir -p "$DIST"
+# The signed app assembled here shares com.drucial.ZenTerm with the installed
+# release. Spotlight indexes dist/, and Raycast discovers apps through that index,
+# so the build artifact would surface beside (or instead of) the /Applications
+# release. This marker keeps dist/ out of Spotlight's index. (LaunchServices
+# registration on launch is a separate subsystem this marker does not govern; the
+# dist/ artifacts are transient and cleaned by the next bin/release run.)
+touch "$DIST/.metadata_never_index"
 if [[ -z "$NOTES_FILE" ]]; then
     NOTES_FILE="$DIST/notes-$VERSION.md"
     if [[ ! -s "$NOTES_FILE" ]]; then
         PREV="$(git describe --tags --abbrev=0 --match "$RELEASE_TAG_GLOB" --exclude "$TAG" 2>/dev/null || true)"
         git log ${PREV:+"$PREV.."}HEAD --pretty='- %s' > "$NOTES_FILE"
     fi
-    # Curate before publishing — private-repo commit subjects go public here.
+    # Curate before publishing: private-repo commit subjects go public here.
     # sh -c so multi-word editors ("code --wait") work.
     sh -c "${EDITOR:-vi} \"\$1\"" sh "$NOTES_FILE"
 fi
 
 rm -rf "$APP" "$DIST/ZenTerm.zip" "$DIST/dmg-root" "$DMG"
-bin/package-app --version "$VERSION" --identity "$IDENTITY" --dest "$DIST"
+bin/package-app --version "$VERSION" --identity "$IDENTITY" --dest "$DIST" --variant release
 
 echo "▸ Notarizing app"
 ditto -c -k --keepParent "$APP" "$DIST/ZenTerm.zip"
 xcrun notarytool submit "$DIST/ZenTerm.zip" --keychain-profile "$NOTARY_PROFILE" --wait \
-    || { echo "✗ notarization failed — inspect with: xcrun notarytool log <id> --keychain-profile $NOTARY_PROFILE" >&2; exit 1; }
+    || { echo "✗ notarization failed; inspect with: xcrun notarytool log <id> --keychain-profile $NOTARY_PROFILE" >&2; exit 1; }
 xcrun stapler staple "$APP"
 
 echo "▸ Building DMG"
@@ -229,7 +236,7 @@ codesign --force --timestamp --sign "$IDENTITY" "$DMG"
 
 echo "▸ Notarizing DMG"
 xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait \
-    || { echo "✗ notarization failed — inspect with: xcrun notarytool log <id> --keychain-profile $NOTARY_PROFILE" >&2; exit 1; }
+    || { echo "✗ notarization failed; inspect with: xcrun notarytool log <id> --keychain-profile $NOTARY_PROFILE" >&2; exit 1; }
 xcrun stapler staple "$DMG"
 
 echo "▸ Verifying"
@@ -242,7 +249,7 @@ xcrun stapler validate "$DMG"
 # Appcast (ZEN-118). The EdDSA signature is taken here, on the final DMG: `stapler staple` above
 # rewrote its bytes, so a signature taken any earlier wouldn't match what users download. The
 # sparkle:version is read back out of the built app's plist rather than recomputing the commit
-# count — two places deriving one number is how they drift. The curated notes go into the
+# count: two places deriving one number is how they drift. The curated notes go into the
 # description CDATA as-is (nothing else consumes this feed), and releaseNotesLink points at the
 # release page, which is the card's "What's new".
 echo "▸ Appcast"

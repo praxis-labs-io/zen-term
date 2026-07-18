@@ -1,6 +1,6 @@
 #!/usr/bin/env swift
 // Renders the ZenTerm app icon into a .iconset directory, one PNG per size.
-// Source of truth for the icon — regenerate with `icon/make-icon.sh`.
+// Source of truth for the icon: regenerate with `icon/make-icon.sh`.
 // Palette is Rosé Pine Moon (the app's theme): deep indigo tile, iris accent.
 import AppKit
 
@@ -10,11 +10,19 @@ func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
         srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
         blue: CGFloat(hex & 0xFF) / 255, alpha: a)
 }
-let iris = rgb(0xC4A7E7)  // brand accent
-let bgTop = rgb(0x221E33)
+// A `--dev` argument (anywhere in argv) produces the daily-driver icon: same deep-indigo tile
+// as the release, but the origami mark is tinted Rosé Pine rose instead of iris,
+// with a small "Dev" chip in the top-right. Same style as the release, different
+// accent, so the two are unmistakable side by side.
+let isDev = CommandLine.arguments.dropFirst().contains("--dev")
+let iris = rgb(0xC4A7E7)  // release mark accent (Rosé Pine Moon iris)
+let rose = rgb(0xEA9A97)  // dev mark accent (Rosé Pine Moon rose)
+let markColor = isDev ? rose : iris
+let bgTop = rgb(0x221E33)  // deep-indigo tile, both variants
 let bgBottom = rgb(0x141120)
+let badgeSurface = rgb(0x393552)  // Rosé Pine Moon overlay: the "Dev" chip fill
 
-// MARK: - Squircle (superellipse, n≈5 — the Apple corner feel)
+// MARK: - Squircle (superellipse, n≈5, the Apple corner feel)
 func squircle(center c: CGPoint, radius a: CGFloat) -> CGPath {
     let n: CGFloat = 5, steps = 720
     let path = CGMutablePath()
@@ -184,7 +192,7 @@ func drawIcon(size: CGFloat, square: Bool = false) -> CGImage {
     func P(_ p: CGPoint) -> CGPoint {
         CGPoint(x: L(512) + (p.x - origamiCenter.x) * k, y: L(512) - (p.y - origamiCenter.y) * k)
     }
-    ctx.setStrokeColor(iris)
+    ctx.setStrokeColor(markColor)
     ctx.setLineWidth(1.5 * k)
     ctx.setLineCap(.round)
     ctx.setLineJoin(.round)
@@ -198,13 +206,44 @@ func drawIcon(size: CGFloat, square: Bool = false) -> CGImage {
 
     ctx.restoreGState()
 
-    // Inner rim highlight — the subtle sheen that reads as depth. Skipped on the square
+    // Inner rim highlight: the subtle sheen that reads as depth. Skipped on the square
     // tile: it traces the tile edge, where the host's own rounding would clip it anyway.
     if !square {
         ctx.addPath(tile)
         ctx.setStrokeColor(rgb(0xFFFFFF, 0.06))
         ctx.setLineWidth(L(3))
         ctx.strokePath()
+    }
+
+    // Dev badge: a small rounded "Dev" chip in the tile's upper-right, filled with the
+    // Rosé Pine surface tone and labelled in the rose accent. The rose-tinted mark already
+    // sets the dev icon apart at small sizes, so the chip is only drawn where its label is
+    // legible (>= 128px). CG here is y-up, so the top-right is high x, high y.
+    // The chip stays fully INSIDE the squircle tile (center 512, radius 412 in 1024 space):
+    // content out in the transparent margin makes macOS (Tahoe) plate the whole Dock icon on
+    // a white background. That is why the anchors are inside the tile, not at the canvas corner.
+    if isDev && size >= 128 {
+        let s = size
+        let h = s * 0.11  // chip height
+        let font = NSFont.systemFont(ofSize: h * 0.6, weight: .semibold)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor(cgColor: rose)!,
+        ]
+        let label = NSAttributedString(string: "Dev", attributes: attrs)
+        let tb = label.size()
+        let w = tb.width + h * 0.9  // horizontal padding either side of the label
+        // Right edge at 0.80 and top edge at 0.86 of the canvas keep every chip corner
+        // inside the squircle (checked against the n=5 superellipse) and clear of the mark.
+        let chip = CGRect(x: s * 0.80 - w, y: s * 0.86 - h, width: w, height: h)
+        let radius = h * 0.32
+        ctx.addPath(CGPath(roundedRect: chip, cornerWidth: radius, cornerHeight: radius, transform: nil))
+        ctx.setFillColor(badgeSurface)
+        ctx.fillPath()
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        label.draw(at: NSPoint(x: chip.midX - tb.width / 2, y: chip.midY - tb.height / 2))
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     return ctx.makeImage()!
