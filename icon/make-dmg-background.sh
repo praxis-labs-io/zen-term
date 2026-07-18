@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Regenerate the DMG installer background from make-dmg-background.swift. Pure macOS tooling.
-#   bin/make-dmg-background.sh   emits dmg-background.tiff (1x + 2x HiDPI reps)
+#   icon/make-dmg-background.sh   emits dmg-background.tiff (1x + 2x HiDPI reps)
 # The committed dmg-background.tiff is what bin/make-dmg copies into the volume's
-# .background/ — regenerate it here whenever the installer art changes.
+# .background/, so regenerate it here whenever the installer art changes.
 set -euo pipefail
 cd "$(dirname "$0")"
 

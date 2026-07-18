@@ -14,7 +14,9 @@
 # runs locally, never headless CI). Background art: icon/dmg-background.tiff, regenerated
 # by icon/make-dmg-background.sh.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+# Resolve the repo root from the script location, but do NOT cd into it: --app/--dest are
+# caller paths and must stay relative to the caller's working directory.
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 APP=""
 VERSION=""
@@ -36,10 +38,11 @@ done
 [[ -n "$APP" && -d "$APP" ]] || { echo "✗ --app must point at a .app bundle" >&2; exit 1; }
 [[ -n "$VERSION" ]] || { echo "✗ --version is required" >&2; exit 1; }
 [[ -n "$DEST" ]] || { echo "✗ --dest is required" >&2; exit 1; }
-BG="icon/dmg-background.tiff"
+BG="$REPO_ROOT/icon/dmg-background.tiff"
 [[ -f "$BG" ]] || { echo "✗ missing $BG (regenerate with icon/make-dmg-background.sh)" >&2; exit 1; }
 
 APP_NAME="$(basename "$APP")"  # "ZenTerm.app" for release, "ZenTerm Dev.app" for a dev test
+# bin/release mirrors this filename as its own $DMG to sign/notarize/upload; keep them in step.
 DMG="$DEST/ZenTerm-$VERSION-arm64.dmg"
 STAGE="$DEST/dmg-root"
 TMP_DMG="$DEST/dmg-rw.dmg"
@@ -61,9 +64,6 @@ APPS_ITEM=" "
 ln -s /Applications "$STAGE/$APPS_ITEM"
 cp "$BG" "$STAGE/.background/background.tiff"
 
-# Clear a stale mount of the same name from a prior run, or Finder styles the wrong window.
-hdiutil detach "/Volumes/$VOLNAME" >/dev/null 2>&1 || true
-
 echo "▸ Creating writable image"
 hdiutil create -volname "$VOLNAME" -srcfolder "$STAGE" -fs HFS+ -format UDRW -ov "$TMP_DMG" >/dev/null
 
@@ -75,10 +75,17 @@ MOUNTPOINT="$(sed -E 's#^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+##' <
 MOUNTED_VOL="$(basename "$MOUNTPOINT")"  # what Finder actually named it (may differ on collision)
 [[ -d "$MOUNTPOINT" ]] || { echo "✗ mount failed" >&2; exit 1; }
 
+automation_help() {
+    echo "  Grant your terminal control of Finder in System Settings > Privacy & Security" >&2
+    echo "  > Automation, then re-run." >&2
+}
+
 echo "▸ Styling window"
-# The close → open → update dance is what makes Finder commit the styled .DS_Store: a
-# single pass often leaves the settings in memory only, so the frozen image is unstyled.
-osascript <<EOF
+# The close, open, update dance is what makes Finder commit the styled .DS_Store: a single
+# pass often leaves the settings in memory only, so the frozen image ends up unstyled.
+# Guard the osascript itself: if Automation is denied, it errors and set -e would otherwise
+# abort with a raw AppleScript message before the .DS_Store check below could explain it.
+if ! osascript <<EOF
 tell application "Finder"
     tell disk "$MOUNTED_VOL"
         open
@@ -106,13 +113,18 @@ tell application "Finder"
     end tell
 end tell
 EOF
+then
+    echo "✗ Finder styling failed: osascript could not drive Finder." >&2
+    automation_help
+    hdiutil detach "$MOUNTPOINT" >/dev/null 2>&1 || true
+    exit 1
+fi
 
 # Prove Finder actually committed the styling before we freeze the image. A missing
-# .DS_Store means the frozen DMG would be the generic default — fail loudly instead.
+# .DS_Store means the frozen DMG would be the generic default, so fail loudly instead.
 if [[ ! -s "$MOUNTPOINT/.DS_Store" ]]; then
-    echo "✗ Finder did not write a styled .DS_Store — the DMG would be unstyled." >&2
-    echo "  Most likely your terminal is not allowed to control Finder: grant it in" >&2
-    echo "  System Settings ▸ Privacy & Security ▸ Automation, then re-run." >&2
+    echo "✗ Finder did not write a styled .DS_Store, so the DMG would be unstyled." >&2
+    automation_help
     hdiutil detach "$MOUNTPOINT" >/dev/null 2>&1 || true
     exit 1
 fi
