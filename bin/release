@@ -227,11 +227,7 @@ xcrun notarytool submit "$DIST/ZenTerm.zip" --keychain-profile "$NOTARY_PROFILE"
 xcrun stapler staple "$APP"
 
 echo "▸ Building DMG"
-STAGE="$DIST/dmg-root"
-mkdir -p "$STAGE"
-cp -R "$APP" "$STAGE/"
-ln -s /Applications "$STAGE/Applications"
-hdiutil create -volname "ZenTerm $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+bin/make-dmg --app "$APP" --version "$VERSION" --dest "$DIST"
 codesign --force --timestamp --sign "$IDENTITY" "$DMG"
 
 echo "▸ Notarizing DMG"
