@@ -215,14 +215,16 @@ func drawIcon(size: CGFloat, square: Bool = false) -> CGImage {
         ctx.strokePath()
     }
 
-    // Dev badge: a small rounded "Dev" chip in the top-right, filled with the Rosé
-    // Pine surface tone and labelled in the rose accent. The rose-tinted mark already
-    // sets the dev icon apart at small sizes, so the chip is only drawn where its
-    // label is legible (>= 128px). CG here is y-up, so the top-right is high x, high y.
+    // Dev badge: a small rounded "Dev" chip in the tile's upper-right, filled with the
+    // Rosé Pine surface tone and labelled in the rose accent. The rose-tinted mark already
+    // sets the dev icon apart at small sizes, so the chip is only drawn where its label is
+    // legible (>= 128px). CG here is y-up, so the top-right is high x, high y.
+    // The chip stays fully INSIDE the squircle tile (center 512, radius 412 in 1024 space):
+    // content out in the transparent margin makes macOS (Tahoe) plate the whole Dock icon on
+    // a white background. That is why the anchors are inside the tile, not at the canvas corner.
     if isDev && size >= 128 {
         let s = size
-        let m = s * 0.085  // inset from the tile's top-right corner
-        let h = s * 0.155  // chip height
+        let h = s * 0.11  // chip height
         let font = NSFont.systemFont(ofSize: h * 0.6, weight: .semibold)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
@@ -231,7 +233,9 @@ func drawIcon(size: CGFloat, square: Bool = false) -> CGImage {
         let label = NSAttributedString(string: "Dev", attributes: attrs)
         let tb = label.size()
         let w = tb.width + h * 0.9  // horizontal padding either side of the label
-        let chip = CGRect(x: s - m - w, y: s - m - h, width: w, height: h)
+        // Right edge at 0.80 and top edge at 0.86 of the canvas keep every chip corner
+        // inside the squircle (checked against the n=5 superellipse) and clear of the mark.
+        let chip = CGRect(x: s * 0.80 - w, y: s * 0.86 - h, width: w, height: h)
         let radius = h * 0.32
         ctx.addPath(CGPath(roundedRect: chip, cornerWidth: radius, cornerHeight: radius, transform: nil))
         ctx.setFillColor(badgeSurface)
