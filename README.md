@@ -53,14 +53,16 @@ the full flow.
 ## Daily-driver build
 
 ```sh
-bin/package-app        # release build → ad-hoc-signed ZenTerm.app in ~/Applications
+bin/package-app        # dev build → ad-hoc-signed "ZenTerm Dev.app" in ~/Applications
 ```
 
 Dev builds stamp the release they descend from plus the commit count since it
 (`0.1.0+7`, or `0.0.0+<count>` before the first tag), and the total commit count
 as the build number. `+7` is seven commits past `v0.1.0`, so a dogfood bug report
 names an exact build. Flags: `--version X.Y.Z`, `--identity "NAME"` (Developer ID
-signing with hardened runtime), `--dest DIR`.
+signing with hardened runtime), `--dest DIR`, `--variant dev|release`. The default
+`dev` variant is `ZenTerm Dev` (`com.drucial.ZenTerm.dev`, its own icon, no Sparkle
+feed), so it runs beside the installed release; `bin/release` uses `--variant release`.
 
 ## Release
 

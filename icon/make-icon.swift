@@ -10,7 +10,7 @@ func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
         srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
         blue: CGFloat(hex & 0xFF) / 255, alpha: a)
 }
-// A `--dev` first argument produces the daily-driver icon: same deep-indigo tile
+// A `--dev` argument (anywhere in argv) produces the daily-driver icon: same deep-indigo tile
 // as the release, but the origami mark is tinted Rosé Pine rose instead of iris,
 // with a small "Dev" chip in the top-right. Same style as the release, different
 // accent, so the two are unmistakable side by side.

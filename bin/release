@@ -200,9 +200,11 @@ fi
 # 0.1.1, which is what a shared notes.md did.
 mkdir -p "$DIST"
 # The signed app assembled here shares com.drucial.ZenTerm with the installed
-# release. Left indexed, Spotlight registers it with LaunchServices and Raycast
-# surfaces the build artifact instead of /Applications, so a fresh install
-# "doesn't show up". This marker keeps everything under dist/ out of the index.
+# release. Spotlight indexes dist/, and Raycast discovers apps through that index,
+# so the build artifact would surface beside (or instead of) the /Applications
+# release. This marker keeps dist/ out of Spotlight's index. (LaunchServices
+# registration on launch is a separate subsystem this marker does not govern; the
+# dist/ artifacts are transient and cleaned by the next bin/release run.)
 touch "$DIST/.metadata_never_index"
 if [[ -z "$NOTES_FILE" ]]; then
     NOTES_FILE="$DIST/notes-$VERSION.md"
