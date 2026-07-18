@@ -38,6 +38,13 @@ zero has left the build and its notice should go with it (`mpack` is the example
 the archive but the linker drops it, so it is deliberately absent from the notices). A new
 name that appears owes a notice.
 
+`libintl` must stay at zero. `bin/build-ghosttykit` builds ghostty with `-Di18n=false`, so
+the GNU libintl it bundles on Apple platforms (Apple's libc omits it) is never referenced and
+never linked. That flag is what keeps this closed-source app clear of libintl's LGPL-2.1
+static-linking relink obligation, which attribution alone does not discharge (ZEN-170). A
+nonzero count means i18n came back on, the flag was dropped or ghostty started pulling libintl
+another way, and the obligation returned with it.
+
 C++ libraries mangle their symbols, so demangle through `c++filt` before matching or they
 undercount to zero. Watch for the reverse too: a case-insensitive `gettext` grep matches
 `ImGui::GetTextLineHeight`, which is not gettext.
