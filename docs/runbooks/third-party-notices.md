@@ -111,5 +111,6 @@ license bodies pass through verbatim). Separately, **About zen-term** shows the 
 - [ ] **zen-term → About zen-term** reads `AppVersion.current`, not a blank version.
 - [ ] `bin/package-app`, then the same two menu items on the packaged app. Acknowledgements
       resolves out of the app's resource bundle, About reads the tag stamp (e.g.
-      `0.1.0+6 (133)`), and `ls ~/Applications/ZenTerm.app/Contents/Resources/THIRD-PARTY-NOTICES.md`
-      confirms the plainly-visible top-level copy is there too.
+      `0.1.0+6 (133)`), and `ls "$HOME/Applications/ZenTerm Dev.app/Contents/Resources/THIRD-PARTY-NOTICES.md"`
+      confirms the plainly-visible top-level copy is there too (bare `bin/package-app`
+      builds the dev variant).

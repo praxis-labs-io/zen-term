@@ -51,11 +51,14 @@ rest need a real signed release.
       `@rpath/Sparkle.framework`; SwiftPM copies the framework beside the dev binary,
       so `@loader_path` resolves it. `swift test` links it too.
 - [ ] **2. Packaged, nested code signs.** `bin/package-app`, then
-      `codesign --verify --strict --deep --verbose=2 ~/Applications/ZenTerm.app`
+      `codesign --verify --strict --deep --verbose=2 "$HOME/Applications/ZenTerm Dev.app"`
       passes with the nested Sparkle `Autoupdate`, `Updater.app`, and framework all
       validated. `Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices` is
-      absent (dropped: sandbox-only).
-- [ ] **3. The card appears.** Point `SUFeedURL` at a local test appcast advertising
+      absent (dropped: sandbox-only). Both variants embed and sign Sparkle identically;
+      bare `bin/package-app` builds the dev variant (`ZenTerm Dev.app`).
+- [ ] **3. The card appears.** The dev variant ships no `SUFeedURL`, so build the
+      release variant to get a feed: `bin/package-app --variant release` (still ad-hoc,
+      no cert). Point its `SUFeedURL` at a local test appcast advertising
       a `sparkle:version` above HEAD's build number. On launch the card appears
       top-right: origami badge accent-tinted, the notes as bullets, three buttons.
 - [ ] **4. Install morphs in place.** Install → the card becomes a progress bar in
