@@ -3,9 +3,16 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-ICONSET="AppIcon.iconset"
-rm -rf "$ICONSET"
-swift make-icon.swift "$ICONSET"
-iconutil --convert icns --output AppIcon.icns "$ICONSET"
-rm -rf "$ICONSET"
-echo "✓ icon/AppIcon.icns"
+build() {
+    local out="$1" flag="${2:-}"
+    local iconset="${out%.icns}.iconset"
+    rm -rf "$iconset"
+    swift make-icon.swift "$iconset" $flag
+    iconutil --convert icns --output "$out" "$iconset"
+    rm -rf "$iconset"
+    echo "✓ icon/$out"
+}
+
+build AppIcon.icns
+[[ "${1:-}" == "--dev" || "${1:-}" == "--all" ]] && build AppIcon-Dev.icns --dev
+[[ "${1:-}" == "--dev" ]] && exit 0

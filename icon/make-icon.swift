@@ -10,9 +10,17 @@ func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
         srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
         blue: CGFloat(hex & 0xFF) / 255, alpha: a)
 }
-let iris = rgb(0xC4A7E7)  // brand accent
-let bgTop = rgb(0x221E33)
-let bgBottom = rgb(0x141120)
+// A `--dev` first argument recolors the tile and stamps a corner badge so the
+// daily-driver build is unmistakable beside the installed release. The origami
+// mark keeps the iris accent; only the tile background and the badge differ.
+let isDev = CommandLine.arguments.dropFirst().contains("--dev")
+let iris = rgb(0xC4A7E7)  // brand accent (mark), both variants
+// Release tile: deep indigo. Dev tile: Rosé Pine gold, a warm contrast that
+// reads differently at Dock size. (Final accent is a visual pick — swap the two
+// dev hex values if gold reads wrong; foam 0x2A4A52 / 0x16282C is the alt.)
+let bgTop = isDev ? rgb(0x3D3018) : rgb(0x221E33)
+let bgBottom = isDev ? rgb(0x1E170A) : rgb(0x141120)
+let badgeFill = rgb(0xF6C177)  // dev badge ribbon
 
 // MARK: - Squircle (superellipse, n≈5 — the Apple corner feel)
 func squircle(center c: CGPoint, radius a: CGFloat) -> CGPath {
@@ -205,6 +213,41 @@ func drawIcon(size: CGFloat, square: Bool = false) -> CGImage {
         ctx.setStrokeColor(rgb(0xFFFFFF, 0.06))
         ctx.setLineWidth(L(3))
         ctx.strokePath()
+    }
+
+    // Dev badge: a filled bottom-right corner wedge, with "DEV" text at large
+    // sizes only (illegible below ~256px, where the tile recolor carries the
+    // distinction instead). Drawn after the mark so it sits on top.
+    if isDev {
+        let s = size
+        let wedge = CGMutablePath()
+        wedge.move(to: CGPoint(x: s * 0.58, y: 0))
+        wedge.addLine(to: CGPoint(x: s, y: 0))
+        wedge.addLine(to: CGPoint(x: s, y: s * 0.42))
+        wedge.closeSubpath()
+        ctx.addPath(wedge)
+        ctx.setFillColor(badgeFill)
+        ctx.fillPath()
+
+        if s >= 256 {
+            let font = NSFont.systemFont(ofSize: s * 0.11, weight: .heavy)
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor(cgColor: bgBottom)!,
+            ]
+            let line = NSAttributedString(string: "DEV", attributes: attrs)
+            let bounds = line.size()
+            // Rotate ctx about the wedge center, draw the label centered, restore.
+            // NSAttributedString.draw needs an NSGraphicsContext current on ctx.
+            ctx.saveGState()
+            ctx.translateBy(x: s * 0.79, y: s * 0.21)
+            ctx.rotate(by: -.pi / 4)
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+            line.draw(at: NSPoint(x: -bounds.width / 2, y: -bounds.height / 2))
+            NSGraphicsContext.restoreGraphicsState()
+            ctx.restoreGState()
+        }
     }
 
     return ctx.makeImage()!
