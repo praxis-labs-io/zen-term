@@ -223,9 +223,11 @@ func render(scale: CGFloat) -> CGImage {
     ctx.addPath(arrow)
     ctx.strokePath()
 
-    // Instruction near the bottom, muted. Copy per docs/brand-voice.md.
+    // Instruction below the icon row, muted. Copy per docs/brand-voice.md. Kept well clear
+    // of the bottom edge: Finder's window bounds include the title bar, so the lowest ~28px
+    // of this art fall outside the visible content and anything down there is clipped.
     drawText(
-        "Drag ZenTerm to your Applications folder to install.", cx: BASE_W / 2, cyTopDown: 356,
+        "Drag ZenTerm to your Applications folder to install.", cx: BASE_W / 2, cyTopDown: 316,
         font: NSFont.systemFont(ofSize: 15, weight: .regular), color: mutedColor)
 
     return ctx.makeImage()!
