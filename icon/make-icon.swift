@@ -10,17 +10,17 @@ func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
         srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
         blue: CGFloat(hex & 0xFF) / 255, alpha: a)
 }
-// A `--dev` first argument recolors the tile and stamps a corner badge so the
-// daily-driver build is unmistakable beside the installed release. The origami
-// mark keeps the iris accent; only the tile background and the badge differ.
+// A `--dev` first argument produces the daily-driver icon: same deep-indigo tile
+// as the release, but the origami mark is tinted Rosé Pine rose instead of iris,
+// with a small "Dev" chip in the top-right. Same style as the release, different
+// accent, so the two are unmistakable side by side.
 let isDev = CommandLine.arguments.dropFirst().contains("--dev")
-let iris = rgb(0xC4A7E7)  // brand accent (mark), both variants
-// Release tile: deep indigo. Dev tile: Rosé Pine gold, a warm contrast that
-// reads differently at Dock size. (Final accent is a visual pick: swap the two
-// dev hex values if gold reads wrong; foam 0x2A4A52 / 0x16282C is the alt.)
-let bgTop = isDev ? rgb(0x3D3018) : rgb(0x221E33)
-let bgBottom = isDev ? rgb(0x1E170A) : rgb(0x141120)
-let badgeFill = rgb(0xF6C177)  // dev badge ribbon
+let iris = rgb(0xC4A7E7)  // release mark accent (Rosé Pine Moon iris)
+let rose = rgb(0xEA9A97)  // dev mark accent (Rosé Pine Moon rose)
+let markColor = isDev ? rose : iris
+let bgTop = rgb(0x221E33)  // deep-indigo tile, both variants
+let bgBottom = rgb(0x141120)
+let badgeSurface = rgb(0x393552)  // Rosé Pine Moon overlay: the "Dev" chip fill
 
 // MARK: - Squircle (superellipse, n≈5 — the Apple corner feel)
 func squircle(center c: CGPoint, radius a: CGFloat) -> CGPath {
@@ -192,7 +192,7 @@ func drawIcon(size: CGFloat, square: Bool = false) -> CGImage {
     func P(_ p: CGPoint) -> CGPoint {
         CGPoint(x: L(512) + (p.x - origamiCenter.x) * k, y: L(512) - (p.y - origamiCenter.y) * k)
     }
-    ctx.setStrokeColor(iris)
+    ctx.setStrokeColor(markColor)
     ctx.setLineWidth(1.5 * k)
     ctx.setLineCap(.round)
     ctx.setLineJoin(.round)
@@ -215,39 +215,31 @@ func drawIcon(size: CGFloat, square: Bool = false) -> CGImage {
         ctx.strokePath()
     }
 
-    // Dev badge: a filled bottom-right corner wedge, with "DEV" text at large
-    // sizes only (illegible below ~256px, where the tile recolor carries the
-    // distinction instead). Drawn after the mark so it sits on top.
-    if isDev {
+    // Dev badge: a small rounded "Dev" chip in the top-right, filled with the Rosé
+    // Pine surface tone and labelled in the rose accent. The rose-tinted mark already
+    // sets the dev icon apart at small sizes, so the chip is only drawn where its
+    // label is legible (>= 128px). CG here is y-up, so the top-right is high x, high y.
+    if isDev && size >= 128 {
         let s = size
-        let wedge = CGMutablePath()
-        wedge.move(to: CGPoint(x: s * 0.58, y: 0))
-        wedge.addLine(to: CGPoint(x: s, y: 0))
-        wedge.addLine(to: CGPoint(x: s, y: s * 0.42))
-        wedge.closeSubpath()
-        ctx.addPath(wedge)
-        ctx.setFillColor(badgeFill)
+        let m = s * 0.085  // inset from the tile's top-right corner
+        let h = s * 0.155  // chip height
+        let font = NSFont.systemFont(ofSize: h * 0.6, weight: .semibold)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor(cgColor: rose)!,
+        ]
+        let label = NSAttributedString(string: "Dev", attributes: attrs)
+        let tb = label.size()
+        let w = tb.width + h * 0.9  // horizontal padding either side of the label
+        let chip = CGRect(x: s - m - w, y: s - m - h, width: w, height: h)
+        let radius = h * 0.32
+        ctx.addPath(CGPath(roundedRect: chip, cornerWidth: radius, cornerHeight: radius, transform: nil))
+        ctx.setFillColor(badgeSurface)
         ctx.fillPath()
-
-        if s >= 256 {
-            let font = NSFont.systemFont(ofSize: s * 0.11, weight: .heavy)
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: font,
-                .foregroundColor: NSColor(cgColor: bgBottom)!,
-            ]
-            let line = NSAttributedString(string: "DEV", attributes: attrs)
-            let bounds = line.size()
-            // Rotate ctx about the wedge center, draw the label centered, restore.
-            // NSAttributedString.draw needs an NSGraphicsContext current on ctx.
-            ctx.saveGState()
-            ctx.translateBy(x: s * 0.79, y: s * 0.21)
-            ctx.rotate(by: -.pi / 4)
-            NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
-            line.draw(at: NSPoint(x: -bounds.width / 2, y: -bounds.height / 2))
-            NSGraphicsContext.restoreGraphicsState()
-            ctx.restoreGState()
-        }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        label.draw(at: NSPoint(x: chip.midX - tb.width / 2, y: chip.midY - tb.height / 2))
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     return ctx.makeImage()!
