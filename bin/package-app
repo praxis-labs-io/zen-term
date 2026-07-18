@@ -10,19 +10,37 @@ cd "$(dirname "$0")/.."
 VERSION=""
 IDENTITY="-"
 DEST="$HOME/Applications"
+VARIANT="dev"
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --version | --identity | --dest)
+        --version | --identity | --dest | --variant)
             [[ $# -ge 2 ]] || { echo "✗ missing value for $1" >&2; exit 1; }
             case "$1" in
                 --version) VERSION="$2" ;;
                 --identity) IDENTITY="$2" ;;
                 --dest) DEST="$2" ;;
+                --variant) VARIANT="$2" ;;
             esac
             shift 2 ;;
         *) echo "unknown argument: $1" >&2; exit 1 ;;
     esac
 done
+
+case "$VARIANT" in
+    dev)
+        BUNDLE_NAME="ZenTerm Dev"
+        BUNDLE_ID="com.drucial.ZenTerm.dev"
+        ICON_SRC="icon/AppIcon-Dev.icns"
+        APP_BASENAME="ZenTerm Dev.app"
+        ;;
+    release)
+        BUNDLE_NAME="ZenTerm"
+        BUNDLE_ID="com.drucial.ZenTerm"
+        ICON_SRC="icon/AppIcon.icns"
+        APP_BASENAME="ZenTerm.app"
+        ;;
+    *) echo "✗ unknown variant: $VARIANT (want dev|release)" >&2; exit 1 ;;
+esac
 
 if [[ -z "$VERSION" ]]; then
     # A daily driver names the release it descends from: "0.1.0+7" is seven commits
@@ -43,7 +61,7 @@ fi
 # above, which resets to 0 at every tag and so would go backwards for Sparkle.
 BUILD="$(git rev-list --count HEAD 2>/dev/null || echo 0)"
 
-APP="$DEST/ZenTerm.app"
+APP="$DEST/$APP_BASENAME"
 BIN=".build/release/ZenTerm"
 
 # SwiftPM resource bundles (brand SVGs, ghostty runtime resources). They ride in
@@ -97,11 +115,11 @@ done
 # until there is a complete signed one to replace it with. Same directory, so the
 # swap is a rename rather than a copy.
 echo "▸ Assembling $APP"
-STAGE="$DEST/.ZenTerm.app.partial"
+STAGE="$DEST/.$APP_BASENAME.partial"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources"
 cp "$BIN" "$STAGE/Contents/MacOS/ZenTerm"
-cp icon/AppIcon.icns "$STAGE/Contents/Resources/AppIcon.icns"
+cp "$ICON_SRC" "$STAGE/Contents/Resources/AppIcon.icns"
 
 # Third-party license notices (ZEN-167). The file is a SwiftPM resource, so it already rides
 # inside ZenTerm_ZenTerm.bundle and the app menu opens it from there. This second copy sits at
@@ -135,15 +153,26 @@ ditto "$FRAMEWORK" "$STAGE/Contents/Frameworks/Sparkle.framework"
 SPARKLE="$STAGE/Contents/Frameworks/Sparkle.framework"
 rm -rf "$SPARKLE/Versions/B/XPCServices" "$SPARKLE/XPCServices"
 
+# Dev omits every Sparkle key: with no feed the updater never checks, which is
+# correct — a dev build is replaced by re-running this script, not by an update.
+# The framework is still embedded and signed below; only the feed config differs.
+SPARKLE_KEYS=""
+if [[ "$VARIANT" == "release" ]]; then
+    SPARKLE_KEYS='  <key>SUFeedURL</key><string>https://github.com/zen-term/zen-term-releases/releases/latest/download/appcast.xml</string>
+  <key>SUPublicEDKey</key><string>M0c0MPZrd8TSeoMNjZi+sNBpEi7t5nYnB6t41Bsm/TU=</string>
+  <key>SUEnableAutomaticChecks</key><true/>
+  <key>SUScheduledCheckInterval</key><integer>86400</integer>'
+fi
+
 cat > "$STAGE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>ZenTerm</string>
-  <key>CFBundleDisplayName</key><string>ZenTerm</string>
+  <key>CFBundleName</key><string>${BUNDLE_NAME}</string>
+  <key>CFBundleDisplayName</key><string>${BUNDLE_NAME}</string>
   <key>CFBundleExecutable</key><string>ZenTerm</string>
-  <key>CFBundleIdentifier</key><string>com.drucial.ZenTerm</string>
+  <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleIconName</key><string>AppIcon</string>
@@ -153,10 +182,7 @@ cat > "$STAGE/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
-  <key>SUFeedURL</key><string>https://github.com/zen-term/zen-term-releases/releases/latest/download/appcast.xml</string>
-  <key>SUPublicEDKey</key><string>M0c0MPZrd8TSeoMNjZi+sNBpEi7t5nYnB6t41Bsm/TU=</string>
-  <key>SUEnableAutomaticChecks</key><true/>
-  <key>SUScheduledCheckInterval</key><integer>86400</integer>
+${SPARKLE_KEYS}
 </dict>
 </plist>
 PLIST
