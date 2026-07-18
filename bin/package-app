@@ -110,6 +110,19 @@ for path in .build/release/*.bundle; do
     exit 1
 done
 
+# ZEN-170: refuse to ship GNU libintl (LGPL-2.1). bin/build-ghosttykit builds ghostty with
+# -Di18n=false so nothing references the libintl it bundles on Apple platforms and the release
+# linker dead-strips it, but that is a property of the staged GhosttyKit: an xcframework built
+# before that flag, or a ghostty pin that force-loads the intl archive, would relink libintl
+# while THIRD-PARTY-NOTICES.md no longer discloses it. Probing the linked binary here is the
+# gate a stale artifact cannot pass. Symbols like _libintl_*, _bindtextdomain, __nl_msg_cat_cntr.
+if nm "$BIN" 2>/dev/null | grep -qiE 'libintl|bindtextdomain|nl_msg_cat_cntr'; then
+    echo "✗ $BIN statically links GNU libintl (LGPL-2.1), not shippable in a closed-source app" >&2
+    echo "  rebuild GhosttyKit with bin/build-ghosttykit (it passes -Di18n=false), then re-probe" >&2
+    echo "  per docs/runbooks/third-party-notices.md" >&2
+    exit 1
+fi
+
 # Assembled and signed off to the side, then swapped in at the end. $APP defaults
 # to the installed daily driver, so building in place means any failure between the
 # delete and the signature (a missing icon, an expired cert) leaves an unlaunchable

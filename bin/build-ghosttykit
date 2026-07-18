@@ -42,10 +42,15 @@ fi
 
 # 3. Build the native (arm64-only) xcframework. app-runtime=none selects libghostty;
 #    emit-macos-app=false skips the full app (which would need xcodebuild + signing).
-#    i18n=false compiles out ghostty's gettext calls so the LGPL libintl ghostty bundles
-#    on Apple platforms (Apple libc omits it) is never referenced — it stays out of the
-#    link, keeping this closed-source app clear of LGPL static-linking obligations. We
-#    ship no translations, so `_()` returning the English msgid is the only effect.
+#    i18n=false compiles out ghostty's gettext call sites so nothing references the LGPL
+#    libintl ghostty bundles on Apple platforms (Apple libc omits it). SharedDeps.zig still
+#    links it, but the release linker then dead-strips the now-unreferenced archive, so it
+#    leaves the shipped binary and this closed-source app stays clear of LGPL static-linking
+#    obligations. bin/package-app probes the linked binary to enforce that it dropped. One
+#    behavior tradeoff (not zero): it also disables ghostty's macOS locale canonicalization,
+#    so a non-English macOS user's child shell gets a non-canonical LANGUAGE (LANG is
+#    unaffected). We ship no translations, so app-side copy is unchanged. See ZEN-170 and
+#    docs/runbooks/third-party-notices.md.
 echo "▸ building GhosttyKit.xcframework (this takes a few minutes)"
 ( cd "$GHOSTTY" && "$ZIG" build \
     -Dapp-runtime=none \
