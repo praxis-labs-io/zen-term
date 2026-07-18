@@ -16,7 +16,7 @@ func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
 let isDev = CommandLine.arguments.dropFirst().contains("--dev")
 let iris = rgb(0xC4A7E7)  // brand accent (mark), both variants
 // Release tile: deep indigo. Dev tile: Rosé Pine gold, a warm contrast that
-// reads differently at Dock size. (Final accent is a visual pick — swap the two
+// reads differently at Dock size. (Final accent is a visual pick: swap the two
 // dev hex values if gold reads wrong; foam 0x2A4A52 / 0x16282C is the alt.)
 let bgTop = isDev ? rgb(0x3D3018) : rgb(0x221E33)
 let bgBottom = isDev ? rgb(0x1E170A) : rgb(0x141120)

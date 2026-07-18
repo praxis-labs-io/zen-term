@@ -15,4 +15,4 @@ build() {
 
 build AppIcon.icns
 [[ "${1:-}" == "--dev" || "${1:-}" == "--all" ]] && build AppIcon-Dev.icns --dev
-[[ "${1:-}" == "--dev" ]] && exit 0
+exit 0
