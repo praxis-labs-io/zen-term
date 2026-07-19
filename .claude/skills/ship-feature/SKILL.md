@@ -1,12 +1,12 @@
 ---
 name: ship-feature
-description: Run zen-term's feature-complete process — full local Swift check, gather /code-review (and Copilot if there's a remote) findings, triage them (fix / mitigate / ignore, no tech debt), then mark the PR ready for review. Invoke when an epic task/feature is built and ready to ship.
+description: Run zen-term's feature-complete process. Full local Swift check, gather /code-review (and Copilot if there's a remote) findings, triage them (fix / mitigate / ignore, no tech debt), then mark the PR ready for review. Invoke when an epic task/feature is built and ready to ship.
 ---
 
 # Ship Feature (zen-term)
 
 Swift/SwiftPM adaptation of the feature-complete process. Solo, terminal-native
-tool — so the GitHub PR / Copilot steps are **conditional on a remote existing**.
+tool, so the GitHub PR / Copilot steps are **conditional on a remote existing**.
 Until zen-term has a remote, this runs as: local check → local review → triage →
 move the Linear ticket. The discipline (no tech debt, everything triaged) is the
 same regardless of remote.
@@ -16,7 +16,7 @@ same regardless of remote.
 - Run `swift build`. Fix anything until it compiles clean.
 - Run `swift test`. Fix until green.
 - If a formatter/linter is configured (`.swift-format`, `swiftlint`), run it and
-  resolve findings. If none is configured, skip — do not add one here.
+  resolve findings. If none is configured, skip; do not add one here.
 - For work with GUI behavior no unit test covers, run `swift run ZenTerm` and
   confirm the plan's manual runbook expectations.
 
@@ -44,7 +44,7 @@ and Copilot see. Fold any downstream flags into your close-out summary.
 ## 4. Request a Copilot review (remote only)
 
 If a draft PR was opened, request a Copilot review via the GitHub MCP tools. It
-runs async — continue and re-check later.
+runs async, so continue and re-check later.
 
 ## 5. Run /code-review
 
@@ -59,7 +59,7 @@ Merge `/code-review` findings with Copilot's (if any), de-duplicated.
 
 For every finding, decide **fix / mitigate / ignore** with a one-line reason.
 
-- **Default to fixing** — no tech debt.
+- **Default to fixing.** No tech debt.
 - **Mitigate** only when a full fix is genuinely out of scope; capture the
   residual as a **Linear ticket** (ZenTerm team), never a silent gap or an
   in-code `TODO`.
@@ -71,7 +71,7 @@ Present the triage table to the user, apply the agreed fixes, then re-run
 ## 8. Close out
 
 - **If a PR exists:** mark it ready for review. Linear moves the ticket to **In
-  Review** itself from there (auto-linked via the issue id) — don't set that
+  Review** itself from there (auto-linked via the issue id); don't set that
   status by hand.
 - **Linear ticket:** update its description with any scope changes. On a
   local-only ship there's no PR to trigger the move, so set **In Review**
