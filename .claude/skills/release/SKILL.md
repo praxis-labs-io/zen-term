@@ -129,3 +129,12 @@ commits nothing new. This step always follows phase 6, never precedes it.
 
 Verify the new `content/release-notes/vX.Y.Z.md` actually appeared before opening
 the PR. An empty diff here means the release had not published yet.
+
+**Then confirm the version is actually live**, because merging is not deploying:
+
+    curl -sL https://zenterm.io/releases | grep -o 'vX\.Y\.Z'
+
+A green merge is not evidence the site updated. On v0.2.2 every check passed, the
+merge landed, and the site still served the previous version a quarter of an hour
+later (ZEN-205). Nothing in the flow noticed, because nothing looked. The release
+is finished when the new version is on the page, not when the PR closes.
