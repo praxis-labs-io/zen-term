@@ -305,6 +305,10 @@ trap 'rm -rf "$DOCS_CLONE"' EXIT
 gh repo clone "$RELEASES_REPO" "$DOCS_CLONE" -- --depth 1
 mkdir -p "$DOCS_CLONE/docs/config"
 cp docs/onboarding.md "$DOCS_CLONE/docs/onboarding.md"
+# The notices ride the release rather than syncing on their own schedule: the file has to
+# describe the binary this tag ships, and what gets linked is a property of the build. A
+# notices file ahead of or behind the shipped app is a licensing problem, not stale copy.
+cp Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md "$DOCS_CLONE/docs/THIRD-PARTY-NOTICES.md"
 cp docs/config/config docs/config/workspaces "$DOCS_CLONE/docs/config/"
 rm -rf "$DOCS_CLONE/docs/config/themes"
 cp -R docs/config/themes "$DOCS_CLONE/docs/config/themes"
