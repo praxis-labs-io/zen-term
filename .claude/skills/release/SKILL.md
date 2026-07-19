@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a public ZenTerm release. Resolves the version, curates docs/release-notes/vX.Y.Z.md from the git log into copy for the person downloading, checks the docs that publish alongside it, runs the gate, and hands over the bin/release command. Invoke when main is ready to ship.
+description: Cut a public ZenTerm release end to end. Resolves the version, curates docs/release-notes/vX.Y.Z.md from the git log into copy for the person downloading, checks the docs that publish alongside it, runs the gate, hands over the bin/release command, then verifies what published and syncs the marketing site. Invoke when main is ready to ship.
 ---
 
 # Release (zen-term)
@@ -13,8 +13,10 @@ What it does not do is judgement. Which commits a stranger cares about, what the
 version should be, whether a doc about to become public is still true, and how
 the notes read. That is this skill.
 
-**The skill stops at the command.** Running `bin/release` publishes a permanent
-public tag and a downloadable build, so Drew runs it. Phase 6 resumes afterward.
+**Drew runs `bin/release` himself.** It publishes a permanent public tag and a
+downloadable build, so phases 1 to 5 stop at handing over the command. Phases 6
+and 7 resume once he reports it finished: a release is not done until the
+artifacts are verified and the website carries the new version.
 
 ## 1. Scope the release
 
@@ -101,5 +103,25 @@ instead of trusting the exit code:
   this is worth a look every time (ZEN-203).
 
 Shipped tickets are already **Done** from their merges, so there is no Linear
-status work here. If `zen-term-website` needs anything for this version, say so
-rather than assuming its sync ran.
+status work here.
+
+## 7. Sync the website
+
+The release is not finished when the DMG is up. The marketing site carries the
+docs and the release notes, and it does not update itself.
+
+In `~/Dev/zen-term-website`, on a branch off `main`:
+
+    pnpm sync-docs
+
+Then commit the new `content/release-notes/vX.Y.Z.md` (plus any changed doc it
+pulled), open a PR, and merge. Render deploys from `main`.
+
+**Order matters and the failure is silent.** `scripts/sync-docs.mjs` reads the
+*published* state: `raw.githubusercontent.com/zen-term/zen-term-releases/main/docs`
+for the docs, and the GitHub Releases API for the notes. Run it before
+`bin/release` has published and it syncs the previous version, succeeds, and
+commits nothing new. This step always follows phase 6, never precedes it.
+
+Verify the new `content/release-notes/vX.Y.Z.md` actually appeared before opening
+the PR. An empty diff here means the release had not published yet.
