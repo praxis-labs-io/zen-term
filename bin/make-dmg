@@ -13,6 +13,11 @@
 # Styling drives Finder over AppleScript, so this needs a real GUI login session (it
 # runs locally, never headless CI). Background art: icon/dmg-background.tiff, regenerated
 # by icon/make-dmg-background.sh.
+#
+# Verifying: open the built DMG with hidden files SHOWN (⌘⇧.). Checking with them hidden
+# cannot reveal what is actually on the volume, which is how a stray .fseventsd shipped in
+# v0.2.1 sitting on the wordmark (ZEN-203). Every item at the volume root needs a position;
+# an unpositioned one gets auto-arranged into the top row.
 set -euo pipefail
 # Resolve the repo root from the script location, but do NOT cd into it: --app/--dest are
 # caller paths and must stay relative to the caller's working directory.
@@ -97,6 +102,14 @@ tell application "Finder"
         set background picture of opts to file ".background:background.tiff"
         set position of item "$APP_NAME" of container window to {170, 200}
         set position of item "$APPS_ITEM" of container window to {490, 200}
+        -- .background has to live on the volume for Finder to draw the background at all, so
+        -- it can't be removed the way .fseventsd can, and unpositioned it gets auto-arranged
+        -- into the top row, right onto the wordmark. It must be positioned INSIDE the window:
+        -- Finder counts an item in the scroll bounds even when it isn't drawing it, so parking
+        -- it off-canvas puts scrollbars on the window for everyone, including the majority who
+        -- never see the item. Top-right is clear of the wordmark, the icon row, and the
+        -- instruction, so the only cost is one folder visible to people browsing with ⌘⇧. on.
+        set position of item ".background" of container window to {580, 80}
         set toolbar visible of container window to false
         set statusbar visible of container window to false
         set the bounds of container window to {$WIN_LEFT, $WIN_TOP, $WIN_LEFT + $WIN_W, $WIN_TOP + $WIN_H}
@@ -129,6 +142,35 @@ if [[ ! -s "$MOUNTPOINT/.DS_Store" ]]; then
     exit 1
 fi
 chmod -Rf go-w "$MOUNTPOINT" 2>/dev/null || true
+# Mount residue, not ours: the OS writes .fseventsd (and sometimes .Trashes) into any volume
+# attached read-write, which is exactly what styling requires. Left in place they get frozen
+# into the shipped image and auto-arranged over the wordmark for anyone browsing with hidden
+# files shown. Removed last, immediately before the detach, so nothing recreates them.
+rm -rf "$MOUNTPOINT/.fseventsd" "$MOUNTPOINT/.Trashes" 2>/dev/null || true
+
+# Then prove the root holds nothing else. The rm above only names the two we've actually seen,
+# but any OS-created root (.Spotlight-V100, .DocumentRevisions-V100, ...) would reproduce
+# ZEN-203 identically: unpositioned items get auto-arranged into the top row, onto the wordmark.
+# This is the general rule the header states, enforced the way the .DS_Store gate above is, so a
+# new one fails the build instead of shipping invisibly to everyone browsing with ⌘⇧. on.
+# Globbed rather than parsed out of `ls`: the volume holds an entry named a single space, and
+# `ls` is widely replaced with a decorating variant that would break the comparison.
+shopt -s nullglob dotglob
+UNEXPECTED=()
+for entry in "$MOUNTPOINT"/*; do
+    case "$(basename "$entry")" in
+        .background | .DS_Store | "$APP_NAME" | "$APPS_ITEM") ;;
+        *) UNEXPECTED+=("$(basename "$entry")") ;;
+    esac
+done
+shopt -u nullglob dotglob
+if [[ ${#UNEXPECTED[@]} -gt 0 ]]; then
+    echo "✗ unexpected items at the volume root, which Finder would arrange onto the art:" >&2
+    printf '    %s\n' "${UNEXPECTED[@]}" >&2
+    echo "  Remove them before the detach, or give them a position in the styling script." >&2
+    hdiutil detach "$MOUNTPOINT" >/dev/null 2>&1 || true
+    exit 1
+fi
 sync
 
 echo "▸ Detaching"
