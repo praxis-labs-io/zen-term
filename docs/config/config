@@ -1,4 +1,4 @@
-# zen-term — general config reference
+# zen-term: general config reference
 #
 # Copy to ~/.config/zen-term/config (or $XDG_CONFIG_HOME/zen-term/config) and
 # uncomment what you want to change. Every value below is the built-in default,
@@ -7,7 +7,7 @@
 # Format: ghostty-flavored `key = value`. Lines starting with `#` and blank
 # lines are ignored. Unknown keys are ignored. A malformed value falls back to
 # the default; an out-of-range number is clamped. Nothing here can crash the app
-# (bad lines are logged and skipped). Config is read once at launch — restart to
+# (bad lines are logged and skipped). Config is read once at launch. Restart to
 # apply hand-edits. Changes made in the in-app Settings card (⌘,) apply live.
 
 # ─── Theme ───────────────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@
 # ─── Terminal appearance ─────────────────────────────────────────────────────
 
 # Monospaced font for the terminal surfaces. (Colors live in a theme file, not
-# here — see the Theme section above.)
+# here. See the Theme section above.)
 # font-family = JetBrainsMono Nerd Font Mono
 # font-size = 14                      # points; clamped to 6…72
 
@@ -40,7 +40,7 @@
 # it ignores this). ghostty's base is a nearly invisible 1px, so the default is 2.
 # cursor-thickness = 2                # clamped to 1…12
 
-# Treat the ⌥ (Option) key as Alt/Meta — enables ⌥f/⌥b word-nav in readline and
+# Treat the ⌥ (Option) key as Alt/Meta: enables ⌥f/⌥b word-nav in readline and
 # Meta chords in vim/emacs, at the cost of macOS accent composing. true = Meta.
 # macos-option-as-alt = true          # true | false
 
@@ -63,12 +63,12 @@
 # pane-gap = 8                        # clamped to 0…64
 
 # Initial size a drawer opens to, as a fraction of the tab's working area.
-# In-app Settings edit: applies to new tabs (a hand ⌥-resize owns the running ratio).
+# In-app Settings edit: applies to new tabs (a hand resize owns the running ratio).
 # bottom-drawer-fraction = 0.28       # clamped to 0.1…0.9
 # right-drawer-fraction = 0.30        # clamped to 0.1…0.9
 
-# One ⌥-arrow nudge when resizing a focused drawer (px), and the ceiling a
-# drawer may grow to (fraction of the working area — the canvas keeps the rest).
+# One ⌘⇧HJKL nudge when resizing a focused drawer (px), and the ceiling a
+# drawer may grow to (fraction of the working area; the canvas keeps the rest).
 # In-app Settings edit: both apply live.
 # drawer-resize-step = 40             # clamped to 4…400
 # max-drawer-fraction = 0.7           # clamped to 0.3…0.95
@@ -90,7 +90,7 @@
 #
 # Command overlays (dock button + command-palette entry + keybinding) whose
 # process lifetime is set by `persist:` (default `none` = ephemeral, fresh every
-# open). There are NO built-in floats — define your own with `float = ` lines.
+# open). There are NO built-in floats: define your own with `float = ` lines.
 # Repeat the key for as many as you like. A float's `key:` is the single source
 # of truth for both its chord and its palette glyph.
 #
@@ -102,7 +102,7 @@
 # Fields (whitespace-separated `field:value`; quote values with spaces):
 #   title    (required)  name in the palette, Settings, and the dock tooltip;
 #                        must be unique, and must hold a letter or number
-#   order    (optional)  position in the dock, palette, and Settings — low to high
+#   order    (optional)  position in the dock, palette, and Settings (low to high)
 #                        (default: the order the `float =` lines appear in here).
 #                        Settings writes these for you when you reorder with ⌥↑/⌥↓
 #   command  (required)  runs as `$SHELL -l -i -c <command>` at the focused cwd
@@ -118,33 +118,33 @@
 #                                 With a pinned `dir:` the anchor is constant, so the
 #                                 instance never re-anchors
 #                        window = keep alive for the window, anchored where it first
-#                                 opened and never re-anchored — for tools that aren't
+#                                 opened and never re-anchored, for tools that aren't
 #                                 about the directory you're in at all
 #                        a float is always window-level: one live instance shared by
 #                        every tab in the window, and its card stays up across a tab
 #                        switch. the instance dies when the tool quits on its own
-#                        (e.g. `q`) — the next open is cold, not resumed
+#                        (e.g. `q`); the next open is cold, not resumed
 #   icon     (optional)  SF Symbol name or bundled mark (github/git) (default square.on.square)
 #   width    (optional)  width as a fraction of the tab              (default 0.85)
 #   height   (optional)  height as a fraction of the tab            (default 0.85)
 #
-# Example — the GitHub dashboard TUI on ⌘⇧G:
+# Example: the GitHub dashboard TUI on ⌘⇧G:
 # float = order:1 title:"Open GitDash" command:"gd" key:cmd+shift+g git:false icon:github
 #
-# Example — a dev server with spaces in the command:
+# Example: a dev server with spaces in the command:
 # float = order:2 title:"Dev server" command:"npm run dev" key:cmd+shift+d
 #
-# Example — lazygit kept warm per repo (first open is cold; reopens are instant).
+# Example: lazygit kept warm per repo (first open is cold; reopens are instant).
 # This is the recipe for the old built-in ⌘G lazygit, now a regular float like any
 # other tool (height:0.78 matches the old card exactly):
 # float = order:3 title:"Open Lazygit" command:"lazygit" key:cmd+g git:true persist:dir icon:git height:0.78
 #
-# Example — a system monitor kept alive for the window, reachable from every tab:
+# Example: a system monitor kept alive for the window, reachable from every tab:
 # float = order:4 title:BTop command:"btop" key:cmd+shift+b persist:window icon:gauge
 
 # ─── Keybinds ────────────────────────────────────────────────────────────────
 #
-# Remap any built-in action with `keybind = <action>=<chord>` — the action reads
+# Remap any built-in action with `keybind = <action>=<chord>`. The action reads
 # first. Your lines override the defaults; if two lines claim the same chord, the
 # last one wins (and a warning is logged). An unknown action is skipped with a warning.
 #
@@ -153,8 +153,8 @@
 #   key:       a single character (letter, digit, or symbol like - \ [ ])
 #
 # Write the key as it's printed *unshifted*, and add `shift` yourself: cmd+shift+-
-# rather than cmd+shift+_. Both spellings work — a shifted glyph folds onto its base
-# key (_ → shift+-, | → shift+\, plus → shift+=) — but the unshifted form is what the
+# rather than cmd+shift+_. Both spellings work: a shifted glyph folds onto its base
+# key (_ → shift+-, | → shift+\, plus → shift+=). But the unshifted form is what the
 # app displays and writes back, so it's the one to reach for.
 #
 # Actions (the full set):

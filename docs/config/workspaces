@@ -1,14 +1,14 @@
-# zen-term — workspaces reference
+# zen-term: workspaces reference
 #
 # Copy to ~/.config/zen-term/workspaces (or $XDG_CONFIG_HOME/zen-term/workspaces) and
-# add a section per workspace. This list is deliberate and hand-curated — zen-term does
+# add a section per workspace. This list is deliberate and hand-curated. zen-term does
 # NOT scan any directory. Each section becomes an entry in the ⌘⇧P picker.
 #
 # Format: INI-style. A `[Title]` line opens a section; `key = value` lines below it
 # configure that workspace until the next header. Lines starting with `#` and blank
 # lines are ignored; unknown keys are ignored. A section with no `path` is skipped, a
 # malformed `env` line is dropped, and nothing here can crash the app (bad lines are
-# logged and skipped). Manage workspaces from inside the app too — Settings → Workspaces
+# logged and skipped). Manage workspaces from inside the app too, in Settings → Workspaces
 # (add / edit / delete), or the ＋ row in the ⌘⇧P picker to add-and-open one. Hand-edits
 # to this file are picked up the next time you open the ⌘⇧P picker (or on restart).
 #
@@ -31,7 +31,7 @@
 #
 # A value with spaces may be quoted: bottom = "npm run dev".
 #
-# Example — an editor + AI + dev-server workspace (uncomment and edit, or write your own):
+# Example: an editor + AI + dev-server workspace (uncomment and edit, or write your own):
 #
 # [ZenTerm]
 # path   = ~/Dev/zen-term
