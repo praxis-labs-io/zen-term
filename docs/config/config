@@ -1,4 +1,4 @@
-# zen-term — general config reference
+# zen-term: general config reference
 #
 # Copy to ~/.config/zen-term/config (or $XDG_CONFIG_HOME/zen-term/config) and
 # uncomment what you want to change. Every value below is the built-in default,
@@ -128,18 +128,18 @@
 #   width    (optional)  width as a fraction of the tab              (default 0.85)
 #   height   (optional)  height as a fraction of the tab            (default 0.85)
 #
-# Example — the GitHub dashboard TUI on ⌘⇧G:
+# Example: the GitHub dashboard TUI on ⌘⇧G:
 # float = order:1 title:"Open GitDash" command:"gd" key:cmd+shift+g git:false icon:github
 #
-# Example — a dev server with spaces in the command:
+# Example: a dev server with spaces in the command:
 # float = order:2 title:"Dev server" command:"npm run dev" key:cmd+shift+d
 #
-# Example — lazygit kept warm per repo (first open is cold; reopens are instant).
+# Example: lazygit kept warm per repo (first open is cold; reopens are instant).
 # This is the recipe for the old built-in ⌘G lazygit, now a regular float like any
 # other tool (height:0.78 matches the old card exactly):
 # float = order:3 title:"Open Lazygit" command:"lazygit" key:cmd+g git:true persist:dir icon:git height:0.78
 #
-# Example — a system monitor kept alive for the window, reachable from every tab:
+# Example: a system monitor kept alive for the window, reachable from every tab:
 # float = order:4 title:BTop command:"btop" key:cmd+shift+b persist:window icon:gauge
 
 # ─── Keybinds ────────────────────────────────────────────────────────────────
