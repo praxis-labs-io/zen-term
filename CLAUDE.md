@@ -240,6 +240,8 @@ on a remote existing:
 
 1. **Local check** — `swift build` clean + `swift test` green (+ formatter/linter
    if configured); confirm any GUI runbook expectations via `swift run ZenTerm`.
+   Run the `update-documentation` skill so any doc this change makes wrong is
+   fixed in `docs/` here and cross-repo work is flagged, not dropped.
 2. **Remote check** — no remote yet → local-only ship (skip Copilot/PR). Remote →
    push branch, open a **draft** PR referencing the Linear id, request a Copilot
    review.

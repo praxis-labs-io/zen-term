@@ -22,7 +22,17 @@ same regardless of remote.
 
 Do not proceed until build + tests are green.
 
-## 2. Determine remote state
+## 2. Documentation accuracy
+
+Run the `update-documentation` skill against this change. It carries ZenTerm's
+docs topology (the authoring source of truth in `docs/`, and what `bin/release`
+and the website sync carry downstream), so any doc a change makes wrong gets
+edited here and any cross-repo work gets flagged rather than silently dropped.
+
+Do this **before** opening the PR so the doc edits land in the diff `/code-review`
+and Copilot see. Fold any downstream flags into your close-out summary.
+
+## 3. Determine remote state
 
 - `git remote -v`. If there is **no remote**, this is a local-only ship: skip
   steps 3–5's Copilot/PR actions, keep the branch committed, and go to step 6
@@ -31,21 +41,21 @@ Do not proceed until build + tests are green.
 - If there **is** a remote, push the branch and open the PR **as a draft**, with
   the Linear issue id in the title/body. Use Linear's generated branch name.
 
-## 3. Request a Copilot review (remote only)
+## 4. Request a Copilot review (remote only)
 
 If a draft PR was opened, request a Copilot review via the GitHub MCP tools. It
 runs async — continue and re-check later.
 
-## 4. Run /code-review
+## 5. Run /code-review
 
 Invoke `/code-review` against the working branch diff (works with or without a
 remote). Capture its findings.
 
-## 5. Gather combined findings
+## 6. Gather combined findings
 
 Merge `/code-review` findings with Copilot's (if any), de-duplicated.
 
-## 6. Triage each finding
+## 7. Triage each finding
 
 For every finding, decide **fix / mitigate / ignore** with a one-line reason.
 
@@ -58,7 +68,7 @@ For every finding, decide **fix / mitigate / ignore** with a one-line reason.
 Present the triage table to the user, apply the agreed fixes, then re-run
 `swift build` + `swift test` (step 1) until green again.
 
-## 7. Close out
+## 8. Close out
 
 - **If a PR exists:** mark it ready for review. Linear moves the ticket to **In
   Review** itself from there (auto-linked via the issue id) — don't set that
