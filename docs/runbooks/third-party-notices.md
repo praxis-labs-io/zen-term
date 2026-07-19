@@ -38,6 +38,22 @@ zero has left the build and its notice should go with it (`mpack` is the example
 the archive but the linker drops it, so it is deliberately absent from the notices). A new
 name that appears owes a notice.
 
+`libintl` must stay at zero. `bin/build-ghosttykit` builds ghostty with `-Di18n=false`, so
+nothing references the GNU libintl it bundles on Apple platforms (Apple's libc omits it).
+`SharedDeps.zig` still links the archive, but with no references the release linker dead-strips
+it, so it leaves the shipped binary (the same mechanism that drops `mpack`). That is what keeps
+this closed-source app clear of libintl's LGPL-2.1 static-linking relink obligation, which
+attribution alone does not discharge (ZEN-170). `bin/package-app` runs this same probe on the
+linked binary and refuses to package a build where libintl survived, so a stale GhosttyKit
+cannot ship the violation with the notice already deleted. A nonzero count means i18n came back
+on: the flag was dropped, or ghostty started pulling libintl another way, and the obligation
+returned with it.
+
+Disabling i18n also turns off ghostty's macOS locale canonicalization, so a non-English macOS
+user's child shell gets a non-canonical `LANGUAGE` (e.g. `zh-Hant-TW` rather than `zh_TW`);
+`LANG` is unaffected. That is an accepted tradeoff for staying off libintl at launch, tracked in
+ZEN-193 (restore canonicalization by dynamic-linking libintl or reimplementing the mapping).
+
 C++ libraries mangle their symbols, so demangle through `c++filt` before matching or they
 undercount to zero. Watch for the reverse too: a case-insensitive `gettext` grep matches
 `ImGui::GetTextLineHeight`, which is not gettext.
