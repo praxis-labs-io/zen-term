@@ -187,20 +187,18 @@ and it must be commented as such. If a chrome element needs a role `ChromeTheme`
 doesn't expose, add the role and derive it from the terminal palette in
 `ChromeThemeDeriver` — never reach for a literal.
 
-## Linear — praxis-labs workspace
+## Linear — ZenTerm workspace
 
-The Linear MCP is already connected to the **praxis-labs** workspace
-(https://linear.app/praxis-labs). Scope every zen-term issue to the **ZenTerm**
-team.
+The Linear MCP (`linear-zenterm`) is connected to the **ZenTerm** workspace
+(https://linear.app/zenterm). Every issue lives on the single **ZenTerm** team.
 
-- **Team:** ZenTerm — `1cfb4d81-3e7c-4cc9-bd76-cb3b79b4b8df`
-- **Status ladder:** Backlog → Todo → In Progress → In Review → Done
-  - Backlog `ed394283-7c1d-4e25-ba0d-d74261d51ef2`
-  - Todo `e53f203e-d7d6-4c49-9b9c-8dba0af74217`
-  - In Progress `29401739-cb4f-4013-b389-459598f06d8c`
-  - In Review `c8f755f6-5c17-4bdd-b41f-9161166fdb19`
-  - Done `ceefb860-420c-4640-88d6-70acda792fc6`
-- **Team key:** `ZEN`. Use Linear's generated `gitBranchName` for branches;
+- **Team:** ZenTerm — `121e9ab2-6c26-43c8-92f7-953be0396d82`, key `ZEN`.
+- **Status ladder:** Backlog → Todo → In Progress → In Review → Done.
+- **Address statuses and projects by name, never a UUID.** `save_issue` takes
+  `state: "In Review"` and `project: "Polish & Bugs"` directly. Hardcoded ids are
+  banned here: the 2026-07-19 move to this workspace invalidated every one, and
+  names survive the next move too.
+- Use Linear's generated `gitBranchName` for branches (now `drew/zen-N-…`);
   reference the issue id in commits/PRs so Linear auto-links.
 
 ## Epics → Linear (just-in-time, not up front)
@@ -253,7 +251,7 @@ on a remote existing:
 5. **Close out** — mark the PR ready for review. Linear moves the ticket to **In
    Review** itself once it's ready (auto-linked via the issue id), so don't set
    that status by hand. On a **local-only** ship there's no PR to trigger it, so
-   move it yourself (`c8f755f6-5c17-4bdd-b41f-9161166fdb19`). Done is reached on
+   move it yourself (`save_issue` with `state: "In Review"`). Done is reached on
    merge, or by hand on a local-only ship.
 
 Status flow the agent drives: **In Progress** on pickup. **In Review** and **Done**
