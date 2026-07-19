@@ -299,4 +299,29 @@ else
         --title "ZenTerm $VERSION" --notes-file "$NOTES_FILE" "$DMG" "$APPCAST"
 fi
 
+# Publish the user-facing docs to the public releases repo (ZEN-162). These are committed
+# repo content, not release assets: the marketing site's sync-docs pulls docs/config/* from
+# raw.githubusercontent, and this private repo is the only place they're authored. Publishing
+# on every release is what keeps the public docs from describing a version that isn't shipped.
+# The README stays hand-kept in the releases repo (it's download-page copy, not a mirror of a
+# doc here); ZEN-123 owns keeping it fresh. Rerun-safe: overwrite, and commit only on a real
+# change so a resumed release doesn't push an empty commit.
+echo "▸ publishing user docs to $RELEASES_REPO"
+DOCS_CLONE="$(mktemp -d)"
+gh repo clone "$RELEASES_REPO" "$DOCS_CLONE" -- --depth 1
+mkdir -p "$DOCS_CLONE/docs/config"
+cp docs/onboarding.md "$DOCS_CLONE/docs/onboarding.md"
+cp docs/config/config docs/config/workspaces "$DOCS_CLONE/docs/config/"
+rm -rf "$DOCS_CLONE/docs/config/themes"
+cp -R docs/config/themes "$DOCS_CLONE/docs/config/themes"
+git -C "$DOCS_CLONE" add -A docs
+if git -C "$DOCS_CLONE" diff --cached --quiet; then
+    echo "✓ user docs already current on $RELEASES_REPO"
+else
+    git -C "$DOCS_CLONE" commit -q -m "docs: sync from ZenTerm $TAG"
+    git -C "$DOCS_CLONE" push -q
+    echo "✓ user docs published to $RELEASES_REPO"
+fi
+rm -rf "$DOCS_CLONE"
+
 echo "✓ ZenTerm $VERSION released: https://github.com/$RELEASES_REPO/releases/tag/$TAG"
