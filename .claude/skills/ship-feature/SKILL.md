@@ -75,7 +75,8 @@ Present the triage table to the user, apply the agreed fixes, then re-run
   status by hand.
 - **Linear ticket:** update its description with any scope changes. On a
   local-only ship there's no PR to trigger the move, so set **In Review**
-  yourself (status `c8f755f6-5c17-4bdd-b41f-9161166fdb19`, ZenTerm team). If no
-  ticket exists yet, note that and skip.
+  yourself: `save_issue` with `state: "In Review"` on the ZenTerm team. Address
+  the status by name, never a UUID (per CLAUDE.md) — the workspace move
+  invalidated every hardcoded id. If no ticket exists yet, note that and skip.
 - Report final state: branch, PR link (if any), build/test status, ticket status,
   and the triage summary.
