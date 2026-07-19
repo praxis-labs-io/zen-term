@@ -36,7 +36,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     }
 
     func showUserInitiatedUpdateCheck(cancellation: @escaping () -> Void) {
-        // No manual "Check for Updates" entry point yet (ZEN-173); only scheduled checks run.
+        // No manual "Check for Updates" entry point yet (ZEN-20); only scheduled checks run.
     }
 
     // MARK: - Update found → the "available" card

@@ -12,7 +12,7 @@ import AppKit
 ///
 /// Non-modal like a sticky toast: it never takes first responder, so it can't steal keys from the
 /// terminal (its buttons are click-only, no Return/Esc equivalents). The top-right keycap slot is
-/// left empty — there's no "Check for Updates" chord yet (ZEN-173), and an unbound glyph would lie.
+/// left empty — there's no "Check for Updates" chord yet (ZEN-20), and an unbound glyph would lie.
 final class UpdateCardView: ShadowCardView {
     /// One update state to render. Pure data; the buttons' behavior comes from `Actions`, kept
     /// apart so a window-close re-home can rebuild the card from the same state and the still-valid
