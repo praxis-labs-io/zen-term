@@ -96,7 +96,11 @@ instead of trusting the exit code:
 - `gh release view vX.Y.Z --repo zen-term/zen-term-releases --json assets` shows
   **both** the DMG and `appcast.xml`. A release missing the appcast leaves every
   installed copy unable to see the update.
-- The `docs: sync from ZenTerm vX.Y.Z` commit landed in the releases repo.
+- The releases repo carries the docs this version ships. `bin/release` commits
+  only on a real change, so a release that touched no published doc correctly
+  leaves the last `docs: sync from ZenTerm vX.Y.Z` commit naming an **older**
+  version. Absence of a commit for this version is not a failure: check that the
+  content is right, not that a commit exists. (v0.2.2 was exactly this case.)
 - The appcast's `sparkle:version` matches the shipped build.
 - Mount the DMG and check the volume root: only the app, the Applications
   symlink, `.background`, and `.DS_Store`. See `bin/make-dmg`'s header for why
