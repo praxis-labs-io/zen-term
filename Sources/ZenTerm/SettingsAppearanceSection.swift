@@ -31,7 +31,7 @@ final class SettingsAppearanceSection: SettingsFormSection {
                 width: 64)
             self.addNumericRow(
                 key: "drawer-resize-step", caption: "Drawer resize step",
-                blurb: "How far each ⌥-arrow nudge resizes", range: 4...400, read: { $0.drawerResizeStep },
+                blurb: "How far each ⌘⇧HJKL nudge resizes", range: 4...400, read: { $0.drawerResizeStep },
                 width: 64)
             self.addNumericRow(
                 key: "max-drawer-fraction", caption: "Max drawer width/height",
