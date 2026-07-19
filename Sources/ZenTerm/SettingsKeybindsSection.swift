@@ -6,7 +6,7 @@ import AppKit
 /// default. Rebinds are ≥1-modifier, block-on-conflict, written via `ConfigWriter` and reloaded via
 /// `AppConfig` so they're live — no restart. A section reset returns everything to the defaults.
 final class SettingsKeybindsSection: SettingsSection {
-    var navTitle: String { "Keybinds" }
+    var navTitle: String { "Shortcuts" }
     var onExitToNav: (() -> Void)?
 
     /// Editable actions grouped by category (float toggles are excluded — they're file-only).
@@ -187,7 +187,7 @@ final class SettingsKeybindsSection: SettingsSection {
         // No interceptor means capture could never complete — bail before arming the row so it
         // doesn't stick on "Press keys…" with no way out. (Always wired in-app; a guard, not a path.)
         guard let capturer else {
-            row.showMessage("Keybind capture is unavailable.")
+            row.showMessage("Shortcut capture is unavailable.")
             return
         }
         captureCloseTimer?.cancel()

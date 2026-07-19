@@ -331,7 +331,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     /// it modal: an outside click cancels. Esc cancels; Backspace clears.
     private func beginCapture() {
         guard let capturer else {
-            chordGroup?.setMessage("Keybind capture is unavailable.")
+            chordGroup?.setMessage("Shortcut capture is unavailable.")
             return
         }
         chordGroup?.setMessage(nil)
@@ -578,7 +578,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         let title = titleField.text.trimmingCharacters(in: .whitespaces)
         var titleMessage: String?
         if title.contains("\"") {
-            titleMessage = "Can’t contain a \" character."
+            titleMessage = "Can't contain a \" character."
         } else if !title.isEmpty, ToolFloatParser.slug(forTitle: title).isEmpty {
             titleMessage = "Needs at least one letter or number."
         } else if !title.isEmpty, existingIDs.contains(ToolFloatParser.slug(forTitle: title)) {
@@ -591,7 +591,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         let command = commandField.text.trimmingCharacters(in: .whitespaces)
         var commandMessage: String?
         if command.contains("\"") {
-            commandMessage = "Can’t contain a \" character."  // the grammar has no escape
+            commandMessage = "Can't contain a \" character."  // the grammar has no escape
         } else if includeRequired, command.isEmpty {
             commandMessage = "Enter a command."
         }
@@ -605,11 +605,11 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         let dirText = dirField.text.trimmingCharacters(in: .whitespaces)
         var dirMessage: String?
         if dirText.contains("\"") {
-            dirMessage = "Can’t contain a \" character."  // the grammar has no escape
+            dirMessage = "Can't contain a \" character."  // the grammar has no escape
         } else if includeRequired, let dirURL = ToolFloatParser.resolveDir(dirText),
             !PathDisplay.isDirectory(dirURL)
         {
-            dirMessage = "That folder doesn’t exist."
+            dirMessage = "That folder doesn't exist."
         }
         flag(dirGroup, field: dirField.field, dirMessage)
 

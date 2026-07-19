@@ -131,7 +131,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         let message: String
         if let dir = spec.dir {
             message =
-                "This float is pinned to \(PathDisplay.abbreviatingHome(dir.path)), "
+                "This tool float is pinned to \(PathDisplay.abbreviatingHome(dir.path)), "
                 + "which isn't a Git repository."
         } else {
             message = "This needs a Git repository. Run `git init` here, or open a folder that has one."
@@ -322,12 +322,12 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     func surfaceDidFailToStart(_ s: TerminalSurface) {
         let descriptor: String
         if activeFloat?.surface === s {
-            descriptor = "This tool"
+            descriptor = "This tool float"
         } else if liveFloats.values.contains(where: { $0.surface === s }) {
             // Hidden persistent float: evict so the next open spawns fresh, but still warn — the
             // user believes this tool is alive in the background, and a silent eviction makes the
             // next open's cold, state-less spawn look like persistence quietly failing.
-            descriptor = "A background tool"
+            descriptor = "A background tool float"
         } else {
             return  // not one of ours
         }

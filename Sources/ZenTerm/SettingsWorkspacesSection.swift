@@ -164,7 +164,7 @@ final class WorkspaceRow: NSView {
         var arranged: [NSView] = [labels, spacer]
         if let gitBadge {
             gitBadge.image = IconCatalog.gitBadge()
-            gitBadge.setAccessibilityLabel("git repository")
+            gitBadge.setAccessibilityLabel("Git repository")
             gitBadge.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
             gitBadge.setContentHuggingPriority(.required, for: .horizontal)
             arranged.append(gitBadge)

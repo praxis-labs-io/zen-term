@@ -679,7 +679,7 @@ final class TabController: NSObject {
         lastZoomBlockToast = (verb, now)
         onRequestToast?(
             ToastContent(
-                variant: .info, title: "Zoom mode",
+                variant: .info, title: "Zoom Mode",
                 message: "Exit zoom (⌘F) to \(verb)."))
     }
 

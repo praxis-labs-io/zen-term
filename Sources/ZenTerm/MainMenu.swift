@@ -13,7 +13,7 @@ enum MainMenu {
         let appMenu = NSMenu()
         appItem.submenu = appMenu
         appMenu.addItem(
-            withTitle: "About zen-term",
+            withTitle: "About ZenTerm",
             action: #selector(AppDelegate.showAbout(_:)),
             keyEquivalent: "")
         // Acknowledgements sits with About — it's app info (who we credit), not a Help topic. Nil
@@ -24,14 +24,14 @@ enum MainMenu {
             keyEquivalent: "")
         appMenu.addItem(.separator())
         let hide = NSMenuItem(
-            title: "Hide zen-term",
+            title: "Hide ZenTerm",
             action: #selector(NSApplication.hide(_:)),
             keyEquivalent: "h")
         hide.keyEquivalentModifierMask = [.command, .shift]  // ⌘⇧H — frees ⌘H for nav-left
         appMenu.addItem(hide)
         appMenu.addItem(.separator())
         appMenu.addItem(
-            withTitle: "Quit zen-term",
+            withTitle: "Quit ZenTerm",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q")
 
