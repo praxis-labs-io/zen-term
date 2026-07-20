@@ -151,16 +151,12 @@ colors the whole app, not only the terminal text.
 new one. If it collides with an existing shortcut, the app tells you which action
 already owns it.
 
-## Two things that look like bugs
+## One thing that looks like a bug
 
 **Links need ⌘-click.** Hold ⌘ and a link underlines and becomes clickable. A
 plain click does nothing, and the cursor stays a text cursor over links. That is
 deliberate. A terminal is full of text that only looks like a link, and a stray
 click should not open your browser.
-
-**Esc does not close an open dropdown.** In Settings, with the theme dropdown or
-the icon grid open, Esc will not back out of it. Click elsewhere instead. This
-one is a real bug and Drew is fixing it.
 
 ## When something breaks
 

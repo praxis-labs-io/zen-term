@@ -142,9 +142,12 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
-    /// The card root owns Esc: any open popover closes first, else the form cancels. Claimed here
-    /// (not in `keyDown`) because `performKeyEquivalent` is the only layer that runs before the
-    /// Cancel button's own key equivalent.
+    /// The form's Esc fallback. This card has no popover host, so Esc always ends here: a focused
+    /// button or segmented control lets it bubble to this pass, and a focused text field routes Esc
+    /// through its field editor (`cancelOperation`), which never bubbles as a card-root `keyDown`.
+    /// Claiming Esc in `performKeyEquivalent` catches both, so the card is the single Esc owner
+    /// rather than each control deciding by accident (ZEN-77). The Cancel button carries no Esc key
+    /// equivalent; this pass is what cancels the form.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() }
