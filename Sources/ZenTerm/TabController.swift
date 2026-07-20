@@ -499,12 +499,12 @@ final class TabController: NSObject {
             edge == .bottom
             ? PanelMeta(title: "Bottom drawer", action: .toggleBottomDrawer)
             : PanelMeta(title: "Right drawer", action: .toggleRightDrawer)
-        // While zoomed the header keeps the drawer's own title and swaps its right side to an
-        // "Exit Focus Mode" ⌘F action, matching the pane's Focus Mode header.
+        // While zoomed the header title reads "<drawer>: Focus Mode" and the toggle keybind is
+        // replaced by ⌘F, matching the pane's Focus Mode header.
         let zoomMeta =
             edge == .bottom
-            ? PanelMeta(title: "Bottom drawer", action: .toggleZoom, actionLabel: "Exit Focus Mode")
-            : PanelMeta(title: "Right drawer", action: .toggleZoom, actionLabel: "Exit Focus Mode")
+            ? PanelMeta(title: "Bottom drawer: Focus Mode", action: .toggleZoom)
+            : PanelMeta(title: "Right drawer: Focus Mode", action: .toggleZoom)
         let panel = PanelHostView(
             content: surface.view,
             background: Theme.current.chrome.background.nsColor,

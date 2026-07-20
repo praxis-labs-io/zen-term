@@ -4,9 +4,9 @@ import XCTest
 @testable import ZenTerm
 
 /// ZEN-65 replaced the floating corner icons with a real header: a drawer shows its title +
-/// keybind always (swapping the right side to an "Exit Focus Mode" ⌘F action while zoomed); a
-/// pane shows a "Terminal pane" + "Exit Focus Mode" ⌘F header only while zoomed. Per the house
-/// rule "GUI controls need interaction tests", these mount the panel and drive its zoom state.
+/// keybind always (swapping to a "<drawer>: Focus Mode" ⌘F variant while zoomed); a pane shows a
+/// "Terminal pane: Focus Mode" header only while zoomed. Per the house rule "GUI controls need
+/// interaction tests", these mount the panel and drive its zoom state.
 final class PanelHostViewTests: XCTestCase {
     private func mount(_ panel: PanelHostView) {
         panel.translatesAutoresizingMaskIntoConstraints = true
@@ -30,8 +30,7 @@ final class PanelHostViewTests: XCTestCase {
     func test_zoomMeta_headerHiddenUntilZoom() {
         let panel = PanelHostView(
             content: NSView(), background: Theme.current.chrome.background.nsColor,
-            meta: nil,
-            zoomMeta: PanelMeta(title: "Terminal pane", action: .toggleZoom, actionLabel: "Exit Focus Mode"),
+            meta: nil, zoomMeta: PanelMeta(title: "Terminal pane: Focus Mode", action: .toggleZoom),
             onFocusRequest: {})
         mount(panel)
         XCTAssertFalse(panel.isHeaderVisibleForTesting, "a pane's Focus Mode header is hidden until zoom")
@@ -47,28 +46,25 @@ final class PanelHostViewTests: XCTestCase {
         let panel = PanelHostView(
             content: NSView(), background: Theme.current.chrome.background.nsColor,
             meta: PanelMeta(title: "Bottom drawer", action: .toggleBottomDrawer),
-            zoomMeta: PanelMeta(title: "Bottom drawer", action: .toggleZoom, actionLabel: "Exit Focus Mode"),
+            zoomMeta: PanelMeta(title: "Bottom drawer: Focus Mode", action: .toggleZoom),
             onFocusRequest: {})
         mount(panel)
 
-        // Resting: the drawer's own title + toggle keybind, no action label.
+        // Resting: the drawer's own title + toggle keybind.
         XCTAssertTrue(panel.isHeaderVisibleForTesting, "a drawer's header is always shown")
         XCTAssertEqual(panel.headerContentForTesting?.title, "BOTTOM DRAWER")
-        XCTAssertNil(panel.headerActionLabelForTesting, "resting header has no action label")
         let restingShortcut = panel.headerContentForTesting?.shortcut
         XCTAssertEqual(restingShortcut, CommandCatalog.spec(for: .toggleBottomDrawer).shortcut)
 
-        // Zoomed: the title stays the drawer's own; the right side swaps to "Exit Focus Mode" + ⌘F.
+        // Zoomed: the header stays visible but swaps to the Focus Mode variant + ⌘F.
         panel.isZoomed = true
         XCTAssertTrue(panel.isHeaderVisibleForTesting, "a zoomed drawer keeps its header")
-        XCTAssertEqual(panel.headerContentForTesting?.title, "BOTTOM DRAWER")
-        XCTAssertEqual(panel.headerActionLabelForTesting, "EXIT FOCUS MODE")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "BOTTOM DRAWER: FOCUS MODE")
         XCTAssertEqual(panel.headerContentForTesting?.shortcut, CommandCatalog.spec(for: .toggleZoom).shortcut)
 
-        // Unzoom restores the resting title + keybind, dropping the action label.
+        // Unzoom restores the resting title + keybind.
         panel.isZoomed = false
         XCTAssertEqual(panel.headerContentForTesting?.title, "BOTTOM DRAWER")
-        XCTAssertNil(panel.headerActionLabelForTesting)
         XCTAssertEqual(panel.headerContentForTesting?.shortcut, restingShortcut)
     }
 

@@ -2,21 +2,18 @@ import AppKit
 
 /// A panel's top header: a muted small-caps title (left) and its live keybind (right),
 /// e.g. `("Bottom drawer", .toggleBottomDrawer)` → `BOTTOM DRAWER  ⌘B`. Replaces the old
-/// floating corner icons — a labeled header, not a control; the toggle lives in the footer
+/// floating corner icons: a labeled header, not a control; the toggle lives in the footer
 /// dock and the keymap.
 struct PanelMeta {
     let title: String
     let action: KeyInterceptor.ReservedChord
-    /// Optional action text shown on the right, just before the keybind (e.g. "Exit Focus Mode"
-    /// ⌘F on a zoomed panel). Nil → the right side is the keybind alone (a resting drawer header).
-    var actionLabel: String?
 }
 
 /// Hosts one terminal surface (a pane leaf or a drawer) inside the shared rounded/bordered
 /// chrome: the iris focus halo (accent border + soft glow) and an inner clip that keeps
 /// content within the corner radius. A drawer passes `meta` for an always-on header, and may
-/// also pass `zoomMeta`: the header content it swaps to while zoomed (its title plus an "Exit
-/// Focus Mode" ⌘F action on the right). A pane passes only `zoomMeta` for a
+/// also pass `zoomMeta`: the header content it swaps to while zoomed (its title reading
+/// "<panel>: Focus Mode" and the keybind replaced by ⌘F). A pane passes only `zoomMeta` for a
 /// header that appears only while the pane is zoomed (Focus Mode). Panes with neither
 /// look/behave exactly as the original pane-only chrome. Clicking anywhere in the panel
 /// requests focus.
@@ -126,10 +123,6 @@ final class PanelHostView: NSView {
     /// the zoom content swap. Nil when there's no header.
     var headerContentForTesting: (title: String, shortcut: String)? { headerView?.contentForTesting }
 
-    /// Test hook: the header's right-side action label (e.g. "EXIT FOCUS MODE"), or nil when the
-    /// right side is the keybind alone.
-    var headerActionLabelForTesting: String? { headerView?.actionLabelForTesting }
-
     /// When true the panel is transparent to the pointer — set while it dissolves out on close, so a
     /// click in the vacated region reaches the surviving pane beneath instead of this dead overlay.
     var isHitTransparent = false
@@ -191,17 +184,13 @@ final class PanelHostView: NSView {
         Motion.ease(layer, keyPath: "shadowOpacity", to: isFocused ? Float(0.3) : Float(0))
     }
 
-    /// A muted small-caps title (left) and a right-aligned group of an optional action label +
-    /// the live keybind chip (e.g. `BOTTOM DRAWER … ⌘B`, or `TERMINAL PANE … EXIT FOCUS MODE ⌘F`
-    /// while zoomed). The keybind resolves from the live keymap via `CommandCatalog`, so it tracks
-    /// user rebinds.
+    /// A muted small-caps title (left) and its live keybind chip (right), e.g. `BOTTOM DRAWER ⌘B`,
+    /// or `TERMINAL PANE: FOCUS MODE ⌘F` while zoomed. The keybind resolves from the live keymap via
+    /// `CommandCatalog`, so it tracks user rebinds.
     private final class PanelHeader: NSView {
         private var title: String
         private var action: KeyInterceptor.ReservedChord
-        private var actionLabel: String?
         private let titleField = NSTextField(labelWithString: "")
-        private let actionField = NSTextField(labelWithString: "")
-        private let trailing = NSStackView()
         private var keycap: KeycapView
         private static let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
 
@@ -211,83 +200,60 @@ final class PanelHostView: NSView {
             (titleField.stringValue, CommandCatalog.spec(for: action).shortcut)
         }
 
-        /// Test hook: the right-side action label (uppercased), or nil when the right side is the
-        /// keybind alone.
-        var actionLabelForTesting: String? {
-            actionLabel == nil ? nil : actionField.stringValue
-        }
-
         init(_ meta: PanelMeta) {
             title = meta.title
             action = meta.action
-            actionLabel = meta.actionLabel
             keycap = KeycapView(shortcut: CommandCatalog.spec(for: meta.action).shortcut, showsBackground: false)
             super.init(frame: .zero)
             titleField.translatesAutoresizingMaskIntoConstraints = false
-            actionField.translatesAutoresizingMaskIntoConstraints = false
-            trailing.translatesAutoresizingMaskIntoConstraints = false
-            trailing.orientation = .horizontal
-            trailing.alignment = .centerY
-            trailing.spacing = 6
             addSubview(titleField)
-            addSubview(trailing)
+            addSubview(keycap)
             NSLayoutConstraint.activate([
                 titleField.leadingAnchor.constraint(equalTo: leadingAnchor),
                 titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
                 heightAnchor.constraint(equalToConstant: 20),
-                trailing.trailingAnchor.constraint(equalTo: trailingAnchor),
-                trailing.centerYAnchor.constraint(equalTo: centerYAnchor),
-                trailing.leadingAnchor.constraint(greaterThanOrEqualTo: titleField.trailingAnchor, constant: 8),
             ])
-            rebuildTrailing()
+            activateKeycapConstraints()
             applyTitle()
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-        /// Swap the header to a new title + action label + keybind (a drawer's resting → zoomed transition).
+        /// Swap the header to a new title + keybind (a drawer's resting → zoomed transition).
         func apply(_ meta: PanelMeta) {
             title = meta.title
             action = meta.action
-            actionLabel = meta.actionLabel
             applyTitle()
-            rebuildTrailing()
+            rebuildKeycap()
         }
 
-        /// Re-apply the live title ink and rebuild the trailing group — the keycap's shortcut is fixed
-        /// at build time, so a rebind (or theme swap) is reflected by re-resolving from the keymap.
+        /// Re-apply the live title ink and rebuild the keybind chip — its shortcut is fixed at
+        /// build time, so a rebind (or theme swap) is reflected by re-resolving from the keymap.
         func reapplyTheme() {
             applyTitle()
-            rebuildTrailing()
+            rebuildKeycap()
         }
 
-        /// Rebuild the right-side group (optional action label + keycap) from the current `action`
-        /// and `actionLabel` against the live keymap.
-        private func rebuildTrailing() {
-            for view in trailing.arrangedSubviews {
-                trailing.removeArrangedSubview(view)
-                view.removeFromSuperview()
-            }
+        /// Rebuild the keycap from the current `action` against the live keymap.
+        private func rebuildKeycap() {
+            keycap.removeFromSuperview()
             keycap = KeycapView(shortcut: CommandCatalog.spec(for: action).shortcut, showsBackground: false)
-            if let actionLabel {
-                applyActionLabel(actionLabel)
-                trailing.addArrangedSubview(actionField)
-            }
-            trailing.addArrangedSubview(keycap)
+            addSubview(keycap)
+            activateKeycapConstraints()
+        }
+
+        private func activateKeycapConstraints() {
+            keycap.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                keycap.trailingAnchor.constraint(equalTo: trailingAnchor),
+                keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
+                keycap.leadingAnchor.constraint(greaterThanOrEqualTo: titleField.trailingAnchor, constant: 8),
+            ])
         }
 
         private func applyTitle() {
-            titleField.attributedStringValue = styled(title)
-        }
-
-        private func applyActionLabel(_ text: String) {
-            actionField.attributedStringValue = styled(text)
-        }
-
-        /// The shared muted small-caps treatment for the title and the action label.
-        private func styled(_ text: String) -> NSAttributedString {
-            NSAttributedString(
-                string: text.uppercased(),
+            titleField.attributedStringValue = NSAttributedString(
+                string: title.uppercased(),
                 attributes: [
                     .font: Self.font,
                     .foregroundColor: Theme.current.chrome.ink(alpha: 0.4),
