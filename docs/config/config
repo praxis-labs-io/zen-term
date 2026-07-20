@@ -50,8 +50,8 @@
 # ─── Chrome ──────────────────────────────────────────────────────────────────
 
 # Show the standard macOS window buttons (close, minimize, zoom) and reserve the
-# header space that clears them. Off = a fully chromeless top; close/minimize
-# still work via ⌘W / ⌘M and the menu, and the window drags by its background.
+# header space that clears them. Off = a chromeless top; close/minimize still
+# work via ⌘W / ⌘M and the menu, and the window drags by its background.
 # In-app Settings edit: applies live.
 # window-chrome = true                # true | false
 

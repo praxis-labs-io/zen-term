@@ -499,12 +499,12 @@ final class TabController: NSObject {
             edge == .bottom
             ? PanelMeta(title: "Bottom drawer", action: .toggleBottomDrawer)
             : PanelMeta(title: "Right drawer", action: .toggleRightDrawer)
-        // While zoomed the header swaps to the Focus Mode variant: its title marks the mode and the
-        // toggle keybind is replaced by ⌘F, matching the pane's Focus Mode header.
+        // While zoomed the header keeps the drawer's own title and swaps its right side to an
+        // "Exit Focus Mode" ⌘F action, matching the pane's Focus Mode header.
         let zoomMeta =
             edge == .bottom
-            ? PanelMeta(title: "Bottom drawer · Focus Mode", action: .toggleZoom)
-            : PanelMeta(title: "Right drawer · Focus Mode", action: .toggleZoom)
+            ? PanelMeta(title: "Bottom drawer", action: .toggleZoom, actionLabel: "Exit Focus Mode")
+            : PanelMeta(title: "Right drawer", action: .toggleZoom, actionLabel: "Exit Focus Mode")
         let panel = PanelHostView(
             content: surface.view,
             background: Theme.current.chrome.background.nsColor,
@@ -576,6 +576,10 @@ final class TabController: NSObject {
         // inside `PaneCanvasController`; a drawer's is `popZoom` here.
         switch focusedPanel {
         case .pane:
+            // Nothing to isolate: a lone pane with no open drawer. Focusing would hide nothing, so
+            // block it rather than enter a dead Focus Mode. Focusing a drawer always hides the
+            // canvas, so drawer cases are always meaningful and never blocked.
+            guard !isSinglePane || isBottomOpen || isRightOpen else { toastFocusModeUnavailable(); return }
             zoomedPanel = .pane
             relayoutPanels()
             view.layoutSubtreeIfNeeded()  // canvas at full size before the pane pops
@@ -663,6 +667,9 @@ final class TabController: NSObject {
     private var lastZoomBlockToast: (verb: String, at: Date)?
     private static let zoomBlockToastThrottle: TimeInterval = 3
 
+    /// The last "nothing to focus" toast — ⌘F on a lone pane with no open drawer auto-repeats too.
+    private var lastFocusUnavailableToast: Date?
+
     /// The last "nothing in that direction" nav toast (direction + when) — same auto-repeat
     /// coalescing as the zoom toast, keyed by direction so a distinct dead direction still speaks.
     private var lastNoNeighborToast: (direction: Direction, at: Date)?
@@ -681,6 +688,20 @@ final class TabController: NSObject {
             ToastContent(
                 variant: .info, title: "Focus Mode",
                 message: "Exit Focus Mode (⌘F) to \(verb)."))
+    }
+
+    /// ⌘F on a lone pane with no open drawer: focusing would hide nothing, so there's nothing to
+    /// isolate. Say why rather than entering a Focus Mode that changes nothing on screen.
+    private func toastFocusModeUnavailable() {
+        let now = Date()
+        if let last = lastFocusUnavailableToast, now.timeIntervalSince(last) < Self.zoomBlockToastThrottle {
+            return
+        }
+        lastFocusUnavailableToast = now
+        onRequestToast?(
+            ToastContent(
+                variant: .info, title: "Focus Mode",
+                message: "Focus Mode needs a second pane or an open drawer."))
     }
 
     /// A ⌘hjkl nav found no panel in `direction` — the edge of the layout, or only a diagonal
