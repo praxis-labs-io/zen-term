@@ -68,3 +68,27 @@ check here, however well unit-tested it looks.
 - [ ] **The order sticks.** Relaunch and confirm the new order holds, that
       `~/.config/zen-term/config` now carries `order:` on every float line, and that
       comments and unrelated keys in that file did not move.
+
+## ⌘W smart close (crosses `KeyInterceptor`)
+
+⌘W is a global chord: like the card chords above it resolves in `KeyInterceptor`
+before the responder chain, so no view-level test sees it decide what to close. It
+closes whatever holds focus and confirms only when live work would be lost — an idle
+target closes with no toast (ZEN-213). Drive each on a real window.
+
+- [ ] **Drawer-focused ⌘W closes the drawer, not the tab.** Open a drawer (⌘B or
+      ⌘\), click into it, ⌘W. An idle drawer closes silently and the tab + panes stay;
+      a busy one (run a process in it first) confirms **"Close Drawer"**, and
+      confirming kills only that drawer with focus returning to the pane.
+- [ ] **Last-pane ⌘W is titled "Close Tab."** On a single-pane tab with something
+      running, ⌘W confirms **"Close Tab"** (not "Close Pane"). An idle single-pane tab
+      closes with no toast, whether or not other tabs remain.
+- [ ] **Split panes.** ⌘W on an idle non-last pane closes it silently; a busy one
+      confirms **"Close Pane"**.
+- [ ] **⌘W over a tool float is blocked, not a pane close.** With a float open (e.g.
+      btop), ⌘W shows the info toast titled **"Tool Float"** reading "Close btop first,
+      then ⌘W" — the pane or drawer behind the float is untouched.
+- [ ] **⇧⏎ in the ⌘P workspace picker confirms a busy replace.** ⌘P, pick a workspace,
+      ⇧⏎. Onto an idle tab it replaces silently; onto a tab with a running pane or
+      drawer it confirms **"Replace Tab"** (Cancel keeps the tab). Plain ⏎ still opens
+      a new tab.
