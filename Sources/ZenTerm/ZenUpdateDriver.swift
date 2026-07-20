@@ -161,10 +161,10 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         }
     }
 
-    /// Pull the bulleted lines out of the appcast `<description>`. The release pipeline drops the
-    /// whole curated notes file in as-is, so this keeps only lines marked "- " / "* " (stripped) and
-    /// ignores headers and prose — "What's new" links the full notes for anyone who wants them. Capped
-    /// so a long changelog can't grow the card without bound.
+    /// Pull the bulleted lines out of the appcast `<description>`. The release pipeline feeds this a
+    /// short list (the notes file's `<!-- card ... -->` block), so this keeps only lines marked
+    /// "- " / "* " (stripped) and ignores any stray prose — "What's new" links the full notes for
+    /// anyone who wants them. Capped so a long list can't grow the card without bound.
     static func bullets(from description: String?) -> [String] {
         guard let description else { return [] }
         return
