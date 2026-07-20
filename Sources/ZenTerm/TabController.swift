@@ -166,6 +166,14 @@ final class TabController: NSObject {
         bottomDrawerSurface?.isBusy == true || rightDrawerSurface?.isBusy == true
     }
 
+    /// Whether a drawer (not the pane canvas) holds the tab's focus — so ⌘W targets that
+    /// drawer instead of bubbling up to the pane/tab close (ZEN-213).
+    var isDrawerFocused: Bool { focusedPanel != .pane }
+
+    /// Whether the focused drawer has a running process. False when the pane holds focus, so
+    /// the ⌘W drawer path can confirm on a busy drawer and close an idle one silently.
+    var focusedDrawerIsBusy: Bool { focusedDrawerSurface?.isBusy == true }
+
     /// The tab's overlay open-state (drawers + zoom), for the footer dock's active tints; fired
     /// via `onOverlayStateChanged` whenever one of them toggles. The shown tool float isn't in
     /// here — it belongs to the window, and the dock reads it from there.
@@ -268,6 +276,16 @@ final class TabController: NSObject {
     @discardableResult func closeFocused() -> Bool {
         exitZoomIfNeeded()  // exit zoom before closing so zoom state can't desync
         return paneCanvas.closeFocused()
+    }
+
+    /// Close the focused drawer entirely — the same teardown as typing `exit` in it (ZEN-213).
+    /// No-op when a pane holds focus; the pane/tab close path handles that case.
+    func closeFocusedDrawer() {
+        switch focusedPanel {
+        case .pane: return
+        case .bottomDrawer: closeDrawer(.bottom)
+        case .rightDrawer: closeDrawer(.right)
+        }
     }
     func focusActivePane() { paneCanvas.focusActivePane() }
 
@@ -1247,6 +1265,22 @@ extension TabController: TerminalSurfaceDelegate {
     /// `PaneCanvasController`; this only reacts to the two drawer surfaces.
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         if s === bottomDrawerSurface {
+            closeDrawer(.bottom)
+        } else if s === rightDrawerSurface {
+            closeDrawer(.right)
+        }
+    }
+
+    /// Tear a drawer down entirely: drop its panel view, terminate the surface, clear its
+    /// refs + nav token, mark it closed, re-tile, and restore focus if it held it. This is
+    /// the shell-is-gone path — shared by `surfaceDidExit` (the user typed `exit`) and ⌘W on
+    /// a focused drawer (ZEN-213), which is meant to behave exactly like `exit`. Distinct from
+    /// `toggle*Drawer()`, which merely hides a drawer and keeps its shell alive.
+    private func closeDrawer(_ edge: DrawerEdge) {
+        let ref: PanelRef
+        switch edge {
+        case .bottom:
+            ref = .bottomDrawer
             if zoomedPanel == .bottomDrawer { zoomedPanel = nil }  // don't leave zoom stuck
             bottomDrawerPanel?.removeFromSuperview()
             bottomDrawerSurface?.terminate()
@@ -1254,17 +1288,8 @@ extension TabController: TerminalSurfaceDelegate {
             bottomDrawerPanel = nil
             unregisterDrawerToken(.bottomDrawer)
             isBottomOpen = false
-            relayoutPanels()
-            // `focusActivePane()` restores BOTH the pane's keyboard first-responder
-            // and — via `onFocusChanged` → `paneGainedFocus()` — the unified halo/
-            // routing state, so typing `exit` in a focused drawer doesn't orphan
-            // keystrokes until the next click. But NOT while the modal float is open:
-            // it must keep focus, so only re-point `focusedPanel` to the pane (the
-            // now-gone drawer) so closing the float later restores focus correctly.
-            if focusedPanel == .bottomDrawer {
-                if isToolFloatOpen() { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
-            }
-        } else if s === rightDrawerSurface {
+        case .right:
+            ref = .rightDrawer
             if zoomedPanel == .rightDrawer { zoomedPanel = nil }  // don't leave zoom stuck
             rightDrawerPanel?.removeFromSuperview()
             rightDrawerSurface?.terminate()
@@ -1272,12 +1297,15 @@ extension TabController: TerminalSurfaceDelegate {
             rightDrawerPanel = nil
             unregisterDrawerToken(.rightDrawer)
             isRightOpen = false
-            relayoutPanels()
-            // See the bottom-drawer branch above: keep the modal float focused if open,
-            // otherwise restore keyboard focus + unified halo/routing to the pane.
-            if focusedPanel == .rightDrawer {
-                if isToolFloatOpen() { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
-            }
+        }
+        relayoutPanels()
+        // `focusActivePane()` restores BOTH the pane's keyboard first-responder and — via
+        // `onFocusChanged` → `paneGainedFocus()` — the unified halo/routing state, so
+        // closing a focused drawer doesn't orphan keystrokes until the next click. But NOT
+        // while the modal float is open: it must keep focus, so only re-point `focusedPanel`
+        // to the pane (the now-gone drawer) so closing the float later restores focus right.
+        if focusedPanel == ref {
+            if isToolFloatOpen() { focusedPanel = .pane } else { paneCanvas.focusActivePane() }
         }
     }
 

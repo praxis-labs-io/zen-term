@@ -919,11 +919,25 @@ final class WindowController: NSObject {
     /// Workspace" form) can open immediately without a relaunch; that form will widen access then.
     private func openWorkspace(_ ws: Workspace, replaceCurrentTab: Bool) {
         closeModal()
-        if replaceCurrentTab {
-            replaceActiveTab(cwd: ws.path, pinnedTitle: ws.title, workspace: ws)
-        } else {
-            addTab(cwd: ws.path, pinnedTitle: ws.title, workspace: ws)
+        guard replaceCurrentTab else {
+            addTab(cwd: ws.path, pinnedTitle: ws.title, workspace: ws)  // ⏎: new tab, destroys nothing
+            return
         }
+        // ⇧⏎ replaces the current tab, terminating every pane and drawer in it. That silent
+        // clobber gets a confirm when the tab has live work; an idle tab is replaced outright
+        // (ZEN-213). Floats are window-scoped and survive a tab replace, so they don't count.
+        let replace = { [weak self] in
+            self?.replaceActiveTab(cwd: ws.path, pinnedTitle: ws.title, workspace: ws)
+        }
+        guard activeController?.allSurfaces.contains(where: { $0.isBusy }) == true else {
+            replace()
+            return
+        }
+        presentConfirm(
+            variant: .warning, title: "Replace Tab",
+            message: "Replacing this tab will stop everything running in it.",
+            confirmLabel: "Replace"
+        ) { replace() }
     }
 
     // MARK: chord routing
@@ -1067,44 +1081,49 @@ final class WindowController: NSObject {
     }
 
     /// ⌘W: close silently when there's nothing to lose; otherwise confirm first.
+    /// - A focused drawer closes like `exit` (just the drawer, not the tab): confirm only when
+    ///   it's busy; an idle drawer closes silently, like an empty pane (ZEN-213).
     /// - A non-last pane confirms only if it's busy (mid-tab work).
-    /// - The last pane closes the tab: if it's the only tab (so ⌘W closes the window), it
-    ///   confirms only when a pane or drawer is busy; if other tabs remain, closing this tab
-    ///   is itself worth a confirm even when idle. `exit`/middle-click stay out of scope.
+    /// - The last pane closes the tab, so the confirm is titled "Close Tab": confirm only when
+    ///   the tab has live work; an idle tab closes silently whether or not other tabs remain.
+    /// `exit`/middle-click stay out of scope.
     private func requestClosePane() {
         guard let active = activeController else { return }
+
+        // A focused drawer is its own close target: ⌘W kills that drawer (like `exit`), never
+        // the tab. Busy → confirm; idle → close silently, exactly like an empty second pane.
+        if active.isDrawerFocused {
+            guard active.focusedDrawerIsBusy else { active.closeFocusedDrawer(); return }
+            presentConfirm(
+                variant: .warning, title: "Close Drawer",
+                message: "Closing this drawer will stop the process running in it.",
+                confirmLabel: "Close"
+            ) { [weak self] in self?.activeController?.closeFocusedDrawer() }
+            return
+        }
+
         let lastPane = active.isSinglePane
         let busy = active.focusedPaneIsBusy
 
-        // Only the last-pane path consults drawers and hidden persistent floats, so probe them
-        // lazily. Hidden floats matter precisely because they're invisible: a dismissed
-        // `persist:` tool keeps running with no on-screen trace, and this confirm is the only
-        // thing standing between ⌘W and silently killing its live work. Floats are window-wide
-        // (ZEN-141), so this now sees one opened from any tab, not just the active one.
-        let running = lastPane ? (busy || active.hasBusyDrawer || floats.hasBusy) : busy
-        let needsConfirm: Bool
-        if lastPane {
-            let closesWindow = tabs.order.count == 1
-            needsConfirm = closesWindow ? running : true
-        } else {
-            needsConfirm = busy
-        }
+        // The last pane's close takes the whole tab, so its confirm weighs the tab's entire live
+        // work: the focused pane, either drawer, and any hidden persistent float. Hidden floats
+        // matter precisely because they're invisible — a dismissed `persist:` tool keeps running
+        // with no on-screen trace, and this confirm is the only thing standing between ⌘W and
+        // silently killing it (floats are window-wide, ZEN-141). An idle tab has nothing to
+        // lose, so it closes with no toast whether or not other tabs remain (ZEN-213).
+        let needsConfirm = lastPane ? (busy || active.hasBusyDrawer || floats.hasBusy) : busy
         guard needsConfirm else {
             // Nothing to lose → close now, cascading to the tab when it was the last pane.
             if active.closeFocused() == false { closeTab(tabs.activeID) }
             return
         }
 
-        // The action is always "Close Pane" — closing the tab is a side effect stated in the body.
-        let title = "Close Pane"
-        let message: String
-        if !lastPane {
-            message = "Closing this pane will stop the process running in it."
-        } else if running {
-            message = "Closing this pane will also close the tab and stop everything running in it."
-        } else {
-            message = "Closing this pane will also close the tab."
-        }
+        // Name the real effect: the last pane's close IS a tab close.
+        let title = lastPane ? "Close Tab" : "Close Pane"
+        let message =
+            lastPane
+            ? "Closing this tab will stop everything running in it."
+            : "Closing this pane will stop the process running in it."
         presentConfirm(
             variant: .warning, title: title, message: message, confirmLabel: "Close"
         ) { [weak self] in
