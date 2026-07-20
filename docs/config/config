@@ -92,6 +92,13 @@
 # shell = /bin/zsh
 # shell-args = -l -i                  # whitespace-separated argv
 
+# ─── Updates ─────────────────────────────────────────────────────────────────
+
+# Check for a new release in the background. On by default; turn it off to check
+# only when you run the "Check for Updates" command. You choose when to install.
+# In-app Settings edit: applies live.
+# automatic-update-checks = true      # true | false
+
 # ─── Tool floats ─────────────────────────────────────────────────────────────
 #
 # Command overlays (dock button + command-palette entry + keybinding) whose
@@ -170,6 +177,7 @@
 #   new_tab  new_window  prev_tab  next_tab  select_tab_1 … select_tab_9
 #   toggle_bottom_drawer  toggle_right_drawer  toggle_focus_mode  fill_screen
 #   toggle_repo_picker  toggle_command_palette  open_settings  reload_config
+#   check_for_updates   (no default binding; bind a chord to reach it by keyboard)
 #   toggle_float:<id>   (bind a second chord to one of your floats)
 #
 # Defaults (uncomment to change; these are what ships):

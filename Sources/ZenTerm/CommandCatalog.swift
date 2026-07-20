@@ -51,6 +51,7 @@ enum CommandCatalog {
         case .toggleRepoPicker: return tool("Open Workspace Picker", glyph, chord)
         case .openSettings: return config("Settings…", glyph, chord)
         case .reloadConfig: return config("Reload Config", glyph, chord)
+        case .checkForUpdates: return config("Check for Updates", glyph, chord)
         // Present for exhaustiveness; both are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
@@ -64,13 +65,14 @@ enum CommandCatalog {
 
     /// The ordered commands shown for a window with `tabCount` tabs, grouped by category
     /// (Tools → Config → Drawers → Tabs → Panes → Window). Tools leads with the workspace picker,
-    /// then the configured tool floats; Config holds Settings + Reload Config; Window holds Fill
+    /// then the configured tool floats; Config holds Settings, Reload Config, Check for Updates;
+    /// Window holds Fill
     /// Screen. `.selectTab` expands to one entry per open tab (capped at the bound ⌘1–⌘9). The
     /// command palette itself and New Window aren't shown.
     static func commands(tabCount: Int) -> [PaletteCommand] {
         var chords: [KeyInterceptor.ReservedChord] = [.toggleRepoPicker]
         chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
-        chords += [.openSettings, .reloadConfig]
+        chords += [.openSettings, .reloadConfig, .checkForUpdates]
         chords += [
             .toggleBottomDrawer, .toggleRightDrawer,
             .newTab, .prevTab, .nextTab,

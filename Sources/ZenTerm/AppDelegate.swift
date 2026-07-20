@@ -85,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MotionConfig.apply(GeneralConfig.current.reduceMotion)  // re-install the reduce-motion override
             self?.surfaceKeymapDiagnostics()
             self?.updateController?.reapplyTheme()  // recolor a live update card — it's outside any window's toast list
+            self?.updateController?.applyAutoCheckSetting()  // pick up a flipped auto-update toggle with no relaunch
         }
 
         // Auto-updates (ZEN-118). Inert in an unpackaged dev build (no SUFeedURL). The card is
@@ -99,8 +100,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Route a chord: `⌘n` makes a new window, `.reloadConfig` re-reads config + theme from
-    /// disk (app-global, not window-scoped); everything else goes to the key window's
-    /// controller.
+    /// disk, `.checkForUpdates` runs a manual update check — all app-global, not window-scoped;
+    /// everything else goes to the key window's controller. The palette also lands here for the
+    /// app-global chords, via `WindowController.onAppGlobalCommand` (they're a no-op in `handle`).
     private func route(_ chord: KeyInterceptor.ReservedChord) {
         if case .newWindow = chord {
             // ⌘N is intercepted here before `handle(_:)`, so a palette's / confirm's modal
@@ -111,6 +113,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if case .reloadConfig = chord {
             AppConfig.reload()
+            return
+        }
+        if case .checkForUpdates = chord {
+            updateController?.checkForUpdates()  // app-global: the updater is app-owned, not window-scoped
             return
         }
         keyController()?.handle(chord)
@@ -162,6 +168,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let rect = NSRect(x: 0, y: 0, width: 900, height: 560).offsetBy(dx: offset, dy: -offset)
         let wc = WindowController(contentRect: rect, initialCWD: initialCWD)
         wc.keybindCapturer = keys
+        // The command palette dispatches through `handle(_:)`, where app-global chords are a no-op.
+        // Hand them back to `route(_:)` so a palette pick reloads config / checks for updates too.
+        wc.onAppGlobalCommand = { [weak self] chord in self?.route(chord) }
         if centered { wc.window.center() }
         wc.onClosed = { [weak self, weak wc] in
             guard let self, let wc else { return }

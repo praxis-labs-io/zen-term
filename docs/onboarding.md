@@ -183,6 +183,10 @@ version, what changed, and Install. It downloads and installs in place, then
 offers to relaunch. Skip a version and it stays skipped. Choose Later and ZenTerm
 offers it again at its next check.
 
+To check on your own, open the command palette (⌘P) and run Check for Updates; if
+nothing is waiting it tells you you're on the latest. To check only when you ask,
+turn off the background checks in Settings → General, and the command still works.
+
 One catch, this first time only: updating from a build older than this one still
 means downloading the DMG by hand, because that older build shipped without the
 updater. After this, updates come to you.

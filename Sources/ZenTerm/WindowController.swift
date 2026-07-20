@@ -109,6 +109,11 @@ final class WindowController: NSObject {
     /// The app's key interceptor, injected so the Settings Keybinds section can capture chords.
     weak var keybindCapturer: KeybindCapturing?
 
+    /// Hand an app-global chord back to `AppDelegate.route`. The keyboard path routes these before
+    /// `handle(_:)`, but a palette pick reaches `handle` directly — where they'd otherwise be a
+    /// no-op — so `handle` forwards them here instead. Injected by `AppDelegate`.
+    var onAppGlobalCommand: ((KeyInterceptor.ReservedChord) -> Void)?
+
     /// Whether a modal card is up right now. Read by `AppDelegate` so window-level chords (⌘N)
     /// and Copy/Paste routing respect the modal too, not just `handle(_:)`.
     var isModalOverlayOpen: Bool { modal != nil }
@@ -666,7 +671,7 @@ final class WindowController: NSObject {
         // added — the array order is the on-screen order.
         let sections: [SettingsSection] = [
             SettingsAppearanceSection(),
-            SettingsNotificationsSection(),
+            SettingsGeneralSection(),
             SettingsTerminalSection(),
             SettingsKeybindsSection(capturer: keybindCapturer),
             toolsSection,
@@ -989,8 +994,10 @@ final class WindowController: NSObject {
         case .prevTab: cycleTab(-1)
         case .nextTab: cycleTab(1)
         case .closePane: requestClosePane()
-        case .newWindow, .reloadConfig:
-            break  // handled by AppDelegate (window manager / app-global config reload); no-op here
+        case .newWindow, .reloadConfig, .checkForUpdates:
+            // App-global (window manager / config reload / update check). The keyboard path routes
+            // these in AppDelegate before handle; a palette pick lands here, so forward it back.
+            onAppGlobalCommand?(chord)
         case .toggleBottomDrawer: active?.toggleBottomDrawer()
         case .toggleRightDrawer: active?.toggleRightDrawer()
         case .toggleZoom: active?.toggleZoom()
