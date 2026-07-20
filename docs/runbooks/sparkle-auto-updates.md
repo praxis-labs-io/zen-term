@@ -25,8 +25,8 @@ keycap, and the manual-check toasts are here, by eye.
   are click-only, so terminal input is never gated behind it.
 - **On-demand check (ZEN-20).** A "Check for Updates" command in the palette (Config
   group) runs a manual check. Unlike a scheduled one it reports its result even when
-  nothing is found: an "Up to date" info toast, or a warning toast on failure (an
-  update found still shows the card). It ships with **no default chord**: bind one
+  nothing is found: a "You're on the latest" info toast, or a warning toast on failure
+  (an update found still shows the card). It ships with **no default chord**: bind one
   with `keybind = check_for_updates=<chord>` and the update card's top-right keycap
   slot fills with that glyph (empty until then, since an unbound glyph would lie).
   The command is app-global (the updater is app-owned): it reaches `UpdateController`
