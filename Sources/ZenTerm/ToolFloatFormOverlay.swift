@@ -283,6 +283,17 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             cancelButton.onArrowLeft = { [weak self] in self?.focus(self?.deleteButton) }
             footerViews = [deleteButton, spacer, cancelButton, submitButton]
         }
+        // Tab walks the footer in place so Cancel (and Delete when editing) are Tab-reachable, not
+        // Left/Right-only: Submit → Cancel → Delete, mirroring the Left-arrow order. Forward Tab off
+        // the last button wraps to the top; Shift-Tab off Submit leaves the footer upward.
+        submitButton.onTab = { [weak self] in self?.focus(self?.cancelButton) }
+        cancelButton.onBacktab = { [weak self] in self?.focus(self?.submitButton) }
+        if onDelete != nil {
+            cancelButton.onTab = { [weak self] in self?.focus(self?.deleteButton) }
+            deleteButton.onBacktab = { [weak self] in self?.focus(self?.cancelButton) }
+        } else {
+            cancelButton.onTab = { [weak self] in self?.moveTab(1) }
+        }
         let footer = Self.hStack(footerViews, spacing: 8)
 
         let content = NSStackView(views: [

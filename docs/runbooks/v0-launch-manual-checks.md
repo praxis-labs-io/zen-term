@@ -69,6 +69,29 @@ check here, however well unit-tested it looks.
       `~/.config/zen-term/config` now carries `order:` on every float line, and that
       comments and unrelated keys in that file did not move.
 
+## Back to the nav in Settings + form cards (ZEN-217)
+
+Arrows and Tab route back to the left nav through the responder chain. The wiring is
+unit-tested (`SettingsGeneralSectionTests`, `SettingsTabTraversalTests`,
+`ToolFloatFormOverlayTests`), but whether each key lands on the intended control in the
+running card is a hand check.
+
+- [ ] **Left off a General toggle returns to the nav.** Settings (`⌘,`) → General, Tab or
+      ↓ into the "Notify me..." On/Off toggle, then ←. With On selected (the leftmost
+      segment) focus jumps straight back to the nav and the toggle does not change. With Off
+      selected, the first ← cycles to On, the second ← returns to the nav.
+- [ ] **Up off the first row returns to the nav.** On any section (General, Appearance),
+      focus the top row's control and press ↑. Focus lands on the selected nav row instead
+      of dead-ending. ↓ off the last stop still does nothing (no wrap).
+- [ ] **The Theme dropdown exits left.** Settings → Appearance, focus the Theme dropdown
+      while it is closed, press ←. Focus returns to the nav.
+- [ ] **Shift-Tab off the first nav row wraps.** Focus the top nav row (General), press
+      ⇧Tab. Focus wraps to the last nav row rather than sticking. ↑ on that same top row
+      still clamps (no wrap).
+- [ ] **Cancel and Delete are Tab-reachable in the form cards.** Settings → Tools, edit a
+      tool float. From Save, Tab walks Save → Cancel → Delete, then wraps to the top field;
+      ⇧Tab walks them back. Same in the Add/Edit workspace card.
+
 ## ⌘W smart close (crosses `KeyInterceptor`)
 
 ⌘W is a global chord: like the card chords above it resolves in `KeyInterceptor`

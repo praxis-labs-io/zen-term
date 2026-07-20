@@ -262,11 +262,13 @@ class SettingsFormSection: SettingsSection {
         case let seg as SegmentedControl:
             seg.onArrowUp = { [weak self] in self?.moveFocus(-1) }
             seg.onArrowDown = { [weak self] in self?.moveFocus(1) }
+            seg.onArrowLeft = { [weak self] in self?.onExitToNav?() }  // Left at the leftmost segment → nav
             seg.onTab = { [weak self] in self?.moveTab(1) }
             seg.onBacktab = { [weak self] in self?.moveTab(-1) }
         case let dropdown as Dropdown:
             dropdown.onArrowUp = { [weak self] in self?.moveFocus(-1) }
             dropdown.onArrowDown = { [weak self] in self?.moveFocus(1) }
+            dropdown.onArrowLeft = { [weak self] in self?.onExitToNav?() }  // Left → nav (a dropdown owns no Left)
             dropdown.onTab = { [weak self] in self?.moveTab(1) }
             dropdown.onBacktab = { [weak self] in self?.moveTab(-1) }
         case let button as AppButton:
@@ -379,9 +381,12 @@ class SettingsFormSection: SettingsSection {
         let visible = stops.filter { !$0.isHidden }
         let window = visible.first?.window
         let anchor = visible.firstIndex { KeyboardFocus.isFocused($0, in: window) }
-        SettingsDetail.moveFocus(stops: visible, from: anchor, delta: delta) { [rows] target in
+        let moved = SettingsDetail.moveFocus(stops: visible, from: anchor, delta: delta) { [rows] target in
             rows.first { target.isDescendant(of: $0) } ?? target
         }
+        // Up from the first stop has nowhere to go in the pane, so it returns to the nav rather than
+        // dead-ending — the non-mutating way back for a section whose first stop is a segmented row.
+        if !moved, delta < 0 { onExitToNav?() }
     }
 
     /// Tab traversal, which differs from the arrows at the ends: Tab wraps from the last stop back
