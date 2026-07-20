@@ -142,12 +142,13 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
-    /// The form's Esc fallback. An open icon grid closes itself first, in `IconPickerField.keyDown`
-    /// — a bare Esc reaches the focused control before this pass, so a typed-in form survives the
-    /// grid-closing Esc untouched and this never runs while the grid is up (ZEN-5). It's claimed in
-    /// `performKeyEquivalent`, not `keyDown`, for the other path: a text field routes Esc through
-    /// `cancelOperation`, where the Cancel button's own key equivalent used to win unconditionally
-    /// and throw the whole form away — this beats it (ZEN-77).
+    /// The form's Esc fallback. A bare Esc reaches the focused control's `keyDown` first, so an open
+    /// icon grid closes itself there (`IconPickerField.keyDown`) and a typed-in form survives
+    /// untouched — this pass never runs while the grid is up (ZEN-5). Claimed in
+    /// `performKeyEquivalent`, not a card-root `keyDown`, so it also catches Esc from a focused text
+    /// field, whose field editor consumes it (`cancelOperation`) before it could bubble as a keyDown
+    /// — one Esc owner per card, so a stray Esc can't discard a filled-in form (ZEN-77). The Cancel
+    /// button carries no Esc key equivalent; this pass is the owner.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() }
