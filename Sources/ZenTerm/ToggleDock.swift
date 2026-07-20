@@ -48,7 +48,7 @@ final class ToggleDock: NSView {
         paletteBtn = button("command", "Command palette", .toggleCommandPalette, onPalette)
         bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", .toggleBottomDrawer, onBottom)
         rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", .toggleRightDrawer, onRight)
-        zoomBtn = button("arrow.up.left.and.arrow.down.right", "Toggle zoom", .toggleZoom, onZoom)
+        zoomBtn = button("arrow.up.left.and.arrow.down.right", "Focus mode", .toggleZoom, onZoom)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         allButtons = [newTab, splitH, splitV, bottomBtn, rightBtn, zoomBtn, paletteBtn]

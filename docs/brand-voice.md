@@ -74,7 +74,9 @@ Mechanical and checkable. A reviewer should be able to fail copy on these.
    copy. Use a colon, a period, a comma, or split the sentence. Plenty of good
    writing uses them, which is exactly why this drifts back: the rule is ours and
    it outranks any outside example. This file contains none, and a grep for the
-   character should keep returning nothing.
+   character should keep returning nothing. **No dot spacers either** (a middle
+   dot `·` between a title and a qualifier): use a colon, e.g. a zoomed panel
+   header reads "Terminal pane: Focus Mode".
 2. **No hype words.** seamless, powerful, beautiful, blazing, effortless,
    delightful, magical, just works, game-changer, unleash, supercharge. The
    product demonstrates these or it doesn't have them.
@@ -116,7 +118,7 @@ what dies. It does not ask the user to introspect.
 **Nothing fails silently.** When an action does nothing, say so:
 
 > "No pane left to focus"
-> "Exit zoom (⌘F) to split."
+> "Exit Focus Mode (⌘F) to split."
 
 **Errors name the place and the fix.**
 
@@ -158,7 +160,6 @@ The strictest surface, because it is read mid-task by someone who wants to be
 doing something else.
 
 - **Titles: Title Case.** "Terminal Didn't Start", "Close Pane", "Quit ZenTerm".
-  (`"Zoom mode"` is the lone outlier and should be "Zoom Mode".)
 - **Body: sentence case**, ending in a period.
 - **Buttons: the verb.** "Quit", "Retry", "Delete", "Save".
 - Measure it against its container before shipping it.
@@ -193,6 +194,8 @@ One word per concept. The audit found four concepts with two or three words each
 | A saved folder + layout | **workspace** | project, repo |
 | A key combination | **shortcut** in UI, **chord** when precision matters | keybind (that's the config key name) |
 | A floating tool | **tool float** first, **float** after | tool |
+| One pane or drawer filling the window | **Focus Mode** | zoom, full screen |
+| The whole window filling the desktop | **Fill Screen** | full screen, fullscreen, maximize |
 | Version control | **Git repository**, or **Git repo** | repo, git repository (lowercase) |
 
 Apostrophes: straight (`'`), matching the bulk of the codebase. Two form overlays
@@ -219,7 +222,7 @@ needs a real deprecation, not a find-and-replace.
 
 Before any copy ships:
 
-- [ ] Any em-dash? Remove it.
+- [ ] Any em-dash or dot spacer (`·`)? Replace it with a colon.
 - [ ] Any hype word or adverb? Cut it.
 - [ ] Passive voice, or an object doing a human verb? Name the actor.
 - [ ] "Not X, it's Y"? State Y.

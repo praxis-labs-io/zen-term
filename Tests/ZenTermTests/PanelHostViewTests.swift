@@ -4,9 +4,9 @@ import XCTest
 @testable import ZenTerm
 
 /// ZEN-65 replaced the floating corner icons with a real header: a drawer shows its title +
-/// keybind always (swapping to a "— Full screen" ⌘F variant while zoomed); a pane shows a
-/// "Terminal pane — Full screen" header only while zoomed. Per the house rule "GUI controls
-/// need interaction tests", these mount the panel and drive its zoom state.
+/// keybind always (swapping to a "<drawer>: Focus Mode" ⌘F variant while zoomed); a pane shows a
+/// "Terminal pane: Focus Mode" header only while zoomed. Per the house rule "GUI controls need
+/// interaction tests", these mount the panel and drive its zoom state.
 final class PanelHostViewTests: XCTestCase {
     private func mount(_ panel: PanelHostView) {
         panel.translatesAutoresizingMaskIntoConstraints = true
@@ -30,23 +30,23 @@ final class PanelHostViewTests: XCTestCase {
     func test_zoomMeta_headerHiddenUntilZoom() {
         let panel = PanelHostView(
             content: NSView(), background: Theme.current.chrome.background.nsColor,
-            meta: nil, zoomMeta: PanelMeta(title: "Full screen", action: .toggleZoom),
+            meta: nil, zoomMeta: PanelMeta(title: "Terminal pane: Focus Mode", action: .toggleZoom),
             onFocusRequest: {})
         mount(panel)
-        XCTAssertFalse(panel.isHeaderVisibleForTesting, "a pane's full-screen header is hidden until zoom")
+        XCTAssertFalse(panel.isHeaderVisibleForTesting, "a pane's Focus Mode header is hidden until zoom")
 
         panel.isZoomed = true
-        XCTAssertTrue(panel.isHeaderVisibleForTesting, "zooming a pane reveals its full-screen header")
+        XCTAssertTrue(panel.isHeaderVisibleForTesting, "zooming a pane reveals its Focus Mode header")
 
         panel.isZoomed = false
         XCTAssertFalse(panel.isHeaderVisibleForTesting, "unzooming hides it again")
     }
 
-    func test_drawerZoom_swapsHeaderToFullScreenAndCommandF() {
+    func test_drawerZoom_swapsHeaderToFocusModeAndCommandF() {
         let panel = PanelHostView(
             content: NSView(), background: Theme.current.chrome.background.nsColor,
             meta: PanelMeta(title: "Bottom drawer", action: .toggleBottomDrawer),
-            zoomMeta: PanelMeta(title: "Bottom drawer — Full screen", action: .toggleZoom),
+            zoomMeta: PanelMeta(title: "Bottom drawer: Focus Mode", action: .toggleZoom),
             onFocusRequest: {})
         mount(panel)
 
@@ -56,10 +56,10 @@ final class PanelHostViewTests: XCTestCase {
         let restingShortcut = panel.headerContentForTesting?.shortcut
         XCTAssertEqual(restingShortcut, CommandCatalog.spec(for: .toggleBottomDrawer).shortcut)
 
-        // Zoomed: the header stays visible but swaps to the full-screen variant + ⌘F.
+        // Zoomed: the header stays visible but swaps to the Focus Mode variant + ⌘F.
         panel.isZoomed = true
         XCTAssertTrue(panel.isHeaderVisibleForTesting, "a zoomed drawer keeps its header")
-        XCTAssertEqual(panel.headerContentForTesting?.title, "BOTTOM DRAWER — FULL SCREEN")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "BOTTOM DRAWER: FOCUS MODE")
         XCTAssertEqual(panel.headerContentForTesting?.shortcut, CommandCatalog.spec(for: .toggleZoom).shortcut)
 
         // Unzoom restores the resting title + keybind.

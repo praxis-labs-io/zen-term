@@ -26,10 +26,18 @@ final class HostWindow: NSWindow {
         // through; the window keeps its titled shadow (no hard app border).
         isOpaque = false
         backgroundColor = .clear
-        // Fully chromeless top: hide the traffic lights. Close/minimize/zoom via ⌘W /
-        // ⌘M / ⌘F-equivs and the menu; the window drags by its background.
-        standardWindowButton(.closeButton)?.isHidden = true
-        standardWindowButton(.miniaturizeButton)?.isHidden = true
-        standardWindowButton(.zoomButton)?.isHidden = true
+        // The traffic lights show by default; `window-chrome = false` hides them for the fully
+        // chromeless top (close/minimize via ⌘W / ⌘M and the menu, drag by background). Kept as a
+        // runtime setter so the Settings toggle applies live. titleVisibility / transparency /
+        // fullSizeContentView stay put either way — we want buttons, not an opaque title bar.
+        setWindowChromeVisible(GeneralConfig.current.windowChrome)
+    }
+
+    /// Show or hide the three standard macOS window buttons. The header space that clears them is
+    /// the tile region's top inset (`ChromeMetrics.topInset`), re-applied on the same config change.
+    func setWindowChromeVisible(_ shown: Bool) {
+        standardWindowButton(.closeButton)?.isHidden = !shown
+        standardWindowButton(.miniaturizeButton)?.isHidden = !shown
+        standardWindowButton(.zoomButton)?.isHidden = !shown
     }
 }

@@ -231,12 +231,12 @@ final class TabController: NSObject {
         // parent after layout doesn't render its shadow.
         content.wantsLayer = true
         view.addSubview(content)
-        // Content-rect inset: an even `windowGutter` on all four sides (the traffic
-        // lights are hidden, so the top no longer needs extra clearance).
+        // Content-rect inset: `windowGutter` on leading/trailing/bottom; the top adds traffic-light
+        // clearance when window chrome is shown (`ChromeMetrics.topInset`), else matches the others.
         gutterConstraints = [
             content.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: ChromeMetrics.windowGutter),
             content.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -ChromeMetrics.windowGutter),
-            content.topAnchor.constraint(equalTo: view.topAnchor, constant: ChromeMetrics.windowGutter),
+            content.topAnchor.constraint(equalTo: view.topAnchor, constant: ChromeMetrics.topInset),
             content.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -ChromeMetrics.windowGutter),
         ]
         NSLayoutConstraint.activate(gutterConstraints)
@@ -499,12 +499,12 @@ final class TabController: NSObject {
             edge == .bottom
             ? PanelMeta(title: "Bottom drawer", action: .toggleBottomDrawer)
             : PanelMeta(title: "Right drawer", action: .toggleRightDrawer)
-        // While zoomed the header swaps to the full-screen variant: its title appended and the
-        // toggle keybind replaced by ⌘F, matching the pane's full-screen header.
+        // While zoomed the header title reads "<drawer>: Focus Mode" and the toggle keybind is
+        // replaced by ⌘F, matching the pane's Focus Mode header.
         let zoomMeta =
             edge == .bottom
-            ? PanelMeta(title: "Bottom drawer — Full screen", action: .toggleZoom)
-            : PanelMeta(title: "Right drawer — Full screen", action: .toggleZoom)
+            ? PanelMeta(title: "Bottom drawer: Focus Mode", action: .toggleZoom)
+            : PanelMeta(title: "Right drawer: Focus Mode", action: .toggleZoom)
         let panel = PanelHostView(
             content: surface.view,
             background: Theme.current.chrome.background.nsColor,
@@ -576,6 +576,10 @@ final class TabController: NSObject {
         // inside `PaneCanvasController`; a drawer's is `popZoom` here.
         switch focusedPanel {
         case .pane:
+            // Nothing to isolate: a lone pane with no open drawer. Focusing would hide nothing, so
+            // block it rather than enter a dead Focus Mode. Focusing a drawer always hides the
+            // canvas, so drawer cases are always meaningful and never blocked.
+            guard !isSinglePane || isBottomOpen || isRightOpen else { toastFocusModeUnavailable(); return }
             zoomedPanel = .pane
             relayoutPanels()
             view.layoutSubtreeIfNeeded()  // canvas at full size before the pane pops
@@ -663,12 +667,15 @@ final class TabController: NSObject {
     private var lastZoomBlockToast: (verb: String, at: Date)?
     private static let zoomBlockToastThrottle: TimeInterval = 3
 
+    /// The last "nothing to focus" toast — ⌘F on a lone pane with no open drawer auto-repeats too.
+    private var lastFocusUnavailableToast: Date?
+
     /// The last "nothing in that direction" nav toast (direction + when) — same auto-repeat
     /// coalescing as the zoom toast, keyed by direction so a distinct dead direction still speaks.
     private var lastNoNeighborToast: (direction: Direction, at: Date)?
 
-    /// A grid command (split / navigate / resize / drawers) was invoked while zoomed. Zoom is
-    /// a strict focus mode, so instead of silently doing nothing, point the user at ⌘F.
+    /// A grid command (split / navigate / resize / drawers) was invoked while zoomed. Focus Mode is
+    /// strict, so instead of silently doing nothing, point the user at ⌘F.
     private func toastZoomBlocked(_ verb: String) {
         let now = Date()
         if let last = lastZoomBlockToast, last.verb == verb,
@@ -679,8 +686,22 @@ final class TabController: NSObject {
         lastZoomBlockToast = (verb, now)
         onRequestToast?(
             ToastContent(
-                variant: .info, title: "Zoom Mode",
-                message: "Exit zoom (⌘F) to \(verb)."))
+                variant: .info, title: "Focus Mode",
+                message: "Exit Focus Mode (⌘F) to \(verb)."))
+    }
+
+    /// ⌘F on a lone pane with no open drawer: focusing would hide nothing, so there's nothing to
+    /// isolate. Say why rather than entering a Focus Mode that changes nothing on screen.
+    private func toastFocusModeUnavailable() {
+        let now = Date()
+        if let last = lastFocusUnavailableToast, now.timeIntervalSince(last) < Self.zoomBlockToastThrottle {
+            return
+        }
+        lastFocusUnavailableToast = now
+        onRequestToast?(
+            ToastContent(
+                variant: .info, title: "Focus Mode",
+                message: "Focus Mode needs a second pane or an open drawer."))
     }
 
     /// A ⌘hjkl nav found no panel in `direction` — the edge of the layout, or only a diagonal
@@ -899,12 +920,17 @@ final class TabController: NSObject {
     /// the running ratio; the new fraction seeds new tabs).
     func reapplyChromeLayout() {
         let gutter = ChromeMetrics.windowGutter
-        // Sign is keyed to positional identity, not the live constant: at gutter == 0 the
+        // Sign and value are keyed to positional identity, not the live constant: at gutter == 0 the
         // trailing/bottom constraints were built with `-0.0`, and `-0.0 < 0` is false in Swift,
         // so inferring sign from the current value silently flips them positive on the next
         // reapply. Order is fixed at construction above: 0 leading, 1 trailing, 2 top, 3 bottom.
+        // The top (index 2) carries the traffic-light clearance, so it tracks `topInset`, not `gutter`.
         for (index, constraint) in gutterConstraints.enumerated() {
-            constraint.constant = (index == 1 || index == 3) ? -gutter : gutter
+            switch index {
+            case 1, 3: constraint.constant = -gutter
+            case 2: constraint.constant = ChromeMetrics.topInset
+            default: constraint.constant = gutter
+            }
         }
         relayoutPanels()
         view.layoutSubtreeIfNeeded()

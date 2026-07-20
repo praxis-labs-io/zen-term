@@ -54,7 +54,7 @@ struct ConfigDiagnostic: Hashable {
 
     /// The full sentence, for a Settings row or a single-problem toast — both need to say where this
     /// came from, since nothing around them does. Written in the *config file's* vocabulary
-    /// (`⌘⇧\ went to toggle_zoom`), not the UI's, so it names the token to grep for in the file.
+    /// (`⌘⇧\ went to toggle_focus_mode`), not the UI's, so it names the token to grep for in the file.
     var message: String {
         switch problem {
         case .chordTaken(let chord, let winner):

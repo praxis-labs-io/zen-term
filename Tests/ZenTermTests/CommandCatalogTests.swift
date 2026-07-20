@@ -35,7 +35,8 @@ final class CommandCatalogTests: XCTestCase {
                 "Split Horizontally", "Split Vertically",
                 "Focus Pane Left", "Focus Pane Down", "Focus Pane Up", "Focus Pane Right",
                 "Resize Pane Left", "Resize Pane Down", "Resize Pane Up", "Resize Pane Right",
-                "Toggle Zoom", "Close Pane",
+                "Focus Mode", "Close Pane",
+                "Fill Screen",
             ])
     }
 
@@ -53,7 +54,7 @@ final class CommandCatalogTests: XCTestCase {
             XCTAssertFalse(seen.contains(category), "category \(category) is not contiguous")
             seen.append(category)
         }
-        XCTAssertEqual(seen, ["Tools", "Config", "Drawers", "Tabs", "Panes"])
+        XCTAssertEqual(seen, ["Tools", "Config", "Drawers", "Tabs", "Panes", "Window"])
     }
 
     func test_selectTab_expandsPerTab() {

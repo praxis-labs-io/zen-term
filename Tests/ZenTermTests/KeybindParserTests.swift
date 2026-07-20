@@ -14,13 +14,26 @@ final class KeybindParserTests: XCTestCase {
             .splitVertical, .splitHorizontal, .navLeft, .navRight, .navUp, .navDown,
             .closePane, .newTab, .newWindow, .prevTab, .nextTab,
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
-            .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom,
+            .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
             .toggleRepoPicker, .toggleCommandPalette, .openSettings,
             .selectTab(1), .selectTab(9), .toggleToolFloat("gitdash"),
         ]
         for chord in cases {
             XCTAssertEqual(action(from: chord.actionToken), chord)
         }
+    }
+
+    func test_focusMode_token_andLegacyZoomAlias() {
+        // The action was renamed zoom → Focus Mode (ZEN-207): the canonical token is the new one,
+        // and the old `toggle_zoom` still parses so an existing config keeps its binding.
+        XCTAssertEqual(KeyInterceptor.ReservedChord.toggleZoom.actionToken, "toggle_focus_mode")
+        XCTAssertEqual(action(from: "toggle_focus_mode"), .toggleZoom)
+        XCTAssertEqual(action(from: "toggle_zoom"), .toggleZoom)  // legacy alias
+    }
+
+    func test_fillScreen_token() {
+        XCTAssertEqual(KeyInterceptor.ReservedChord.fillScreen.actionToken, "fill_screen")
+        XCTAssertEqual(action(from: "fill_screen"), .fillScreen)
     }
 
     func test_parse_validKeybindLine() {

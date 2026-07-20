@@ -16,6 +16,7 @@ final class GeneralConfigParserTests: XCTestCase {
             cursor-style-blink = false
             macos-option-as-alt = false
             scroll-multiplier = 4
+            window-chrome = false
             backdrop-alpha = 0.5
             window-gutter = 16
             pane-gap = 12
@@ -35,6 +36,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertFalse(config.cursorBlink)
         XCTAssertFalse(config.optionAsAlt)
         XCTAssertEqual(config.scrollMultiplier, 4)
+        XCTAssertFalse(config.windowChrome)
         XCTAssertEqual(config.backdropAlpha, 0.5)
         XCTAssertEqual(config.windowGutter, 16)
         XCTAssertEqual(config.panelGap, 12)
@@ -73,11 +75,13 @@ final class GeneralConfigParserTests: XCTestCase {
             font-size = abc
             cursor-style = wiggle
             macos-option-as-alt = maybe
+            window-chrome = sometimes
             backdrop-alpha = 0.3
             """)
         XCTAssertEqual(config.fontSize, GeneralConfig.builtIn.fontSize)  // "abc" → fallback
         XCTAssertEqual(config.cursorStyle, GeneralConfig.builtIn.cursorStyle)  // "wiggle" → fallback
         XCTAssertEqual(config.optionAsAlt, GeneralConfig.builtIn.optionAsAlt)  // "maybe" → fallback
+        XCTAssertEqual(config.windowChrome, GeneralConfig.builtIn.windowChrome)  // "sometimes" → fallback (true)
         XCTAssertEqual(config.backdropAlpha, 0.3)  // the valid line still applies
     }
 

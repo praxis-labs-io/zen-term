@@ -20,6 +20,7 @@ final class KeymapAssemblyTests: XCTestCase {
     func test_defaultsPresent() {
         let map = assemble()
         XCTAssertEqual(map[Chord(command: true, key: "f")], .toggleZoom)
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: "f")], .fillScreen)
         XCTAssertEqual(map[Chord(command: true, shift: true, key: "\\")], .splitVertical)
         XCTAssertEqual(map[Chord(command: true, option: true, key: "r")], .reloadConfig)
     }

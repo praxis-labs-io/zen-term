@@ -11,6 +11,13 @@ final class SettingsAppearanceSection: SettingsFormSection {
 
     override func populate() {
         addGroup("Theme") { self.addThemeRow() }
+        addGroup("Window") {
+            self.addSegmentedRow(
+                key: "window-chrome", caption: "Window buttons",
+                blurb: "Show the standard macOS window buttons", options: ["On", "Off"],
+                read: { $0.windowChrome ? 0 : 1 },
+                token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
+        }
         addGroup("Layout") {
             self.addNumericRow(
                 key: "backdrop-alpha", caption: "Backdrop alpha", blurb: "Tint strength over the window blur",

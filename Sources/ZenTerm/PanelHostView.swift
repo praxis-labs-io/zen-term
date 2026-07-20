@@ -2,7 +2,7 @@ import AppKit
 
 /// A panel's top header: a muted small-caps title (left) and its live keybind (right),
 /// e.g. `("Bottom drawer", .toggleBottomDrawer)` → `BOTTOM DRAWER  ⌘B`. Replaces the old
-/// floating corner icons — a labeled header, not a control; the toggle lives in the footer
+/// floating corner icons: a labeled header, not a control; the toggle lives in the footer
 /// dock and the keymap.
 struct PanelMeta {
     let title: String
@@ -12,9 +12,9 @@ struct PanelMeta {
 /// Hosts one terminal surface (a pane leaf or a drawer) inside the shared rounded/bordered
 /// chrome: the iris focus halo (accent border + soft glow) and an inner clip that keeps
 /// content within the corner radius. A drawer passes `meta` for an always-on header, and may
-/// also pass `zoomMeta` — the header content it swaps to while zoomed (e.g. its title appended
-/// with "— Full screen" and the keybind replaced by ⌘F). A pane passes only `zoomMeta` for a
-/// header that appears only while the pane is zoomed (full screen). Panes with neither
+/// also pass `zoomMeta`: the header content it swaps to while zoomed (its title reading
+/// "<panel>: Focus Mode" and the keybind replaced by ⌘F). A pane passes only `zoomMeta` for a
+/// header that appears only while the pane is zoomed (Focus Mode). Panes with neither
 /// look/behave exactly as the original pane-only chrome. Clicking anywhere in the panel
 /// requests focus.
 final class PanelHostView: NSView {
@@ -35,7 +35,7 @@ final class PanelHostView: NSView {
     var isFocused: Bool = false { didSet { if oldValue != isFocused { updateHalo() } } }
 
     /// Whether this panel is the sole full-canvas panel (zoomed). A pane reveals its
-    /// full-screen header; a drawer keeps its always-on header but swaps its content to the
+    /// Focus Mode header; a drawer keeps its always-on header but swaps its content to the
     /// zoomed variant (title + ⌘F).
     var isZoomed: Bool = false {
         didSet {
@@ -184,8 +184,9 @@ final class PanelHostView: NSView {
         Motion.ease(layer, keyPath: "shadowOpacity", to: isFocused ? Float(0.3) : Float(0))
     }
 
-    /// A muted small-caps title (left) and its live keybind chip (right), e.g. `BOTTOM DRAWER ⌘B`.
-    /// The keybind resolves from the live keymap via `CommandCatalog`, so it tracks user rebinds.
+    /// A muted small-caps title (left) and its live keybind chip (right), e.g. `BOTTOM DRAWER ⌘B`,
+    /// or `TERMINAL PANE: FOCUS MODE ⌘F` while zoomed. The keybind resolves from the live keymap via
+    /// `CommandCatalog`, so it tracks user rebinds.
     private final class PanelHeader: NSView {
         private var title: String
         private var action: KeyInterceptor.ReservedChord

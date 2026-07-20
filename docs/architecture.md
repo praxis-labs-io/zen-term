@@ -166,7 +166,8 @@ stranded in capture mode, swallowing every keystroke in every window).
 | Surface | Owner | Scope |
 |---|---|---|
 | Bottom drawer, right drawer | `TabController` | per tab |
-| Zoom | `TabController` + `PaneCanvasController` | per tab |
+| Focus Mode (internally `zoom`) | `TabController` + `PaneCanvasController` | per tab |
+| Fill Screen | `WindowController` | per window |
 | Tool floats | `ToolFloatController` | per window |
 | Settings, command palette, workspace picker | `WindowController.modal` | per window |
 | Toasts, confirms | `ToastPresenter` | per window |
@@ -182,9 +183,17 @@ Drawer animation resizes the canvas for real while the drawer **slides in at its
 final size**, so its terminal reflows once and settles instead of jittering through
 every row count.
 
-**Zoom is strict.** While zoomed, split, nav, resize, and drawer toggles are
-blocked with a toast rather than ignored. Order matters: relayout to final size
-first, then pop.
+**Focus Mode is strict.** While a pane or drawer is focused, split, nav, resize, and
+drawer toggles are blocked with a toast rather than ignored. Order matters: relayout
+to final size first, then pop. The internal identifiers stay `zoom` (`zoomedLeaf`,
+`toggleZoom`, `Motion.zoomPop`) to stay distinct from the always-on pane-focus halo;
+only the user-facing name is Focus Mode.
+
+**Window chrome is config-driven.** The macOS window buttons show by default;
+`window-chrome = false` hides them for a chromeless top, and `ChromeMetrics.topInset`
+adds/drops the traffic-light clearance to match. **Fill Screen** (⌘⇧F) toggles the
+window between its size and the screen's visible frame; it is a maximize, not native
+fullscreen (no space switch, the menu bar stays).
 
 **Modal cards share one slot.** `ModalKind` plus a single `modal` property. A chord
 for a different card closes the current one and falls through, so cards switch
@@ -197,7 +206,7 @@ reference to any `TabController` and reaches the active tab through four injecte
 closures. Liveness and visibility are independent: `activeFloat` is the one shown,
 `liveFloats` are the ones alive.
 
-**Every silent no-op is a toast.** Zoom-blocked commands, dead nav directions,
+**Every silent no-op is a toast.** Focus-Mode-blocked commands, dead nav directions,
 git-guarded floats, ⌘W over a float. Both toast paths throttle at 3s per verb
 because held chords auto-repeat.
 
@@ -223,8 +232,8 @@ mislabel a chord, never invent one.**
 
 Defaults (`KeymapDefaults.map`): ⌘⇧\ and ⌘⇧- split, ⌘HJKL nav, ⌘⇧HJKL resize, ⌘W
 close pane, ⌘T new tab, ⌘N new window, ⌘[ ⌘] tabs, ⌘1-9 select, ⌘B bottom drawer,
-⌘\ right drawer, ⌘F zoom, ⌘P command palette, ⌘⇧P workspace picker, ⌘, settings,
-⌘⌥R reload. ⌘⇧- rather than bare ⌘- leaves ⌘- free for ghostty's text
+⌘\ right drawer, ⌘F Focus Mode, ⌘⇧F Fill Screen, ⌘P command palette, ⌘⇧P workspace
+picker, ⌘, settings, ⌘⌥R reload. ⌘⇧- rather than bare ⌘- leaves ⌘- free for ghostty's text
 magnification. **No tool float is built in**; a float's chord comes from its own
 `key:` field.
 

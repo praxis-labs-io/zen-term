@@ -15,6 +15,7 @@ import XCTest
 @MainActor
 final class WindowControllerConfigFanOutTests: XCTestCase {
     private var originalTheme: AppTheme!
+    private var originalConfig: GeneralConfig!
     private var originalOverride: (() -> TerminalSurface)?
     private var tempRoots: [URL] = []
     private var controller: WindowController?
@@ -22,6 +23,7 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
     override func setUp() {
         super.setUp()
         originalTheme = Theme.current
+        originalConfig = GeneralConfig.current
         originalOverride = TerminalSurfaceFactory.makeOverride
         // The real ghostty backend needs a live libghostty app, which a test bundle has no
         // business spinning up — inject a headless stub surface instead.
@@ -35,6 +37,7 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
         Theme.setCurrentForTesting(originalTheme)
+        GeneralConfig.setCurrentForTesting(originalConfig)
         for dir in tempRoots { try? FileManager.default.removeItem(at: dir) }
         tempRoots = []
         try super.tearDownWithError()
@@ -90,5 +93,30 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
         // baked-in accent. Slot 5 provably moved (Rosé Pine Moon → #00ff00), so a working fan-out
         // must change it.
         XCTAssertNotEqual(accentBefore, tabBar.tracerColorForTesting)
+    }
+
+    func test_configDidChange_appliesWindowChromeThroughTheFanOut() throws {
+        var config = GeneralConfig.builtIn
+        config.windowChrome = true
+        GeneralConfig.setCurrentForTesting(config)
+
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
+        self.controller = controller
+        // Built with chrome on, so the traffic lights start visible.
+        XCTAssertEqual(controller.window.standardWindowButton(.closeButton)?.isHidden, false)
+
+        config.windowChrome = false
+        GeneralConfig.setCurrentForTesting(config)
+        NotificationCenter.default.post(name: .configDidChange, object: nil)
+
+        let drained = expectation(description: "main queue drained")
+        OperationQueue.main.addOperation { drained.fulfill() }
+        wait(for: [drained], timeout: 5)
+
+        // If the fan-out had dropped `window.setWindowChromeVisible(...)`, the button would still be
+        // visible. Driving the real notification proves the observer applies the toggle, not just
+        // that the setter works in isolation.
+        XCTAssertEqual(controller.window.standardWindowButton(.closeButton)?.isHidden, true)
     }
 }
