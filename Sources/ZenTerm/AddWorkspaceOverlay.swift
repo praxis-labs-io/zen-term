@@ -258,8 +258,9 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             footerViews = [deleteButton, spacer, cancelButton, addButton]
         }
         // Tab walks the footer in place so Cancel (and Delete when editing) are Tab-reachable, not
-        // Left/Right-only: Save → Cancel → Delete, mirroring the Left-arrow order. Forward Tab off the
-        // last button wraps to the top; Shift-Tab off Save leaves the footer upward.
+        // Left/Right-only: the primary button (Add Workspace / Save) → Cancel → Delete, mirroring the
+        // Left-arrow order. Forward Tab off the last button wraps to the top; Shift-Tab off the
+        // primary button leaves the footer upward.
         addButton.onTab = { [weak self] in self?.focus(self?.cancelButton) }
         cancelButton.onBacktab = { [weak self] in self?.focus(self?.addButton) }
         if onDelete != nil {
