@@ -94,11 +94,13 @@ rest need a real signed release.
       "Reload Config" and "Check for Updates" are both present. Pick **Reload Config**
       and confirm it re-reads the config (the previously-dead palette path, now fixed).
       "Check for Updates" shows no keycap (unbound by default).
-- [ ] **10. Manual check result (release variant).** With the step-3 setup pointing at
-      an appcast at/above HEAD's build number, run "Check for Updates": an update at a
-      higher version shows the card; an appcast at the same version shows the "Up to
-      date" info toast; an unreachable feed shows the "Couldn't check for updates"
-      warning toast. A scheduled check in the same states stays silent.
+- [ ] **10. Manual check result (release variant).** Run "Check for Updates": a feed
+      version above the build shows the card; a feed at or below the build shows the
+      "You're on the latest" info toast; an unreachable feed shows the "Couldn't check
+      for updates" warning toast. A scheduled check in the same states stays silent.
+      Note the free case: HEAD's build number is already above the public appcast's
+      latest, so a plain `--variant release` build checked against the real feed lands
+      the "You're on the latest" toast with no test appcast needed.
 - [ ] **11. Bound keycap.** Add `keybind = check_for_updates=cmd+opt+u` (any free
       chord), relaunch, trigger the available card (step 3): its top-right keycap slot
       now shows the glyph. Rebind or unbind with the card up (⌘, → Keybinds, or ⌘⌥R
