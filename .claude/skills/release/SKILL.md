@@ -64,10 +64,12 @@ Structure, as the existing files establish it:
 The card block feeds the update card and nothing else. `bin/release` pulls just
 these bullets into the appcast `<description>`; the full prose stays on the GitHub
 release page, which the card's "What's new" links. HTML comments don't render on
-GitHub, so the block is invisible there. It is not optional: `bin/release` refuses
-to publish without it, because an empty description renders a blank card (which is
-what shipped for five releases before ZEN-211). Put it right under the opening
-line:
+GitHub, so the block is invisible there. `bin/release` refuses to publish a
+release whose notes yield no bullets at all: it falls back to any top-level `-`
+lines (which is what keeps the bare git-log scaffold working), but a curated notes
+file is pure prose, so in practice that fallback finds nothing and this block is
+what stands between the release and a blank card (which is what shipped for five
+releases before ZEN-211). Put it right under the opening line:
 
     <!-- card
     - The one-line thing this release is about
