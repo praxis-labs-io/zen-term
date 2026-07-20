@@ -74,7 +74,9 @@ Mechanical and checkable. A reviewer should be able to fail copy on these.
    copy. Use a colon, a period, a comma, or split the sentence. Plenty of good
    writing uses them, which is exactly why this drifts back: the rule is ours and
    it outranks any outside example. This file contains none, and a grep for the
-   character should keep returning nothing.
+   character should keep returning nothing. **No dot spacers either** (a middle
+   dot `·` between a title and a qualifier): use a colon, e.g. a zoomed panel
+   header reads "Terminal pane: Focus Mode".
 2. **No hype words.** seamless, powerful, beautiful, blazing, effortless,
    delightful, magical, just works, game-changer, unleash, supercharge. The
    product demonstrates these or it doesn't have them.
@@ -220,7 +222,7 @@ needs a real deprecation, not a find-and-replace.
 
 Before any copy ships:
 
-- [ ] Any em-dash? Remove it.
+- [ ] Any em-dash or dot spacer (`·`)? Replace it with a colon.
 - [ ] Any hype word or adverb? Cut it.
 - [ ] Passive voice, or an object doing a human verb? Name the actor.
 - [ ] "Not X, it's Y"? State Y.
