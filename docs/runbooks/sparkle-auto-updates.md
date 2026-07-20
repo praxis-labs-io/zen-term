@@ -1,10 +1,12 @@
-# Sparkle Auto-Updates Runbook (ZEN-118)
+# Sparkle Auto-Updates Runbook (ZEN-118, ZEN-19, ZEN-20)
 
 How in-app updates work, and the manual verification a unit test can't reach
 (signing, notarization, and a real appcast round-trip need a Mac with the
 Developer ID cert). Automated coverage: the notes-column budget and the appcast
-bullet parsing are in `UpdateCardTests`; the card's layout, color, and motion are
-here, by eye.
+bullet parsing are in `UpdateCardTests`; the config toggle, the command/chord
+plumbing, and the palette entry are in `GeneralConfigParserTests`,
+`KeybindParserTests`, and `CommandCatalogTests`; the card's layout, color, motion,
+keycap, and the manual-check toasts are here, by eye.
 
 ## How it works
 
@@ -21,6 +23,20 @@ here, by eye.
   never starts. Only a packaged app checks for updates (daily, `SUScheduledCheckInterval`).
 - **The card never takes focus.** It is non-modal, like a sticky toast: its buttons
   are click-only, so terminal input is never gated behind it.
+- **On-demand check (ZEN-20).** A "Check for Updates" command in the palette (Config
+  group) runs a manual check. Unlike a scheduled one it reports its result even when
+  nothing is found: an "Up to date" info toast, or a warning toast on failure (an
+  update found still shows the card). It ships with **no default chord** — bind one
+  with `keybind = check_for_updates=<chord>` and the update card's top-right keycap
+  slot fills with that glyph (empty until then, since an unbound glyph would lie).
+  The command is app-global (the updater is app-owned): it reaches `UpdateController`
+  via `AppDelegate.route`, and a palette pick lands there too through
+  `WindowController.onAppGlobalCommand` — the same seam that makes Reload Config work
+  from the palette.
+- **Off switch (ZEN-19).** Settings → Updates → "Check for updates in the background"
+  drives Sparkle's automatic-check schedule (`automatic-update-checks` in the config,
+  on by default). It applies live: `AppDelegate` re-points Sparkle on `.configDidChange`.
+  Inert in dev (no feed), like everything else here.
 
 ## One-time setup (Drew's machine)
 
@@ -74,3 +90,19 @@ rest need a real signed release.
 - [ ] **8. Real round-trip.** `bin/release` to a scratch tag, install the previous
       release, and confirm it sees and installs the new one over the real appcast,
       then relaunches into the new build.
+- [ ] **9. Palette dispatch (dev is fine).** Open the command palette (⌘P) → Config:
+      "Reload Config" and "Check for Updates" are both present. Pick **Reload Config**
+      and confirm it re-reads the config (the previously-dead palette path, now fixed).
+      "Check for Updates" shows no keycap (unbound by default).
+- [ ] **10. Manual check result (release variant).** With the step-3 setup pointing at
+      an appcast at/above HEAD's build number, run "Check for Updates": an update at a
+      higher version shows the card; an appcast at the same version shows the "Up to
+      date" info toast; an unreachable feed shows the "Couldn't check for updates"
+      warning toast. A scheduled check in the same states stays silent.
+- [ ] **11. Bound keycap.** Add `keybind = check_for_updates=cmd+opt+u` (any free
+      chord), relaunch, trigger the available card (step 3): its top-right keycap slot
+      now shows the glyph. Rebind or unbind with the card up (⌘, → Keybinds, or ⌘⌥R
+      after a hand-edit) and the keycap tracks it.
+- [ ] **12. Off switch (release variant).** Settings → Updates → set "Check for updates
+      in the background" to Off. `automatic-update-checks = false` lands in the config,
+      and Sparkle stops its scheduled checks (the manual command still works).

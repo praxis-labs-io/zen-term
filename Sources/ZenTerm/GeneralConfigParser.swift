@@ -59,6 +59,8 @@ enum GeneralConfigParser {
                 if let r = parseReduceMotion(value) { config.reduceMotion = r }
             case "agent-notifications":
                 if let b = parseBool(value, key) { config.agentNotifications = b }
+            case "automatic-update-checks":
+                if let b = parseBool(value, key) { config.automaticUpdateChecks = b }
             case "shell":
                 if !value.isEmpty { config.shell = value }
             case "shell-args":

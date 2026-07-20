@@ -30,6 +30,7 @@ final class KeyInterceptor {
         case toggleCommandPalette
         case openSettings
         case reloadConfig
+        case checkForUpdates  // run a manual Sparkle update check (unbound by default; ZEN-20)
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?

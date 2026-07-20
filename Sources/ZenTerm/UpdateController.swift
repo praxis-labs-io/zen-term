@@ -48,11 +48,34 @@ final class UpdateController {
             NSLog("ZenTerm: update checks unavailable — \(error.localizedDescription)")
             return
         }
+        applyAutoCheckSetting()
         windowCloseObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: nil, queue: .main
         ) { [weak self] note in
             self?.hostWindowMaybeClosing(note.object as? NSWindow)
         }
+    }
+
+    /// Point Sparkle's automatic-check schedule at the config's off switch (ZEN-19). The packaged
+    /// plist enables checks by default; this makes the config the source of truth. Called at
+    /// launch and re-applied by `AppDelegate` on `.configDidChange`, so a Settings toggle takes
+    /// effect with no relaunch. Inert in an unpackaged build.
+    func applyAutoCheckSetting() {
+        guard Self.isSupported else { return }
+        updater.automaticallyChecksForUpdates = GeneralConfig.current.automaticUpdateChecks
+    }
+
+    /// Run a user-initiated check now (the "Check for Updates" command, ZEN-20). Unlike a scheduled
+    /// check, the driver reports its result even when nothing's found. A no-op in an unpackaged build.
+    func checkForUpdates() {
+        guard Self.isSupported else { return }
+        updater.checkForUpdates()
+    }
+
+    /// Surface a toast from the driver (a user-initiated check's up-to-date / failure result). Routed
+    /// to the key window, like the card — nil when no window of ours is key, which drops it silently.
+    func announce(_ content: ToastContent) {
+        keyController()?.showToast(content)
     }
 
     // MARK: - Card presentation (called by the driver)

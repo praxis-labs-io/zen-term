@@ -57,6 +57,13 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertNil(config.ai)
     }
 
+    func test_automaticUpdateChecks_parsesAndDefaultsOn() {
+        XCTAssertFalse(parse("automatic-update-checks = false\n").automaticUpdateChecks)
+        XCTAssertTrue(parse("automatic-update-checks = true\n").automaticUpdateChecks)
+        XCTAssertTrue(parse("automatic-update-checks = maybe\n").automaticUpdateChecks)  // malformed → default
+        XCTAssertTrue(parse("font-size = 14\n").automaticUpdateChecks)  // absent → default (on)
+    }
+
     func test_themeKey_setsThemeName() {
         XCTAssertEqual(parse("theme = catppuccin-mocha\n").themeName, "catppuccin-mocha")
         XCTAssertNil(parse("font-size = 14\n").themeName)  // absent → nil (legacy/default path)

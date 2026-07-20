@@ -24,6 +24,11 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     /// `AppVersion.current` — the old, still-running version — instead of the update's target.
     private var pendingVersion: String?
 
+    /// True while a user-initiated check ("Check for Updates", ZEN-20) is in flight. A manual check
+    /// reports its result even when nothing's found (an up-to-date / failure toast); a scheduled one
+    /// stays silent. Set at `showUserInitiatedUpdateCheck`, cleared once the outcome is delivered.
+    private var userInitiated = false
+
     // MARK: - Permission / check (no card)
 
     func show(
@@ -36,7 +41,9 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     }
 
     func showUserInitiatedUpdateCheck(cancellation: @escaping () -> Void) {
-        // No manual "Check for Updates" entry point yet (ZEN-20); only scheduled checks run.
+        // The "Check for Updates" command started this check (ZEN-20). Remember it so the outcome
+        // reports back — an up-to-date or failure toast a scheduled check would swallow silently.
+        userInitiated = true
     }
 
     // MARK: - Update found → the "available" card
@@ -47,6 +54,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         reply: @escaping @Sendable (SPUUserUpdateChoice) -> Void
     ) {
         pendingVersion = appcastItem.displayVersionString
+        userInitiated = false  // the card carries the result now; no separate toast
         let choose = Self.fireOnce(reply)
         var actions = UpdateCardView.Actions()
         actions.install = { choose(.install) }
@@ -75,11 +83,26 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
 
     func showUpdateNotFoundWithError(_ error: any Error, acknowledgement: @escaping () -> Void) {
         controller?.dismiss()
+        if userInitiated {
+            userInitiated = false
+            controller?.announce(
+                ToastContent(
+                    variant: .info, title: "Up to date",
+                    message: "You're on \(AppVersion.current)."))
+        }
         acknowledgement()
     }
 
     func showUpdaterError(_ error: any Error, acknowledgement: @escaping () -> Void) {
         controller?.dismiss()
+        if userInitiated {
+            userInitiated = false
+            NSLog("ZenTerm: update check failed — \(error.localizedDescription)")
+            controller?.announce(
+                ToastContent(
+                    variant: .warning, title: "Couldn't check for updates",
+                    message: "Something went wrong reaching the update server."))
+        }
         acknowledgement()
     }
 

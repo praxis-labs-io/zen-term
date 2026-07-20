@@ -11,8 +11,9 @@ import AppKit
 ///   ready        "Ready to install" + [Relaunch] [Later]
 ///
 /// Non-modal like a sticky toast: it never takes first responder, so it can't steal keys from the
-/// terminal (its buttons are click-only, no Return/Esc equivalents). The top-right keycap slot is
-/// left empty — there's no "Check for Updates" chord yet (ZEN-20), and an unbound glyph would lie.
+/// terminal (its buttons are click-only, no Return/Esc equivalents). The top-right keycap slot names
+/// the "Check for Updates" chord (ZEN-20) — empty until the user binds one, since that chord has no
+/// default and an unbound glyph would lie; it lights up the moment a binding exists.
 final class UpdateCardView: ShadowCardView {
     /// One update state to render. Pure data; the buttons' behavior comes from `Actions`, kept
     /// apart so a window-close re-home can rebuild the card from the same state and the still-valid
@@ -53,6 +54,11 @@ final class UpdateCardView: ShadowCardView {
     private let badgeFill = NSView()
     private let iconView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
+    /// The title row, retained so its trailing keycap can be rebuilt when the binding changes.
+    private let header = NSStackView()
+    /// The "Check for Updates" keycap in the header's trailing slot — nil while that action is
+    /// unbound (its default), so an unbound glyph never lies. Resolved from the live keymap.
+    private var checkKeycap: KeycapView?
     /// The content beneath the header (subtitle + notes / progress), rebuilt per state.
     private let bodyColumn = NSStackView()
     private let buttonRow = NSStackView()
@@ -83,14 +89,17 @@ final class UpdateCardView: ShadowCardView {
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        // Title leading, empty trailing slot (the keycap corner stays empty this PR).
+        // Title leading, keycap trailing — the slot names the "Check for Updates" chord, empty until
+        // one is bound (like ToastView's shortcut slot). The spacer holds title and keycap apart.
         let headerSpacer = NSView()
         headerSpacer.setContentHuggingPriority(.init(rawValue: 1), for: .horizontal)
         headerSpacer.setContentCompressionResistancePriority(.init(rawValue: 1), for: .horizontal)
-        let header = NSStackView(views: [titleLabel, headerSpacer])
         header.orientation = .horizontal
         header.alignment = .centerY
         header.spacing = 6
+        header.addArrangedSubview(titleLabel)
+        header.addArrangedSubview(headerSpacer)
+        refreshKeycap()
 
         bodyColumn.orientation = .vertical
         bodyColumn.alignment = .leading
@@ -244,7 +253,24 @@ final class UpdateCardView: ShadowCardView {
     /// so it recolors in place like `ToastView.reapplyTheme()`.
     func reapplyTheme() {
         applyColors()
+        refreshKeycap()  // a chord bound/unbound while the card is up
+        checkKeycap?.reapplyTheme()  // recolor when the glyph is unchanged (refreshKeycap was a no-op)
         render()  // labels/buttons re-read Theme.current as they rebuild
+    }
+
+    /// Rebuild the header keycap from the live "Check for Updates" binding. An empty glyph (the
+    /// unbound default) leaves the slot empty; a bound one fills it. Mirrors `ToastView`'s
+    /// `ShortcutSlot` — a no-op when the glyph is unchanged, so a plain re-render doesn't churn it.
+    private func refreshKeycap() {
+        let glyph = Chord.displayed(.checkForUpdates, in: GeneralConfig.current.keymap)?.displayGlyph ?? ""
+        guard glyph != checkKeycap?.shortcut else { return }
+        checkKeycap.map { header.removeArrangedSubview($0) }
+        checkKeycap?.removeFromSuperview()
+        checkKeycap = nil
+        guard !glyph.isEmpty else { return }  // unbound → no keycap at all
+        let cap = KeycapView(shortcut: glyph)
+        header.addArrangedSubview(cap)
+        checkKeycap = cap
     }
 
     // MARK: - Interaction

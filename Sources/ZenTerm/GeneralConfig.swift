@@ -44,6 +44,10 @@ struct GeneralConfig: Equatable {
     // (the macOS permission is the real gate; this is the in-app opt-out).
     var agentNotifications: Bool
 
+    // Updates — check for a new release in the background (ZEN-19). On by default; this is the
+    // off switch, driving Sparkle's automatic-check setting. Inert in an unpackaged dev build.
+    var automaticUpdateChecks: Bool
+
     // Launch.
     var shell: String?
     var shellArgs: [String]
@@ -86,6 +90,7 @@ struct GeneralConfig: Equatable {
         maxDrawerFraction: 0.7,
         reduceMotion: .system,
         agentNotifications: true,
+        automaticUpdateChecks: true,
         shell: nil,
         shellArgs: [],
         editor: nil,

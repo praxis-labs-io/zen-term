@@ -29,7 +29,7 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(
             names,
             [
-                "Open Workspace Picker", "Settings…", "Reload Config",
+                "Open Workspace Picker", "Settings…", "Reload Config", "Check for Updates",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab",
                 "Split Horizontally", "Split Vertically",
@@ -88,11 +88,21 @@ final class CommandCatalogTests: XCTestCase {
         if case .reloadConfig = entry!.chord {} else { XCTFail("expected .reloadConfig") }
     }
 
+    func test_checkForUpdates_isPresent_andUnboundByDefault() {
+        // Check for Updates ships without a default chord (ZEN-20), so it's in the palette but shows
+        // no glyph — an unbound glyph would lie. Binding a chord fills it via the live keymap.
+        let entry = CommandCatalog.commands(tabCount: 0).first { $0.title == "Check for Updates" }
+        XCTAssertNotNil(entry)
+        if case .checkForUpdates = entry!.chord {} else { XCTFail("expected .checkForUpdates") }
+        XCTAssertEqual(entry!.shortcut, "", "Check for Updates has no default binding")
+    }
+
     func test_everyEntry_hasTitle_andShortcut() {
-        // Every palette command has a default key binding, so each shows its glyph. (The one former
-        // exception, `.addWorkspace`, was unbound and is no longer in the palette — ZEN-112.)
+        // Every palette command shows its glyph, except Check for Updates — the one action shipped
+        // deliberately unbound (ZEN-20). Everything else has a default binding.
         for command in CommandCatalog.commands(tabCount: 9) {
             XCTAssertFalse(command.title.isEmpty)
+            if case .checkForUpdates = command.chord { continue }
             XCTAssertFalse(command.shortcut.isEmpty, "\(command.title) should show a shortcut")
         }
     }

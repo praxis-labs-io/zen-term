@@ -15,7 +15,7 @@ final class KeybindParserTests: XCTestCase {
             .closePane, .newTab, .newWindow, .prevTab, .nextTab,
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
             .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
-            .toggleRepoPicker, .toggleCommandPalette, .openSettings,
+            .toggleRepoPicker, .toggleCommandPalette, .openSettings, .reloadConfig, .checkForUpdates,
             .selectTab(1), .selectTab(9), .toggleToolFloat("gitdash"),
         ]
         for chord in cases {
@@ -34,6 +34,15 @@ final class KeybindParserTests: XCTestCase {
     func test_fillScreen_token() {
         XCTAssertEqual(KeyInterceptor.ReservedChord.fillScreen.actionToken, "fill_screen")
         XCTAssertEqual(action(from: "fill_screen"), .fillScreen)
+    }
+
+    func test_checkForUpdates_token_hasNoDefaultBinding() {
+        // The action round-trips (so a hand-written keybind resolves), but it isn't in the built-in
+        // keymap — it ships unbound (ZEN-20).
+        XCTAssertEqual(KeyInterceptor.ReservedChord.checkForUpdates.actionToken, "check_for_updates")
+        XCTAssertEqual(action(from: "check_for_updates"), .checkForUpdates)
+        XCTAssertFalse(
+            KeymapDefaults.map.values.contains(.checkForUpdates), "should ship without a default chord")
     }
 
     func test_parse_validKeybindLine() {
