@@ -115,8 +115,6 @@ Do not show or promise:
 
 ## Landmines
 
-- **Do not press Esc over an open dropdown.** It will not close (ZEN-157). If it
-  happens, name it as a known bug and click away.
 - **Do not plain-click a link** and expect it to open. Hold ⌘. If you forget in
   front of them you will look like you found a bug in your own app.
 - **Do not open a fresh install's ⌘⇧P.** It is empty except for ＋ Add workspace.

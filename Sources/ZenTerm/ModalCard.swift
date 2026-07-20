@@ -66,10 +66,14 @@ struct DismissGate {
 /// Esc for a modal card, in one place: every card root routes its Esc through here, so the rule
 /// lives once instead of in ~8 hand-written `.escape` cases that drifted apart.
 ///
-/// It closes the CARD only. Layering Esc over an open popover (close the dropdown first, card
-/// second) is deliberately NOT here — see ZEN-157: two attempts at it failed in the running app,
-/// and the layer AppKit actually dispatches bare Esc to is still unestablished. A popover closes
-/// its own Esc locally, in its `keyDown`.
+/// It closes the CARD only, and that's the whole job. Layered dismissal (close an open popover
+/// first, the card second) is NOT handled here and doesn't need to be: a bare Esc reaches the
+/// focused control's `keyDown` before this `performKeyEquivalent` pass ever runs, so a popover host
+/// (`Dropdown`, `IconPickerField`) closes its own list/grid there and the card never sees that Esc.
+/// The two earlier attempts to close the popover from the card root (ZEN-157) failed for a dull
+/// reason, now confirmed in the running app (ZEN-5): `performKeyEquivalent` is simply not invoked
+/// for a bare Esc while a popover host holds focus, so that code never ran. A popover owns its Esc
+/// locally, in its `keyDown` — keep it there.
 enum ModalEscape {
     /// `dismissing` is required, not defaulted: claiming Esc window-wide is only safe while the card
     /// is actually up, and "every root remembers the guard" is the exact drift this type exists to

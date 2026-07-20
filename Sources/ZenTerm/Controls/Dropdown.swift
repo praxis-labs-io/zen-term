@@ -146,6 +146,9 @@ final class Dropdown: NSView {
             case .up: moveHighlight(-1)
             case .down: moveHighlight(1)
             case .activate: commitHighlight()  // return / enter / space
+            // This local Esc is what makes layered dismissal work: a bare Esc reaches the focused
+            // control's keyDown before any card-root performKeyEquivalent, so closing the list here
+            // keeps the card open. Don't hoist Esc to the card root — that's the ZEN-5 dead-end.
             case .escape: closeList()
             default: break  // consume every other key while the list is open
             }
