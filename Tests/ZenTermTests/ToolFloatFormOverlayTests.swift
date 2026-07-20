@@ -317,6 +317,26 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         XCTAssertEqual(sink.submitted.first?.icon, IconCatalog.all[1])
     }
 
+    /// The footer buttons used to be Left/Right-only (Cancel and Delete shared Submit's vertical
+    /// stop), so Tab skipped straight past them — a button unreachable by Tab looks perfectly fine
+    /// on screen (ZEN-217). Drive real Tab keyDowns and assert focus walks Submit → Cancel → Delete.
+    func test_footer_tabWalksSubmitCancelDelete() {
+        let existing = existingFloat(title: "dev", icon: IconCatalog.defaultSymbol)
+        let (overlay, _, _) = mount(editing: existing, withDelete: true)
+        let buttons = descendants(of: overlay).compactMap { $0 as? AppButton }
+        guard let submit = buttons.first(where: { $0.title == "Save" }),
+            let cancel = buttons.first(where: { $0.title == "Cancel" }),
+            let delete = buttons.first(where: { $0.title == "Delete" })
+        else { return XCTFail("editing form must show Save, Cancel, and Delete") }
+
+        window!.makeFirstResponder(submit)
+        submit.keyDown(with: keyDown("\t", code: 48))
+        XCTAssertTrue(KeyboardFocus.isFocused(cancel, in: window), "Tab from Save reaches Cancel")
+
+        cancel.keyDown(with: keyDown("\t", code: 48))
+        XCTAssertTrue(KeyboardFocus.isFocused(delete, in: window), "Tab from Cancel reaches Delete")
+    }
+
     /// A bare Esc over an open icon grid closes the grid at its real dispatch layer — the picker's
     /// own `keyDown`, which fires before any card-root `performKeyEquivalent` (ZEN-5). Driving the
     /// real keyDown is what locks this: a `performKeyEquivalent`-by-hand press would stay green even

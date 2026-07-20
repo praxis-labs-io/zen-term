@@ -87,4 +87,53 @@ final class SettingsGeneralSectionTests: XCTestCase {
         XCTAssertTrue(
             configText().contains("automatic-update-checks = true"), "got: \(configText())")
     }
+
+    // MARK: back to the nav (ZEN-217) — a section of stacked segmented rows had no arrow path out
+
+    /// An arrow key as AppKit delivers it: keyCode plus the `.function`/`.numericPad` pair every
+    /// arrow keyDown actually carries (a bare-modifier fake is a keystroke macOS never sends).
+    private func arrow(_ keyCode: UInt16) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [.function, .numericPad], timestamp: 0,
+            windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
+            isARepeat: false, keyCode: keyCode)!
+    }
+    private static let leftKey: UInt16 = 123
+    private static let upKey: UInt16 = 126
+
+    func test_leftAtLeftmostSegment_exitsToNav_withoutChangingTheValue() {
+        let notifications = mountSegments()[0]
+        var exited = 0
+        section?.onExitToNav = { exited += 1 }
+
+        hostWindow?.makeFirstResponder(notifications)
+        notifications.keyDown(with: arrow(Self.leftKey))  // On is leftmost — nothing left to cycle
+
+        XCTAssertEqual(exited, 1, "Left at the leftmost segment returns to the nav")
+        XCTAssertEqual(notifications.selectedIndex, 0, "exiting must not flip the toggle")
+    }
+
+    func test_leftAtNonLeftmostSegment_cycles_ratherThanExiting() {
+        let notifications = mountSegments()[0]
+        var exited = 0
+        section?.onExitToNav = { exited += 1 }
+        notifications.select(1)  // Off — now there's a segment to the left
+
+        hostWindow?.makeFirstResponder(notifications)
+        notifications.keyDown(with: arrow(Self.leftKey))
+
+        XCTAssertEqual(notifications.selectedIndex, 0, "Left off a non-leftmost segment cycles left")
+        XCTAssertEqual(exited, 0, "cycling within the control must not exit to the nav")
+    }
+
+    func test_upFromFirstStop_exitsToNav() {
+        let notifications = mountSegments()[0]  // the first vertical stop in the section
+        var exited = 0
+        section?.onExitToNav = { exited += 1 }
+
+        hostWindow?.makeFirstResponder(notifications)
+        notifications.keyDown(with: arrow(Self.upKey))
+
+        XCTAssertEqual(exited, 1, "Up from the first stop returns to the nav instead of dead-ending")
+    }
 }

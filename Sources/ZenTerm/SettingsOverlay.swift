@@ -152,6 +152,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
             let row = SettingsNavRow(title: section.navTitle) { [weak self] in self?.selectSection(index) }
             row.onArrowUp = { [weak self] in self?.moveNav(-1) }
             row.onArrowDown = { [weak self] in self?.moveNav(1) }
+            row.onBacktab = { [weak self] in self?.moveNav(-1, wrap: true) }
             row.onEnterDetail = { [weak self] in self?.enterDetail() }
             navRows.append(row)
             navStack.addArrangedSubview(row)
@@ -297,9 +298,10 @@ final class SettingsOverlay: NSView, ModalOverlay {
         navRows[index].scrollToVisible(navRows[index].bounds)  // keep the selected row on screen when the list scrolls
     }
 
-    private func moveNav(_ delta: Int) {
+    private func moveNav(_ delta: Int, wrap: Bool = false) {
         let current = navRows.firstIndex { KeyboardFocus.isFocused($0, in: window) }
-        guard let next = KeyboardFocus.step(from: current, delta: delta, count: navRows.count) else { return }
+        guard let next = KeyboardFocus.step(from: current, delta: delta, count: navRows.count, wrap: wrap)
+        else { return }
         selectSection(next)
     }
 

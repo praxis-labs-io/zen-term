@@ -192,26 +192,29 @@ final class SettingsTabTraversalTests: XCTestCase {
         XCTAssertTrue(picker.isPopoverOpen)
     }
 
-    // MARK: the nav row — Shift-Tab used to enter the detail pane too
+    // MARK: the nav row — Shift-Tab retreats via its own (wrapping) path, not aliased to Up
 
-    func test_navRow_tabEntersDetail_butShiftTabRetreats() {
+    func test_navRow_tabEntersDetail_shiftTabRetreatsViaBacktab_notUp() {
         let row = SettingsNavRow(title: "Test", onActivate: {})
         var entered = 0
-        var retreated = 0
+        var uped = 0
+        var backtabbed = 0
         row.onEnterDetail = { entered += 1 }
-        row.onArrowUp = { retreated += 1 }
+        row.onArrowUp = { uped += 1 }
+        row.onBacktab = { backtabbed += 1 }
         let host = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
         host.addSubview(row)
         mount(host)
 
         row.keyDown(with: tabEvent(shift: false))
         XCTAssertEqual(entered, 1)
-        XCTAssertEqual(retreated, 0)
+        XCTAssertEqual(backtabbed, 0)
 
         row.keyDown(with: tabEvent(shift: true))
         XCTAssertEqual(
             entered, 1, "Shift-Tab must not enter the detail pane — the shift payload was discarded")
-        XCTAssertEqual(retreated, 1, "Shift-Tab retreats a nav row, like Up")
+        XCTAssertEqual(backtabbed, 1, "Shift-Tab retreats via onBacktab, which wraps at the first row")
+        XCTAssertEqual(uped, 0, "Shift-Tab is no longer aliased to Up — Up clamps, Shift-Tab wraps")
     }
 
     // MARK: helpers

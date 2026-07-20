@@ -13,6 +13,10 @@ final class SegmentedControl: NSView {
     var onChange: (Int) -> Void
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
+    /// Left at the leftmost segment (there's nowhere further left to cycle) exits the control — the
+    /// form wires it to return to the nav, mirroring `FieldBox`'s Left-at-cursor-start. Left anywhere
+    /// else still cycles the selection.
+    var onArrowLeft: (() -> Void)?
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
 
@@ -120,6 +124,7 @@ final class SegmentedControl: NSView {
 
     override func keyDown(with event: NSEvent) {
         switch KeyboardFocus.key(for: event) {
+        case .left where selectedIndex == 0 && onArrowLeft != nil: onArrowLeft?()  // boundary → exit
         case .left: select(selectedIndex - 1)
         case .right: select(selectedIndex + 1)
         case .up: onArrowUp?()  // previous field
