@@ -464,7 +464,7 @@ final class WindowController: NSObject {
     ///
     /// Inserted below `tabBar` — above every canvas (`pinCanvas` keeps those at the back) but
     /// below the tab strip, the dock, and the toast stack. That last one is the reason this isn't
-    /// a plain top-of-stack `addSubview`: the ⌘W guard toast ("Close btop first to close a pane")
+    /// a plain top-of-stack `addSubview`: the ⌘W guard toast ("Close btop first, then ⌘W")
     /// fires precisely while a card is up, and a card stacked over the toasts would swallow it.
     private func presentWindowFloat(_ overlay: NSView) {
         overlay.translatesAutoresizingMaskIntoConstraints = false
@@ -979,8 +979,8 @@ final class WindowController: NSObject {
                     .map { $0.title.replacingOccurrences(of: "Open ", with: "") } ?? "the tool"
                 toasts.show(
                     ToastContent(
-                        variant: .info, title: "Close Pane",
-                        message: "Close \(name) first to close a pane."))
+                        variant: .info, title: "Tool Float",
+                        message: "Close \(name) first, then ⌘W."))
                 return
             case .toggleCommandPalette, .toggleRepoPicker, .openSettings:
                 floats.close()  // close it, then fall through to open the other
