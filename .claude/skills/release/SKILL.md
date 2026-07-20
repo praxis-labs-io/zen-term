@@ -55,9 +55,29 @@ downloading rather than the person who wrote the patch.
 Structure, as the existing files establish it:
 
 - One line at the top saying what this release is.
+- A `<!-- card ... -->` block of two to five `-` bullets: the short list the
+  in-app update card shows. See below.
 - `## New` / `## Fixed` / `## Changed`, only the ones that apply. Bold lead-in
   naming the thing, then plain sentences about what changed.
 - `## Install` and `## Reporting a bug`.
+
+The card block feeds the update card and nothing else. `bin/release` pulls just
+these bullets into the appcast `<description>`; the full prose stays on the GitHub
+release page, which the card's "What's new" links. HTML comments don't render on
+GitHub, so the block is invisible there. `bin/release` refuses to publish a
+release whose notes yield no bullets at all: it falls back to any top-level `-`
+lines (which is what keeps the bare git-log scaffold working), but a curated notes
+file is pure prose, so in practice that fallback finds nothing and this block is
+what stands between the release and a blank card (which is what shipped for five
+releases before ZEN-211). Put it right under the opening line:
+
+    <!-- card
+    - The one-line thing this release is about
+    - Each other change worth a glance, in the app's voice
+    -->
+
+These are glanceable, not the prose: a few words each, no trailing period, the
+change not the section name. Brand voice still governs them.
 
 Check `## Install` against current reality rather than copying the last file
 forward. It has already gone stale once: the pre-v0.2.0 notes say "re-download to
@@ -68,6 +88,7 @@ rereading your own copy does not:
 
     grep -c '—' docs/release-notes/vX.Y.Z.md    # must be 0, per brand-voice
     grep -nEi 'seamless|powerful|beautiful|just works|simply|easily|quickly' docs/release-notes/vX.Y.Z.md
+    awk '/<!--[[:space:]]*card/{f=1;next} f&&/-->/{f=0} f' docs/release-notes/vX.Y.Z.md | grep -c '^-'  # card bullets, must be >0
 
 Then show Drew the notes and get approval. Copy is the deliverable here.
 

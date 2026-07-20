@@ -225,6 +225,25 @@ if [[ -z "$NOTES_FILE" ]]; then
     sh -c "${EDITOR:-vi} \"\$1\"" sh "$NOTES_FILE"
 fi
 
+# The update card's bullets (ZEN-211). The card wants a short list, not the whole notes file, which
+# also carries the Install / Reporting boilerplate. A `<!-- card ... -->` block lets the notes read
+# as pure prose on the GitHub release page (HTML comments don't render there) while handing the card
+# an explicit list; a file predating the convention (e.g. the bare git-log scaffold, all bullets)
+# falls back to its top-level "- "/"* " lines. ZenUpdateDriver.bullets(from:) strips and caps these
+# downstream; here we gather them and refuse to publish an empty set, since an empty <description>
+# renders a blank card, which is how five releases shipped a card with no notes.
+CARD_NOTES="$(awk '
+    /<!--[[:space:]]*card/ { in_card=1; next }
+    in_card && /-->/       { in_card=0; next }
+    in_card                { print }
+' "$NOTES_FILE")"
+BULLET_RE='^[[:space:]]*[-*][[:space:]]'
+if ! grep -qE "$BULLET_RE" <<< "$CARD_NOTES"; then
+    CARD_NOTES="$(grep -E "$BULLET_RE" "$NOTES_FILE" || true)"
+fi
+grep -qE "$BULLET_RE" <<< "$CARD_NOTES" \
+    || { echo "✗ no update-card bullets in $NOTES_FILE: add a '<!-- card ... -->' list (the in-app update card shows these; without them it renders blank)" >&2; exit 1; }
+
 rm -rf "$APP" "$DIST/ZenTerm.zip" "$DIST/dmg-root" "$DMG"
 bin/package-app --version "$VERSION" --identity "$IDENTITY" --dest "$DIST" --variant release
 
@@ -253,9 +272,9 @@ xcrun stapler validate "$DMG"
 # Appcast (ZEN-118). The EdDSA signature is taken here, on the final DMG: `stapler staple` above
 # rewrote its bytes, so a signature taken any earlier wouldn't match what users download. The
 # sparkle:version is read back out of the built app's plist rather than recomputing the commit
-# count: two places deriving one number is how they drift. The curated notes go into the
-# description CDATA as-is (nothing else consumes this feed), and releaseNotesLink points at the
-# release page, which is the card's "What's new".
+# count: two places deriving one number is how they drift. The card bullets (CARD_NOTES, gathered
+# above) go into the description CDATA; the full curated prose stays in the GitHub release body, which
+# releaseNotesLink points at as the card's "What's new".
 echo "▸ Appcast"
 BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")"
 ED_ATTRS="$("$SIGN_UPDATE" "$DMG")"  # sparkle:edSignature="…" length="…"
@@ -275,7 +294,7 @@ cat > "$APPCAST" <<XML
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <sparkle:releaseNotesLink>https://github.com/$RELEASES_REPO/releases/tag/$TAG</sparkle:releaseNotesLink>
       <description><![CDATA[
-$(cat "$NOTES_FILE")
+$CARD_NOTES
 ]]></description>
       <enclosure url="https://github.com/$RELEASES_REPO/releases/latest/download/$DMG_NAME" $ED_ATTRS type="application/octet-stream" />
     </item>
