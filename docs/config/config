@@ -49,6 +49,12 @@
 
 # ─── Chrome ──────────────────────────────────────────────────────────────────
 
+# Show the standard macOS window buttons (close, minimize, zoom) and reserve the
+# header space that clears them. Off = a fully chromeless top; close/minimize
+# still work via ⌘W / ⌘M and the menu, and the window drags by its background.
+# In-app Settings edit: applies live.
+# window-chrome = true                # true | false
+
 # Opacity of the on-brand tint over the behind-window blur. 1 = solid shell,
 # 0 = raw system blur showing your desktop through the whole window.
 # In-app Settings edit: applies live.
@@ -162,7 +168,7 @@
 #   nav_left  nav_right  nav_up  nav_down
 #   resize_left  resize_right  resize_up  resize_down
 #   new_tab  new_window  prev_tab  next_tab  select_tab_1 … select_tab_9
-#   toggle_bottom_drawer  toggle_right_drawer  toggle_zoom
+#   toggle_bottom_drawer  toggle_right_drawer  toggle_focus_mode  fill_screen
 #   toggle_repo_picker  toggle_command_palette  open_settings  reload_config
 #   toggle_float:<id>   (bind a second chord to one of your floats)
 #
@@ -185,7 +191,8 @@
 # keybind = select_tab_1=cmd+1                    # … through select_tab_9=cmd+9
 # keybind = toggle_bottom_drawer=cmd+b
 # keybind = toggle_right_drawer=cmd+\
-# keybind = toggle_zoom=cmd+f
+# keybind = toggle_focus_mode=cmd+f              # one pane/drawer fills the window
+# keybind = fill_screen=cmd+shift+f              # the window fills the desktop
 # keybind = toggle_repo_picker=cmd+shift+p
 # keybind = toggle_command_palette=cmd+p
 # keybind = open_settings=cmd+,

@@ -23,7 +23,8 @@ final class KeyInterceptor {
         case resizeLeft, resizeRight, resizeUp, resizeDown
         case toggleBottomDrawer
         case toggleRightDrawer
-        case toggleZoom
+        case toggleZoom  // the "Focus Mode" command (internal name stays `zoom`, distinct from pane focus)
+        case fillScreen  // toggle the window to fill the desktop's visible frame (not native fullscreen)
         case toggleToolFloat(String)  // associated value = ToolFloat.id
         case toggleRepoPicker
         case toggleCommandPalette

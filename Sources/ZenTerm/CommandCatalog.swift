@@ -17,6 +17,7 @@ enum CommandCatalog {
         static let panes = "Panes"
         static let tabs = "Tabs"
         static let drawers = "Drawers"
+        static let window = "Window"
         static let tools = "Tools"
         static let config = "Config"
     }
@@ -37,7 +38,8 @@ enum CommandCatalog {
         case .resizeDown: return pane("Resize Pane Down", glyph, chord)
         case .resizeUp: return pane("Resize Pane Up", glyph, chord)
         case .resizeRight: return pane("Resize Pane Right", glyph, chord)
-        case .toggleZoom: return pane("Toggle Zoom", glyph, chord)
+        case .toggleZoom: return pane("Focus Mode", glyph, chord)
+        case .fillScreen: return window("Fill Screen", glyph, chord)
         case .closePane: return pane("Close Pane", glyph, chord)
         case .newTab: return tab("New Tab", glyph, chord)
         case .prevTab: return tab("Previous Tab", glyph, chord)
@@ -61,10 +63,10 @@ enum CommandCatalog {
     }
 
     /// The ordered commands shown for a window with `tabCount` tabs, grouped by category
-    /// (Tools → Config → Drawers → Tabs → Panes). Tools leads with the workspace picker, then
-    /// the configured tool floats; Config holds Settings + Reload Config. `.selectTab`
-    /// expands to one entry per open tab (capped at the bound ⌘1–⌘9). The command palette itself and
-    /// New Window aren't shown.
+    /// (Tools → Config → Drawers → Tabs → Panes → Window). Tools leads with the workspace picker,
+    /// then the configured tool floats; Config holds Settings + Reload Config; Window holds Fill
+    /// Screen. `.selectTab` expands to one entry per open tab (capped at the bound ⌘1–⌘9). The
+    /// command palette itself and New Window aren't shown.
     static func commands(tabCount: Int) -> [PaletteCommand] {
         var chords: [KeyInterceptor.ReservedChord] = [.toggleRepoPicker]
         chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
@@ -82,6 +84,7 @@ enum CommandCatalog {
             .resizeLeft, .resizeDown, .resizeUp, .resizeRight,
             .toggleZoom, .closePane,
         ]
+        chords += [.fillScreen]
         return chords.map(spec(for:))
     }
 
@@ -99,6 +102,11 @@ enum CommandCatalog {
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
         .init(title: title, shortcut: shortcut, category: Category.drawers, chord: chord)
+    }
+    private static func window(
+        _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
+    ) -> PaletteCommand {
+        .init(title: title, shortcut: shortcut, category: Category.window, chord: chord)
     }
     private static func tool(
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord

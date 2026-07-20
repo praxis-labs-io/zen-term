@@ -60,7 +60,7 @@ final class WindowControllerToastSeamTests: XCTestCase {
         // could still be broken is the card rendering something other than what it was handed.
         let labels = descendants(of: toasts[0]).compactMap { ($0 as? NSTextField)?.stringValue }
         XCTAssertTrue(labels.contains { $0.contains("Split Vertically") }, "\(labels)")
-        XCTAssertTrue(labels.contains { $0.contains("toggle_zoom") }, "\(labels)")
+        XCTAssertTrue(labels.contains { $0.contains("toggle_focus_mode") }, "\(labels)")
     }
 
     func test_showToast_isReachableFromTheKeyWindowLookup() {

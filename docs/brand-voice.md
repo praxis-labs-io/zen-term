@@ -116,7 +116,7 @@ what dies. It does not ask the user to introspect.
 **Nothing fails silently.** When an action does nothing, say so:
 
 > "No pane left to focus"
-> "Exit zoom (⌘F) to split."
+> "Exit Focus Mode (⌘F) to split."
 
 **Errors name the place and the fix.**
 
@@ -158,7 +158,6 @@ The strictest surface, because it is read mid-task by someone who wants to be
 doing something else.
 
 - **Titles: Title Case.** "Terminal Didn't Start", "Close Pane", "Quit ZenTerm".
-  (`"Zoom mode"` is the lone outlier and should be "Zoom Mode".)
 - **Body: sentence case**, ending in a period.
 - **Buttons: the verb.** "Quit", "Retry", "Delete", "Save".
 - Measure it against its container before shipping it.
@@ -193,6 +192,8 @@ One word per concept. The audit found four concepts with two or three words each
 | A saved folder + layout | **workspace** | project, repo |
 | A key combination | **shortcut** in UI, **chord** when precision matters | keybind (that's the config key name) |
 | A floating tool | **tool float** first, **float** after | tool |
+| One pane or drawer filling the window | **Focus Mode** | zoom, full screen |
+| The whole window filling the desktop | **Fill Screen** | full screen, fullscreen, maximize |
 | Version control | **Git repository**, or **Git repo** | repo, git repository (lowercase) |
 
 Apostrophes: straight (`'`), matching the bulk of the codebase. Two form overlays

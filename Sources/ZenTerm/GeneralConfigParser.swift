@@ -39,6 +39,8 @@ enum GeneralConfigParser {
                 if let b = parseBool(value, key) { config.optionAsAlt = b }
             case "scroll-multiplier":
                 if let n = parseDouble(value, key) { config.scrollMultiplier = clamp(n, 0.1, 10, key) }
+            case "window-chrome":
+                if let b = parseBool(value, key) { config.windowChrome = b }
             case "backdrop-alpha":
                 if let n = parseDouble(value, key) { config.backdropAlpha = CGFloat(clamp(n, 0, 1, key)) }
             case "window-gutter":

@@ -25,6 +25,10 @@ struct GeneralConfig: Equatable {
     var fontSize: CGFloat
 
     // Chrome.
+    /// Show the standard macOS window buttons (traffic lights) and reserve the header space that
+    /// clears them. Off → the fully chromeless top (ZEN-163): buttons hidden, an even gutter on
+    /// all four sides. Close/minimize still work via ⌘W / ⌘M and the menu.
+    var windowChrome: Bool
     var backdropAlpha: CGFloat
     var windowGutter: CGFloat
     var panelGap: CGFloat
@@ -72,6 +76,7 @@ struct GeneralConfig: Equatable {
         themeName: nil,
         fontName: "JetBrainsMono Nerd Font Mono",
         fontSize: 14,
+        windowChrome: true,
         backdropAlpha: 0.82,
         windowGutter: 8,
         panelGap: 8,

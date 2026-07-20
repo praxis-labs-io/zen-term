@@ -83,7 +83,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         let content = try XCTUnwrap(ConfigDiagnostic.toast(for: [splitVerticalLostBackslash]))
         XCTAssertEqual(content.variant, .warning, "a working-but-surprising config is a warning, not a failure")
         XCTAssertEqual(content.title, "Split Vertically has no shortcut")
-        XCTAssertEqual(content.message, "⌘⇧\\ went to toggle_zoom in your config.")
+        XCTAssertEqual(content.message, "⌘⇧\\ went to toggle_focus_mode in your config.")
     }
 
     func test_severalProblems_areOneCompactLineEach() throws {
@@ -93,7 +93,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
             content.message,
             """
             Split Vertically
-              ⌘⇧\\ → toggle_zoom
+              ⌘⇧\\ → toggle_focus_mode
 
             New Tab
               ⌘T → toggle_float:btop
@@ -165,12 +165,12 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     /// The real config path: a hand-edited file that steals a chord must produce a toast-worthy
     /// diagnostic, not just an inline row note.
     func test_aConfigThatStealsAChord_producesAToast() throws {
-        try "keybind = toggle_zoom=cmd+shift+\\\n"
+        try "keybind = toggle_focus_mode=cmd+shift+\\\n"
             .write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         AppConfig.reload()
 
         let content = try XCTUnwrap(ConfigDiagnostic.toast(for: GeneralConfig.current.keymapDiagnostics))
         XCTAssertTrue(content.title.contains("Split Vertically"), content.title)
-        XCTAssertTrue(content.message.contains("toggle_zoom"), content.message)
+        XCTAssertTrue(content.message.contains("toggle_focus_mode"), content.message)
     }
 }

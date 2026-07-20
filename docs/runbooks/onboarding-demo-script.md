@@ -44,9 +44,9 @@ Move around the panes you made.
 If they don't know vim: H left, L right, J down, K up. Say it once, move on. Do
 not teach vim.
 
-## 4. Zoom (⌘F)
+## 4. Focus Mode (⌘F)
 
-Zoom a pane to fill the window, then unzoom.
+Focus a pane to fill the window, then exit Focus Mode.
 
 > "Same panes, one gets the room."
 

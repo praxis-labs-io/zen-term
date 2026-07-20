@@ -23,7 +23,8 @@ extension KeyInterceptor.ReservedChord {
         case .resizeDown: return "resize_down"
         case .toggleBottomDrawer: return "toggle_bottom_drawer"
         case .toggleRightDrawer: return "toggle_right_drawer"
-        case .toggleZoom: return "toggle_zoom"
+        case .toggleZoom: return "toggle_focus_mode"
+        case .fillScreen: return "fill_screen"
         case .toggleToolFloat(let id): return "toggle_float:\(id)"
         case .toggleRepoPicker: return "toggle_repo_picker"
         case .toggleCommandPalette: return "toggle_command_palette"
@@ -53,7 +54,11 @@ extension KeyInterceptor.ReservedChord {
         case "resize_down": self = .resizeDown
         case "toggle_bottom_drawer": self = .toggleBottomDrawer
         case "toggle_right_drawer": self = .toggleRightDrawer
+        case "toggle_focus_mode": self = .toggleZoom
+        // Back-compat: the action was renamed from zoom to Focus Mode (ZEN-207); an existing
+        // config with the old token still resolves rather than silently dropping the binding.
         case "toggle_zoom": self = .toggleZoom
+        case "fill_screen": self = .fillScreen
         case "toggle_repo_picker": self = .toggleRepoPicker
         case "toggle_command_palette": self = .toggleCommandPalette
         case "open_settings": self = .openSettings
@@ -89,6 +94,7 @@ enum KeymapDefaults {
         map[Chord(command: true, shift: true, key: "k")] = .resizeUp
         map[Chord(command: true, shift: true, key: "j")] = .resizeDown
         map[Chord(command: true, shift: true, key: "p")] = .toggleRepoPicker
+        map[Chord(command: true, shift: true, key: "f")] = .fillScreen
 
         // bare ⌘.
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer

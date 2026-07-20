@@ -12,9 +12,9 @@ struct PanelMeta {
 /// Hosts one terminal surface (a pane leaf or a drawer) inside the shared rounded/bordered
 /// chrome: the iris focus halo (accent border + soft glow) and an inner clip that keeps
 /// content within the corner radius. A drawer passes `meta` for an always-on header, and may
-/// also pass `zoomMeta` — the header content it swaps to while zoomed (e.g. its title appended
-/// with "— Full screen" and the keybind replaced by ⌘F). A pane passes only `zoomMeta` for a
-/// header that appears only while the pane is zoomed (full screen). Panes with neither
+/// also pass `zoomMeta` — the header content it swaps to while zoomed (e.g. its title marking
+/// "· Focus Mode" and the keybind replaced by ⌘F). A pane passes only `zoomMeta` for a
+/// header that appears only while the pane is zoomed (Focus Mode). Panes with neither
 /// look/behave exactly as the original pane-only chrome. Clicking anywhere in the panel
 /// requests focus.
 final class PanelHostView: NSView {
@@ -35,7 +35,7 @@ final class PanelHostView: NSView {
     var isFocused: Bool = false { didSet { if oldValue != isFocused { updateHalo() } } }
 
     /// Whether this panel is the sole full-canvas panel (zoomed). A pane reveals its
-    /// full-screen header; a drawer keeps its always-on header but swaps its content to the
+    /// Focus Mode header; a drawer keeps its always-on header but swaps its content to the
     /// zoomed variant (title + ⌘F).
     var isZoomed: Bool = false {
         didSet {

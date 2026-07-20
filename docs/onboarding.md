@@ -61,7 +61,8 @@ Pane movement is vim's arrow keys. **H** is left, **L** is right, **J** is down,
 |                                  |                             |
 | -------------------------------- | --------------------------- |
 | Resize the pane                  | `⌘⇧H` `⌘⇧J` `⌘⇧K` `⌘⇧L`     |
-| Zoom the pane to fill the window | `⌘F`                        |
+| Focus Mode (pane fills the window) | `⌘F`                      |
+| Fill Screen (window fills the desktop) | `⌘⇧F`                 |
 | Bottom drawer                    | `⌘B`                        |
 | Right drawer                     | `⌘\`                        |
 | New window                       | `⌘N`                        |

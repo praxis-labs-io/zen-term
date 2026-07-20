@@ -11,11 +11,12 @@ final class SettingsKeybindsSection: SettingsSection {
 
     /// Editable actions grouped by category (float toggles are excluded — they're file-only).
     private static let groups: [(String, [KeyInterceptor.ReservedChord])] = [
-        ("Panes", [.splitHorizontal, .splitVertical, .closePane]),
+        ("Panes", [.splitHorizontal, .splitVertical, .closePane, .toggleZoom]),
         ("Navigation", [.navLeft, .navDown, .navUp, .navRight]),
         ("Resize", [.resizeLeft, .resizeDown, .resizeUp, .resizeRight]),
         ("Tabs", [.newTab, .newWindow, .prevTab, .nextTab] + (1...9).map { .selectTab($0) }),
-        ("Drawers", [.toggleBottomDrawer, .toggleRightDrawer, .toggleZoom]),
+        ("Window", [.fillScreen]),
+        ("Drawers", [.toggleBottomDrawer, .toggleRightDrawer]),
         ("Surfaces & Tools", [.toggleRepoPicker, .toggleCommandPalette, .openSettings]),
     ]
 

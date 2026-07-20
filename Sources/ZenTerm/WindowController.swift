@@ -38,7 +38,7 @@ final class WindowController: NSObject {
     /// Top-right transient notices (e.g. "not a git repository"). Lazy so its stack mounts
     /// above the canvas on first use; window-level so it's shared by every tab.
     private lazy var toasts = ToastPresenter(
-        host: container, topInset: ChromeMetrics.windowGutter + 12, trailingInset: ChromeMetrics.windowGutter + 12)
+        host: container, topInset: ChromeMetrics.topInset + 12, trailingInset: ChromeMetrics.windowGutter + 12)
 
     /// Surface a notice in this window. The seam for app-global notices (`AppDelegate` routes
     /// config problems to one window this way) — the presenter itself stays private so nothing
@@ -210,6 +210,9 @@ final class WindowController: NSObject {
             guard let self else { return }
             self.tint.layer?.backgroundColor =
                 Theme.current.chrome.background.nsColor.withAlphaComponent(Self.backdropTintAlpha).cgColor
+            // Show/hide the traffic lights live; `reapplyChromeLayout()` below re-applies the
+            // matching top inset so the header space appears/reclaims without a relaunch.
+            self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
             for controller in self.controllers.values {
                 controller.reapplyChromeLayout()
                 controller.reapplyChromeColors()
@@ -962,8 +965,8 @@ final class WindowController: NSObject {
                 return
             case .toggleCommandPalette, .toggleRepoPicker, .openSettings:
                 floats.close()  // close it, then fall through to open the other
-            case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab:
-                break
+            case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab, .fillScreen:
+                break  // cross-tab/window chords still act; Fill Screen is window-level
             default:
                 return
             }
@@ -991,12 +994,32 @@ final class WindowController: NSObject {
         case .toggleBottomDrawer: active?.toggleBottomDrawer()
         case .toggleRightDrawer: active?.toggleRightDrawer()
         case .toggleZoom: active?.toggleZoom()
+        case .fillScreen: toggleFillScreen()
         case .toggleToolFloat(let id):
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
         }
+    }
+
+    /// The window frame before Fill Screen grew it, so a second ⌘⇧F restores the exact size
+    /// and position. Nil means the window is not currently filled.
+    private var preFillFrame: NSRect?
+
+    /// Toggle the window between its current size and the screen's visible frame (the desktop
+    /// minus the menu bar and Dock). This is NOT native macOS fullscreen — no space switch, the
+    /// menu bar stays — just a "fill the desktop" maximize with a restore on the second press.
+    private func toggleFillScreen() {
+        let animate = !Motion.isReduceMotionEnabled()
+        if let restore = preFillFrame {
+            preFillFrame = nil
+            window.setFrame(restore, display: true, animate: animate)
+            return
+        }
+        guard let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+        preFillFrame = window.frame
+        window.setFrame(visible, display: true, animate: animate)
     }
 
     /// Number of open tabs in this window (for the quit tally).
