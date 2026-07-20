@@ -119,6 +119,9 @@ final class IconPickerField: NSView {
             case .up: moveHighlight(-Self.columns)
             case .down: moveHighlight(Self.columns)
             case .activate: commitHighlight()
+            // Load-bearing for layered dismissal: a bare Esc reaches this keyDown before any
+            // card-root performKeyEquivalent, so closing the grid here leaves the form open. Don't
+            // hoist Esc to the card root — that's the ZEN-5 dead-end.
             case .escape: closePopover()
             default: break  // consume every other key while the grid is open
             }

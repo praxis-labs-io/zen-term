@@ -88,9 +88,13 @@ final class SettingsOverlay: NSView, ModalOverlay {
     }
     override func hitTest(_ point: NSPoint) -> NSView? { dismiss.isDismissing ? nil : super.hitTest(point) }
 
-    /// The card root owns Esc: an open dropdown closes first, else the card does. Claimed here (not
-    /// in `keyDown`) because `performKeyEquivalent` is the only layer that runs before a button's
-    /// own `"\u{1b}"` key equivalent.
+    /// The card root's Esc fallback. A bare Esc reaches the focused control's `keyDown` first, so an
+    /// open dropdown closes itself there (its own `.escape` case) and the card stays — this pass
+    /// never runs while a popover is up. It fires only when Esc goes unhandled by the focus (a plain
+    /// nav row, no popover open), and closes the card. Claimed in `performKeyEquivalent`, not
+    /// `keyDown`, for the other dispatch path: a text field routes Esc through `cancelOperation`,
+    /// where a Cancel button's own `"\u{1b}"` key equivalent would otherwise win — this beats it
+    /// (ZEN-77). Two paths, both real; verified in the running app (ZEN-5).
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing, close: { self.onClose() }

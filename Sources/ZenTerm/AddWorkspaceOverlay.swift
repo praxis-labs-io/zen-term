@@ -142,9 +142,11 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
-    /// The card root owns Esc: any open popover closes first, else the form cancels. Claimed here
-    /// (not in `keyDown`) because `performKeyEquivalent` is the only layer that runs before the
-    /// Cancel button's own key equivalent.
+    /// The form's Esc fallback. Any open popover closes itself first, in its own `keyDown` — a bare
+    /// Esc reaches the focused control before this pass, so this never runs while a popover is up
+    /// (ZEN-5). It's claimed in `performKeyEquivalent`, not `keyDown`, for the other path: a text
+    /// field routes Esc through `cancelOperation`, where the Cancel button's own key equivalent
+    /// would otherwise win — this beats it (ZEN-77).
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() }

@@ -92,9 +92,12 @@ final class ToolFloatFormOverlayTests: XCTestCase {
             requiresGitRepo: git, persist: persist, toggle: toggle)
     }
 
-    /// Press Esc as a `performKeyEquivalent` traversal of the contentView subtree — the layer the
-    /// card root claims it at. NOTE (ZEN-157): whether AppKit really dispatches a BARE Esc this way
-    /// is unconfirmed, so a pass here is not proof the key works in the running app.
+    /// Press Esc as a `performKeyEquivalent` traversal of the contentView subtree. This is the real
+    /// layer for the card-cancel case (confirmed in the running app, ZEN-5): a text field routes Esc
+    /// through `cancelOperation`, and the card root claims it here to beat the Cancel button's own
+    /// key equivalent (ZEN-77). It is NOT the path for a bare Esc over an open popover — that reaches
+    /// the focused control's `keyDown` first, so grid dismissal is driven through the picker's
+    /// `keyDown` directly (see `test_iconGrid_escKeyDown_closesGrid`), not this helper.
     @discardableResult
     private func pressEscape() -> Bool {
         window!.contentView!.performKeyEquivalent(with: keyDown("\u{1b}", code: 53))
@@ -312,6 +315,24 @@ final class ToolFloatFormOverlayTests: XCTestCase {
 
         submit(in: overlay)
         XCTAssertEqual(sink.submitted.first?.icon, IconCatalog.all[1])
+    }
+
+    /// A bare Esc over an open icon grid closes the grid at its real dispatch layer — the picker's
+    /// own `keyDown`, which fires before any card-root `performKeyEquivalent` (ZEN-5). Driving the
+    /// real keyDown is what locks this: a `performKeyEquivalent`-by-hand press would stay green even
+    /// if this handler were deleted, because that path never runs for a bare Esc while the picker
+    /// holds focus — the exact false-green the ticket called out.
+    func test_iconGrid_escKeyDown_closesGrid() {
+        let (overlay, _, sink) = mount()
+        let picker = picker(in: overlay)
+        window!.makeFirstResponder(picker)
+        picker.openForTesting()
+        XCTAssertTrue(picker.isPopoverOpen)
+
+        picker.keyDown(with: keyDown("\u{1b}", code: 53))
+
+        XCTAssertFalse(picker.isPopoverOpen, "Esc in the picker's keyDown closes the grid")
+        XCTAssertEqual(sink.cancelled, 0, "closing the grid must not cancel the form")
     }
 
     func test_editForm_deleteButton_firesOnDelete() {
