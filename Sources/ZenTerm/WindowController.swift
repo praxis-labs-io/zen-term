@@ -1104,14 +1104,18 @@ final class WindowController: NSObject {
 
         let lastPane = active.isSinglePane
         let busy = active.focusedPaneIsBusy
+        // ⌘W on the last pane closes the tab; on the last tab that also closes the window.
+        let closesWindow = lastPane && tabs.order.count == 1
 
-        // The last pane's close takes the whole tab, so its confirm weighs the tab's entire live
-        // work: the focused pane, either drawer, and any hidden persistent float. Hidden floats
-        // matter precisely because they're invisible — a dismissed `persist:` tool keeps running
-        // with no on-screen trace, and this confirm is the only thing standing between ⌘W and
-        // silently killing it (floats are window-wide, ZEN-141). An idle tab has nothing to
-        // lose, so it closes with no toast whether or not other tabs remain (ZEN-213).
-        let needsConfirm = lastPane ? (busy || active.hasBusyDrawer || floats.hasBusy) : busy
+        // The confirm weighs exactly the live work THIS ⌘W would stop. Closing the tab stops its
+        // panes and drawers, so those count once it's the last pane. Floats are window-scoped and
+        // survive a tab close (a persistent one keeps running, hidden) — they only die when ⌘W
+        // also closes the window, so they count only then; a dismissed `persist:` tool running
+        // with no on-screen trace is exactly why the window-close case must still see it
+        // (ZEN-141). An idle tab has nothing to lose, so it closes with no toast whether or not
+        // other tabs remain (ZEN-213).
+        let needsConfirm =
+            busy || (lastPane && active.hasBusyDrawer) || (closesWindow && floats.hasBusy)
         guard needsConfirm else {
             // Nothing to lose → close now, cascading to the tab when it was the last pane.
             if active.closeFocused() == false { closeTab(tabs.activeID) }
