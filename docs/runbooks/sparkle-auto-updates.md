@@ -33,7 +33,7 @@ keycap, and the manual-check toasts are here, by eye.
   via `AppDelegate.route`, and a palette pick lands there too through
   `WindowController.onAppGlobalCommand`, the same seam that makes Reload Config work
   from the palette.
-- **Off switch (ZEN-19).** Settings → Updates → "Check for updates in the background"
+- **Off switch (ZEN-19).** Settings → General → Updates → "Check for updates in the background"
   drives Sparkle's automatic-check schedule (`automatic-update-checks` in the config,
   on by default). It applies live: `AppDelegate` re-points Sparkle on `.configDidChange`.
   Inert in dev (no feed), like everything else here.
@@ -59,8 +59,23 @@ first hop is a manual DMG download. Onboarding says so.
 
 ## Verification
 
-Steps 1–2 also run green from an ad-hoc `bin/package-app` (no cert needed); the
-rest need a real signed release.
+Steps 1–2 run green from an ad-hoc `bin/package-app` (no cert needed). The update
+flow (3–6) also runs ad-hoc: build the release variant *below* the feed's latest and
+the real, already-signed public release plays the part of "the update", so no scratch
+release is needed. Only step 8 (cutting an actual release) needs the cert.
+
+**Test-an-available-update recipe (no fake appcast, no signing).** The public appcast's
+latest is build **152** (v0.2.2). Build a release-variant app that reports a *lower*
+`CFBundleVersion`, so a check against the real feed sees 0.2.2 as an update:
+
+```
+bin/package-app --variant release --version 0.2.1 --build 100
+open "$HOME/Applications/ZenTerm.app"
+```
+
+`--build` is testing-only (`bin/release` never passes it). Installing pulls and
+verifies the genuine signed 0.2.2, so the download, EdDSA check, and relaunch are all
+real. This is the shared setup for steps 3–6 and 11.
 
 - [ ] **1. Dev launch (the rpath check).** `swift run ZenTerm` launches and behaves
       normally. This is the step most likely to break, because the binary links
@@ -72,11 +87,10 @@ rest need a real signed release.
       validated. `Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices` is
       absent (dropped: sandbox-only). Both variants embed and sign Sparkle identically;
       bare `bin/package-app` builds the dev variant (`ZenTerm Dev.app`).
-- [ ] **3. The card appears.** The dev variant ships no `SUFeedURL`, so build the
-      release variant to get a feed: `bin/package-app --variant release` (still ad-hoc,
-      no cert). Point its `SUFeedURL` at a local test appcast advertising
-      a `sparkle:version` above HEAD's build number. On launch the card appears
-      top-right: origami badge accent-tinted, the notes as bullets, three buttons.
+- [ ] **3. The available card appears.** With the recipe build above, launch it: the
+      card appears top-right against the real feed, origami badge accent-tinted, the
+      release notes as bullets, three buttons ([Install] [Later] [Skip]) and "What's
+      new". The header reads "ZenTerm 0.2.2 is available" over "You're on 0.2.1".
 - [ ] **4. Install morphs in place.** Install → the card becomes a progress bar in
       place, then "Ready to install" with Relaunch. It never steals keys from the
       terminal and never takes first responder (type into a pane behind it while
@@ -94,17 +108,15 @@ rest need a real signed release.
       "Reload Config" and "Check for Updates" are both present. Pick **Reload Config**
       and confirm it re-reads the config (the previously-dead palette path, now fixed).
       "Check for Updates" shows no keycap (unbound by default).
-- [ ] **10. Manual check result (release variant).** Run "Check for Updates": a feed
-      version above the build shows the card; a feed at or below the build shows the
-      "You're on the latest" info toast; an unreachable feed shows the "Couldn't check
-      for updates" warning toast. A scheduled check in the same states stays silent.
-      Note the free case: HEAD's build number is already above the public appcast's
-      latest, so a plain `--variant release` build checked against the real feed lands
-      the "You're on the latest" toast with no test appcast needed.
+- [ ] **10. Manual check result.** Run "Check for Updates" three ways: the recipe build
+      (below the feed) shows the available card; a plain `--variant release` build (its
+      build number is above the feed's 152) shows the "You're on the latest" info toast;
+      an offline machine shows the "Couldn't check for updates" warning toast. A
+      scheduled check in the same states stays silent.
 - [ ] **11. Bound keycap.** Add `keybind = check_for_updates=cmd+opt+u` (any free
-      chord), relaunch, trigger the available card (step 3): its top-right keycap slot
-      now shows the glyph. Rebind or unbind with the card up (⌘, → Keybinds, or ⌘⌥R
-      after a hand-edit) and the keycap tracks it.
-- [ ] **12. Off switch (release variant).** Settings → Updates → set "Check for updates
-      in the background" to Off. `automatic-update-checks = false` lands in the config,
-      and Sparkle stops its scheduled checks (the manual command still works).
+      chord), relaunch the recipe build, and trigger the available card (step 3): its
+      top-right keycap slot now shows the glyph. Rebind or unbind with the card up (⌘, →
+      Keybinds, or ⌘⌥R after a hand-edit) and the keycap tracks it.
+- [ ] **12. Off switch.** Settings → General → Updates → set "Check for updates in the
+      background" to Off. `automatic-update-checks = false` lands in the config, and
+      Sparkle stops its scheduled checks (the manual command still works).

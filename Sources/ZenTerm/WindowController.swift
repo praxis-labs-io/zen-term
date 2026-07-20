@@ -671,9 +671,8 @@ final class WindowController: NSObject {
         // added — the array order is the on-screen order.
         let sections: [SettingsSection] = [
             SettingsAppearanceSection(),
-            SettingsNotificationsSection(),
+            SettingsGeneralSection(),
             SettingsTerminalSection(),
-            SettingsUpdatesSection(),
             SettingsKeybindsSection(capturer: keybindCapturer),
             toolsSection,
             workspacesSection,

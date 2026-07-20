@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Package ZenTerm as a standalone .app.
-# Usage: bin/package-app [--version X.Y.Z] [--identity "NAME"] [--dest DIR] [--variant dev|release]
+# Usage: bin/package-app [--version X.Y.Z] [--identity "NAME"] [--dest DIR] [--variant dev|release] [--build N]
 #   --version   CFBundleShortVersionString (default: latest tag + "+<commits since>")
 #   --identity  codesign identity (default "-" = ad-hoc, for daily driving)
 #   --dest      output directory (default ~/Applications)
 #   --variant   dev (default): "ZenTerm Dev", com.drucial.ZenTerm.dev, dev icon, no Sparkle feed.
 #               release: "ZenTerm", com.drucial.ZenTerm, release icon, public Sparkle feed.
+#   --build     CFBundleVersion override (default: commit count). Testing-only: bin/release never
+#               passes it. Build a release variant BELOW the feed's latest version to make the real
+#               signed release show up as an available update, so the whole flow can be exercised
+#               locally. See docs/runbooks/sparkle-auto-updates.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -13,20 +17,27 @@ VERSION=""
 IDENTITY="-"
 DEST="$HOME/Applications"
 VARIANT="dev"
+BUILD_OVERRIDE=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --version | --identity | --dest | --variant)
+        --version | --identity | --dest | --variant | --build)
             [[ $# -ge 2 ]] || { echo "✗ missing value for $1" >&2; exit 1; }
             case "$1" in
                 --version) VERSION="$2" ;;
                 --identity) IDENTITY="$2" ;;
                 --dest) DEST="$2" ;;
                 --variant) VARIANT="$2" ;;
+                --build) BUILD_OVERRIDE="$2" ;;
             esac
             shift 2 ;;
         *) echo "unknown argument: $1" >&2; exit 1 ;;
     esac
 done
+
+if [[ -n "$BUILD_OVERRIDE" && ! "$BUILD_OVERRIDE" =~ ^[0-9]+$ ]]; then
+    echo "✗ --build must be a non-negative integer, got: $BUILD_OVERRIDE" >&2
+    exit 1
+fi
 
 case "$VARIANT" in
     dev)
@@ -61,7 +72,9 @@ fi
 # Monotonic build number (commit count on the current branch): unique per release
 # commit and Sparkle-compatible, unlike a short SHA. Deliberately NOT the "+N"
 # above, which resets to 0 at every tag and so would go backwards for Sparkle.
-BUILD="$(git rev-list --count HEAD 2>/dev/null || echo 0)"
+# --build overrides it for testing the update flow (see the usage note); a real
+# release never passes it, so the count stays the source of truth there.
+BUILD="${BUILD_OVERRIDE:-$(git rev-list --count HEAD 2>/dev/null || echo 0)}"
 
 APP="$DEST/$APP_BASENAME"
 BIN=".build/release/ZenTerm"
