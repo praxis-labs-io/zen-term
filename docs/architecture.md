@@ -242,13 +242,13 @@ keybinds, later winning. **A user keybind moves its action**: the action's defau
 chords are dropped first, so the old key is freed rather than both firing.
 
 **The modal gate cascade** in `WindowController.handle(_:)` runs confirm, then
-modal card, then tool float, then dispatch. The app-global chords — ⌘N (new window),
-⌘⌥R (reload config), and the (unbound-by-default) Check for Updates command — bypass
-it on the keyboard path (`AppDelegate.route`) and re-implement the gate by hand,
-because they are app-global rather than window-scoped. A command-palette pick,
-though, dispatches through `handle`, which forwards those same app-global chords back
-to `route` via `WindowController.onAppGlobalCommand` — without that they'd be a no-op
-in `handle` (that's how Reload Config from the palette used to do nothing). Copy and
+modal card, then tool float, then dispatch. The app-global chords (⌘N new window,
+⌘⌥R reload config, and the unbound-by-default Check for Updates command) bypass it on
+the keyboard path (`AppDelegate.route`) and re-implement the gate by hand, because
+they are app-global rather than window-scoped. A command-palette pick, though,
+dispatches through `handle`, which forwards those same app-global chords back to
+`route` via `WindowController.onAppGlobalCommand`. Without that they'd be a no-op in
+`handle` (that's how Reload Config from the palette used to do nothing). Copy and
 paste take a third path through the responder chain.
 
 **The nav socket** backs [zen-navigator.nvim](https://github.com/zen-term/zen-navigator.nvim).

@@ -101,7 +101,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
             controller?.announce(
                 ToastContent(
                     variant: .warning, title: "Couldn't check for updates",
-                    message: "Something went wrong reaching the update server."))
+                    message: "Something went wrong. Try again later."))
         }
         acknowledgement()
     }

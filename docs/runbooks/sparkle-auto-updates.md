@@ -26,12 +26,12 @@ keycap, and the manual-check toasts are here, by eye.
 - **On-demand check (ZEN-20).** A "Check for Updates" command in the palette (Config
   group) runs a manual check. Unlike a scheduled one it reports its result even when
   nothing is found: an "Up to date" info toast, or a warning toast on failure (an
-  update found still shows the card). It ships with **no default chord** — bind one
+  update found still shows the card). It ships with **no default chord**: bind one
   with `keybind = check_for_updates=<chord>` and the update card's top-right keycap
   slot fills with that glyph (empty until then, since an unbound glyph would lie).
   The command is app-global (the updater is app-owned): it reaches `UpdateController`
   via `AppDelegate.route`, and a palette pick lands there too through
-  `WindowController.onAppGlobalCommand` — the same seam that makes Reload Config work
+  `WindowController.onAppGlobalCommand`, the same seam that makes Reload Config work
   from the palette.
 - **Off switch (ZEN-19).** Settings → Updates → "Check for updates in the background"
   drives Sparkle's automatic-check schedule (`automatic-update-checks` in the config,
