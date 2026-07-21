@@ -722,25 +722,39 @@ final class WindowController: NSObject {
     }
 
     /// Open (or self-toggle closed) the diff viewer over the active tile. The git work is resolved
-    /// from the focused pane's directory: no enclosing repo means a `nil` loader, and the overlay
-    /// shows its not-a-repo state rather than the picker refusing to open. The `GitDiffRunner` is
-    /// captured by the loader closure, so it lives as long as the overlay it serves.
+    /// from the focused pane's directory; if that isn't inside a repo there's nothing to diff, so a
+    /// toast says so and the overlay never opens. The `GitDiffRunner` is captured by the loader
+    /// closure, so it lives as long as the overlay it serves.
     func openDiffViewer() {
         if modal?.kind == .diffViewer { closeModal(); return }
-        if modal != nil { closeModal() }  // single slot — dismiss whatever's up first
-        let loader: DiffViewerOverlay.Loader?
-        if let repoRoot = GitRepo.repoRoot(for: focusedCWD) {
-            let runner = GitDiffRunner(repoRoot: repoRoot)
-            loader = { scope, completion in runner.load(scope: scope, completion: completion) }
-        } else {
-            loader = nil
+        guard let repoRoot = GitRepo.repoRoot(for: focusedCWD) else {
+            toasts.show(
+                ToastContent(
+                    variant: .info, title: "Diff Viewer",
+                    message: "This folder isn't a Git repository."))
+            return
         }
+        if modal != nil { closeModal() }  // single slot — dismiss whatever's up first
+        let runner = GitDiffRunner(repoRoot: repoRoot)
+        // Reopening on the same repo renders the last status instantly and refreshes behind the card
+        // instead of flashing a spinner; the loader restamps the cache on every successful load.
+        let initial = diffCache.flatMap { $0.repoRoot == repoRoot ? $0.load : nil }
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
-            loader: loader,
+            initialStatus: initial,
+            loader: { [weak self] completion in
+                runner.loadStatus { result in
+                    if case .success(let load) = result { self?.diffCache = (repoRoot, load) }
+                    completion(result)
+                }
+            },
             onCancel: { [weak self] in self?.closeModal() })
         presentModal(overlay, kind: .diffViewer)
     }
+
+    /// The last diff-viewer load, kept so reopening on the same repo renders instantly and refreshes
+    /// behind the card instead of flashing a spinner. A different repo root ignores it.
+    private var diffCache: (repoRoot: URL, load: GitDiffRunner.StatusLoad)?
 
     /// Which section the Settings card opens on. `.tools` / `.workspaces` are used when a sub-form
     /// (tool-float or workspace editor) hands back to the section it was launched from; the
@@ -1129,6 +1143,13 @@ final class WindowController: NSObject {
         if let modal {
             if let selfToggle = modal.kind.selfToggle, chord == selfToggle {
                 closeModal()
+                return
+            }
+            // The diff viewer navigates with the app's pane chords (⌘h/j/k/l): forward them so it can
+            // move between its tree and diff and jump changes, instead of swallowing them like a form.
+            if modal.kind == .diffViewer, let diff = modal.overlay as? DiffViewerOverlay,
+                diff.handleNavChord(chord)
+            {
                 return
             }
             switch chord {

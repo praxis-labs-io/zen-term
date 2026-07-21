@@ -1,11 +1,10 @@
 import Foundation
 
-/// Which slice of the repo's history the diff viewer shows. `.branch` is the union of the
-/// other two: everything on this branch since it forked from the base, working-tree edits
-/// folded in. `.committed` is the same fork point up to HEAD (the PR-equivalent). `.uncommitted`
-/// is HEAD up to the working tree (only what hasn't been committed yet).
+/// The three slices of a repo's state the diff viewer shows as stacked sections, top to bottom.
+/// `.unstaged` is the working tree against the index (plus untracked files); `.staged` is the index
+/// against HEAD; `.committed` is HEAD against the branch's fork point (the commits on this branch).
 enum DiffScope: String, CaseIterable {
-    case branch
+    case unstaged
+    case staged
     case committed
-    case uncommitted
 }

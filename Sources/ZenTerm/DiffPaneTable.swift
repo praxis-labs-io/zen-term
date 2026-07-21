@@ -2,23 +2,13 @@ import AppKit
 
 /// The right pane's side-by-side diff, rendered as a virtualized `NSTableView`: fixed-height
 /// monospace rows, only the visible ones built and reused. Switching files is a whole-table
-/// `reloadData`, so arrowing quickly through the tree stays cheap no matter the file's size. The
-/// pane is a Tab stop with a current-line highlight (like a normal diff viewer): arrows move the
-/// highlighted line and scroll to follow it, and the highlight brightens while the pane is focused.
+/// `reloadData`, so arrowing quickly through the tree stays cheap no matter the file's size. A
+/// current-line highlight (like a normal diff viewer) moves with the arrow keys; ⌘j/⌘k jump between
+/// hunks (driven from the overlay).
 final class DiffPaneTable: NSView {
     private let table = DiffTableView()
     private let scroll = NSScrollView()
     private let source = Source()
-
-    /// Tab / Shift-Tab out of the pane — wired by the overlay to move focus around the ring.
-    var onExitForward: (() -> Void)? {
-        get { table.onExitForward }
-        set { table.onExitForward = newValue }
-    }
-    var onExitBackward: (() -> Void)? {
-        get { table.onExitBackward }
-        set { table.onExitBackward = newValue }
-    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -29,7 +19,7 @@ final class DiffPaneTable: NSView {
         table.backgroundColor = .clear
         table.gridStyleMask = []
         table.intercellSpacing = NSSize(width: 0, height: 0)
-        table.focusRingType = .none  // no system-blue ring on Tab-in (ZEN-27: chrome is theme-only)
+        table.focusRingType = .none  // no system-blue ring on focus-in (ZEN-27: chrome is theme-only)
         table.allowsMultipleSelection = false
         table.allowsEmptySelection = true
         table.rowHeight = DiffLineCell.rowHeight
@@ -66,6 +56,40 @@ final class DiffPaneTable: NSView {
         table.scrollRowToVisible(0)
     }
 
+    /// Recolor the visible cells after a live theme change — each cell reads `Theme.current` when
+    /// (re)built, so a reload is enough.
+    func reapplyTheme() {
+        table.reloadData()
+    }
+
+    /// Move the current line to the next / previous hunk header and bring it to the top — the fast
+    /// jump through a long file (⌘j / ⌘k), so you don't hold the arrow from line 1 to line 200.
+    func jumpToNextHunk() { jumpHunk(1) }
+    func jumpToPrevHunk() { jumpHunk(-1) }
+
+    private func jumpHunk(_ direction: Int) {
+        let rows = source.rows
+        guard !rows.isEmpty else { return }
+        let start = table.selectedRow >= 0 ? table.selectedRow : (direction > 0 ? -1 : rows.count)
+        var index = start + direction
+        while index >= 0, index < rows.count {
+            if case .hunkHeader = rows[index] {
+                table.selectRowIndexes([index], byExtendingSelection: false)
+                scrollRowToTop(index)
+                return
+            }
+            index += direction
+        }
+    }
+
+    private func scrollRowToTop(_ row: Int) {
+        let clip = scroll.contentView
+        let target = CGFloat(row) * table.rowHeight
+        let maxY = max(0, table.frame.height - clip.bounds.height)
+        clip.scroll(to: NSPoint(x: 0, y: min(max(0, target), maxY)))
+        scroll.reflectScrolledClipView(clip)
+    }
+
     private final class Source: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         var rows: [SideBySideRow] = []
 
@@ -90,14 +114,10 @@ final class DiffPaneTable: NSView {
     }
 }
 
-/// The diff table, which manages its own keyboard: `NSTableView` handles arrows/Tab inside its own
-/// `keyDown` (so `nextKeyView`/`moveUp` overrides don't fire), so Tab out is handled here; arrows
-/// fall through to move the selected line and scroll. On focus-in it selects the first visible line
-/// so there's always a visible current line to see and move.
+/// The diff table. Accepts first responder even when empty (so keystrokes never leak to the terminal
+/// behind the card), and on focus-in selects the first visible line so there's always a current line
+/// to see and move. Arrows move the line and scroll (default `NSTableView` behavior).
 private final class DiffTableView: NSTableView {
-    var onExitForward: (() -> Void)?
-    var onExitBackward: (() -> Void)?
-
     override var acceptsFirstResponder: Bool { true }
 
     override func becomeFirstResponder() -> Bool {
@@ -109,14 +129,6 @@ private final class DiffTableView: NSTableView {
             scrollRowToVisible(target)
         }
         return ok
-    }
-
-    override func keyDown(with event: NSEvent) {
-        if case .tab(let shift)? = KeyboardFocus.key(for: event) {
-            (shift ? onExitBackward : onExitForward)?()
-            return
-        }
-        super.keyDown(with: event)  // arrows move the selected line + autoscroll
     }
 }
 

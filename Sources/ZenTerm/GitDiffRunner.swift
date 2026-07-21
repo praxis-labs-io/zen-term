@@ -1,25 +1,36 @@
 import Foundation
 
-/// Runs `git` off the main thread and delivers a parsed diff back on main. The app's first
-/// real subprocess: everything git-facing for the diff viewer lives here, so the chrome only
-/// ever sees `[FileDiff]`. Never blocks the main thread (ZEN-90): the work runs on a global
-/// queue and hops back via `DispatchQueue.main.async`.
+/// Runs `git` off the main thread and delivers a parsed status back on main. The app's first real
+/// subprocess: everything git-facing for the diff viewer lives here, so the chrome only ever sees
+/// `[FileDiff]`. Never blocks the main thread (ZEN-90): the work runs on a global queue and hops
+/// back via `DispatchQueue.main.async`.
 final class GitDiffRunner {
-    /// The repo root the diff is computed from, resolved by the caller via
-    /// `GitRepo.repoRoot(for:)`. All git invocations run with this as their working directory.
+    /// The repo root the diff is computed from, resolved by the caller via `GitRepo.repoRoot(for:)`.
+    /// All git invocations run with this as their working directory.
     let repoRoot: URL
 
     init(repoRoot: URL) {
         self.repoRoot = repoRoot
     }
 
-    /// What a successful load carries. `baseBranch`/`baseSHA` are nil for `.uncommitted`,
-    /// which compares against HEAD rather than a fork point.
-    struct DiffLoad: Equatable {
-        let scope: DiffScope
+    /// A full status: the three diff slices the viewer stacks. `baseBranch`/`baseSHA` describe the
+    /// fork point the committed slice is measured from (nil when no base could be resolved).
+    struct StatusLoad: Equatable {
+        let unstaged: [FileDiff]
+        let staged: [FileDiff]
+        let committed: [FileDiff]
         let baseBranch: String?
         let baseSHA: String?
-        let files: [FileDiff]
+
+        var isEmpty: Bool { unstaged.isEmpty && staged.isEmpty && committed.isEmpty }
+
+        func files(for scope: DiffScope) -> [FileDiff] {
+            switch scope {
+            case .unstaged: return unstaged
+            case .staged: return staged
+            case .committed: return committed
+            }
+        }
     }
 
     /// Why a load produced nothing usable. `.gitUnavailable` means git itself couldn't run;
@@ -29,14 +40,15 @@ final class GitDiffRunner {
         case gitError(String)
     }
 
-    /// Loads `scope`'s diff off-main and calls `completion` on the main thread. A prior call
-    /// is not cancelled; the caller drives one load at a time (open, then a scope switch).
-    func load(scope: DiffScope, completion: @escaping (Result<DiffLoad, Failure>) -> Void) {
+    /// Loads the repo's status off-main and calls `completion` on the main thread. `base` names the
+    /// ref the committed slice forks from; nil uses the repo's default branch. A prior call is not
+    /// cancelled; the caller drives one load at a time.
+    func loadStatus(base: String? = nil, completion: @escaping (Result<StatusLoad, Failure>) -> Void) {
         let repoRoot = self.repoRoot
         DispatchQueue.global(qos: .userInitiated).async {
-            let result: Result<DiffLoad, Failure>
+            let result: Result<StatusLoad, Failure>
             do {
-                result = .success(try Self.loadSync(scope: scope, repoRoot: repoRoot))
+                result = .success(try Self.loadSync(base: base, repoRoot: repoRoot))
             } catch let failure as Failure {
                 result = .failure(failure)
             } catch {
@@ -48,21 +60,21 @@ final class GitDiffRunner {
 
     // MARK: - Pure helpers (unit-tested)
 
-    /// The `git diff` argument list for a scope. `--no-color`/`--no-ext-diff` keep the output
-    /// a plain unified diff the parser can read regardless of the user's git config;
-    /// `--find-renames` makes a moved file read as a rename rather than an add plus a delete.
+    /// The `git diff` argument list for a slice. `--no-color`/`--no-ext-diff` keep the output a plain
+    /// unified diff the parser can read regardless of git config; `--find-renames` makes a moved file
+    /// read as a rename rather than an add plus a delete. Unstaged is working-tree vs index; staged is
+    /// index vs HEAD (`--cached`); committed is the fork point (`mergeBase`) vs HEAD.
     static func diffArguments(scope: DiffScope, mergeBase: String) -> [String] {
         let base = ["diff", "--no-color", "--no-ext-diff", "--find-renames"]
         switch scope {
-        case .branch: return base + [mergeBase]
+        case .unstaged: return base
+        case .staged: return base + ["--cached"]
         case .committed: return base + [mergeBase, "HEAD"]
-        case .uncommitted: return base + ["HEAD"]
         }
     }
 
-    /// The default-branch name from `git symbolic-ref … origin/HEAD` output, e.g.
-    /// `origin/release/1.x` -> `release/1.x`. Strips only the leading `origin/`, so a branch
-    /// name with slashes survives. Nil when the ref is blank.
+    /// The branch name from a ref, e.g. `origin/release/1.x` -> `release/1.x`. Strips only the leading
+    /// `origin/`, so a branch name with slashes survives. Nil when the ref is blank.
     static func defaultBranchName(fromSymbolicRef ref: String) -> String? {
         let trimmed = ref.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -70,14 +82,10 @@ final class GitDiffRunner {
         return trimmed.hasPrefix(prefix) ? String(trimmed.dropFirst(prefix.count)) : trimmed
     }
 
-    /// Untracked files rendered as synthetic all-added `FileDiff`s, since `git diff` never
-    /// shows them. Included for `.branch` and `.uncommitted` (they are part of the working
-    /// state); excluded for `.committed` (an untracked file is not in the PR).
-    static func syntheticUntrackedDiffs(
-        scope: DiffScope, untrackedFiles: [(path: String, contents: String)]
-    ) -> [FileDiff] {
-        guard scope == .branch || scope == .uncommitted else { return [] }
-        return untrackedFiles.map { syntheticAddedDiff(path: $0.path, contents: $0.contents) }
+    /// Untracked files rendered as synthetic all-added `FileDiff`s, since `git diff` never shows them.
+    /// They belong to the unstaged slice (working-tree files not yet in the index).
+    static func syntheticUntrackedDiffs(untrackedFiles: [(path: String, contents: String)]) -> [FileDiff] {
+        untrackedFiles.map { syntheticAddedDiff(path: $0.path, contents: $0.contents) }
     }
 
     private static func syntheticAddedDiff(path: String, contents: String) -> FileDiff {
@@ -95,44 +103,38 @@ final class GitDiffRunner {
 
     // MARK: - Off-main worker
 
-    /// Runs synchronously on a background queue: resolves the base, runs the scope's diff,
-    /// parses it, and folds in untracked files. Throws `Failure` on any git failure.
-    private static func loadSync(scope: DiffScope, repoRoot: URL) throws -> DiffLoad {
+    /// Runs synchronously on a background queue: the three diff slices, the fork base for the
+    /// committed slice, and the untracked fold into unstaged. Throws `Failure` on any git failure.
+    private static func loadSync(base: String?, repoRoot: URL) throws -> StatusLoad {
+        let unstagedPatch = try runGit(diffArguments(scope: .unstaged, mergeBase: ""), in: repoRoot)
+        let stagedPatch = try runGit(diffArguments(scope: .staged, mergeBase: ""), in: repoRoot)
+
         var baseBranch: String?
         var baseSHA: String?
-        let patch: String
-
-        switch scope {
-        case .branch, .committed:
-            let base = try resolveBaseBranch(in: repoRoot)
-            let mergeBase = try runGit(["merge-base", base, "HEAD"], in: repoRoot)
+        var committedPatch = ""
+        if let resolved = base ?? (try? resolveDefaultBase(in: repoRoot)) {
+            let mergeBase = try runGit(["merge-base", resolved, "HEAD"], in: repoRoot)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            // `base` is a ref git can resolve (e.g. `origin/zen-225`); strip `origin/` for the cue.
-            baseBranch = defaultBranchName(fromSymbolicRef: base)
+            baseBranch = defaultBranchName(fromSymbolicRef: resolved)
             baseSHA = String(mergeBase.prefix(7))
-            patch = try runGit(diffArguments(scope: scope, mergeBase: mergeBase), in: repoRoot)
-        case .uncommitted:
-            patch = try runGit(diffArguments(scope: scope, mergeBase: ""), in: repoRoot)
+            committedPatch = try runGit(diffArguments(scope: .committed, mergeBase: mergeBase), in: repoRoot)
         }
 
-        var files = DiffParser.parse(patch)
-        files += syntheticUntrackedDiffs(scope: scope, untrackedFiles: readUntracked(scope: scope, repoRoot: repoRoot))
-        return DiffLoad(scope: scope, baseBranch: baseBranch, baseSHA: baseSHA, files: files)
+        var unstaged = DiffParser.parse(unstagedPatch)
+        unstaged += syntheticUntrackedDiffs(untrackedFiles: readUntracked(repoRoot: repoRoot))
+        return StatusLoad(
+            unstaged: unstaged,
+            staged: DiffParser.parse(stagedPatch),
+            committed: DiffParser.parse(committedPatch),
+            baseBranch: baseBranch,
+            baseSHA: baseSHA)
     }
 
-    /// A ref git can resolve for the fork point, most specific first: the branch's own upstream
-    /// (its tracking base), so a branch stacked on another diffs against that parent rather than
-    /// always against main; then `origin/HEAD`'s target; then whichever of `main`/`master` exists
-    /// locally. Returns a resolvable ref (`origin/zen-225`, `main`) — the caller strips `origin/`
-    /// for display. Throws when none can be found.
-    private static func resolveBaseBranch(in repoRoot: URL) throws -> String {
-        if let upstream =
-            (try? runGit(
-                ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], in: repoRoot))?
-            .trimmingCharacters(in: .whitespacesAndNewlines), !upstream.isEmpty
-        {
-            return upstream
-        }
+    /// The ref the committed slice forks from, when the caller doesn't name one: the repo's default
+    /// branch (`origin/HEAD`), else `main`/`master`. Git records no parent-branch, so guessing a
+    /// stacked branch's parent is unreliable; the viewer defaults to the default branch and lets the
+    /// user pick a different base. Throws when none resolves (a fresh repo with only the root commit).
+    private static func resolveDefaultBase(in repoRoot: URL) throws -> String {
         if let ref = try? runGit(
             ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], in: repoRoot),
             let name = defaultBranchName(fromSymbolicRef: ref)
@@ -144,13 +146,12 @@ final class GitDiffRunner {
                 return candidate
             }
         }
-        throw Failure.gitError("no base branch (upstream, origin/HEAD, main, or master)")
+        throw Failure.gitError("no base branch (origin/HEAD, main, or master)")
     }
 
-    /// Untracked file paths and their text contents, or empty for scopes that exclude them.
-    /// Files that can't be read as UTF-8 (binaries) are skipped rather than shown as garbage.
-    private static func readUntracked(scope: DiffScope, repoRoot: URL) -> [(path: String, contents: String)] {
-        guard scope == .branch || scope == .uncommitted else { return [] }
+    /// Untracked file paths and their text contents. Files that can't be read as UTF-8 (binaries)
+    /// are skipped rather than shown as garbage.
+    private static func readUntracked(repoRoot: URL) -> [(path: String, contents: String)] {
         guard let listing = try? runGit(["ls-files", "--others", "--exclude-standard", "-z"], in: repoRoot)
         else { return [] }
         return listing.split(separator: "\0").compactMap { segment -> (path: String, contents: String)? in
@@ -161,10 +162,9 @@ final class GitDiffRunner {
         }
     }
 
-    /// Runs `/usr/bin/git` with `args` in `dir` and returns stdout. Both pipes are drained to
-    /// EOF *before* `waitUntilExit`, and stderr is drained on a second queue concurrently with
-    /// stdout: a command that fills both pipe buffers can't deadlock (we're never blocked reading
-    /// one while git blocks writing the other). Runs on the background queue, so the
+    /// Runs `/usr/bin/git` with `args` in `dir` and returns stdout. Both pipes are drained to EOF
+    /// *before* `waitUntilExit`, and stderr is drained on a second queue concurrently with stdout: a
+    /// command that fills both pipe buffers can't deadlock. Runs on the background queue, so the
     /// `waitUntilExit` here never blocks main (ZEN-90).
     private static func runGit(_ args: [String], in dir: URL) throws -> String {
         let process = Process()

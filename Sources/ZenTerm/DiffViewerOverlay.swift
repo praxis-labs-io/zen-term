@@ -1,59 +1,53 @@
 import AppKit
 
-/// The diff viewer: a chrome-native modal card over the active tile. The left column carries the
-/// orientation cue and the three-scope selector above the file tree; the right column is the
-/// side-by-side diff. Scopes (uncommitted / committed / all) are picked by an in-nav
-/// `SegmentedControl`. A `ModalOverlay` sharing the card + backdrop + spring and Esc model with the
-/// other overlays. Git work is injected as `loader` (a `nil` loader means the focused directory
-/// isn't a repo), so the whole surface is drivable in a test without a real repo.
+/// The diff viewer: a chrome-native modal card over the active tile. The left column is a single file
+/// tree split into three sections — Unstaged, Staged, Committed (top to bottom) — the right column is
+/// the side-by-side diff of the selected file, and a full-width footer carries the totals and the key
+/// hints. A `ModalOverlay` sharing the card + backdrop + spring and Esc model with the other
+/// overlays. Git work is injected as `loader`; the caller only opens this over a real repo (a non-repo
+/// shows a toast), so there is no not-a-repo state.
+///
+/// Navigation uses the app's pane chords rather than Tab: ⌘h/⌘l move between the tree and the diff,
+/// ⌘j/⌘k jump to the next/previous change (file in the tree, hunk in the diff). Those arrive through
+/// `handleNavChord` (WindowController forwards them, since KeyInterceptor consumes chords before the
+/// responder chain). Plain arrows move line-by-line; Left/Right fold sections and directories.
 ///
 /// The `FileDiff` -> side-by-side rows step lives in `SideBySideDiff`; ZEN-228's unified layout swaps
 /// that transform, not this shell.
 final class DiffViewerOverlay: NSView, ModalOverlay {
-    typealias LoadResult = Result<GitDiffRunner.DiffLoad, GitDiffRunner.Failure>
-    /// Runs a scope's diff and calls back on the main thread. Injected so the overlay never touches
+    typealias StatusResult = Result<GitDiffRunner.StatusLoad, GitDiffRunner.Failure>
+    /// Loads the repo status and calls back on the main thread. Injected so the overlay never touches
     /// `Process` itself; `WindowController` wires this to a `GitDiffRunner`.
-    typealias Loader = (DiffScope, @escaping (LoadResult) -> Void) -> Void
+    typealias Loader = (@escaping (StatusResult) -> Void) -> Void
 
-    /// The scope order the segmented control shows, left to right. `Committed` leads and is the
-    /// default focus — the PR-equivalent view; `Uncommitted` is the working-tree-only slice, and
-    /// `All` is the union of both. Every scope stays visible rather than hiding behind a menu.
-    private static let scopeOrder: [DiffScope] = [.committed, .uncommitted, .branch]
-    private static let scopeTitles = ["Committed", "Uncommitted", "All"]
-    private static let defaultScopeIndex = 0
-
-    private let loader: Loader?
+    private let loader: Loader
     private let onCancel: () -> Void
 
     private let card = CardView()
     private var dismiss = DismissGate()
 
-    // The persistent nav-column chrome (built once for a repo; the tree + diff swap beneath it).
-    private let metaLabel = NSTextField(labelWithString: "")
-    private var scopeSelector: SegmentedControl?
-    private let navBorder = NSView()
-    private let treeHost = NSView()
-    private let diffHost = NSView()
+    private let outline = NavOutlineView()
+    private var outlineController: DiffTreeOutlineController?
+    private let treeRule = NSView()
+    private let diffTable = DiffPaneTable()
+    private let messageLabel = NSTextField(wrappingLabelWithString: "")
+    private let footerDivider = NSView()
+    private let statsLabel = NSTextField(labelWithString: "")
+    private let hintsLabel = NSTextField(labelWithString: "")
 
-    private var scope: DiffScope
-    /// Guards against a slower older load overwriting a newer one when the scope is switched twice in
-    /// quick succession: each `reload` stamps a token, and a completion whose token is stale is dropped.
+    private var selectedFilePath: String?
+    /// The status currently on screen — a background refresh that returns the same thing is a no-op,
+    /// so a reopen from the same dir doesn't yank the view (or flash) when nothing has changed.
+    private var displayedStatus: GitDiffRunner.StatusLoad?
+    /// Guards against a slower older load overwriting a newer one.
     private var loadToken = 0
 
-    /// Retained because `NSOutlineView` holds its data source and delegate weakly.
-    private var outlineController: DiffTreeOutlineController?
-    private var outlineView: NSOutlineView?
-    private var diffTable: DiffPaneTable?
-    private var selectedFilePath: String?
-    /// Set when the overlay is asked to take focus before the first load finished — the tree doesn't
-    /// exist yet. Consumed by `installLoaded` so the initial focus lands on the file tree, not the
-    /// scope buttons.
-    private var pendingInitialFocus = false
-
-    init(background: NSColor, loader: Loader?, onCancel: @escaping () -> Void) {
+    init(
+        background: NSColor, initialStatus: GitDiffRunner.StatusLoad?, loader: @escaping Loader,
+        onCancel: @escaping () -> Void
+    ) {
         self.loader = loader
         self.onCancel = onCancel
-        self.scope = Self.scopeOrder[Self.defaultScopeIndex]
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -65,6 +59,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         CardChrome.apply(to: card, background: background)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
+
+        buildLayout()
 
         NSLayoutConstraint.activate([
             backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -80,11 +76,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
         ])
 
-        if loader == nil {
-            installMessageOnly()
+        // Warm open: render the cached status instantly and refresh silently behind it. Cold open:
+        // show the spinner while the first load runs.
+        if let initialStatus {
+            apply(initialStatus)
+            reload(showSpinner: false)
         } else {
-            installShell()
-            reload(scope: scope)
+            reload(showSpinner: true)
         }
     }
 
@@ -102,13 +100,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     // MARK: ModalOverlay
 
     func focusInitialResponder() {
-        if let outlineView {
-            window?.makeFirstResponder(outlineView)
-        } else if loader != nil {
-            // The first load hasn't built the tree yet; land focus there when it arrives, not on the
-            // scope buttons. Esc still works — it's claimed in performKeyEquivalent, not by a responder.
-            pendingInitialFocus = true
-        }
+        // The tree always exists and always takes focus, so keystrokes never fall through to the
+        // terminal behind the card (even while loading or when there are no changes).
+        window?.makeFirstResponder(outline)
     }
 
     func animateIn() {
@@ -135,221 +129,57 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     func reapplyTheme() {
-        // `render` tears out and rebuilds the tree + diff, which would drop first responder to the
-        // window if focus was inside them. Capture and restore it so a live theme swap doesn't yank
-        // the user's keyboard focus out of the viewer.
-        let hadTreeFocus = window?.firstResponder === outlineView
-        let hadDiffFocus = diffTable.map { window?.firstResponder === $0.scrollFocusTarget } ?? false
         CardChrome.reapplyTheme(to: card)
-        metaLabel.textColor = Theme.current.chrome.muted.nsColor
-        navBorder.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
-        scopeSelector?.reapplyTheme()
-        // Rebuild the swapped content from the retained state so tree + diff rows pick up the palette.
-        render(currentState)
-        if hadTreeFocus {
-            focusTree()
-        } else if hadDiffFocus {
-            focusDiff()
+        treeRule.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        footerDivider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        messageLabel.textColor = Theme.current.chrome.muted.nsColor
+        hintsLabel.attributedStringValue = Self.hintsText()
+        if let status = displayedStatus { statsLabel.attributedStringValue = Self.statsText(for: status) }
+        outline.reloadData()
+        diffTable.reapplyTheme()
+    }
+
+    // MARK: pane-chord navigation
+
+    /// The pane-nav chords, forwarded by `WindowController` while this overlay is open (KeyInterceptor
+    /// consumes chords before the responder chain, so the overlay can't see them itself). ⌘h/⌘l move
+    /// between the tree and the diff; ⌘j/⌘k jump to the next/previous change in the focused pane.
+    /// Returns true when it consumed the chord.
+    func handleNavChord(_ chord: KeyInterceptor.ReservedChord) -> Bool {
+        switch chord {
+        case .navLeft:
+            window?.makeFirstResponder(outline)
+        case .navRight:
+            window?.makeFirstResponder(diffTable.scrollFocusTarget)
+        case .navDown:
+            if treeIsFocused { moveFileSelection(1) } else { diffTable.jumpToNextHunk() }
+        case .navUp:
+            if treeIsFocused { moveFileSelection(-1) } else { diffTable.jumpToPrevHunk() }
+        default:
+            return false
         }
+        return true
     }
 
-    // MARK: shell
+    private var treeIsFocused: Bool { window?.firstResponder === outline }
 
-    /// The persistent split for a repo: nav column (meta + scope selector + border + tree) on the
-    /// left, the diff pane on the right. Built once; loads only swap the tree and the diff.
-    private func installShell() {
-        metaLabel.font = .systemFont(ofSize: 11.5)
-        metaLabel.textColor = Theme.current.chrome.muted.nsColor
-        metaLabel.lineBreakMode = .byTruncatingTail
-        metaLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        metaLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        let selector = SegmentedControl(
-            options: Self.scopeTitles, selectedIndex: Self.defaultScopeIndex, fillEqually: true
-        ) { [weak self] index in
-            guard let self else { return }
-            self.reload(scope: Self.scopeOrder[index])
-        }
-        selector.onArrowDown = { [weak self] in self?.focusTree() }
-        selector.onTab = { [weak self] in self?.focusTree() }
-        selector.onBacktab = { [weak self] in self?.focusDiff() }
-        selector.translatesAutoresizingMaskIntoConstraints = false
-        scopeSelector = selector
-
-        navBorder.wantsLayer = true
-        navBorder.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
-        navBorder.translatesAutoresizingMaskIntoConstraints = false
-
-        treeHost.translatesAutoresizingMaskIntoConstraints = false
-
-        let nav = NSView()
-        nav.translatesAutoresizingMaskIntoConstraints = false
-        nav.addSubview(metaLabel)
-        nav.addSubview(selector)
-        nav.addSubview(navBorder)
-        nav.addSubview(treeHost)
-
-        let rule = NSView()
-        rule.wantsLayer = true
-        rule.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
-        rule.translatesAutoresizingMaskIntoConstraints = false
-
-        diffHost.translatesAutoresizingMaskIntoConstraints = false
-
-        card.addSubview(nav)
-        card.addSubview(rule)
-        card.addSubview(diffHost)
-
-        let inset: CGFloat = 12
-        NSLayoutConstraint.activate([
-            nav.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            nav.topAnchor.constraint(equalTo: card.topAnchor),
-            nav.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-            aspect(nav.widthAnchor, to: card.widthAnchor, 0.32, priority: .defaultHigh),
-            nav.widthAnchor.constraint(greaterThanOrEqualToConstant: 240),
-
-            metaLabel.leadingAnchor.constraint(equalTo: nav.leadingAnchor, constant: inset),
-            metaLabel.trailingAnchor.constraint(lessThanOrEqualTo: nav.trailingAnchor, constant: -inset),
-            metaLabel.topAnchor.constraint(equalTo: nav.topAnchor, constant: 14),
-
-            // The selector fills the column (equal-width segments) rather than hugging its content.
-            selector.leadingAnchor.constraint(equalTo: nav.leadingAnchor, constant: inset),
-            selector.trailingAnchor.constraint(equalTo: nav.trailingAnchor, constant: -inset),
-            selector.topAnchor.constraint(equalTo: metaLabel.bottomAnchor, constant: 8),
-
-            navBorder.leadingAnchor.constraint(equalTo: nav.leadingAnchor),
-            navBorder.trailingAnchor.constraint(equalTo: nav.trailingAnchor),
-            navBorder.topAnchor.constraint(equalTo: selector.bottomAnchor, constant: 12),
-            navBorder.heightAnchor.constraint(equalToConstant: 1),
-
-            treeHost.leadingAnchor.constraint(equalTo: nav.leadingAnchor),
-            treeHost.trailingAnchor.constraint(equalTo: nav.trailingAnchor),
-            treeHost.topAnchor.constraint(equalTo: navBorder.bottomAnchor),
-            treeHost.bottomAnchor.constraint(equalTo: nav.bottomAnchor),
-
-            rule.leadingAnchor.constraint(equalTo: nav.trailingAnchor),
-            rule.topAnchor.constraint(equalTo: card.topAnchor),
-            rule.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-            rule.widthAnchor.constraint(equalToConstant: 1),
-
-            diffHost.leadingAnchor.constraint(equalTo: rule.trailingAnchor),
-            diffHost.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            diffHost.topAnchor.constraint(equalTo: card.topAnchor),
-            diffHost.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-        ])
-    }
-
-    private func installMessageOnly() {
-        let host = NSView()
-        host.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(host)
-        NSLayoutConstraint.activate([
-            host.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            host.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            host.topAnchor.constraint(equalTo: card.topAnchor),
-            host.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-        ])
-        card.widthAnchor.constraint(equalToConstant: 420).isActive = true
-        card.heightAnchor.constraint(equalToConstant: 220).isActive = true
-        fill(host, with: message("This folder isn't a Git repository", muted: true))
-    }
-
-    // MARK: state + loading
-
-    private enum State {
-        case loading(DiffScope)
-        case loaded(GitDiffRunner.DiffLoad)
-        case empty(DiffScope)
-        case failed(GitDiffRunner.Failure)
-        case notARepo
-    }
-    private var currentState: State = .notARepo
-
-    private func reload(scope: DiffScope) {
-        self.scope = scope
-        guard let loader else {
-            render(.notARepo)
-            return
-        }
-        loadToken += 1
-        let token = loadToken
-        render(.loading(scope))
-        loader(scope) { [weak self] result in
-            guard let self, token == self.loadToken else { return }
-            switch result {
-            case .success(let load):
-                self.render(load.files.isEmpty ? .empty(scope) : .loaded(load))
-            case .failure(let failure):
-                self.render(.failed(failure))
+    /// Move the tree selection to the next / previous file, skipping section headers and directories.
+    private func moveFileSelection(_ delta: Int) {
+        let count = outline.numberOfRows
+        var row = outline.selectedRow + delta
+        while row >= 0, row < count {
+            if let item = outline.item(atRow: row) as? DiffOutlineItem, item.fileDiff != nil {
+                outline.selectRowIndexes([row], byExtendingSelection: false)
+                outline.scrollRowToVisible(row)
+                return
             }
+            row += delta
         }
     }
 
-    private func render(_ state: State) {
-        currentState = state
-        if loader == nil {
-            fill(reset(card), with: message("This folder isn't a Git repository", muted: true))
-            return
-        }
-        outlineController = nil
-        outlineView = nil
-        diffTable = nil
-        selectedFilePath = nil
-        treeHost.subviews.forEach { $0.removeFromSuperview() }
-        diffHost.subviews.forEach { $0.removeFromSuperview() }
-        metaLabel.stringValue = orientationText(for: state)
+    // MARK: layout
 
-        switch state {
-        case .loaded(let load):
-            installLoaded(files: load.files)
-        case .loading:
-            fill(diffHost, with: message("Loading…", muted: true))
-        case .empty(let scope):
-            fill(diffHost, with: message(emptyMessage(for: scope), muted: true))
-        case .notARepo:
-            fill(diffHost, with: message("This folder isn't a Git repository", muted: true))
-        case .failed(let failure):
-            fill(diffHost, with: message(failureMessage(for: failure), muted: false))
-        }
-    }
-
-    private func installLoaded(files: [FileDiff]) {
-        let controller = DiffTreeOutlineController(files: files) { [weak self] file in
-            self?.selectFile(file)
-        }
-        outlineController = controller
-        fill(treeHost, with: buildTreeScroll(controller: controller))
-
-        let table = DiffPaneTable()
-        table.translatesAutoresizingMaskIntoConstraints = false
-        // Tab ring: selector -> tree -> diff -> selector (each view intercepts Tab in its own keyDown
-        // and hands focus on, since AppKit's key-view loop doesn't drive NSTableView/NSOutlineView).
-        table.onExitForward = { [weak self] in self?.focusSelector() }
-        table.onExitBackward = { [weak self] in self?.focusTree() }
-        diffTable = table
-        fill(diffHost, with: table)
-
-        if let outline = outlineView {
-            outline.expandItem(nil, expandChildren: true)
-            if let first = controller.firstFile {
-                let row = outline.row(forItem: first)
-                if row >= 0 { outline.selectRowIndexes([row], byExtendingSelection: false) }
-            }
-        }
-        if let first = controller.firstFile?.fileDiff {
-            selectFile(first)
-        }
-        if pendingInitialFocus {
-            pendingInitialFocus = false
-            focusTree()
-        }
-    }
-
-    private func buildTreeScroll(controller: DiffTreeOutlineController) -> NSScrollView {
-        let outline = NavOutlineView()
-        outline.onExitUp = { [weak self] in self?.focusSelector() }
-        outline.onExitForward = { [weak self] in self?.focusDiff() }
-        outline.onExitBackward = { [weak self] in self?.focusSelector() }
+    private func buildLayout() {
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("file"))
         column.resizingMask = .autoresizingMask
         outline.addTableColumn(column)
@@ -358,71 +188,169 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         outline.rowSizeStyle = .small
         outline.indentationPerLevel = 12
         outline.backgroundColor = .clear
-        outline.focusRingType = .none  // no system-blue ring on Tab-in (ZEN-27: chrome is theme-only)
-        outline.autoresizesOutlineColumn = true
+        outline.focusRingType = .none  // no system-blue ring on focus-in (ZEN-27: chrome is theme-only)
+
+        let treeScroll = NSScrollView()
+        treeScroll.drawsBackground = false
+        treeScroll.hasVerticalScroller = true
+        treeScroll.verticalScroller = SlimScroller()
+        treeScroll.scrollerStyle = .overlay
+        treeScroll.autohidesScrollers = true
+        treeScroll.documentView = outline
+        treeScroll.automaticallyAdjustsContentInsets = false
+        treeScroll.contentInsets = NSEdgeInsets(top: 10, left: 8, bottom: 10, right: 8)
+        treeScroll.translatesAutoresizingMaskIntoConstraints = false
+
+        treeRule.wantsLayer = true
+        treeRule.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        treeRule.translatesAutoresizingMaskIntoConstraints = false
+
+        diffTable.translatesAutoresizingMaskIntoConstraints = false
+
+        messageLabel.alignment = .center
+        messageLabel.font = .systemFont(ofSize: 13)
+        messageLabel.textColor = Theme.current.chrome.muted.nsColor
+        messageLabel.translatesAutoresizingMaskIntoConstraints = false
+        messageLabel.isHidden = true
+
+        let diffHost = NSView()
+        diffHost.translatesAutoresizingMaskIntoConstraints = false
+        diffHost.addSubview(diffTable)
+        diffHost.addSubview(messageLabel)
+
+        let footer = buildFooter()
+
+        card.addSubview(treeScroll)
+        card.addSubview(treeRule)
+        card.addSubview(diffHost)
+        card.addSubview(footerDivider)
+        card.addSubview(footer)
+
+        NSLayoutConstraint.activate([
+            footerDivider.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            footerDivider.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            footerDivider.heightAnchor.constraint(equalToConstant: 1),
+            footerDivider.bottomAnchor.constraint(equalTo: footer.topAnchor),
+
+            footer.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            footer.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            footer.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+            footer.heightAnchor.constraint(equalToConstant: 30),
+
+            treeScroll.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            treeScroll.topAnchor.constraint(equalTo: card.topAnchor),
+            treeScroll.bottomAnchor.constraint(equalTo: footerDivider.topAnchor),
+            treeScroll.widthAnchor.constraint(equalTo: card.widthAnchor, multiplier: 0.3),
+
+            treeRule.leadingAnchor.constraint(equalTo: treeScroll.trailingAnchor),
+            treeRule.topAnchor.constraint(equalTo: card.topAnchor),
+            treeRule.bottomAnchor.constraint(equalTo: footerDivider.topAnchor),
+            treeRule.widthAnchor.constraint(equalToConstant: 1),
+
+            diffHost.leadingAnchor.constraint(equalTo: treeRule.trailingAnchor),
+            diffHost.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            diffHost.topAnchor.constraint(equalTo: card.topAnchor),
+            diffHost.bottomAnchor.constraint(equalTo: footerDivider.topAnchor),
+
+            diffTable.leadingAnchor.constraint(equalTo: diffHost.leadingAnchor),
+            diffTable.trailingAnchor.constraint(equalTo: diffHost.trailingAnchor),
+            diffTable.topAnchor.constraint(equalTo: diffHost.topAnchor),
+            diffTable.bottomAnchor.constraint(equalTo: diffHost.bottomAnchor),
+
+            messageLabel.centerXAnchor.constraint(equalTo: diffHost.centerXAnchor),
+            messageLabel.centerYAnchor.constraint(equalTo: diffHost.centerYAnchor),
+            messageLabel.leadingAnchor.constraint(greaterThanOrEqualTo: diffHost.leadingAnchor, constant: 24),
+            messageLabel.trailingAnchor.constraint(lessThanOrEqualTo: diffHost.trailingAnchor, constant: -24),
+        ])
+    }
+
+    private func buildFooter() -> NSView {
+        statsLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        statsLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        hintsLabel.font = .systemFont(ofSize: 11)
+        hintsLabel.alignment = .right
+        hintsLabel.attributedStringValue = Self.hintsText()
+        hintsLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        hintsLabel.setContentHuggingPriority(.required, for: .horizontal)
+        hintsLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        footerDivider.wantsLayer = true
+        footerDivider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        footerDivider.translatesAutoresizingMaskIntoConstraints = false
+
+        let footer = NSView()
+        footer.translatesAutoresizingMaskIntoConstraints = false
+        footer.addSubview(statsLabel)
+        footer.addSubview(hintsLabel)
+        NSLayoutConstraint.activate([
+            statsLabel.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 14),
+            statsLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
+            hintsLabel.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -14),
+            hintsLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
+            hintsLabel.leadingAnchor.constraint(greaterThanOrEqualTo: statsLabel.trailingAnchor, constant: 12),
+        ])
+        return footer
+    }
+
+    // MARK: loading
+
+    private func reload(showSpinner: Bool) {
+        loadToken += 1
+        let token = loadToken
+        if showSpinner { showMessage("Loading…") }
+        loader { [weak self] result in
+            guard let self, token == self.loadToken else { return }
+            switch result {
+            case .success(let status):
+                guard status != self.displayedStatus else { return }  // unchanged — keep the view
+                self.apply(status)
+            case .failure(let failure):
+                self.displayedStatus = nil
+                self.statsLabel.stringValue = ""
+                self.showMessage(self.failureMessage(for: failure))
+            }
+        }
+    }
+
+    private func apply(_ status: GitDiffRunner.StatusLoad) {
+        displayedStatus = status
+        statsLabel.attributedStringValue = Self.statsText(for: status)
+
+        let controller = DiffTreeOutlineController(sections: DiffOutlineItem.sections(from: status)) {
+            [weak self] file in self?.selectFile(file)
+        }
+        outlineController = controller
         outline.dataSource = controller
         outline.delegate = controller
         outline.reloadData()
-        outlineView = outline
+        outline.expandItem(nil, expandChildren: true)
 
-        let scroll = NSScrollView()
-        scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
-        scroll.verticalScroller = SlimScroller()
-        scroll.scrollerStyle = .overlay
-        scroll.autohidesScrollers = true
-        scroll.documentView = outline
-        scroll.automaticallyAdjustsContentInsets = false
-        scroll.contentInsets = NSEdgeInsets(top: 6, left: 0, bottom: 6, right: 0)
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-        return scroll
+        selectedFilePath = nil
+        guard let first = controller.firstFile, let file = first.fileDiff else {
+            showMessage("No changes")
+            return
+        }
+        let row = outline.row(forItem: first)
+        if row >= 0 { outline.selectRowIndexes([row], byExtendingSelection: false) }
+        selectFile(file)
     }
 
     private func selectFile(_ file: FileDiff) {
-        // Dedup: the initial load both selects the row (firing this via the delegate) and calls here
-        // directly, and re-selecting the current file shouldn't re-render. Guard on the shown path.
+        // Dedup: the load both selects the row (firing this via the delegate) and calls here directly,
+        // and re-selecting the shown file shouldn't re-render.
         guard selectedFilePath != file.path else { return }
         selectedFilePath = file.path
-        diffTable?.show(SideBySideDiff.rows(for: file))
+        messageLabel.isHidden = true
+        diffTable.isHidden = false
+        diffTable.show(SideBySideDiff.rows(for: file))
     }
 
-    private func focusTree() {
-        guard let outlineView else { return }
-        window?.makeFirstResponder(outlineView)
-    }
-
-    private func focusDiff() {
-        guard let diffTable else { return }
-        window?.makeFirstResponder(diffTable.scrollFocusTarget)
-    }
-
-    private func focusSelector() {
-        guard let scopeSelector else { return }
-        window?.makeFirstResponder(scopeSelector)
-    }
-
-    // MARK: orientation + messages
-
-    private func orientationText(for state: State) -> String {
-        switch state {
-        case .loaded(let load):
-            if let branch = load.baseBranch, let sha = load.baseSHA {
-                return "comparing against \(branch) \(sha)"
-            }
-            return "comparing against HEAD"
-        case .loading(let scope), .empty(let scope):
-            return scope == .uncommitted ? "comparing against HEAD" : ""
-        case .notARepo, .failed:
-            return ""
-        }
-    }
-
-    private func emptyMessage(for scope: DiffScope) -> String {
-        switch scope {
-        case .branch: return "No changes on this branch"
-        case .committed: return "No committed changes on this branch"
-        case .uncommitted: return "Nothing uncommitted"
-        }
+    private func showMessage(_ text: String) {
+        selectedFilePath = nil
+        messageLabel.stringValue = text
+        messageLabel.isHidden = false
+        diffTable.isHidden = true
     }
 
     private func failureMessage(for failure: GitDiffRunner.Failure) -> String {
@@ -432,78 +360,42 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         }
     }
 
-    private func message(_ text: String, muted: Bool) -> NSView {
-        let label = NSTextField(wrappingLabelWithString: text)
-        label.alignment = .center
-        label.font = .systemFont(ofSize: 13)
-        label.textColor = muted ? Theme.current.chrome.muted.nsColor : Theme.current.chrome.foreground.nsColor
-        label.translatesAutoresizingMaskIntoConstraints = false
-        let container = NSView()
-        container.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(label)
-        NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            label.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 24),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -24),
-        ])
-        return container
+    private static func statsText(for status: GitDiffRunner.StatusLoad) -> NSAttributedString {
+        let files = status.unstaged + status.staged + status.committed
+        let added = files.reduce(0) { $0 + $1.addedCount }
+        let removed = files.reduce(0) { $0 + $1.removedCount }
+        let chrome = Theme.current.chrome
+        let text = NSMutableAttributedString()
+        text.append(NSAttributedString(string: "+\(added)", attributes: [.foregroundColor: chrome.positive.nsColor]))
+        text.append(NSAttributedString(string: "  "))
+        text.append(
+            NSAttributedString(string: "−\(removed)", attributes: [.foregroundColor: chrome.destructive.nsColor]))
+        return text
     }
 
-    @discardableResult
-    private func reset(_ container: NSView) -> NSView {
-        container.subviews.forEach { $0.removeFromSuperview() }
-        return container
-    }
-
-    private func fill(_ container: NSView, with view: NSView) {
-        view.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(view)
-        NSLayoutConstraint.activate([
-            view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            view.topAnchor.constraint(equalTo: container.topAnchor),
-            view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-        ])
+    private static func hintsText() -> NSAttributedString {
+        NSAttributedString(
+            string: "⌘h/l panes   ⌘j/k jump   ←/→ fold   esc close",
+            attributes: [.foregroundColor: Theme.current.chrome.ink(alpha: 0.45)])
     }
 
     // MARK: test hooks
 
-    /// The number of rows the file tree currently shows (expanded). Reads the real outline view so a
-    /// test can't pass while the tree is empty or unmounted.
-    var treeRowCountForTesting: Int { outlineView?.numberOfRows ?? 0 }
-    /// The path of the file whose diff is in the right pane, or nil when no file is shown.
+    /// The number of rows the file tree currently shows (sections + expanded files).
+    var treeRowCountForTesting: Int { outline.numberOfRows }
+    /// The path of the file whose diff is in the right pane, or nil when a message is shown.
     var selectedFilePathForTesting: String? { selectedFilePath }
-    /// The number of visual diff rows rendered in the right pane (hunk headers + line rows).
-    var diffRowCountForTesting: Int { diffTable?.rowCountForTesting ?? 0 }
+    /// The number of visual diff rows rendered in the right pane.
+    var diffRowCountForTesting: Int { diffTable.rowCountForTesting }
     /// Drive a tree selection the way a click/arrow would, so a test exercises the real selection path.
     func selectRowForTesting(_ row: Int) {
-        outlineView?.selectRowIndexes([row], byExtendingSelection: false)
+        outline.selectRowIndexes([row], byExtendingSelection: false)
     }
-    /// Drive the scope selector the way a click would (fires its `onChange`).
-    func selectScopeForTesting(_ index: Int) {
-        scopeSelector?.select(index)
-    }
-    var shownScopeForTesting: DiffScope { scope }
 }
 
-/// The file tree's outline view, which manages its own keyboard exits: `NSOutlineView` handles
-/// arrows and Tab inside its own `keyDown` (so `moveUp`/`nextKeyView` overrides never fire), so the
-/// three ways out of the tree are intercepted here. Up on the top row returns to the scope selector
-/// (symmetric with its Down-into-the-tree); Tab / Shift-Tab move around the focus ring.
+/// The file tree's outline view. Accepts first responder even when empty (so keystrokes never leak to
+/// the terminal behind the card). Navigation is driven by forwarded pane chords, not Tab, so it adds
+/// no keyDown handling of its own.
 private final class NavOutlineView: NSOutlineView {
-    var onExitUp: (() -> Void)?
-    var onExitForward: (() -> Void)?
-    var onExitBackward: (() -> Void)?
-
-    override func keyDown(with event: NSEvent) {
-        switch KeyboardFocus.key(for: event) {
-        case .up where selectedRow <= 0:
-            onExitUp?()
-        case .tab(let shift):
-            (shift ? onExitBackward : onExitForward)?()
-        default:
-            super.keyDown(with: event)
-        }
-    }
+    override var acceptsFirstResponder: Bool { true }
 }

@@ -1,18 +1,19 @@
 import AppKit
 
-/// The data source + delegate for the diff viewer's left file tree. Renders each row as a name
-/// plus a themed `+n −m` stat, and reports the selected file back through `onSelect`. Row views are
-/// reused (like the diff pane's cells) and read `Theme.current` at configure time, so a live theme
-/// swap (`reloadData`) recolors.
+/// The data source + delegate for the diff viewer's file tree: three top-level section rows
+/// (Unstaged / Staged / Committed), each holding a folded file tree. Section rows aren't selectable;
+/// selecting a file reports it through `onSelect`. Row views are reused and read `Theme.current` at
+/// configure time, so a live theme swap (`reloadData`) recolors.
 final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
-    let roots: [DiffOutlineItem]
+    private(set) var roots: [DiffOutlineItem]
     private let onSelect: (FileDiff) -> Void
 
     private static let rowID = NSUserInterfaceItemIdentifier("diff-tree-row")
+    private static let sectionID = NSUserInterfaceItemIdentifier("diff-tree-section")
     private static let selectionRowID = NSUserInterfaceItemIdentifier("diff-tree-selection")
 
-    init(files: [FileDiff], onSelect: @escaping (FileDiff) -> Void) {
-        self.roots = DiffOutlineItem.roots(from: files)
+    init(sections: [DiffOutlineItem], onSelect: @escaping (FileDiff) -> Void) {
+        self.roots = sections
         self.onSelect = onSelect
     }
 
@@ -39,7 +40,7 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
     }
 
     func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
-        (item as? DiffOutlineItem)?.isDirectory ?? false
+        !children(of: item).isEmpty
     }
 
     private func children(of item: Any?) -> [DiffOutlineItem] {
@@ -49,8 +50,19 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
 
     // MARK: delegate
 
+    // Every row is selectable — including section headers and directories — so the arrow keys can
+    // land on them and Left/Right fold them. Selecting a non-file row just doesn't change the diff
+    // (the selection handler only acts on files).
+
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? DiffOutlineItem else { return nil }
+        if node.isSection {
+            let row =
+                outlineView.makeView(withIdentifier: Self.sectionID, owner: self) as? DiffSectionRowView
+                ?? DiffSectionRowView(id: Self.sectionID)
+            row.configure(title: node.displayName, subtitle: node.sectionSubtitle)
+            return row
+        }
         let row =
             outlineView.makeView(withIdentifier: Self.rowID, owner: self) as? DiffTreeRowView
             ?? DiffTreeRowView(id: Self.rowID)
@@ -89,9 +101,51 @@ private final class ThemedSelectionRowView: NSTableRowView {
     }
 }
 
+/// A section header row: the slice name (Unstaged / Staged / Committed) in muted small caps, with an
+/// optional trailing subtitle (the fork base for the committed slice). Not selectable.
+private final class DiffSectionRowView: NSView {
+    private let titleLabel = NSTextField(labelWithString: "")
+    private let subtitleLabel = NSTextField(labelWithString: "")
+
+    init(id: NSUserInterfaceItemIdentifier) {
+        super.init(frame: .zero)
+        identifier = id
+        titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        subtitleLabel.font = .monospacedDigitSystemFont(ofSize: 10.5, weight: .regular)
+        subtitleLabel.lineBreakMode = .byTruncatingTail
+        addSubview(titleLabel)
+        addSubview(subtitleLabel)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func configure(title: String, subtitle: String?) {
+        let chrome = Theme.current.chrome
+        titleLabel.stringValue = title.uppercased()
+        titleLabel.textColor = chrome.ink(alpha: 0.55)
+        subtitleLabel.stringValue = subtitle ?? ""
+        subtitleLabel.textColor = chrome.muted.nsColor
+        subtitleLabel.isHidden = subtitle == nil
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        let titleHeight = titleLabel.intrinsicContentSize.height
+        titleLabel.frame = NSRect(
+            x: 0, y: ((bounds.height - titleHeight) / 2).rounded(),
+            width: titleLabel.intrinsicContentSize.width, height: titleHeight)
+        let subtitleWidth = subtitleLabel.isHidden ? 0 : subtitleLabel.intrinsicContentSize.width
+        let subtitleHeight = subtitleLabel.intrinsicContentSize.height
+        subtitleLabel.frame = NSRect(
+            x: bounds.width - subtitleWidth, y: ((bounds.height - subtitleHeight) / 2).rounded(),
+            width: subtitleWidth, height: subtitleHeight)
+    }
+}
+
 /// One reused row of the file tree: the file (or directory) name, and for a file the `+n −m`
-/// add/remove stat in the positive/destructive roles. Manual `frame` layout (no per-row Auto
-/// Layout) so scrolling a large tree stays cheap, mirroring the diff pane's cell.
+/// add/remove stat in the positive/destructive roles. Manual `frame` layout (no per-row Auto Layout)
+/// so scrolling a large tree stays cheap, mirroring the diff pane's cell.
 private final class DiffTreeRowView: NSView {
     private let nameLabel = NSTextField(labelWithString: "")
     private let statLabel = NSTextField(labelWithString: "")

@@ -3,9 +3,9 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the diff viewer, driven through the real outline view and scope selector in
-/// a window. State-only assertions would pass while the tree or selector was dead — the failure mode
-/// the project's interaction-test rule guards against. The git work is a fake `loader`, so no repo.
+/// Interaction tests for the diff viewer, driven through the real outline view in a window. The git
+/// work is a fake `loader`, so no repo. State-only assertions would pass while the tree was dead, the
+/// failure mode the project's interaction-test rule guards against.
 final class DiffViewerOverlayTests: XCTestCase {
     private var window: NSWindow?
 
@@ -17,33 +17,36 @@ final class DiffViewerOverlayTests: XCTestCase {
     // MARK: harness
 
     private final class LoaderSpy {
-        var requestedScopes: [DiffScope] = []
-        var files: [FileDiff]
-        var failure: GitDiffRunner.Failure?
-        init(files: [FileDiff], failure: GitDiffRunner.Failure? = nil) {
-            self.files = files
+        var calls = 0
+        let status: GitDiffRunner.StatusLoad
+        let failure: GitDiffRunner.Failure?
+        init(status: GitDiffRunner.StatusLoad, failure: GitDiffRunner.Failure?) {
+            self.status = status
             self.failure = failure
         }
-        func load(_ scope: DiffScope, _ completion: (DiffViewerOverlay.LoadResult) -> Void) {
-            requestedScopes.append(scope)
+        func load(_ completion: (DiffViewerOverlay.StatusResult) -> Void) {
+            calls += 1
             if let failure {
                 completion(.failure(failure))
             } else {
-                completion(
-                    .success(
-                        GitDiffRunner.DiffLoad(scope: scope, baseBranch: "main", baseSHA: "abc1234", files: files)))
+                completion(.success(status))
             }
         }
     }
 
-    private func mount(files: [FileDiff], failure: GitDiffRunner.Failure? = nil, notARepo: Bool = false)
-        -> (overlay: DiffViewerOverlay, spy: LoaderSpy)
-    {
-        let spy = LoaderSpy(files: files, failure: failure)
-        let loader: DiffViewerOverlay.Loader? =
-            notARepo ? nil : { scope, completion in spy.load(scope, completion) }
+    private func mount(
+        unstaged: [FileDiff] = [], staged: [FileDiff] = [], committed: [FileDiff] = [],
+        base: (branch: String, sha: String)? = nil, failure: GitDiffRunner.Failure? = nil
+    ) -> (overlay: DiffViewerOverlay, spy: LoaderSpy) {
+        let status = GitDiffRunner.StatusLoad(
+            unstaged: unstaged, staged: staged, committed: committed,
+            baseBranch: base?.branch, baseSHA: base?.sha)
+        let spy = LoaderSpy(status: status, failure: failure)
         let overlay = DiffViewerOverlay(
-            background: Theme.current.chrome.background.nsColor, loader: loader, onCancel: {})
+            background: Theme.current.chrome.background.nsColor,
+            initialStatus: nil,
+            loader: { completion in spy.load(completion) },
+            onCancel: {})
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
             styleMask: [.borderless], backing: .buffered, defer: false)
@@ -69,65 +72,58 @@ final class DiffViewerOverlayTests: XCTestCase {
 
     // MARK: tests
 
-    func test_initialLoad_requestsCommittedScopeAndFillsTheTree() {
-        let (overlay, spy) = mount(files: [file("a/b/One.swift"), file("a/Two.swift")])
+    func test_initialLoad_loadsOnceAndFillsTheTreeUnderASection() {
+        let (overlay, spy) = mount(unstaged: [file("a/b/One.swift"), file("a/Two.swift")])
 
-        XCTAssertEqual(spy.requestedScopes, [.committed])  // default focus is Committed, index 0
-        // Tree: a / (b / One.swift) + Two.swift, expanded => 4 rows.
-        XCTAssertEqual(overlay.treeRowCountForTesting, 4)
-        XCTAssertEqual(overlay.shownScopeForTesting, .committed)
+        XCTAssertEqual(spy.calls, 1)
+        // Unstaged section + a / (b / One.swift) + Two.swift, expanded => 5 rows.
+        XCTAssertEqual(overlay.treeRowCountForTesting, 5)
     }
 
     func test_load_autoSelectsFirstFileIntoTheRightPane() {
-        let (overlay, _) = mount(files: [file("a/b/One.swift"), file("a/Two.swift")])
+        let (overlay, _) = mount(unstaged: [file("a/b/One.swift"), file("a/Two.swift")])
 
         XCTAssertEqual(overlay.selectedFilePathForTesting, "a/b/One.swift")
         XCTAssertGreaterThan(overlay.diffRowCountForTesting, 0)
     }
 
     func test_selectingAFileInTheTree_drivesTheRightPane() {
-        let (overlay, _) = mount(files: [file("a/b/One.swift"), file("a/Two.swift")])
+        let (overlay, _) = mount(unstaged: [file("a/b/One.swift"), file("a/Two.swift")])
 
-        // Row 3 is Two.swift (rows: a=0, b=1, One.swift=2, Two.swift=3).
-        overlay.selectRowForTesting(3)
+        // Rows: Unstaged=0, a=1, b=2, One.swift=3, Two.swift=4.
+        overlay.selectRowForTesting(4)
 
         XCTAssertEqual(overlay.selectedFilePathForTesting, "a/Two.swift")
-        XCTAssertGreaterThan(overlay.diffRowCountForTesting, 0)
     }
 
-    func test_selectingADirectoryRow_doesNotChangeTheShownFile() {
-        let (overlay, _) = mount(files: [file("a/b/One.swift"), file("a/Two.swift")])
+    func test_selectingASectionRow_doesNotChangeTheShownFile() {
+        let (overlay, _) = mount(unstaged: [file("a/b/One.swift"), file("a/Two.swift")])
 
-        overlay.selectRowForTesting(0)  // the "a" directory row
+        overlay.selectRowForTesting(0)  // the "Unstaged" section header (not selectable)
 
         XCTAssertEqual(overlay.selectedFilePathForTesting, "a/b/One.swift")  // unchanged
     }
 
-    func test_scopeSelector_reRequestsTheDiffForTheChosenScope() {
-        let (overlay, spy) = mount(files: [file("One.swift")])
-        XCTAssertEqual(spy.requestedScopes, [.committed])  // default is Committed, index 0
+    func test_multipleSlices_eachGetTheirOwnSection() {
+        let (overlay, _) = mount(
+            unstaged: [file("U.swift")], staged: [file("S.swift")], committed: [file("C.swift")],
+            base: (branch: "main", sha: "abc1234"))
 
-        overlay.selectScopeForTesting(1)  // "Uncommitted" (order: Committed · Uncommitted · All)
-        XCTAssertEqual(spy.requestedScopes.last, .uncommitted)
-        XCTAssertEqual(overlay.shownScopeForTesting, .uncommitted)
-
-        overlay.selectScopeForTesting(2)  // "All"
-        XCTAssertEqual(spy.requestedScopes.last, .branch)
-        XCTAssertEqual(overlay.shownScopeForTesting, .branch)
+        // Three sections, each with one file => 6 rows.
+        XCTAssertEqual(overlay.treeRowCountForTesting, 6)
     }
 
-    func test_emptyScope_showsNoTreeAndNoSelectedFile() {
-        let (overlay, _) = mount(files: [])
+    func test_emptyStatus_showsNoTreeAndNoSelectedFile() {
+        let (overlay, _) = mount()
 
         XCTAssertEqual(overlay.treeRowCountForTesting, 0)
         XCTAssertNil(overlay.selectedFilePathForTesting)
     }
 
-    func test_notARepo_showsNoTreeAndNeverRequestsALoad() {
-        let (overlay, spy) = mount(files: [], notARepo: true)
+    func test_gitError_showsNoTreeAndNoSelectedFile() {
+        let (overlay, _) = mount(failure: .gitError("fatal: bad thing"))
 
         XCTAssertEqual(overlay.treeRowCountForTesting, 0)
         XCTAssertNil(overlay.selectedFilePathForTesting)
-        XCTAssertTrue(spy.requestedScopes.isEmpty)
     }
 }
