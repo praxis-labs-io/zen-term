@@ -79,8 +79,9 @@ an Issue (`ReportIssueOverlay`) opens a composer whose `IssueReport`/`SupportLin
 build a prefilled GitHub new-issue URL on the same `SystemReport` block, so the
 exported diagnostics header and a filed issue can't disagree. The app has no
 backend, so it opens the browser to file; a dragged-in diagnostics zip attaches
-the logs. The composer is reached from the Help menu and a Settings nav button
-(no chord).
+the logs. The composer is reached three ways: the Help menu, a quiet link below
+the version in Settings, and the command palette (a `report_issue` action that
+ships unbound, like `check_for_updates`).
 
 **GhosttyKit and its resources are gitignored and built per machine**
 (`bin/build-ghosttykit`). A fresh worktree needs `Frameworks/GhosttyKit.xcframework`
