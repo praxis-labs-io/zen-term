@@ -26,8 +26,10 @@ public enum Log {
     /// Verbose gate. Seeded from the environment; the app overrides it from config at launch.
     public static var isVerbose: Bool = ProcessInfo.processInfo.environment["ZENTERM_LOG_VERBOSE"] == "1"
 
-    /// The file sink. Nil disables disk logging.
-    public static var fileSink: LogFileSink? = LogFileSink.standard()
+    /// The file sink; nil disables disk logging. The app installs the real sink
+    /// (`LogFileSink.standard()`) at launch — it stays nil under `swift test` (which never launches
+    /// the app), so a test run never writes to the user's `~/Library/Logs/ZenTerm/zen-term.log`.
+    public static var fileSink: LogFileSink?
 
     /// Verbose-only diagnostics. The message is not even built when verbose is off, so an expensive
     /// dump (e.g. a nav-frame trace) costs nothing on a normal run.

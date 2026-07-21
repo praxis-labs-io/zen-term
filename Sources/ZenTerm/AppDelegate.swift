@@ -19,6 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var updateController: UpdateController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Install the on-disk log sink now that this is a real app run, before the first config
+        // load logs anything. Left nil under `swift test` (the app never launches there), so a test
+        // run never writes to the user's ~/Library/Logs/ZenTerm/zen-term.log.
+        Log.fileSink = .standard()
+
         // Terminals repeat a held key rather than popping macOS's press-and-hold accent
         // palette — the palette otherwise leaks the auto-repeats and the selection number
         // key straight into the shell. Match ghostty and every other terminal: disable it
