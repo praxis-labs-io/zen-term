@@ -187,7 +187,7 @@
 #   resize_left  resize_right  resize_up  resize_down
 #   new_tab  new_window  prev_tab  next_tab  select_tab_1 … select_tab_9
 #   toggle_bottom_drawer  toggle_right_drawer  toggle_focus_mode  fill_screen
-#   toggle_repo_picker  toggle_command_palette  open_settings  reload_config
+#   toggle_workspace_picker  toggle_command_palette  open_settings  reload_config
 #   check_for_updates   (no default binding; bind a chord to reach it by keyboard)
 #   report_issue        (no default binding; also in the command palette and Help menu)
 #   toggle_float:<id>   (bind a second chord to one of your floats)
@@ -213,7 +213,7 @@
 # keybind = toggle_right_drawer=cmd+\
 # keybind = toggle_focus_mode=cmd+f              # one pane/drawer fills the window
 # keybind = fill_screen=cmd+shift+f              # the window fills the desktop
-# keybind = toggle_repo_picker=cmd+shift+p
+# keybind = toggle_workspace_picker=cmd+shift+p
 # keybind = toggle_command_palette=cmd+p
 # keybind = open_settings=cmd+,
 # keybind = reload_config=cmd+opt+r

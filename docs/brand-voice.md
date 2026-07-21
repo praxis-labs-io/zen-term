@@ -204,14 +204,16 @@ use curly (`’`) and should be reconciled.
 ### The seam: UI vocabulary vs config vocabulary
 
 The product has two vocabularies. The UI says "Workspaces" and "shortcut". The
-config file says `toggle_repo_picker` and `keybind = `. `ConfigDiagnostic`
-deliberately speaks the config file's vocabulary, because it names the token you
-grep for, and that reasoning is sound.
+config file says `keybind = ` and speaks in snake_case action tokens.
+`ConfigDiagnostic` deliberately speaks the config file's vocabulary, because it
+names the token you grep for, and that reasoning is sound.
 
 **The rule:** the config vocabulary wins only where the user is looking at the
 config, and the token must be a word the product still uses. `toggle_repo_picker`
-fails that test. A user can be shown "⌘⇧P went to toggle_repo_picker in your
-config" while every other surface says "Workspaces".
+failed that test: a user could be shown "⌘⇧P went to toggle_repo_picker in your
+config" while every other surface said "Workspaces". It was renamed to
+`toggle_workspace_picker` (ZEN-6), and the old token still parses so an existing
+binding keeps working.
 
 Renaming a config token is a breaking change for anyone who has bound it, so it
 needs a real deprecation, not a find-and-replace.
