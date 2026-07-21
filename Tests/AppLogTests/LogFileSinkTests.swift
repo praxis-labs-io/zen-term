@@ -58,6 +58,23 @@ final class LogFileSinkTests: XCTestCase {
         XCTAssertFalse(names.contains("zen-term.log.2"), "a rotation that doesn't exist yet isn't listed")
     }
 
+    func testFileURLsDrainsQueuedWritesSoTheExportSeesEveryLine() throws {
+        let sink = LogFileSink(directory: dir, fileName: "zen-term.log", maxBytes: 5_000_000, maxFiles: 2)
+        let count = 500
+        for i in 0..<count { sink.writeLine("entry-\(i)") }
+
+        // No flush(): reading fileURLs must itself drain the write queue. Without that, the file on
+        // disk still holds only a prefix of the 500 just-queued lines, and Export Diagnostics would
+        // ship a truncated log missing the newest, most relevant lines.
+        let active = try XCTUnwrap(sink.fileURLs.first)
+        let contents = try String(contentsOf: active, encoding: .utf8)
+
+        XCTAssertEqual(
+            contents.split(separator: "\n").count, count,
+            "fileURLs must drain queued writes before the export reads them")
+        XCTAssertTrue(contents.contains("entry-\(count - 1)"), "the newest line must be on disk")
+    }
+
     func testRotationLosesOrDuplicatesNoLineWithinCapacity() {
         let sink = LogFileSink(directory: dir, fileName: "zen-term.log", maxBytes: 50, maxFiles: 20)
         let lines = (0..<30).map { "entry-\($0)" }
