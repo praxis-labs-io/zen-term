@@ -1,3 +1,4 @@
+import AppLog
 import Foundation
 
 /// A tiny `AF_UNIX` stream listener that carries the nvim navigator protocol. Neovim
@@ -115,12 +116,15 @@ final class NavSocketServer {
 
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else {
-            NSLog("NavSocket: socket() failed (\(errnoText())) — seamless nav disabled")
+            Log.warning(
+                "NavSocket: socket() failed (\(errnoText())) — seamless nav disabled", category: .nav)
             return
         }
 
         guard var addr = Self.socketAddress(for: path) else {
-            NSLog("NavSocket: socket path too long for sun_path: \(path) — seamless nav disabled")
+            Log.warning(
+                "NavSocket: socket path too long for sun_path: \(path) — seamless nav disabled",
+                category: .nav)
             close(fd)
             return
         }
@@ -131,7 +135,9 @@ final class NavSocketServer {
             }
         }
         guard bound == 0, listen(fd, 8) == 0 else {
-            NSLog("NavSocket: bind/listen on \(path) failed (\(errnoText())) — seamless nav disabled")
+            Log.warning(
+                "NavSocket: bind/listen on \(path) failed (\(errnoText())) — seamless nav disabled",
+                category: .nav)
             close(fd)
             return
         }

@@ -1,3 +1,4 @@
+import AppLog
 import Foundation
 
 /// Translates the chrome's `TerminalTheme` into ghostty config-file text — the seam's
@@ -54,7 +55,8 @@ enum GhosttyConfigWriter {
             try configText(for: theme, behavior: behavior).write(to: url, atomically: true, encoding: .utf8)
             return url.path
         } catch {
-            NSLog("GhosttyConfigWriter: failed to write generated config: \(error)")
+            Log.error(
+                "GhosttyConfigWriter: failed to write generated config: \(error)", category: .config)
             return nil
         }
     }

@@ -1,4 +1,5 @@
 import AppKit
+import AppLog
 import Sparkle
 
 /// Owns the Sparkle updater and the one app-global update card (ZEN-118). Built and started by
@@ -51,7 +52,8 @@ final class UpdateController {
         do {
             try updater.start()
         } catch {
-            NSLog("ZenTerm: update checks unavailable — \(error.localizedDescription)")
+            Log.warning(
+                "ZenTerm: update checks unavailable — \(error.localizedDescription)", category: .update)
             return
         }
         started = true

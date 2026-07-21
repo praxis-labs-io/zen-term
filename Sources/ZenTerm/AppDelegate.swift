@@ -1,4 +1,5 @@
 import AppKit
+import AppLog
 import TabKit
 
 /// Owns every window and routes chords/Copy/Paste to whichever is key. `⌘n` opens a
@@ -18,6 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var updateController: UpdateController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Install the on-disk log sink now that this is a real app run, before the first config
+        // load logs anything. Left nil under `swift test` (the app never launches there), so a test
+        // run never writes to the user's ~/Library/Logs/ZenTerm/zen-term.log.
+        Log.fileSink = .standard()
+
         // Terminals repeat a held key rather than popping macOS's press-and-hold accent
         // palette — the palette otherwise leaks the auto-repeats and the selection number
         // key straight into the shell. Match ghostty and every other terminal: disable it
@@ -28,6 +34,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // override and deterministically forcing GeneralConfig.current to load (so the first
         // window's Theme font, drawer sizes, and dock floats are already settled).
         MotionConfig.apply(GeneralConfig.current.reduceMotion)
+
+        // Verbose diagnostics gate (ZEN-11): config `debug = true` turns on the same file tee as
+        // ZENTERM_LOG_VERBOSE=1 (already seeded into Log.isVerbose), so either switch enables it.
+        if GeneralConfig.current.debug { Log.isVerbose = true }
+        Log.info("ZenTerm launched v\(AppVersion.current)", category: .app)
 
         MainMenu.install(copyPaste: nil)  // Copy/Paste route via the responder chain
         newWindow(initialCWD: nil, centered: true)

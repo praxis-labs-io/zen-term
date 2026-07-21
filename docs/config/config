@@ -99,6 +99,14 @@
 # In-app Settings edit: applies live.
 # automatic-update-checks = true      # true | false
 
+# ─── Diagnostics ─────────────────────────────────────────────────────────────
+
+# Tee verbose diagnostics to the log file. Off by default: the log then holds
+# warnings, errors, and a trail of key actions (panes, tabs, drawers). Turn it on
+# to add deep traces for a bug report. The log is at
+# ~/Library/Logs/ZenTerm/zen-term.log; ZENTERM_LOG_VERBOSE=1 is the env equivalent.
+# debug = false                       # true | false
+
 # ─── Tool floats ─────────────────────────────────────────────────────────────
 #
 # Command overlays (dock button + command-palette entry + keybinding) whose

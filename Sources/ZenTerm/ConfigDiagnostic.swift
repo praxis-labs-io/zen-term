@@ -1,5 +1,5 @@
 /// A problem found while loading the config, carried on `GeneralConfig` so a surface can show it
-/// in place instead of the user's only clue being an `NSLog` nobody reads.
+/// in place instead of the user's only clue being a log line nobody reads.
 ///
 /// Only `.keybind` diagnostics are collected today (ZEN-142). Every other bad-config path —
 /// invalid ints, bad enum values, malformed float lines — still logs and silently falls back;

@@ -43,6 +43,9 @@ TerminalKit          the ONLY target that may import GhosttyKit
   ZenTerm            the chrome
      ↑
   TabKit             pure: no AppKit, no backend
+
+  AppLog             pure leaf (Foundation + os); TerminalKit and ZenTerm
+                     depend on it for diagnostic logging (ZEN-11)
 ```
 
 **Nothing lints this. The package graph does.** `ZenTerm` has no dependency on
@@ -55,6 +58,16 @@ returns a `GhosttySurface` while proving the protocol is implementable with zero
 backend (`SpySurface`).
 
 `PaneKit` and `TabKit` import no AppKit. TabKit imports nothing at all.
+
+`AppLog` is a zero-dependency leaf (Foundation + `os`) that both `TerminalKit`
+and `ZenTerm` use for logging, so it sits below the seam and imports neither the
+backend nor the chrome. `Log` tees every line to `os.Logger` (subsystem
+`com.drucial.ZenTerm`, keyed by category) and to a rotating file at
+`~/Library/Logs/ZenTerm/zen-term.log` (~5 MB × 2), written off the main thread.
+Warnings, errors, and a thin key-event trail (surface start/stop, split, close
+pane, drawer toggle, zoom, tab open/close/switch) are always on; `debug` lines
+tee to the file only under the verbose gate (config `debug = true` or
+`ZENTERM_LOG_VERBOSE=1`).
 
 **GhosttyKit and its resources are gitignored and built per machine**
 (`bin/build-ghosttykit`). A fresh worktree needs `Frameworks/GhosttyKit.xcframework`

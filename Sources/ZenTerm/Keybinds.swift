@@ -1,3 +1,4 @@
+import AppLog
 import Foundation
 
 extension KeyInterceptor.ReservedChord {
@@ -163,7 +164,9 @@ enum KeymapAssembler {
             canType(bind.0) ? split.0.append(bind) : split.1.append(bind)
         }
         for (chord, action) in untypeable {
-            NSLog("GeneralConfig: keybind \(action.actionToken)=\(chord.configToken) can't be typed — ignored")
+            Log.warning(
+                "GeneralConfig: keybind \(action.actionToken)=\(chord.configToken) can't be typed — ignored",
+                category: .keybinds)
         }
 
         // A user keybind MOVES its action: drop the action's default chord(s) first, so the
@@ -173,9 +176,9 @@ enum KeymapAssembler {
 
         func set(_ chord: Chord, _ action: KeyInterceptor.ReservedChord) {
             if let existing = map[chord], existing != action {
-                NSLog(
+                Log.info(
                     "GeneralConfig: chord \(chord.displayGlyph) rebound from \(existing.actionToken) "
-                        + "to \(action.actionToken)")
+                        + "to \(action.actionToken)", category: .keybinds)
                 displacements.append(Displacement(chord: chord, loser: existing))
             }
             map[chord] = action
@@ -184,7 +187,9 @@ enum KeymapAssembler {
         for float in floats { set(float.toggle, .toggleToolFloat(float.id)) }
         for (chord, action) in typeable {
             if case .toggleToolFloat(let id) = action, !floatIDs.contains(id) {
-                NSLog("GeneralConfig: keybind action toggle_float:\(id) names no configured float — ignored")
+                Log.warning(
+                    "GeneralConfig: keybind action toggle_float:\(id) names no configured float — ignored",
+                    category: .keybinds)
                 continue
             }
             set(chord, action)

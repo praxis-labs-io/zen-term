@@ -48,6 +48,11 @@ struct GeneralConfig: Equatable {
     // off switch, driving Sparkle's automatic-check setting. Inert in an unpackaged dev build.
     var automaticUpdateChecks: Bool
 
+    // Diagnostics — tee verbose diagnostics to the log file (ZEN-11). Off by default; the file
+    // otherwise carries only warnings/errors and the key-event trail. `ZENTERM_LOG_VERBOSE=1` is
+    // the env equivalent.
+    var debug: Bool
+
     // Launch.
     var shell: String?
     var shellArgs: [String]
@@ -91,6 +96,7 @@ struct GeneralConfig: Equatable {
         reduceMotion: .system,
         agentNotifications: true,
         automaticUpdateChecks: true,
+        debug: false,
         shell: nil,
         shellArgs: [],
         editor: nil,

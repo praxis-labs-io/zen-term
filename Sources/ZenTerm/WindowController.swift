@@ -1,4 +1,5 @@
 import AppKit
+import AppLog
 import TabKit
 import TerminalKit
 
@@ -506,6 +507,7 @@ final class WindowController: NSObject {
     /// passes a `Workspace` (its path + title + open recipe); plain `⌘t` passes the inherited
     /// cwd, no pin, and no workspace (a bare shell).
     private func addTab(cwd: URL?, pinnedTitle: String?, workspace: Workspace? = nil) {
+        Log.info("tab opened", category: .tabs)
         closeModal()  // the "+" button is reachable while a palette is up
         closeFloatForTabChange()
         let id = mintTabID()
@@ -544,6 +546,7 @@ final class WindowController: NSObject {
     private func select(_ id: TabID, slideFrom: SlideEdge? = nil) {
         closeModal()  // a tab-bar click must not orphan a modal palette
         guard tabs.order.contains(id), id != tabs.activeID else { return }
+        Log.info("tab switched", category: .tabs)
         closeFloatForTabChange()
         clearWaiting(id)  // seeing the tab clears its rose flag + dismisses its bell toast
         cancelConfirm()  // switching tabs voids a pending close confirm (its target moved)
@@ -567,6 +570,7 @@ final class WindowController: NSObject {
     /// Close a specific tab: terminate its shells, detach its canvas, and cascade to
     /// closing the window when it was the last tab.
     private func closeTab(_ id: TabID) {
+        Log.info("tab closed", category: .tabs)
         closeModal()  // the "×" button is reachable while a palette is up
         closeFloatForTabChange()
         cancelConfirm()  // a middle-click close voids a pending confirm on another tab
@@ -991,8 +995,12 @@ final class WindowController: NSObject {
             }
         }
         switch chord {
-        case .splitVertical: active?.split(.vertical)
-        case .splitHorizontal: active?.split(.horizontal)
+        case .splitVertical:
+            Log.info("pane split (vertical)", category: .panes)
+            active?.split(.vertical)
+        case .splitHorizontal:
+            Log.info("pane split (horizontal)", category: .panes)
+            active?.split(.horizontal)
         case .navLeft: active?.navigate(.left)
         case .navRight: active?.navigate(.right)
         case .navUp: active?.navigate(.up)
@@ -1007,14 +1015,22 @@ final class WindowController: NSObject {
             if idx >= 0 && idx < tabs.order.count { select(tabs.order[idx]) }
         case .prevTab: cycleTab(-1)
         case .nextTab: cycleTab(1)
-        case .closePane: requestClosePane()
+        case .closePane:
+            Log.info("close pane", category: .panes)
+            requestClosePane()
         case .newWindow, .reloadConfig, .checkForUpdates:
             // App-global (window manager / config reload / update check). The keyboard path routes
             // these in AppDelegate before handle; a palette pick lands here, so forward it back.
             onAppGlobalCommand?(chord)
-        case .toggleBottomDrawer: active?.toggleBottomDrawer()
-        case .toggleRightDrawer: active?.toggleRightDrawer()
-        case .toggleZoom: active?.toggleZoom()
+        case .toggleBottomDrawer:
+            Log.info("bottom drawer toggled", category: .drawers)
+            active?.toggleBottomDrawer()
+        case .toggleRightDrawer:
+            Log.info("right drawer toggled", category: .drawers)
+            active?.toggleRightDrawer()
+        case .toggleZoom:
+            Log.info("zoom toggled", category: .panes)
+            active?.toggleZoom()
         case .fillScreen: toggleFillScreen()
         case .toggleToolFloat(let id):
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }

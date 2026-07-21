@@ -21,6 +21,7 @@ let package = Package(
             name: "TerminalKit",
             dependencies: [
                 "GhosttyKit",
+                "AppLog",  // diagnostic logging facade (ZEN-11); leaf, no backend
             ],
             // libghostty's runtime resources (shell-integration, themes, terminfo),
             // staged from the pinned vendor/ghostty build by bin/build-ghosttykit.
@@ -48,6 +49,9 @@ let package = Package(
             ]
         ),
         .target(
+            name: "AppLog"                   // pure leaf — Foundation + os only, no backend, no chrome
+        ),
+        .target(
             name: "PaneKit",
             dependencies: ["TerminalKit"]   // seam types only — never the backend
         ),
@@ -57,7 +61,7 @@ let package = Package(
         .executableTarget(
             name: "ZenTerm",
             dependencies: [
-                "TerminalKit", "PaneKit", "TabKit",  // chrome — no backend
+                "TerminalKit", "PaneKit", "TabKit", "AppLog",  // chrome — no backend
                 .product(name: "Sparkle", package: "Sparkle"),  // auto-updates (ZEN-118), chrome-side
             ],
             resources: [
@@ -84,6 +88,10 @@ let package = Package(
         .testTarget(
             name: "TabKitTests",
             dependencies: ["TabKit"]
+        ),
+        .testTarget(
+            name: "AppLogTests",
+            dependencies: ["AppLog"]
         ),
         .testTarget(
             name: "ZenTermTests",
