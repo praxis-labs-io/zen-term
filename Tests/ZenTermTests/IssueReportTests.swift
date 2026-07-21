@@ -35,17 +35,29 @@ final class IssueReportTests: XCTestCase {
         XCTAssertEqual(components?.queryItems?.first { $0.name == "body" }?.value, issue.body)
     }
 
-    func test_body_overBudget_truncatesOnlyUserTextAndKeepsTheRest() {
-        let huge = String(repeating: "A", count: 20_000)  // far past the 6 KB cap
+    func test_body_overBudget_capsTheUrlAndKeepsTheRest() {
+        let huge = String(repeating: "A", count: 20_000)  // far past the URL cap
         let issue = IssueReport(title: "big", whatHappened: huge, report: report)
         let body = issue.body
 
-        XCTAssertLessThanOrEqual(body.utf8.count, IssueReport.maxBodyBytes, "body is capped")
+        XCTAssertLessThanOrEqual(
+            issue.url.absoluteString.utf8.count, IssueReport.maxURLBytes, "the prefilled URL is capped")
         XCTAssertTrue(body.contains("### Environment"))
         XCTAssertTrue(body.contains(report.plainText), "environment survives truncation")
         XCTAssertTrue(body.contains("### Diagnostics"), "diagnostics instruction survives truncation")
         XCTAssertTrue(body.contains("truncated"), "a truncation notice is added")
         XCTAssertTrue(body.contains("AAAA"), "some of the user text is kept")
+    }
+
+    func test_body_overBudget_withNonASCII_stillCapsTheEncodedURL() {
+        // Percent-encoding triples each of these 3-byte characters, so a raw-byte cap would let the
+        // encoded URL overflow. The cap measures the real URL, so it holds regardless.
+        let huge = String(repeating: "行", count: 8_000)
+        let issue = IssueReport(title: "big", whatHappened: huge, report: report)
+
+        XCTAssertLessThanOrEqual(issue.url.absoluteString.utf8.count, IssueReport.maxURLBytes)
+        XCTAssertTrue(issue.body.contains("行"), "some of the user text is kept")
+        XCTAssertTrue(issue.body.contains(report.plainText), "environment survives")
     }
 
     func test_body_underBudget_isNotTruncated() {
