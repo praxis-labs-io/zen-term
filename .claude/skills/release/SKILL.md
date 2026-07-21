@@ -99,9 +99,19 @@ Then show Drew the notes and get approval. Copy is the deliverable here.
 
 ## 5. Hand over
 
-Commit the notes to `main`, then give Drew the command:
+Commit the notes to `main`, then give Drew the command. **Name the version
+explicitly** — the exact `X.Y.Z` confirmed in phase 1:
 
-    bin/release --notes-file docs/release-notes/vX.Y.Z.md
+    bin/release X.Y.Z --notes-file docs/release-notes/vX.Y.Z.md
+
+**Never hand over bare `bin/release`.** Bare, it patch-bumps the last tag, and
+`--notes-file` does *not* set the version, so a notes file named `v0.4.0.md`
+ships as a patch anyway. That is exactly how a minor feature release went out as
+`v0.3.1` instead of `v0.4.0` (a published tag is permanent, so the number could
+not be corrected). Naming `X.Y.Z` in the command makes it match the notes
+filename by construction and removes the whole class of error. Before handing it
+over, confirm the `X.Y.Z` in the command is the version phase 1 chose, not
+whatever a bare patch-bump would land on.
 
 Two things worth saying alongside it: a rerun after a partial failure is safe and
 **resumes** rather than bumping (a tag already at HEAD is the signal), and the
