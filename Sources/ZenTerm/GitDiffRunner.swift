@@ -150,9 +150,11 @@ final class GitDiffRunner {
         }
     }
 
-    /// Runs `/usr/bin/git` with `args` in `dir` and returns stdout. Drains the stdout pipe to
-    /// EOF *before* `waitUntilExit` so a diff larger than the pipe buffer can't deadlock. This
-    /// runs on the background queue, so the `waitUntilExit` here never blocks main (ZEN-90).
+    /// Runs `/usr/bin/git` with `args` in `dir` and returns stdout. Both pipes are drained to
+    /// EOF *before* `waitUntilExit`, and stderr is drained on a second queue concurrently with
+    /// stdout: a command that fills both pipe buffers can't deadlock (we're never blocked reading
+    /// one while git blocks writing the other). Runs on the background queue, so the
+    /// `waitUntilExit` here never blocks main (ZEN-90).
     private static func runGit(_ args: [String], in dir: URL) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
@@ -170,8 +172,14 @@ final class GitDiffRunner {
             throw Failure.gitUnavailable
         }
 
+        let stderrHandle = stderr.fileHandleForReading
+        var errData = Data()
+        let group = DispatchGroup()
+        DispatchQueue.global(qos: .userInitiated).async(group: group) {
+            errData = stderrHandle.readDataToEndOfFile()
+        }
         let outData = stdout.fileHandleForReading.readDataToEndOfFile()
-        let errData = stderr.fileHandleForReading.readDataToEndOfFile()
+        group.wait()
         process.waitUntilExit()
 
         guard process.terminationStatus == 0 else {

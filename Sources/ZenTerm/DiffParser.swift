@@ -140,13 +140,16 @@ enum DiffParser {
                 isBinary = true
                 continue
             }
-            if line.hasPrefix("--- ") {
+            // `--- `/`+++ ` are file headers only in the preamble. Inside a hunk they must fall
+            // through to the content handling below: a removed line whose content starts with
+            // `-- ` arrives as `--- …`, and an added line starting `++ ` arrives as `+++ …`.
+            if hunkHeader == nil, line.hasPrefix("--- ") {
                 let path = strippedPath(from: line, prefix: "--- ")
                 minusPath = path
                 oldIsDevNull = path == nil
                 continue
             }
-            if line.hasPrefix("+++ ") {
+            if hunkHeader == nil, line.hasPrefix("+++ ") {
                 let path = strippedPath(from: line, prefix: "+++ ")
                 plusPath = path
                 newIsDevNull = path == nil

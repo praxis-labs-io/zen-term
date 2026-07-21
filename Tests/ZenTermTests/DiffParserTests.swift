@@ -223,4 +223,50 @@ final class DiffParserTests: XCTestCase {
     func test_parse_emptyDiff_returnsEmpty() {
         XCTAssertTrue(DiffParser.parse("").isEmpty)
     }
+
+    // A removed line whose content starts with "-- " arrives as "--- content" and must not be
+    // mistaken for a `---` file header (SQL/Lua/Haskell comments, patch files).
+    func test_parse_removedLineStartingWithDoubleDash_notMistakenForHeader() {
+        let diff = """
+            diff --git a/q.sql b/q.sql
+            index 1111111..2222222 100644
+            --- a/q.sql
+            +++ b/q.sql
+            @@ -1,3 +1,2 @@
+             SELECT 1;
+            --- old comment
+             SELECT 2;
+            """
+
+        let file = DiffParser.parse(diff)[0]
+        XCTAssertEqual(file.path, "q.sql")
+        XCTAssertEqual(file.changeKind, .modified)
+        XCTAssertEqual(file.removedCount, 1)
+        let removed = file.hunks[0].lines.first { $0.kind == .removed }
+        XCTAssertEqual(removed?.text, "-- old comment")
+        let lastLine = file.hunks[0].lines.last
+        XCTAssertEqual(lastLine?.text, "SELECT 2;")
+        XCTAssertEqual(lastLine?.oldLineNumber, 3)
+    }
+
+    // Symmetric case: an added line whose content starts with "++ " arrives as "+++ content"
+    // and must not be mistaken for a `+++` header (which would drop it and mis-set the path).
+    func test_parse_addedLineStartingWithDoublePlus_notMistakenForHeader() {
+        let diff = """
+            diff --git a/notes.patch b/notes.patch
+            index 1111111..2222222 100644
+            --- a/notes.patch
+            +++ b/notes.patch
+            @@ -1,1 +1,2 @@
+             context line
+            +++ b/some/added/file
+            """
+
+        let file = DiffParser.parse(diff)[0]
+        XCTAssertEqual(file.path, "notes.patch")
+        XCTAssertEqual(file.changeKind, .modified)
+        XCTAssertEqual(file.addedCount, 1)
+        let added = file.hunks[0].lines.first { $0.kind == .added }
+        XCTAssertEqual(added?.text, "++ b/some/added/file")
+    }
 }

@@ -32,8 +32,8 @@ enum DiffTree {
 
     private static func nodes(of dir: MutableDir) -> [DiffTreeNode] {
         var result: [DiffTreeNode] = []
-        for name in dir.subdirs.keys.sorted() {
-            result.append(collapsed(name: name, dir: dir.subdirs[name]!))
+        for (name, subdir) in dir.subdirs.sorted(by: { $0.key < $1.key }) {
+            result.append(collapsed(name: name, dir: subdir))
         }
         for file in dir.files.sorted(by: { basename($0.path) < basename($1.path) }) {
             result.append(.file(file))
