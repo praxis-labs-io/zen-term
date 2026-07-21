@@ -821,15 +821,19 @@ final class WindowController: NSObject {
     /// no key equivalents, so it never steals input from the terminal (ZEN-106). `landingScope` is the
     /// scope the primary button opens; the caller passes the first diagnostic's.
     func showConfigDiagnosticsToast(_ content: ToastContent, landingScope: ConfigDiagnostic.Scope) {
-        var toast: ToastView?
+        // `weak` breaks the retain cycle the strong-capture idiom would form: the toast retains its
+        // buttons, each button retains its `onTap`, and these closures reference the toast — so a
+        // strong capture would leak every sticky toast past dismissal. The presenter's stack keeps the
+        // toast alive until dismissed; the closures only need to reach it, not own it.
+        weak var toast: ToastView?
         // Dismiss on the left, primary on the right — the confirm-dialog convention (see the
         // waiting-toast).
         let actions = [
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
-                if let toast { self?.toasts.dismiss(toast) }
+                toast.map { self?.toasts.dismiss($0) }
             },
             ToastAction(title: "Open Settings", kind: .primary) { [weak self] in
-                if let toast { self?.toasts.dismiss(toast) }
+                toast.map { self?.toasts.dismiss($0) }
                 self?.openSettings(for: landingScope)
             },
         ]

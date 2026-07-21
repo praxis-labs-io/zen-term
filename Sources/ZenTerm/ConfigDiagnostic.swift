@@ -105,7 +105,9 @@ struct ConfigDiagnostic: Hashable {
         case .floatUnusableKey(let key):
             return "\(title) has an unusable key: \(key). Ignoring this tool float."
         case .unparseableLine(let raw):
-            return "Couldn't read the keybind line `\(raw)`. Ignoring it."
+            // Show the literal `keybind = …` token so the user can grep for it; keep the prose out of
+            // the shortcut/keybind word choice so it doesn't fight the "shortcut line" headline.
+            return "Couldn't read this line in your config: `keybind = \(raw)`. Ignoring it."
         }
     }
 

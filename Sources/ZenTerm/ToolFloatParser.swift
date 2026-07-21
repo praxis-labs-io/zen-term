@@ -94,7 +94,9 @@ enum ToolFloatParser {
                 "GeneralConfig: float `\(id)` missing required `command:` — ignored", category: .toolFloat)
             return (nil, dropped(title, .floatMissingField("command:")))
         }
-        guard let keySpec = fields["key"] else {
+        guard let keySpec = fields["key"], !keySpec.isEmpty else {
+            // An empty `key:` is missing, not unusable — reporting it as an unusable key would name a
+            // blank chord and read as a keyboard limitation. Mirrors the `!command.isEmpty` guard above.
             Log.warning(
                 "GeneralConfig: float `\(id)` missing required `key:` — ignored", category: .toolFloat)
             return (nil, dropped(title, .floatMissingField("key:")))

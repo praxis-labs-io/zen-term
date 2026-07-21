@@ -83,6 +83,16 @@ final class ToolFloatParserTests: XCTestCase {
             ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatMissingField("key:")))
     }
 
+    func test_parseLine_emptyKey_reportsMissingNotUnusable() {
+        // `key:` with no value is missing, not an unusable key — reporting `.floatUnusableKey("")`
+        // would name a blank chord and read as a keyboard limitation.
+        let result = ToolFloatParser.parseLine("title:Notes command:foo key:")
+        XCTAssertNil(result.float)
+        XCTAssertEqual(
+            result.diagnostic,
+            ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatMissingField("key:")))
+    }
+
     func test_parseLine_unparseableKey_reportsUnusableKey() {
         let result = ToolFloatParser.parseLine("title:Notes command:foo key:nope+")
         XCTAssertNil(result.float)
