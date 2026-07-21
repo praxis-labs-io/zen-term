@@ -163,6 +163,24 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         XCTAssertEqual(diagnostic.message, "Open Lazygit is missing command:. Ignoring this tool float.")
     }
 
+    func test_floatFieldInvalid_phrasings() {
+        let diagnostic = ConfigDiagnostic(
+            scope: .toolFloatField(id: "open-lazygit", label: "Open Lazygit"),
+            problem: .floatFieldInvalid(field: "width:", got: "big", using: "0.85"))
+        XCTAssertEqual(diagnostic.headline, "Open Lazygit has an invalid setting")
+        XCTAssertEqual(diagnostic.message, "Open Lazygit: width:big isn't valid. Using 0.85.")
+        XCTAssertEqual(diagnostic.detail, "width:big isn't valid")
+    }
+
+    func test_floatFieldClamped_phrasings() {
+        let diagnostic = ConfigDiagnostic(
+            scope: .toolFloatField(id: "open-lazygit", label: "Open Lazygit"),
+            problem: .floatFieldClamped(field: "height:", got: "5", to: "1"))
+        XCTAssertEqual(diagnostic.headline, "Open Lazygit has an invalid setting")
+        XCTAssertEqual(diagnostic.message, "Open Lazygit: height:5 is out of range. Using 1.")
+        XCTAssertEqual(diagnostic.detail, "height:5 → 1")
+    }
+
     func test_nonKeybindProblems_surfaceInTheToast() throws {
         let content = try XCTUnwrap(
             ConfigDiagnostic.toast(for: [
@@ -185,6 +203,9 @@ final class ConfigDiagnosticToastTests: XCTestCase {
                 problem: .invalidValue(got: "rectangle", expected: "block, bar, or underline")),
             ConfigDiagnostic(
                 scope: .toolFloat(label: "Open Lazygit in Worktree"), problem: .floatMissingField("command:")),
+            ConfigDiagnostic(
+                scope: .toolFloatField(id: "open-lazygit-in-worktree", label: "Open Lazygit in Worktree"),
+                problem: .floatFieldClamped(field: "height:", got: "0.05", to: "0.2")),
         ]
         for diagnostic in realistic {
             for line in diagnostic.summary.split(separator: "\n") {

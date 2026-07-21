@@ -297,8 +297,10 @@ unreadable one logs and falls back, a typo'd value falls back per key, and an
 out-of-range number is clamped. Every adjustment logs one warning **and** collects a
 `ConfigDiagnostic` (`configDiagnostics` on the resolved `GeneralConfig`), so the fallback
 isn't silent: a stolen keybind or a bad scalar shows inline on the Settings row that owns
-it, a dropped `float =` line in the Tools-section notice, and a reload surfaces them all in
-one actionable toast whose "Open Settings" button lands on the first problem's section.
+it, a bad sub-field on a surviving `float =` (its `width`/`height`/`order`/`persist`) on
+that float's Tools row, a dropped `float =` line in the Tools-section notice (it has no
+row), and a reload surfaces them all in one actionable toast whose "Open Settings" button
+lands on the first problem's section.
 
 **A fresh install writes nothing to disk.** `~/.config/zen-term/` does not exist
 until the first save from Settings. There are no built-in tool floats and no

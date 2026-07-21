@@ -63,24 +63,24 @@ final class ToolFloatParserTests: XCTestCase {
         let result = ToolFloatParser.parseLine("command:foo key:cmd+shift+j")
         XCTAssertNil(result.float)
         XCTAssertEqual(
-            result.diagnostic,
-            ConfigDiagnostic(scope: .toolFloat(label: "a float line"), problem: .floatMissingField("title:")))
+            result.diagnostics,
+            [ConfigDiagnostic(scope: .toolFloat(label: "a float line"), problem: .floatMissingField("title:"))])
     }
 
     func test_parseLine_missingCommand_reportsMissingCommandLabelledByTitle() {
         let result = ToolFloatParser.parseLine("title:Notes key:cmd+shift+n")
         XCTAssertNil(result.float)
         XCTAssertEqual(
-            result.diagnostic,
-            ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatMissingField("command:")))
+            result.diagnostics,
+            [ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatMissingField("command:"))])
     }
 
     func test_parseLine_missingKey_reportsMissingKey() {
         let result = ToolFloatParser.parseLine("title:Notes command:foo")
         XCTAssertNil(result.float)
         XCTAssertEqual(
-            result.diagnostic,
-            ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatMissingField("key:")))
+            result.diagnostics,
+            [ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatMissingField("key:"))])
     }
 
     func test_parseLine_emptyKey_reportsMissingNotUnusable() {
@@ -89,22 +89,82 @@ final class ToolFloatParserTests: XCTestCase {
         let result = ToolFloatParser.parseLine("title:Notes command:foo key:")
         XCTAssertNil(result.float)
         XCTAssertEqual(
-            result.diagnostic,
-            ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatMissingField("key:")))
+            result.diagnostics,
+            [ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatMissingField("key:"))])
     }
 
     func test_parseLine_unparseableKey_reportsUnusableKey() {
         let result = ToolFloatParser.parseLine("title:Notes command:foo key:nope+")
         XCTAssertNil(result.float)
         XCTAssertEqual(
-            result.diagnostic,
-            ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatUnusableKey("nope+")))
+            result.diagnostics,
+            [ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatUnusableKey("nope+"))])
     }
 
-    func test_parseLine_validFloat_hasNoDiagnostic() {
+    func test_parseLine_validFloat_hasNoDiagnostics() {
         let result = ToolFloatParser.parseLine("title:x command:c key:cmd+shift+j")
         XCTAssertNotNil(result.float)
-        XCTAssertNil(result.diagnostic)
+        XCTAssertTrue(result.diagnostics.isEmpty)
+    }
+
+    // MARK: surviving-float sub-field diagnostics (ZEN-7 — order/persist/width/height)
+    //
+    // These floats still work, so they keep their row; the fallback must not be silent. width/height/
+    // order gained a log too (they used to fall back with no trace at all).
+
+    func test_parseLine_unparseableWidth_keepsFloatAndReportsInvalid() {
+        let result = ToolFloatParser.parseLine("title:Notes command:c key:cmd+shift+n width:big")
+        XCTAssertEqual(result.float?.widthFraction, ToolFloatParser.defaultFraction)  // fell back
+        XCTAssertEqual(
+            result.diagnostics,
+            [
+                ConfigDiagnostic(
+                    scope: .toolFloatField(id: "notes", label: "Notes"),
+                    problem: .floatFieldInvalid(field: "width:", got: "big", using: "0.85"))
+            ])
+    }
+
+    func test_parseLine_outOfRangeHeight_keepsFloatAndReportsClamp() {
+        let result = ToolFloatParser.parseLine("title:Notes command:c key:cmd+shift+n height:5")
+        XCTAssertEqual(result.float?.heightFraction, 1.0)  // clamped to the 0.2…1.0 range
+        XCTAssertEqual(
+            result.diagnostics,
+            [
+                ConfigDiagnostic(
+                    scope: .toolFloatField(id: "notes", label: "Notes"),
+                    problem: .floatFieldClamped(field: "height:", got: "5", to: "1"))
+            ])
+    }
+
+    func test_parseLine_nonIntegerOrder_keepsFloatAndReportsInvalid() {
+        let result = ToolFloatParser.parseLine(
+            "title:Notes command:c key:cmd+shift+n order:nope", fallbackOrder: 3)
+        XCTAssertEqual(result.float?.order, 3)  // fell back to file order
+        XCTAssertEqual(
+            result.diagnostics,
+            [
+                ConfigDiagnostic(
+                    scope: .toolFloatField(id: "notes", label: "Notes"),
+                    problem: .floatFieldInvalid(field: "order:", got: "nope", using: "file order"))
+            ])
+    }
+
+    func test_parseLine_unknownPersist_keepsFloatAndReportsInvalid() {
+        let result = ToolFloatParser.parseLine("title:Notes command:c key:cmd+shift+n persist:banana")
+        XCTAssertEqual(result.float?.persist, .ephemeral)  // `none` = ephemeral
+        XCTAssertEqual(
+            result.diagnostics,
+            [
+                ConfigDiagnostic(
+                    scope: .toolFloatField(id: "notes", label: "Notes"),
+                    problem: .floatFieldInvalid(field: "persist:", got: "banana", using: "none"))
+            ])
+    }
+
+    func test_parseLine_omittedOptionalFields_areSilent() {
+        // Absent order:/width:/height:/persist: are valid — they take defaults with no diagnostic.
+        let result = ToolFloatParser.parseLine("title:Notes command:c key:cmd+shift+n")
+        XCTAssertTrue(result.diagnostics.isEmpty)
     }
 
     // MARK: identity (ZEN-145)

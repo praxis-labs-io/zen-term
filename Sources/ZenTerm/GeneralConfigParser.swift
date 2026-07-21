@@ -97,12 +97,12 @@ enum GeneralConfigParser {
             case "ai":
                 if !value.isEmpty { config.ai = value }
             case "float":
-                let (float, diagnostic) = ToolFloatParser.parseLine(value, fallbackOrder: floatLineIndex)
+                let (float, floatDiagnostics) = ToolFloatParser.parseLine(value, fallbackOrder: floatLineIndex)
                 if let float {
                     floats.removeAll { $0.id == float.id }  // last declaration of an id wins
                     floats.append(float)
                 }
-                if let diagnostic { diagnostics.append(diagnostic) }
+                diagnostics.append(contentsOf: floatDiagnostics)
                 // Counts every float line, parsed or not, so a dropped line leaves a gap rather than
                 // shifting the floats below it out of file order.
                 floatLineIndex += 1

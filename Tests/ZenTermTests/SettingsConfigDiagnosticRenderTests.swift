@@ -99,6 +99,27 @@ final class SettingsConfigDiagnosticRenderTests: XCTestCase {
         XCTAssertTrue(notices.isEmpty)
     }
 
+    // MARK: surviving-float sub-field diagnostics render on the float's own row
+
+    private func toolRowMessages(_ views: [NSView]) -> [String] {
+        views.compactMap { ($0 as? ToolFloatRow)?.renderedMessageForTesting }
+    }
+
+    func test_survivingFloatWithBadField_showsOnItsToolsRow() {
+        loadConfig("float = title:Notes command:notes key:cmd+shift+n width:big\n")  // float survives
+        let views = mount(SettingsToolsSection())
+        XCTAssertEqual(toolRowMessages(views), ["Notes: width:big isn't valid. Using 0.85."])
+        // It renders on the row, NOT in the dropped-line notice — the float still works.
+        let notices = views.compactMap { ($0 as? NSTextField)?.stringValue }
+            .filter { $0.contains("Ignoring this tool float") }
+        XCTAssertTrue(notices.isEmpty, "a surviving float belongs on its row, not the dropped-line notice")
+    }
+
+    func test_cleanFloat_showsNoRowMessage() {
+        loadConfig("float = title:Notes command:notes key:cmd+shift+n\n")
+        XCTAssertTrue(toolRowMessages(mount(SettingsToolsSection())).isEmpty)
+    }
+
     // MARK: toast landing (scope → section)
 
     func test_landing_mapsEachScopeToItsSection() {

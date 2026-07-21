@@ -69,6 +69,18 @@ final class SettingsToolsSection: SettingsSection {
         }
     }
 
+    /// The sub-field diagnostics for one surviving float (matched by id), joined for its row — a float
+    /// with a bad `width:` and a bad `order:` shows both. Nil when the float is clean.
+    private func fieldDiagnosticMessages(for id: String) -> String? {
+        let messages = GeneralConfig.current.configDiagnostics.compactMap { diagnostic -> String? in
+            if case .toolFloatField(let fieldID, _) = diagnostic.scope, fieldID == id {
+                return diagnostic.message
+            }
+            return nil
+        }
+        return messages.isEmpty ? nil : messages.joined(separator: "\n")
+    }
+
     // MARK: rows
 
     /// The group caption with an optional hint pinned to its trailing edge.
@@ -132,6 +144,7 @@ final class SettingsToolsSection: SettingsSection {
         } else {
             for float in floats {
                 let row = ToolFloatRow(float: float)
+                row.showMessage(fieldDiagnosticMessages(for: float.id))  // a bad width:/order:/persist:
                 row.onActivate = { [weak self, weak row] in row.map { self?.onEditFloat?($0.float) } }
                 row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
                 row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
@@ -225,6 +238,9 @@ final class ToolFloatRow: NSView {
     private let titleLabel: NSTextField
     private let subtitleLabel: NSTextField
     private let keycap: KeycapView
+    /// A surviving float's sub-field diagnostic (ZEN-7): a bad `width:`/`order:`/`persist:` shows here,
+    /// in warning tone, since the float still works and has this row.
+    private let messageLabel = NSTextField(labelWithString: "")
     private var isFocused = false { didSet { restyle() } }
 
     init(float: ToolFloat) {
@@ -259,13 +275,25 @@ final class ToolFloatRow: NSView {
         controls.orientation = .horizontal
         controls.alignment = .centerY
         controls.spacing = 10
-        controls.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(controls)
+
+        messageLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        messageLabel.textColor = Theme.current.chrome.warning.nsColor
+        messageLabel.lineBreakMode = .byWordWrapping
+        messageLabel.maximumNumberOfLines = 0
+        messageLabel.isHidden = true
+
+        let stack = NSStackView(views: [controls, messageLabel])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 3
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
         NSLayoutConstraint.activate([
-            controls.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            controls.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            controls.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-            controls.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            controls.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
         restyle()
     }
@@ -276,8 +304,21 @@ final class ToolFloatRow: NSView {
         iconView.contentTintColor = Theme.current.chrome.ink(alpha: 0.75)
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         subtitleLabel.textColor = Theme.current.chrome.ink(alpha: 0.5)
+        messageLabel.textColor = Theme.current.chrome.warning.nsColor
         keycap.reapplyTheme()
         restyle()
+    }
+
+    /// Show (or clear, with nil) the row's inline sub-field diagnostic.
+    func showMessage(_ text: String?) {
+        messageLabel.stringValue = text ?? ""
+        messageLabel.isHidden = (text == nil)
+    }
+
+    /// Test hook: the inline message as actually rendered — nil when the label is hidden, so a test
+    /// can't pass while the row shows nothing.
+    var renderedMessageForTesting: String? {
+        messageLabel.isHidden ? nil : messageLabel.stringValue
     }
 
     // MARK: focus + keyboard

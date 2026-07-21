@@ -728,7 +728,7 @@ final class WindowController: NSObject {
     private static func landing(for scope: ConfigDiagnostic.Scope) -> SettingsLanding {
         switch scope {
         case .keybind, .keybindLine: return .shortcuts
-        case .toolFloat: return .tools
+        case .toolFloat, .toolFloatField: return .tools
         case .setting(let key): return landing(forSettingKey: key)
         }
     }

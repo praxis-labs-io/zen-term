@@ -28,6 +28,10 @@ struct ConfigDiagnostic: Hashable {
         /// A dropped `float =` line. It never became a float, so there's no row — the Tools section
         /// notice and the reload toast carry it. The label is a best-effort name for the file line.
         case toolFloat(label: String)
+        /// A surviving float whose sub-field (`width:`/`height:`/`order:`/`persist:`) fell back. The
+        /// float still works, so its Tools row carries the message; `id` matches the row, `label`
+        /// names it in the toast (resolving the title on read is unreliable — see the type note).
+        case toolFloatField(id: String, label: String)
         /// A `keybind =` line that didn't parse to an action. No row to send anyone to; the reload
         /// toast is the only surface.
         case keybindLine
@@ -49,6 +53,10 @@ struct ConfigDiagnostic: Hashable {
         case floatMissingField(String)
         /// A `float =` line whose `key:` this keyboard can't produce (the raw spec).
         case floatUnusableKey(String)
+        /// A surviving float's sub-field value the parser couldn't read; it fell back to `using`.
+        case floatFieldInvalid(field: String, got: String, using: String)
+        /// A surviving float's numeric sub-field outside its range, clamped to `to`.
+        case floatFieldClamped(field: String, got: String, to: String)
         /// A `keybind =` line that couldn't be parsed (the raw line).
         case unparseableLine(String)
     }
@@ -70,6 +78,7 @@ struct ConfigDiagnostic: Hashable {
         case .keybind(let action): return CommandCatalog.spec(for: action).title
         case .setting(let key): return key
         case .toolFloat(let label): return label
+        case .toolFloatField(_, let label): return label
         case .keybindLine: return "Shortcut"
         }
     }
@@ -82,6 +91,7 @@ struct ConfigDiagnostic: Hashable {
         case .invalidValue: return "\(title) has an invalid value"
         case .clamped: return "\(title) is out of range"
         case .floatMissingField, .floatUnusableKey: return "A tool float was ignored"
+        case .floatFieldInvalid, .floatFieldClamped: return "\(title) has an invalid setting"
         case .unparseableLine: return "A shortcut line was ignored"
         }
     }
@@ -104,6 +114,10 @@ struct ConfigDiagnostic: Hashable {
             return "\(title) is missing \(field). Ignoring this tool float."
         case .floatUnusableKey(let key):
             return "\(title) has an unusable key: \(key). Ignoring this tool float."
+        case .floatFieldInvalid(let field, let got, let using):
+            return "\(title): \(field)\(got) isn't valid. Using \(using)."
+        case .floatFieldClamped(let field, let got, let to):
+            return "\(title): \(field)\(got) is out of range. Using \(to)."
         case .unparseableLine(let raw):
             // Show the literal `keybind = …` token so the user can grep for it; keep the prose out of
             // the shortcut/keybind word choice so it doesn't fight the "shortcut line" headline.
@@ -127,6 +141,10 @@ struct ConfigDiagnostic: Hashable {
             return "missing \(field)"
         case .floatUnusableKey:
             return "key can't be typed"
+        case .floatFieldInvalid(let field, let got, _):
+            return "\(field)\(got) isn't valid"
+        case .floatFieldClamped(let field, let got, let to):
+            return "\(field)\(got) → \(to)"
         case .unparseableLine:
             return "couldn't be read"
         }
