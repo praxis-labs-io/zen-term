@@ -68,20 +68,50 @@ final class DiffPaneTable: NSView {
         set { table.onEscape = newValue }
     }
 
-    /// Move the current line down / up by roughly a page and scroll to it — the fast jump through a
-    /// long file, so you don't hold the arrow from line 1 to line 200. Always moves (unlike a
-    /// hunk-to-hunk jump, which stalls on the common one-or-two-hunk file).
-    func jumpForward() { jumpPage(1) }
-    func jumpBackward() { jumpPage(-1) }
+    /// Jump to the start of the next / previous change cluster — a contiguous run of +/− lines,
+    /// separated from the next by context. This works *within* a single hunk (the common case: git
+    /// folds nearby edits into one hunk), which hunk-to-hunk jumping did not. Anchored on the top
+    /// *visible* row, not the selection, since the selection goes stale when you scroll by trackpad.
+    func jumpToNextChange() { jumpChange(1) }
+    func jumpToPrevChange() { jumpChange(-1) }
 
-    private func jumpPage(_ direction: Int) {
-        let count = source.rows.count
-        guard count > 0 else { return }
-        let page = max(1, table.rows(in: table.visibleRect).length - 2)  // keep a couple lines of overlap
-        let current = table.selectedRow >= 0 ? table.selectedRow : (direction > 0 ? 0 : count - 1)
-        let target = min(max(0, current + page * direction), count - 1)
-        table.selectRowIndexes([target], byExtendingSelection: false)
-        table.scrollRowToVisible(target)
+    private func jumpChange(_ direction: Int) {
+        let rows = source.rows
+        guard !rows.isEmpty else { return }
+        var index = topVisibleRow() + direction
+        while index >= 0, index < rows.count {
+            if isChangeClusterStart(at: index, in: rows) {
+                table.selectRowIndexes([index], byExtendingSelection: false)
+                scrollRowToTop(max(0, index - 2))  // a couple lines of context above the change
+                return
+            }
+            index += direction
+        }
+    }
+
+    /// A change line (a row with an added or removed cell) whose predecessor isn't itself a change —
+    /// i.e. the first line of a contiguous edit, the thing worth stopping on.
+    private func isChangeClusterStart(at index: Int, in rows: [SideBySideRow]) -> Bool {
+        guard Self.isChangeLine(rows[index]) else { return false }
+        return index == 0 || !Self.isChangeLine(rows[index - 1])
+    }
+
+    private static func isChangeLine(_ row: SideBySideRow) -> Bool {
+        guard case .lines(let left, let right) = row else { return false }
+        return left?.kind == .removed || right?.kind == .added
+    }
+
+    private func topVisibleRow() -> Int {
+        let visible = table.rows(in: table.visibleRect)
+        return visible.length > 0 ? visible.location : 0
+    }
+
+    private func scrollRowToTop(_ row: Int) {
+        let clip = scroll.contentView
+        let target = CGFloat(row) * table.rowHeight
+        let maxY = max(0, table.frame.height - clip.bounds.height)
+        clip.scroll(to: NSPoint(x: 0, y: min(max(0, target), maxY)))
+        scroll.reflectScrolledClipView(clip)
     }
 
     private final class Source: NSObject, NSTableViewDataSource, NSTableViewDelegate {

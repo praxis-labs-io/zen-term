@@ -152,9 +152,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         case .navRight:
             window?.makeFirstResponder(diffTable.scrollFocusTarget)
         case .navDown:
-            if treeIsFocused { moveFileSelection(1) } else { diffTable.jumpForward() }
+            if treeIsFocused { moveFileSelection(1) } else { diffTable.jumpToNextChange() }
         case .navUp:
-            if treeIsFocused { moveFileSelection(-1) } else { diffTable.jumpBackward() }
+            if treeIsFocused { moveFileSelection(-1) } else { diffTable.jumpToPrevChange() }
         default:
             return false
         }
@@ -242,11 +242,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             treeScroll.leadingAnchor.constraint(equalTo: card.leadingAnchor),
             treeScroll.topAnchor.constraint(equalTo: card.topAnchor),
             treeScroll.bottomAnchor.constraint(equalTo: footerDivider.topAnchor),
-            // A share of the card, but capped so it doesn't sprawl on a wide screen (the file names
-            // don't need 30% of a large window) and floored so it stays usable on a small one.
-            aspect(treeScroll.widthAnchor, to: card.widthAnchor, 0.3, priority: .defaultHigh),
-            treeScroll.widthAnchor.constraint(lessThanOrEqualToConstant: 340),
-            treeScroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 220),
+            treeScroll.widthAnchor.constraint(equalTo: card.widthAnchor, multiplier: 0.3),
 
             treeRule.leadingAnchor.constraint(equalTo: treeScroll.trailingAnchor),
             treeRule.topAnchor.constraint(equalTo: card.topAnchor),
@@ -412,9 +408,19 @@ private final class NavOutlineView: NSOutlineView {
     override var acceptsFirstResponder: Bool { true }
 
     override func keyDown(with event: NSEvent) {
-        if KeyboardFocus.key(for: event) == .escape {
+        switch KeyboardFocus.key(for: event) {
+        case .escape:
             onEscape?()
             return
+        case .activate:
+            // Return/Enter on a folder or section folds it, matching Left/Right — a file just stays
+            // selected (its diff is already shown).
+            if let item = item(atRow: selectedRow), isExpandable(item) {
+                if isItemExpanded(item) { collapseItem(item) } else { expandItem(item) }
+                return
+            }
+        default:
+            break
         }
         super.keyDown(with: event)
     }
