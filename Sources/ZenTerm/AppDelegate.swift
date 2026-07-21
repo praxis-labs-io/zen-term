@@ -43,10 +43,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainMenu.install(copyPaste: nil)  // Copy/Paste route via the responder chain
         newWindow(initialCWD: nil, centered: true)
         // Announce a config that's already broken at launch, not just one broken later. Someone who
-        // hand-edited their config and quit has no reason to open Settings → Keybinds — they're
-        // exactly who this is for. It also seeds the change-gate, so a pre-existing conflict can't
-        // ambush them later, attached to an unrelated edit that didn't cause it.
-        surfaceKeymapDiagnostics()
+        // hand-edited their config and quit has no reason to open Settings — they're exactly who this
+        // is for. It also seeds the change-gate, so a pre-existing problem can't ambush them later,
+        // attached to an unrelated edit that didn't cause it.
+        surfaceConfigDiagnostics()
 
         keys.onReservedChord = { [weak self] chord in self?.route(chord) }
         // Seamless-nav opt-in: let a `Ctrl`-nav chord fall through to a pane running nvim so
@@ -94,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             self?.keys.setKeymap(GeneralConfig.current.keymap)
             MotionConfig.apply(GeneralConfig.current.reduceMotion)  // re-install the reduce-motion override
-            self?.surfaceKeymapDiagnostics()
+            self?.surfaceConfigDiagnostics()
             self?.updateController?.reapplyTheme()  // recolor a live update card — it's outside any window's toast list
             self?.updateController?.applyAutoCheckSetting()  // pick up a flipped auto-update toggle with no relaunch
         }
@@ -143,28 +143,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wc.selectTab(tabID)
     }
 
-    /// The keymap problems announced on the last reload — so an unchanged set stays quiet.
-    private var lastKeymapDiagnostics: [ConfigDiagnostic] = []
+    /// The config problems announced on the last reload — so an unchanged set stays quiet.
+    private var lastConfigDiagnostics: [ConfigDiagnostic] = []
 
-    /// Toast the config's keybind problems when they change. Lives here, not in `WindowController`:
-    /// that observer runs once per open window, so three windows would mean three toasts for one
-    /// reload — and the keymap these describe is app-global anyway. Routed to the key window only.
-    /// The decision itself is `ConfigDiagnostic.announcement`, where it's testable.
-    private func surfaceKeymapDiagnostics() {
-        let diagnostics = GeneralConfig.current.keymapDiagnostics
+    /// Toast the config's problems when they change (a stolen keybind, an invalid scalar, a dropped
+    /// float). Lives here, not in `WindowController`: that observer runs once per open window, so
+    /// three windows would mean three toasts for one reload — and the config these describe is
+    /// app-global anyway. Routed to the key window only. The toast is actionable: its "Open Settings"
+    /// button lands on the first problem's section. The announce decision itself is
+    /// `ConfigDiagnostic.announcement`, where it's testable.
+    private func surfaceConfigDiagnostics() {
+        let diagnostics = GeneralConfig.current.configDiagnostics
         guard
             let content = ConfigDiagnostic.announcement(
-                for: diagnostics, alreadyAnnounced: lastKeymapDiagnostics)
+                for: diagnostics, alreadyAnnounced: lastConfigDiagnostics)
         else {
-            lastKeymapDiagnostics = diagnostics
+            lastConfigDiagnostics = diagnostics
             return
         }
         // Record it as announced only once a window has actually shown it. `keyController()` is nil
         // when the key window isn't one of ours (an open panel), and marking an undelivered notice
-        // as announced would let the change-gate swallow it forever.
-        guard let controller = keyController() else { return }
-        controller.showToast(content)
-        lastKeymapDiagnostics = diagnostics
+        // as announced would let the change-gate swallow it forever. `content` is non-nil only when
+        // there's at least one diagnostic, so `first` is the section the button lands on.
+        guard let controller = keyController(), let first = diagnostics.first else { return }
+        controller.showConfigDiagnosticsToast(content, landingScope: first.scope)
+        lastConfigDiagnostics = diagnostics
     }
 
     /// The `WindowController` owning the current key window, falling back to the

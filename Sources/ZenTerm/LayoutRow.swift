@@ -4,12 +4,19 @@ import AppKit
 /// control on the right with an optional note beneath it (e.g. the valid range), and an inline
 /// validation message under the whole row. The control is supplied and keyboard-wired by the section.
 final class LayoutRow: NSView {
+    /// Why the row is showing a message, which decides its ink. A `.diagnostic` (a config value the
+    /// file asked for and got a fallback of) reads as a warning; a `.failure` (an invalid live edit
+    /// or a write that didn't land) reads destructive. Rendering a working-but-clamped config in the
+    /// same red as "couldn't write config" would teach the user to read both as breakage.
+    enum MessageKind { case diagnostic, failure }
+
     /// Retained (not throwaway locals) so `reapplyTheme()` can recolor them in place — the section
     /// recolors the mounted detail rather than rebuilding it, so nothing here may go stranded.
     private let captionLabel: NSTextField
     private let descriptionLabel: NSTextField?
     private let controlNoteLabel: NSTextField?
     private let messageLabel = NSTextField(labelWithString: "")
+    private var messageKind: MessageKind?
 
     init(caption: String, description: String?, control: NSView, controlNote: String?, controlWidth: CGFloat?) {
         let label = NSTextField(labelWithString: caption)
@@ -83,18 +90,36 @@ final class LayoutRow: NSView {
         return (stack, noteLabel)
     }
 
-    func showMessage(_ text: String?) {
+    /// Show (or clear, with nil) the row's inline message. `.failure` (the default) keeps the
+    /// existing live-validation / write-error tone; `.diagnostic` marks a config-file value the
+    /// parser fell back on, which reads as a warning rather than breakage.
+    func showMessage(_ text: String?, kind: MessageKind = .failure) {
         messageLabel.stringValue = text ?? ""
         messageLabel.isHidden = (text == nil)
+        messageKind = (text == nil) ? nil : kind
+        messageLabel.textColor = LayoutRow.ink(for: messageKind)
+    }
+
+    private static func ink(for kind: MessageKind?) -> NSColor {
+        switch kind {
+        case .diagnostic: return Theme.current.chrome.warning.nsColor
+        case .failure, nil: return Theme.current.chrome.destructive.nsColor
+        }
+    }
+
+    /// Test hook: the inline message as actually rendered — nil when the label is hidden. Reads the
+    /// label rather than a backing property, so a test can't pass while the row shows nothing.
+    var renderedMessageForTesting: String? {
+        messageLabel.isHidden ? nil : messageLabel.stringValue
     }
 
     /// Re-apply the live chrome colors after a config change — no relaunch. Matches the exact
-    /// roles set at construction: caption foreground, both note labels at `ink(0.4)`, message
-    /// destructive.
+    /// roles set at construction: caption foreground, both note labels at `ink(0.4)`, message tone
+    /// by its current kind.
     func reapplyTheme() {
         captionLabel.textColor = Theme.current.chrome.foreground.nsColor
         descriptionLabel?.textColor = Theme.current.chrome.ink(alpha: 0.4)
         controlNoteLabel?.textColor = Theme.current.chrome.ink(alpha: 0.4)
-        messageLabel.textColor = Theme.current.chrome.destructive.nsColor
+        messageLabel.textColor = LayoutRow.ink(for: messageKind)
     }
 }

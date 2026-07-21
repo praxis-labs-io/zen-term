@@ -53,6 +53,50 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertNil(ToolFloatParser.parse("title:x command:foo key:nope+"))  // unparseable key
     }
 
+    // MARK: dropped-line diagnostics (ZEN-7)
+    //
+    // A dropped float never becomes a row, so `parseLine`'s diagnostic is the only way its reason
+    // reaches the user (the Tools notice + the reload toast). `parse` swallows it; `parseLine` carries
+    // it, labelled by the line's title so the notice names the right line.
+
+    func test_parseLine_missingTitle_reportsMissingTitle() {
+        let result = ToolFloatParser.parseLine("command:foo key:cmd+shift+j")
+        XCTAssertNil(result.float)
+        XCTAssertEqual(
+            result.diagnostic,
+            ConfigDiagnostic(scope: .toolFloat(label: "a float line"), problem: .floatMissingField("title:")))
+    }
+
+    func test_parseLine_missingCommand_reportsMissingCommandLabelledByTitle() {
+        let result = ToolFloatParser.parseLine("title:Notes key:cmd+shift+n")
+        XCTAssertNil(result.float)
+        XCTAssertEqual(
+            result.diagnostic,
+            ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatMissingField("command:")))
+    }
+
+    func test_parseLine_missingKey_reportsMissingKey() {
+        let result = ToolFloatParser.parseLine("title:Notes command:foo")
+        XCTAssertNil(result.float)
+        XCTAssertEqual(
+            result.diagnostic,
+            ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatMissingField("key:")))
+    }
+
+    func test_parseLine_unparseableKey_reportsUnusableKey() {
+        let result = ToolFloatParser.parseLine("title:Notes command:foo key:nope+")
+        XCTAssertNil(result.float)
+        XCTAssertEqual(
+            result.diagnostic,
+            ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatUnusableKey("nope+")))
+    }
+
+    func test_parseLine_validFloat_hasNoDiagnostic() {
+        let result = ToolFloatParser.parseLine("title:x command:c key:cmd+shift+j")
+        XCTAssertNotNil(result.float)
+        XCTAssertNil(result.diagnostic)
+    }
+
     // MARK: identity (ZEN-145)
 
     /// The title is the source of truth; the id is its slug and is never authored. Renaming a float is

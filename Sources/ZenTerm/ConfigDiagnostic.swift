@@ -1,26 +1,36 @@
 /// A problem found while loading the config, carried on `GeneralConfig` so a surface can show it
 /// in place instead of the user's only clue being a log line nobody reads.
 ///
-/// Only `.keybind` diagnostics are collected today (ZEN-142). Every other bad-config path —
-/// invalid ints, bad enum values, malformed float lines — still logs and silently falls back;
-/// collecting and rendering those is ZEN-154, and is additive to this type.
+/// ZEN-7 widened this past the original `.keybind` scope: an invalid scalar (`font-size = bigg`),
+/// an out-of-range number, a bad enum value, and a dropped `float =` line all collect here now,
+/// each rendered on the Settings row that owns it (or, for the home-less cases, a Tools notice and
+/// the reload toast).
 ///
-/// Every diagnostic is a warning today — the config asked for something and got it, just not what
-/// the user wanted. A severity field would be one case nothing branches on; ZEN-154 can add it when
-/// it has a second severity *and* a reader for it.
+/// Every diagnostic is still a warning — the config asked for something and got a fallback, not what
+/// the user wanted. A severity field would be one case nothing branches on; add it when there's a
+/// second severity *and* a reader for it.
 ///
 /// Carries the *facts* and derives every phrasing on read. Three surfaces word the same problem
 /// differently — a row has no title to lean on, a single-problem toast has one, a list of problems
 /// must not repeat what its own title just said — and a stored sentence can only serve one of them.
-/// Deriving also keeps names out of the parse: diagnostics are built inside `KeymapAssembler`, which
-/// runs while `GeneralConfig.current` still holds the OLD config, so resolving a float's title back
-/// then renders it as its raw id.
+/// Deriving also keeps names out of the parse: keybind diagnostics are built inside `KeymapAssembler`,
+/// which runs while `GeneralConfig.current` still holds the OLD config, so resolving a float's title
+/// back then renders it as its raw id.
 struct ConfigDiagnostic: Hashable {
     /// Which surface can render this in place, and what it's about. The associated value names the
     /// subject so a section can match a diagnostic to the row that owns it.
     enum Scope: Hashable {
-        /// The action left with no shortcut. Its Settings row carries the message.
+        /// The action left with no shortcut. Its Shortcuts row carries the message.
         case keybind(KeyInterceptor.ReservedChord)
+        /// A scalar/enum config key (`font-size`, `cursor-style`, …). Its form-section row carries
+        /// the message; the value is the config token, the thing to grep for in the file.
+        case setting(key: String)
+        /// A dropped `float =` line. It never became a float, so there's no row — the Tools section
+        /// notice and the reload toast carry it. The label is a best-effort name for the file line.
+        case toolFloat(label: String)
+        /// A `keybind =` line that didn't parse to an action. No row to send anyone to; the reload
+        /// toast is the only surface.
+        case keybindLine
     }
 
     /// What went wrong — these are different claims and must not share a phrasing.
@@ -30,37 +40,72 @@ struct ConfigDiagnostic: Hashable {
         /// A config line names a chord this keyboard can't produce. The line is dead; the action
         /// still has its default.
         case unusableBind(Chord)
+        /// A scalar/enum value the parser couldn't read (`expected` names the valid set). The key
+        /// fell back to its default.
+        case invalidValue(got: String, expected: String)
+        /// A number outside its range, clamped to the nearest valid extreme.
+        case clamped(value: String, to: String)
+        /// A `float =` line missing a required field (the config token, e.g. `command:`).
+        case floatMissingField(String)
+        /// A `float =` line whose `key:` this keyboard can't produce (the raw spec).
+        case floatUnusableKey(String)
+        /// A `keybind =` line that couldn't be parsed (the raw line).
+        case unparseableLine(String)
     }
 
     var scope: Scope
     var problem: Problem
 
-    private var action: KeyInterceptor.ReservedChord {
-        switch scope {
-        case .keybind(let action): return action
-        }
+    /// The action token for a `.keybind` scope, else empty — `.unusableBind` only ever pairs with
+    /// `.keybind`, so this reads the subject its message needs without a scope switch inside `message`.
+    private var keybindActionToken: String {
+        if case .keybind(let action) = scope { return action.actionToken }
+        return ""
     }
 
-    /// The action's human name — resolved on read; see the type's note.
-    var title: String { CommandCatalog.spec(for: action).title }
+    /// The subject's human name — resolved on read; see the type's note. A keybind resolves to its
+    /// command title; a setting/float names the config token to grep for.
+    var title: String {
+        switch scope {
+        case .keybind(let action): return CommandCatalog.spec(for: action).title
+        case .setting(let key): return key
+        case .toolFloat(let label): return label
+        case .keybindLine: return "Shortcut"
+        }
+    }
 
     /// The one-line claim, for a toast's title.
     var headline: String {
         switch problem {
         case .chordTaken: return "\(title) has no shortcut"
         case .unusableBind: return "\(title) has an unusable shortcut"
+        case .invalidValue: return "\(title) has an invalid value"
+        case .clamped: return "\(title) is out of range"
+        case .floatMissingField, .floatUnusableKey: return "A tool float was ignored"
+        case .unparseableLine: return "A shortcut line was ignored"
         }
     }
 
     /// The full sentence, for a Settings row or a single-problem toast — both need to say where this
     /// came from, since nothing around them does. Written in the *config file's* vocabulary
-    /// (`⌘⇧\ went to toggle_focus_mode`), not the UI's, so it names the token to grep for in the file.
+    /// (`⌘⇧\ went to toggle_focus_mode`, `font-size = bigg`), not the UI's, so it names the token to
+    /// grep for in the file.
     var message: String {
         switch problem {
         case .chordTaken(let chord, let winner):
             return "\(chord.displayGlyph) went to \(winner.actionToken) in your config."
         case .unusableBind(let chord):
-            return "\(action.actionToken)=\(chord.configToken) can't be typed on your keyboard. Ignoring it."
+            return "\(keybindActionToken)=\(chord.configToken) can't be typed on your keyboard. Ignoring it."
+        case .invalidValue(let got, let expected):
+            return "\(title) = \(got) isn't valid (\(expected)). Using the default."
+        case .clamped(let value, let to):
+            return "\(title) = \(value) is out of range. Using \(to)."
+        case .floatMissingField(let field):
+            return "\(title) is missing \(field). Ignoring this tool float."
+        case .floatUnusableKey(let key):
+            return "\(title) has an unusable key: \(key). Ignoring this tool float."
+        case .unparseableLine(let raw):
+            return "Couldn't read the keybind line `\(raw)`. Ignoring it."
         }
     }
 
@@ -72,10 +117,20 @@ struct ConfigDiagnostic: Hashable {
             return "\(chord.displayGlyph) → \(winner.actionToken)"
         case .unusableBind(let chord):
             return "\(chord.configToken) can't be typed"
+        case .invalidValue(let got, _):
+            return "\(got) isn't valid"
+        case .clamped(let value, let to):
+            return "\(value) → \(to)"
+        case .floatMissingField(let field):
+            return "missing \(field)"
+        case .floatUnusableKey:
+            return "key can't be typed"
+        case .unparseableLine:
+            return "couldn't be read"
         }
     }
 
-    /// A list entry: the action on its own line, its detail indented beneath. Two lines by
+    /// A list entry: the subject on its own line, its detail indented beneath. Two lines by
     /// *measurement*, not preference — a long action title plus a long token is 284pt against a
     /// 236pt column, so one line can't hold both and the wrap lands mid-phrase. Splitting it puts
     /// the break where it belongs and keeps each line inside the card. Drops the "in your config"
@@ -100,13 +155,13 @@ struct ConfigDiagnostic: Hashable {
     }
 
     /// The notice for a set of diagnostics, or nil when there's nothing to say. A reload has to
-    /// announce itself: the inline note on a Keybinds row only reaches someone already looking at
+    /// announce itself: the inline note on a Settings row only reaches someone already looking at
     /// that row, and a user who just broke their config by hand has no reason to go there.
     ///
-    /// Every line carries the chord and the offending token, because that pair is the whole point:
-    /// it's what the user greps for in the file. Naming only the actions would say something is
-    /// wrong without saying what to go fix — and the fix always lives in the config, which is why
-    /// nothing here points at Settings: a tool float has no Keybinds row to send anyone to.
+    /// Every line carries the offending token, because that's what the user greps for in the file.
+    /// Naming only the subjects would say something is wrong without saying what to go fix — and the
+    /// fix always lives in the config, which is why nothing here points at Settings: a dropped tool
+    /// float has no row to send anyone to.
     static func toast(for diagnostics: [ConfigDiagnostic]) -> ToastContent? {
         guard !diagnostics.isEmpty else { return nil }
         if diagnostics.count == 1, let only = diagnostics.first {

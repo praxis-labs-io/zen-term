@@ -7,13 +7,17 @@ import TerminalKit
 /// `float =` / `keybind =` lines) into a `GeneralConfig`. Best-effort, symmetric with
 /// `GhosttyThemeParser`: unknown keys are ignored, a malformed value falls back to the
 /// corresponding `fallback` field, and an out-of-range number is clamped to the nearest
-/// valid extreme — every adjustment logs one warning, nothing ever throws.
+/// valid extreme — every adjustment logs one warning AND collects a `ConfigDiagnostic` so a
+/// Settings row can show it in place (ZEN-7), and nothing ever throws.
 enum GeneralConfigParser {
     static func parse(_ text: String, fallback: GeneralConfig) -> GeneralConfig {
         var config = fallback
         var floats: [ToolFloat] = []
         var floatLineIndex = 0
         var keybinds: [(Chord, KeyInterceptor.ReservedChord)] = []
+        // The non-keybind diagnostics collected as scalars/enums/floats are read; the keybind ones
+        // come from `KeymapAssembler` below and are merged in at the end.
+        var diagnostics: [ConfigDiagnostic] = []
 
         for rawLine in text.split(whereSeparator: \.isNewline) {
             let line = ConfigText.stripComment(String(rawLine)).trimmingCharacters(in: .whitespaces)
@@ -29,41 +33,61 @@ enum GeneralConfigParser {
             case "font-family":
                 if !value.isEmpty { config.fontName = value }
             case "font-size":
-                if let n = parseDouble(value, key) { config.fontSize = CGFloat(clamp(n, 6, 72, key)) }
+                if let n = parseDouble(value, key, &diagnostics) {
+                    config.fontSize = CGFloat(clamp(n, 6, 72, key, &diagnostics))
+                }
             case "cursor-style":
-                if let style = parseCursorStyle(value) { config.cursorStyle = style }
+                if let style = parseCursorStyle(value, &diagnostics) { config.cursorStyle = style }
             case "cursor-style-blink":
-                if let b = parseBool(value, key) { config.cursorBlink = b }
+                if let b = parseBool(value, key, &diagnostics) { config.cursorBlink = b }
             case "cursor-thickness":
-                if let n = parseDouble(value, key) { config.cursorThickness = Int(clamp(n, 1, 12, key)) }
+                if let n = parseDouble(value, key, &diagnostics) {
+                    config.cursorThickness = Int(clamp(n, 1, 12, key, &diagnostics))
+                }
             case "macos-option-as-alt":
-                if let b = parseBool(value, key) { config.optionAsAlt = b }
+                if let b = parseBool(value, key, &diagnostics) { config.optionAsAlt = b }
             case "scroll-multiplier":
-                if let n = parseDouble(value, key) { config.scrollMultiplier = clamp(n, 0.1, 10, key) }
+                if let n = parseDouble(value, key, &diagnostics) {
+                    config.scrollMultiplier = clamp(n, 0.1, 10, key, &diagnostics)
+                }
             case "window-chrome":
-                if let b = parseBool(value, key) { config.windowChrome = b }
+                if let b = parseBool(value, key, &diagnostics) { config.windowChrome = b }
             case "backdrop-alpha":
-                if let n = parseDouble(value, key) { config.backdropAlpha = CGFloat(clamp(n, 0, 1, key)) }
+                if let n = parseDouble(value, key, &diagnostics) {
+                    config.backdropAlpha = CGFloat(clamp(n, 0, 1, key, &diagnostics))
+                }
             case "window-gutter":
-                if let n = parseDouble(value, key) { config.windowGutter = CGFloat(clamp(n, 0, 64, key)) }
+                if let n = parseDouble(value, key, &diagnostics) {
+                    config.windowGutter = CGFloat(clamp(n, 0, 64, key, &diagnostics))
+                }
             case "pane-gap":
-                if let n = parseDouble(value, key) { config.panelGap = CGFloat(clamp(n, 0, 64, key)) }
+                if let n = parseDouble(value, key, &diagnostics) {
+                    config.panelGap = CGFloat(clamp(n, 0, 64, key, &diagnostics))
+                }
             case "bottom-drawer-fraction":
-                if let n = parseDouble(value, key) { config.bottomDrawerFraction = CGFloat(clamp(n, 0.1, 0.9, key)) }
+                if let n = parseDouble(value, key, &diagnostics) {
+                    config.bottomDrawerFraction = CGFloat(clamp(n, 0.1, 0.9, key, &diagnostics))
+                }
             case "right-drawer-fraction":
-                if let n = parseDouble(value, key) { config.rightDrawerFraction = CGFloat(clamp(n, 0.1, 0.9, key)) }
+                if let n = parseDouble(value, key, &diagnostics) {
+                    config.rightDrawerFraction = CGFloat(clamp(n, 0.1, 0.9, key, &diagnostics))
+                }
             case "drawer-resize-step":
-                if let n = parseDouble(value, key) { config.drawerResizeStep = CGFloat(clamp(n, 4, 400, key)) }
+                if let n = parseDouble(value, key, &diagnostics) {
+                    config.drawerResizeStep = CGFloat(clamp(n, 4, 400, key, &diagnostics))
+                }
             case "max-drawer-fraction":
-                if let n = parseDouble(value, key) { config.maxDrawerFraction = CGFloat(clamp(n, 0.3, 0.95, key)) }
+                if let n = parseDouble(value, key, &diagnostics) {
+                    config.maxDrawerFraction = CGFloat(clamp(n, 0.3, 0.95, key, &diagnostics))
+                }
             case "reduce-motion":
-                if let r = parseReduceMotion(value) { config.reduceMotion = r }
+                if let r = parseReduceMotion(value, &diagnostics) { config.reduceMotion = r }
             case "agent-notifications":
-                if let b = parseBool(value, key) { config.agentNotifications = b }
+                if let b = parseBool(value, key, &diagnostics) { config.agentNotifications = b }
             case "automatic-update-checks":
-                if let b = parseBool(value, key) { config.automaticUpdateChecks = b }
+                if let b = parseBool(value, key, &diagnostics) { config.automaticUpdateChecks = b }
             case "debug":
-                if let b = parseBool(value, key) { config.debug = b }
+                if let b = parseBool(value, key, &diagnostics) { config.debug = b }
             case "shell":
                 if !value.isEmpty { config.shell = value }
             case "shell-args":
@@ -73,10 +97,12 @@ enum GeneralConfigParser {
             case "ai":
                 if !value.isEmpty { config.ai = value }
             case "float":
-                if let float = ToolFloatParser.parse(value, fallbackOrder: floatLineIndex) {
+                let (float, diagnostic) = ToolFloatParser.parseLine(value, fallbackOrder: floatLineIndex)
+                if let float {
                     floats.removeAll { $0.id == float.id }  // last declaration of an id wins
                     floats.append(float)
                 }
+                if let diagnostic { diagnostics.append(diagnostic) }
                 // Counts every float line, parsed or not, so a dropped line leaves a gap rather than
                 // shifting the floats below it out of file order.
                 floatLineIndex += 1
@@ -84,7 +110,7 @@ enum GeneralConfigParser {
                 if let pair = KeybindParser.parse(value) {
                     keybinds.append(pair)
                 } else {
-                    warnUnparseableKeybind(value)
+                    warnUnparseableKeybind(value, &diagnostics)
                 }
             default:
                 continue
@@ -95,7 +121,7 @@ enum GeneralConfigParser {
         config.floats = ordered
         let assembled = KeymapAssembler.assemble(floats: ordered, keybinds: keybinds)
         config.keymap = assembled.map
-        config.keymapDiagnostics = assembled.diagnostics
+        config.configDiagnostics = diagnostics + assembled.diagnostics
         return config
     }
 
@@ -114,12 +140,17 @@ enum GeneralConfigParser {
     /// the old built-in card) and keeps the chord from the user's own dropped line, so following
     /// the log verbatim reproduces what they had. Exact-match on the action left of `=` (the same
     /// split `KeybindParser` uses), so a typo like `toggle_lazygit_old` still reads unparseable.
-    private static func warnUnparseableKeybind(_ value: String) {
+    ///
+    /// Only the generic case collects a `ConfigDiagnostic`: the lazygit branch is a transitional
+    /// migration whose whole value is the multi-line recipe, which a terse toast would lose — it
+    /// stays log-only on purpose.
+    private static func warnUnparseableKeybind(_ value: String, _ diagnostics: inout [ConfigDiagnostic]) {
         let equals = value.firstIndex(of: "=")
         let action = (equals.map { value[..<$0] } ?? Substring(value))
             .trimmingCharacters(in: .whitespaces)
         guard action == "toggle_lazygit" else {
             Log.warning("GeneralConfig: unparseable keybind line `\(value)` — ignored", category: .keybinds)
+            diagnostics.append(ConfigDiagnostic(scope: .keybindLine, problem: .unparseableLine(value)))
             return
         }
         let bound = equals.map {
@@ -134,7 +165,9 @@ enum GeneralConfigParser {
             category: .config)
     }
 
-    private static func parseBool(_ value: String, _ key: String) -> Bool? {
+    private static func parseBool(
+        _ value: String, _ key: String, _ diagnostics: inout [ConfigDiagnostic]
+    ) -> Bool? {
         switch value.lowercased() {
         case "true": return true
         case "false": return false
@@ -142,23 +175,29 @@ enum GeneralConfigParser {
             Log.warning(
                 "GeneralConfig: `\(key)` expected true/false, got `\(value)` — using default",
                 category: .config)
+            diagnostics.append(invalid(key, got: value, expected: "true or false"))
             return nil
         }
     }
 
-    private static func parseDouble(_ value: String, _ key: String) -> Double? {
+    private static func parseDouble(
+        _ value: String, _ key: String, _ diagnostics: inout [ConfigDiagnostic]
+    ) -> Double? {
         // `Double("nan")`/`"inf"` parse successfully but poison clamp() (min/max propagate NaN)
         // and would trap in `Int(nan)` — reject non-finite so nothing can crash the load.
         guard let n = Double(value), n.isFinite else {
             Log.warning(
                 "GeneralConfig: `\(key)` expected a finite number, got `\(value)` — using default",
                 category: .config)
+            diagnostics.append(invalid(key, got: value, expected: "a number"))
             return nil
         }
         return n
     }
 
-    private static func parseCursorStyle(_ value: String) -> TerminalBehavior.CursorStyle? {
+    private static func parseCursorStyle(
+        _ value: String, _ diagnostics: inout [ConfigDiagnostic]
+    ) -> TerminalBehavior.CursorStyle? {
         switch value.lowercased() {
         case "block": return .block
         case "bar": return .bar
@@ -167,11 +206,14 @@ enum GeneralConfigParser {
             Log.warning(
                 "GeneralConfig: `cursor-style` expected block/bar/underline, got `\(value)` — using default",
                 category: .config)
+            diagnostics.append(invalid("cursor-style", got: value, expected: "block, bar, or underline"))
             return nil
         }
     }
 
-    private static func parseReduceMotion(_ value: String) -> GeneralConfig.ReduceMotion? {
+    private static func parseReduceMotion(
+        _ value: String, _ diagnostics: inout [ConfigDiagnostic]
+    ) -> GeneralConfig.ReduceMotion? {
         switch value.lowercased() {
         case "system": return .system
         case "on": return .on
@@ -180,18 +222,35 @@ enum GeneralConfigParser {
             Log.warning(
                 "GeneralConfig: `reduce-motion` expected system/on/off, got `\(value)` — using default",
                 category: .config)
+            diagnostics.append(invalid("reduce-motion", got: value, expected: "system, on, or off"))
             return nil
         }
     }
 
-    /// Clamp a right-typed value to `[lower, upper]`, logging once if it had to move.
-    private static func clamp(_ value: Double, _ lower: Double, _ upper: Double, _ key: String) -> Double {
+    /// Clamp a right-typed value to `[lower, upper]`, logging + collecting a diagnostic once if it
+    /// had to move.
+    private static func clamp(
+        _ value: Double, _ lower: Double, _ upper: Double, _ key: String,
+        _ diagnostics: inout [ConfigDiagnostic]
+    ) -> Double {
         let clamped = min(max(value, lower), upper)
         if clamped != value {
             Log.warning(
                 "GeneralConfig: `\(key)` \(value) out of range [\(lower), \(upper)] — clamped to \(clamped)",
                 category: .config)
+            diagnostics.append(
+                ConfigDiagnostic(
+                    scope: .setting(key: key),
+                    problem: .clamped(value: numberText(value), to: numberText(clamped))))
         }
         return clamped
     }
+
+    private static func invalid(_ key: String, got: String, expected: String) -> ConfigDiagnostic {
+        ConfigDiagnostic(scope: .setting(key: key), problem: .invalidValue(got: got, expected: expected))
+    }
+
+    /// A config number without a trailing `.0` (`200`, not `200.0`; `0.95` stays `0.95`) — the form
+    /// the value reads as in the file, so a diagnostic names it the way the user typed it.
+    private static func numberText(_ value: Double) -> String { String(format: "%g", value) }
 }

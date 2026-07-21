@@ -217,4 +217,80 @@ final class GeneralConfigParserTests: XCTestCase {
             """)
         XCTAssertEqual(config.floats.map(\.id), ["b", "c", "a"])
     }
+
+    // MARK: config diagnostics (ZEN-7)
+    //
+    // The scalar/enum/float fallbacks used to log-and-drop with no trace a surface could show. Each
+    // now collects a `ConfigDiagnostic` too — the piece that can go silently dead, so it's asserted.
+
+    func test_invalidScalars_collectInvalidValueDiagnostics() {
+        let diagnostics = parse(
+            """
+            cursor-style = beam
+            macos-option-as-alt = yep
+            reduce-motion = maybe
+            """
+        ).configDiagnostics
+        XCTAssertEqual(
+            diagnostics,
+            [
+                ConfigDiagnostic(
+                    scope: .setting(key: "cursor-style"),
+                    problem: .invalidValue(got: "beam", expected: "block, bar, or underline")),
+                ConfigDiagnostic(
+                    scope: .setting(key: "macos-option-as-alt"),
+                    problem: .invalidValue(got: "yep", expected: "true or false")),
+                ConfigDiagnostic(
+                    scope: .setting(key: "reduce-motion"),
+                    problem: .invalidValue(got: "maybe", expected: "system, on, or off")),
+            ])
+    }
+
+    func test_outOfRangeNumber_collectsAClampedDiagnostic() {
+        XCTAssertEqual(
+            parse("font-size = 200\n").configDiagnostics,
+            [ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .clamped(value: "200", to: "72"))])
+    }
+
+    func test_nonFiniteNumber_collectsInvalidValueNotClamp() {
+        // "inf" is rejected in parseDouble before clamp ever runs, so it reads as invalid, not clamped.
+        XCTAssertEqual(
+            parse("scroll-multiplier = inf\n").configDiagnostics,
+            [
+                ConfigDiagnostic(
+                    scope: .setting(key: "scroll-multiplier"),
+                    problem: .invalidValue(got: "inf", expected: "a number"))
+            ])
+    }
+
+    func test_validConfig_collectsNoDiagnostics() {
+        XCTAssertTrue(parse("font-size = 16\ncursor-style = bar\nreduce-motion = on\n").configDiagnostics.isEmpty)
+    }
+
+    func test_unparseableKeybindLine_collectsADiagnostic() {
+        XCTAssertEqual(
+            parse("keybind = totally bogus\n").configDiagnostics,
+            [ConfigDiagnostic(scope: .keybindLine, problem: .unparseableLine("totally bogus"))])
+    }
+
+    func test_droppedFloatLine_collectsADiagnostic() {
+        XCTAssertEqual(
+            parse("float = title:Notes key:cmd+shift+n\n").configDiagnostics,  // no command:
+            [ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatMissingField("command:"))])
+    }
+
+    func test_keybindConflict_stillCollected_alongsideScalarDiagnostics() {
+        // The keybind diagnostics come from KeymapAssembler; the scalar ones from the parse loop.
+        // Both must land in the one `configDiagnostics` array.
+        let diagnostics = parse(
+            """
+            font-size = 200
+            keybind = toggle_focus_mode=cmd+shift+\\
+            """
+        ).configDiagnostics
+        XCTAssertTrue(
+            diagnostics.contains(
+                ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .clamped(value: "200", to: "72"))))
+        XCTAssertTrue(diagnostics.contains { if case .keybind = $0.scope { return true } else { return false } })
+    }
 }

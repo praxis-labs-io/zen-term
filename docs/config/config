@@ -6,8 +6,9 @@
 #
 # Format: ghostty-flavored `key = value`. Lines starting with `#` and blank
 # lines are ignored. Unknown keys are ignored. A malformed value falls back to
-# the default; an out-of-range number is clamped. Nothing here can crash the app
-# (bad lines are logged and skipped). Config is read once at launch. Restart to
+# the default; an out-of-range number is clamped. Nothing here can crash the app:
+# a bad value is logged, skipped, and shown in the app (inline on its Settings
+# row, or in a notice when you reload). Config is read once at launch. Restart to
 # apply hand-edits. Changes made in the in-app Settings card (⌘,) apply live.
 
 # ─── Theme ───────────────────────────────────────────────────────────────────

@@ -354,7 +354,7 @@ final class SettingsKeybindsSection: SettingsSection {
     /// doesn't resolve. Clearing it here would let an unrelated reload (a theme change in another
     /// window) silently retract "couldn't write config" while the edit is still not on disk.
     private func refreshRows() {
-        let diagnostics = GeneralConfig.current.keymapDiagnostics
+        let diagnostics = GeneralConfig.current.configDiagnostics
         for row in rows {
             row.render(currentShortcut: displayedChord(for: row.action)?.displayGlyph ?? "")
             guard row.messageKind != .failure else { continue }

@@ -65,9 +65,21 @@ enum ToolFloatParser {
         return fields
     }
 
-    /// `fallbackOrder` is the float's line order in the file, used when the line has no `order:` —
-    /// so a config that has never been reordered reads exactly as it did before `order:` existed.
+    /// The float a `float =` line resolves to, or nil when it was dropped. The convenience over
+    /// `parseLine` for callers (and round-trip tests) that only care about the float, not why a line
+    /// was ignored.
     static func parse(_ value: String, fallbackOrder: Int = 0) -> ToolFloat? {
+        parseLine(value, fallbackOrder: fallbackOrder).float
+    }
+
+    /// Parse a `float =` line into its float, and — when the line is dropped — the `ConfigDiagnostic`
+    /// saying why (ZEN-7). A dropped float never becomes a `ToolFloatRow`, so this diagnostic is the
+    /// only way its reason reaches the user (the Tools-section notice and the reload toast).
+    /// `fallbackOrder` is the float's line order in the file, used when the line has no `order:` — so
+    /// a config that has never been reordered reads exactly as it did before `order:` existed.
+    static func parseLine(
+        _ value: String, fallbackOrder: Int = 0
+    ) -> (float: ToolFloat?, diagnostic: ConfigDiagnostic?) {
         let fields = fields(value)
 
         let title = fields["title"] ?? ""
@@ -75,22 +87,27 @@ enum ToolFloatParser {
             Log.warning(
                 "GeneralConfig: float line needs a `title:` with at least one letter or number — ignored",
                 category: .toolFloat)
-            return nil
+            return (nil, dropped("a float line", .floatMissingField("title:")))
         }
         guard let command = fields["command"], !command.isEmpty else {
             Log.warning(
                 "GeneralConfig: float `\(id)` missing required `command:` — ignored", category: .toolFloat)
-            return nil
+            return (nil, dropped(title, .floatMissingField("command:")))
         }
-        guard let keySpec = fields["key"], let toggle = Chord.parse(keySpec) else {
+        guard let keySpec = fields["key"] else {
             Log.warning(
-                "GeneralConfig: float `\(id)` has a missing or unparseable `key:` — ignored",
+                "GeneralConfig: float `\(id)` missing required `key:` — ignored", category: .toolFloat)
+            return (nil, dropped(title, .floatMissingField("key:")))
+        }
+        guard let toggle = Chord.parse(keySpec) else {
+            Log.warning(
+                "GeneralConfig: float `\(id)` has an unparseable `key:\(keySpec)` — ignored",
                 category: .toolFloat)
-            return nil
+            return (nil, dropped(title, .floatUnusableKey(keySpec)))
         }
 
         let persist = persistence(fields["persist"], id: id)
-        return ToolFloat(
+        let float = ToolFloat(
             id: id,
             order: fields["order"].flatMap { Int($0) } ?? fallbackOrder,
             title: title,
@@ -102,6 +119,13 @@ enum ToolFloatParser {
             requiresGitRepo: fields["git"]?.lowercased() == "true",
             persist: persist,
             toggle: toggle)
+        return (float, nil)
+    }
+
+    /// A dropped-float diagnostic labelled by the line's title (or a generic stand-in when the title
+    /// is what's missing) — the label is what the Tools notice and toast name the ignored line by.
+    private static func dropped(_ label: String, _ problem: ConfigDiagnostic.Problem) -> ConfigDiagnostic {
+        ConfigDiagnostic(scope: .toolFloat(label: label), problem: problem)
     }
 
     /// A width/height fraction clamped to a sane 0.2…1.0 — an unclamped 0 collapses the float

@@ -25,6 +25,9 @@ final class SettingsToolsSection: SettingsSection {
     private weak var caption: NSTextField?
     private weak var emptyHint: NSTextField?
     private weak var reorderHint: NSTextField?
+    /// The dropped-`float`-line notice (ZEN-7), when the config has any. A dropped float never becomes
+    /// a row, so this top-of-section note is its only in-Settings home.
+    private weak var droppedFloatNotice: NSTextField?
     private var rowsStack: NSStackView?
 
     func makeDetailView() -> NSView {
@@ -52,8 +55,18 @@ final class SettingsToolsSection: SettingsSection {
         caption?.textColor = Theme.current.chrome.ink(alpha: 0.4)
         emptyHint?.textColor = Theme.current.chrome.ink(alpha: 0.5)
         reorderHint?.textColor = Theme.current.chrome.ink(alpha: 0.35)
+        droppedFloatNotice?.textColor = Theme.current.chrome.warning.nsColor
         rows.forEach { $0.reapplyTheme() }
         addButton.reapplyTheme()
+    }
+
+    /// The `.message` of every dropped-`float`-line diagnostic in the live config — what the
+    /// top-of-section notice lists, since a dropped float has no row of its own.
+    private func droppedFloatMessages() -> [String] {
+        GeneralConfig.current.configDiagnostics.compactMap {
+            if case .toolFloat = $0.scope { return $0.message }
+            return nil
+        }
     }
 
     // MARK: rows
@@ -95,6 +108,17 @@ final class SettingsToolsSection: SettingsSection {
         let header = Self.headerRow(caption: caption, hint: floats.count > 1 ? makeReorderHint() : nil)
         stack.addArrangedSubview(header)
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+        let dropped = droppedFloatMessages()
+        if !dropped.isEmpty {
+            let notice = NSTextField(wrappingLabelWithString: dropped.joined(separator: "\n"))
+            notice.font = .systemFont(ofSize: 11, weight: .medium)
+            notice.textColor = Theme.current.chrome.warning.nsColor
+            droppedFloatNotice = notice
+            stack.addArrangedSubview(notice)
+            notice.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+            stack.setCustomSpacing(10, after: notice)  // header→notice spacing is set below, uniformly
+        }
 
         if floats.isEmpty {
             let hint = NSTextField(labelWithString: "No tool floats yet. Add one to get a dock button and a shortcut.")
