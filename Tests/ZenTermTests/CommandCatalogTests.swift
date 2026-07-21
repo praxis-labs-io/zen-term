@@ -30,6 +30,7 @@ final class CommandCatalogTests: XCTestCase {
             names,
             [
                 "Open Workspace Picker", "Settings…", "Reload Config", "Check for Updates",
+                "Report an Issue…",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab",
                 "Split Horizontally", "Split Vertically",
@@ -54,7 +55,7 @@ final class CommandCatalogTests: XCTestCase {
             XCTAssertFalse(seen.contains(category), "category \(category) is not contiguous")
             seen.append(category)
         }
-        XCTAssertEqual(seen, ["Tools", "Config", "Drawers", "Tabs", "Panes", "Window"])
+        XCTAssertEqual(seen, ["Tools", "Config", "Help", "Drawers", "Tabs", "Panes", "Window"])
     }
 
     func test_selectTab_expandsPerTab() {
@@ -98,11 +99,12 @@ final class CommandCatalogTests: XCTestCase {
     }
 
     func test_everyEntry_hasTitle_andShortcut() {
-        // Every palette command shows its glyph, except Check for Updates — the one action shipped
-        // deliberately unbound (ZEN-20). Everything else has a default binding.
+        // Every palette command shows its glyph, except the two actions shipped deliberately unbound:
+        // Check for Updates (ZEN-20) and Report an Issue (ZEN-212). Everything else has a default.
         for command in CommandCatalog.commands(tabCount: 9) {
             XCTAssertFalse(command.title.isEmpty)
             if case .checkForUpdates = command.chord { continue }
+            if case .reportIssue = command.chord { continue }
             XCTAssertFalse(command.shortcut.isEmpty, "\(command.title) should show a shortcut")
         }
     }

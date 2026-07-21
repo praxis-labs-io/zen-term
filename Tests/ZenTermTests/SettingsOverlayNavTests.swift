@@ -73,6 +73,47 @@ final class SettingsOverlayNavTests: XCTestCase {
                 + "appearance-following sidebar wash this test guards against")
     }
 
+    // MARK: Report an Issue button (ZEN-212)
+
+    private func mountNav(onReportIssue: @escaping () -> Void) -> (overlay: SettingsOverlay, window: NSWindow) {
+        let overlay = SettingsOverlay(
+            sections: [BareSection()], capturer: nil,
+            background: Theme.current.chrome.background.nsColor, onClose: {})
+        overlay.onReportIssue = onReportIssue
+        let win = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 460),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        win.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 620, height: 460)
+        window = win
+        return (overlay, win)
+    }
+
+    private func reportButton(_ overlay: NSView) -> AppButton? {
+        descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Report an Issue" }
+    }
+
+    func test_reportButton_firesOnReportIssue() {
+        var reported = 0
+        let (overlay, _) = mountNav(onReportIssue: { reported += 1 })
+
+        reportButton(overlay)?.onTap()
+
+        XCTAssertEqual(reported, 1, "tapping the nav's Report button opens the composer")
+    }
+
+    func test_downFromLastNavRow_reachesReportButton() {
+        let (overlay, win) = mountNav(onReportIssue: {})
+        let lastRow = descendants(of: overlay).compactMap { $0 as? SettingsNavRow }.last
+        win.makeFirstResponder(lastRow)
+
+        lastRow?.onArrowDown?()
+
+        XCTAssertTrue(
+            KeyboardFocus.isFocused(reportButton(overlay)!, in: win),
+            "Down from the last section row focuses the Report button")
+    }
+
     // MARK: Esc (ZEN-149)
 
     private func mount(_ section: SettingsSection, onClose: @escaping () -> Void) -> NSWindow {

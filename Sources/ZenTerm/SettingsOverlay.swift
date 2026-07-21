@@ -23,6 +23,12 @@ final class SettingsOverlay: NSView, ModalOverlay {
     /// Nav footer: the origami brand mark + the app version, pinned to the bottom of the nav column.
     private let brandMark = NSImageView()
     private let versionLabel = NSTextField(labelWithString: "")
+    /// A quiet "Report an Issue" text link sitting just below the version line (where someone looks
+    /// to cite the version in a report). A `.link` button, not a section row or a pill, so it reads as
+    /// a footer affordance rather than a nav destination. A keyboard stop after the section rows;
+    /// fired via `onReportIssue`, and also reachable from the command palette and Help menu.
+    private let reportButton = AppButton(title: "Report an Issue", variant: .link)
+    var onReportIssue: (() -> Void)?
 
     init(
         sections: [SettingsSection], capturer: KeybindCapturing?, initialSection: Int = 0,
@@ -118,6 +124,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
         divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         brandMark.contentTintColor = Theme.current.chrome.accent.nsColor
         versionLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        reportButton.reapplyTheme()
         navRows.forEach { $0.reapplyTheme() }
         sections.forEach { $0.reapplyTheme() }
     }
@@ -167,6 +174,16 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
         let footer = makeNavFooter()
 
+        // The Report link is the trailing keyboard stop after the section rows: Down from the last row
+        // focuses it, Up/Shift-Tab returns. It doesn't select a section, so it makes itself first
+        // responder directly rather than going through `moveNav`/`selectSection`.
+        reportButton.isKeyboardFocusable = true
+        reportButton.onTap = { [weak self] in self?.onReportIssue?() }
+        reportButton.onArrowUp = { [weak self] in self?.focusNavTail() }
+        reportButton.onBacktab = { [weak self] in self?.focusNavTail() }
+        reportButton.translatesAutoresizingMaskIntoConstraints = false
+        navRows.last?.onArrowDown = { [weak self] in self?.focusReportButton() }
+
         // The nav rows scroll when they'd overflow the column (many sections on a short window),
         // instead of clipping or colliding with the version footer pinned below (ZEN-136). Keyboard
         // nav scrolls the selected row into view in `selectSection`.
@@ -187,6 +204,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
         let root = NSView()
         root.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(navScroll)
+        root.addSubview(reportButton)
         root.addSubview(footer)
         root.addSubview(divider)
         root.addSubview(detailContainer)
@@ -196,20 +214,29 @@ final class SettingsOverlay: NSView, ModalOverlay {
             navScroll.widthAnchor.constraint(equalToConstant: Self.navWidth),
             navScroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -8),
 
+            // The Report link sits at the very bottom of the column, just under the version line,
+            // centered like the footer.
+            reportButton.centerXAnchor.constraint(equalTo: navScroll.centerXAnchor),
+            reportButton.leadingAnchor.constraint(
+                greaterThanOrEqualTo: root.leadingAnchor, constant: Self.footerTrailingInset),
+            reportButton.trailingAnchor.constraint(
+                lessThanOrEqualTo: navScroll.trailingAnchor, constant: -Self.footerTrailingInset),
+            reportButton.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -14),
+
             // navStack is the scrolling document: full content width, height intrinsic (scrolls tall).
             navStack.topAnchor.constraint(equalTo: navScroll.contentView.topAnchor),
             navStack.leadingAnchor.constraint(equalTo: navScroll.contentView.leadingAnchor),
             navStack.widthAnchor.constraint(equalTo: navScroll.contentView.widthAnchor),
 
-            // The version footer sits below the scrolling list, pinned to the column bottom and
-            // centered across the nav column (the mark + version read as one unit, so they center
-            // together rather than hanging off the leading edge).
+            // The version footer sits below the scrolling list, above the Report link, centered
+            // across the nav column (the mark + version read as one unit, so they center together
+            // rather than hanging off the leading edge).
             footer.centerXAnchor.constraint(equalTo: navScroll.centerXAnchor),
             footer.leadingAnchor.constraint(
                 greaterThanOrEqualTo: root.leadingAnchor, constant: Self.footerTrailingInset),
             footer.trailingAnchor.constraint(
                 lessThanOrEqualTo: navScroll.trailingAnchor, constant: -Self.footerTrailingInset),
-            footer.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
+            footer.bottomAnchor.constraint(equalTo: reportButton.topAnchor, constant: -6),
 
             divider.leadingAnchor.constraint(equalTo: navScroll.trailingAnchor),
             divider.topAnchor.constraint(equalTo: root.topAnchor),
@@ -314,4 +341,9 @@ final class SettingsOverlay: NSView, ModalOverlay {
         guard navRows.indices.contains(selectedIndex) else { return }
         window?.makeFirstResponder(navRows[selectedIndex])
     }
+
+    private func focusReportButton() { window?.makeFirstResponder(reportButton) }
+
+    /// Return focus from the Report button to the last nav row, which is the one it's reached from.
+    private func focusNavTail() { window?.makeFirstResponder(navRows.last) }
 }

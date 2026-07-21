@@ -129,18 +129,18 @@ final class WindowController: NSObject {
     /// a kind discriminator rather than parallel per-overlay stacks. Window-level (they open/
     /// switch tabs) but presented over the active tab's tile region. Modal while open.
     private enum ModalKind {
-        case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm
+        case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
 
         /// The chord that closes this same modal when pressed again (its own toggle), or nil for a
-        /// card with no dedicated chord (the workspace / tool-float forms, reached from the picker or
-        /// a Settings section) — those are still closed by any surface-switch chord in `handle(_:)`,
-        /// just not self-toggled.
+        /// card with no dedicated chord (the workspace / tool-float / report forms, reached from a
+        /// picker, a Settings section, or the Help menu) — those are still closed by any
+        /// surface-switch chord in `handle(_:)`, just not self-toggled.
         var selfToggle: KeyInterceptor.ReservedChord? {
             switch self {
             case .repoPicker: return .toggleRepoPicker
             case .commandPalette: return .toggleCommandPalette
             case .settings: return .openSettings
-            case .workspaceForm, .toolFloatForm: return nil
+            case .workspaceForm, .toolFloatForm, .reportIssue: return nil
             }
         }
     }
@@ -698,6 +698,25 @@ final class WindowController: NSObject {
         presentModal(form, kind: .workspaceForm)
     }
 
+    /// Open the "Report an Issue" composer (Help menu + Settings). Non-private: `AppDelegate` routes
+    /// the Help-menu item here, and the Settings nav button calls it too. It's terminal, so opening
+    /// the GitHub issue or cancelling just closes back to the terminal (Settings doesn't reopen).
+    /// Reusing the single modal slot means opening it from Settings dismisses Settings first.
+    func openReportIssue() {
+        if modal?.kind == .reportIssue { closeModal(); return }
+        if modal != nil { closeModal() }  // single slot — dismiss whatever's up (e.g. Settings) first
+        let overlay = ReportIssueOverlay(
+            report: .current(),
+            background: Theme.current.chrome.background.nsColor,
+            onOpenURL: { [weak self] url in
+                NSWorkspace.shared.open(url)
+                self?.closeModal()
+            },
+            onExportDiagnostics: { [weak self] in self?.exportDiagnostics() },
+            onCancel: { [weak self] in self?.closeModal() })
+        presentModal(overlay, kind: .reportIssue)
+    }
+
     /// Which section the Settings card opens on. `.tools` / `.workspaces` are used when a sub-form
     /// (tool-float or workspace editor) hands back to the section it was launched from.
     private enum SettingsLanding { case top, tools, workspaces }
@@ -733,6 +752,9 @@ final class WindowController: NSObject {
             background: Theme.current.chrome.background.nsColor,
             onClose: { [weak self] in self?.closeModal() }
         )
+        // Opening the composer dismisses Settings first (single modal slot); it's terminal and
+        // doesn't reopen Settings on close.
+        overlay.onReportIssue = { [weak self] in self?.openReportIssue() }
         presentModal(overlay, kind: .settings)
     }
 
@@ -1003,7 +1025,7 @@ final class WindowController: NSObject {
                 return
             }
             switch chord {
-            case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat:
+            case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue:
                 closeModal()  // close the current card, then open the requested surface below
             default:
                 return
@@ -1025,7 +1047,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Tool Float",
                         message: "Close \(name) first, then ⌘W."))
                 return
-            case .toggleCommandPalette, .toggleRepoPicker, .openSettings:
+            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue:
                 floats.close()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab, .fillScreen:
                 break  // cross-tab/window chords still act; Fill Screen is window-level
@@ -1076,6 +1098,7 @@ final class WindowController: NSObject {
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
+        case .reportIssue: openReportIssue()
         }
     }
 

@@ -45,6 +45,15 @@ final class KeybindParserTests: XCTestCase {
             KeymapDefaults.map.values.contains(.checkForUpdates), "should ship without a default chord")
     }
 
+    func test_reportIssue_token_hasNoDefaultBinding() {
+        // Round-trips so a hand-written keybind resolves, but ships unbound — it's reached from the
+        // command palette, the Help menu, and Settings, not a default chord (ZEN-212).
+        XCTAssertEqual(KeyInterceptor.ReservedChord.reportIssue.actionToken, "report_issue")
+        XCTAssertEqual(action(from: "report_issue"), .reportIssue)
+        XCTAssertFalse(
+            KeymapDefaults.map.values.contains(.reportIssue), "should ship without a default chord")
+    }
+
     func test_parse_validKeybindLine() {
         // Action first, then chord.
         let pair = KeybindParser.parse("toggle_repo_picker=cmd+shift+p")

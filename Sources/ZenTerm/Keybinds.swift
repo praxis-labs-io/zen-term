@@ -32,6 +32,7 @@ extension KeyInterceptor.ReservedChord {
         case .openSettings: return "open_settings"
         case .reloadConfig: return "reload_config"
         case .checkForUpdates: return "check_for_updates"
+        case .reportIssue: return "report_issue"
         }
     }
 
@@ -66,6 +67,7 @@ extension KeyInterceptor.ReservedChord {
         case "open_settings": self = .openSettings
         case "reload_config": self = .reloadConfig
         case "check_for_updates": self = .checkForUpdates
+        case "report_issue": self = .reportIssue
         default:
             if let rest = token.dropPrefixIfPresent("select_tab_"), let n = Int(rest), (1...9).contains(n) {
                 self = .selectTab(n)

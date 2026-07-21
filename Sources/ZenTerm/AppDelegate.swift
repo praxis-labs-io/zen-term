@@ -234,6 +234,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         keyController()?.exportDiagnostics()
     }
 
+    /// Opens the "Report an Issue" composer. Reached from Help ▸ Report an Issue with a nil target,
+    /// routed here through the responder chain like About; the Settings nav button opens the same card.
+    @objc func reportAnIssue(_ sender: Any?) {
+        keyController()?.openReportIssue()
+    }
+
     /// While a modal overlay (a palette or the Add-Workspace form) is up, Copy/Paste must act on
     /// its focused text field, not the terminal hidden behind it (else ⌘V would inject the
     /// clipboard into that shell).
