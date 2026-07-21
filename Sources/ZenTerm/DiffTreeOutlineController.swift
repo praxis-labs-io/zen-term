@@ -1,9 +1,9 @@
 import AppKit
 
 /// The data source + delegate for the diff viewer's file tree: three top-level section rows
-/// (Unstaged / Staged / Committed), each holding a folded file tree. Section rows aren't selectable;
-/// selecting a file reports it through `onSelect`. Row views are reused and read `Theme.current` at
-/// configure time, so a live theme swap (`reloadData`) recolors.
+/// (Unstaged / Staged / Committed), each holding a folded file tree. Selecting a file reports it
+/// through `onSelect`; selecting a section or directory just doesn't change the diff. Row views are
+/// reused and read `Theme.current` at configure time, so a live theme swap (`reloadData`) recolors.
 final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
     private(set) var roots: [DiffOutlineItem]
     private let onSelect: (FileDiff) -> Void
@@ -51,8 +51,7 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
     // MARK: delegate
 
     // Every row is selectable — including section headers and directories — so the arrow keys can
-    // land on them and Left/Right fold them. Selecting a non-file row just doesn't change the diff
-    // (the selection handler only acts on files).
+    // land on them and Left/Right fold them. Selecting a non-file row just doesn't change the diff.
 
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? DiffOutlineItem else { return nil }
@@ -60,7 +59,7 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
             let row =
                 outlineView.makeView(withIdentifier: Self.sectionID, owner: self) as? DiffSectionRowView
                 ?? DiffSectionRowView(id: Self.sectionID)
-            row.configure(title: node.displayName, subtitle: node.sectionSubtitle)
+            row.configure(node)
             return row
         }
         let row =
@@ -90,6 +89,21 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
     }
 }
 
+/// The `+n −m` stat in the positive/destructive roles, shared by the file rows and the section
+/// headers so both read the same way.
+func diffStatText(added: Int, removed: Int, chrome: ChromeTheme) -> NSAttributedString {
+    let text = NSMutableAttributedString()
+    if added > 0 {
+        text.append(NSAttributedString(string: "+\(added)", attributes: [.foregroundColor: chrome.positive.nsColor]))
+    }
+    if removed > 0 {
+        if text.length > 0 { text.append(NSAttributedString(string: " ")) }
+        text.append(
+            NSAttributedString(string: "−\(removed)", attributes: [.foregroundColor: chrome.destructive.nsColor]))
+    }
+    return text
+}
+
 /// A tree row whose selection fill is the theme accent, not macOS's system-blue highlight — the
 /// chrome must never show a color that doesn't follow `Theme.current` (ZEN-27). Matches the command
 /// palette's selection tint (accent at low alpha).
@@ -101,11 +115,14 @@ private final class ThemedSelectionRowView: NSTableRowView {
     }
 }
 
-/// A section header row: the slice name (Unstaged / Staged / Committed) in muted small caps, with an
-/// optional trailing subtitle (the fork base for the committed slice). Not selectable.
+/// A section header row: the slice name (Unstaged / Staged / Committed) in muted small caps, an
+/// optional inline subtitle (the fork base for the committed slice), and the slice's `+n −m` total on
+/// the right. Not a file, so selecting it doesn't change the diff.
 private final class DiffSectionRowView: NSView {
     private let titleLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "")
+    private let statLabel = NSTextField(labelWithString: "")
+    private var hasStat = false
 
     init(id: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
@@ -113,50 +130,71 @@ private final class DiffSectionRowView: NSView {
         titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
         subtitleLabel.font = .monospacedDigitSystemFont(ofSize: 10.5, weight: .regular)
         subtitleLabel.lineBreakMode = .byTruncatingTail
+        statLabel.font = .monospacedDigitSystemFont(ofSize: 10.5, weight: .regular)
         addSubview(titleLabel)
         addSubview(subtitleLabel)
+        addSubview(statLabel)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func configure(title: String, subtitle: String?) {
+    func configure(_ item: DiffOutlineItem) {
         let chrome = Theme.current.chrome
-        titleLabel.stringValue = title.uppercased()
+        titleLabel.stringValue = item.displayName.uppercased()
         titleLabel.textColor = chrome.ink(alpha: 0.55)
-        subtitleLabel.stringValue = subtitle ?? ""
+        subtitleLabel.stringValue = item.sectionSubtitle ?? ""
         subtitleLabel.textColor = chrome.muted.nsColor
-        subtitleLabel.isHidden = subtitle == nil
+        subtitleLabel.isHidden = item.sectionSubtitle == nil
+        hasStat = item.addedCount + item.removedCount > 0
+        statLabel.isHidden = !hasStat
+        if hasStat {
+            statLabel.attributedStringValue = diffStatText(
+                added: item.addedCount, removed: item.removedCount, chrome: chrome)
+        }
         needsLayout = true
     }
 
     override func layout() {
         super.layout()
-        let titleHeight = titleLabel.intrinsicContentSize.height
+        let titleSize = titleLabel.intrinsicContentSize
         titleLabel.frame = NSRect(
-            x: 0, y: ((bounds.height - titleHeight) / 2).rounded(),
-            width: titleLabel.intrinsicContentSize.width, height: titleHeight)
-        let subtitleWidth = subtitleLabel.isHidden ? 0 : subtitleLabel.intrinsicContentSize.width
+            x: 0, y: ((bounds.height - titleSize.height) / 2).rounded(),
+            width: titleSize.width, height: titleSize.height)
+
+        let statWidth = hasStat ? statLabel.intrinsicContentSize.width : 0
+        let statHeight = statLabel.intrinsicContentSize.height
+        statLabel.frame = NSRect(
+            x: bounds.width - statWidth, y: ((bounds.height - statHeight) / 2).rounded(),
+            width: statWidth, height: statHeight)
+
+        let subtitleX = titleSize.width + 8
+        let subtitleAvailable = max(0, bounds.width - statWidth - 8 - subtitleX)
         let subtitleHeight = subtitleLabel.intrinsicContentSize.height
         subtitleLabel.frame = NSRect(
-            x: bounds.width - subtitleWidth, y: ((bounds.height - subtitleHeight) / 2).rounded(),
-            width: subtitleWidth, height: subtitleHeight)
+            x: subtitleX, y: ((bounds.height - subtitleHeight) / 2).rounded(),
+            width: subtitleAvailable, height: subtitleHeight)
     }
 }
 
-/// One reused row of the file tree: the file (or directory) name, and for a file the `+n −m`
-/// add/remove stat in the positive/destructive roles. Manual `frame` layout (no per-row Auto Layout)
-/// so scrolling a large tree stays cheap, mirroring the diff pane's cell.
+/// One reused row of the file tree: a status-tinted file (or folder) icon, the name, and for a file
+/// the `+n −m` stat. Manual `frame` layout (no per-row Auto Layout) so scrolling a large tree stays
+/// cheap, mirroring the diff pane's cell.
 private final class DiffTreeRowView: NSView {
+    private let iconView = NSImageView()
     private let nameLabel = NSTextField(labelWithString: "")
     private let statLabel = NSTextField(labelWithString: "")
     private var hasStat = false
 
+    private static let iconWidth: CGFloat = 16
+
     init(id: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
         identifier = id
+        iconView.imageScaling = .scaleProportionallyDown
         nameLabel.font = .systemFont(ofSize: 12)
         nameLabel.lineBreakMode = .byTruncatingMiddle
         statLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        addSubview(iconView)
         addSubview(nameLabel)
         addSubview(statLabel)
     }
@@ -165,44 +203,53 @@ private final class DiffTreeRowView: NSView {
 
     func configure(_ item: DiffOutlineItem) {
         let chrome = Theme.current.chrome
+        let icon = Self.icon(for: item, chrome: chrome)
+        iconView.image = NSImage(systemSymbolName: icon.symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 12, weight: .regular))
+        iconView.contentTintColor = icon.color
+
         nameLabel.stringValue = item.displayName
         nameLabel.textColor = item.isDirectory ? chrome.ink(alpha: 0.7) : chrome.foreground.nsColor
         hasStat = !item.isDirectory && (item.addedCount + item.removedCount > 0)
         statLabel.isHidden = !hasStat
         if hasStat {
-            statLabel.attributedStringValue = Self.statText(
+            statLabel.attributedStringValue = diffStatText(
                 added: item.addedCount, removed: item.removedCount, chrome: chrome)
         }
         needsLayout = true
     }
 
+    /// The SF Symbol + theme tint for a row: a folder for a directory; for a file, a doc tinted by its
+    /// change kind — added green, deleted red, renamed accent, modified/binary neutral — with a plus
+    /// badge on additions, so new / changed / deleted read at a glance (ZEN-27: all theme roles).
+    private static func icon(for item: DiffOutlineItem, chrome: ChromeTheme) -> (symbol: String, color: NSColor) {
+        if item.isDirectory { return ("folder", chrome.ink(alpha: 0.5)) }
+        switch item.fileDiff?.changeKind {
+        case .added: return ("doc.badge.plus", chrome.positive.nsColor)
+        case .deleted: return ("doc", chrome.destructive.nsColor)
+        case .renamed: return ("doc", chrome.accent.nsColor)
+        case .modified, .binary, .none: return ("doc", chrome.ink(alpha: 0.55))
+        }
+    }
+
     override func layout() {
         super.layout()
+        let icon = Self.iconWidth
+        iconView.frame = NSRect(x: 0, y: ((bounds.height - icon) / 2).rounded(), width: icon, height: icon)
+
         let statWidth = hasStat ? statLabel.intrinsicContentSize.width : 0
         let gap: CGFloat = hasStat ? 8 : 0
-        // NSTextField top-aligns single-line text in a taller frame, so size each label to its own
-        // height and center it — otherwise the name rides high in the selection highlight.
-        let nameHeight = nameLabel.intrinsicContentSize.height
         let statHeight = statLabel.intrinsicContentSize.height
         statLabel.frame = NSRect(
             x: bounds.width - statWidth, y: ((bounds.height - statHeight) / 2).rounded(),
             width: statWidth, height: statHeight)
-        nameLabel.frame = NSRect(
-            x: 0, y: ((bounds.height - nameHeight) / 2).rounded(),
-            width: max(0, bounds.width - statWidth - gap), height: nameHeight)
-    }
 
-    private static func statText(added: Int, removed: Int, chrome: ChromeTheme) -> NSAttributedString {
-        let text = NSMutableAttributedString()
-        if added > 0 {
-            text.append(
-                NSAttributedString(string: "+\(added)", attributes: [.foregroundColor: chrome.positive.nsColor]))
-        }
-        if removed > 0 {
-            if text.length > 0 { text.append(NSAttributedString(string: " ")) }
-            text.append(
-                NSAttributedString(string: "−\(removed)", attributes: [.foregroundColor: chrome.destructive.nsColor]))
-        }
-        return text
+        // NSTextField top-aligns single-line text in a taller frame, so size the name to its own
+        // height and center it — otherwise it rides high in the selection highlight.
+        let nameX = icon + 5
+        let nameHeight = nameLabel.intrinsicContentSize.height
+        nameLabel.frame = NSRect(
+            x: nameX, y: ((bounds.height - nameHeight) / 2).rounded(),
+            width: max(0, bounds.width - statWidth - gap - nameX), height: nameHeight)
     }
 }

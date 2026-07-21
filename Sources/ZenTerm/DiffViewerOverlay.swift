@@ -152,9 +152,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         case .navRight:
             window?.makeFirstResponder(diffTable.scrollFocusTarget)
         case .navDown:
-            if treeIsFocused { moveFileSelection(1) } else { diffTable.jumpToNextHunk() }
+            if treeIsFocused { moveFileSelection(1) } else { diffTable.jumpForward() }
         case .navUp:
-            if treeIsFocused { moveFileSelection(-1) } else { diffTable.jumpToPrevHunk() }
+            if treeIsFocused { moveFileSelection(-1) } else { diffTable.jumpBackward() }
         default:
             return false
         }
@@ -189,6 +189,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         outline.indentationPerLevel = 12
         outline.backgroundColor = .clear
         outline.focusRingType = .none  // no system-blue ring on focus-in (ZEN-27: chrome is theme-only)
+        outline.onEscape = { [weak self] in self?.onCancel() }
+        diffTable.onEscape = { [weak self] in self?.onCancel() }
 
         let treeScroll = NSScrollView()
         treeScroll.drawsBackground = false
@@ -240,7 +242,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             treeScroll.leadingAnchor.constraint(equalTo: card.leadingAnchor),
             treeScroll.topAnchor.constraint(equalTo: card.topAnchor),
             treeScroll.bottomAnchor.constraint(equalTo: footerDivider.topAnchor),
-            treeScroll.widthAnchor.constraint(equalTo: card.widthAnchor, multiplier: 0.3),
+            // A share of the card, but capped so it doesn't sprawl on a wide screen (the file names
+            // don't need 30% of a large window) and floored so it stays usable on a small one.
+            aspect(treeScroll.widthAnchor, to: card.widthAnchor, 0.3, priority: .defaultHigh),
+            treeScroll.widthAnchor.constraint(lessThanOrEqualToConstant: 340),
+            treeScroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 220),
 
             treeRule.leadingAnchor.constraint(equalTo: treeScroll.trailingAnchor),
             treeRule.topAnchor.constraint(equalTo: card.topAnchor),
@@ -374,9 +380,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     private static func hintsText() -> NSAttributedString {
-        NSAttributedString(
-            string: "⌘h/l panes   ⌘j/k jump   ←/→ fold   esc close",
-            attributes: [.foregroundColor: Theme.current.chrome.ink(alpha: 0.45)])
+        // Glyphs come from the live keymap, so the hints show the user's own bindings, not the defaults.
+        func glyph(_ chord: KeyInterceptor.ReservedChord) -> String { CommandCatalog.spec(for: chord).shortcut }
+        let text =
+            "\(glyph(.navLeft)) \(glyph(.navRight)) panes   "
+            + "\(glyph(.navDown)) \(glyph(.navUp)) jump   ←/→ fold   esc close"
+        return NSAttributedString(
+            string: text, attributes: [.foregroundColor: Theme.current.chrome.ink(alpha: 0.45)])
     }
 
     // MARK: test hooks
@@ -394,8 +404,18 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 }
 
 /// The file tree's outline view. Accepts first responder even when empty (so keystrokes never leak to
-/// the terminal behind the card). Navigation is driven by forwarded pane chords, not Tab, so it adds
-/// no keyDown handling of its own.
+/// the terminal behind the card). Navigation is driven by forwarded pane chords, not Tab; the only
+/// key it claims is Esc, so it closes the viewer instead of the outline eating it as a deselect.
 private final class NavOutlineView: NSOutlineView {
+    var onEscape: (() -> Void)?
+
     override var acceptsFirstResponder: Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        if KeyboardFocus.key(for: event) == .escape {
+            onEscape?()
+            return
+        }
+        super.keyDown(with: event)
+    }
 }

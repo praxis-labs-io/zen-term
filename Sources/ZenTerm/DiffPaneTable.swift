@@ -62,32 +62,26 @@ final class DiffPaneTable: NSView {
         table.reloadData()
     }
 
-    /// Move the current line to the next / previous hunk header and bring it to the top — the fast
-    /// jump through a long file (⌘j / ⌘k), so you don't hold the arrow from line 1 to line 200.
-    func jumpToNextHunk() { jumpHunk(1) }
-    func jumpToPrevHunk() { jumpHunk(-1) }
-
-    private func jumpHunk(_ direction: Int) {
-        let rows = source.rows
-        guard !rows.isEmpty else { return }
-        let start = table.selectedRow >= 0 ? table.selectedRow : (direction > 0 ? -1 : rows.count)
-        var index = start + direction
-        while index >= 0, index < rows.count {
-            if case .hunkHeader = rows[index] {
-                table.selectRowIndexes([index], byExtendingSelection: false)
-                scrollRowToTop(index)
-                return
-            }
-            index += direction
-        }
+    /// Esc out of the pane — wired to close the viewer.
+    var onEscape: (() -> Void)? {
+        get { table.onEscape }
+        set { table.onEscape = newValue }
     }
 
-    private func scrollRowToTop(_ row: Int) {
-        let clip = scroll.contentView
-        let target = CGFloat(row) * table.rowHeight
-        let maxY = max(0, table.frame.height - clip.bounds.height)
-        clip.scroll(to: NSPoint(x: 0, y: min(max(0, target), maxY)))
-        scroll.reflectScrolledClipView(clip)
+    /// Move the current line down / up by roughly a page and scroll to it — the fast jump through a
+    /// long file, so you don't hold the arrow from line 1 to line 200. Always moves (unlike a
+    /// hunk-to-hunk jump, which stalls on the common one-or-two-hunk file).
+    func jumpForward() { jumpPage(1) }
+    func jumpBackward() { jumpPage(-1) }
+
+    private func jumpPage(_ direction: Int) {
+        let count = source.rows.count
+        guard count > 0 else { return }
+        let page = max(1, table.rows(in: table.visibleRect).length - 2)  // keep a couple lines of overlap
+        let current = table.selectedRow >= 0 ? table.selectedRow : (direction > 0 ? 0 : count - 1)
+        let target = min(max(0, current + page * direction), count - 1)
+        table.selectRowIndexes([target], byExtendingSelection: false)
+        table.scrollRowToVisible(target)
     }
 
     private final class Source: NSObject, NSTableViewDataSource, NSTableViewDelegate {
@@ -118,6 +112,8 @@ final class DiffPaneTable: NSView {
 /// behind the card), and on focus-in selects the first visible line so there's always a current line
 /// to see and move. Arrows move the line and scroll (default `NSTableView` behavior).
 private final class DiffTableView: NSTableView {
+    var onEscape: (() -> Void)?
+
     override var acceptsFirstResponder: Bool { true }
 
     override func becomeFirstResponder() -> Bool {
@@ -129,6 +125,16 @@ private final class DiffTableView: NSTableView {
             scrollRowToVisible(target)
         }
         return ok
+    }
+
+    override func keyDown(with event: NSEvent) {
+        // Claim Esc before the table's own cancelOperation (which would just clear selection), so it
+        // closes the viewer.
+        if KeyboardFocus.key(for: event) == .escape {
+            onEscape?()
+            return
+        }
+        super.keyDown(with: event)
     }
 }
 

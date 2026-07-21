@@ -34,11 +34,11 @@ final class DiffOutlineItem {
         }
     }
 
-    private init(section title: String, subtitle: String?, children: [DiffOutlineItem]) {
+    private init(section title: String, subtitle: String?, added: Int, removed: Int, children: [DiffOutlineItem]) {
         kind = .section(title: title, subtitle: subtitle)
         self.children = children
-        addedCount = 0
-        removedCount = 0
+        addedCount = added
+        removedCount = removed
     }
 
     var isSection: Bool {
@@ -76,7 +76,11 @@ final class DiffOutlineItem {
         func add(_ title: String, _ files: [FileDiff], subtitle: String? = nil) {
             guard !files.isEmpty else { return }
             let children = DiffTree.build(files).map(DiffOutlineItem.init)
-            roots.append(DiffOutlineItem(section: title, subtitle: subtitle, children: children))
+            let added = files.reduce(0) { $0 + $1.addedCount }
+            let removed = files.reduce(0) { $0 + $1.removedCount }
+            roots.append(
+                DiffOutlineItem(
+                    section: title, subtitle: subtitle, added: added, removed: removed, children: children))
         }
         add("Unstaged", status.unstaged)
         add("Staged", status.staged)
