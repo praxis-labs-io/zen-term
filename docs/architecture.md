@@ -69,6 +69,14 @@ pane, drawer toggle, zoom, tab open/close/switch) are always on; `debug` lines
 tee to the file only under the verbose gate (config `debug = true` or
 `ZENTERM_LOG_VERBOSE=1`).
 
+Help ▸ Export Diagnostics writes a `.zip` of those log files plus a `metadata.txt`
+(app version, macOS version, arch) for a bug report. `DiagnosticsBundleBuilder`
+(in `ZenTerm`) assembles it from the sink's `fileURLs` and a `SystemReport`, and
+carries only what it's handed, so the shell environment and the config file never
+leak in; the zip is produced with `NSFileCoordinator`'s `.forUploading`, no
+third-party archiver. `SystemReport` is the shared metadata source ZEN-212's
+in-app report will reuse, so the exported header and a filed issue can't disagree.
+
 **GhosttyKit and its resources are gitignored and built per machine**
 (`bin/build-ghosttykit`). A fresh worktree needs `Frameworks/GhosttyKit.xcframework`
 and `Sources/TerminalKit/Resources/ghostty-resources` symlinked in or the build

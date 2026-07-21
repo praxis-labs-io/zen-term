@@ -2,6 +2,7 @@ import AppKit
 import AppLog
 import TabKit
 import TerminalKit
+import UniformTypeIdentifiers
 
 /// Owns one window and its independent set of tabs. Each tab is a
 /// `TabController` (wrapping Epic 1's pane tree + registry + focus). Only the active
@@ -55,6 +56,44 @@ final class WindowController: NSObject {
     func dismissUpdateCard(_ card: UpdateCardView) {
         card.beginDismissal()
         toasts.remove(card: card)
+    }
+
+    /// Save-panel wiring over `DiagnosticsBundleBuilder` (ZEN-11): pick a destination, then build the
+    /// zip off the main thread (ZEN-90) and confirm or report with a toast. The log set is the live
+    /// sink's files; with no sink the bundle is just system metadata, still worth exporting.
+    func exportDiagnostics() {
+        let panel = NSSavePanel()
+        panel.title = "Export Diagnostics"
+        panel.nameFieldStringValue = "ZenTerm Diagnostics.zip"
+        panel.allowedContentTypes = [.zip]
+        panel.canCreateDirectories = true
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let destination = panel.url, let self else { return }
+            DispatchQueue.global(qos: .userInitiated).async {
+                let builder = DiagnosticsBundleBuilder(
+                    report: .current(), logFiles: Log.fileSink?.fileURLs ?? [])
+                do {
+                    try builder.build(to: destination)
+                    Log.info("diagnostics exported to \(destination.lastPathComponent)", category: .app)
+                    DispatchQueue.main.async {
+                        self.showToast(
+                            ToastContent(
+                                variant: .info, title: "Diagnostics Exported",
+                                message:
+                                    "Saved \(destination.lastPathComponent). It holds your logs and system info."
+                            ))
+                    }
+                } catch {
+                    Log.error("diagnostics export failed: \(error.localizedDescription)", category: .app)
+                    DispatchQueue.main.async {
+                        self.showToast(
+                            ToastContent(
+                                variant: .warning, title: "Export Failed",
+                                message: "Couldn't write the diagnostics file: \(error.localizedDescription)"))
+                    }
+                }
+            }
+        }
     }
 
     /// The window's tool floats (ZEN-141). Window-level, not per-tab: one live instance per float

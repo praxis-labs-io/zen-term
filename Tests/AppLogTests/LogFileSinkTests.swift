@@ -45,6 +45,36 @@ final class LogFileSinkTests: XCTestCase {
         XCTAssertFalse(rotated.contains("A"), "the oldest generation was dropped, not left stale in .1")
     }
 
+    func testFileURLsListsActiveThenExistingRotations() {
+        let sink = LogFileSink(directory: dir, fileName: "zen-term.log", maxBytes: 40, maxFiles: 3)
+        XCTAssertEqual(sink.fileURLs, [], "nothing to list before the first write")
+
+        for _ in 0..<3 { sink.writeLine("AAAAAAAAAAAAAAAA") }  // ~17 bytes each, forces one rotation
+        sink.flush()
+
+        let names = sink.fileURLs.map(\.lastPathComponent)
+        XCTAssertEqual(names.first, "zen-term.log", "the active file leads")
+        XCTAssertTrue(names.contains("zen-term.log.1"), "a rotation is listed once it exists")
+        XCTAssertFalse(names.contains("zen-term.log.2"), "a rotation that doesn't exist yet isn't listed")
+    }
+
+    func testFileURLsDrainsQueuedWritesSoTheExportSeesEveryLine() throws {
+        let sink = LogFileSink(directory: dir, fileName: "zen-term.log", maxBytes: 5_000_000, maxFiles: 2)
+        let count = 500
+        for i in 0..<count { sink.writeLine("entry-\(i)") }
+
+        // No flush(): reading fileURLs must itself drain the write queue. Without that, the file on
+        // disk still holds only a prefix of the 500 just-queued lines, and Export Diagnostics would
+        // ship a truncated log missing the newest, most relevant lines.
+        let active = try XCTUnwrap(sink.fileURLs.first)
+        let contents = try String(contentsOf: active, encoding: .utf8)
+
+        XCTAssertEqual(
+            contents.split(separator: "\n").count, count,
+            "fileURLs must drain queued writes before the export reads them")
+        XCTAssertTrue(contents.contains("entry-\(count - 1)"), "the newest line must be on disk")
+    }
+
     func testRotationLosesOrDuplicatesNoLineWithinCapacity() {
         let sink = LogFileSink(directory: dir, fileName: "zen-term.log", maxBytes: 50, maxFiles: 20)
         let lines = (0..<30).map { "entry-\($0)" }

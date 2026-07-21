@@ -105,6 +105,8 @@
 # warnings, errors, and a trail of key actions (panes, tabs, drawers). Turn it on
 # to add deep traces for a bug report. The log is at
 # ~/Library/Logs/ZenTerm/zen-term.log; ZENTERM_LOG_VERBOSE=1 is the env equivalent.
+# To attach it to a bug report, use Help → Export Diagnostics: it saves a zip of the
+# log files plus your system info (app version, macOS version, arch).
 # debug = false                       # true | false
 
 # ─── Tool floats ─────────────────────────────────────────────────────────────
