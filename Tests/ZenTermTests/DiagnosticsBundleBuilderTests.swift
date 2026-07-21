@@ -86,9 +86,12 @@ final class DiagnosticsBundleBuilderTests: XCTestCase {
         process.arguments = ["-l", zip.path]
         let pipe = Pipe()
         process.standardOutput = pipe
+        process.standardError = pipe
         try process.run()
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        return String(data: data, encoding: .utf8) ?? ""
+        let output = String(data: data, encoding: .utf8) ?? ""
+        XCTAssertEqual(process.terminationStatus, 0, "unzip -l failed:\n\(output)")
+        return output
     }
 }

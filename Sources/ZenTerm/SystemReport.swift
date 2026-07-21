@@ -33,21 +33,28 @@ struct SystemReport: Equatable {
             architecture: machineArchitecture())
     }
 
-    /// "15.5 (24F74)" — the marketing version plus the OS build, parsed out of
-    /// `operatingSystemVersionString` ("Version 15.5 (Build 24F74)"). The patch component is kept
-    /// only when non-zero, so a ".0" point release reads "15.5", not "15.5.0".
+    /// "15.5 (24F74)" — the marketing version (from the numeric `operatingSystemVersion`, so no
+    /// locale parsing) plus the OS build. The patch component is kept only when non-zero, so a ".0"
+    /// point release reads "15.5", not "15.5.0"; the build is dropped if `sysctl` can't supply it.
     private static func liveOSVersion() -> String {
-        let process = ProcessInfo.processInfo
-        let version = process.operatingSystemVersion
+        let version = ProcessInfo.processInfo.operatingSystemVersion
         let semantic =
             version.patchVersion > 0
             ? "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
             : "\(version.majorVersion).\(version.minorVersion)"
-        let full = process.operatingSystemVersionString
-        guard let build = full.range(of: "Build "),
-            let close = full.range(of: ")", range: build.upperBound..<full.endIndex)
-        else { return semantic }
-        return "\(semantic) (\(full[build.upperBound..<close.lowerBound]))"
+        guard let build = osBuild() else { return semantic }
+        return "\(semantic) (\(build))"
+    }
+
+    /// The OS build ("24F74") from `sysctl kern.osversion`. `operatingSystemVersionString` carries
+    /// the same build but is localized ("Build"/"Compilación"/…), so parsing it drops the build in a
+    /// non-English locale; the sysctl value is not localized.
+    private static func osBuild() -> String? {
+        var size = 0
+        guard sysctlbyname("kern.osversion", nil, &size, nil, 0) == 0, size > 0 else { return nil }
+        var buffer = [CChar](repeating: 0, count: size)
+        guard sysctlbyname("kern.osversion", &buffer, &size, nil, 0) == 0 else { return nil }
+        return String(cString: buffer)
     }
 
     /// The process architecture from `uname` ("arm64" on Apple Silicon, "x86_64" under Rosetta) — the

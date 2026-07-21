@@ -17,8 +17,11 @@ struct DiagnosticsBundleBuilder {
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         try Data(report.plainText.utf8)
             .write(to: directory.appendingPathComponent("metadata.txt"))
-        for log in logFiles where fileManager.fileExists(atPath: log.path) {
-            try fileManager.copyItem(at: log, to: directory.appendingPathComponent(log.lastPathComponent))
+        for log in logFiles {
+            // A log can be absent, vanish between listing and copy (a rotation mid-export), or be
+            // unreadable; a diagnostics bundle is best-effort per file, so skip one that fails rather
+            // than abort the whole export.
+            try? fileManager.copyItem(at: log, to: directory.appendingPathComponent(log.lastPathComponent))
         }
     }
 
