@@ -136,6 +136,88 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         XCTAssertTrue(unusable.message.contains("split_vertical=cmd+|"), unusable.message)
     }
 
+    // MARK: non-keybind diagnostics (ZEN-7)
+
+    func test_invalidValue_phrasings() {
+        let diagnostic = ConfigDiagnostic(
+            scope: .setting(key: "cursor-style"),
+            problem: .invalidValue(got: "beam", expected: "block, bar, or underline"))
+        XCTAssertEqual(diagnostic.headline, "cursor-style has an invalid value")
+        XCTAssertEqual(
+            diagnostic.message, "cursor-style = beam isn't valid (block, bar, or underline). Using the default.")
+        XCTAssertEqual(diagnostic.detail, "beam isn't valid")
+    }
+
+    func test_clamped_phrasings() {
+        let diagnostic = ConfigDiagnostic(
+            scope: .setting(key: "font-size"), problem: .clamped(value: "200", to: "72"))
+        XCTAssertEqual(diagnostic.headline, "font-size is out of range")
+        XCTAssertEqual(diagnostic.message, "font-size = 200 is out of range. Using 72.")
+        XCTAssertEqual(diagnostic.detail, "200 → 72")
+    }
+
+    func test_droppedFloat_phrasings() {
+        let diagnostic = ConfigDiagnostic(
+            scope: .toolFloat(label: "Open Lazygit"), problem: .floatMissingField("command:"))
+        XCTAssertEqual(diagnostic.headline, "A tool float was ignored")
+        XCTAssertEqual(diagnostic.message, "Open Lazygit is missing command:. Ignoring this tool float.")
+    }
+
+    func test_floatFieldInvalid_phrasings() {
+        let diagnostic = ConfigDiagnostic(
+            scope: .toolFloatField(id: "open-lazygit", label: "Open Lazygit"),
+            problem: .floatFieldInvalid(field: "width:", got: "big", using: "0.85"))
+        XCTAssertEqual(diagnostic.headline, "Open Lazygit has an invalid setting")
+        XCTAssertEqual(diagnostic.message, "Open Lazygit: width:big isn't valid. Using 0.85.")
+        XCTAssertEqual(diagnostic.detail, "width:big isn't valid")
+    }
+
+    func test_floatFieldClamped_phrasings() {
+        let diagnostic = ConfigDiagnostic(
+            scope: .toolFloatField(id: "open-lazygit", label: "Open Lazygit"),
+            problem: .floatFieldClamped(field: "height:", got: "5", to: "1"))
+        XCTAssertEqual(diagnostic.headline, "Open Lazygit has an invalid setting")
+        XCTAssertEqual(diagnostic.message, "Open Lazygit: height:5 is out of range. Using 1.")
+        XCTAssertEqual(diagnostic.detail, "height:5 → 1")
+    }
+
+    func test_nonKeybindProblems_surfaceInTheToast() throws {
+        let content = try XCTUnwrap(
+            ConfigDiagnostic.toast(for: [
+                ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .clamped(value: "200", to: "72")),
+                ConfigDiagnostic(scope: .toolFloat(label: "Open Lazygit"), problem: .floatMissingField("command:")),
+            ]))
+        XCTAssertEqual(content.title, "2 problems in your config")
+        XCTAssertTrue(content.message.contains("font-size"), content.message)
+        XCTAssertTrue(content.message.contains("Open Lazygit"), content.message)
+    }
+
+    /// The same width budget the keybind summaries are measured against, for the non-keybind cases —
+    /// a long setting key or float title plus its detail can't wrap mid-phrase in the 236pt column.
+    func test_nonKeybindSummaryLines_fitTheToastWithoutWrapping() {
+        let realistic: [ConfigDiagnostic] = [
+            ConfigDiagnostic(
+                scope: .setting(key: "bottom-drawer-fraction"), problem: .clamped(value: "0.05", to: "0.1")),
+            ConfigDiagnostic(
+                scope: .setting(key: "cursor-style"),
+                problem: .invalidValue(got: "rectangle", expected: "block, bar, or underline")),
+            ConfigDiagnostic(
+                scope: .toolFloat(label: "Open Lazygit in Worktree"), problem: .floatMissingField("command:")),
+            ConfigDiagnostic(
+                scope: .toolFloatField(id: "open-lazygit-in-worktree", label: "Open Lazygit in Worktree"),
+                problem: .floatFieldClamped(field: "height:", got: "0.05", to: "0.2")),
+        ]
+        for diagnostic in realistic {
+            for line in diagnostic.summary.split(separator: "\n") {
+                let width = (String(line) as NSString)
+                    .size(withAttributes: [.font: ToastView.messageFont]).width
+                XCTAssertLessThanOrEqual(
+                    width, ToastView.messageMaxWidth,
+                    "wraps at \(Int(width))pt > \(Int(ToastView.messageMaxWidth))pt: \(line)")
+            }
+        }
+    }
+
     func test_announce_sameConflictsInADifferentOrder_staysQuiet() {
         // Diagnostics come out in config-line order and ConfigWriter SORTS the lines it emits, so a
         // Settings write can reorder them without changing a thing. An order-sensitive gate would
@@ -152,8 +234,8 @@ final class ConfigDiagnosticToastTests: XCTestCase {
             .write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         AppConfig.reload()
 
-        XCTAssertEqual(GeneralConfig.current.keymapDiagnostics.map(\.scope), [.keybind(.toggleToolFloat("btop"))])
-        let content = try XCTUnwrap(ConfigDiagnostic.toast(for: GeneralConfig.current.keymapDiagnostics))
+        XCTAssertEqual(GeneralConfig.current.configDiagnostics.map(\.scope), [.keybind(.toggleToolFloat("btop"))])
+        let content = try XCTUnwrap(ConfigDiagnostic.toast(for: GeneralConfig.current.configDiagnostics))
         // "BTop", the float's title — not "btop", its id. The headline has to be derived on READ:
         // diagnostics are built inside the parse, while GeneralConfig.current still holds the old
         // config, so resolving the name back then reads the previous launch's floats and finds none.
@@ -169,7 +251,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
             .write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         AppConfig.reload()
 
-        let content = try XCTUnwrap(ConfigDiagnostic.toast(for: GeneralConfig.current.keymapDiagnostics))
+        let content = try XCTUnwrap(ConfigDiagnostic.toast(for: GeneralConfig.current.configDiagnostics))
         XCTAssertTrue(content.title.contains("Split Vertically"), content.title)
         XCTAssertTrue(content.message.contains("toggle_focus_mode"), content.message)
     }

@@ -171,4 +171,47 @@ final class WindowControllerToastSeamTests: XCTestCase {
 
         XCTAssertEqual(keycaps(in: toast), ["⌘2"], "the keycap must follow the tab, not go stale at ⌘3")
     }
+
+    // MARK: the config-diagnostics toast (ZEN-7)
+
+    func test_configDiagnosticsToast_mountsWithOpenSettingsAndDismiss() throws {
+        let controller = makeController()
+        let content = try XCTUnwrap(
+            ConfigDiagnostic.toast(for: [
+                ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .clamped(value: "200", to: "72"))
+            ]))
+        controller.showConfigDiagnosticsToast(content, landingScope: .setting(key: "font-size"))
+
+        let toasts = toastViews(in: controller)
+        XCTAssertEqual(toasts.count, 1, "the config toast must mount, not be swallowed")
+        let titles = descendants(of: toasts[0]).compactMap { ($0 as? AppButton)?.title }
+        XCTAssertEqual(Set(titles), ["Dismiss", "Open Settings"], "\(titles)")
+    }
+
+    /// The ZEN-106 guarantee holds for the new `.primary` button too: a sticky toast never arms a
+    /// Return/Esc equivalent, so it can't steal keys from the terminal.
+    func test_configDiagnosticsToast_armsNoKeyEquivalents() {
+        let controller = makeController()
+        controller.showConfigDiagnosticsToast(
+            ToastContent(variant: .warning, title: "t", message: "m"), landingScope: .keybindLine)
+        let toast = toastViews(in: controller)[0]
+        let armed = descendants(of: toast).compactMap { ($0 as? AppButton)?.keyEquivalent }
+        XCTAssertEqual(armed, ["", ""], "a sticky toast arms no Return/Esc on either button")
+        XCTAssertFalse(toast.acceptsFirstResponder, "and it never takes focus from the terminal")
+    }
+
+    /// The new seam end to end: firing the toast's "Open Settings" action opens the Settings card
+    /// (the section it lands on is unit-tested via the scope→section map). A dead button would leave
+    /// the toast's whole point unreachable.
+    func test_configDiagnosticsToast_openSettingsButton_opensTheSettingsCard() throws {
+        let controller = makeController()
+        controller.showConfigDiagnosticsToast(
+            ToastContent(variant: .warning, title: "t", message: "m"), landingScope: .setting(key: "font-size"))
+        let toast = toastViews(in: controller)[0]
+        let openButton = try XCTUnwrap(
+            descendants(of: toast).compactMap { $0 as? AppButton }.first { $0.title == "Open Settings" })
+        XCTAssertFalse(controller.isModalOverlayOpen, "no card before the tap")
+        openButton.onTap()  // the action a click runs
+        XCTAssertTrue(controller.isModalOverlayOpen, "Open Settings must open the Settings card")
+    }
 }

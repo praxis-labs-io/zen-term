@@ -1,6 +1,9 @@
 /// One button on an actionable (confirm) toast.
 struct ToastAction {
-    enum Kind { case cancel, destructive }
+    /// The button's role: `cancel` (muted, Esc), `destructive` (tinted, Return), or `primary` (the
+    /// accent default action, Return) — used for an affirmative like "Open Settings" on the config
+    /// diagnostics toast (ZEN-7), where neither cancel nor destructive fits.
+    enum Kind { case cancel, destructive, primary }
     let title: String
     let kind: Kind
     /// The chord this action's key is bound to, shown as a keycap beside the title — resolved

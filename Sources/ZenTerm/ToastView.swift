@@ -167,12 +167,17 @@ final class ToastView: ShadowCardView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Build a toast action button on the shared `AppButton`: `cancel` → a muted `secondary`,
-    /// `destructive` → the destructive-tinted `destructive`. Return / Esc key equivalents mirror
-    /// the action kind, unless `keyEquivalents` is off (a non-modal toast that must not hijack
-    /// those keys window-wide).
+    /// `destructive` → the destructive-tinted `destructive`, `primary` → the accent `primary`. The
+    /// affirmative kinds (primary/destructive) take Return and `cancel` takes Esc, unless
+    /// `keyEquivalents` is off (a non-modal toast that must not hijack those keys window-wide).
     private static func button(for action: ToastAction, keyEquivalents: Bool) -> AppButton {
-        let variant: AppButton.Variant = action.kind == .destructive ? .destructive : .secondary
-        let keyEquivalent = keyEquivalents ? (action.kind == .destructive ? "\r" : "\u{1b}") : ""
+        let variant: AppButton.Variant
+        switch action.kind {
+        case .primary: variant = .primary
+        case .destructive: variant = .destructive
+        case .cancel: variant = .secondary
+        }
+        let keyEquivalent = keyEquivalents ? (action.kind == .cancel ? "\u{1b}" : "\r") : ""
         return AppButton(title: action.title, variant: variant, keyEquivalent: keyEquivalent, onTap: action.run)
     }
 

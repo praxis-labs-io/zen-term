@@ -718,8 +718,62 @@ final class WindowController: NSObject {
     }
 
     /// Which section the Settings card opens on. `.tools` / `.workspaces` are used when a sub-form
-    /// (tool-float or workspace editor) hands back to the section it was launched from.
-    private enum SettingsLanding { case top, tools, workspaces }
+    /// (tool-float or workspace editor) hands back to the section it was launched from; the
+    /// per-section cases are where the config-diagnostics toast lands (ZEN-7).
+    private enum SettingsLanding { case top, tools, workspaces, terminal, appearance, general, shortcuts }
+
+    /// The Settings section that owns a diagnostic's subject — where the config-diagnostics toast's
+    /// "Open Settings" button lands. Keybind problems go to Shortcuts, a dropped float to Tools, and a
+    /// scalar/enum key to whichever section holds its row.
+    private static func landing(for scope: ConfigDiagnostic.Scope) -> SettingsLanding {
+        switch scope {
+        case .keybind, .keybindLine: return .shortcuts
+        case .toolFloat, .toolFloatField: return .tools
+        case .setting(let key): return landing(forSettingKey: key)
+        }
+    }
+
+    /// The one place mapping a config key to its Settings section. Mirrors what each
+    /// `SettingsFormSection` subclass registers in `populate()`; a key with no form row (e.g.
+    /// `debug`) or an unrecognized one lands on the nav.
+    private static func landing(forSettingKey key: String) -> SettingsLanding {
+        switch key {
+        case "font-family", "font-size", "cursor-style", "cursor-style-blink", "cursor-thickness",
+            "macos-option-as-alt", "scroll-multiplier", "shell", "shell-args", "editor", "ai":
+            return .terminal
+        case "theme", "window-chrome", "backdrop-alpha", "window-gutter", "pane-gap",
+            "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",
+            "reduce-motion":
+            return .appearance
+        case "agent-notifications", "automatic-update-checks":
+            return .general
+        default:
+            return .top
+        }
+    }
+
+    /// The `navTitle` a landing resolves to (nil = the nav / first section) — the single source both
+    /// `openSettings` and the diagnostics-landing test read, so they can't drift.
+    private static func navTitle(for landing: SettingsLanding) -> String? {
+        switch landing {
+        case .top: return nil
+        case .tools: return "Tools"
+        case .workspaces: return "Workspaces"
+        case .terminal: return "Terminal"
+        case .appearance: return "Appearance"
+        case .general: return "General"
+        case .shortcuts: return "Shortcuts"
+        }
+    }
+
+    #if DEBUG
+        /// Test hook: the Settings section (by `navTitle`, nil = nav) the config-diagnostics toast
+        /// lands on for a given scope. Resolves the private `SettingsLanding` to the observable title
+        /// so a test can pin the scope→section map without touching internals.
+        static func settingsLandingNavTitleForTesting(for scope: ConfigDiagnostic.Scope) -> String? {
+            navTitle(for: landing(for: scope))
+        }
+    #endif
 
     /// Open the Settings card. Built fresh each open so every section reads live config values.
     private func openSettings(landing: SettingsLanding = .top) {
@@ -739,16 +793,12 @@ final class WindowController: NSObject {
             toolsSection,
             workspacesSection,
         ].sorted { $0.navTitle.localizedCaseInsensitiveCompare($1.navTitle) == .orderedAscending }
-        let landingSection: SettingsSection?
-        switch landing {
-        case .top: landingSection = nil
-        case .tools: landingSection = toolsSection
-        case .workspaces: landingSection = workspacesSection
-        }
         let overlay = SettingsOverlay(
             sections: sections,
             capturer: keybindCapturer,
-            initialSection: landingSection.flatMap { target in sections.firstIndex { $0 === target } } ?? 0,
+            initialSection: Self.navTitle(for: landing).flatMap { title in
+                sections.firstIndex { $0.navTitle == title }
+            } ?? 0,
             background: Theme.current.chrome.background.nsColor,
             onClose: { [weak self] in self?.closeModal() }
         )
@@ -756,6 +806,38 @@ final class WindowController: NSObject {
         // doesn't reopen Settings on close.
         overlay.onReportIssue = { [weak self] in self?.openReportIssue() }
         presentModal(overlay, kind: .settings)
+    }
+
+    /// Open Settings on the section that owns `scope` — the config-diagnostics toast's "Open Settings"
+    /// action (ZEN-7). Always opens (re-opening on the target if Settings is already up), never the
+    /// ⌘, toggle: someone acting on the toast wants the section, not to close a card they just opened.
+    func openSettings(for scope: ConfigDiagnostic.Scope) {
+        if modal != nil { closeModal() }  // single slot: replace whatever's up, then land on the section
+        openSettings(landing: Self.landing(for: scope))
+    }
+
+    /// Present the config-diagnostics reload notice as a sticky, actionable toast (ZEN-7): a primary
+    /// "Open Settings" that lands on the first problem's section, plus a Dismiss. Non-modal — it arms
+    /// no key equivalents, so it never steals input from the terminal (ZEN-106). `landingScope` is the
+    /// scope the primary button opens; the caller passes the first diagnostic's.
+    func showConfigDiagnosticsToast(_ content: ToastContent, landingScope: ConfigDiagnostic.Scope) {
+        // `weak` breaks the retain cycle the strong-capture idiom would form: the toast retains its
+        // buttons, each button retains its `onTap`, and these closures reference the toast — so a
+        // strong capture would leak every sticky toast past dismissal. The presenter's stack keeps the
+        // toast alive until dismissed; the closures only need to reach it, not own it.
+        weak var toast: ToastView?
+        // Dismiss on the left, primary on the right — the confirm-dialog convention (see the
+        // waiting-toast).
+        let actions = [
+            ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
+                toast.map { self?.toasts.dismiss($0) }
+            },
+            ToastAction(title: "Open Settings", kind: .primary) { [weak self] in
+                toast.map { self?.toasts.dismiss($0) }
+                self?.openSettings(for: landingScope)
+            },
+        ]
+        toast = toasts.showSticky(content, actions: actions)
     }
 
     /// Open the tool-float add / edit form from the Tools section (`nil` adds, a value edits). Closes
@@ -1330,14 +1412,16 @@ final class WindowController: NSObject {
         let content = ToastContent(
             variant: .warning, title: "Terminal Didn't Start",
             message: "The terminal surface failed to launch.")
-        var toast: ToastView?
+        // `weak` breaks the retain cycle toast → button → onTap → toast that would otherwise leak this
+        // sticky toast past dismissal (ZEN-229); the presenter's stack keeps it alive until dismissed.
+        weak var toast: ToastView?
         let actions = [
             ToastAction(title: "Close Pane", kind: .cancel) { [weak self] in
-                if let toast { self?.toasts.dismiss(toast) }
+                toast.map { self?.toasts.dismiss($0) }
                 close()
             },
             ToastAction(title: "Retry", kind: .destructive) { [weak self] in
-                if let toast { self?.toasts.dismiss(toast) }
+                toast.map { self?.toasts.dismiss($0) }
                 retry()
             },
         ]

@@ -37,9 +37,8 @@ final class SettingsFormCommitTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    /// Mount a section in a host window (both retained) and return its single numeric field,
-    /// reached by walking the live view tree.
-    private func mountField(_ section: SettingsFormSection) -> FieldBox {
+    /// Mount a section in a host window (both retained) and return its live detail view.
+    private func mountDetail(_ section: SettingsFormSection) -> NSView {
         self.section = section
         let detail = section.makeDetailView()
         let window = NSWindow(
@@ -48,8 +47,20 @@ final class SettingsFormCommitTests: XCTestCase {
         self.hostWindow = window
         window.contentView?.addSubview(detail)
         detail.frame = window.contentView!.bounds
-        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
-        return descendants(of: detail).compactMap { $0 as? FieldBox }.first { $0.field.isEditable }!
+        return detail
+    }
+
+    private func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
+    private func editableFields(in detail: NSView) -> [FieldBox] {
+        descendants(of: detail).compactMap { $0 as? FieldBox }.filter { $0.field.isEditable }
+    }
+    private func layoutRows(in detail: NSView) -> [LayoutRow] {
+        descendants(of: detail).compactMap { $0 as? LayoutRow }
+    }
+
+    /// Mount a section and return its single numeric field, reached by walking the live view tree.
+    private func mountField(_ section: SettingsFormSection) -> FieldBox {
+        editableFields(in: mountDetail(section)).first!
     }
 
     /// Read the sandboxed config file straight from the root the writer used, so the read path
@@ -142,5 +153,36 @@ final class SettingsFormCommitTests: XCTestCase {
         box.onEndEditing?()
         XCTAssertTrue(configText().contains("cursor-thickness = 6"), "got: \(configText())")
         XCTAssertFalse(configText().contains("5.7"))
+    }
+
+    // MARK: diagnostics refresh must not stomp a live error (ZEN-7)
+
+    private final class TwoNumericSection: SettingsFormSection {
+        override var navTitle: String { "Terminal" }
+        override func populate() {
+            addGroup("Nums") {
+                addNumericRow(
+                    key: "font-size", caption: "Font Size", blurb: "", range: 6...72, read: { $0.fontSize })
+                addNumericRow(
+                    key: "cursor-thickness", caption: "Thickness", blurb: "", range: 1...12,
+                    read: { CGFloat($0.cursorThickness) }, integer: true)
+            }
+        }
+    }
+
+    /// A live invalid-range error on one row must survive a *different* row's successful commit — that
+    /// commit reloads and refreshes every row, and the diagnostics pass must skip rows mid-`.failure`
+    /// rather than clear the feedback while the field still holds invalid text.
+    func test_liveRangeError_survivesAnUnrelatedRowsCommit() {
+        let detail = mountDetail(TwoNumericSection())
+        let fields = editableFields(in: detail)  // [font-size, cursor-thickness]
+        fields[0].setText("3")  // below 6 → a .failure range error; invalid, so nothing is written
+        fields[0].onChange?()
+        fields[1].setText("5")  // valid → commits, which reloads + refreshes every row
+        fields[1].onChange?()
+        fields[1].onEndEditing?()
+        let messages = layoutRows(in: detail).compactMap { $0.renderedMessageForTesting }
+        XCTAssertEqual(messages.count, 1, "only the font-size row still shows a message; got: \(messages)")
+        XCTAssertTrue(messages.first?.contains("Enter a number") == true, "range error was wiped: \(messages)")
     }
 }

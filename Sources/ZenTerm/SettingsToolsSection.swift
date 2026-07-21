@@ -25,6 +25,9 @@ final class SettingsToolsSection: SettingsSection {
     private weak var caption: NSTextField?
     private weak var emptyHint: NSTextField?
     private weak var reorderHint: NSTextField?
+    /// The dropped-`float`-line notice (ZEN-7), when the config has any. A dropped float never becomes
+    /// a row, so this top-of-section note is its only in-Settings home.
+    private weak var droppedFloatNotice: NSTextField?
     private var rowsStack: NSStackView?
 
     func makeDetailView() -> NSView {
@@ -52,8 +55,30 @@ final class SettingsToolsSection: SettingsSection {
         caption?.textColor = Theme.current.chrome.ink(alpha: 0.4)
         emptyHint?.textColor = Theme.current.chrome.ink(alpha: 0.5)
         reorderHint?.textColor = Theme.current.chrome.ink(alpha: 0.35)
+        droppedFloatNotice?.textColor = Theme.current.chrome.warning.nsColor
         rows.forEach { $0.reapplyTheme() }
         addButton.reapplyTheme()
+    }
+
+    /// The `.message` of every dropped-`float`-line diagnostic in the live config — what the
+    /// top-of-section notice lists, since a dropped float has no row of its own.
+    private func droppedFloatMessages() -> [String] {
+        GeneralConfig.current.configDiagnostics.compactMap {
+            if case .toolFloat = $0.scope { return $0.message }
+            return nil
+        }
+    }
+
+    /// The sub-field diagnostics for one surviving float (matched by id), joined for its row — a float
+    /// with a bad `width:` and a bad `order:` shows both. Nil when the float is clean.
+    private func fieldDiagnosticMessages(for id: String) -> String? {
+        let messages = GeneralConfig.current.configDiagnostics.compactMap { diagnostic -> String? in
+            if case .toolFloatField(let fieldID, _) = diagnostic.scope, fieldID == id {
+                return diagnostic.message
+            }
+            return nil
+        }
+        return messages.isEmpty ? nil : messages.joined(separator: "\n")
     }
 
     // MARK: rows
@@ -96,6 +121,17 @@ final class SettingsToolsSection: SettingsSection {
         stack.addArrangedSubview(header)
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
+        let dropped = droppedFloatMessages()
+        if !dropped.isEmpty {
+            let notice = NSTextField(wrappingLabelWithString: dropped.joined(separator: "\n"))
+            notice.font = .systemFont(ofSize: 11, weight: .medium)
+            notice.textColor = Theme.current.chrome.warning.nsColor
+            droppedFloatNotice = notice
+            stack.addArrangedSubview(notice)
+            notice.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+            stack.setCustomSpacing(10, after: notice)  // header→notice spacing is set below, uniformly
+        }
+
         if floats.isEmpty {
             let hint = NSTextField(labelWithString: "No tool floats yet. Add one to get a dock button and a shortcut.")
             hint.font = .systemFont(ofSize: 12)
@@ -108,6 +144,7 @@ final class SettingsToolsSection: SettingsSection {
         } else {
             for float in floats {
                 let row = ToolFloatRow(float: float)
+                row.showMessage(fieldDiagnosticMessages(for: float.id))  // a bad width:/order:/persist:
                 row.onActivate = { [weak self, weak row] in row.map { self?.onEditFloat?($0.float) } }
                 row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
                 row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
@@ -201,6 +238,9 @@ final class ToolFloatRow: NSView {
     private let titleLabel: NSTextField
     private let subtitleLabel: NSTextField
     private let keycap: KeycapView
+    /// A surviving float's sub-field diagnostic (ZEN-7): a bad `width:`/`order:`/`persist:` shows here,
+    /// in warning tone, since the float still works and has this row.
+    private let messageLabel = NSTextField(labelWithString: "")
     private var isFocused = false { didSet { restyle() } }
 
     init(float: ToolFloat) {
@@ -235,13 +275,28 @@ final class ToolFloatRow: NSView {
         controls.orientation = .horizontal
         controls.alignment = .centerY
         controls.spacing = 10
-        controls.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(controls)
+
+        messageLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        messageLabel.textColor = Theme.current.chrome.warning.nsColor
+        messageLabel.lineBreakMode = .byWordWrapping
+        messageLabel.maximumNumberOfLines = 0
+        messageLabel.isHidden = true
+
+        let stack = NSStackView(views: [controls, messageLabel])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 3
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
         NSLayoutConstraint.activate([
-            controls.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            controls.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            controls.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-            controls.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            controls.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            // Pin the wrapping message to the row width too — the `.leading` stack won't stretch it, so
+            // without this the multi-line label sizes to its full intrinsic width and overflows the row.
+            messageLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
         restyle()
     }
@@ -252,8 +307,21 @@ final class ToolFloatRow: NSView {
         iconView.contentTintColor = Theme.current.chrome.ink(alpha: 0.75)
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         subtitleLabel.textColor = Theme.current.chrome.ink(alpha: 0.5)
+        messageLabel.textColor = Theme.current.chrome.warning.nsColor
         keycap.reapplyTheme()
         restyle()
+    }
+
+    /// Show (or clear, with nil) the row's inline sub-field diagnostic.
+    func showMessage(_ text: String?) {
+        messageLabel.stringValue = text ?? ""
+        messageLabel.isHidden = (text == nil)
+    }
+
+    /// Test hook: the inline message as actually rendered — nil when the label is hidden, so a test
+    /// can't pass while the row shows nothing.
+    var renderedMessageForTesting: String? {
+        messageLabel.isHidden ? nil : messageLabel.stringValue
     }
 
     // MARK: focus + keyboard

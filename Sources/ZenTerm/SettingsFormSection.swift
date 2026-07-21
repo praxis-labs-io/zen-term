@@ -329,10 +329,22 @@ class SettingsFormSection: SettingsSection {
         return true
     }
 
-    /// Sync every control to the reloaded config (each row registered its own refresh closure). A
-    /// numeric/text field being edited skips itself so a live-apply write doesn't clobber the caret.
+    /// Sync every control to the reloaded config (each row registered its own refresh closure), then
+    /// surface any config-file diagnostic on the row that owns its key — the form analogue of the
+    /// Keybinds section's per-row conflict note (ZEN-7). Runs on section open and after every
+    /// in-section write; the reload toast is what announces a hand-edit made while this isn't open.
+    ///
+    /// Skips a row currently showing a `.failure` — a live invalid-range error, or a "Couldn't write
+    /// config" — exactly as `SettingsKeybindsSection.refreshRows` does: those report something the
+    /// user just did, which an unrelated write's refresh doesn't resolve, so clearing them here would
+    /// wipe the feedback while it's still true.
     private func refreshRows() {
         refreshers.forEach { $0() }
+        let diagnostics = GeneralConfig.current.configDiagnostics
+        for key in scalarKeys {
+            guard let row = rowFor(key), row.messageKind != .failure else { continue }
+            row.showMessage(diagnostics.first { $0.scope == .setting(key: key) }?.message, kind: .diagnostic)
+        }
     }
 
     // MARK: debounce
