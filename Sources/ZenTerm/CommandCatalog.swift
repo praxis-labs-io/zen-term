@@ -20,6 +20,7 @@ enum CommandCatalog {
         static let window = "Window"
         static let tools = "Tools"
         static let config = "Config"
+        static let help = "Help"
     }
 
     /// Title, display shortcut, and group for a chord. Exhaustive over `ReservedChord`. The
@@ -52,6 +53,7 @@ enum CommandCatalog {
         case .openSettings: return config("Settings…", glyph, chord)
         case .reloadConfig: return config("Reload Config", glyph, chord)
         case .checkForUpdates: return config("Check for Updates", glyph, chord)
+        case .reportIssue: return help("Report an Issue…", glyph, chord)
         // Present for exhaustiveness; both are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
@@ -72,7 +74,7 @@ enum CommandCatalog {
     static func commands(tabCount: Int) -> [PaletteCommand] {
         var chords: [KeyInterceptor.ReservedChord] = [.toggleRepoPicker]
         chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
-        chords += [.openSettings, .reloadConfig, .checkForUpdates]
+        chords += [.openSettings, .reloadConfig, .checkForUpdates, .reportIssue]
         chords += [
             .toggleBottomDrawer, .toggleRightDrawer,
             .newTab, .prevTab, .nextTab,
@@ -119,5 +121,10 @@ enum CommandCatalog {
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
         .init(title: title, shortcut: shortcut, category: Category.config, chord: chord)
+    }
+    private static func help(
+        _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
+    ) -> PaletteCommand {
+        .init(title: title, shortcut: shortcut, category: Category.help, chord: chord)
     }
 }

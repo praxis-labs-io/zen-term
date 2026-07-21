@@ -10,8 +10,10 @@ import AppKit
 /// - `muted` — muted text on a subtle fill (a form's Add-variable).
 /// - `destructive` — destructive-tinted, subtle fill (a toast's confirm).
 /// - `segment` — an accent toggle that fills when `isOn` (a form's focus selector).
+/// - `link` — plain muted text, no fill or pill; brightens on hover, accent + underline on focus (a
+///   quiet footer affordance like Settings' Report an Issue).
 final class AppButton: NSButton {
-    enum Variant { case primary, secondary, muted, destructive, segment }
+    enum Variant { case primary, secondary, muted, destructive, segment, link }
 
     var onTap: () -> Void
     /// Segment selection state — fills with the accent when true. Ignored by other variants.
@@ -172,21 +174,30 @@ final class AppButton: NSButton {
                 isOn
                 ? chrome.accent.nsColor.withAlphaComponent(0.16)
                 : (isHovered ? chrome.ink(alpha: 0.09) : chrome.ink(alpha: 0.05))
+        case .link:
+            textColor =
+                isFocusedStop
+                ? chrome.accent.nsColor : (isHovered ? chrome.foreground.nsColor : chrome.muted.nsColor)
+            background = .clear
         }
         layer?.backgroundColor = background.cgColor
-        // Focus (as a stop, or an outlined segment) reads as an accent outline, not a fill.
-        let outlined = isFocusedStop || showsFocusOutline
+        // Focus (as a stop, or an outlined segment) reads as an accent outline, not a fill — except a
+        // link, which has no pill to outline and shows focus as accent text + an underline instead.
+        let outlined = (isFocusedStop || showsFocusOutline) && variant != .link
         layer?.borderWidth = outlined ? 1.5 : 0
         layer?.borderColor = outlined ? chrome.accent.nsColor.cgColor : nil
         if symbolName != nil {
             contentTintColor = textColor  // tint the SF Symbol like the variant's text would be
         } else {
-            attributedTitle = NSAttributedString(
-                string: labelText,
-                attributes: [
-                    .foregroundColor: textColor,
-                    .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
-                ])
+            let isLink = variant == .link
+            var attributes: [NSAttributedString.Key: Any] = [
+                .foregroundColor: textColor,
+                // A link matches the nav rows' 13pt regular so it reads as one of them; the pill
+                // variants stay 12pt semibold.
+                .font: NSFont.systemFont(ofSize: isLink ? 13 : 12, weight: isLink ? .regular : .semibold),
+            ]
+            if isLink, isFocusedStop { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+            attributedTitle = NSAttributedString(string: labelText, attributes: attributes)
         }
     }
 

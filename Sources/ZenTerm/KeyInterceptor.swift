@@ -31,6 +31,7 @@ final class KeyInterceptor {
         case openSettings
         case reloadConfig
         case checkForUpdates  // run a manual Sparkle update check (unbound by default; ZEN-20)
+        case reportIssue  // open the Report an Issue composer (unbound by default; ZEN-212)
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?

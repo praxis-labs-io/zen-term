@@ -188,6 +188,7 @@
 #   toggle_bottom_drawer  toggle_right_drawer  toggle_focus_mode  fill_screen
 #   toggle_repo_picker  toggle_command_palette  open_settings  reload_config
 #   check_for_updates   (no default binding; bind a chord to reach it by keyboard)
+#   report_issue        (no default binding; also in the command palette and Help menu)
 #   toggle_float:<id>   (bind a second chord to one of your floats)
 #
 # Defaults (uncomment to change; these are what ships):

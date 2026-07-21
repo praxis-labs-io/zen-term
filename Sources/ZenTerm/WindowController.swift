@@ -1025,7 +1025,7 @@ final class WindowController: NSObject {
                 return
             }
             switch chord {
-            case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat:
+            case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue:
                 closeModal()  // close the current card, then open the requested surface below
             default:
                 return
@@ -1047,7 +1047,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Tool Float",
                         message: "Close \(name) first, then ⌘W."))
                 return
-            case .toggleCommandPalette, .toggleRepoPicker, .openSettings:
+            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue:
                 floats.close()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab, .fillScreen:
                 break  // cross-tab/window chords still act; Fill Screen is window-level
@@ -1098,6 +1098,7 @@ final class WindowController: NSObject {
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
+        case .reportIssue: openReportIssue()
         }
     }
 

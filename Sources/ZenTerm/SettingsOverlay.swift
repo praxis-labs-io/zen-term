@@ -23,10 +23,11 @@ final class SettingsOverlay: NSView, ModalOverlay {
     /// Nav footer: the origami brand mark + the app version, pinned to the bottom of the nav column.
     private let brandMark = NSImageView()
     private let versionLabel = NSTextField(labelWithString: "")
-    /// A "Report an Issue" button sitting directly above the version footer (beside the version line
-    /// the docs tell users to cite in a report). It's a keyboard stop after the section rows, not part
-    /// of the non-interactive footer. Fired via `onReportIssue`; the host opens the composer.
-    private let reportButton = AppButton(title: "Report an Issue…", variant: .muted)
+    /// A quiet "Report an Issue" text link sitting just below the version line (where someone looks
+    /// to cite the version in a report). A `.link` button, not a section row or a pill, so it reads as
+    /// a footer affordance rather than a nav destination. A keyboard stop after the section rows;
+    /// fired via `onReportIssue`, and also reachable from the command palette and Help menu.
+    private let reportButton = AppButton(title: "Report an Issue", variant: .link)
     var onReportIssue: (() -> Void)?
 
     init(
@@ -173,8 +174,8 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
         let footer = makeNavFooter()
 
-        // The Report button is the trailing keyboard stop after the section rows: Down from the last
-        // row focuses it, Up/Shift-Tab returns. It doesn't select a section, so it makes itself first
+        // The Report link is the trailing keyboard stop after the section rows: Down from the last row
+        // focuses it, Up/Shift-Tab returns. It doesn't select a section, so it makes itself first
         // responder directly rather than going through `moveNav`/`selectSection`.
         reportButton.isKeyboardFocusable = true
         reportButton.onTap = { [weak self] in self?.onReportIssue?() }
@@ -211,31 +212,31 @@ final class SettingsOverlay: NSView, ModalOverlay {
             navScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             navScroll.topAnchor.constraint(equalTo: root.topAnchor),
             navScroll.widthAnchor.constraint(equalToConstant: Self.navWidth),
-            navScroll.bottomAnchor.constraint(equalTo: reportButton.topAnchor, constant: -8),
+            navScroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -8),
 
-            // The Report button sits in the nav column, between the scrolling list and the version
-            // footer, centered like the footer.
+            // The Report link sits at the very bottom of the column, just under the version line,
+            // centered like the footer.
             reportButton.centerXAnchor.constraint(equalTo: navScroll.centerXAnchor),
             reportButton.leadingAnchor.constraint(
                 greaterThanOrEqualTo: root.leadingAnchor, constant: Self.footerTrailingInset),
             reportButton.trailingAnchor.constraint(
                 lessThanOrEqualTo: navScroll.trailingAnchor, constant: -Self.footerTrailingInset),
-            reportButton.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -10),
+            reportButton.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -14),
 
             // navStack is the scrolling document: full content width, height intrinsic (scrolls tall).
             navStack.topAnchor.constraint(equalTo: navScroll.contentView.topAnchor),
             navStack.leadingAnchor.constraint(equalTo: navScroll.contentView.leadingAnchor),
             navStack.widthAnchor.constraint(equalTo: navScroll.contentView.widthAnchor),
 
-            // The version footer sits below the scrolling list, pinned to the column bottom and
-            // centered across the nav column (the mark + version read as one unit, so they center
-            // together rather than hanging off the leading edge).
+            // The version footer sits below the scrolling list, above the Report link, centered
+            // across the nav column (the mark + version read as one unit, so they center together
+            // rather than hanging off the leading edge).
             footer.centerXAnchor.constraint(equalTo: navScroll.centerXAnchor),
             footer.leadingAnchor.constraint(
                 greaterThanOrEqualTo: root.leadingAnchor, constant: Self.footerTrailingInset),
             footer.trailingAnchor.constraint(
                 lessThanOrEqualTo: navScroll.trailingAnchor, constant: -Self.footerTrailingInset),
-            footer.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
+            footer.bottomAnchor.constraint(equalTo: reportButton.topAnchor, constant: -6),
 
             divider.leadingAnchor.constraint(equalTo: navScroll.trailingAnchor),
             divider.topAnchor.constraint(equalTo: root.topAnchor),

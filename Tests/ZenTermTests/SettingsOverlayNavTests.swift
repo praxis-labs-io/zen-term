@@ -90,7 +90,7 @@ final class SettingsOverlayNavTests: XCTestCase {
     }
 
     private func reportButton(_ overlay: NSView) -> AppButton? {
-        descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Report an Issue…" }
+        descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Report an Issue" }
     }
 
     func test_reportButton_firesOnReportIssue() {
