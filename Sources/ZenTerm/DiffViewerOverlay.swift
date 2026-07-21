@@ -191,10 +191,19 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     // MARK: layout
 
     private func buildLayout() {
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("file"))
-        column.resizingMask = .autoresizingMask
-        outline.addTableColumn(column)
-        outline.outlineTableColumn = column
+        // Two columns: the name (indented outline column, flexible) and the +n −m stat (fixed width,
+        // right-aligned) so stats align on a common right edge and never clip on a nested file.
+        let nameColumn = NSTableColumn(identifier: DiffTreeOutlineController.nameColumnID)
+        nameColumn.resizingMask = .autoresizingMask
+        let statColumn = NSTableColumn(identifier: DiffTreeOutlineController.statColumnID)
+        statColumn.width = 78
+        statColumn.minWidth = 78
+        statColumn.maxWidth = 78
+        statColumn.resizingMask = []
+        outline.addTableColumn(nameColumn)
+        outline.addTableColumn(statColumn)
+        outline.outlineTableColumn = nameColumn
+        outline.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
         outline.headerView = nil
         outline.rowSizeStyle = .small
         outline.indentationPerLevel = 12
