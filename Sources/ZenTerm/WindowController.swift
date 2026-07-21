@@ -1412,14 +1412,16 @@ final class WindowController: NSObject {
         let content = ToastContent(
             variant: .warning, title: "Terminal Didn't Start",
             message: "The terminal surface failed to launch.")
-        var toast: ToastView?
+        // `weak` breaks the retain cycle toast → button → onTap → toast that would otherwise leak this
+        // sticky toast past dismissal (ZEN-229); the presenter's stack keeps it alive until dismissed.
+        weak var toast: ToastView?
         let actions = [
             ToastAction(title: "Close Pane", kind: .cancel) { [weak self] in
-                if let toast { self?.toasts.dismiss(toast) }
+                toast.map { self?.toasts.dismiss($0) }
                 close()
             },
             ToastAction(title: "Retry", kind: .destructive) { [weak self] in
-                if let toast { self?.toasts.dismiss(toast) }
+                toast.map { self?.toasts.dismiss($0) }
                 retry()
             },
         ]
