@@ -294,6 +294,9 @@ final class ToolFloatRow: NSView {
             stack.topAnchor.constraint(equalTo: topAnchor, constant: 6),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
             controls.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            // Pin the wrapping message to the row width too — the `.leading` stack won't stretch it, so
+            // without this the multi-line label sizes to its full intrinsic width and overflows the row.
+            messageLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
         restyle()
     }
