@@ -115,8 +115,11 @@ final class ToggleDock: NSView {
         allButtons.removeAll { button in toolFloatBtns.values.contains { $0 === button } }
         toolFloatBtns = [:]
         for spec in toolFloats {
+            // Like the fixed buttons, resolve the glyph from the live keymap so the tooltip tracks
+            // user rebinds of the float's `toggle_float:<id>` chord (ZEN-44).
             let btn = IconButton(
-                symbol: spec.icon, pointSize: Self.iconPointSize, accessibilityLabel: spec.title
+                symbol: spec.icon, pointSize: Self.iconPointSize, accessibilityLabel: spec.title,
+                shortcut: { CommandCatalog.spec(for: .toggleToolFloat(spec.id)).shortcut }
             ) { [weak self] in self?.onToolFloat(spec) }
             toolFloatBtns[spec.id] = btn
             allButtons.append(btn)

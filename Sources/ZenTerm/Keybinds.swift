@@ -27,7 +27,7 @@ extension KeyInterceptor.ReservedChord {
         case .toggleZoom: return "toggle_focus_mode"
         case .fillScreen: return "fill_screen"
         case .toggleToolFloat(let id): return "toggle_float:\(id)"
-        case .toggleRepoPicker: return "toggle_repo_picker"
+        case .toggleRepoPicker: return "toggle_workspace_picker"
         case .toggleCommandPalette: return "toggle_command_palette"
         case .openSettings: return "open_settings"
         case .reloadConfig: return "reload_config"
@@ -62,6 +62,10 @@ extension KeyInterceptor.ReservedChord {
         // config with the old token still resolves rather than silently dropping the binding.
         case "toggle_zoom": self = .toggleZoom
         case "fill_screen": self = .fillScreen
+        case "toggle_workspace_picker": self = .toggleRepoPicker
+        // Back-compat: the config token is `toggle_workspace_picker` (ZEN-6) — the product calls it
+        // a workspace everywhere, and `repo` was the one token whose product name moved on. The old
+        // `toggle_repo_picker` still resolves so an existing binding keeps working.
         case "toggle_repo_picker": self = .toggleRepoPicker
         case "toggle_command_palette": self = .toggleCommandPalette
         case "open_settings": self = .openSettings
@@ -123,7 +127,7 @@ enum KeymapDefaults {
     }()
 }
 
-/// Parses a single `keybind =` value, e.g. `toggle_repo_picker=cmd+shift+p`.
+/// Parses a single `keybind =` value, e.g. `toggle_workspace_picker=cmd+shift+p`.
 enum KeybindParser {
     /// Split on the FIRST `=` (action LHS, chord RHS — the action reads first, mirroring the
     /// "behavior, then key" phrasing). Returns `nil` (caller warns + skips) on an unknown

@@ -68,6 +68,10 @@ check here, however well unit-tested it looks.
 - [ ] **The order sticks.** Relaunch and confirm the new order holds, that
       `~/.config/zen-term/config` now carries `order:` on every float line, and that
       comments and unrelated keys in that file did not move.
+- [ ] **Float dock buttons show their shortcut on hover (ZEN-44).** Hover a tool-float
+      button in the footer dock → the tooltip names the float and its toggle glyph (e.g.
+      ⌘⇧D), the same way the fixed dock buttons do. Rebind that float's `key:` in the
+      config, reload, and the tooltip tracks the new glyph.
 
 ## Back to the nav in Settings + form cards (ZEN-217)
 

@@ -56,9 +56,17 @@ final class KeybindParserTests: XCTestCase {
 
     func test_parse_validKeybindLine() {
         // Action first, then chord.
-        let pair = KeybindParser.parse("toggle_repo_picker=cmd+shift+p")
+        let pair = KeybindParser.parse("toggle_workspace_picker=cmd+shift+p")
         XCTAssertEqual(pair?.0, Chord(command: true, shift: true, key: "p"))
         XCTAssertEqual(pair?.1, .toggleRepoPicker)
+    }
+
+    func test_workspacePicker_token_andLegacyRepoAlias() {
+        // The token was renamed repo → workspace (ZEN-6): the canonical token is the new one, and
+        // the old `toggle_repo_picker` still parses so an existing config keeps its binding.
+        XCTAssertEqual(KeyInterceptor.ReservedChord.toggleRepoPicker.actionToken, "toggle_workspace_picker")
+        XCTAssertEqual(action(from: "toggle_workspace_picker"), .toggleRepoPicker)
+        XCTAssertEqual(action(from: "toggle_repo_picker"), .toggleRepoPicker)  // legacy alias
     }
 
     func test_parse_unknownAction_isNil() {
