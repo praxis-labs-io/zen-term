@@ -15,11 +15,12 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// `Process` itself; `WindowController` wires this to a `GitDiffRunner`.
     typealias Loader = (DiffScope, @escaping (LoadResult) -> Void) -> Void
 
-    /// The scope order the segmented control shows, left to right. `All` (`.branch`) is the default
-    /// and the union of the other two; both alternatives stay visible rather than hiding behind a menu.
-    private static let scopeOrder: [DiffScope] = [.uncommitted, .committed, .branch]
-    private static let scopeTitles = ["Uncommitted", "Committed", "All"]
-    private static let defaultScopeIndex = 2
+    /// The scope order the segmented control shows, left to right. `All` (`.branch`) leads and is the
+    /// default — the union of the other two; both alternatives stay visible rather than hiding behind
+    /// a menu. Order runs broad to narrow: all changes, then committed, then just uncommitted.
+    private static let scopeOrder: [DiffScope] = [.branch, .committed, .uncommitted]
+    private static let scopeTitles = ["All", "Committed", "Uncommitted"]
+    private static let defaultScopeIndex = 0
 
     private let loader: Loader?
     private let onCancel: () -> Void
@@ -44,6 +45,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private var outlineView: NSOutlineView?
     private var diffTable: DiffPaneTable?
     private var selectedFilePath: String?
+    /// Set when the overlay is asked to take focus before the first load finished — the tree doesn't
+    /// exist yet. Consumed by `installLoaded` so the initial focus lands on the file tree, not the
+    /// scope buttons.
+    private var pendingInitialFocus = false
 
     init(background: NSColor, loader: Loader?, onCancel: @escaping () -> Void) {
         self.loader = loader
@@ -97,7 +102,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     // MARK: ModalOverlay
 
     func focusInitialResponder() {
-        window?.makeFirstResponder(outlineView ?? scopeSelector)
+        if let outlineView {
+            window?.makeFirstResponder(outlineView)
+        } else if loader != nil {
+            // The first load hasn't built the tree yet; land focus there when it arrives, not on the
+            // scope buttons. Esc still works — it's claimed in performKeyEquivalent, not by a responder.
+            pendingInitialFocus = true
+        }
     }
 
     func animateIn() {
@@ -124,12 +135,22 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     func reapplyTheme() {
+        // `render` tears out and rebuilds the tree + diff, which would drop first responder to the
+        // window if focus was inside them. Capture and restore it so a live theme swap doesn't yank
+        // the user's keyboard focus out of the viewer.
+        let hadTreeFocus = window?.firstResponder === outlineView
+        let hadDiffFocus = diffTable.map { window?.firstResponder === $0.scrollFocusTarget } ?? false
         CardChrome.reapplyTheme(to: card)
         metaLabel.textColor = Theme.current.chrome.muted.nsColor
         navBorder.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         scopeSelector?.reapplyTheme()
         // Rebuild the swapped content from the retained state so tree + diff rows pick up the palette.
         render(currentState)
+        if hadTreeFocus {
+            focusTree()
+        } else if hadDiffFocus {
+            focusDiff()
+        }
     }
 
     // MARK: shell
@@ -144,7 +165,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         metaLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let selector = SegmentedControl(
-            options: Self.scopeTitles, selectedIndex: Self.defaultScopeIndex
+            options: Self.scopeTitles, selectedIndex: Self.defaultScopeIndex, fillEqually: true
         ) { [weak self] index in
             guard let self else { return }
             self.reload(scope: Self.scopeOrder[index])
@@ -184,16 +205,16 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             nav.leadingAnchor.constraint(equalTo: card.leadingAnchor),
             nav.topAnchor.constraint(equalTo: card.topAnchor),
             nav.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-            // The nav follows the card width but never squeezes the scope selector below its content.
             aspect(nav.widthAnchor, to: card.widthAnchor, 0.32, priority: .defaultHigh),
-            nav.widthAnchor.constraint(greaterThanOrEqualTo: selector.widthAnchor, constant: inset * 2),
+            nav.widthAnchor.constraint(greaterThanOrEqualToConstant: 240),
 
             metaLabel.leadingAnchor.constraint(equalTo: nav.leadingAnchor, constant: inset),
             metaLabel.trailingAnchor.constraint(lessThanOrEqualTo: nav.trailingAnchor, constant: -inset),
             metaLabel.topAnchor.constraint(equalTo: nav.topAnchor, constant: 14),
 
+            // The selector fills the column (equal-width segments) rather than hugging its content.
             selector.leadingAnchor.constraint(equalTo: nav.leadingAnchor, constant: inset),
-            selector.trailingAnchor.constraint(lessThanOrEqualTo: nav.trailingAnchor, constant: -inset),
+            selector.trailingAnchor.constraint(equalTo: nav.trailingAnchor, constant: -inset),
             selector.topAnchor.constraint(equalTo: metaLabel.bottomAnchor, constant: 8),
 
             navBorder.leadingAnchor.constraint(equalTo: nav.leadingAnchor),
@@ -304,7 +325,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         diffTable = table
         fill(diffHost, with: table)
 
-        // Tab ring: scope selector -> tree -> diff pane -> back. Arrows scroll the pane once focused.
+        // Tab ring: scope selector -> tree -> diff pane -> back; arrows scroll the pane once focused.
+        // The selector consumes Tab/Shift-Tab itself (via onTab/onBacktab -> focusTree/focusDiff), so
+        // its forward leg is the closure, not the key-view loop; the chain here gives the outline and
+        // table their next/previous key views for the legs AppKit does drive.
         if let outline = outlineView, let selector = scopeSelector {
             selector.nextKeyView = outline
             outline.nextKeyView = table.scrollFocusTarget
@@ -318,10 +342,15 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         if let first = controller.firstFile?.fileDiff {
             selectFile(first)
         }
+        if pendingInitialFocus {
+            pendingInitialFocus = false
+            focusTree()
+        }
     }
 
     private func buildTreeScroll(controller: DiffTreeOutlineController) -> NSScrollView {
-        let outline = NSOutlineView()
+        let outline = NavOutlineView()
+        outline.onNavigateUpPastTop = { [weak self] in self?.focusSelector() }
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("file"))
         column.resizingMask = .autoresizingMask
         outline.addTableColumn(column)
@@ -330,6 +359,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         outline.rowSizeStyle = .small
         outline.indentationPerLevel = 12
         outline.backgroundColor = .clear
+        outline.focusRingType = .none  // no system-blue ring on Tab-in (ZEN-27: chrome is theme-only)
         outline.autoresizesOutlineColumn = true
         outline.dataSource = controller
         outline.delegate = controller
@@ -350,6 +380,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     private func selectFile(_ file: FileDiff) {
+        // Dedup: the initial load both selects the row (firing this via the delegate) and calls here
+        // directly, and re-selecting the current file shouldn't re-render. Guard on the shown path.
+        guard selectedFilePath != file.path else { return }
         selectedFilePath = file.path
         diffTable?.show(SideBySideDiff.rows(for: file))
     }
@@ -362,6 +395,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private func focusDiff() {
         guard let diffTable else { return }
         window?.makeFirstResponder(diffTable.scrollFocusTarget)
+    }
+
+    private func focusSelector() {
+        guard let scopeSelector else { return }
+        window?.makeFirstResponder(scopeSelector)
     }
 
     // MARK: orientation + messages
@@ -448,4 +486,19 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         scopeSelector?.select(index)
     }
     var shownScopeForTesting: DiffScope { scope }
+}
+
+/// The file tree's outline view, with one added behavior: pressing Up while the top row is selected
+/// exits the tree back to the scope selector, so arrow navigation is symmetric with the selector's
+/// Down-into-the-tree. Without this, the tree swallows Up at the top and there's no way back up.
+private final class NavOutlineView: NSOutlineView {
+    var onNavigateUpPastTop: (() -> Void)?
+
+    override func moveUp(_ sender: Any?) {
+        if selectedRow <= 0 {
+            onNavigateUpPastTop?()
+            return
+        }
+        super.moveUp(sender)
+    }
 }

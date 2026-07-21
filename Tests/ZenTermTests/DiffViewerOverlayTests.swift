@@ -105,9 +105,9 @@ final class DiffViewerOverlayTests: XCTestCase {
 
     func test_scopeSelector_reRequestsTheDiffForTheChosenScope() {
         let (overlay, spy) = mount(files: [file("One.swift")])
-        XCTAssertEqual(spy.requestedScopes, [.branch])
+        XCTAssertEqual(spy.requestedScopes, [.branch])  // default is All (.branch), index 0
 
-        overlay.selectScopeForTesting(0)  // "Uncommitted"
+        overlay.selectScopeForTesting(2)  // "Uncommitted" (order: All · Committed · Uncommitted)
         XCTAssertEqual(spy.requestedScopes.last, .uncommitted)
         XCTAssertEqual(overlay.shownScopeForTesting, .uncommitted)
 

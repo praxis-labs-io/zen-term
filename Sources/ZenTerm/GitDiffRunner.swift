@@ -107,7 +107,8 @@ final class GitDiffRunner {
             let base = try resolveBaseBranch(in: repoRoot)
             let mergeBase = try runGit(["merge-base", base, "HEAD"], in: repoRoot)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            baseBranch = base
+            // `base` is a ref git can resolve (e.g. `origin/zen-225`); strip `origin/` for the cue.
+            baseBranch = defaultBranchName(fromSymbolicRef: base)
             baseSHA = String(mergeBase.prefix(7))
             patch = try runGit(diffArguments(scope: scope, mergeBase: mergeBase), in: repoRoot)
         case .uncommitted:
@@ -119,9 +120,19 @@ final class GitDiffRunner {
         return DiffLoad(scope: scope, baseBranch: baseBranch, baseSHA: baseSHA, files: files)
     }
 
-    /// The base branch to fork from: `origin/HEAD`'s target, or whichever of `main`/`master`
-    /// exists locally. Throws when neither can be found.
+    /// A ref git can resolve for the fork point, most specific first: the branch's own upstream
+    /// (its tracking base), so a branch stacked on another diffs against that parent rather than
+    /// always against main; then `origin/HEAD`'s target; then whichever of `main`/`master` exists
+    /// locally. Returns a resolvable ref (`origin/zen-225`, `main`) — the caller strips `origin/`
+    /// for display. Throws when none can be found.
     private static func resolveBaseBranch(in repoRoot: URL) throws -> String {
+        if let upstream =
+            (try? runGit(
+                ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], in: repoRoot))?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !upstream.isEmpty
+        {
+            return upstream
+        }
         if let ref = try? runGit(
             ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], in: repoRoot),
             let name = defaultBranchName(fromSymbolicRef: ref)
@@ -133,7 +144,7 @@ final class GitDiffRunner {
                 return candidate
             }
         }
-        throw Failure.gitError("no base branch (origin/HEAD, main, or master)")
+        throw Failure.gitError("no base branch (upstream, origin/HEAD, main, or master)")
     }
 
     /// Untracked file paths and their text contents, or empty for scopes that exclude them.
