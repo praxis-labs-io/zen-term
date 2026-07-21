@@ -2,9 +2,9 @@ import AppKit
 
 /// The right pane's side-by-side diff, rendered as a virtualized `NSTableView`: fixed-height
 /// monospace rows, only the visible ones built and reused. Switching files is a whole-table
-/// `reloadData`, so arrowing quickly through the tree stays cheap no matter the file's size (the
-/// per-line-stack version rebuilt and re-laid-out every row on each keystroke). The pane is a Tab
-/// stop that scrolls with the arrow keys once focused.
+/// `reloadData`, so arrowing quickly through the tree stays cheap no matter the file's size. The
+/// pane is a Tab stop with a current-line highlight (like a normal diff viewer): arrows move the
+/// highlighted line and scroll to follow it, and the highlight brightens while the pane is focused.
 final class DiffPaneTable: NSView {
     private let table = DiffTableView()
     private let scroll = NSScrollView()
@@ -29,8 +29,9 @@ final class DiffPaneTable: NSView {
         table.backgroundColor = .clear
         table.gridStyleMask = []
         table.intercellSpacing = NSSize(width: 0, height: 0)
-        table.selectionHighlightStyle = .none  // a diff pane scrolls; it doesn't select rows
         table.focusRingType = .none  // no system-blue ring on Tab-in (ZEN-27: chrome is theme-only)
+        table.allowsMultipleSelection = false
+        table.allowsEmptySelection = true
         table.rowHeight = DiffLineCell.rowHeight
         table.usesAutomaticRowHeights = false
         table.dataSource = source
@@ -55,7 +56,7 @@ final class DiffPaneTable: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// The view to make first responder so arrows scroll this pane.
+    /// The view to make first responder so arrows move the current line and scroll the pane.
     var scrollFocusTarget: NSView { table }
     var rowCountForTesting: Int { source.rows.count }
 
@@ -76,41 +77,58 @@ final class DiffPaneTable: NSView {
             cell.configure(rows[row])
             return cell
         }
+
+        func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+            let id = NSUserInterfaceItemIdentifier("diff-row")
+            if let reused = tableView.makeView(withIdentifier: id, owner: self) as? DiffLineRowView {
+                return reused
+            }
+            let view = DiffLineRowView()
+            view.identifier = id
+            return view
+        }
     }
 }
 
 /// The diff table, which manages its own keyboard: `NSTableView` handles arrows/Tab inside its own
-/// `keyDown` (so `nextKeyView`/`moveUp` overrides don't fire), so the exit keys and line scrolling
-/// are handled here directly. Selection is off — this pane scrolls, it doesn't pick rows.
+/// `keyDown` (so `nextKeyView`/`moveUp` overrides don't fire), so Tab out is handled here; arrows
+/// fall through to move the selected line and scroll. On focus-in it selects the first visible line
+/// so there's always a visible current line to see and move.
 private final class DiffTableView: NSTableView {
     var onExitForward: (() -> Void)?
     var onExitBackward: (() -> Void)?
 
-    /// Rows scrolled per arrow press — a few lines so held-key repeat moves at a readable pace.
-    private static let scrollRows = 3
-
     override var acceptsFirstResponder: Bool { true }
 
-    override func keyDown(with event: NSEvent) {
-        switch KeyboardFocus.key(for: event) {
-        case .tab(let shift):
-            (shift ? onExitBackward : onExitForward)?()
-        case .up:
-            scroll(rows: -Self.scrollRows)
-        case .down:
-            scroll(rows: Self.scrollRows)
-        default:
-            super.keyDown(with: event)
+    override func becomeFirstResponder() -> Bool {
+        let ok = super.becomeFirstResponder()
+        if ok, selectedRow == -1, numberOfRows > 0 {
+            let visible = rows(in: visibleRect)
+            let target = visible.length > 0 ? visible.location : 0
+            selectRowIndexes([target], byExtendingSelection: false)
+            scrollRowToVisible(target)
         }
+        return ok
     }
 
-    private func scroll(rows: Int) {
-        guard let clip = enclosingScrollView?.contentView else { return }
-        var origin = clip.bounds.origin
-        origin.y += CGFloat(rows) * rowHeight
-        let maxY = max(0, frame.height - clip.bounds.height)  // the table is its own scroll document
-        origin.y = min(max(0, origin.y), maxY)
-        clip.scroll(to: origin)
-        enclosingScrollView?.reflectScrolledClipView(clip)
+    override func keyDown(with event: NSEvent) {
+        if case .tab(let shift)? = KeyboardFocus.key(for: event) {
+            (shift ? onExitBackward : onExitForward)?()
+            return
+        }
+        super.keyDown(with: event)  // arrows move the selected line + autoscroll
+    }
+}
+
+/// A diff row's current-line highlight: a full-width fill in the accent while the pane is focused
+/// (`isEmphasized`), dimming to a faint ink when focus is elsewhere so the line stays findable
+/// without shouting. Theme-only (ZEN-27); no system selection color.
+private final class DiffLineRowView: NSTableRowView {
+    override func drawSelection(in dirtyRect: NSRect) {
+        guard isSelected else { return }
+        let chrome = Theme.current.chrome
+        let fill = isEmphasized ? chrome.accent.nsColor.withAlphaComponent(0.16) : chrome.ink(alpha: 0.06)
+        fill.setFill()
+        bounds.fill()
     }
 }

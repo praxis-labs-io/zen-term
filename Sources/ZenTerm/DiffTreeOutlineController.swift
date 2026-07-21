@@ -126,8 +126,16 @@ private final class DiffTreeRowView: NSView {
         super.layout()
         let statWidth = hasStat ? statLabel.intrinsicContentSize.width : 0
         let gap: CGFloat = hasStat ? 8 : 0
-        statLabel.frame = NSRect(x: bounds.width - statWidth, y: 0, width: statWidth, height: bounds.height)
-        nameLabel.frame = NSRect(x: 0, y: 0, width: max(0, bounds.width - statWidth - gap), height: bounds.height)
+        // NSTextField top-aligns single-line text in a taller frame, so size each label to its own
+        // height and center it — otherwise the name rides high in the selection highlight.
+        let nameHeight = nameLabel.intrinsicContentSize.height
+        let statHeight = statLabel.intrinsicContentSize.height
+        statLabel.frame = NSRect(
+            x: bounds.width - statWidth, y: ((bounds.height - statHeight) / 2).rounded(),
+            width: statWidth, height: statHeight)
+        nameLabel.frame = NSRect(
+            x: 0, y: ((bounds.height - nameHeight) / 2).rounded(),
+            width: max(0, bounds.width - statWidth - gap), height: nameHeight)
     }
 
     private static func statText(added: Int, removed: Int, chrome: ChromeTheme) -> NSAttributedString {

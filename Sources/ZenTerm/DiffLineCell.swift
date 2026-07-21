@@ -90,20 +90,28 @@ final class DiffLineCell: NSView {
         }
     }
 
+    /// Single-line monospace text height, measured once — `NSTextField` top-aligns text in a taller
+    /// frame, so labels are sized to this and centered rather than filling the row.
+    private static let textHeight = ("0" as NSString)
+        .size(withAttributes: [.font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)])
+        .height.rounded(.up)
+
     override func layout() {
         super.layout()
         let gutter = Self.gutterWidth
         let height = bounds.height
+        let textY = ((height - Self.textHeight) / 2).rounded()
+        let textH = Self.textHeight
         if isHeader {
-            headerLabel.frame = NSRect(x: 8, y: 0, width: max(0, bounds.width - 8), height: height)
+            headerLabel.frame = NSRect(x: 8, y: textY, width: max(0, bounds.width - 8), height: textH)
             return
         }
         let available = max(0, bounds.width - 2 * gutter - 1)
         let half = (available / 2).rounded(.down)
-        leftGutter.frame = NSRect(x: 0, y: 0, width: gutter - Self.gutterGap, height: height)
-        leftText.frame = NSRect(x: gutter, y: 0, width: half, height: height)
+        leftGutter.frame = NSRect(x: 0, y: textY, width: gutter - Self.gutterGap, height: textH)
+        leftText.frame = NSRect(x: gutter, y: textY, width: half, height: textH)
         rule.frame = NSRect(x: gutter + half, y: 0, width: 1, height: height)
-        rightGutter.frame = NSRect(x: gutter + half + 1, y: 0, width: gutter - Self.gutterGap, height: height)
-        rightText.frame = NSRect(x: 2 * gutter + half + 1, y: 0, width: available - half, height: height)
+        rightGutter.frame = NSRect(x: gutter + half + 1, y: textY, width: gutter - Self.gutterGap, height: textH)
+        rightText.frame = NSRect(x: 2 * gutter + half + 1, y: textY, width: available - half, height: textH)
     }
 }
