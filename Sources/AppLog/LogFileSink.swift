@@ -38,6 +38,21 @@ public final class LogFileSink {
         queue.sync {}
     }
 
+    /// The log files that currently exist, active file first then each present rotation — the set
+    /// Export Diagnostics bundles (ZEN-11). Keeps the naming scheme here rather than leaking
+    /// `fileName`/`.1` to callers. Reads directory entries synchronously, so call it off the main
+    /// thread.
+    public var fileURLs: [URL] {
+        let fileManager = FileManager.default
+        var urls: [URL] = []
+        if fileManager.fileExists(atPath: activeURL.path) { urls.append(activeURL) }
+        for index in 1..<maxFiles {
+            let url = rotatedURL(index)
+            if fileManager.fileExists(atPath: url.path) { urls.append(url) }
+        }
+        return urls
+    }
+
     private var activeURL: URL { directory.appendingPathComponent(fileName) }
     private func rotatedURL(_ index: Int) -> URL {
         directory.appendingPathComponent("\(fileName).\(index)")

@@ -227,6 +227,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AcknowledgementsWindow.shared.show()
     }
 
+    /// Export a diagnostics zip (logs + system metadata) via a save panel. Reached from Help ▸ Export
+    /// Diagnostics with a nil target, routed here through the responder chain like About; ZEN-212's
+    /// in-app report reuses the same action.
+    @objc func exportDiagnostics(_ sender: Any?) {
+        keyController()?.exportDiagnostics()
+    }
+
     /// While a modal overlay (a palette or the Add-Workspace form) is up, Copy/Paste must act on
     /// its focused text field, not the terminal hidden behind it (else ⌘V would inject the
     /// clipboard into that shell).

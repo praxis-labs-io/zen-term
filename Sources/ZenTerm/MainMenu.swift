@@ -49,6 +49,18 @@ enum MainMenu {
         paste.target = target
         editMenu.addItem(paste)
 
+        // Help menu — Export Diagnostics (ZEN-11). Nil target routes through the responder chain to
+        // the app delegate, like About. macOS adds its standard search field to any menu titled
+        // "Help"; that's expected. ZEN-212 adds Report an Issue here.
+        let helpItem = NSMenuItem()
+        main.addItem(helpItem)
+        let helpMenu = NSMenu(title: "Help")
+        helpItem.submenu = helpMenu
+        helpMenu.addItem(
+            withTitle: "Export Diagnostics…",
+            action: #selector(AppDelegate.exportDiagnostics(_:)),
+            keyEquivalent: "")
+
         NSApp.mainMenu = main
     }
 }
