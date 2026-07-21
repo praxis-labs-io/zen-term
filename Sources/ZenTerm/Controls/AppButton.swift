@@ -172,7 +172,7 @@ final class AppButton: NSButton {
             textColor = isOn ? chrome.accent.nsColor : chrome.muted.nsColor
             background =
                 isOn
-                ? chrome.accent.nsColor.withAlphaComponent(0.16)
+                ? chrome.accent.nsColor.withAlphaComponent(0.18)  // match the command palette selection tint
                 : (isHovered ? chrome.ink(alpha: 0.09) : chrome.ink(alpha: 0.05))
         case .link:
             textColor =
@@ -197,6 +197,13 @@ final class AppButton: NSButton {
                 .font: NSFont.systemFont(ofSize: isLink ? 13 : 12, weight: isLink ? .regular : .semibold),
             ]
             if isLink, isFocusedStop { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+            if variant == .segment {
+                // A segment can be stretched wider than its title (a fill-equally selector), so center
+                // the label in its width rather than letting the cell left-align it.
+                let centered = NSMutableParagraphStyle()
+                centered.alignment = .center
+                attributes[.paragraphStyle] = centered
+            }
             attributedTitle = NSAttributedString(string: labelText, attributes: attributes)
         }
     }

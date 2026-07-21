@@ -15,11 +15,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// `Process` itself; `WindowController` wires this to a `GitDiffRunner`.
     typealias Loader = (DiffScope, @escaping (LoadResult) -> Void) -> Void
 
-    /// The scope order the segmented control shows, left to right. `All` (`.branch`) leads and is the
-    /// default — the union of the other two; both alternatives stay visible rather than hiding behind
-    /// a menu. Order runs broad to narrow: all changes, then committed, then just uncommitted.
-    private static let scopeOrder: [DiffScope] = [.branch, .committed, .uncommitted]
-    private static let scopeTitles = ["All", "Committed", "Uncommitted"]
+    /// The scope order the segmented control shows, left to right. `Committed` leads and is the
+    /// default focus — the PR-equivalent view; `Uncommitted` is the working-tree-only slice, and
+    /// `All` is the union of both. Every scope stays visible rather than hiding behind a menu.
+    private static let scopeOrder: [DiffScope] = [.committed, .uncommitted, .branch]
+    private static let scopeTitles = ["Committed", "Uncommitted", "All"]
     private static let defaultScopeIndex = 0
 
     private let loader: Loader?
@@ -322,17 +322,14 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
         let table = DiffPaneTable()
         table.translatesAutoresizingMaskIntoConstraints = false
+        // Tab ring: selector -> tree -> diff -> selector (each view intercepts Tab in its own keyDown
+        // and hands focus on, since AppKit's key-view loop doesn't drive NSTableView/NSOutlineView).
+        table.onExitForward = { [weak self] in self?.focusSelector() }
+        table.onExitBackward = { [weak self] in self?.focusTree() }
         diffTable = table
         fill(diffHost, with: table)
 
-        // Tab ring: scope selector -> tree -> diff pane -> back; arrows scroll the pane once focused.
-        // The selector consumes Tab/Shift-Tab itself (via onTab/onBacktab -> focusTree/focusDiff), so
-        // its forward leg is the closure, not the key-view loop; the chain here gives the outline and
-        // table their next/previous key views for the legs AppKit does drive.
-        if let outline = outlineView, let selector = scopeSelector {
-            selector.nextKeyView = outline
-            outline.nextKeyView = table.scrollFocusTarget
-            table.scrollFocusTarget.nextKeyView = selector
+        if let outline = outlineView {
             outline.expandItem(nil, expandChildren: true)
             if let first = controller.firstFile {
                 let row = outline.row(forItem: first)
@@ -350,7 +347,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     private func buildTreeScroll(controller: DiffTreeOutlineController) -> NSScrollView {
         let outline = NavOutlineView()
-        outline.onNavigateUpPastTop = { [weak self] in self?.focusSelector() }
+        outline.onExitUp = { [weak self] in self?.focusSelector() }
+        outline.onExitForward = { [weak self] in self?.focusDiff() }
+        outline.onExitBackward = { [weak self] in self?.focusSelector() }
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("file"))
         column.resizingMask = .autoresizingMask
         outline.addTableColumn(column)
@@ -488,17 +487,23 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     var shownScopeForTesting: DiffScope { scope }
 }
 
-/// The file tree's outline view, with one added behavior: pressing Up while the top row is selected
-/// exits the tree back to the scope selector, so arrow navigation is symmetric with the selector's
-/// Down-into-the-tree. Without this, the tree swallows Up at the top and there's no way back up.
+/// The file tree's outline view, which manages its own keyboard exits: `NSOutlineView` handles
+/// arrows and Tab inside its own `keyDown` (so `moveUp`/`nextKeyView` overrides never fire), so the
+/// three ways out of the tree are intercepted here. Up on the top row returns to the scope selector
+/// (symmetric with its Down-into-the-tree); Tab / Shift-Tab move around the focus ring.
 private final class NavOutlineView: NSOutlineView {
-    var onNavigateUpPastTop: (() -> Void)?
+    var onExitUp: (() -> Void)?
+    var onExitForward: (() -> Void)?
+    var onExitBackward: (() -> Void)?
 
-    override func moveUp(_ sender: Any?) {
-        if selectedRow <= 0 {
-            onNavigateUpPastTop?()
-            return
+    override func keyDown(with event: NSEvent) {
+        switch KeyboardFocus.key(for: event) {
+        case .up where selectedRow <= 0:
+            onExitUp?()
+        case .tab(let shift):
+            (shift ? onExitBackward : onExitForward)?()
+        default:
+            super.keyDown(with: event)
         }
-        super.moveUp(sender)
     }
 }

@@ -69,13 +69,13 @@ final class DiffViewerOverlayTests: XCTestCase {
 
     // MARK: tests
 
-    func test_initialLoad_requestsBranchScopeAndFillsTheTree() {
+    func test_initialLoad_requestsCommittedScopeAndFillsTheTree() {
         let (overlay, spy) = mount(files: [file("a/b/One.swift"), file("a/Two.swift")])
 
-        XCTAssertEqual(spy.requestedScopes, [.branch])  // default scope is All (.branch)
+        XCTAssertEqual(spy.requestedScopes, [.committed])  // default focus is Committed, index 0
         // Tree: a / (b / One.swift) + Two.swift, expanded => 4 rows.
         XCTAssertEqual(overlay.treeRowCountForTesting, 4)
-        XCTAssertEqual(overlay.shownScopeForTesting, .branch)
+        XCTAssertEqual(overlay.shownScopeForTesting, .committed)
     }
 
     func test_load_autoSelectsFirstFileIntoTheRightPane() {
@@ -105,15 +105,15 @@ final class DiffViewerOverlayTests: XCTestCase {
 
     func test_scopeSelector_reRequestsTheDiffForTheChosenScope() {
         let (overlay, spy) = mount(files: [file("One.swift")])
-        XCTAssertEqual(spy.requestedScopes, [.branch])  // default is All (.branch), index 0
+        XCTAssertEqual(spy.requestedScopes, [.committed])  // default is Committed, index 0
 
-        overlay.selectScopeForTesting(2)  // "Uncommitted" (order: All · Committed · Uncommitted)
+        overlay.selectScopeForTesting(1)  // "Uncommitted" (order: Committed · Uncommitted · All)
         XCTAssertEqual(spy.requestedScopes.last, .uncommitted)
         XCTAssertEqual(overlay.shownScopeForTesting, .uncommitted)
 
-        overlay.selectScopeForTesting(1)  // "Committed"
-        XCTAssertEqual(spy.requestedScopes.last, .committed)
-        XCTAssertEqual(overlay.shownScopeForTesting, .committed)
+        overlay.selectScopeForTesting(2)  // "All"
+        XCTAssertEqual(spy.requestedScopes.last, .branch)
+        XCTAssertEqual(overlay.shownScopeForTesting, .branch)
     }
 
     func test_emptyScope_showsNoTreeAndNoSelectedFile() {

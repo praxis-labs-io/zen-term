@@ -70,6 +70,14 @@ final class SegmentedControl: NSView {
                 ? stack.trailingAnchor.constraint(equalTo: trailingAnchor)
                 : stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
         ])
+        if fillEqually, let first = segments.first {
+            // `.fillEqually` alone loses to each `AppButton`'s content-hugging intrinsic width, so pin
+            // the segments to equal widths and let them stretch — the stack then fills the column.
+            for segment in segments { segment.setContentHuggingPriority(.defaultLow, for: .horizontal) }
+            for segment in segments.dropFirst() {
+                segment.widthAnchor.constraint(equalTo: first.widthAnchor).isActive = true
+            }
+        }
         updateSelection()
     }
 
