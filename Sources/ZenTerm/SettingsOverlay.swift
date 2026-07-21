@@ -23,6 +23,11 @@ final class SettingsOverlay: NSView, ModalOverlay {
     /// Nav footer: the origami brand mark + the app version, pinned to the bottom of the nav column.
     private let brandMark = NSImageView()
     private let versionLabel = NSTextField(labelWithString: "")
+    /// A "Report an Issue" button sitting directly above the version footer (beside the version line
+    /// the docs tell users to cite in a report). It's a keyboard stop after the section rows, not part
+    /// of the non-interactive footer. Fired via `onReportIssue`; the host opens the composer.
+    private let reportButton = AppButton(title: "Report an Issue…", variant: .muted)
+    var onReportIssue: (() -> Void)?
 
     init(
         sections: [SettingsSection], capturer: KeybindCapturing?, initialSection: Int = 0,
@@ -118,6 +123,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
         divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         brandMark.contentTintColor = Theme.current.chrome.accent.nsColor
         versionLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        reportButton.reapplyTheme()
         navRows.forEach { $0.reapplyTheme() }
         sections.forEach { $0.reapplyTheme() }
     }
@@ -167,6 +173,16 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
         let footer = makeNavFooter()
 
+        // The Report button is the trailing keyboard stop after the section rows: Down from the last
+        // row focuses it, Up/Shift-Tab returns. It doesn't select a section, so it makes itself first
+        // responder directly rather than going through `moveNav`/`selectSection`.
+        reportButton.isKeyboardFocusable = true
+        reportButton.onTap = { [weak self] in self?.onReportIssue?() }
+        reportButton.onArrowUp = { [weak self] in self?.focusNavTail() }
+        reportButton.onBacktab = { [weak self] in self?.focusNavTail() }
+        reportButton.translatesAutoresizingMaskIntoConstraints = false
+        navRows.last?.onArrowDown = { [weak self] in self?.focusReportButton() }
+
         // The nav rows scroll when they'd overflow the column (many sections on a short window),
         // instead of clipping or colliding with the version footer pinned below (ZEN-136). Keyboard
         // nav scrolls the selected row into view in `selectSection`.
@@ -187,6 +203,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
         let root = NSView()
         root.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(navScroll)
+        root.addSubview(reportButton)
         root.addSubview(footer)
         root.addSubview(divider)
         root.addSubview(detailContainer)
@@ -194,7 +211,16 @@ final class SettingsOverlay: NSView, ModalOverlay {
             navScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             navScroll.topAnchor.constraint(equalTo: root.topAnchor),
             navScroll.widthAnchor.constraint(equalToConstant: Self.navWidth),
-            navScroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -8),
+            navScroll.bottomAnchor.constraint(equalTo: reportButton.topAnchor, constant: -8),
+
+            // The Report button sits in the nav column, between the scrolling list and the version
+            // footer, centered like the footer.
+            reportButton.centerXAnchor.constraint(equalTo: navScroll.centerXAnchor),
+            reportButton.leadingAnchor.constraint(
+                greaterThanOrEqualTo: root.leadingAnchor, constant: Self.footerTrailingInset),
+            reportButton.trailingAnchor.constraint(
+                lessThanOrEqualTo: navScroll.trailingAnchor, constant: -Self.footerTrailingInset),
+            reportButton.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -10),
 
             // navStack is the scrolling document: full content width, height intrinsic (scrolls tall).
             navStack.topAnchor.constraint(equalTo: navScroll.contentView.topAnchor),
@@ -314,4 +340,9 @@ final class SettingsOverlay: NSView, ModalOverlay {
         guard navRows.indices.contains(selectedIndex) else { return }
         window?.makeFirstResponder(navRows[selectedIndex])
     }
+
+    private func focusReportButton() { window?.makeFirstResponder(reportButton) }
+
+    /// Return focus from the Report button to the last nav row, which is the one it's reached from.
+    private func focusNavTail() { window?.makeFirstResponder(navRows.last) }
 }

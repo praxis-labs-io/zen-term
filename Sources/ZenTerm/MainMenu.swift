@@ -57,6 +57,10 @@ enum MainMenu {
         let helpMenu = NSMenu(title: "Help")
         helpItem.submenu = helpMenu
         helpMenu.addItem(
+            withTitle: "Report an Issue…",
+            action: #selector(AppDelegate.reportAnIssue(_:)),
+            keyEquivalent: "")
+        helpMenu.addItem(
             withTitle: "Export Diagnostics…",
             action: #selector(AppDelegate.exportDiagnostics(_:)),
             keyEquivalent: "")

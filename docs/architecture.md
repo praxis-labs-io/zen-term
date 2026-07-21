@@ -74,8 +74,13 @@ Help ▸ Export Diagnostics writes a `.zip` of those log files plus a `metadata.
 (in `ZenTerm`) assembles it from the sink's `fileURLs` and a `SystemReport`, and
 carries only what it's handed, so the shell environment and the config file never
 leak in; the zip is produced with `NSFileCoordinator`'s `.forUploading`, no
-third-party archiver. `SystemReport` is the shared metadata source ZEN-212's
-in-app report will reuse, so the exported header and a filed issue can't disagree.
+third-party archiver. `SystemReport` is the shared metadata source: Help ▸ Report
+an Issue (`ReportIssueOverlay`) opens a composer whose `IssueReport`/`SupportLinks`
+build a prefilled GitHub new-issue URL on the same `SystemReport` block, so the
+exported diagnostics header and a filed issue can't disagree. The app has no
+backend, so it opens the browser to file; a dragged-in diagnostics zip attaches
+the logs. The composer is reached from the Help menu and a Settings nav button
+(no chord).
 
 **GhosttyKit and its resources are gitignored and built per machine**
 (`bin/build-ghosttykit`). A fresh worktree needs `Frameworks/GhosttyKit.xcframework`
