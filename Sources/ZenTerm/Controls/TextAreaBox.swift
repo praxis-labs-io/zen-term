@@ -3,9 +3,9 @@ import AppKit
 /// A rounded, chrome-styled box wrapping an editable multiline `NSTextView` in a scroll view — the
 /// multiline sibling of `FieldBox`. On focus its fill lifts to the palettes' muted accent and its
 /// edge outlines with the accent. Return inserts a newline; ⌘Return submits; Tab / Shift-Tab leave;
-/// Up from the first line and Down from the last line leave (mid-text they move between lines), so it
-/// slots into a form's keyboard focus ring. Esc belongs to the card root (see `ModalEscape`), not the
-/// text view. A shared form-control primitive.
+/// Up from the start and Down from the end leave (mid-text they move the caret), so it slots into a
+/// form's keyboard focus ring. Esc belongs to the card root (see `ModalEscape`), not the text view. A
+/// shared form-control primitive.
 final class TextAreaBox: NSView, NSTextViewDelegate {
     let textView = FocusReportingTextView()
     var onChange: (() -> Void)?
@@ -107,10 +107,18 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
             guard NSApp.currentEvent?.modifierFlags.contains(.command) == true else { return false }
             onSubmit?()
         case #selector(NSResponder.moveUp(_:)):
-            guard let onArrowUp, caretIsOnFirstLine(textView) else { return false }  // else move a line up
+            // Leave only from the very start; elsewhere Up moves the caret up a line (return false).
+            // Testing the caret position, not the visual line, so a soft-wrapped paragraph (no manual
+            // newlines) still navigates line by line instead of exiting on the first Up.
+            guard let onArrowUp, textView.selectedRange() == NSRange(location: 0, length: 0) else {
+                return false
+            }
             onArrowUp()
         case #selector(NSResponder.moveDown(_:)):
-            guard let onArrowDown, caretIsOnLastLine(textView) else { return false }
+            let end = (textView.string as NSString).length
+            guard let onArrowDown, textView.selectedRange() == NSRange(location: end, length: 0) else {
+                return false
+            }
             onArrowDown()
         case #selector(NSResponder.insertTab(_:)):
             guard let onTab else { return false }
@@ -144,21 +152,6 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
 
     private func updatePlaceholderVisibility() {
         placeholderLabel.isHidden = !textView.string.isEmpty
-    }
-
-    /// The caret is on the first logical line when no newline precedes it; on the last when none
-    /// follows. Logical (not soft-wrapped) lines, so this stays deterministic and layout-free: Up
-    /// from the top line and Down from the bottom line leave the field, mid-text they move a line.
-    private func caretIsOnFirstLine(_ textView: NSTextView) -> Bool {
-        let string = textView.string as NSString
-        let caret = min(textView.selectedRange().location, string.length)
-        return !string.substring(to: caret).contains("\n")
-    }
-
-    private func caretIsOnLastLine(_ textView: NSTextView) -> Bool {
-        let string = textView.string as NSString
-        let caret = min(textView.selectedRange().location, string.length)
-        return !string.substring(from: caret).contains("\n")
     }
 }
 
