@@ -58,7 +58,41 @@ final class GitDiffRunner {
         }
     }
 
+    /// Loads the repo's local branches off-main and calls `completion` on the main thread with the
+    /// default branch pinned first, then the rest by most-recent commit — the order the base picker
+    /// shows. A git failure yields an empty list (the picker just shows nothing rather than an error;
+    /// the current base is unaffected).
+    func loadBranches(completion: @escaping ([String]) -> Void) {
+        let repoRoot = self.repoRoot
+        DispatchQueue.global(qos: .userInitiated).async {
+            let recency =
+                (try? Self.runGit(
+                    ["for-each-ref", "--format=%(refname:short)", "--sort=-committerdate", "refs/heads"],
+                    in: repoRoot))?
+                .split(separator: "\n").map(String.init) ?? []
+            let preferred = try? Self.resolveDefaultBase(in: repoRoot)
+            let ordered = Self.orderedBranches(recency: recency, default: preferred)
+            DispatchQueue.main.async { completion(ordered) }
+        }
+    }
+
     // MARK: - Pure helpers (unit-tested)
+
+    /// The base picker's branch order: the default branch first (so `main` sits on top even when it
+    /// hasn't been committed to recently), then every other branch by the recency order git returned,
+    /// deduplicated. A `default` not among the local branches is still pinned first — it may be a
+    /// remote default the user forks from without a local tracking branch.
+    static func orderedBranches(recency: [String], default preferred: String?) -> [String] {
+        var seen = Set<String>()
+        var ordered: [String] = []
+        func add(_ name: String) {
+            guard seen.insert(name).inserted else { return }
+            ordered.append(name)
+        }
+        if let preferred, !preferred.isEmpty { add(preferred) }
+        recency.forEach(add)
+        return ordered
+    }
 
     /// The `git diff` argument list for a slice. `--no-color`/`--no-ext-diff` keep the output a plain
     /// unified diff the parser can read regardless of git config; `--find-renames` makes a moved file

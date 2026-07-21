@@ -144,6 +144,11 @@ final class WindowController: NSObject {
             case .workspaceForm, .toolFloatForm, .reportIssue: return nil
             }
         }
+
+        /// Whether presenting this card takes the accent halo from the pane behind it — true only for
+        /// the diff viewer, which wears the halo itself (like a configured tool float). The transient
+        /// pickers and forms leave the pane's focus glow lit behind them.
+        var stealsHalo: Bool { self == .diffViewer }
     }
     private var modal: (overlay: ModalOverlay, kind: ModalKind)?
 
@@ -642,6 +647,7 @@ final class WindowController: NSObject {
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
         guard let active = activeController else { return }
         active.presentTileOverlay(overlay)
+        if kind.stealsHalo { active.yieldFocusToFloat() }  // pane drops its glow; the card wears it
         modal = (overlay, kind)
         overlay.focusInitialResponder()
         overlay.animateIn()
@@ -742,12 +748,15 @@ final class WindowController: NSObject {
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
             initialStatus: initial,
-            loader: { [weak self] completion in
-                runner.loadStatus { result in
-                    if case .success(let load) = result { self?.diffCache = (repoRoot, load) }
+            loader: { [weak self] base, completion in
+                runner.loadStatus(base: base) { result in
+                    // Only the default-base load restamps the cache — a picked base is a transient
+                    // override, not the state a plain reopen should render.
+                    if base == nil, case .success(let load) = result { self?.diffCache = (repoRoot, load) }
                     completion(result)
                 }
             },
+            branchesLoader: { completion in runner.loadBranches(completion: completion) },
             onCancel: { [weak self] in self?.closeModal() })
         presentModal(overlay, kind: .diffViewer)
     }

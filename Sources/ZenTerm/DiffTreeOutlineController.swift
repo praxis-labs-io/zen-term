@@ -9,6 +9,9 @@ import AppKit
 final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
     private(set) var roots: [DiffOutlineItem]
     private let onSelect: (FileDiff) -> Void
+    /// Open the base picker — wired to the `main abc1234 ▾` button on the Committed section header,
+    /// the only section that carries a base subtitle.
+    private let onPickBase: () -> Void
 
     static let nameColumnID = NSUserInterfaceItemIdentifier("diff-name")
     static let statColumnID = NSUserInterfaceItemIdentifier("diff-stat")
@@ -18,9 +21,10 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
     private static let statViewID = NSUserInterfaceItemIdentifier("diff-tree-stat")
     private static let selectionRowID = NSUserInterfaceItemIdentifier("diff-tree-selection")
 
-    init(sections: [DiffOutlineItem], onSelect: @escaping (FileDiff) -> Void) {
+    init(sections: [DiffOutlineItem], onSelect: @escaping (FileDiff) -> Void, onPickBase: @escaping () -> Void) {
         self.roots = sections
         self.onSelect = onSelect
+        self.onPickBase = onPickBase
     }
 
     /// The first file in tree order, or nil for an empty tree — the initial selection.
@@ -72,7 +76,7 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
             let row =
                 outlineView.makeView(withIdentifier: Self.sectionID, owner: self) as? DiffSectionRowView
                 ?? DiffSectionRowView(id: Self.sectionID)
-            row.configure(node)
+            row.configure(node, onPickBase: node.sectionSubtitle != nil ? onPickBase : nil)
             return row
         }
         let row =
@@ -171,30 +175,33 @@ private final class ThemedSelectionRowView: NSTableRowView {
 }
 
 /// A section header row (name column): the slice name in muted small caps, with an optional inline
-/// subtitle (the fork base for the committed slice). The slice total lives in the stat column.
+/// base button (the fork base for the committed slice, `main abc1234 ▾`, clicked to change it). The
+/// slice total lives in the stat column.
 private final class DiffSectionRowView: NSView {
     private let titleLabel = NSTextField(labelWithString: "")
-    private let subtitleLabel = NSTextField(labelWithString: "")
+    private let baseButton = BaseButton()
 
     init(id: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
         identifier = id
         titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
-        subtitleLabel.font = .monospacedDigitSystemFont(ofSize: 10.5, weight: .regular)
-        subtitleLabel.lineBreakMode = .byTruncatingTail
         addSubview(titleLabel)
-        addSubview(subtitleLabel)
+        addSubview(baseButton)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func configure(_ item: DiffOutlineItem) {
-        let chrome = Theme.current.chrome
+    /// `onPickBase` is non-nil only for the committed section (the one with a base subtitle); a nil
+    /// hides the button, so the other section headers show only their name.
+    func configure(_ item: DiffOutlineItem, onPickBase: (() -> Void)?) {
         titleLabel.stringValue = item.displayName.uppercased()
-        titleLabel.textColor = chrome.ink(alpha: 0.55)
-        subtitleLabel.stringValue = item.sectionSubtitle ?? ""
-        subtitleLabel.textColor = chrome.muted.nsColor
-        subtitleLabel.isHidden = item.sectionSubtitle == nil
+        titleLabel.textColor = Theme.current.chrome.ink(alpha: 0.55)
+        if let subtitle = item.sectionSubtitle, let onPickBase {
+            baseButton.configure(text: subtitle, onClick: onPickBase)
+            baseButton.isHidden = false
+        } else {
+            baseButton.isHidden = true
+        }
         needsLayout = true
     }
 
@@ -205,11 +212,77 @@ private final class DiffSectionRowView: NSView {
             x: 0, y: ((bounds.height - titleSize.height) / 2).rounded(),
             width: titleSize.width, height: titleSize.height)
 
-        let subtitleX = titleSize.width + 8
-        let subtitleHeight = subtitleLabel.intrinsicContentSize.height
-        subtitleLabel.frame = NSRect(
-            x: subtitleX, y: ((bounds.height - subtitleHeight) / 2).rounded(),
-            width: max(0, bounds.width - subtitleX), height: subtitleHeight)
+        guard !baseButton.isHidden else { return }
+        let buttonX = titleSize.width + 8
+        let buttonSize = baseButton.intrinsicContentSize
+        baseButton.frame = NSRect(
+            x: buttonX, y: ((bounds.height - buttonSize.height) / 2).rounded(),
+            width: min(buttonSize.width, max(0, bounds.width - buttonX)), height: buttonSize.height)
+    }
+}
+
+/// The `main abc1234 ▾` base button on the Committed header: a faint rounded pill (the chrome's
+/// rounded-box idiom) that brightens on hover and opens the base picker on click. A view, not an
+/// `NSButton`, so it sits inside an outline row cell and takes its click without tripping row
+/// selection (its `mouseDown` doesn't call super).
+private final class BaseButton: NSView {
+    private let label = NSTextField(labelWithString: "")
+    private let chevron = NSImageView()
+    private var onClick: (() -> Void)?
+    private var trackingArea: NSTrackingArea?
+    private var isHovered = false { didSet { updateFill() } }
+
+    init() {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 5
+        label.font = .monospacedDigitSystemFont(ofSize: 10.5, weight: .regular)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        chevron.image = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: "change base")?
+            .withSymbolConfiguration(.init(pointSize: 8, weight: .semibold))
+        chevron.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+        addSubview(chevron)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 7),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            chevron.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 4),
+            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -7),
+            chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
+            heightAnchor.constraint(equalToConstant: 18),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func configure(text: String, onClick: @escaping () -> Void) {
+        self.onClick = onClick
+        label.stringValue = text
+        label.textColor = Theme.current.chrome.ink(alpha: 0.7)
+        chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
+        setAccessibilityLabel("Compare against \(text)")
+        updateFill()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(
+            rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { isHovered = true }
+    override func mouseExited(with event: NSEvent) { isHovered = false }
+    override func mouseDown(with event: NSEvent) { onClick?() }
+    override func accessibilityPerformPress() -> Bool { onClick?(); return true }
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
+
+    private func updateFill() {
+        layer?.backgroundColor = Theme.current.chrome.ink(alpha: isHovered ? 0.14 : 0.08).cgColor
     }
 }
 

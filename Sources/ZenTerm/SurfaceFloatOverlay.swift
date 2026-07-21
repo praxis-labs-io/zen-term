@@ -45,7 +45,7 @@ class SurfaceFloatOverlay: NSView {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        CardChrome.apply(to: card, background: background, cornerRadius: cornerRadius)
+        CardChrome.apply(to: card, background: background, cornerRadius: cornerRadius, halo: true)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 
@@ -85,7 +85,7 @@ class SurfaceFloatOverlay: NSView {
     /// Re-apply the card's theme-dependent colors after a live theme change. The shadow
     /// (`FloatShadow.applyShadow`) is theme-independent and untouched.
     func reapplyTheme() {
-        CardChrome.reapplyTheme(to: card)
+        CardChrome.reapplyTheme(to: card, halo: true)
     }
 
     /// Spring the card in (fade + subtle scale about its center). Call after presenting.

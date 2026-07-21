@@ -42,6 +42,30 @@ final class GitDiffRunnerTests: XCTestCase {
         XCTAssertNil(GitDiffRunner.defaultBranchName(fromSymbolicRef: "\n"))
     }
 
+    // MARK: base picker branch order
+
+    func test_orderedBranches_pinsDefaultFirstThenRecency() {
+        let ordered = GitDiffRunner.orderedBranches(
+            recency: ["feature-x", "main", "bugfix"], default: "main")
+        XCTAssertEqual(ordered, ["main", "feature-x", "bugfix"])  // main hoisted out of its recency slot
+    }
+
+    func test_orderedBranches_defaultNotAmongLocalsIsStillPinned() {
+        let ordered = GitDiffRunner.orderedBranches(recency: ["feature-x", "bugfix"], default: "main")
+        XCTAssertEqual(ordered, ["main", "feature-x", "bugfix"])  // remote default with no local branch
+    }
+
+    func test_orderedBranches_noDefaultKeepsRecencyOrder() {
+        let ordered = GitDiffRunner.orderedBranches(recency: ["feature-x", "bugfix"], default: nil)
+        XCTAssertEqual(ordered, ["feature-x", "bugfix"])
+    }
+
+    func test_orderedBranches_deduplicates() {
+        let ordered = GitDiffRunner.orderedBranches(
+            recency: ["main", "feature-x", "feature-x"], default: "main")
+        XCTAssertEqual(ordered, ["main", "feature-x"])
+    }
+
     // MARK: untracked fold (always unstaged)
 
     func test_syntheticUntrackedDiffs_addsAsAddedFiles() {

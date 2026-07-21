@@ -227,15 +227,28 @@ for a different card closes the current one and falls through, so cards switch
 live.
 
 **The diff viewer is the first chrome subsystem to shell out.** ⌘⇧D opens
-`DiffViewerOverlay`, a modal card (file tree left, side-by-side diff right) over the
-focused tile, across three scopes (uncommitted / committed / all) switched live from
-an in-header segmented control. Its git work is `GitDiffRunner`, the app's first real
-subprocess: `git diff` runs off the main thread on a global queue, both pipes drained
-to EOF before `waitUntilExit`, then back to main with a parsed `[FileDiff]`. The model
-half (`DiffParser`, `DiffTree`, `SideBySideDiff`) is pure and renderer-agnostic; the
-overlay takes an injected loader, so the chrome never touches `Process`, "not a repo"
-is a state rather than a failure, and the whole surface is drivable in a test without
-a repo. Like the palette and floats it has no menu entry: chord + ⌘P + dock.
+`DiffViewerOverlay`, a modal card over the focused tile: a single file tree on the
+left split into three status sections (Unstaged → Staged → Committed, empty ones
+hidden), the side-by-side diff of the selected file on the right, and a full-width
+footer carrying the total `+n −m` on the left and the live-keymap key hints (real
+`KeycapView`s) on the right. The committed slice forks from the repo's default branch
+(`origin/HEAD`, else main/master — git records no parent, so a stacked branch's parent
+isn't guessed); its section header carries a `main abc1234 ▾` base button that opens
+`DiffBasePickerOverlay`, a searchable `PaletteOverlay` (branches default-first then by
+recency) which re-runs the committed slice against the chosen branch. Navigation is the
+app's own pane chords, not Tab: ⌘h/⌘l move between the tree and the diff, ⌘j/⌘k jump to
+the next/previous change; they're forwarded from `WindowController.handle` because
+`KeyInterceptor` consumes chords before the responder chain. It wears the accent halo
+and the pane behind yields focus, the way a configured tool float does.
+
+Its git work is `GitDiffRunner`, the app's first real subprocess: `git diff` runs off
+the main thread on a global queue, both pipes drained to EOF before `waitUntilExit`,
+then back to main with a parsed `[FileDiff]`. The model half (`DiffParser`, `DiffTree`,
+`SideBySideDiff`) is pure and renderer-agnostic; the overlay takes an injected loader,
+so the chrome never touches `Process` and the whole surface is drivable in a test
+without a repo. Opening is guarded upstream: a non-repo directory shows a toast and the
+overlay never mounts, so it always has a repo. Like the palette and floats it has no
+menu entry: chord + ⌘P + dock.
 
 **Tool floats are window-level, not app-level**, because a surface is one `NSView`
 and can live in one view hierarchy: an app-global instance would physically yank

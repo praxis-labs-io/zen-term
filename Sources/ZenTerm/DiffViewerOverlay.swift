@@ -16,12 +16,26 @@ import AppKit
 /// that transform, not this shell.
 final class DiffViewerOverlay: NSView, ModalOverlay {
     typealias StatusResult = Result<GitDiffRunner.StatusLoad, GitDiffRunner.Failure>
-    /// Loads the repo status and calls back on the main thread. Injected so the overlay never touches
-    /// `Process` itself; `WindowController` wires this to a `GitDiffRunner`.
-    typealias Loader = (@escaping (StatusResult) -> Void) -> Void
+    /// Loads the repo status for a chosen base (nil = the repo's default) and calls back on the main
+    /// thread. Injected so the overlay never touches `Process` itself; `WindowController` wires this to
+    /// a `GitDiffRunner`.
+    typealias Loader = (String?, @escaping (StatusResult) -> Void) -> Void
+    /// Loads the repo's branches (base-picker order) and calls back on the main thread.
+    typealias BranchesLoader = (@escaping ([String]) -> Void) -> Void
 
     private let loader: Loader
+    private let branchesLoader: BranchesLoader
     private let onCancel: () -> Void
+
+    /// The base the committed slice is compared against once the user overrides the default via the
+    /// base picker; nil defers to the repo's default (main/master).
+    private var baseOverride: String?
+    /// The base picker while it's hosted over this card, so nav chords/Esc route to it and a second
+    /// open is idempotent.
+    private var basePicker: DiffBasePickerOverlay?
+    /// The repo's branches, loaded in the background and refreshed on each status load, so the base
+    /// picker opens instantly (git branch listing is fast, but not click-latency fast).
+    private var branches: [String] = []
 
     private let card = CardView()
     private var dismiss = DismissGate()
@@ -33,7 +47,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private let messageLabel = NSTextField(wrappingLabelWithString: "")
     private let footerDivider = NSView()
     private let statsLabel = NSTextField(labelWithString: "")
-    private let hintsLabel = NSTextField(labelWithString: "")
+    private let hintsStack = NSStackView()
 
     private var selectedFilePath: String?
     /// The status currently on screen — a background refresh that returns the same thing is a no-op,
@@ -44,9 +58,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     init(
         background: NSColor, initialStatus: GitDiffRunner.StatusLoad?, loader: @escaping Loader,
-        onCancel: @escaping () -> Void
+        branchesLoader: @escaping BranchesLoader, onCancel: @escaping () -> Void
     ) {
         self.loader = loader
+        self.branchesLoader = branchesLoader
         self.onCancel = onCancel
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -56,7 +71,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        CardChrome.apply(to: card, background: background)
+        CardChrome.apply(to: card, background: background, halo: true)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 
@@ -84,6 +99,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         } else {
             reload(showSpinner: true)
         }
+        refreshBranches()
+    }
+
+    /// Pull the repo's branches into the cache so the base picker opens without a load delay. Cheap
+    /// (a local `for-each-ref`); refreshed on each status load so a newly-created branch appears.
+    private func refreshBranches() {
+        branchesLoader { [weak self] branches in self?.branches = branches }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -120,6 +142,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // While the base picker is up it owns Esc (to close itself, not the whole viewer), so defer to
+        // the responder traversal that reaches it instead of claiming Esc here.
+        if basePicker != nil { return super.performKeyEquivalent(with: event) }
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() }
         ) {
@@ -129,14 +154,15 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     func reapplyTheme() {
-        CardChrome.reapplyTheme(to: card)
+        CardChrome.reapplyTheme(to: card, halo: true)
         treeRule.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         footerDivider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         messageLabel.textColor = Theme.current.chrome.muted.nsColor
-        hintsLabel.attributedStringValue = Self.hintsText()
+        fillHints()
         if let status = displayedStatus { statsLabel.attributedStringValue = Self.statsText(for: status) }
         outline.reloadData()
         diffTable.reapplyTheme()
+        basePicker?.reapplyTheme()
     }
 
     // MARK: pane-chord navigation
@@ -146,6 +172,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// between the tree and the diff; ⌘j/⌘k jump to the next/previous change in the focused pane.
     /// Returns true when it consumed the chord.
     func handleNavChord(_ chord: KeyInterceptor.ReservedChord) -> Bool {
+        // The base picker owns navigation while it's up (its own list handles the arrows); swallow the
+        // pane chords so they don't drive the tree behind it.
+        if basePicker != nil { return true }
         switch chord {
         case .navLeft:
             window?.makeFirstResponder(outline)
@@ -186,6 +215,50 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             }
             row += delta
         }
+    }
+
+    // MARK: base picker
+
+    /// Open the base picker over the card (hosted here, not the window's modal slot, so dismissing it
+    /// returns to the diff). Idempotent; uses the cached branch list so it appears without a delay.
+    private func openBasePicker() {
+        guard basePicker == nil else { return }
+        let picker = DiffBasePickerOverlay(
+            branches: branches,
+            currentBase: displayedStatus?.baseBranch,
+            background: Theme.current.chrome.background.nsColor,
+            onChoose: { [weak self] branch in self?.chooseBase(branch) },
+            onDismiss: { [weak self] in self?.dismissBasePicker() })
+        picker.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(picker)
+        NSLayoutConstraint.activate([
+            picker.leadingAnchor.constraint(equalTo: leadingAnchor),
+            picker.trailingAnchor.constraint(equalTo: trailingAnchor),
+            picker.topAnchor.constraint(equalTo: topAnchor),
+            picker.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        basePicker = picker
+        layoutSubtreeIfNeeded()
+        picker.focusInitialResponder()
+        picker.animateIn()
+    }
+
+    /// Compare against the chosen branch: re-run the committed slice against it, keeping the current
+    /// diff on screen until the new one lands (no spinner flash). A reselect of the current base is a
+    /// no-op.
+    private func chooseBase(_ branch: String) {
+        dismissBasePicker()
+        guard branch != displayedStatus?.baseBranch else { return }
+        baseOverride = branch
+        reload(showSpinner: false)
+    }
+
+    private func dismissBasePicker() {
+        guard let picker = basePicker else { return }
+        basePicker = nil
+        picker.animateOut { picker.removeFromSuperview() }
+        window?.makeFirstResponder(outline)
+        refreshFocusStyling()
     }
 
     // MARK: layout
@@ -290,12 +363,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         statsLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         statsLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        hintsLabel.font = .systemFont(ofSize: 11)
-        hintsLabel.alignment = .right
-        hintsLabel.attributedStringValue = Self.hintsText()
-        hintsLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        hintsLabel.setContentHuggingPriority(.required, for: .horizontal)
-        hintsLabel.translatesAutoresizingMaskIntoConstraints = false
+        hintsStack.orientation = .horizontal
+        hintsStack.spacing = 16
+        hintsStack.alignment = .centerY
+        hintsStack.setContentCompressionResistancePriority(.required, for: .horizontal)
+        hintsStack.setContentHuggingPriority(.required, for: .horizontal)
+        hintsStack.translatesAutoresizingMaskIntoConstraints = false
+        fillHints()
 
         footerDivider.wantsLayer = true
         footerDivider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
@@ -304,15 +378,42 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         let footer = NSView()
         footer.translatesAutoresizingMaskIntoConstraints = false
         footer.addSubview(statsLabel)
-        footer.addSubview(hintsLabel)
+        footer.addSubview(hintsStack)
         NSLayoutConstraint.activate([
             statsLabel.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 14),
             statsLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
-            hintsLabel.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -14),
-            hintsLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
-            hintsLabel.leadingAnchor.constraint(greaterThanOrEqualTo: statsLabel.trailingAnchor, constant: 12),
+            hintsStack.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -14),
+            hintsStack.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
+            hintsStack.leadingAnchor.constraint(greaterThanOrEqualTo: statsLabel.trailingAnchor, constant: 12),
         ])
         return footer
+    }
+
+    /// The footer's key legend as real keycaps, built from the live keymap so it shows the user's own
+    /// pane/jump bindings (not the defaults). Rebuilt in full on a theme/keymap change — every keycap
+    /// bakes its colors in at construction, so it's re-created rather than mutated.
+    private func fillHints() {
+        hintsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        func glyph(_ chord: KeyInterceptor.ReservedChord) -> String { CommandCatalog.spec(for: chord).shortcut }
+        let groups: [(keys: String, label: String)] = [
+            ("\(glyph(.navLeft)) \(glyph(.navRight))", "panes"),
+            ("\(glyph(.navDown)) \(glyph(.navUp))", "jump"),
+            ("←/→", "fold"),
+            ("esc", "close"),
+        ]
+        for group in groups { hintsStack.addArrangedSubview(Self.hintGroup(keys: group.keys, label: group.label)) }
+    }
+
+    /// One `[keycap]  label` pair for the footer legend: a themed keycap next to a muted caption.
+    private static func hintGroup(keys: String, label: String) -> NSView {
+        let caption = NSTextField(labelWithString: label)
+        caption.font = .systemFont(ofSize: 11)
+        caption.textColor = Theme.current.chrome.ink(alpha: 0.45)
+        let stack = NSStackView(views: [KeycapView(shortcut: keys), caption])
+        stack.orientation = .horizontal
+        stack.spacing = 6
+        stack.alignment = .centerY
+        return stack
     }
 
     // MARK: loading
@@ -321,7 +422,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         loadToken += 1
         let token = loadToken
         if showSpinner { showMessage("Loading…") }
-        loader { [weak self] result in
+        loader(baseOverride) { [weak self] result in
             guard let self, token == self.loadToken else { return }
             switch result {
             case .success(let status):
@@ -337,11 +438,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     private func apply(_ status: GitDiffRunner.StatusLoad) {
         displayedStatus = status
+        refreshBranches()  // keep the picker's list fresh across refreshes
         statsLabel.attributedStringValue = Self.statsText(for: status)
 
-        let controller = DiffTreeOutlineController(sections: DiffOutlineItem.sections(from: status)) {
-            [weak self] file in self?.selectFile(file)
-        }
+        let controller = DiffTreeOutlineController(
+            sections: DiffOutlineItem.sections(from: status),
+            onSelect: { [weak self] file in self?.selectFile(file) },
+            onPickBase: { [weak self] in self?.openBasePicker() })
         outlineController = controller
         outline.dataSource = controller
         outline.delegate = controller
@@ -399,16 +502,6 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         return text
     }
 
-    private static func hintsText() -> NSAttributedString {
-        // Glyphs come from the live keymap, so the hints show the user's own bindings, not the defaults.
-        func glyph(_ chord: KeyInterceptor.ReservedChord) -> String { CommandCatalog.spec(for: chord).shortcut }
-        let text =
-            "\(glyph(.navLeft)) \(glyph(.navRight)) panes   "
-            + "\(glyph(.navDown)) \(glyph(.navUp)) jump   ←/→ fold   esc close"
-        return NSAttributedString(
-            string: text, attributes: [.foregroundColor: Theme.current.chrome.ink(alpha: 0.45)])
-    }
-
     // MARK: test hooks
 
     /// The number of rows the file tree currently shows (sections + expanded files).
@@ -421,6 +514,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     func selectRowForTesting(_ row: Int) {
         outline.selectRowIndexes([row], byExtendingSelection: false)
     }
+    /// Open the base picker the way the Committed header's base button does (the button itself, buried
+    /// in an outline row, is a runbook check), so a test can drive the picker → base-override wiring.
+    func openBasePickerForTesting() { openBasePicker() }
+    /// The hosted base picker, or nil when it's closed.
+    var basePickerForTesting: DiffBasePickerOverlay? { basePicker }
 }
 
 /// The file tree's outline view. Accepts first responder even when empty (so keystrokes never leak to

@@ -18,14 +18,20 @@ final class DiffViewerOverlayTests: XCTestCase {
 
     private final class LoaderSpy {
         var calls = 0
+        /// The `base` the overlay asked each load for — nil on the default-base load, the picked branch
+        /// after a base override.
+        var lastBase: String?
         let status: GitDiffRunner.StatusLoad
         let failure: GitDiffRunner.Failure?
-        init(status: GitDiffRunner.StatusLoad, failure: GitDiffRunner.Failure?) {
+        let branches: [String]
+        init(status: GitDiffRunner.StatusLoad, failure: GitDiffRunner.Failure?, branches: [String]) {
             self.status = status
             self.failure = failure
+            self.branches = branches
         }
-        func load(_ completion: (DiffViewerOverlay.StatusResult) -> Void) {
+        func load(_ base: String?, _ completion: (DiffViewerOverlay.StatusResult) -> Void) {
             calls += 1
+            lastBase = base
             if let failure {
                 completion(.failure(failure))
             } else {
@@ -36,16 +42,18 @@ final class DiffViewerOverlayTests: XCTestCase {
 
     private func mount(
         unstaged: [FileDiff] = [], staged: [FileDiff] = [], committed: [FileDiff] = [],
-        base: (branch: String, sha: String)? = nil, failure: GitDiffRunner.Failure? = nil
+        base: (branch: String, sha: String)? = nil, branches: [String] = [],
+        failure: GitDiffRunner.Failure? = nil
     ) -> (overlay: DiffViewerOverlay, spy: LoaderSpy) {
         let status = GitDiffRunner.StatusLoad(
             unstaged: unstaged, staged: staged, committed: committed,
             baseBranch: base?.branch, baseSHA: base?.sha)
-        let spy = LoaderSpy(status: status, failure: failure)
+        let spy = LoaderSpy(status: status, failure: failure, branches: branches)
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
             initialStatus: nil,
-            loader: { completion in spy.load(completion) },
+            loader: { base, completion in spy.load(base, completion) },
+            branchesLoader: { completion in completion(spy.branches) },
             onCancel: {})
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
@@ -125,5 +133,59 @@ final class DiffViewerOverlayTests: XCTestCase {
 
         XCTAssertEqual(overlay.treeRowCountForTesting, 0)
         XCTAssertNil(overlay.selectedFilePathForTesting)
+    }
+
+    // MARK: base picker
+
+    func test_basePicker_opensWithTheCachedBranchesAndMarksCurrentBase() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main", "feature-x"])
+
+        overlay.openBasePickerForTesting()
+
+        XCTAssertEqual(overlay.basePickerForTesting?.matchesForTesting, ["main", "feature-x"])
+    }
+
+    func test_basePicker_filtersBranchesBySubstring() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main", "feature-x", "feature-y", "bugfix"])
+        overlay.openBasePickerForTesting()
+
+        overlay.basePickerForTesting?.applyFilter(query: "feat")
+
+        XCTAssertEqual(overlay.basePickerForTesting?.matchesForTesting, ["feature-x", "feature-y"])
+    }
+
+    func test_choosingABranch_reloadsTheDiffAgainstThatBase() {
+        let (overlay, spy) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main", "feature-x"])
+        overlay.openBasePickerForTesting()
+        let callsBeforeChoose = spy.calls
+
+        // Activate the "feature-x" row the way Enter on the picker does.
+        let picker = overlay.basePickerForTesting!
+        let index = picker.matchesForTesting.firstIndex(of: "feature-x")!
+        picker.activate(index: index, modifiers: [])
+
+        XCTAssertEqual(spy.lastBase, "feature-x")  // the committed slice re-ran against the picked base
+        XCTAssertGreaterThan(spy.calls, callsBeforeChoose)
+        XCTAssertNil(overlay.basePickerForTesting)  // picker dismissed on choose
+    }
+
+    func test_choosingTheCurrentBase_isANoOp() {
+        let (overlay, spy) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main", "feature-x"])
+        overlay.openBasePickerForTesting()
+        let callsBeforeChoose = spy.calls
+
+        let picker = overlay.basePickerForTesting!
+        picker.activate(index: picker.matchesForTesting.firstIndex(of: "main")!, modifiers: [])
+
+        XCTAssertEqual(spy.calls, callsBeforeChoose)  // same base — no reload
+        XCTAssertNil(overlay.basePickerForTesting)
     }
 }
