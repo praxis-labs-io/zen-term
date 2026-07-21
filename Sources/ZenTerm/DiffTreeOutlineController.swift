@@ -90,16 +90,22 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
 }
 
 /// The `+n −m` stat in the positive/destructive roles, shared by the file rows and the section
-/// headers so both read the same way.
+/// headers so both read the same way. The font is baked into the attributes, not left to the label's
+/// `.font`: an `attributedStringValue` ignores the label's font, so without it the string measures and
+/// renders in different fonts and the frame clips the number (a long `+130` showed as `+1`).
 func diffStatText(added: Int, removed: Int, chrome: ChromeTheme) -> NSAttributedString {
+    let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
     let text = NSMutableAttributedString()
     if added > 0 {
-        text.append(NSAttributedString(string: "+\(added)", attributes: [.foregroundColor: chrome.positive.nsColor]))
+        text.append(
+            NSAttributedString(
+                string: "+\(added)", attributes: [.foregroundColor: chrome.positive.nsColor, .font: font]))
     }
     if removed > 0 {
-        if text.length > 0 { text.append(NSAttributedString(string: " ")) }
+        if text.length > 0 { text.append(NSAttributedString(string: " ", attributes: [.font: font])) }
         text.append(
-            NSAttributedString(string: "−\(removed)", attributes: [.foregroundColor: chrome.destructive.nsColor]))
+            NSAttributedString(
+                string: "−\(removed)", attributes: [.foregroundColor: chrome.destructive.nsColor, .font: font]))
     }
     return text
 }
@@ -110,8 +116,18 @@ func diffStatText(added: Int, removed: Int, chrome: ChromeTheme) -> NSAttributed
 private final class ThemedSelectionRowView: NSTableRowView {
     override func drawSelection(in dirtyRect: NSRect) {
         guard isSelected else { return }
-        Theme.current.chrome.accent.nsColor.withAlphaComponent(0.18).setFill()
-        NSBezierPath(roundedRect: bounds.insetBy(dx: 4, dy: 1), xRadius: 6, yRadius: 6).fill()
+        let accent = Theme.current.chrome.accent.nsColor
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 4, dy: 1), xRadius: 6, yRadius: 6)
+        if isEmphasized {
+            // The tree holds focus: a solid accent fill.
+            accent.withAlphaComponent(0.18).setFill()
+            path.fill()
+        } else {
+            // Focus is in the diff: keep the selected file marked, but as a quiet outline.
+            accent.withAlphaComponent(0.4).setStroke()
+            path.lineWidth = 1
+            path.stroke()
+        }
     }
 }
 
@@ -161,14 +177,15 @@ private final class DiffSectionRowView: NSView {
             x: 0, y: ((bounds.height - titleSize.height) / 2).rounded(),
             width: titleSize.width, height: titleSize.height)
 
+        let rightPad: CGFloat = 8
         let statWidth = hasStat ? statLabel.intrinsicContentSize.width : 0
         let statHeight = statLabel.intrinsicContentSize.height
         statLabel.frame = NSRect(
-            x: bounds.width - statWidth, y: ((bounds.height - statHeight) / 2).rounded(),
+            x: bounds.width - statWidth - rightPad, y: ((bounds.height - statHeight) / 2).rounded(),
             width: statWidth, height: statHeight)
 
         let subtitleX = titleSize.width + 8
-        let subtitleAvailable = max(0, bounds.width - statWidth - 8 - subtitleX)
+        let subtitleAvailable = max(0, bounds.width - statWidth - rightPad - 8 - subtitleX)
         let subtitleHeight = subtitleLabel.intrinsicContentSize.height
         subtitleLabel.frame = NSRect(
             x: subtitleX, y: ((bounds.height - subtitleHeight) / 2).rounded(),
@@ -237,11 +254,12 @@ private final class DiffTreeRowView: NSView {
         let icon = Self.iconWidth
         iconView.frame = NSRect(x: 0, y: ((bounds.height - icon) / 2).rounded(), width: icon, height: icon)
 
+        let rightPad: CGFloat = 8
         let statWidth = hasStat ? statLabel.intrinsicContentSize.width : 0
         let gap: CGFloat = hasStat ? 8 : 0
         let statHeight = statLabel.intrinsicContentSize.height
         statLabel.frame = NSRect(
-            x: bounds.width - statWidth, y: ((bounds.height - statHeight) / 2).rounded(),
+            x: bounds.width - statWidth - rightPad, y: ((bounds.height - statHeight) / 2).rounded(),
             width: statWidth, height: statHeight)
 
         // NSTextField top-aligns single-line text in a taller frame, so size the name to its own
@@ -250,6 +268,6 @@ private final class DiffTreeRowView: NSView {
         let nameHeight = nameLabel.intrinsicContentSize.height
         nameLabel.frame = NSRect(
             x: nameX, y: ((bounds.height - nameHeight) / 2).rounded(),
-            width: max(0, bounds.width - statWidth - gap - nameX), height: nameHeight)
+            width: max(0, bounds.width - statWidth - rightPad - gap - nameX), height: nameHeight)
     }
 }

@@ -149,8 +149,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         switch chord {
         case .navLeft:
             window?.makeFirstResponder(outline)
+            refreshFocusStyling()
         case .navRight:
             window?.makeFirstResponder(diffTable.scrollFocusTarget)
+            refreshFocusStyling()
         case .navDown:
             if treeIsFocused { moveFileSelection(1) } else { diffTable.jumpToNextChange() }
         case .navUp:
@@ -162,6 +164,15 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     private var treeIsFocused: Bool { window?.firstResponder === outline }
+
+    /// Redraw both panes' selection when focus moves between them: the tree's selected file switches
+    /// between a solid fill (focused) and a quiet outline (not), and the diff's cursor line only
+    /// shows while the diff is focused. AppKit's `isEmphasized` redraw across two views in one window
+    /// isn't reliable, so nudge it.
+    private func refreshFocusStyling() {
+        outline.enumerateAvailableRowViews { rowView, _ in rowView.needsDisplay = true }
+        diffTable.redrawSelection()
+    }
 
     /// Move the tree selection to the next / previous file, skipping section headers and directories.
     private func moveFileSelection(_ delta: Int) {
@@ -367,11 +378,15 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         let added = files.reduce(0) { $0 + $1.addedCount }
         let removed = files.reduce(0) { $0 + $1.removedCount }
         let chrome = Theme.current.chrome
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         let text = NSMutableAttributedString()
-        text.append(NSAttributedString(string: "+\(added)", attributes: [.foregroundColor: chrome.positive.nsColor]))
-        text.append(NSAttributedString(string: "  "))
         text.append(
-            NSAttributedString(string: "−\(removed)", attributes: [.foregroundColor: chrome.destructive.nsColor]))
+            NSAttributedString(
+                string: "+\(added)", attributes: [.foregroundColor: chrome.positive.nsColor, .font: font]))
+        text.append(NSAttributedString(string: "  ", attributes: [.font: font]))
+        text.append(
+            NSAttributedString(
+                string: "−\(removed)", attributes: [.foregroundColor: chrome.destructive.nsColor, .font: font]))
         return text
     }
 

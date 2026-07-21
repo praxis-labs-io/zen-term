@@ -62,6 +62,12 @@ final class DiffPaneTable: NSView {
         table.reloadData()
     }
 
+    /// Redraw the current-line highlight — called when focus enters or leaves the pane, since the
+    /// cursor line is only drawn while the pane is focused.
+    func redrawSelection() {
+        table.enumerateAvailableRowViews { rowView, _ in rowView.needsDisplay = true }
+    }
+
     /// Esc out of the pane — wired to close the viewer.
     var onEscape: (() -> Void)? {
         get { table.onEscape }
@@ -170,15 +176,13 @@ private final class DiffTableView: NSTableView {
     }
 }
 
-/// A diff row's current-line highlight: a full-width fill in the accent while the pane is focused
-/// (`isEmphasized`), dimming to a faint ink when focus is elsewhere so the line stays findable
-/// without shouting. Theme-only (ZEN-27); no system selection color.
+/// A diff row's current-line highlight: a full-width accent fill, drawn only while the diff pane
+/// holds focus (`isEmphasized`). When focus is in the tree there's no cursor line — the tree owns the
+/// focus indicator then. Theme-only (ZEN-27); no system selection color.
 private final class DiffLineRowView: NSTableRowView {
     override func drawSelection(in dirtyRect: NSRect) {
-        guard isSelected else { return }
-        let chrome = Theme.current.chrome
-        let fill = isEmphasized ? chrome.accent.nsColor.withAlphaComponent(0.16) : chrome.ink(alpha: 0.06)
-        fill.setFill()
+        guard isSelected, isEmphasized else { return }
+        Theme.current.chrome.accent.nsColor.withAlphaComponent(0.16).setFill()
         bounds.fill()
     }
 }
