@@ -20,6 +20,11 @@ enum SupportLinks {
             URLQueryItem(name: "title", value: title),
             URLQueryItem(name: "body", value: body),
         ]
+        // URLQueryItem leaves a literal "+" unescaped (it's RFC-3986-legal), but GitHub form-decodes
+        // the query, where "+" means a space — so "C++" would arrive as "C  ". Encode it to %2B; the
+        // space is already %20, so nothing else is affected.
+        components.percentEncodedQuery = components.percentEncodedQuery?
+            .replacingOccurrences(of: "+", with: "%2B")
         return components.url ?? URL(fileURLWithPath: "/")
     }
 }

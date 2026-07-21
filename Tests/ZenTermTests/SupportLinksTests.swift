@@ -29,4 +29,12 @@ final class SupportLinksTests: XCTestCase {
         XCTAssertEqual(query(url, "body"), body)
         XCTAssertFalse(url.absoluteString.contains(" "), "spaces must be percent-encoded in the URL")
     }
+
+    func test_newIssueURL_encodesPlusSoGitHubDoesNotFormDecodeItToSpace() {
+        // GitHub form-decodes the query, where a bare "+" means a space, so "C++" would arrive as
+        // "C  ". The "+" must be percent-encoded to survive.
+        let url = SupportLinks.newIssueURL(title: "1+1=2", body: "C++ pane crash")
+        XCTAssertFalse(url.absoluteString.contains("+"), "a literal + must be encoded, not left bare")
+        XCTAssertTrue(url.absoluteString.contains("%2B"), "+ is encoded as %2B")
+    }
 }
