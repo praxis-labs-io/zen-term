@@ -26,11 +26,11 @@ public final class LogFileSink {
         return LogFileSink(directory: logs, fileName: "zen-term.log", maxBytes: 5 * 1024 * 1024, maxFiles: 2)
     }
 
-    /// Append one line (a trailing newline is added). Returns immediately; the write lands on the
-    /// serial queue.
-    public func writeLine(_ line: String) {
-        let data = Data((line + "\n").utf8)
-        queue.async { [weak self] in self?.append(data) }
+    /// Append one line (a trailing newline is added). Returns immediately; the line is *formatted*
+    /// and written on the serial queue (the `@autoclosure` defers it), so the caller thread never
+    /// touches the shared date formatter or the disk.
+    public func writeLine(_ line: @autoclosure @escaping () -> String) {
+        queue.async { [weak self] in self?.append(Data((line() + "\n").utf8)) }
     }
 
     /// Block until every queued write has landed. For tests and for a clean shutdown.

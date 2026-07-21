@@ -50,8 +50,10 @@ public enum Log {
 
     private static func write(_ level: LogLevel, _ text: String, _ category: LogCategory) {
         logger(for: category).log(level: level.osLogType, "\(text, privacy: .public)")
-        fileSink?.writeLine(
-            LogEntry(level: level, category: category.name, message: text, timestamp: Date()).fileLine())
+        // Timestamp is captured now (on the caller thread) for accuracy; `fileLine()` runs on the
+        // sink's serial queue via the @autoclosure, so the shared ISO formatter is touched single-threaded.
+        let entry = LogEntry(level: level, category: category.name, message: text, timestamp: Date())
+        fileSink?.writeLine(entry.fileLine())
     }
 
     private static let subsystem = "com.drucial.ZenTerm"
