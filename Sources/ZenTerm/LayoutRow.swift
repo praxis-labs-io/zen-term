@@ -16,7 +16,10 @@ final class LayoutRow: NSView {
     private let descriptionLabel: NSTextField?
     private let controlNoteLabel: NSTextField?
     private let messageLabel = NSTextField(labelWithString: "")
-    private var messageKind: MessageKind?
+    /// Readable so the section can skip a row mid-`.failure` when it re-renders diagnostics — a
+    /// `.failure` (a live-invalid edit or a write that didn't land) must outlive an unrelated write's
+    /// refresh, exactly as `KeybindRow` does.
+    private(set) var messageKind: MessageKind?
 
     init(caption: String, description: String?, control: NSView, controlNote: String?, controlWidth: CGFloat?) {
         let label = NSTextField(labelWithString: caption)

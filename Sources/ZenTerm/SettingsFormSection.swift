@@ -334,15 +334,16 @@ class SettingsFormSection: SettingsSection {
     /// Keybinds section's per-row conflict note (ZEN-7). Runs on section open and after every
     /// in-section write; the reload toast is what announces a hand-edit made while this isn't open.
     ///
-    /// A live-edit range error (set in `.failure` tone directly from a row's `onChange`, not here)
-    /// only outlives this on the row being typed — a successful write elsewhere reloads and clears it,
-    /// same as it does for the keybind rows.
+    /// Skips a row currently showing a `.failure` — a live invalid-range error, or a "Couldn't write
+    /// config" — exactly as `SettingsKeybindsSection.refreshRows` does: those report something the
+    /// user just did, which an unrelated write's refresh doesn't resolve, so clearing them here would
+    /// wipe the feedback while it's still true.
     private func refreshRows() {
         refreshers.forEach { $0() }
         let diagnostics = GeneralConfig.current.configDiagnostics
         for key in scalarKeys {
-            let message = diagnostics.first { $0.scope == .setting(key: key) }?.message
-            rowFor(key)?.showMessage(message, kind: .diagnostic)
+            guard let row = rowFor(key), row.messageKind != .failure else { continue }
+            row.showMessage(diagnostics.first { $0.scope == .setting(key: key) }?.message, kind: .diagnostic)
         }
     }
 
