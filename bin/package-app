@@ -189,7 +189,11 @@ if [[ "$VARIANT" == "release" ]]; then
     SPARKLE_KEYS='  <key>SUFeedURL</key><string>https://github.com/zen-term/zen-term-releases/releases/latest/download/appcast.xml</string>
   <key>SUPublicEDKey</key><string>M0c0MPZrd8TSeoMNjZi+sNBpEi7t5nYnB6t41Bsm/TU=</string>
   <key>SUEnableAutomaticChecks</key><true/>
-  <key>SUScheduledCheckInterval</key><integer>86400</integer>'
+  <key>SUScheduledCheckInterval</key><integer>3600</integer>'
+  # 3600 (1h), not a day: Sparkle only checks at launch once the interval has
+  # elapsed since the last check, and a terminal is launched dozens of times a
+  # day, so a daily interval left almost every launch inside the window and never
+  # checked (ZEN-204). An hour still dedupes rapid relaunches via SULastCheckTime.
 fi
 
 cat > "$STAGE/Contents/Info.plist" <<PLIST

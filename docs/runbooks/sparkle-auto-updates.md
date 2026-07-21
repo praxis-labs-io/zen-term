@@ -20,7 +20,7 @@ keycap, and the manual-check toasts are here, by eye.
   `bin/release` uploads a single-item `appcast.xml` beside each DMG, so `latest/`
   always resolves to the newest release. Sparkle only ever offers the newest item.
 - **Inert in dev.** A `swift run` build has no `SUFeedURL`, so `UpdateController`
-  never starts. Only a packaged app checks for updates (daily, `SUScheduledCheckInterval`).
+  never starts. Only a packaged app checks for updates (hourly, `SUScheduledCheckInterval`).
 - **The card never takes focus.** It is non-modal, like a sticky toast: its buttons
   are click-only, so terminal input is never gated behind it.
 - **On-demand check (ZEN-20).** A "Check for Updates" command in the palette (Config
