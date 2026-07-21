@@ -78,7 +78,14 @@ final class DiffPaneTable: NSView {
     private func jumpChange(_ direction: Int) {
         let rows = source.rows
         guard !rows.isEmpty else { return }
-        var index = topVisibleRow() + direction
+        // Anchor on the highlighted line when it's on screen (consecutive keyboard jumps advance from
+        // the last landing, not from the scrolled viewport-top, which sits above it and would re-find
+        // the same change); fall back to the viewport-top only after a trackpad scroll moved the
+        // selection off screen.
+        let visible = table.rows(in: table.visibleRect)
+        let selected = table.selectedRow
+        let anchor = selected >= 0 && NSLocationInRange(selected, visible) ? selected : visible.location
+        var index = anchor + direction
         while index >= 0, index < rows.count {
             if isChangeClusterStart(at: index, in: rows) {
                 table.selectRowIndexes([index], byExtendingSelection: false)
@@ -99,11 +106,6 @@ final class DiffPaneTable: NSView {
     private static func isChangeLine(_ row: SideBySideRow) -> Bool {
         guard case .lines(let left, let right) = row else { return false }
         return left?.kind == .removed || right?.kind == .added
-    }
-
-    private func topVisibleRow() -> Int {
-        let visible = table.rows(in: table.visibleRect)
-        return visible.length > 0 ? visible.location : 0
     }
 
     private func scrollRowToTop(_ row: Int) {
