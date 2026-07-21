@@ -33,6 +33,7 @@ extension KeyInterceptor.ReservedChord {
         case .reloadConfig: return "reload_config"
         case .checkForUpdates: return "check_for_updates"
         case .reportIssue: return "report_issue"
+        case .openDiffViewer: return "diff_viewer"
         }
     }
 
@@ -72,6 +73,7 @@ extension KeyInterceptor.ReservedChord {
         case "reload_config": self = .reloadConfig
         case "check_for_updates": self = .checkForUpdates
         case "report_issue": self = .reportIssue
+        case "diff_viewer": self = .openDiffViewer
         default:
             if let rest = token.dropPrefixIfPresent("select_tab_"), let n = Int(rest), (1...9).contains(n) {
                 self = .selectTab(n)
@@ -104,6 +106,7 @@ enum KeymapDefaults {
         map[Chord(command: true, shift: true, key: "j")] = .resizeDown
         map[Chord(command: true, shift: true, key: "p")] = .toggleRepoPicker
         map[Chord(command: true, shift: true, key: "f")] = .fillScreen
+        map[Chord(command: true, shift: true, key: "d")] = .openDiffViewer
 
         // bare ⌘.
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer

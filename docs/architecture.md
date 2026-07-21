@@ -226,6 +226,17 @@ fullscreen (no space switch, the menu bar stays).
 for a different card closes the current one and falls through, so cards switch
 live.
 
+**The diff viewer is the first chrome subsystem to shell out.** ⌘⇧D opens
+`DiffViewerOverlay`, a modal card (file tree left, side-by-side diff right) over the
+focused tile, across three scopes (uncommitted / committed / all) switched live from
+an in-header segmented control. Its git work is `GitDiffRunner`, the app's first real
+subprocess: `git diff` runs off the main thread on a global queue, both pipes drained
+to EOF before `waitUntilExit`, then back to main with a parsed `[FileDiff]`. The model
+half (`DiffParser`, `DiffTree`, `SideBySideDiff`) is pure and renderer-agnostic; the
+overlay takes an injected loader, so the chrome never touches `Process`, "not a repo"
+is a state rather than a failure, and the whole surface is drivable in a test without
+a repo. Like the palette and floats it has no menu entry: chord + ⌘P + dock.
+
 **Tool floats are window-level, not app-level**, because a surface is one `NSView`
 and can live in one view hierarchy: an app-global instance would physically yank
 the float out of window A when opened in window B. `ToolFloatController` holds no
