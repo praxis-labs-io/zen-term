@@ -1,3 +1,4 @@
+import AppLog
 import Foundation
 
 /// Parses `~/.config/zen-term/workspaces` into `[Workspace]`. INI-style: each `[Title]`
@@ -25,7 +26,8 @@ enum WorkspacesParser {
                 flush()  // a header closes the previous section
                 let title = String(line.dropFirst().dropLast()).trimmingCharacters(in: .whitespaces)
                 if title.isEmpty {
-                    NSLog("Workspaces: an empty `[…]` section header — ignored")
+                    Log.warning(
+                        "Workspaces: an empty `[…]` section header — ignored", category: .workspace)
                     continue
                 }
                 current = Section(title: title)
@@ -37,7 +39,8 @@ enum WorkspacesParser {
             let rawValue = String(line[line.index(after: equals)...]).trimmingCharacters(in: .whitespaces)
             let value = ConfigText.unquote(rawValue)
             guard current != nil else {
-                NSLog("Workspaces: `\(key)` appears before any [section] — ignored")
+                Log.warning(
+                    "Workspaces: `\(key)` appears before any [section] — ignored", category: .workspace)
                 continue
             }
             current?.set(key: key, value: value)
@@ -66,12 +69,16 @@ enum WorkspacesParser {
             case "focus": focusRaw = value
             case "env":
                 guard let equals = value.firstIndex(of: "=") else {
-                    NSLog("Workspaces: `\(title)` env entry `\(value)` isn't KEY=VALUE — skipped")
+                    Log.warning(
+                        "Workspaces: `\(title)` env entry `\(value)` isn't KEY=VALUE — skipped",
+                        category: .workspace)
                     return
                 }
                 let name = String(value[..<equals]).trimmingCharacters(in: .whitespaces)
                 guard !name.isEmpty else {
-                    NSLog("Workspaces: `\(title)` env entry `\(value)` has an empty key — skipped")
+                    Log.warning(
+                        "Workspaces: `\(title)` env entry `\(value)` has an empty key — skipped",
+                        category: .workspace)
                     return
                 }
                 // Trim + unquote the value so `env = KEY= v` and `env = KEY="a b"` behave like the
@@ -85,12 +92,15 @@ enum WorkspacesParser {
 
         func build() -> Workspace? {
             guard let path, !path.isEmpty else {
-                NSLog("Workspaces: `\(title)` has no `path` — section dropped")
+                Log.warning(
+                    "Workspaces: `\(title)` has no `path` — section dropped", category: .workspace)
                 return nil
             }
             let focus = focusRaw.flatMap { Workspace.Region(rawValue: $0.lowercased()) } ?? .main
             if let focusRaw, Workspace.Region(rawValue: focusRaw.lowercased()) == nil {
-                NSLog("Workspaces: `\(title)` focus `\(focusRaw)` isn't main/right/bottom — using main")
+                Log.warning(
+                    "Workspaces: `\(title)` focus `\(focusRaw)` isn't main/right/bottom — using main",
+                    category: .workspace)
             }
             var envMap: [String: String] = [:]
             for entry in env { envMap[entry.key] = entry.value }  // last wins for a repeated key

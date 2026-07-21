@@ -1,4 +1,5 @@
 import AppKit
+import AppLog
 import Sparkle
 
 /// Drives Sparkle's user-facing moments into the one `UpdateCardView` (ZEN-118). Sparkle keeps the
@@ -97,7 +98,8 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         controller?.dismiss()
         if userInitiated {
             userInitiated = false
-            NSLog("ZenTerm: update check failed — \(error.localizedDescription)")
+            Log.warning(
+                "ZenTerm: update check failed — \(error.localizedDescription)", category: .update)
             controller?.announce(
                 ToastContent(
                     variant: .warning, title: "Couldn't check for updates",

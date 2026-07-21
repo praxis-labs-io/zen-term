@@ -1,3 +1,4 @@
+import AppLog
 import CoreGraphics
 import Foundation
 
@@ -71,15 +72,20 @@ enum ToolFloatParser {
 
         let title = fields["title"] ?? ""
         guard let id = identity(fields: fields) else {
-            NSLog("GeneralConfig: float line needs a `title:` with at least one letter or number — ignored")
+            Log.warning(
+                "GeneralConfig: float line needs a `title:` with at least one letter or number — ignored",
+                category: .toolFloat)
             return nil
         }
         guard let command = fields["command"], !command.isEmpty else {
-            NSLog("GeneralConfig: float `\(id)` missing required `command:` — ignored")
+            Log.warning(
+                "GeneralConfig: float `\(id)` missing required `command:` — ignored", category: .toolFloat)
             return nil
         }
         guard let keySpec = fields["key"], let toggle = Chord.parse(keySpec) else {
-            NSLog("GeneralConfig: float `\(id)` has a missing or unparseable `key:` — ignored")
+            Log.warning(
+                "GeneralConfig: float `\(id)` has a missing or unparseable `key:` — ignored",
+                category: .toolFloat)
             return nil
         }
 
@@ -110,7 +116,8 @@ enum ToolFloatParser {
     private static func persistence(_ raw: String?, id: String) -> ToolFloat.Persistence {
         guard let raw else { return defaultPersist }
         guard let value = ToolFloat.Persistence(rawValue: raw.lowercased()) else {
-            NSLog("GeneralConfig: float `\(id)` has unknown `persist:\(raw)` — using `none`")
+            Log.warning(
+                "GeneralConfig: float `\(id)` has unknown `persist:\(raw)` — using `none`", category: .toolFloat)
             return defaultPersist
         }
         return value

@@ -1,4 +1,5 @@
 import AppKit
+import AppLog
 import GhosttyKit
 
 /// The process-global libghostty runtime.
@@ -152,9 +153,9 @@ final class GhosttyApp {
                 .appendingPathComponent("ghostty-resources/ghostty").path,
             FileManager.default.fileExists(atPath: dir)
         else {
-            NSLog(
+            Log.warning(
                 "GhosttyApp: staged ghostty resources missing — shell integration and "
-                    + "terminfo degraded. Re-run bin/build-ghosttykit.")
+                    + "terminfo degraded. Re-run bin/build-ghosttykit.", category: .surface)
             return
         }
         setenv("GHOSTTY_RESOURCES_DIR", dir, 1)

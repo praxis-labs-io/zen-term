@@ -1,3 +1,4 @@
+import AppLog
 import Foundation
 import TerminalKit
 
@@ -41,7 +42,9 @@ enum ConfigLoader {
                 terminal = GhosttyThemeParser.parse(
                     text, fontName: builtIn.fontName, fontSize: builtIn.fontSize, fallback: builtIn)
             } catch {
-                NSLog("ConfigLoader: could not read \(themeURL.path): \(error) — using built-in theme")
+                Log.warning(
+                    "ConfigLoader: could not read \(themeURL.path): \(error) — using built-in theme",
+                    category: .config)
                 terminal = builtIn
             }
         } else {
@@ -67,8 +70,9 @@ enum ConfigLoader {
                 return userURL
             }
             if let bundled = ThemeCatalog.bundledURL(for: name) { return bundled }
-            NSLog(
-                "ConfigLoader: theme `\(name)` not found in user themes/ or the bundled catalog — using built-in theme")
+            Log.warning(
+                "ConfigLoader: theme `\(name)` not found in user themes/ or the bundled catalog — using built-in theme",
+                category: .config)
             return nil
         }
         let legacy = configRoot.appendingPathComponent("theme")
@@ -84,7 +88,9 @@ enum ConfigLoader {
             let text = try String(contentsOf: configURL, encoding: .utf8)
             return GeneralConfigParser.parse(text, fallback: .builtIn)
         } catch {
-            NSLog("ConfigLoader: could not read \(configURL.path): \(error) — using built-in config")
+            Log.warning(
+                "ConfigLoader: could not read \(configURL.path): \(error) — using built-in config",
+                category: .config)
             return .builtIn
         }
     }
@@ -100,11 +106,15 @@ enum ConfigLoader {
         do {
             workspaces = WorkspacesParser.parse(try String(contentsOf: url, encoding: .utf8))
         } catch {
-            NSLog("ConfigLoader: could not read \(url.path): \(error) — no workspaces loaded")
+            Log.warning(
+                "ConfigLoader: could not read \(url.path): \(error) — no workspaces loaded",
+                category: .workspace)
             return []
         }
         for workspace in workspaces where !PathDisplay.isDirectory(workspace.path) {
-            NSLog("ConfigLoader: workspace `\(workspace.title)` path \(workspace.path.path) isn't a directory")
+            Log.warning(
+                "ConfigLoader: workspace `\(workspace.title)` path \(workspace.path.path) isn't a directory",
+                category: .workspace)
         }
         return workspaces
     }

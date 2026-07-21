@@ -1,4 +1,5 @@
 import AppKit
+import AppLog
 import TabKit
 
 /// Owns every window and routes chords/Copy/Paste to whichever is key. `⌘n` opens a
@@ -28,6 +29,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // override and deterministically forcing GeneralConfig.current to load (so the first
         // window's Theme font, drawer sizes, and dock floats are already settled).
         MotionConfig.apply(GeneralConfig.current.reduceMotion)
+
+        // Verbose diagnostics gate (ZEN-11): config `debug = true` turns on the same file tee as
+        // ZENTERM_LOG_VERBOSE=1 (already seeded into Log.isVerbose), so either switch enables it.
+        if GeneralConfig.current.debug { Log.isVerbose = true }
+        Log.info("ZenTerm launched — v\(AppVersion.current)", category: .app)
 
         MainMenu.install(copyPaste: nil)  // Copy/Paste route via the responder chain
         newWindow(initialCWD: nil, centered: true)

@@ -1,4 +1,5 @@
 import AppKit
+import AppLog
 import PaneKit
 import TerminalKit
 
@@ -216,8 +217,10 @@ final class PaneCanvasController: NSObject {
             }
             launchByLeaf[id] = launch
             surface.start(launch)
+            Log.info("surface started (pane \(id))", category: .surface)
         }
         for id in diff.removed {
+            Log.info("surface stopped (pane \(id))", category: .surface)
             cwdByLeaf[id] = nil
             hostByLeaf[id] = nil
             launchByLeaf[id] = nil

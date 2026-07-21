@@ -1,3 +1,4 @@
+import AppLog
 import CoreGraphics
 import Foundation
 import TerminalKit
@@ -61,6 +62,8 @@ enum GeneralConfigParser {
                 if let b = parseBool(value, key) { config.agentNotifications = b }
             case "automatic-update-checks":
                 if let b = parseBool(value, key) { config.automaticUpdateChecks = b }
+            case "debug":
+                if let b = parseBool(value, key) { config.debug = b }
             case "shell":
                 if !value.isEmpty { config.shell = value }
             case "shell-args":
@@ -116,18 +119,19 @@ enum GeneralConfigParser {
         let action = (equals.map { value[..<$0] } ?? Substring(value))
             .trimmingCharacters(in: .whitespaces)
         guard action == "toggle_lazygit" else {
-            NSLog("GeneralConfig: unparseable keybind line `\(value)` — ignored")
+            Log.warning("GeneralConfig: unparseable keybind line `\(value)` — ignored", category: .keybinds)
             return
         }
         let bound = equals.map {
             value[value.index(after: $0)...].trimmingCharacters(in: .whitespaces)
         }
         let chord = bound.flatMap { $0.isEmpty ? nil : $0 } ?? "cmd+g"
-        NSLog(
+        Log.warning(
             "GeneralConfig: `toggle_lazygit` was removed — lazygit is a regular tool float now; "
                 + "replace this keybind with: float = command:\"lazygit\" "
                 + "key:\(chord) git:true persist:dir icon:git title:\"Open Lazygit\" "
-                + "height:0.78 — ignored")
+                + "height:0.78 — ignored",
+            category: .config)
     }
 
     private static func parseBool(_ value: String, _ key: String) -> Bool? {
@@ -135,7 +139,9 @@ enum GeneralConfigParser {
         case "true": return true
         case "false": return false
         default:
-            NSLog("GeneralConfig: `\(key)` expected true/false, got `\(value)` — using default")
+            Log.warning(
+                "GeneralConfig: `\(key)` expected true/false, got `\(value)` — using default",
+                category: .config)
             return nil
         }
     }
@@ -144,7 +150,9 @@ enum GeneralConfigParser {
         // `Double("nan")`/`"inf"` parse successfully but poison clamp() (min/max propagate NaN)
         // and would trap in `Int(nan)` — reject non-finite so nothing can crash the load.
         guard let n = Double(value), n.isFinite else {
-            NSLog("GeneralConfig: `\(key)` expected a finite number, got `\(value)` — using default")
+            Log.warning(
+                "GeneralConfig: `\(key)` expected a finite number, got `\(value)` — using default",
+                category: .config)
             return nil
         }
         return n
@@ -156,7 +164,9 @@ enum GeneralConfigParser {
         case "bar": return .bar
         case "underline": return .underline
         default:
-            NSLog("GeneralConfig: `cursor-style` expected block/bar/underline, got `\(value)` — using default")
+            Log.warning(
+                "GeneralConfig: `cursor-style` expected block/bar/underline, got `\(value)` — using default",
+                category: .config)
             return nil
         }
     }
@@ -167,7 +177,9 @@ enum GeneralConfigParser {
         case "on": return .on
         case "off": return .off
         default:
-            NSLog("GeneralConfig: `reduce-motion` expected system/on/off, got `\(value)` — using default")
+            Log.warning(
+                "GeneralConfig: `reduce-motion` expected system/on/off, got `\(value)` — using default",
+                category: .config)
             return nil
         }
     }
@@ -176,7 +188,9 @@ enum GeneralConfigParser {
     private static func clamp(_ value: Double, _ lower: Double, _ upper: Double, _ key: String) -> Double {
         let clamped = min(max(value, lower), upper)
         if clamped != value {
-            NSLog("GeneralConfig: `\(key)` \(value) out of range [\(lower), \(upper)] — clamped to \(clamped)")
+            Log.warning(
+                "GeneralConfig: `\(key)` \(value) out of range [\(lower), \(upper)] — clamped to \(clamped)",
+                category: .config)
         }
         return clamped
     }
