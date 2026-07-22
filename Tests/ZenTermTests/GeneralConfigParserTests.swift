@@ -7,6 +7,22 @@ final class GeneralConfigParserTests: XCTestCase {
         GeneralConfigParser.parse(text, fallback: .builtIn)
     }
 
+    func test_cursorShader_isSingleSelect_lastNonEmptyWins() {
+        // Single-select: the parser stores the raw bundled-shader name (ConfigLoader resolves it),
+        // last non-empty line wins, and an empty value is skipped.
+        let config = parse(
+            """
+            cursor-shader = cursor_warp
+            cursor-shader =
+            cursor-shader = cursor_tail
+            """)
+        XCTAssertEqual(config.cursorShader, "cursor_tail")
+    }
+
+    func test_noCursorShader_isNil() {
+        XCTAssertNil(parse("font-family = Menlo").cursorShader)
+    }
+
     func test_happyPath_parsesEveryScalar() {
         let config = parse(
             """

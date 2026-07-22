@@ -1,8 +1,8 @@
 # Third-party notices
 
 ZenTerm is built on [Ghostty](https://ghostty.org) and ships the libraries,
-fonts, and icons below. This file carries their copyright and license text,
-which is what each of these licenses asks for.
+fonts, icons, and shaders below. This file carries their copyright and license
+text, which is what each of these licenses asks for.
 
 Every library listed here was confirmed present in the shipped executable by
 probing `Contents/MacOS/ZenTerm` itself, not by reading a dependency
@@ -2940,6 +2940,38 @@ SOFTWARE.
 **CC0 1.0**
 
 `git.svg`, `github.svg`, and `spotify.svg`. CC0 waives attribution, so this entry is a courtesy rather than an obligation. It covers the artwork only, not the trademarks the marks depict.
+
+## Shaders
+
+### ghostty-cursor-shaders
+
+**MIT**
+
+The bundled cursor-trail shaders `cursor_warp.glsl` and `cursor_tail.glsl` (selectable in Settings → Terminal → Cursor shader), from Sahaj Bhatt's [ghostty-cursor-shaders](https://github.com/sahaj-b/ghostty-cursor-shaders). Adapted: the trail color is left in the cursor's sRGB space (an upstream sRGB-to-linear step darkened it in our pipeline) and the timing tuned. The distance-field technique follows Inigo Quilez's 2D distance functions article, credited in the shader source.
+
+```text
+MIT License
+
+Copyright (c) 2026 Sahaj Bhatt
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ## Apache License 2.0
 
