@@ -2,8 +2,9 @@ import Foundation
 
 /// Backend-neutral terminal behavior the chrome dials from user config — the seam's
 /// vocabulary for the non-appearance knobs (cursor shape/thickness, Option semantics, scroll
-/// feel). The libghostty backend maps the cursor and Option fields to ghostty config; the
-/// scroll multiplier is applied in `GhosttyHostView`'s own scroll handling, not via config.
+/// feel, custom render shaders). The libghostty backend maps the cursor, Option, and shader
+/// fields to ghostty config; the scroll multiplier is applied in `GhosttyHostView`'s own
+/// scroll handling, not via config.
 public struct TerminalBehavior: Equatable, Sendable {
     public enum CursorStyle: Sendable, Equatable { case block, bar, underline }
 
@@ -14,19 +15,27 @@ public struct TerminalBehavior: Equatable, Sendable {
     public var cursorThickness: Int
     public var optionAsAlt: Bool
     public var scrollMultiplier: Double
+    /// Absolute path to a single GLSL cursor shader (a post-process pass), or nil for none. The
+    /// chrome resolves a bundled shader name to this path before it crosses the seam; the backend
+    /// emits it to ghostty config and, when it's set, drops the surface layer's opacity so the
+    /// shader's real alpha reaches the compositor instead of being ignored. Single by design —
+    /// the chrome ships one selectable effect, not a stack.
+    public var cursorShader: String?
 
     public init(
         cursorStyle: CursorStyle = .block,
         cursorBlink: Bool = true,
         cursorThickness: Int = 2,
         optionAsAlt: Bool = true,
-        scrollMultiplier: Double = 1.5
+        scrollMultiplier: Double = 1.5,
+        cursorShader: String? = nil
     ) {
         self.cursorStyle = cursorStyle
         self.cursorBlink = cursorBlink
         self.cursorThickness = cursorThickness
         self.optionAsAlt = optionAsAlt
         self.scrollMultiplier = scrollMultiplier
+        self.cursorShader = cursorShader
     }
 
     /// The shipped baseline used when no config is present.

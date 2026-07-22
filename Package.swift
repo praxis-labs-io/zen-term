@@ -67,6 +67,7 @@ let package = Package(
             resources: [
                 .copy("Resources"),  // brand marks (GitHub, git, origami) SVGs for the dock + Settings
                 .copy("Themes"),  // bundled ghostty theme catalog for the Settings theme picker
+                .copy("Shaders"),  // bundled, vetted GLSL custom shaders selected by `custom-shader`
             ],
             // swift build links Sparkle.framework but doesn't embed it; the shipped bundle carries
             // it under Contents/Frameworks (bin/package-app), so the binary must resolve it there.

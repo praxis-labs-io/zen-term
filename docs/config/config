@@ -48,6 +48,13 @@
 # Precise-scroll (trackpad) feel multiplier. 1 = raw, higher = faster.
 # scroll-multiplier = 1.5             # clamped to 0.1…10
 
+# A bundled GLSL cursor shader drawn over the terminal surface. Bundled, vetted
+# options only, one at a time: `cursor_warp` is a pronounced Neovide-style smear,
+# `cursor_tail` a lighter comet. Unset = none. Also in Settings → Terminal → Cursor
+# shader, which applies live. These are cursor effects, so they show on cursor
+# moves and read most in editors like neovim; they do not affect scrolling.
+# cursor-shader = cursor_warp         # cursor_warp | cursor_tail
+
 # ─── Chrome ──────────────────────────────────────────────────────────────────
 
 # Show the standard macOS window buttons (close, minimize, zoom) and reserve the

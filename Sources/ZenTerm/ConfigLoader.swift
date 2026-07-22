@@ -86,13 +86,29 @@ enum ConfigLoader {
         }
         do {
             let text = try String(contentsOf: configURL, encoding: .utf8)
-            return GeneralConfigParser.parse(text, fallback: .builtIn)
+            var config = GeneralConfigParser.parse(text, fallback: .builtIn)
+            config.cursorShader = resolveShader(config.cursorShader)
+            return config
         } catch {
             Log.warning(
                 "ConfigLoader: could not read \(configURL.path): \(error) — using built-in config",
                 category: .config)
             return .builtIn
         }
+    }
+
+    /// Resolve a bundled-shader name (from `cursor-shader = <name>`) to an absolute file path. A
+    /// name with no bundled shader is logged and yields nil — bundled-only, so a path or an unknown
+    /// name simply means no shader rather than loading anything un-vetted.
+    private static func resolveShader(_ name: String?) -> String? {
+        guard let name else { return nil }
+        guard let url = ShaderCatalog.bundledURL(for: name) else {
+            Log.warning(
+                "ConfigLoader: cursor-shader `\(name)` is not a bundled shader — ignored",
+                category: .config)
+            return nil
+        }
+        return url.path
     }
 
     /// Load the hand-curated `workspaces` file (the `⌘⇧P` picker) from the config root. Absent

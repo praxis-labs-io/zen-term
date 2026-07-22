@@ -70,6 +70,21 @@ final class GhosttyConfigWriterTests: XCTestCase {
         XCTAssertFalse(text.contains("adjust-cursor-thickness"))
     }
 
+    func test_noShader_emitsNeitherShaderKey() {
+        let text = GhosttyConfigWriter.configText(for: theme, behavior: TerminalBehavior())
+        XCTAssertFalse(text.contains("custom-shader"))
+        XCTAssertFalse(text.contains("custom-shader-animation"))
+    }
+
+    func test_cursorShaderEmitsGhosttyKeyWithAnimation() {
+        let behavior = TerminalBehavior(cursorShader: "/a/cursor_warp.glsl")
+        let text = GhosttyConfigWriter.configText(for: theme, behavior: behavior)
+        // The chrome's single `cursor-shader` maps to ghostty's own `custom-shader` key.
+        XCTAssertTrue(text.contains("custom-shader = /a/cursor_warp.glsl\n"))
+        // The animation loop is pinned on only when there's a shader to animate.
+        XCTAssertTrue(text.contains("custom-shader-animation = true\n"))
+    }
+
     func test_defaultBehavior() {
         let behavior = TerminalBehavior()
         XCTAssertEqual(behavior.cursorStyle, .block)
