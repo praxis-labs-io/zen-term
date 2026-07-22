@@ -5,14 +5,20 @@ import AppKit
 /// is a real focus stop — arrow / Tab reachable like the form's other controls — rather than a
 /// click-on-the-input affordance, so it works whether the field is empty or already holds a path.
 ///
-/// `field` and `chooseButton` are exposed so the host form wires them into its own arrow / Tab
-/// navigation, exactly like an env row's KEY field + remove button: the field is the vertical stop,
-/// Right reaches the button, Left returns. A shared form-control primitive.
+/// The field is exposed so the host wires it as a vertical stop (`wireField`); the button ↔ field
+/// focus partnership (Right reaches the button, Left / Shift-Tab return) is owned here, and the
+/// host hands back only the two moves that leave the pair — see `wireNav`.
 final class DirectoryPickerField: NSView, ThemeReapplying {
     let field: FieldBox
     let chooseButton = AppButton(title: "Choose", variant: .muted)
     /// Runs after a pick fills the field — the host refreshes validity and can seed a sibling field.
     var onPicked: ((URL) -> Void)?
+
+    /// Seam: present a directory chooser starting at `start`, calling back with the chosen URL (nil
+    /// if cancelled). Defaults to a native `NSOpenPanel` sheet; tests replace it so no real panel is
+    /// presented (and can assert where it would have opened).
+    var presentPanel: (_ host: NSWindow?, _ start: URL, _ completion: @escaping (URL?) -> Void) -> Void =
+        DirectoryPickerField.nativePanel
 
     init(placeholder: String) {
         field = FieldBox(placeholder: placeholder)
@@ -51,27 +57,31 @@ final class DirectoryPickerField: NSView, ThemeReapplying {
         chooseButton.reapplyTheme()
     }
 
+    /// Wire the button into the host form's navigation: the field stays the vertical stop and the
+    /// button hangs off it horizontally (Right reaches it, Left / Shift-Tab return) — the same shape
+    /// as an env row's remove button. The host supplies only the moves that leave the pair: `onVertical`
+    /// for Up/Down, `onTabForward` for a forward Tab off the button. Call after the host's `wireField`,
+    /// since it overrides the field's Right/Tab.
+    func wireNav(onVertical: @escaping (Int) -> Void, onTabForward: @escaping () -> Void) {
+        field.onArrowRight = { [weak self] in self?.focusButton() }
+        field.onTab = { [weak self] in self?.focusButton() }
+        chooseButton.onArrowLeft = { [weak self] in self?.focusField() }
+        chooseButton.onBacktab = { [weak self] in self?.focusField() }
+        chooseButton.onArrowUp = { onVertical(-1) }
+        chooseButton.onArrowDown = { onVertical(1) }
+        chooseButton.onTab = { onTabForward() }
+    }
+
+    private func focusButton() { window?.makeFirstResponder(chooseButton) }
+    private func focusField() { window?.makeFirstResponder(field.field) }
+
     /// Open the directory panel; on choose, fill the field (home-abbreviated) and run `onPicked`.
-    /// Presents as a sheet on the field's window. Fired from the button's action (release-based),
-    /// so the sheet attaches cleanly.
+    /// Fired from the button's action (release-based), so the sheet attaches cleanly.
     private func choose() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
-        // Start where the user is: the path already typed if it's a real directory, else home —
-        // never wherever the panel happened to land last (that opened at /Library).
-        panel.directoryURL = startDirectory
-        let handle: (NSApplication.ModalResponse) -> Void = { [weak self] response in
-            guard let self, response == .OK, let url = panel.url else { return }
+        presentPanel(field.window, startDirectory) { [weak self] url in
+            guard let self, let url else { return }
             self.field.setText(PathDisplay.abbreviatingHome(url.path))
             self.onPicked?(url)
-        }
-        if let window = field.window {
-            panel.beginSheetModal(for: window, completionHandler: handle)
-        } else {
-            panel.begin(completionHandler: handle)
         }
     }
 
@@ -84,5 +94,24 @@ final class DirectoryPickerField: NSView, ThemeReapplying {
             if PathDisplay.isDirectory(url) { return url }
         }
         return FileManager.default.homeDirectoryForCurrentUser
+    }
+
+    /// The default `presentPanel`: a native directory `NSOpenPanel` presented as a sheet. Starts at
+    /// `start` (never wherever the panel last landed, which opened at /Library).
+    private static func nativePanel(host: NSWindow?, start: URL, completion: @escaping (URL?) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.directoryURL = start
+        let handle: (NSApplication.ModalResponse) -> Void = { response in
+            completion(response == .OK ? panel.url : nil)
+        }
+        if let host {
+            panel.beginSheetModal(for: host, completionHandler: handle)
+        } else {
+            panel.begin(completionHandler: handle)
+        }
     }
 }

@@ -212,19 +212,34 @@ final class AddWorkspaceOverlayTests: XCTestCase {
 
     // MARK: folder picker
 
+    private func picker(in overlay: NSView) -> DirectoryPickerField {
+        descendants(of: overlay).compactMap { $0 as? DirectoryPickerField }.first!
+    }
+
     /// The folder field carries a Choose button that opens the picker whether the field is empty or
-    /// already holds a path — the affordance is the button, not a click on the input. Tapping it
-    /// attaches the `NSOpenPanel` sheet (a direct present, so it attaches reliably even headless).
+    /// already holds a path — the affordance is the button, not a click on the input. Presentation
+    /// goes through the picker's seam, so no real panel is popped.
     func test_folderChooseButton_opensThePicker() throws {
         let (overlay, _) = mount()
-        let win = try XCTUnwrap(window)
-        win.makeKeyAndOrderFront(nil)
-        addTeardownBlock { win.attachedSheet.map { win.endSheet($0) } }
+        var opened = false
+        picker(in: overlay).presentPanel = { _, _, _ in opened = true }
 
         try XCTUnwrap(button(in: overlay, title: "Choose")).onTap()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
 
-        XCTAssertNotNil(win.attachedSheet, "the Choose button must open the folder panel")
+        XCTAssertTrue(opened, "the Choose button must open the folder picker")
+    }
+
+    /// Choosing a folder seeds the workspace title from its last path component (until the user has
+    /// edited the title themselves).
+    func test_folderPick_seedsTitleFromFolderName() throws {
+        let (overlay, _) = mount()
+        picker(in: overlay).presentPanel = { _, _, completion in
+            completion(URL(fileURLWithPath: "/tmp/my-project", isDirectory: true))
+        }
+
+        try XCTUnwrap(button(in: overlay, title: "Choose")).onTap()
+
+        XCTAssertEqual(field(in: overlay, placeholder: "Workspace name").text, "my-project")
     }
 
     /// The Choose button is keyboard-reachable, not mouse-only: Right off the folder field lands on

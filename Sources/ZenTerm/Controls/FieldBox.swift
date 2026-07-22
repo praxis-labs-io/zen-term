@@ -2,9 +2,8 @@ import AppKit
 
 /// A rounded input box wrapping a borderless text field. On focus its fill lifts to the palettes'
 /// muted accent and its edge outlines with the accent. Forwards edits and keyboard navigation
-/// (arrows / Return / ⌘Return) to the host, and — while empty — a click to `onEmptyClick`
-/// (the folder picker). Esc belongs to the card root (see `ModalEscape`), not to the field.
-/// A shared form-control primitive.
+/// (arrows / Return / ⌘Return) to the host. Esc belongs to the card root (see `ModalEscape`), not
+/// to the field. A shared form-control primitive.
 final class FieldBox: NSView, NSTextFieldDelegate {
     let field = ClickField()
     var onChange: (() -> Void)?

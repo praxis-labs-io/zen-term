@@ -86,8 +86,16 @@ final class PaletteInteractionTests: XCTestCase {
         descendants(of: overlay).compactMap { $0 as? SelectableRowView }
     }
 
-    /// Click a row the real way — a mouseDown then mouseUp on the row view. `landingInside`
-    /// controls where the release lands, so a test can drive both a normal click and a drag-off.
+    /// Drive the row's real mouseDown/mouseUp with real `NSEvent`s (not its backing state), which is
+    /// where the single-click activation logic lives. `landingInside` places the release inside the
+    /// row or well outside it, to drive a normal click vs a drag-off.
+    ///
+    /// This calls the row directly rather than routing through `window.sendEvent`: dispatching a
+    /// synthetic click to a headless, off-screen window isn't hit-tested to the row, and the only
+    /// way to make routing work — a real key window ordered on screen — reintroduces the very
+    /// panel/window flashing these tests avoid. That the OS routes a click through the scroll/clip
+    /// view to the row is AppKit's job, not ours; the single-click behavior actually landing is a
+    /// look-don't-assert runbook step (`swift run ZenTerm`).
     private func click(_ row: SelectableRowView, landingInside: Bool = true) {
         let inside = CGPoint(x: row.bounds.midX, y: row.bounds.midY)
         let outside = CGPoint(x: row.bounds.maxX + 400, y: row.bounds.midY)

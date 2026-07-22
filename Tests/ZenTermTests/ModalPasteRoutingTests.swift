@@ -16,11 +16,16 @@ final class ModalPasteRoutingTests: XCTestCase {
     private var originalConfig: GeneralConfig!
     private var controller: WindowController?
     private var spawned: [RecordingSurface] = []
+    /// The user's real clipboard, snapshotted so the test's writes to `NSPasteboard.general` don't
+    /// permanently clobber it — the production paste path reads the general pasteboard directly, so
+    /// there's no private one to redirect to; restore-after is the workable guard.
+    private var savedClipboard: String?
 
     override func setUpWithError() throws {
         try super.setUpWithError()
         originalOverride = TerminalSurfaceFactory.makeOverride
         originalConfig = GeneralConfig.current
+        savedClipboard = NSPasteboard.general.string(forType: .string)
         Motion.isReduceMotionEnabled = { true }
         TerminalSurfaceFactory.makeOverride = { [weak self] in
             let surface = RecordingSurface()
@@ -37,6 +42,8 @@ final class ModalPasteRoutingTests: XCTestCase {
         Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
+        NSPasteboard.general.clearContents()
+        if let savedClipboard { NSPasteboard.general.setString(savedClipboard, forType: .string) }
         try super.tearDownWithError()
     }
 

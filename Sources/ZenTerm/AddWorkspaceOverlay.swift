@@ -204,7 +204,9 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             if !self.titleEditedByUser { self.titleField.setText(url.lastPathComponent) }
             self.refreshValidity()
         }
-        wireChooseButton(folderPicker)
+        folderPicker.wireNav(
+            onVertical: { [weak self] in self?.moveVertical($0) },
+            onTabForward: { [weak self] in self?.moveTab(1) })
         let folderGroup = LabeledField(caption: Self.caption("FOLDER", required: true), control: folderPicker)
         self.folderGroup = folderGroup
 
@@ -365,19 +367,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         box.onTab = { [weak self] in self?.moveTab(1) }
         box.onBacktab = { [weak self] in self?.moveTab(-1) }
         box.onSubmit = { [weak self] in self?.submit() }
-    }
-
-    /// The Choose button sits to the field's right: Right reaches it, Left returns; Up/Down still
-    /// navigate vertically and Tab walks field → button → next stop. Same shape as an env row's
-    /// remove button, so the button is fully arrow / Tab reachable, not mouse-only.
-    private func wireChooseButton(_ picker: DirectoryPickerField) {
-        picker.field.onArrowRight = { [weak self, weak picker] in self?.focus(picker?.chooseButton) }
-        picker.field.onTab = { [weak self, weak picker] in self?.focus(picker?.chooseButton) }
-        picker.chooseButton.onArrowLeft = { [weak self, weak picker] in self?.focus(picker?.field.field) }
-        picker.chooseButton.onBacktab = { [weak self, weak picker] in self?.focus(picker?.field.field) }
-        picker.chooseButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
-        picker.chooseButton.onArrowDown = { [weak self] in self?.moveVertical(1) }
-        picker.chooseButton.onTab = { [weak self] in self?.moveTab(1) }
     }
 
     private func wireSegment(_ segment: SegmentedControl) {
@@ -552,7 +541,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private func resolvedFolder() -> URL? {
         let text = folderPicker.text.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return nil }
-        return URL(fileURLWithPath: (text as NSString).expandingTildeInPath, isDirectory: true)
+        return URL(fileURLWithPath: PathDisplay.expandingHome(text), isDirectory: true)
     }
 
     /// Update every field's inline message and return the first offending field to focus (nil when
