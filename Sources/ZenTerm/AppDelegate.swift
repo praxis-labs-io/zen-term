@@ -194,20 +194,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wc.showAndStart()
     }
 
-    /// Copy/Paste forwarders reached via the responder chain (menu items have a nil
-    /// target) — always act on the key window's active tab, never a stale window.
+    /// Copy/Paste forwarders reached via the responder chain (menu items have a nil target) — always
+    /// act on the key window's controller, never a stale one. The modal-aware routing (paste into a
+    /// card's focused field vs the surface) lives in `WindowController`: as the window delegate it's
+    /// reached ahead of this app-delegate fallback, so duplicating the guard here would be dead code.
     @objc func copyFromSurface(_ sender: Any?) {
-        if isConfirmModal { return }  // confirm has no text field
-        if isModalUp {
-            NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.copy(_:)), with: sender); return
-        }
         keyController()?.copyFromSurface(sender)
     }
     @objc func pasteToSurface(_ sender: Any?) {
-        if isConfirmModal { return }  // confirm has no text field
-        if isModalUp {
-            NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSText.paste(_:)), with: sender); return
-        }
         keyController()?.pasteToSurface(sender)
     }
 
@@ -242,15 +236,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func reportAnIssue(_ sender: Any?) {
         keyController()?.openReportIssue()
     }
-
-    /// While a modal overlay (a palette or the Add-Workspace form) is up, Copy/Paste must act on
-    /// its focused text field, not the terminal hidden behind it (else ⌘V would inject the
-    /// clipboard into that shell).
-    private var isModalUp: Bool { keyController()?.isModalOverlayOpen == true }
-
-    /// While a confirm toast is up it's fully modal — ⌘N and Copy/Paste are swallowed
-    /// (it has no text field to act on), mirroring `isModalUp`.
-    private var isConfirmModal: Bool { keyController()?.isConfirmOpen == true }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 

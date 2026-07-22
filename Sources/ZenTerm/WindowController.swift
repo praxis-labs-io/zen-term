@@ -1357,10 +1357,27 @@ final class WindowController: NSObject {
 
     // A shown float is modal over the window, so it owns the clipboard verbs; a persistent float's
     // surface outlives its card, so gate on visibility (`isOpen`), not on the registry.
+    //
+    // A modal *card* is reached even before that: the Paste menu item's custom `pasteToSurface:`
+    // selector bypasses the focused field editor's standard `paste:`, and this controller is the
+    // window's delegate — so the responder chain lands ⌘C/⌘V here ahead of `AppDelegate`. A card
+    // with a text field (palette, pickers, workspace / tool-float forms) copies from and pastes
+    // into that field; the confirm card has none, so the verb is swallowed. Without this the
+    // clipboard verbs fell straight through every modal into the terminal behind it.
     @objc func copyFromSurface(_ sender: Any?) {
+        if isConfirmOpen { return }
+        if isModalOverlayOpen {
+            window.firstResponder?.tryToPerform(#selector(NSText.copy(_:)), with: sender)
+            return
+        }
         if floats.isOpen { floats.copyFromSurface(sender) } else { activeController?.copyFromSurface(sender) }
     }
     @objc func pasteToSurface(_ sender: Any?) {
+        if isConfirmOpen { return }
+        if isModalOverlayOpen {
+            window.firstResponder?.tryToPerform(#selector(NSText.paste(_:)), with: sender)
+            return
+        }
         if floats.isOpen { floats.pasteToSurface(sender) } else { activeController?.pasteToSurface(sender) }
     }
 
