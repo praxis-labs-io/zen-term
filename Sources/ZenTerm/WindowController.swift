@@ -160,6 +160,19 @@ final class WindowController: NSObject {
     /// no-op — so `handle` forwards them here instead. Injected by `AppDelegate`.
     var onAppGlobalCommand: ((KeyInterceptor.ReservedChord) -> Void)?
 
+    /// Resolves the enclosing git repo root off the main thread (ZEN-90/ZEN-234), injected so a
+    /// test can drive a deterministic or deliberately-slow resolver. Defaults to the real
+    /// filesystem walk. Contract: the completion must be delivered on the **main thread** — the
+    /// continuation presents the viewer and touches AppKit; the default resolver hops back to main,
+    /// and any injected resolver must too.
+    var resolveRepoRoot: (URL?, @escaping (URL?) -> Void) -> Void = {
+        GitRepo.resolveRepoRoot(for: $0, completion: $1)
+    }
+    /// True while a diff-viewer open is waiting on its off-main repo-root resolve, so a second
+    /// ⌘⇧D landing in that gap doesn't queue a second viewer (the top-of-`openDiffViewer` toggle
+    /// check can't catch it — nothing is presented yet).
+    private var isResolvingDiffRepo = false
+
     /// Whether a modal card is up right now. Read by `AppDelegate` so window-level chords (⌘N)
     /// and Copy/Paste routing respect the modal too, not just `handle(_:)`.
     var isModalOverlayOpen: Bool { modal != nil }
@@ -733,7 +746,21 @@ final class WindowController: NSObject {
     /// closure, so it lives as long as the overlay it serves.
     func openDiffViewer() {
         if modal?.kind == .diffViewer { closeModal(); return }
-        guard let repoRoot = GitRepo.repoRoot(for: focusedCWD) else {
+        // The repo-root walk is filesystem I/O — resolve it off-main (ZEN-90/ZEN-234), then present
+        // on main. That gap means a second ⌘⇧D before the resolve lands must be dropped, not queued.
+        if isResolvingDiffRepo { return }
+        isResolvingDiffRepo = true
+        resolveRepoRoot(focusedCWD) { [weak self] repoRoot in
+            guard let self else { return }
+            self.isResolvingDiffRepo = false
+            self.presentDiffViewer(repoRoot: repoRoot)
+        }
+    }
+
+    /// Present the diff viewer once the repo root is resolved, or toast if there's none. Split out
+    /// of `openDiffViewer` so the off-main resolve hands back to a plain main-thread body.
+    private func presentDiffViewer(repoRoot: URL?) {
+        guard let repoRoot else {
             toasts.show(
                 ToastContent(
                     variant: .info, title: "Diff Viewer",
