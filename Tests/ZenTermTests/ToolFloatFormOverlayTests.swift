@@ -117,6 +117,10 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         descendants(of: overlay).compactMap { $0 as? KeybindChip }.first!
     }
 
+    private func button(in overlay: NSView, title: String) -> AppButton? {
+        descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == title }
+    }
+
     /// Record a chord through the form's real capture path: arm the chip, then feed the event.
     private func capture(_ chord: Chord, in overlay: NSView, _ capturer: FakeCapturer) {
         chip(in: overlay).onActivate?()
@@ -438,13 +442,31 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         return dir
     }
 
+    /// The directory field's Choose button is arrow-reachable, not mouse-only: Right off the field
+    /// lands on it, Left returns. Its nav is wired separately from the workspace form's, so it gets
+    /// its own guard against the dead-control failure mode.
+    func test_dirChooseButton_isArrowReachable() throws {
+        let (overlay, _, _) = mount()
+        let win = try XCTUnwrap(window)
+        win.makeKeyAndOrderFront(nil)
+        let dir = field(in: overlay, placeholder: "Type a path, or Choose")
+        let choose = try XCTUnwrap(button(in: overlay, title: "Choose"))
+        win.makeFirstResponder(dir.field)
+
+        dir.onArrowRight?()
+        XCTAssertTrue(KeyboardFocus.isFocused(choose, in: win), "Right must reach the Choose button")
+
+        choose.onArrowLeft?()
+        XCTAssertTrue(KeyboardFocus.isFocused(dir.field, in: win), "Left must return to the field")
+    }
+
     func test_dirField_buildsPinnedDirectory() throws {
         let home = try makeHomeRelativeDir()
         let tilde = PathDisplay.abbreviatingHome(home.path)  // "~/zenterm-form-test-…"
         let (overlay, capturer, sink) = mount()
         field(in: overlay, placeholder: "Open GitDash").setText("notes")
         field(in: overlay, placeholder: "npm run dev").setText("nvim")
-        field(in: overlay, placeholder: "~/notes").setText(tilde)
+        field(in: overlay, placeholder: "Type a path, or Choose").setText(tilde)
         capture(novelChord, in: overlay, capturer)
 
         submit(in: overlay)
@@ -467,7 +489,8 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         let (overlay, capturer, sink) = mount()
         field(in: overlay, placeholder: "Open GitDash").setText("dev")
         field(in: overlay, placeholder: "npm run dev").setText("vim")
-        field(in: overlay, placeholder: "~/notes").setText("/tmp/a\"b")  // a `"` can't round-trip
+        // a `"` can't round-trip
+        field(in: overlay, placeholder: "Type a path, or Choose").setText("/tmp/a\"b")
         capture(novelChord, in: overlay, capturer)
 
         submit(in: overlay)
@@ -479,7 +502,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         let (overlay, capturer, sink) = mount()
         field(in: overlay, placeholder: "Open GitDash").setText("dev")
         field(in: overlay, placeholder: "npm run dev").setText("vim")
-        field(in: overlay, placeholder: "~/notes")
+        field(in: overlay, placeholder: "Type a path, or Choose")
             .setText("/definitely/not/a/real/path-\(UUID().uuidString)")
         capture(novelChord, in: overlay, capturer)
 
@@ -495,7 +518,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         let (overlay, capturer, sink) = mount()
         field(in: overlay, placeholder: "Open GitDash").setText("dev")
         field(in: overlay, placeholder: "npm run dev").setText("vim")
-        field(in: overlay, placeholder: "~/notes").setText(realDir.path)
+        field(in: overlay, placeholder: "Type a path, or Choose").setText(realDir.path)
         capture(novelChord, in: overlay, capturer)
 
         submit(in: overlay)
@@ -538,7 +561,7 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         let (overlay, _, sink) = mount(editing: existing)
 
         XCTAssertEqual(
-            field(in: overlay, placeholder: "~/notes").text, tilde,
+            field(in: overlay, placeholder: "Type a path, or Choose").text, tilde,
             "prefill must re-abbreviate a home-relative dir, not show the raw absolute path")
 
         field(in: overlay, placeholder: "npm run dev").setText("lazygit --config foo")

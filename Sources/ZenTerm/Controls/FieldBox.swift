@@ -26,9 +26,6 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     var onEndEditing: (() -> Void)?
     /// ⌘Return anywhere in the field — submit the whole form.
     var onSubmit: (() -> Void)?
-    var onEmptyClick: (() -> Void)? {
-        didSet { field.onEmptyClick = onEmptyClick }
-    }
 
     private static var restFill: NSColor { Theme.current.chrome.ink(alpha: 0.06) }
     /// The same muted accent fill the ⌘P/⌘⇧P palettes use for the selected row.
@@ -154,26 +151,16 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         return range.location == (textView.string as NSString).length && range.length == 0
     }
 
-    /// An `NSTextField` that, while empty, treats a click as an action (open the folder panel)
-    /// rather than beginning to edit — so the folder field needs no separate "Choose" button —
-    /// and reports its first-responder transitions so the box can show its focus border reliably
-    /// (the editing-notification delegates don't fire consistently under keyboard navigation).
+    /// An `NSTextField` that reports its first-responder transitions so the box can show its focus
+    /// border reliably (the editing-notification delegates don't fire consistently under keyboard
+    /// navigation).
     final class ClickField: NSTextField {
-        var onEmptyClick: (() -> Void)?
         var onGainedFocus: (() -> Void)?
 
         override func becomeFirstResponder() -> Bool {
             let ok = super.becomeFirstResponder()
             if ok { onGainedFocus?() }
             return ok
-        }
-
-        override func mouseDown(with event: NSEvent) {
-            if stringValue.isEmpty, let onEmptyClick {
-                onEmptyClick()
-            } else {
-                super.mouseDown(with: event)
-            }
         }
     }
 }

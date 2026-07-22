@@ -14,6 +14,12 @@ enum PathDisplay {
         return path.hasPrefix(homePath + "/") ? "~" + path.dropFirst(homePath.count) : path
     }
 
+    /// Expand a leading `~` back to the home directory — the inverse of `abbreviatingHome`, so a
+    /// field that shows `~/proj` resolves to a real path.
+    static func expandingHome(_ path: String) -> String {
+        (path as NSString).expandingTildeInPath
+    }
+
     /// Whether `url` points at an existing directory (not a regular file).
     static func isDirectory(_ url: URL) -> Bool {
         var isDirectory: ObjCBool = false

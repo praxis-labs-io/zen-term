@@ -103,7 +103,7 @@ final class AddWorkspaceOverlayTests: XCTestCase {
 
         XCTAssertEqual(field(in: overlay, placeholder: "Workspace name").text, "Alpha")
         XCTAssertEqual(
-            field(in: overlay, placeholder: "Click to choose, or type a path").text,
+            field(in: overlay, placeholder: "Type a path, or Choose").text,
             PathDisplay.abbreviatingHome(dir.path))
     }
 
@@ -154,7 +154,7 @@ final class AddWorkspaceOverlayTests: XCTestCase {
         let (overlay, sink) = mount()  // add mode defaults to the "Editor + AI + Shell" segment
 
         field(in: overlay, placeholder: "Workspace name").setText("Beta")
-        field(in: overlay, placeholder: "Click to choose, or type a path")
+        field(in: overlay, placeholder: "Type a path, or Choose")
             .setText(PathDisplay.abbreviatingHome(dir.path))
         button(in: overlay, title: "Add Workspace")?.onTap()
 
@@ -208,6 +208,41 @@ final class AddWorkspaceOverlayTests: XCTestCase {
 
         row.valueBox.onBacktab?()
         XCTAssertTrue(KeyboardFocus.isFocused(row.keyBox.field, in: window), "Shift-Tab returns to KEY")
+    }
+
+    // MARK: folder picker
+
+    /// The folder field carries a Choose button that opens the picker whether the field is empty or
+    /// already holds a path — the affordance is the button, not a click on the input. Tapping it
+    /// attaches the `NSOpenPanel` sheet (a direct present, so it attaches reliably even headless).
+    func test_folderChooseButton_opensThePicker() throws {
+        let (overlay, _) = mount()
+        let win = try XCTUnwrap(window)
+        win.makeKeyAndOrderFront(nil)
+        addTeardownBlock { win.attachedSheet.map { win.endSheet($0) } }
+
+        try XCTUnwrap(button(in: overlay, title: "Choose")).onTap()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+
+        XCTAssertNotNil(win.attachedSheet, "the Choose button must open the folder panel")
+    }
+
+    /// The Choose button is keyboard-reachable, not mouse-only: Right off the folder field lands on
+    /// it, Left returns. Guards the dead-control failure mode the project's interaction rule exists
+    /// for — a button that renders but no arrow key can reach.
+    func test_folderChooseButton_isArrowReachable() throws {
+        let (overlay, _) = mount()
+        let win = try XCTUnwrap(window)
+        win.makeKeyAndOrderFront(nil)
+        let folder = field(in: overlay, placeholder: "Type a path, or Choose")
+        let choose = try XCTUnwrap(button(in: overlay, title: "Choose"))
+        win.makeFirstResponder(folder.field)
+
+        folder.onArrowRight?()
+        XCTAssertTrue(KeyboardFocus.isFocused(choose, in: win), "Right must reach the Choose button")
+
+        choose.onArrowLeft?()
+        XCTAssertTrue(KeyboardFocus.isFocused(folder.field, in: win), "Left must return to the field")
     }
 
     // MARK: Esc (ZEN-149)

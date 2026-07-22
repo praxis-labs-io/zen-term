@@ -39,7 +39,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private let header = NSTextField(labelWithString: "")
 
     private let titleField = FieldBox(placeholder: "Workspace name")
-    private let folderField = FieldBox(placeholder: "Click to choose, or type a path")
+    private let folderPicker = DirectoryPickerField(placeholder: "Type a path, or Choose")
     private var titleGroup: LabeledField?
     private var folderGroup: LabeledField?
     private var titleEditedByUser = false
@@ -171,7 +171,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         envError.textColor = chrome.destructive.nsColor
 
         let controls: [ThemeReapplying] = [
-            titleField, folderField, mainField, rightField, bottomField,
+            titleField, folderPicker, mainField, rightField, bottomField,
             layoutSegment, focusSegment, addVarButton, cancelButton, addButton, deleteButton,
         ]
         controls.forEach { $0.reapplyTheme() }
@@ -197,17 +197,15 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         let titleGroup = LabeledField(caption: Self.caption("WORKSPACE NAME", required: true), control: titleField)
         self.titleGroup = titleGroup
 
-        wireField(folderField)
-        folderField.onEmptyClick = { [weak self] in self?.chooseFolder() }
-        folderField.onEnter = { [weak self] in
+        wireField(folderPicker.field)
+        // Choosing a folder seeds the title from its name until the user has edited the title.
+        folderPicker.onPicked = { [weak self] url in
             guard let self else { return }
-            if self.folderField.text.trimmingCharacters(in: .whitespaces).isEmpty {
-                self.chooseFolder()
-            } else {
-                self.moveVertical(1)
-            }
+            if !self.titleEditedByUser { self.titleField.setText(url.lastPathComponent) }
+            self.refreshValidity()
         }
-        let folderGroup = LabeledField(caption: Self.caption("FOLDER", required: true), control: folderField)
+        wireChooseButton(folderPicker)
+        let folderGroup = LabeledField(caption: Self.caption("FOLDER", required: true), control: folderPicker)
         self.folderGroup = folderGroup
 
         layoutSegment.onChange = { [weak self] index in self?.layoutChanged(index) }
@@ -313,7 +311,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     /// whether the custom fields are shown and how many env rows exist. Each env row contributes a
     /// single stop (its KEY field); its value box and remove button are reached with Left/Right.
     private func verticalStops() -> [NSView] {
-        var stops: [NSView] = [titleField.field, folderField.field, layoutSegment]
+        var stops: [NSView] = [titleField.field, folderPicker.field.field, layoutSegment]
         if layoutChoice == .custom {
             stops += [mainField.field, rightField.field, bottomField.field, focusSegment]
         }
@@ -348,6 +346,8 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         for row in envRows where isFocused(row.valueBox.field) || isFocused(row.removeButton) {
             return row.keyBox.field
         }
+        // The folder Choose button shares the folder field's vertical stop; it's reached with Right.
+        if isFocused(folderPicker.chooseButton) { return folderPicker.field.field }
         // Cancel and Delete share the footer's vertical stop (Add); they're reached with Left/Right.
         if isFocused(cancelButton) || isFocused(deleteButton) { return addButton }
         return nil
@@ -367,6 +367,19 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         box.onSubmit = { [weak self] in self?.submit() }
     }
 
+    /// The Choose button sits to the field's right: Right reaches it, Left returns; Up/Down still
+    /// navigate vertically and Tab walks field → button → next stop. Same shape as an env row's
+    /// remove button, so the button is fully arrow / Tab reachable, not mouse-only.
+    private func wireChooseButton(_ picker: DirectoryPickerField) {
+        picker.field.onArrowRight = { [weak self, weak picker] in self?.focus(picker?.chooseButton) }
+        picker.field.onTab = { [weak self, weak picker] in self?.focus(picker?.chooseButton) }
+        picker.chooseButton.onArrowLeft = { [weak self, weak picker] in self?.focus(picker?.field.field) }
+        picker.chooseButton.onBacktab = { [weak self, weak picker] in self?.focus(picker?.field.field) }
+        picker.chooseButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
+        picker.chooseButton.onArrowDown = { [weak self] in self?.moveVertical(1) }
+        picker.chooseButton.onTab = { [weak self] in self?.moveTab(1) }
+    }
+
     private func wireSegment(_ segment: SegmentedControl) {
         segment.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         segment.onArrowDown = { [weak self] in self?.moveVertical(1) }
@@ -375,25 +388,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     }
 
     // MARK: actions
-
-    private func chooseFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
-        let handle: (NSApplication.ModalResponse) -> Void = { [weak self] response in
-            guard let self, response == .OK, let url = panel.url else { return }
-            self.folderField.setText(PathDisplay.abbreviatingHome(url.path))
-            if !self.titleEditedByUser { self.titleField.setText(url.lastPathComponent) }
-            self.refreshValidity()
-        }
-        if let window {
-            panel.beginSheetModal(for: window, completionHandler: handle)
-        } else {
-            panel.begin(completionHandler: handle)
-        }
-    }
 
     private func layoutChanged(_ index: Int) {
         layoutCaption.stringValue = layoutCaptions[min(index, layoutCaptions.count - 1)]
@@ -438,7 +432,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         guard let ws = editingWorkspace else { return }
         titleEditedByUser = true
         titleField.setText(ws.title)
-        folderField.setText(PathDisplay.abbreviatingHome(ws.path.path))
+        folderPicker.setText(PathDisplay.abbreviatingHome(ws.path.path))
         let choice = layoutChoice(for: ws)
         layoutSegment.setSelection(Self.layoutIndex(for: choice))
         if choice == .custom {
@@ -556,7 +550,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     }
 
     private func resolvedFolder() -> URL? {
-        let text = folderField.text.trimmingCharacters(in: .whitespaces)
+        let text = folderPicker.text.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return nil }
         return URL(fileURLWithPath: (text as NSString).expandingTildeInPath, isDirectory: true)
     }
@@ -583,7 +577,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         }
         flag(titleGroup, field: titleField.field, titleMessage)
 
-        let folderText = folderField.text.trimmingCharacters(in: .whitespaces)
+        let folderText = folderPicker.text.trimmingCharacters(in: .whitespaces)
         var folderMessage: String?
         if includeRequired, folderText.isEmpty {
             folderMessage = "Choose or type a workspace folder."
@@ -592,7 +586,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         } else if !folderText.isEmpty, let folder = resolvedFolder(), !PathDisplay.isDirectory(folder) {
             folderMessage = "That folder doesn't exist."
         }
-        flag(folderGroup, field: folderField.field, folderMessage)
+        flag(folderGroup, field: folderPicker.field.field, folderMessage)
 
         // Custom command fields only matter (and only show) while the Custom layout is selected.
         if layoutChoice == .custom {
