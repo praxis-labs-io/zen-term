@@ -129,7 +129,7 @@ final class WindowController: NSObject {
     /// a kind discriminator rather than parallel per-overlay stacks. Window-level (they open/
     /// switch tabs) but presented over the active tab's tile region. Modal while open.
     private enum ModalKind {
-        case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
+        case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue, diffViewer
 
         /// The chord that closes this same modal when pressed again (its own toggle), or nil for a
         /// card with no dedicated chord (the workspace / tool-float / report forms, reached from a
@@ -140,9 +140,15 @@ final class WindowController: NSObject {
             case .repoPicker: return .toggleRepoPicker
             case .commandPalette: return .toggleCommandPalette
             case .settings: return .openSettings
+            case .diffViewer: return .openDiffViewer
             case .workspaceForm, .toolFloatForm, .reportIssue: return nil
             }
         }
+
+        /// Whether presenting this card takes the accent halo from the pane behind it — true only for
+        /// the diff viewer, which wears the halo itself (like a configured tool float). The transient
+        /// pickers and forms leave the pane's focus glow lit behind them.
+        var stealsHalo: Bool { self == .diffViewer }
     }
     private var modal: (overlay: ModalOverlay, kind: ModalKind)?
 
@@ -214,12 +220,14 @@ final class WindowController: NSObject {
         var onBottom: () -> Void = {}
         var onRight: () -> Void = {}
         var onZoom: () -> Void = {}
+        var onDiffViewer: () -> Void = {}
         var onToolFloat: (ToolFloat) -> Void = { _ in }
         dock = ToggleDock(
             onNewTab: { onNewTab() },
             onSplitH: { onSplitH() }, onSplitV: { onSplitV() },
             onPalette: { onPalette() }, onBottom: { onBottom() },
             onRight: { onRight() }, onZoom: { onZoom() },
+            onDiffViewer: { onDiffViewer() },
             toolFloats: ToolFloatCatalog.all, onToolFloat: { onToolFloat($0) })
         super.init()
         nextTabID = 2
@@ -238,6 +246,7 @@ final class WindowController: NSObject {
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
         onZoom = { [weak self] in self?.handle(.toggleZoom) }
+        onDiffViewer = { [weak self] in self?.handle(.openDiffViewer) }
         onToolFloat = { [weak self] spec in self?.handle(.toggleToolFloat(spec.id)) }
 
         let first = makeController(cwd: initialCWD)
@@ -638,6 +647,7 @@ final class WindowController: NSObject {
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
         guard let active = activeController else { return }
         active.presentTileOverlay(overlay)
+        if kind.stealsHalo { active.yieldFocusToFloat() }  // pane drops its glow; the card wears it
         modal = (overlay, kind)
         overlay.focusInitialResponder()
         overlay.animateIn()
@@ -716,6 +726,44 @@ final class WindowController: NSObject {
             onCancel: { [weak self] in self?.closeModal() })
         presentModal(overlay, kind: .reportIssue)
     }
+
+    /// Open (or self-toggle closed) the diff viewer over the active tile. The git work is resolved
+    /// from the focused pane's directory; if that isn't inside a repo there's nothing to diff, so a
+    /// toast says so and the overlay never opens. The `GitDiffRunner` is captured by the loader
+    /// closure, so it lives as long as the overlay it serves.
+    func openDiffViewer() {
+        if modal?.kind == .diffViewer { closeModal(); return }
+        guard let repoRoot = GitRepo.repoRoot(for: focusedCWD) else {
+            toasts.show(
+                ToastContent(
+                    variant: .info, title: "Diff Viewer",
+                    message: "This folder isn't a Git repository."))
+            return
+        }
+        if modal != nil { closeModal() }  // single slot — dismiss whatever's up first
+        let runner = GitDiffRunner(repoRoot: repoRoot)
+        // Reopening on the same repo renders the last status instantly and refreshes behind the card
+        // instead of flashing a spinner; the loader restamps the cache on every successful load.
+        let initial = diffCache.flatMap { $0.repoRoot == repoRoot ? $0.load : nil }
+        let overlay = DiffViewerOverlay(
+            background: Theme.current.chrome.background.nsColor,
+            initialStatus: initial,
+            loader: { [weak self] base, completion in
+                runner.loadStatus(base: base) { result in
+                    // Only the default-base load restamps the cache — a picked base is a transient
+                    // override, not the state a plain reopen should render.
+                    if base == nil, case .success(let load) = result { self?.diffCache = (repoRoot, load) }
+                    completion(result)
+                }
+            },
+            branchesLoader: { completion in runner.loadBranches(completion: completion) },
+            onCancel: { [weak self] in self?.closeModal() })
+        presentModal(overlay, kind: .diffViewer)
+    }
+
+    /// The last diff-viewer load, kept so reopening on the same repo renders instantly and refreshes
+    /// behind the card instead of flashing a spinner. A different repo root ignores it.
+    private var diffCache: (repoRoot: URL, load: GitDiffRunner.StatusLoad)?
 
     /// Which section the Settings card opens on. `.tools` / `.workspaces` are used when a sub-form
     /// (tool-float or workspace editor) hands back to the section it was launched from; the
@@ -1106,8 +1154,16 @@ final class WindowController: NSObject {
                 closeModal()
                 return
             }
+            // The diff viewer navigates with the app's pane chords (⌘h/j/k/l): forward them so it can
+            // move between its tree and diff and jump changes, instead of swallowing them like a form.
+            if modal.kind == .diffViewer, let diff = modal.overlay as? DiffViewerOverlay,
+                diff.handleNavChord(chord)
+            {
+                return
+            }
             switch chord {
-            case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue:
+            case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
+                .openDiffViewer:
                 closeModal()  // close the current card, then open the requested surface below
             default:
                 return
@@ -1129,7 +1185,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Tool Float",
                         message: "Close \(name) first, then ⌘W."))
                 return
-            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue:
+            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .openDiffViewer:
                 floats.close()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab, .fillScreen:
                 break  // cross-tab/window chords still act; Fill Screen is window-level
@@ -1181,6 +1237,7 @@ final class WindowController: NSObject {
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
         case .reportIssue: openReportIssue()
+        case .openDiffViewer: openDiffViewer()
         }
     }
 
@@ -1503,6 +1560,7 @@ final class WindowController: NSObject {
         // The shown float is window-level, so it comes from `floats`, not the active tab's state.
         dock.render(
             overlay: overlay, floatID: floats.activeID, paletteOpen: modal?.kind == .commandPalette,
+            diffViewerOpen: modal?.kind == .diffViewer,
             isLiveInBackground: floats.isLiveInBackground)
         // Keep the poll's change-guard in sync with what's actually shown, so a tab switch to a
         // differently-busy tab re-evaluates instead of comparing against a stale value.

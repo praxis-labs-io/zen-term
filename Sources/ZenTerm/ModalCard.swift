@@ -32,18 +32,29 @@ final class CardView: ShadowCardView { override func mouseDown(with event: NSEve
 enum CardChrome {
     static let cornerRadius: CGFloat = 12
 
-    static func apply(to card: NSView, background: NSColor, cornerRadius: CGFloat = CardChrome.cornerRadius) {
+    /// `halo: true` swaps the neutral hairline for the accent focus ring — the same signal a focused
+    /// terminal pane wears. Reserved for the surfaces that steal focus from the pane behind them
+    /// (the configured tool floats and the diff viewer), so the ring reads as "focus is here now";
+    /// transient pickers and forms keep the neutral edge.
+    static func apply(
+        to card: NSView, background: NSColor, cornerRadius: CGFloat = CardChrome.cornerRadius,
+        halo: Bool = false
+    ) {
         card.wantsLayer = true
         card.layer?.cornerRadius = cornerRadius
         card.layer?.backgroundColor = background.cgColor
-        card.layer?.borderWidth = 1
-        card.layer?.borderColor = FloatShadow.edge.cgColor
+        card.layer?.borderWidth = halo ? 1.5 : 1
+        card.layer?.borderColor = borderColor(halo: halo)
         FloatShadow.applyShadow(to: card)  // masksToBounds stays off so the shadow isn't clipped
     }
 
-    static func reapplyTheme(to card: NSView) {
+    static func reapplyTheme(to card: NSView, halo: Bool = false) {
         card.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        card.layer?.borderColor = FloatShadow.edge.cgColor
+        card.layer?.borderColor = borderColor(halo: halo)
+    }
+
+    private static func borderColor(halo: Bool) -> CGColor {
+        halo ? Theme.current.chrome.accent.nsColor.cgColor : FloatShadow.edge.cgColor
     }
 }
 

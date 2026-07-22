@@ -172,7 +172,7 @@ final class AppButton: NSButton {
             textColor = isOn ? chrome.accent.nsColor : chrome.muted.nsColor
             background =
                 isOn
-                ? chrome.accent.nsColor.withAlphaComponent(0.16)
+                ? chrome.accent.nsColor.withAlphaComponent(0.18)  // match the command palette selection tint
                 : (isHovered ? chrome.ink(alpha: 0.09) : chrome.ink(alpha: 0.05))
         case .link:
             textColor =

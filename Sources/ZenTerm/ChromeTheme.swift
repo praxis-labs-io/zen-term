@@ -15,6 +15,9 @@ struct ChromeTheme: Equatable {
     let accent: TerminalColor
     let attention: TerminalColor
     let muted: TerminalColor
+    /// Green "added / success" role — the only ANSI hue the chrome hadn't needed until the diff
+    /// viewer's added-line fg/bg (ZEN-226). Named for meaning, not hue, like the other roles.
+    let positive: TerminalColor
 
     /// Readability multiplier applied to every ink opacity. The chrome's per-site opacities
     /// were tuned for light-on-dark; a dark ink at the same opacity on a light theme reads

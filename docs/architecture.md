@@ -226,6 +226,31 @@ fullscreen (no space switch, the menu bar stays).
 for a different card closes the current one and falls through, so cards switch
 live.
 
+**The diff viewer is the first chrome subsystem to shell out.** ⌘⇧D opens
+`DiffViewerOverlay`, a modal card over the focused tile: a single file tree on the
+left split into three status sections (Unstaged → Staged → Committed, empty ones
+hidden), the side-by-side diff of the selected file on the right, and a full-width
+footer carrying the total `+n −m` on the left and the live-keymap key hints (real
+`KeycapView`s) on the right. The committed slice forks from the repo's default branch
+(`origin/HEAD`, else main/master; git records no parent, so a stacked branch's parent
+isn't guessed). A static header above the tree carries a `Base: <branch>` `Dropdown`
+(the same control the theme picker uses; branches default-first then by recency, the
+checked-out branch excluded) that re-runs the committed slice against the chosen branch
+and is reachable from the tree by arrow key. Navigation is the
+app's own pane chords, not Tab: ⌘h/⌘l move between the tree and the diff, ⌘j/⌘k jump to
+the next/previous change; they're forwarded from `WindowController.handle` because
+`KeyInterceptor` consumes chords before the responder chain. It wears the accent halo
+and the pane behind yields focus, the way a configured tool float does.
+
+Its git work is `GitDiffRunner`, the app's first real subprocess: `git diff` runs off
+the main thread on a global queue, both pipes drained to EOF before `waitUntilExit`,
+then back to main with a parsed `[FileDiff]`. The model half (`DiffParser`, `DiffTree`,
+`SideBySideDiff`) is pure and renderer-agnostic; the overlay takes an injected loader,
+so the chrome never touches `Process` and the whole surface is drivable in a test
+without a repo. Opening is guarded upstream: a non-repo directory shows a toast and the
+overlay never mounts, so it always has a repo. Like the palette and floats it has no
+menu entry: chord + ⌘P + dock.
+
 **Tool floats are window-level, not app-level**, because a surface is one `NSView`
 and can live in one view hierarchy: an app-global instance would physically yank
 the float out of window A when opened in window B. `ToolFloatController` holds no
