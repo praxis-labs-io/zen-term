@@ -81,6 +81,26 @@ final class PaletteInteractionTests: XCTestCase {
         return window.contentView!.performKeyEquivalent(with: esc)
     }
 
+    /// The selectable (non-header) rows currently laid out, in list order.
+    private func rows(in overlay: PaletteOverlay) -> [SelectableRowView] {
+        descendants(of: overlay).compactMap { $0 as? SelectableRowView }
+    }
+
+    /// Click a row the real way — a mouseDown then mouseUp on the row view. `landingInside`
+    /// controls where the release lands, so a test can drive both a normal click and a drag-off.
+    private func click(_ row: SelectableRowView, landingInside: Bool = true) {
+        let inside = CGPoint(x: row.bounds.midX, y: row.bounds.midY)
+        let outside = CGPoint(x: row.bounds.maxX + 400, y: row.bounds.midY)
+        func event(_ type: NSEvent.EventType, _ local: CGPoint) -> NSEvent {
+            NSEvent.mouseEvent(
+                with: type, location: row.convert(local, to: nil), modifierFlags: [], timestamp: 0,
+                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0, clickCount: 1,
+                pressure: 1)!
+        }
+        row.mouseDown(with: event(.leftMouseDown, inside))
+        row.mouseUp(with: event(.leftMouseUp, landingInside ? inside : outside))
+    }
+
     private static let moveDown = #selector(NSResponder.moveDown(_:))
     private static let moveUp = #selector(NSResponder.moveUp(_:))
     private static let insertNewline = #selector(NSResponder.insertNewline(_:))
@@ -109,6 +129,25 @@ final class PaletteInteractionTests: XCTestCase {
         // Default selection is the first *selectable* row (index 1), never the "Panes" header.
         send(Self.insertNewline, to: overlay)
         XCTAssertEqual(ran, .splitVertical)
+    }
+
+    func test_commandPalette_singleClickRunsTheRow() {
+        var ran: KeyInterceptor.ReservedChord?
+        let overlay = makeCommandPalette(onRun: { ran = $0 })
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+        // First selectable row = Split Vertically (the "Panes" header isn't a SelectableRowView).
+        click(rows(in: overlay)[0])
+        XCTAssertEqual(ran, .splitVertical, "a single click must run the row, no double-click")
+    }
+
+    func test_commandPalette_pressThenDragOff_doesNotRun() {
+        var ran: KeyInterceptor.ReservedChord?
+        let overlay = makeCommandPalette(onRun: { ran = $0 })
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+        click(rows(in: overlay)[0], landingInside: false)
+        XCTAssertNil(ran, "releasing off the row cancels, like a button drag-off")
     }
 
     func test_commandPalette_arrowDownSkipsTheHeaderBetweenGroups() {

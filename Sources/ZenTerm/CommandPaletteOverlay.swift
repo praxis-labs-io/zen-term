@@ -50,9 +50,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
         case .header(let title):
             return HeaderRowView(title: title)
         case .command(let command):
-            return RowView(command: command) { [weak self] clickCount in
-                self?.selectRow(at: index, clickCount: clickCount)
-            }
+            return RowView(command: command) { [weak self] in self?.activateRow(at: index) }
         }
     }
 
@@ -143,7 +141,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
 
     /// One command row: the action name (left) and its shortcut keycap (right).
     private final class RowView: SelectableRowView {
-        init(command: PaletteCommand, onClick: @escaping (Int) -> Void) {
+        init(command: PaletteCommand, onClick: @escaping () -> Void) {
             super.init(onClick: onClick)
 
             let title = NSTextField(labelWithString: command.title)
