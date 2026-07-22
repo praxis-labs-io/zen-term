@@ -312,7 +312,11 @@ final class GhosttyHostView: NSView {
             x *= scrollMultiplier  // subjective feel multiplier, matching Ghostty's own app
             y *= scrollMultiplier
         }
-        // Packed scroll mods: bit 0 = high-precision. Momentum phases are tracked in ZEN-68.
+        // Packed scroll mods: bit 0 = high-precision. Only the precision bit is set: ghostty's core
+        // ignores the momentum phase entirely (verified in 1.3.1 — zero references), so forwarding it
+        // changes nothing. The flick coast comes from macOS's own decaying deltas; ghostty then
+        // scrolls in whole cells (it carries a sub-cell remainder but never renders fractional rows),
+        // which is the deceleration stutter and needs upstream fractional-line rendering to smooth.
         let mods: ghostty_input_scroll_mods_t = precise ? 1 : 0
         ghostty_surface_mouse_scroll(surfacePtr, x, y, mods)
     }

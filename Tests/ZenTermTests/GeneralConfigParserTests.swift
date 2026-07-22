@@ -7,6 +7,22 @@ final class GeneralConfigParserTests: XCTestCase {
         GeneralConfigParser.parse(text, fallback: .builtIn)
     }
 
+    func test_customShader_isRepeatableAndKeepsOrder() {
+        // The parser stores raw bundled-shader names in file order (ConfigLoader resolves them);
+        // an empty value is skipped.
+        let config = parse(
+            """
+            custom-shader = cursor_warp
+            custom-shader =
+            custom-shader = crt
+            """)
+        XCTAssertEqual(config.customShaders, ["cursor_warp", "crt"])
+    }
+
+    func test_noCustomShader_isEmpty() {
+        XCTAssertEqual(parse("font-family = Menlo").customShaders, [])
+    }
+
     func test_happyPath_parsesEveryScalar() {
         let config = parse(
             """

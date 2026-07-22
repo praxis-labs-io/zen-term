@@ -42,6 +42,17 @@ enum GhosttyConfigWriter {
                 lines.append("palette = \(index)=\(color.hex)")
             }
         }
+        // Custom shaders run as post-process passes, in order (ghostty's repeatable
+        // `custom-shader`). Paths are already absolute (the chrome resolves bundled names), so
+        // ghostty's file-relative resolution — which would look next to this temp config — never
+        // applies. Pin `custom-shader-animation = true` so the effect animates while focused
+        // regardless of ghostty's default drift; only emit it when there's a shader to animate.
+        for shader in behavior.customShaders {
+            lines.append("custom-shader = \(shader)")
+        }
+        if !behavior.customShaders.isEmpty {
+            lines.append("custom-shader-animation = true")
+        }
         return lines.joined(separator: "\n") + "\n"
     }
 

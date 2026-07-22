@@ -86,12 +86,29 @@ enum ConfigLoader {
         }
         do {
             let text = try String(contentsOf: configURL, encoding: .utf8)
-            return GeneralConfigParser.parse(text, fallback: .builtIn)
+            var config = GeneralConfigParser.parse(text, fallback: .builtIn)
+            config.customShaders = resolveShaders(config.customShaders)
+            return config
         } catch {
             Log.warning(
                 "ConfigLoader: could not read \(configURL.path): \(error) — using built-in config",
                 category: .config)
             return .builtIn
+        }
+    }
+
+    /// Resolve bundled-shader names (from `custom-shader = <name>` lines) to absolute file paths,
+    /// preserving order. A name with no bundled shader is logged and dropped — bundled-only, so a
+    /// path or an unknown name simply yields no shader rather than loading anything un-vetted.
+    private static func resolveShaders(_ names: [String]) -> [String] {
+        names.compactMap { name in
+            guard let url = ShaderCatalog.bundledURL(for: name) else {
+                Log.warning(
+                    "ConfigLoader: custom-shader `\(name)` is not a bundled shader — ignored",
+                    category: .config)
+                return nil
+            }
+            return url.path
         }
     }
 

@@ -2,8 +2,9 @@ import Foundation
 
 /// Backend-neutral terminal behavior the chrome dials from user config — the seam's
 /// vocabulary for the non-appearance knobs (cursor shape/thickness, Option semantics, scroll
-/// feel). The libghostty backend maps the cursor and Option fields to ghostty config; the
-/// scroll multiplier is applied in `GhosttyHostView`'s own scroll handling, not via config.
+/// feel, custom render shaders). The libghostty backend maps the cursor, Option, and shader
+/// fields to ghostty config; the scroll multiplier is applied in `GhosttyHostView`'s own
+/// scroll handling, not via config.
 public struct TerminalBehavior: Equatable, Sendable {
     public enum CursorStyle: Sendable, Equatable { case block, bar, underline }
 
@@ -14,19 +15,27 @@ public struct TerminalBehavior: Equatable, Sendable {
     public var cursorThickness: Int
     public var optionAsAlt: Bool
     public var scrollMultiplier: Double
+    /// Absolute paths to GLSL custom shaders, applied as post-process passes in order (ghostty
+    /// `custom-shader`, repeatable). Empty = none. The chrome resolves bundled shader names to
+    /// these paths before they cross the seam; the backend emits them to config and, when this
+    /// is non-empty, drops the surface layer's opacity so a shader's real alpha reaches the
+    /// compositor instead of being ignored.
+    public var customShaders: [String]
 
     public init(
         cursorStyle: CursorStyle = .block,
         cursorBlink: Bool = true,
         cursorThickness: Int = 2,
         optionAsAlt: Bool = true,
-        scrollMultiplier: Double = 1.5
+        scrollMultiplier: Double = 1.5,
+        customShaders: [String] = []
     ) {
         self.cursorStyle = cursorStyle
         self.cursorBlink = cursorBlink
         self.cursorThickness = cursorThickness
         self.optionAsAlt = optionAsAlt
         self.scrollMultiplier = scrollMultiplier
+        self.customShaders = customShaders
     }
 
     /// The shipped baseline used when no config is present.

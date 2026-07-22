@@ -739,7 +739,8 @@ final class WindowController: NSObject {
     private static func landing(forSettingKey key: String) -> SettingsLanding {
         switch key {
         case "font-family", "font-size", "cursor-style", "cursor-style-blink", "cursor-thickness",
-            "macos-option-as-alt", "scroll-multiplier", "shell", "shell-args", "editor", "ai":
+            "custom-shader", "macos-option-as-alt", "scroll-multiplier", "shell", "shell-args",
+            "editor", "ai":
             return .terminal
         case "theme", "window-chrome", "backdrop-alpha", "window-gutter", "pane-gap",
             "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",

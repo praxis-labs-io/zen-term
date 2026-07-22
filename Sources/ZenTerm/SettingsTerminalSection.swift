@@ -10,6 +10,10 @@ final class SettingsTerminalSection: SettingsFormSection {
 
     private static let cursorStyles: [TerminalBehavior.CursorStyle] = [.block, .bar, .underline]
 
+    /// The custom-shader picker's options: nil = Off (no shader), then each bundled catalog token.
+    private var shaderTokens: [String?] = []
+    private weak var shaderDropdown: Dropdown?
+
     override func populate() {
         addGroup("Font") {
             self.addTextRow(
@@ -31,6 +35,7 @@ final class SettingsTerminalSection: SettingsFormSection {
             self.addNumericRow(
                 key: "cursor-thickness", caption: "Thickness", blurb: "Bar/underline thickness in px",
                 range: 1...12, read: { CGFloat($0.cursorThickness) }, width: 64, integer: true)
+            self.addShaderRow()
         }
         addGroup("Input") {
             self.addSegmentedRow(
@@ -63,5 +68,58 @@ final class SettingsTerminalSection: SettingsFormSection {
     /// capture `self` (which would retain-cycle through the section's `refreshers`).
     private static func cursorStyleIndex(_ c: GeneralConfig) -> Int {
         cursorStyles.firstIndex(of: c.cursorStyle) ?? 0
+    }
+
+    /// The custom-shader picker: Off plus each bundled, vetted shader (bundled-only, so nothing
+    /// un-tested is selectable). It lives here, not in Appearance, because a shader only affects the
+    /// terminal surface. A pick writes `custom-shader = <token>` (or clears it) and applies live to
+    /// every open surface via the config-reload fan-out.
+    private func addShaderRow() {
+        shaderTokens = [nil] + ShaderCatalog.bundled.map { $0.token }
+        let selected = currentShaderIndex()
+        let dropdown = Dropdown(items: shaderItems(selected: selected), selectedIndex: selected) {
+            [weak self] index in self?.selectShader(index)
+        }
+        shaderDropdown = dropdown
+
+        addCustomRow(
+            key: "custom-shader", caption: "Cursor shader", description: "Applies instantly",
+            control: dropdown, focusStop: dropdown, controlNote: nil, width: 220,
+            refresh: { [weak self] in self?.refreshShaderRow() })
+    }
+
+    private func shaderItems(selected: Int) -> [DropdownItem] {
+        shaderTokens.enumerated().map { index, token in
+            DropdownItem(
+                title: token.map(ShaderCatalog.displayName) ?? "Off",
+                group: nil, note: nil, isSelected: index == selected)
+        }
+    }
+
+    private func currentShaderIndex() -> Int {
+        shaderTokens.firstIndex(of: Self.currentShaderToken()) ?? 0
+    }
+
+    private func selectShader(_ index: Int) {
+        guard shaderTokens.indices.contains(index) else { return }
+        if let token = shaderTokens[index] {
+            write("custom-shader", token, row: "custom-shader")
+        } else {
+            writeOrRemove("custom-shader", nil, row: "custom-shader")  // Off clears the key
+        }
+    }
+
+    private func refreshShaderRow() {
+        let selected = currentShaderIndex()
+        shaderDropdown?.setItems(shaderItems(selected: selected), selectedIndex: selected)
+    }
+
+    /// The active shader's catalog token, derived from the resolved path in config (`customShaders`
+    /// holds absolute paths post-resolution), or nil for Off. Static so the read doesn't capture
+    /// `self` into a row's refresh closure (which would retain-cycle through `refreshers`).
+    private static func currentShaderToken() -> String? {
+        GeneralConfig.current.customShaders.first.map {
+            URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent
+        }
     }
 }

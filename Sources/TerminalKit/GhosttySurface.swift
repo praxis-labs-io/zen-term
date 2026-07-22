@@ -112,8 +112,14 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // which tears under heavy TUI redraws and flashes the (light) backdrop through any
         // redraw gap. Mark the layer opaque over the terminal background so it composites
         // as a solid surface and gaps show the terminal bg, not the window behind it.
+        //
+        // Exception: with a custom shader active, ghostty's shader pass writes real alpha into
+        // the drawable; an opaque layer tells Core Animation to ignore that alpha, which flashes
+        // the backdrop through on the alt-screen full redraw. So drop opacity when a shader is
+        // on, but keep the opaque backgroundColor so an ordinary redraw gap still shows the
+        // terminal bg rather than the window behind it.
         if let layer = hostView.layer {
-            layer.isOpaque = true
+            layer.isOpaque = (config.behavior ?? .default).customShaders.isEmpty
             layer.backgroundColor = (config.theme?.background.nsColor ?? .black).cgColor
         }
 
@@ -176,7 +182,9 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         GhosttyApp.shared.updateConfig(theme: theme, behavior: behavior)
         if let layer = hostView.layer {
             // Reset the opaque-layer background (the same trick start(_:) uses) so redraw gaps
-            // show the new terminal bg, not the old one.
+            // show the new terminal bg, not the old one; and re-derive opacity, since toggling a
+            // custom shader on/off flips whether the layer must pass the drawable's real alpha.
+            layer.isOpaque = behavior.customShaders.isEmpty
             layer.backgroundColor = theme.background.nsColor.cgColor
         }
         hostView.scrollMultiplier = behavior.scrollMultiplier
