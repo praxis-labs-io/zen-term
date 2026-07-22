@@ -1,21 +1,32 @@
 import AppKit
 
+/// Shared horizontal metrics so the selection pill and the row content agree on where the pill's inner
+/// edge sits. The pill is inset symmetrically from the row's edges; content must stop inside that inner
+/// edge rather than run to the row edge (past the pill) and hug its border.
+private enum DiffRowMetrics {
+    /// Pill inset from the row's left/right edges — the symmetric gap between the pill and the column
+    /// edge on the left and the tree divider on the right.
+    static let pillInset: CGFloat = 6
+    /// Trailing inset for row content: clears the pill's inner edge plus a little text padding, so a
+    /// truncated name stops inside the pill instead of touching its right border.
+    static let contentTrailing: CGFloat = pillInset + 4
+}
+
 /// The data source + delegate for the diff viewer's file tree: three top-level section rows
-/// (Unstaged / Staged / Committed), each holding a folded file tree. The tree has two columns — the
-/// name (indented, flexible) and the `+n −m` stat (fixed width, right-aligned) — so the stats line up
-/// on a common right edge and never clip, regardless of how deep a file is nested. Selecting a file
-/// reports it through `onSelect`; a section or directory just doesn't change the diff. Row views are
-/// reused and read `Theme.current` at configure time, so a live theme swap (`reloadData`) recolors.
+/// (Unstaged / Staged / Committed), each holding a folded file tree. A single flexible column — the
+/// indented name — takes the full width; a file's change magnitude reads from its status-tinted icon
+/// (added / deleted / renamed / modified) and the branch total lives in the footer, so no row reserves
+/// width for a stat. Selecting a file reports it through `onSelect`; a section or directory just
+/// doesn't change the diff. Row views are reused and read `Theme.current` at configure time, so a live
+/// theme swap (`reloadData`) recolors.
 final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
     private(set) var roots: [DiffOutlineItem]
     private let onSelect: (FileDiff) -> Void
 
     static let nameColumnID = NSUserInterfaceItemIdentifier("diff-name")
-    static let statColumnID = NSUserInterfaceItemIdentifier("diff-stat")
 
     private static let rowID = NSUserInterfaceItemIdentifier("diff-tree-row")
     private static let sectionID = NSUserInterfaceItemIdentifier("diff-tree-section")
-    private static let statViewID = NSUserInterfaceItemIdentifier("diff-tree-stat")
     private static let selectionRowID = NSUserInterfaceItemIdentifier("diff-tree-selection")
 
     init(sections: [DiffOutlineItem], onSelect: @escaping (FileDiff) -> Void) {
@@ -66,13 +77,6 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
 
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? DiffOutlineItem else { return nil }
-        if tableColumn?.identifier == Self.statColumnID {
-            let cell =
-                outlineView.makeView(withIdentifier: Self.statViewID, owner: self) as? DiffStatCellView
-                ?? DiffStatCellView(id: Self.statViewID)
-            cell.configure(added: node.addedCount, removed: node.removedCount)
-            return cell
-        }
         if node.isSection {
             let row =
                 outlineView.makeView(withIdentifier: Self.sectionID, owner: self) as? DiffSectionRowView
@@ -107,64 +111,6 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
     }
 }
 
-/// The `+n −m` stat in the positive/destructive roles, shared by the file and section stat cells. The
-/// font is baked into the attributes, not left to the label's `.font`: an `attributedStringValue`
-/// ignores the label's font, so without it the string measures and renders in different fonts.
-func diffStatText(added: Int, removed: Int, chrome: ChromeTheme) -> NSAttributedString {
-    let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-    let text = NSMutableAttributedString()
-    if added > 0 {
-        text.append(
-            NSAttributedString(
-                string: "+\(added)", attributes: [.foregroundColor: chrome.positive.nsColor, .font: font]))
-    }
-    if removed > 0 {
-        if text.length > 0 { text.append(NSAttributedString(string: " ", attributes: [.font: font])) }
-        text.append(
-            NSAttributedString(
-                string: "−\(removed)", attributes: [.foregroundColor: chrome.destructive.nsColor, .font: font]))
-    }
-    // Bake right-alignment into the string. `attributedStringValue` ignores the label's `.alignment`
-    // (the same reason the font is baked in), so with the label filling its cell this is what actually
-    // pins the stat flush to the right edge — the `+n`-only case included.
-    let paragraph = NSMutableParagraphStyle()
-    paragraph.alignment = .right
-    text.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: text.length))
-    return text
-}
-
-/// The stat column's cell: the `+n −m` total, right-aligned. A fixed-width column, so every stat
-/// lines up on the same right edge and the `−m` can't be clipped by a nested file's narrow name cell.
-private final class DiffStatCellView: NSView {
-    private let label = NSTextField(labelWithString: "")
-
-    init(id: NSUserInterfaceItemIdentifier) {
-        super.init(frame: .zero)
-        identifier = id
-        label.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(label)
-        // The label FILLS the cell (leading pinned, not `>=`) so the baked right-alignment has room to
-        // push the stat to the trailing edge. When the label only hugged its content, alignment was a
-        // no-op and the stat landed wherever the content-sized frame happened to sit — flush for some
-        // rows, short of the edge for others.
-        NSLayoutConstraint.activate([
-            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-        ])
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    func configure(added: Int, removed: Int) {
-        if added + removed > 0 {
-            label.attributedStringValue = diffStatText(added: added, removed: removed, chrome: Theme.current.chrome)
-        } else {
-            label.stringValue = ""
-        }
-    }
-}
-
 /// A tree row whose selection fill is the theme accent, not macOS's system-blue highlight (ZEN-27).
 /// Solid accent fill while the tree holds focus; a quiet outline while the diff does, so the selected
 /// file stays marked without competing with the diff's own cursor line.
@@ -172,7 +118,8 @@ private final class ThemedSelectionRowView: NSTableRowView {
     override func drawSelection(in dirtyRect: NSRect) {
         guard isSelected else { return }
         let accent = Theme.current.chrome.accent.nsColor
-        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 4, dy: 1), xRadius: 6, yRadius: 6)
+        let path = NSBezierPath(
+            roundedRect: bounds.insetBy(dx: DiffRowMetrics.pillInset, dy: 1), xRadius: 6, yRadius: 6)
         if isEmphasized {
             accent.withAlphaComponent(0.18).setFill()
             path.fill()
@@ -184,15 +131,14 @@ private final class ThemedSelectionRowView: NSTableRowView {
     }
 }
 
-/// A section header row (name column): the slice name in muted small caps. The slice total lives in
-/// the stat column.
+/// A section header row: the slice name (Unstaged / Staged / Committed) in muted small caps.
 private final class DiffSectionRowView: NSView {
     private let titleLabel = NSTextField(labelWithString: "")
 
-    // The outline already frames this cell view clear of the disclosure triangle (same as any
-    // other row) — this is just extra breathing room so a section title doesn't sit flush against
-    // it.
-    private static let leadingInset: CGFloat = 16
+    // The outline already frames this cell clear of the disclosure triangle, so a small inset is all
+    // it takes — matching where the file/folder rows sit their icon, so the section title reads as
+    // tight to its chevron as the files do to theirs (not floating far to the right).
+    private static let leadingInset: CGFloat = 2
 
     init(id: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
@@ -217,16 +163,19 @@ private final class DiffSectionRowView: NSView {
         // (DiffViewerOverlay.swift) is what makes that width trustworthy (ZEN-226).
         titleLabel.frame = NSRect(
             x: Self.leadingInset, y: ((bounds.height - titleHeight) / 2).rounded(),
-            width: max(0, bounds.width - Self.leadingInset), height: titleHeight)
+            width: max(0, bounds.width - Self.leadingInset - DiffRowMetrics.contentTrailing),
+            height: titleHeight)
     }
 }
 
-/// One reused row of the file tree (name column): a status-tinted file (or folder) icon and the name.
-/// The stat is a separate column. Manual `frame` layout (no per-row Auto Layout) so scrolling a large
-/// tree stays cheap.
+/// One reused row of the file tree: a status-tinted file (or folder) icon and the name. Manual `frame`
+/// layout (no per-row Auto Layout) so scrolling a large tree stays cheap. A name the column had to clip
+/// reveals its full self in a branded hover tooltip.
 private final class DiffTreeRowView: NSView {
     private let iconView = NSImageView()
     private let nameLabel = NSTextField(labelWithString: "")
+    private var tooltip = TooltipHost(label: "")
+    private var trackingArea: NSTrackingArea?
 
     private static let iconWidth: CGFloat = 16
 
@@ -251,6 +200,12 @@ private final class DiffTreeRowView: NSView {
 
         nameLabel.stringValue = item.displayName
         nameLabel.textColor = item.isDirectory ? chrome.ink(alpha: 0.7) : chrome.foreground.nsColor
+        // Rows are reused across scroll positions, so the tooltip label has to be reassigned every
+        // configure — otherwise a recycled row names the wrong file on hover. Dismiss any tooltip the
+        // old host is still showing first (a `reloadData` can reconfigure the row under the pointer),
+        // so a stale label can't linger past the swap.
+        tooltip.hide(from: self)
+        tooltip = TooltipHost(label: item.displayName)
         needsLayout = true
     }
 
@@ -278,6 +233,27 @@ private final class DiffTreeRowView: NSView {
         let nameHeight = nameLabel.intrinsicContentSize.height
         nameLabel.frame = NSRect(
             x: nameX, y: ((bounds.height - nameHeight) / 2).rounded(),
-            width: max(0, bounds.width - nameX), height: nameHeight)
+            width: max(0, bounds.width - nameX - DiffRowMetrics.contentTrailing), height: nameHeight)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(
+            rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    // Only a name the column actually clipped earns a tooltip — a fully-visible one doesn't need one.
+    override func mouseEntered(with event: NSEvent) {
+        if nameLabel.intrinsicContentSize.width > nameLabel.frame.width + 0.5 { tooltip.show(from: self) }
+    }
+    override func mouseExited(with event: NSEvent) { tooltip.hide(from: self) }
+
+    /// Drop the tooltip if the row leaves the window (the tree rebuilds on a reload).
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { tooltip.hide(from: self) }
     }
 }

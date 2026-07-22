@@ -49,6 +49,36 @@ synthesized `modifierFlags: .option` event is a keystroke macOS never sends: it 
 ⌥-arrow reorder past four green tests and a mutation check, because both only ever exercised the fake
 event (ZEN-145).
 
+## Scroll views
+
+**A single-column `NSOutlineView` left at the default `.automatic` style is permanently wider than
+its clip.** `.automatic` resolves to the inset/source-list family, whose tiling reserves a constant
+**+32pt in the outline's own frame beyond the column width**, and reports `intercellSpacing` as
+`(17, 0)` — not the classic `(3, 2)` most code assumes. So an outline sized to fill its clip with the
+documented formula (`column.width = clipWidth - intercellSpacing.width`) still leaves the document
+~15pt wider than the clip at *every* width, independent of row content — a static geometry overflow,
+not a scroll artifact, so a `constrainBoundsRect` origin-clamp and `horizontalScrollElasticity = .none`
+defend against dragging into it but never remove it. Force `outline.style = .plain` and zero the
+intercell width (`intercellSpacing = NSSize(width: 0, height: intercellSpacing.height)`); `.plain`
+restores the real `documentWidth = columnWidth + intercellSpacing.width` relation, making the fill
+math exact. `.plain` also stops silently overriding `rowSizeStyle` (row height drops 24→17 for
+`.small`). `.plain` draws level-0 rows hard against the column edge, so a section header's disclosure
+triangle pokes left of a selection pill: shift level-0 cells right by one `indentationPerLevel` in
+`frameOfOutlineCell`/`frameOfCell` to seat them inside the pill (ZEN-236).
+
+**`NSScrollView.contentInsets` is scrollable range, not padding.** A nonzero inset on an edge
+extends the clip view's pannable range by exactly that many points on that edge — same model as
+`UIScrollView.contentInset` — *even when the document view exactly fills the clip on that axis*. A
+single-column `NSOutlineView` sized to fill its clip's width exactly still scrolled sideways by a
+fixed few points at every window width because `contentInsets.left`/`.right` were nonzero (wanted
+for visual breathing room); no amount of recomputing the column's width against
+`contentView.bounds` could cancel it, because the pannable range is additive on top of the
+document/clip width relationship, not derived from it. Reserve `contentInsets` for axes that are
+actually meant to scroll (e.g. `top`/`bottom` breathing room above/below the first/last row); get
+edge padding on a non-scrolling axis from the row content's own insets instead (`DiffTreeRowView`,
+`DiffTreeOutlineController.swift`), which affect where content draws/truncates, never the
+document's reported frame width (ZEN-226).
+
 ## Layers, shadows, and colors
 
 **Static layer shadows go on `NSView.shadow`, not `layer.shadowOpacity`.** Setting
