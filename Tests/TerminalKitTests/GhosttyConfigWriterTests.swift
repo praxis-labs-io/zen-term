@@ -70,21 +70,17 @@ final class GhosttyConfigWriterTests: XCTestCase {
         XCTAssertFalse(text.contains("adjust-cursor-thickness"))
     }
 
-    func test_noShaders_emitsNeitherShaderKey() {
+    func test_noShader_emitsNeitherShaderKey() {
         let text = GhosttyConfigWriter.configText(for: theme, behavior: TerminalBehavior())
         XCTAssertFalse(text.contains("custom-shader"))
         XCTAssertFalse(text.contains("custom-shader-animation"))
     }
 
-    func test_customShadersEmittedInOrderWithAnimation() {
-        let behavior = TerminalBehavior(customShaders: ["/a/one.glsl", "/b/two.glsl"])
+    func test_cursorShaderEmitsGhosttyKeyWithAnimation() {
+        let behavior = TerminalBehavior(cursorShader: "/a/cursor_warp.glsl")
         let text = GhosttyConfigWriter.configText(for: theme, behavior: behavior)
-        XCTAssertTrue(text.contains("custom-shader = /a/one.glsl\n"))
-        XCTAssertTrue(text.contains("custom-shader = /b/two.glsl\n"))
-        // Order matters: shaders stack, each feeding the next.
-        let first = try? XCTUnwrap(text.range(of: "custom-shader = /a/one.glsl"))
-        let second = try? XCTUnwrap(text.range(of: "custom-shader = /b/two.glsl"))
-        if let first, let second { XCTAssertLessThan(first.lowerBound, second.lowerBound) }
+        // The chrome's single `cursor-shader` maps to ghostty's own `custom-shader` key.
+        XCTAssertTrue(text.contains("custom-shader = /a/cursor_warp.glsl\n"))
         // The animation loop is pinned on only when there's a shader to animate.
         XCTAssertTrue(text.contains("custom-shader-animation = true\n"))
     }

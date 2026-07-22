@@ -70,9 +70,9 @@ final class SettingsTerminalSection: SettingsFormSection {
         cursorStyles.firstIndex(of: c.cursorStyle) ?? 0
     }
 
-    /// The custom-shader picker: Off plus each bundled, vetted shader (bundled-only, so nothing
+    /// The cursor-shader picker: Off plus each bundled, vetted shader (bundled-only, so nothing
     /// un-tested is selectable). It lives here, not in Appearance, because a shader only affects the
-    /// terminal surface. A pick writes `custom-shader = <token>` (or clears it) and applies live to
+    /// terminal surface. A pick writes `cursor-shader = <token>` (or clears it) and applies live to
     /// every open surface via the config-reload fan-out.
     private func addShaderRow() {
         shaderTokens = [nil] + ShaderCatalog.bundled.map { $0.token }
@@ -83,7 +83,7 @@ final class SettingsTerminalSection: SettingsFormSection {
         shaderDropdown = dropdown
 
         addCustomRow(
-            key: "custom-shader", caption: "Cursor shader", description: "Applies instantly",
+            key: "cursor-shader", caption: "Cursor shader", description: "Applies instantly",
             control: dropdown, focusStop: dropdown, controlNote: nil, width: 220,
             refresh: { [weak self] in self?.refreshShaderRow() })
     }
@@ -103,9 +103,9 @@ final class SettingsTerminalSection: SettingsFormSection {
     private func selectShader(_ index: Int) {
         guard shaderTokens.indices.contains(index) else { return }
         if let token = shaderTokens[index] {
-            write("custom-shader", token, row: "custom-shader")
+            write("cursor-shader", token, row: "cursor-shader")
         } else {
-            writeOrRemove("custom-shader", nil, row: "custom-shader")  // Off clears the key
+            writeOrRemove("cursor-shader", nil, row: "cursor-shader")  // Off clears the key
         }
     }
 
@@ -114,11 +114,11 @@ final class SettingsTerminalSection: SettingsFormSection {
         shaderDropdown?.setItems(shaderItems(selected: selected), selectedIndex: selected)
     }
 
-    /// The active shader's catalog token, derived from the resolved path in config (`customShaders`
-    /// holds absolute paths post-resolution), or nil for Off. Static so the read doesn't capture
+    /// The active shader's catalog token, derived from the resolved path in config (`cursorShader`
+    /// holds the absolute path post-resolution), or nil for Off. Static so the read doesn't capture
     /// `self` into a row's refresh closure (which would retain-cycle through `refreshers`).
     private static func currentShaderToken() -> String? {
-        GeneralConfig.current.customShaders.first.map {
+        GeneralConfig.current.cursorShader.map {
             URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent
         }
     }

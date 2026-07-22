@@ -16,10 +16,10 @@ struct GeneralConfig: Equatable {
     var optionAsAlt: Bool
     var scrollMultiplier: Double
 
-    /// Custom render shaders, as bundled catalog names in `custom-shader = <name>` lines
-    /// (repeatable). `ConfigLoader` resolves each name to a bundled shader's absolute path before
-    /// it crosses the seam; an unknown name is dropped. Bundled-only by design — no user files.
-    var customShaders: [String]
+    /// The selected cursor shader, as a bundled catalog name in a single `cursor-shader = <name>`
+    /// line. `ConfigLoader` resolves the name to a bundled shader's absolute path before it crosses
+    /// the seam; an unknown name resolves to nil. Bundled-only, single-select by design.
+    var cursorShader: String?
 
     // Theme — selects a named file from `~/.config/zen-term/themes/`. Nil → the legacy
     // single `theme` file if present, else the built-in default.
@@ -88,7 +88,7 @@ struct GeneralConfig: Equatable {
         cursorThickness: 2,
         optionAsAlt: true,
         scrollMultiplier: 1.5,
-        customShaders: [],
+        cursorShader: nil,
         themeName: nil,
         fontName: "JetBrainsMono Nerd Font Mono",
         fontSize: 14,
@@ -131,6 +131,6 @@ struct GeneralConfig: Equatable {
     var terminalBehavior: TerminalBehavior {
         TerminalBehavior(
             cursorStyle: cursorStyle, cursorBlink: cursorBlink, cursorThickness: cursorThickness,
-            optionAsAlt: optionAsAlt, scrollMultiplier: scrollMultiplier, customShaders: customShaders)
+            optionAsAlt: optionAsAlt, scrollMultiplier: scrollMultiplier, cursorShader: cursorShader)
     }
 }

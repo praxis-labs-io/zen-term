@@ -7,20 +7,20 @@ final class GeneralConfigParserTests: XCTestCase {
         GeneralConfigParser.parse(text, fallback: .builtIn)
     }
 
-    func test_customShader_isRepeatableAndKeepsOrder() {
-        // The parser stores raw bundled-shader names in file order (ConfigLoader resolves them);
-        // an empty value is skipped.
+    func test_cursorShader_isSingleSelect_lastNonEmptyWins() {
+        // Single-select: the parser stores the raw bundled-shader name (ConfigLoader resolves it),
+        // last non-empty line wins, and an empty value is skipped.
         let config = parse(
             """
-            custom-shader = cursor_warp
-            custom-shader =
-            custom-shader = crt
+            cursor-shader = cursor_warp
+            cursor-shader =
+            cursor-shader = cursor_tail
             """)
-        XCTAssertEqual(config.customShaders, ["cursor_warp", "crt"])
+        XCTAssertEqual(config.cursorShader, "cursor_tail")
     }
 
-    func test_noCustomShader_isEmpty() {
-        XCTAssertEqual(parse("font-family = Menlo").customShaders, [])
+    func test_noCursorShader_isNil() {
+        XCTAssertNil(parse("font-family = Menlo").cursorShader)
     }
 
     func test_happyPath_parsesEveryScalar() {

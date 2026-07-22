@@ -119,7 +119,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // on, but keep the opaque backgroundColor so an ordinary redraw gap still shows the
         // terminal bg rather than the window behind it.
         if let layer = hostView.layer {
-            layer.isOpaque = (config.behavior ?? .default).customShaders.isEmpty
+            layer.isOpaque = (config.behavior ?? .default).cursorShader == nil
             layer.backgroundColor = (config.theme?.background.nsColor ?? .black).cgColor
         }
 
@@ -183,8 +183,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         if let layer = hostView.layer {
             // Reset the opaque-layer background (the same trick start(_:) uses) so redraw gaps
             // show the new terminal bg, not the old one; and re-derive opacity, since toggling a
-            // custom shader on/off flips whether the layer must pass the drawable's real alpha.
-            layer.isOpaque = behavior.customShaders.isEmpty
+            // cursor shader on/off flips whether the layer must pass the drawable's real alpha.
+            layer.isOpaque = behavior.cursorShader == nil
             layer.backgroundColor = theme.background.nsColor.cgColor
         }
         hostView.scrollMultiplier = behavior.scrollMultiplier

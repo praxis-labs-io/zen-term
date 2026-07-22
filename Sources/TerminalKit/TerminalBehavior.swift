@@ -15,12 +15,12 @@ public struct TerminalBehavior: Equatable, Sendable {
     public var cursorThickness: Int
     public var optionAsAlt: Bool
     public var scrollMultiplier: Double
-    /// Absolute paths to GLSL custom shaders, applied as post-process passes in order (ghostty
-    /// `custom-shader`, repeatable). Empty = none. The chrome resolves bundled shader names to
-    /// these paths before they cross the seam; the backend emits them to config and, when this
-    /// is non-empty, drops the surface layer's opacity so a shader's real alpha reaches the
-    /// compositor instead of being ignored.
-    public var customShaders: [String]
+    /// Absolute path to a single GLSL cursor shader (a post-process pass), or nil for none. The
+    /// chrome resolves a bundled shader name to this path before it crosses the seam; the backend
+    /// emits it to ghostty config and, when it's set, drops the surface layer's opacity so the
+    /// shader's real alpha reaches the compositor instead of being ignored. Single by design —
+    /// the chrome ships one selectable effect, not a stack.
+    public var cursorShader: String?
 
     public init(
         cursorStyle: CursorStyle = .block,
@@ -28,14 +28,14 @@ public struct TerminalBehavior: Equatable, Sendable {
         cursorThickness: Int = 2,
         optionAsAlt: Bool = true,
         scrollMultiplier: Double = 1.5,
-        customShaders: [String] = []
+        cursorShader: String? = nil
     ) {
         self.cursorStyle = cursorStyle
         self.cursorBlink = cursorBlink
         self.cursorThickness = cursorThickness
         self.optionAsAlt = optionAsAlt
         self.scrollMultiplier = scrollMultiplier
-        self.customShaders = customShaders
+        self.cursorShader = cursorShader
     }
 
     /// The shipped baseline used when no config is present.

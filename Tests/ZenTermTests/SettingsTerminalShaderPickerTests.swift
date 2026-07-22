@@ -76,7 +76,7 @@ final class SettingsTerminalShaderPickerTests: XCTestCase {
     func test_defaultsToOff_withNoShaderKey() {
         let dropdown = mountShaderDropdown()
         XCTAssertEqual(dropdown.buttonTitleForTesting, "Off")
-        XCTAssertFalse(configText().contains("custom-shader"))
+        XCTAssertFalse(configText().contains("cursor-shader"))
     }
 
     func test_selectingCursorWarp_writesTheToken_thenOffClearsIt() {
@@ -89,7 +89,7 @@ final class SettingsTerminalShaderPickerTests: XCTestCase {
         dropdown.keyDown(with: key(Self.returnKey, arrow: false))
 
         XCTAssertTrue(
-            configText().contains("custom-shader = cursor_warp"), "got: \(configText())")
+            configText().contains("cursor-shader = cursor_warp"), "got: \(configText())")
         XCTAssertEqual(dropdown.buttonTitleForTesting, "Cursor Warp")
 
         // Back to Off (Return to open, Up to index 0, Return) clears the key entirely.
@@ -97,7 +97,7 @@ final class SettingsTerminalShaderPickerTests: XCTestCase {
         dropdown.keyDown(with: key(Self.upKey, arrow: true))
         dropdown.keyDown(with: key(Self.returnKey, arrow: false))
 
-        XCTAssertFalse(configText().contains("custom-shader"), "got: \(configText())")
+        XCTAssertFalse(configText().contains("cursor-shader"), "got: \(configText())")
         XCTAssertEqual(dropdown.buttonTitleForTesting, "Off")
     }
 }

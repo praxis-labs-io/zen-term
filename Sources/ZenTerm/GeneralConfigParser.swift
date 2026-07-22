@@ -13,7 +13,6 @@ enum GeneralConfigParser {
     static func parse(_ text: String, fallback: GeneralConfig) -> GeneralConfig {
         var config = fallback
         var floats: [ToolFloat] = []
-        var customShaders: [String] = []
         var floatLineIndex = 0
         var keybinds: [(Chord, KeyInterceptor.ReservedChord)] = []
         // The non-keybind diagnostics collected as scalars/enums/floats are read; the keybind ones
@@ -51,10 +50,10 @@ enum GeneralConfigParser {
                 if let n = parseDouble(value, key, &diagnostics) {
                     config.scrollMultiplier = clamp(n, 0.1, 10, key, &diagnostics)
                 }
-            case "custom-shader":
-                // Repeatable; store the raw bundled-shader name in order. ConfigLoader resolves
-                // each name to a bundled path (the parser stays text-pure and off the filesystem).
-                if !value.isEmpty { customShaders.append(value) }
+            case "cursor-shader":
+                // Single-select: store the raw bundled-shader name (last line wins). ConfigLoader
+                // resolves it to a bundled path (the parser stays text-pure and off the filesystem).
+                if !value.isEmpty { config.cursorShader = value }
             case "window-chrome":
                 if let b = parseBool(value, key, &diagnostics) { config.windowChrome = b }
             case "backdrop-alpha":
@@ -122,7 +121,6 @@ enum GeneralConfigParser {
             }
         }
 
-        config.customShaders = customShaders
         let ordered = sortedByOrder(floats)
         config.floats = ordered
         let assembled = KeymapAssembler.assemble(floats: ordered, keybinds: keybinds)

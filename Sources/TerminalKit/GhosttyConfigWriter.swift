@@ -42,15 +42,14 @@ enum GhosttyConfigWriter {
                 lines.append("palette = \(index)=\(color.hex)")
             }
         }
-        // Custom shaders run as post-process passes, in order (ghostty's repeatable
-        // `custom-shader`). Paths are already absolute (the chrome resolves bundled names), so
-        // ghostty's file-relative resolution — which would look next to this temp config — never
-        // applies. Pin `custom-shader-animation = true` so the effect animates while focused
-        // regardless of ghostty's default drift; only emit it when there's a shader to animate.
-        for shader in behavior.customShaders {
+        // The cursor shader runs as a post-process pass via ghostty's `custom-shader` (that stays
+        // ghostty's own key even though the chrome exposes a single `cursor-shader`). The path is
+        // already absolute (the chrome resolves the bundled name), so ghostty's file-relative
+        // resolution — which would look next to this temp config — never applies. Pin
+        // `custom-shader-animation = true` so it animates while focused regardless of ghostty's
+        // default drift; only emit it when there's a shader to animate.
+        if let shader = behavior.cursorShader {
             lines.append("custom-shader = \(shader)")
-        }
-        if !behavior.customShaders.isEmpty {
             lines.append("custom-shader-animation = true")
         }
         return lines.joined(separator: "\n") + "\n"
