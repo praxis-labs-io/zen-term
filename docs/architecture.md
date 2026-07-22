@@ -232,7 +232,7 @@ left split into three status sections (Unstaged → Staged → Committed, empty 
 hidden), the side-by-side diff of the selected file on the right, and a full-width
 footer carrying the total `+n −m` on the left and the live-keymap key hints (real
 `KeycapView`s) on the right. The committed slice forks from the repo's default branch
-(`origin/HEAD`, else main/master — git records no parent, so a stacked branch's parent
+(`origin/HEAD`, else main/master; git records no parent, so a stacked branch's parent
 isn't guessed). A static header above the tree carries a `Base: <branch>` `Dropdown`
 (the same control the theme picker uses; branches default-first then by recency, the
 checked-out branch excluded) that re-runs the committed slice against the chosen branch

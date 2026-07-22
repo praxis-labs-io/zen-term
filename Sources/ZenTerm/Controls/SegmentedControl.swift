@@ -30,19 +30,13 @@ final class SegmentedControl: NSView {
     /// pin it — otherwise a no-op click leaves config unpinned and it silently follows the OS later.
     private let notifiesOnReselect: Bool
 
-    /// When true the segments split the control's width evenly and it fills its container instead of
-    /// hugging its content — for a control that spans a fixed column (the diff viewer's scope picker)
-    /// rather than sitting inline in a form row. Off by default, so existing call sites are unchanged.
-    private let fillEqually: Bool
-
     init(
         options: [String], selectedIndex: Int = 0, notifiesOnReselect: Bool = false,
-        fillEqually: Bool = false, onChange: @escaping (Int) -> Void
+        onChange: @escaping (Int) -> Void
     ) {
         self.optionTitles = options
         self.selectedIndex = selectedIndex
         self.notifiesOnReselect = notifiesOnReselect
-        self.fillEqually = fillEqually
         self.onChange = onChange
         super.init(frame: .zero)
         wantsLayer = true
@@ -56,7 +50,6 @@ final class SegmentedControl: NSView {
         stack.orientation = .horizontal
         stack.alignment = .centerY
         stack.spacing = 4
-        stack.distribution = fillEqually ? .fillEqually : stack.distribution
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         segmentsStack = stack
@@ -64,30 +57,17 @@ final class SegmentedControl: NSView {
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            // Fill: the stack spans the full width and splits it evenly. Hug: it stays at content
-            // width and a form's spacer pushes it to the trailing edge.
-            fillEqually
-                ? stack.trailingAnchor.constraint(equalTo: trailingAnchor)
-                : stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
         ])
-        if fillEqually, let first = segments.first {
-            // `.fillEqually` alone loses to each `AppButton`'s content-hugging intrinsic width, so pin
-            // the segments to equal widths and let them stretch — the stack then fills the column.
-            for segment in segments { segment.setContentHuggingPriority(.defaultLow, for: .horizontal) }
-            for segment in segments.dropFirst() {
-                segment.widthAnchor.constraint(equalTo: first.widthAnchor).isActive = true
-            }
-        }
         updateSelection()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Report the segment row's width so content hugging can keep the control at its content size
-    /// (and let a form's spacer push it to the trailing edge). A fill-equally control fills its
-    /// container instead, so it reports no intrinsic width.
+    /// (and let a form's spacer push it to the trailing edge).
     override var intrinsicContentSize: NSSize {
-        guard let segmentsStack, !fillEqually else { return super.intrinsicContentSize }
+        guard let segmentsStack else { return super.intrinsicContentSize }
         return NSSize(width: segmentsStack.fittingSize.width, height: NSView.noIntrinsicMetric)
     }
 

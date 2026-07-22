@@ -197,13 +197,6 @@ final class AppButton: NSButton {
                 .font: NSFont.systemFont(ofSize: isLink ? 13 : 12, weight: isLink ? .regular : .semibold),
             ]
             if isLink, isFocusedStop { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
-            if variant == .segment {
-                // A segment can be stretched wider than its title (a fill-equally selector), so center
-                // the label in its width rather than letting the cell left-align it.
-                let centered = NSMutableParagraphStyle()
-                centered.alignment = .center
-                attributes[.paragraphStyle] = centered
-            }
             attributedTitle = NSAttributedString(string: labelText, attributes: attributes)
         }
     }

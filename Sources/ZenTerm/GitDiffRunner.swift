@@ -152,7 +152,8 @@ final class GitDiffRunner {
         var baseSHA: String?
         var committedPatch = ""
         if let resolved = base ?? (try? resolveDefaultBase(in: repoRoot)) {
-            let mergeBase = try runGit(["merge-base", resolved, "HEAD"], in: repoRoot)
+            let ref = existingRef(for: resolved, in: repoRoot)
+            let mergeBase = try runGit(["merge-base", ref, "HEAD"], in: repoRoot)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             baseBranch = defaultBranchName(fromSymbolicRef: resolved)
             baseSHA = String(mergeBase.prefix(7))
@@ -186,6 +187,17 @@ final class GitDiffRunner {
             }
         }
         throw Failure.gitError("no base branch (origin/HEAD, main, or master)")
+    }
+
+    /// The ref to hand `merge-base` for a base name. `resolveDefaultBase` strips the `origin/` off the
+    /// default (so it reads as `main`, not `origin/main`), but a repo can have `origin/main` as its
+    /// default without a local `main` checked out — `merge-base main HEAD` then fails. Fall back to
+    /// `origin/<name>` when the bare name doesn't resolve, so the committed slice still loads.
+    private static func existingRef(for name: String, in repoRoot: URL) -> String {
+        if (try? runGit(["rev-parse", "--verify", "--quiet", name], in: repoRoot)) != nil {
+            return name
+        }
+        return "origin/\(name)"
     }
 
     /// Untracked file paths and their text contents. Files that can't be read as UTF-8 (binaries)

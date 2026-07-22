@@ -569,13 +569,17 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         let chrome = Theme.current.chrome
         let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         let text = NSMutableAttributedString()
-        text.append(
-            NSAttributedString(
-                string: "+\(added)", attributes: [.foregroundColor: chrome.positive.nsColor, .font: font]))
-        text.append(NSAttributedString(string: "  ", attributes: [.font: font]))
-        text.append(
-            NSAttributedString(
-                string: "−\(removed)", attributes: [.foregroundColor: chrome.destructive.nsColor, .font: font]))
+        if added > 0 {
+            text.append(
+                NSAttributedString(
+                    string: "+\(added)", attributes: [.foregroundColor: chrome.positive.nsColor, .font: font]))
+        }
+        if removed > 0 {
+            if text.length > 0 { text.append(NSAttributedString(string: "  ", attributes: [.font: font])) }
+            text.append(
+                NSAttributedString(
+                    string: "−\(removed)", attributes: [.foregroundColor: chrome.destructive.nsColor, .font: font]))
+        }
         return text
     }
 
@@ -600,6 +604,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         guard let index = baseItems.firstIndex(of: branch) else { return }
         chooseBaseAt(index)
     }
+    /// The file tree, so a test can send a real `keyDown` (Esc / Up-at-top / Return-to-fold) through
+    /// `NavOutlineView`'s handler rather than only its selection path.
+    var treeOutlineForTesting: NSOutlineView { outline }
+    /// Which pane holds first responder, for asserting `handleNavChord`'s focus moves landed.
+    var isTreeFocusedForTesting: Bool { window?.firstResponder === outline }
+    var isDiffFocusedForTesting: Bool { window?.firstResponder === diffTable.scrollFocusTarget }
+    var isBaseDropdownFocusedForTesting: Bool { window?.firstResponder === baseDropdown }
 }
 
 /// The file tree's outline view. Accepts first responder even when empty (so keystrokes never leak to
