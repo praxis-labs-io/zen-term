@@ -9,9 +9,6 @@ import AppKit
 final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
     private(set) var roots: [DiffOutlineItem]
     private let onSelect: (FileDiff) -> Void
-    /// Open the base picker — wired to the `main abc1234 ▾` button on the Committed section header,
-    /// the only section that carries a base subtitle.
-    private let onPickBase: () -> Void
 
     static let nameColumnID = NSUserInterfaceItemIdentifier("diff-name")
     static let statColumnID = NSUserInterfaceItemIdentifier("diff-stat")
@@ -21,10 +18,9 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
     private static let statViewID = NSUserInterfaceItemIdentifier("diff-tree-stat")
     private static let selectionRowID = NSUserInterfaceItemIdentifier("diff-tree-selection")
 
-    init(sections: [DiffOutlineItem], onSelect: @escaping (FileDiff) -> Void, onPickBase: @escaping () -> Void) {
+    init(sections: [DiffOutlineItem], onSelect: @escaping (FileDiff) -> Void) {
         self.roots = sections
         self.onSelect = onSelect
-        self.onPickBase = onPickBase
     }
 
     /// The first file in tree order, or nil for an empty tree — the initial selection.
@@ -63,6 +59,11 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
     // Every row is selectable — including section headers and directories — so the arrow keys can
     // land on them and Left/Right fold them. Selecting a non-file row just doesn't change the diff.
 
+    func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
+        guard let node = item as? DiffOutlineItem else { return 20 }
+        return node.isSection ? 34 : 20  // the extra height sets each section off from the rows above
+    }
+
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? DiffOutlineItem else { return nil }
         if tableColumn?.identifier == Self.statColumnID {
@@ -76,7 +77,7 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
             let row =
                 outlineView.makeView(withIdentifier: Self.sectionID, owner: self) as? DiffSectionRowView
                 ?? DiffSectionRowView(id: Self.sectionID)
-            row.configure(node, onPickBase: node.sectionSubtitle != nil ? onPickBase : nil)
+            row.configure(node)
             return row
         }
         let row =
@@ -123,6 +124,12 @@ func diffStatText(added: Int, removed: Int, chrome: ChromeTheme) -> NSAttributed
             NSAttributedString(
                 string: "−\(removed)", attributes: [.foregroundColor: chrome.destructive.nsColor, .font: font]))
     }
+    // Bake right-alignment into the string. `attributedStringValue` ignores the label's `.alignment`
+    // (the same reason the font is baked in), so with the label filling its cell this is what actually
+    // pins the stat flush to the right edge — the `+n`-only case included.
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.alignment = .right
+    text.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: text.length))
     return text
 }
 
@@ -134,13 +141,16 @@ private final class DiffStatCellView: NSView {
     init(id: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
         identifier = id
-        label.alignment = .right
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
+        // The label FILLS the cell (leading pinned, not `>=`) so the baked right-alignment has room to
+        // push the stat to the trailing edge. When the label only hugged its content, alignment was a
+        // no-op and the stat landed wherever the content-sized frame happened to sit — flush for some
+        // rows, short of the edge for others.
         NSLayoutConstraint.activate([
             label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 2),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
         ])
     }
 
@@ -174,115 +184,40 @@ private final class ThemedSelectionRowView: NSTableRowView {
     }
 }
 
-/// A section header row (name column): the slice name in muted small caps, with an optional inline
-/// base button (the fork base for the committed slice, `main abc1234 ▾`, clicked to change it). The
-/// slice total lives in the stat column.
+/// A section header row (name column): the slice name in muted small caps. The slice total lives in
+/// the stat column.
 private final class DiffSectionRowView: NSView {
     private let titleLabel = NSTextField(labelWithString: "")
-    private let baseButton = BaseButton()
+
+    // The outline already frames this cell view clear of the disclosure triangle (same as any
+    // other row) — this is just extra breathing room so a section title doesn't sit flush against
+    // it.
+    private static let leadingInset: CGFloat = 16
 
     init(id: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
         identifier = id
         titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        titleLabel.lineBreakMode = .byTruncatingTail
         addSubview(titleLabel)
-        addSubview(baseButton)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// `onPickBase` is non-nil only for the committed section (the one with a base subtitle); a nil
-    /// hides the button, so the other section headers show only their name.
-    func configure(_ item: DiffOutlineItem, onPickBase: (() -> Void)?) {
+    func configure(_ item: DiffOutlineItem) {
         titleLabel.stringValue = item.displayName.uppercased()
         titleLabel.textColor = Theme.current.chrome.ink(alpha: 0.55)
-        if let subtitle = item.sectionSubtitle, let onPickBase {
-            baseButton.configure(text: subtitle, onClick: onPickBase)
-            baseButton.isHidden = false
-        } else {
-            baseButton.isHidden = true
-        }
         needsLayout = true
     }
 
     override func layout() {
         super.layout()
-        let titleSize = titleLabel.intrinsicContentSize
+        let titleHeight = titleLabel.intrinsicContentSize.height
+        // Clamp to the cell's real width, same as `DiffTreeRowView` — `NavOutlineView.layout()`
+        // (DiffViewerOverlay.swift) is what makes that width trustworthy (ZEN-226).
         titleLabel.frame = NSRect(
-            x: 0, y: ((bounds.height - titleSize.height) / 2).rounded(),
-            width: titleSize.width, height: titleSize.height)
-
-        guard !baseButton.isHidden else { return }
-        let buttonX = titleSize.width + 8
-        let buttonSize = baseButton.intrinsicContentSize
-        baseButton.frame = NSRect(
-            x: buttonX, y: ((bounds.height - buttonSize.height) / 2).rounded(),
-            width: min(buttonSize.width, max(0, bounds.width - buttonX)), height: buttonSize.height)
-    }
-}
-
-/// The `main abc1234 ▾` base button on the Committed header: a faint rounded pill (the chrome's
-/// rounded-box idiom) that brightens on hover and opens the base picker on click. A view, not an
-/// `NSButton`, so it sits inside an outline row cell and takes its click without tripping row
-/// selection (its `mouseDown` doesn't call super).
-private final class BaseButton: NSView {
-    private let label = NSTextField(labelWithString: "")
-    private let chevron = NSImageView()
-    private var onClick: (() -> Void)?
-    private var trackingArea: NSTrackingArea?
-    private var isHovered = false { didSet { updateFill() } }
-
-    init() {
-        super.init(frame: .zero)
-        wantsLayer = true
-        layer?.cornerRadius = 5
-        label.font = .monospacedDigitSystemFont(ofSize: 10.5, weight: .regular)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        chevron.image = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: "change base")?
-            .withSymbolConfiguration(.init(pointSize: 8, weight: .semibold))
-        chevron.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(label)
-        addSubview(chevron)
-        setAccessibilityElement(true)
-        setAccessibilityRole(.button)
-        NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 7),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            chevron.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 4),
-            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -7),
-            chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
-            heightAnchor.constraint(equalToConstant: 18),
-        ])
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    func configure(text: String, onClick: @escaping () -> Void) {
-        self.onClick = onClick
-        label.stringValue = text
-        label.textColor = Theme.current.chrome.ink(alpha: 0.7)
-        chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
-        setAccessibilityLabel("Compare against \(text)")
-        updateFill()
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let trackingArea { removeTrackingArea(trackingArea) }
-        let area = NSTrackingArea(
-            rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self)
-        addTrackingArea(area)
-        trackingArea = area
-    }
-
-    override func mouseEntered(with event: NSEvent) { isHovered = true }
-    override func mouseExited(with event: NSEvent) { isHovered = false }
-    override func mouseDown(with event: NSEvent) { onClick?() }
-    override func accessibilityPerformPress() -> Bool { onClick?(); return true }
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
-
-    private func updateFill() {
-        layer?.backgroundColor = Theme.current.chrome.ink(alpha: isHovered ? 0.14 : 0.08).cgColor
+            x: Self.leadingInset, y: ((bounds.height - titleHeight) / 2).rounded(),
+            width: max(0, bounds.width - Self.leadingInset), height: titleHeight)
     }
 }
 

@@ -71,19 +71,24 @@ final class GitDiffRunner {
                     in: repoRoot))?
                 .split(separator: "\n").map(String.init) ?? []
             let preferred = try? Self.resolveDefaultBase(in: repoRoot)
-            let ordered = Self.orderedBranches(recency: recency, default: preferred)
+            let current = (try? Self.runGit(["rev-parse", "--abbrev-ref", "HEAD"], in: repoRoot))?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let ordered = Self.orderedBranches(recency: recency, default: preferred, current: current)
             DispatchQueue.main.async { completion(ordered) }
         }
     }
 
     // MARK: - Pure helpers (unit-tested)
 
-    /// The base picker's branch order: the default branch first (so `main` sits on top even when it
+    /// The base dropdown's branch order: the default branch first (so `main` sits on top even when it
     /// hasn't been committed to recently), then every other branch by the recency order git returned,
-    /// deduplicated. A `default` not among the local branches is still pinned first — it may be a
-    /// remote default the user forks from without a local tracking branch.
-    static func orderedBranches(recency: [String], default preferred: String?) -> [String] {
+    /// deduplicated. The `current` (checked-out) branch is excluded outright — comparing the committed
+    /// work against the branch it's on is meaningless. A `default` not among the local branches is
+    /// still pinned first (it may be a remote default the user forks from without a local branch),
+    /// unless it *is* the current branch.
+    static func orderedBranches(recency: [String], default preferred: String?, current: String?) -> [String] {
         var seen = Set<String>()
+        if let current, !current.isEmpty { seen.insert(current) }  // never offer the checked-out branch
         var ordered: [String] = []
         func add(_ name: String) {
             guard seen.insert(name).inserted else { return }

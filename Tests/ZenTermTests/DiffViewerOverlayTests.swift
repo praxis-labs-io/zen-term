@@ -117,7 +117,7 @@ final class DiffViewerOverlayTests: XCTestCase {
             unstaged: [file("U.swift")], staged: [file("S.swift")], committed: [file("C.swift")],
             base: (branch: "main", sha: "abc1234"))
 
-        // Three sections, each with one file => 6 rows.
+        // Three sections, each with one file => 6 rows (the base lives in the header, not the tree).
         XCTAssertEqual(overlay.treeRowCountForTesting, 6)
     }
 
@@ -135,57 +135,44 @@ final class DiffViewerOverlayTests: XCTestCase {
         XCTAssertNil(overlay.selectedFilePathForTesting)
     }
 
-    // MARK: base picker
+    // MARK: base dropdown
 
-    func test_basePicker_opensWithTheCachedBranchesAndMarksCurrentBase() {
+    func test_baseDropdown_shownWithTheBranchListAndCurrentBaseSelected_whenABaseResolves() {
         let (overlay, _) = mount(
             committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
             branches: ["main", "feature-x"])
 
-        overlay.openBasePickerForTesting()
-
-        XCTAssertEqual(overlay.basePickerForTesting?.matchesForTesting, ["main", "feature-x"])
+        XCTAssertTrue(overlay.isBaseHeaderShownForTesting)
+        // The trigger reads "Base: <branch>"; the list rows stay bare branch names.
+        XCTAssertEqual(overlay.baseDropdownForTesting.buttonTitleForTesting, "Base: main")
     }
 
-    func test_basePicker_filtersBranchesBySubstring() {
-        let (overlay, _) = mount(
-            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
-            branches: ["main", "feature-x", "feature-y", "bugfix"])
-        overlay.openBasePickerForTesting()
+    func test_baseDropdown_hidden_whenNoBaseResolves() {
+        let (overlay, _) = mount(unstaged: [file("U.swift")])  // no committed slice, no base
 
-        overlay.basePickerForTesting?.applyFilter(query: "feat")
-
-        XCTAssertEqual(overlay.basePickerForTesting?.matchesForTesting, ["feature-x", "feature-y"])
+        XCTAssertFalse(overlay.isBaseHeaderShownForTesting)
     }
 
     func test_choosingABranch_reloadsTheDiffAgainstThatBase() {
         let (overlay, spy) = mount(
             committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
             branches: ["main", "feature-x"])
-        overlay.openBasePickerForTesting()
-        let callsBeforeChoose = spy.calls
+        let callsBefore = spy.calls
 
-        // Activate the "feature-x" row the way Enter on the picker does.
-        let picker = overlay.basePickerForTesting!
-        let index = picker.matchesForTesting.firstIndex(of: "feature-x")!
-        picker.activate(index: index, modifiers: [])
+        overlay.chooseBaseForTesting("feature-x")
 
         XCTAssertEqual(spy.lastBase, "feature-x")  // the committed slice re-ran against the picked base
-        XCTAssertGreaterThan(spy.calls, callsBeforeChoose)
-        XCTAssertNil(overlay.basePickerForTesting)  // picker dismissed on choose
+        XCTAssertGreaterThan(spy.calls, callsBefore)
     }
 
     func test_choosingTheCurrentBase_isANoOp() {
         let (overlay, spy) = mount(
             committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
             branches: ["main", "feature-x"])
-        overlay.openBasePickerForTesting()
-        let callsBeforeChoose = spy.calls
+        let callsBefore = spy.calls
 
-        let picker = overlay.basePickerForTesting!
-        picker.activate(index: picker.matchesForTesting.firstIndex(of: "main")!, modifiers: [])
+        overlay.chooseBaseForTesting("main")
 
-        XCTAssertEqual(spy.calls, callsBeforeChoose)  // same base — no reload
-        XCTAssertNil(overlay.basePickerForTesting)
+        XCTAssertEqual(spy.calls, callsBefore)  // same base — no reload
     }
 }

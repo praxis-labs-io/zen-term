@@ -100,8 +100,13 @@ final class Dropdown: NSView {
         renderTitle()
     }
 
+    /// An optional lead shown before the selected item in the button only (not the list rows), e.g.
+    /// `"Base: "` so the button reads `Base: main` while the rows stay bare branch names. Empty by
+    /// default, so existing dropdowns are unchanged.
+    var titlePrefix: String = "" { didSet { renderTitle() } }
+
     private func renderTitle() {
-        titleLabel.stringValue = items.indices.contains(selectedIndex) ? items[selectedIndex].title : ""
+        titleLabel.stringValue = items.indices.contains(selectedIndex) ? titlePrefix + items[selectedIndex].title : ""
     }
 
     /// Re-apply the live chrome colors after a config change — no relaunch. `restyle()` already

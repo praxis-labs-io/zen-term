@@ -5,10 +5,11 @@ import Foundation
 /// freshly-boxed value each call would break it. This wraps the tree once into stable objects.
 ///
 /// The diff viewer's tree is three top-level `section` nodes (Unstaged / Staged / Committed), each
-/// holding a folded file tree of `directory` and `file` nodes.
+/// holding a folded file tree of `directory` and `file` nodes. The committed slice's fork base is not
+/// in the tree: it's a dropdown in the static header above the tree (`DiffViewerOverlay`).
 final class DiffOutlineItem {
     enum Kind {
-        case section(title: String, subtitle: String?)
+        case section(title: String)
         case directory(String)
         case file(FileDiff)
     }
@@ -34,8 +35,8 @@ final class DiffOutlineItem {
         }
     }
 
-    private init(section title: String, subtitle: String?, added: Int, removed: Int, children: [DiffOutlineItem]) {
-        kind = .section(title: title, subtitle: subtitle)
+    private init(kind: Kind, added: Int, removed: Int, children: [DiffOutlineItem]) {
+        self.kind = kind
         self.children = children
         addedCount = added
         removedCount = removed
@@ -58,36 +59,26 @@ final class DiffOutlineItem {
 
     var displayName: String {
         switch kind {
-        case .section(let title, _): return title
+        case .section(let title): return title
         case .directory(let name): return name
         case .file(let file): return String(file.path.split(separator: "/").last ?? Substring(file.path))
         }
     }
 
-    var sectionSubtitle: String? {
-        if case .section(_, let subtitle) = kind { return subtitle }
-        return nil
-    }
-
-    /// The three section roots for a status, skipping any slice with no changes. The committed
-    /// section carries the fork base as its subtitle so the base is visible without a header.
+    /// The section roots for a status, skipping any slice with no changes.
     static func sections(from status: GitDiffRunner.StatusLoad) -> [DiffOutlineItem] {
         var roots: [DiffOutlineItem] = []
-        func add(_ title: String, _ files: [FileDiff], subtitle: String? = nil) {
+        func add(_ title: String, _ files: [FileDiff]) {
             guard !files.isEmpty else { return }
             let children = DiffTree.build(files).map(DiffOutlineItem.init)
             let added = files.reduce(0) { $0 + $1.addedCount }
             let removed = files.reduce(0) { $0 + $1.removedCount }
             roots.append(
-                DiffOutlineItem(
-                    section: title, subtitle: subtitle, added: added, removed: removed, children: children))
+                DiffOutlineItem(kind: .section(title: title), added: added, removed: removed, children: children))
         }
         add("Unstaged", status.unstaged)
         add("Staged", status.staged)
-        let base = status.baseBranch.map { branch in
-            status.baseSHA.map { "\(branch) \($0)" } ?? branch
-        }
-        add("Committed", status.committed, subtitle: base)
+        add("Committed", status.committed)
         return roots
     }
 }

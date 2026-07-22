@@ -28,17 +28,21 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private let onCancel: () -> Void
 
     /// The base the committed slice is compared against once the user overrides the default via the
-    /// base picker; nil defers to the repo's default (main/master).
+    /// base dropdown; nil defers to the repo's default (main/master).
     private var baseOverride: String?
-    /// The base picker while it's hosted over this card, so nav chords/Esc route to it and a second
-    /// open is idempotent.
-    private var basePicker: DiffBasePickerOverlay?
     /// The repo's branches, loaded in the background and refreshed on each status load, so the base
-    /// picker opens instantly (git branch listing is fast, but not click-latency fast).
+    /// dropdown is populated (git branch listing is fast, but async).
     private var branches: [String] = []
 
     private let card = CardView()
     private var dismiss = DismissGate()
+
+    /// The static header above the tree: the branch dropdown, its trigger reading `Base: <branch>`.
+    /// Shown only when the committed slice has a resolved base; hidden (zero height) otherwise, so a
+    /// repo with no commits vs. its base shows just the tree.
+    private let baseHeader = NSView()
+    private var baseDropdown: Dropdown!  // created in buildLayout (its onChange needs self)
+    private var baseHeaderHeight: NSLayoutConstraint!
 
     private let outline = NavOutlineView()
     private var outlineController: DiffTreeOutlineController?
@@ -102,10 +106,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         refreshBranches()
     }
 
-    /// Pull the repo's branches into the cache so the base picker opens without a load delay. Cheap
-    /// (a local `for-each-ref`); refreshed on each status load so a newly-created branch appears.
+    /// Pull the repo's branches so the base dropdown is populated. Cheap (a local `for-each-ref`);
+    /// refreshed on each status load so a newly-created branch appears, then the dropdown rebuilds.
     private func refreshBranches() {
-        branchesLoader { [weak self] branches in self?.branches = branches }
+        branchesLoader { [weak self] branches in
+            self?.branches = branches
+            self?.updateBaseHeader()
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -142,9 +149,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        // While the base picker is up it owns Esc (to close itself, not the whole viewer), so defer to
-        // the responder traversal that reaches it instead of claiming Esc here.
-        if basePicker != nil { return super.performKeyEquivalent(with: event) }
+        // A bare Esc reaches the focused control's keyDown first, so an open base dropdown closes its
+        // own list there before this ever runs; here Esc closes the viewer.
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() }
         ) {
@@ -157,12 +163,12 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         CardChrome.reapplyTheme(to: card, halo: true)
         treeRule.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         footerDivider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        baseDropdown.reapplyTheme()
         messageLabel.textColor = Theme.current.chrome.muted.nsColor
         fillHints()
         if let status = displayedStatus { statsLabel.attributedStringValue = Self.statsText(for: status) }
         outline.reloadData()
         diffTable.reapplyTheme()
-        basePicker?.reapplyTheme()
     }
 
     // MARK: pane-chord navigation
@@ -172,9 +178,6 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// between the tree and the diff; ⌘j/⌘k jump to the next/previous change in the focused pane.
     /// Returns true when it consumed the chord.
     func handleNavChord(_ chord: KeyInterceptor.ReservedChord) -> Bool {
-        // The base picker owns navigation while it's up (its own list handles the arrows); swallow the
-        // pane chords so they don't drive the tree behind it.
-        if basePicker != nil { return true }
         switch chord {
         case .navLeft:
             window?.makeFirstResponder(outline)
@@ -217,48 +220,54 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         }
     }
 
-    // MARK: base picker
+    // MARK: base dropdown
 
-    /// Open the base picker over the card (hosted here, not the window's modal slot, so dismissing it
-    /// returns to the diff). Idempotent; uses the cached branch list so it appears without a delay.
-    private func openBasePicker() {
-        guard basePicker == nil else { return }
-        let picker = DiffBasePickerOverlay(
-            branches: branches,
-            currentBase: displayedStatus?.baseBranch,
-            background: Theme.current.chrome.background.nsColor,
-            onChoose: { [weak self] branch in self?.chooseBase(branch) },
-            onDismiss: { [weak self] in self?.dismissBasePicker() })
-        picker.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(picker)
-        NSLayoutConstraint.activate([
-            picker.leadingAnchor.constraint(equalTo: leadingAnchor),
-            picker.trailingAnchor.constraint(equalTo: trailingAnchor),
-            picker.topAnchor.constraint(equalTo: topAnchor),
-            picker.bottomAnchor.constraint(equalTo: bottomAnchor),
-        ])
-        basePicker = picker
-        layoutSubtreeIfNeeded()
-        picker.focusInitialResponder()
-        picker.animateIn()
+    /// The branch order backing the dropdown (the loaded branches, with the current base guaranteed
+    /// present), so `onChange`'s index maps back to a branch name.
+    private var baseItems: [String] = []
+
+    /// Rebuild the base dropdown from the current status + loaded branches, and show or hide the header
+    /// with it: shown whenever a base resolved (so the base is always changeable), hidden when there's
+    /// none (a repo with no base). Called on each load and whenever the branch list refreshes.
+    private func updateBaseHeader() {
+        guard let currentBase = displayedStatus?.baseBranch else {
+            baseHeader.isHidden = true
+            baseHeaderHeight.constant = 0
+            return
+        }
+        var items = branches
+        if !items.contains(currentBase) { items.insert(currentBase, at: 0) }  // an override off the list
+        baseItems = items
+        let selected = items.firstIndex(of: currentBase) ?? 0
+        baseDropdown.setItems(
+            items.map { DropdownItem(title: $0, group: nil, note: nil, isSelected: $0 == currentBase) },
+            selectedIndex: selected)
+        baseHeader.isHidden = false
+        baseHeaderHeight.constant = Self.baseHeaderShownHeight
     }
 
-    /// Compare against the chosen branch: re-run the committed slice against it, keeping the current
-    /// diff on screen until the new one lands (no spinner flash). A reselect of the current base is a
+    /// Compare the committed slice against the chosen branch: re-run against it, keeping the current
+    /// diff on screen until the new one lands (no spinner flash). Reselecting the current base is a
     /// no-op.
-    private func chooseBase(_ branch: String) {
-        dismissBasePicker()
+    private func chooseBaseAt(_ index: Int) {
+        guard baseItems.indices.contains(index) else { return }
+        let branch = baseItems[index]
         guard branch != displayedStatus?.baseBranch else { return }
         baseOverride = branch
         reload(showSpinner: false)
     }
 
-    private func dismissBasePicker() {
-        guard let picker = basePicker else { return }
-        basePicker = nil
-        picker.animateOut { picker.removeFromSuperview() }
+    /// Move focus from the base dropdown down into the tree (Down from the closed dropdown), and back
+    /// up from the top of the tree (Up at the first row) — so the dropdown is reachable by the arrows.
+    private func focusTreeTop() {
         window?.makeFirstResponder(outline)
+        if outline.numberOfRows > 0 { outline.selectRowIndexes([0], byExtendingSelection: false) }
         refreshFocusStyling()
+    }
+
+    private func focusBaseDropdown() {
+        guard !baseHeader.isHidden else { return }
+        window?.makeFirstResponder(baseDropdown)
     }
 
     // MARK: layout
@@ -267,7 +276,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // Two columns: the name (indented outline column, flexible) and the +n −m stat (fixed width,
         // right-aligned) so stats align on a common right edge and never clip on a nested file.
         let nameColumn = NSTableColumn(identifier: DiffTreeOutlineController.nameColumnID)
-        nameColumn.resizingMask = .autoresizingMask
+        // No legacy autoresizing mask / `.firstColumnOnlyAutoresizingStyle` here — that machinery
+        // resizes the column by the DELTA between the outline's old and new width, not by filling
+        // whatever's left. `reload()` populates the tree inside `init()`, before this view is ever
+        // in a window, so the column's first "resize" event fires against a stale pre-Auto-Layout
+        // width (NSTableColumn's 100pt default vs. the outline's placeholder frame) and never
+        // recovers — `NavOutlineView.layout()` drives `nameColumn.width` explicitly instead (ZEN-226).
+        nameColumn.resizingMask = []
         let statColumn = NSTableColumn(identifier: DiffTreeOutlineController.statColumnID)
         statColumn.width = 78
         statColumn.minWidth = 78
@@ -276,14 +291,16 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         outline.addTableColumn(nameColumn)
         outline.addTableColumn(statColumn)
         outline.outlineTableColumn = nameColumn
-        outline.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
         outline.headerView = nil
         outline.rowSizeStyle = .small
         outline.indentationPerLevel = 12
         outline.backgroundColor = .clear
         outline.focusRingType = .none  // no system-blue ring on focus-in (ZEN-27: chrome is theme-only)
         outline.onEscape = { [weak self] in self?.onCancel() }
+        outline.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
         diffTable.onEscape = { [weak self] in self?.onCancel() }
+
+        buildBaseHeader()
 
         let treeScroll = NSScrollView()
         treeScroll.drawsBackground = false
@@ -315,13 +332,41 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
         let footer = buildFooter()
 
+        // The tree width is ~1/5 of the card, clamped to a min (never collapses) and a max (never
+        // sprawls on a wide monitor). The proportional term is the load-bearing detail: a resizable
+        // NSWindow treats its own frame as a layout variable at priority 500
+        // (`NSLayoutPriorityWindowSizeStayPut`). This proportional *equality* traces to the window
+        // through the overlay's edge pins, and on a wide display `0.2 × card` overshoots the 360 cap,
+        // making the equality infeasible at the current size. Above priority 500, AppKit resolves that
+        // by RESIZING THE WINDOW smaller (cheaper than leaving the equality in error) — the recurring
+        // cross-feature shrink, and it only shows on a big monitor because that's the only place the
+        // fraction crosses the cap. Kept below 500 (`.defaultLow`), the equality yields (the tree
+        // clamps to 360) and the window is left alone. The min/max clamps are inequalities and don't
+        // trip this, so their priority is free to stay above the proportional term so it wins.
+        let treeWidthProportional = treeScroll.widthAnchor.constraint(equalTo: card.widthAnchor, multiplier: 0.2)
+        treeWidthProportional.priority = .defaultLow
+        let treeMinWidth = treeScroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 200)
+        treeMinWidth.priority = .defaultHigh
+        let treeMaxWidth = treeScroll.widthAnchor.constraint(lessThanOrEqualToConstant: 360)
+        treeMaxWidth.priority = .defaultHigh
+
+        card.addSubview(baseHeader)
         card.addSubview(treeScroll)
         card.addSubview(treeRule)
         card.addSubview(diffHost)
         card.addSubview(footerDivider)
         card.addSubview(footer)
 
+        baseHeaderHeight = baseHeader.heightAnchor.constraint(equalToConstant: 0)
+
         NSLayoutConstraint.activate([
+            // The base dropdown header spans the tree column (left of the vertical rule), above the
+            // tree. Its height toggles 0 ⇄ shown, so a repo with no base shows just the tree.
+            baseHeader.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            baseHeader.trailingAnchor.constraint(equalTo: treeRule.leadingAnchor),
+            baseHeader.topAnchor.constraint(equalTo: card.topAnchor),
+            baseHeaderHeight,
+
             footerDivider.leadingAnchor.constraint(equalTo: card.leadingAnchor),
             footerDivider.trailingAnchor.constraint(equalTo: card.trailingAnchor),
             footerDivider.heightAnchor.constraint(equalToConstant: 1),
@@ -333,9 +378,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             footer.heightAnchor.constraint(equalToConstant: 30),
 
             treeScroll.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            treeScroll.topAnchor.constraint(equalTo: card.topAnchor),
+            treeScroll.topAnchor.constraint(equalTo: baseHeader.bottomAnchor),
             treeScroll.bottomAnchor.constraint(equalTo: footerDivider.topAnchor),
-            treeScroll.widthAnchor.constraint(equalTo: card.widthAnchor, multiplier: 0.3),
+            treeWidthProportional, treeMinWidth, treeMaxWidth,
 
             treeRule.leadingAnchor.constraint(equalTo: treeScroll.trailingAnchor),
             treeRule.topAnchor.constraint(equalTo: card.topAnchor),
@@ -359,6 +404,28 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         ])
     }
 
+    private static let baseHeaderShownHeight: CGFloat = 44
+
+    /// The static header above the tree: just the branch dropdown, its trigger reading `Base: <branch>`
+    /// (no separate caption, no bottom border — the padding alone separates it from the tree). The
+    /// dropdown is the reused chrome `Dropdown` (anchored list, keyboard nav, checks), so this is not a
+    /// modal; Down from the dropdown drops into the tree, Up from the tree's top row returns to it.
+    private func buildBaseHeader() {
+        baseHeader.translatesAutoresizingMaskIntoConstraints = false
+        baseHeader.clipsToBounds = true  // stays tidy when collapsed to zero height
+
+        baseDropdown = Dropdown(items: [], selectedIndex: 0) { [weak self] index in self?.chooseBaseAt(index) }
+        baseDropdown.titlePrefix = "Base: "
+        baseDropdown.onArrowDown = { [weak self] in self?.focusTreeTop() }
+
+        baseHeader.addSubview(baseDropdown)
+        NSLayoutConstraint.activate([
+            baseDropdown.leadingAnchor.constraint(equalTo: baseHeader.leadingAnchor, constant: 10),
+            baseDropdown.trailingAnchor.constraint(equalTo: baseHeader.trailingAnchor, constant: -10),
+            baseDropdown.centerYAnchor.constraint(equalTo: baseHeader.centerYAnchor),
+        ])
+    }
+
     private func buildFooter() -> NSView {
         statsLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         statsLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -366,7 +433,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         hintsStack.orientation = .horizontal
         hintsStack.spacing = 16
         hintsStack.alignment = .centerY
-        hintsStack.setContentCompressionResistancePriority(.required, for: .horizontal)
+        // Resist compression (hints shouldn't clip) but below 500 — a `.required` floor here would
+        // *grow* the window on a display too narrow to fit the hints, the same NSWindow stay-put
+        // mechanism the tree width dodges above. Hugging can stay high: refusing to grow past
+        // intrinsic size never pushes the window.
+        hintsStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         hintsStack.setContentHuggingPriority(.required, for: .horizontal)
         hintsStack.translatesAutoresizingMaskIntoConstraints = false
         fillHints()
@@ -395,24 +466,30 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private func fillHints() {
         hintsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         func glyph(_ chord: KeyInterceptor.ReservedChord) -> String { CommandCatalog.spec(for: chord).shortcut }
-        let groups: [(keys: String, label: String)] = [
-            ("\(glyph(.navLeft)) \(glyph(.navRight))", "panes"),
-            ("\(glyph(.navDown)) \(glyph(.navUp))", "jump"),
-            ("←/→", "fold"),
-            ("esc", "close"),
+        // Each key is its own command, so each gets its own keycap — never two glyphs crammed in one
+        // box. A pair that shares a caption (the two pane keys, the two jump keys) sits as two boxes
+        // before the label.
+        let groups: [(keys: [String], label: String)] = [
+            ([glyph(.navLeft), glyph(.navRight)], "panes"),
+            ([glyph(.navDown), glyph(.navUp)], "jump"),
+            (["←", "→"], "fold"),
+            (["esc"], "close"),
         ]
         for group in groups { hintsStack.addArrangedSubview(Self.hintGroup(keys: group.keys, label: group.label)) }
     }
 
-    /// One `[keycap]  label` pair for the footer legend: a themed keycap next to a muted caption.
-    private static func hintGroup(keys: String, label: String) -> NSView {
+    /// One legend entry for the footer: a keycap per key, then a muted caption. The keys sit tight
+    /// together; the caption gets a wider gap so it reads as their shared label.
+    private static func hintGroup(keys: [String], label: String) -> NSView {
+        let caps: [NSView] = keys.map { KeycapView(shortcut: $0) }
         let caption = NSTextField(labelWithString: label)
         caption.font = .systemFont(ofSize: 11)
         caption.textColor = Theme.current.chrome.ink(alpha: 0.45)
-        let stack = NSStackView(views: [KeycapView(shortcut: keys), caption])
+        let stack = NSStackView(views: caps + [caption])
         stack.orientation = .horizontal
-        stack.spacing = 6
+        stack.spacing = 3  // tight between the keycaps
         stack.alignment = .centerY
+        if let lastCap = caps.last { stack.setCustomSpacing(6, after: lastCap) }  // wider before the caption
         return stack
     }
 
@@ -438,13 +515,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     private func apply(_ status: GitDiffRunner.StatusLoad) {
         displayedStatus = status
-        refreshBranches()  // keep the picker's list fresh across refreshes
+        updateBaseHeader()  // reflect the base this load resolved to
+        refreshBranches()  // and refresh the branch list behind it
         statsLabel.attributedStringValue = Self.statsText(for: status)
 
         let controller = DiffTreeOutlineController(
             sections: DiffOutlineItem.sections(from: status),
-            onSelect: { [weak self] file in self?.selectFile(file) },
-            onPickBase: { [weak self] in self?.openBasePicker() })
+            onSelect: { [weak self] file in self?.selectFile(file) })
         outlineController = controller
         outline.dataSource = controller
         outline.delegate = controller
@@ -514,11 +591,15 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     func selectRowForTesting(_ row: Int) {
         outline.selectRowIndexes([row], byExtendingSelection: false)
     }
-    /// Open the base picker the way the Committed header's base button does (the button itself, buried
-    /// in an outline row, is a runbook check), so a test can drive the picker → base-override wiring.
-    func openBasePickerForTesting() { openBasePicker() }
-    /// The hosted base picker, or nil when it's closed.
-    var basePickerForTesting: DiffBasePickerOverlay? { basePicker }
+    /// Whether the base dropdown header is shown (a base resolved for the committed slice).
+    var isBaseHeaderShownForTesting: Bool { !baseHeader.isHidden }
+    /// The base dropdown, for asserting its branch list and driving a pick through the real control.
+    var baseDropdownForTesting: Dropdown { baseDropdown }
+    /// Choose a base branch the way the dropdown's `onChange` does, to exercise the base-override load.
+    func chooseBaseForTesting(_ branch: String) {
+        guard let index = baseItems.firstIndex(of: branch) else { return }
+        chooseBaseAt(index)
+    }
 }
 
 /// The file tree's outline view. Accepts first responder even when empty (so keystrokes never leak to
@@ -526,16 +607,43 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 /// key it claims is Esc, so it closes the viewer instead of the outline eating it as a deselect.
 private final class NavOutlineView: NSOutlineView {
     var onEscape: (() -> Void)?
+    /// Move focus up out of the tree to the base dropdown — fired by Up at the top row, so the
+    /// dropdown is reachable by the arrows without leaving the keyboard.
+    var onFocusBase: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
+
+    /// Size the name column to fill whatever's left of the enclosing scroll view once the fixed
+    /// stat column is accounted for. AppKit's own column-autoresizing styles are delta-based (they
+    /// nudge the column by the *change* in the table's width since the last resize, not a fresh
+    /// "fill remaining space" calculation), so the very first resize — which for this tree fires
+    /// while `DiffViewerOverlay` is still mid-`init()`, before the surrounding Auto Layout has ever
+    /// resolved a real width — permanently anchors the column to the wrong size. Reading from
+    /// `enclosingScrollView.contentSize` instead of `self.bounds` matters too: the outline's own
+    /// bounds is exactly the value that legacy machinery leaves in a bad state, where the scroll
+    /// view's content size is the one number here that Auto Layout actually resolves (ZEN-226).
+    override func layout() {
+        super.layout()
+        guard let nameColumn = outlineTableColumn,
+            let statColumn = tableColumns.first(where: { $0 !== nameColumn }),
+            let contentWidth = enclosingScrollView?.contentSize.width
+        else { return }
+        let target = max(40, contentWidth - statColumn.width - intercellSpacing.width)
+        if abs(nameColumn.width - target) > 0.5 {
+            nameColumn.width = target
+        }
+    }
 
     override func keyDown(with event: NSEvent) {
         switch KeyboardFocus.key(for: event) {
         case .escape:
             onEscape?()
             return
+        case .up where selectedRow <= 0:
+            onFocusBase?()  // at the top already — step up to the base dropdown
+            return
         case .activate:
-            // Return/Enter on a folder or section folds it, matching Left/Right — a file just stays
+            // Return/Enter on a folder or section folds it, matching Left/Right; a file just stays
             // selected (its diff is already shown).
             if let item = item(atRow: selectedRow), isExpandable(item) {
                 if isItemExpanded(item) { collapseItem(item) } else { expandItem(item) }

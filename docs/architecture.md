@@ -233,9 +233,10 @@ hidden), the side-by-side diff of the selected file on the right, and a full-wid
 footer carrying the total `+n −m` on the left and the live-keymap key hints (real
 `KeycapView`s) on the right. The committed slice forks from the repo's default branch
 (`origin/HEAD`, else main/master — git records no parent, so a stacked branch's parent
-isn't guessed); its section header carries a `main abc1234 ▾` base button that opens
-`DiffBasePickerOverlay`, a searchable `PaletteOverlay` (branches default-first then by
-recency) which re-runs the committed slice against the chosen branch. Navigation is the
+isn't guessed). A static header above the tree carries a `Base: <branch>` `Dropdown`
+(the same control the theme picker uses; branches default-first then by recency, the
+checked-out branch excluded) that re-runs the committed slice against the chosen branch
+and is reachable from the tree by arrow key. Navigation is the
 app's own pane chords, not Tab: ⌘h/⌘l move between the tree and the diff, ⌘j/⌘k jump to
 the next/previous change; they're forwarded from `WindowController.handle` because
 `KeyInterceptor` consumes chords before the responder chain. It wears the accent halo

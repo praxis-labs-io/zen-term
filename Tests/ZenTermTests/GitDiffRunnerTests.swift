@@ -46,24 +46,33 @@ final class GitDiffRunnerTests: XCTestCase {
 
     func test_orderedBranches_pinsDefaultFirstThenRecency() {
         let ordered = GitDiffRunner.orderedBranches(
-            recency: ["feature-x", "main", "bugfix"], default: "main")
-        XCTAssertEqual(ordered, ["main", "feature-x", "bugfix"])  // main hoisted out of its recency slot
+            recency: ["feature-x", "main", "bugfix"], default: "main", current: "feature-x")
+        // main hoisted out of its recency slot; the checked-out feature-x dropped.
+        XCTAssertEqual(ordered, ["main", "bugfix"])
     }
 
     func test_orderedBranches_defaultNotAmongLocalsIsStillPinned() {
-        let ordered = GitDiffRunner.orderedBranches(recency: ["feature-x", "bugfix"], default: "main")
-        XCTAssertEqual(ordered, ["main", "feature-x", "bugfix"])  // remote default with no local branch
+        let ordered = GitDiffRunner.orderedBranches(
+            recency: ["feature-x", "bugfix"], default: "main", current: "feature-x")
+        XCTAssertEqual(ordered, ["main", "bugfix"])  // remote default with no local branch, current dropped
+    }
+
+    func test_orderedBranches_excludesTheCurrentBranch() {
+        let ordered = GitDiffRunner.orderedBranches(
+            recency: ["feature-x", "main", "bugfix"], default: "main", current: "bugfix")
+        XCTAssertFalse(ordered.contains("bugfix"))  // the checked-out branch is never offered
+        XCTAssertEqual(ordered, ["main", "feature-x"])
     }
 
     func test_orderedBranches_noDefaultKeepsRecencyOrder() {
-        let ordered = GitDiffRunner.orderedBranches(recency: ["feature-x", "bugfix"], default: nil)
+        let ordered = GitDiffRunner.orderedBranches(recency: ["feature-x", "bugfix"], default: nil, current: nil)
         XCTAssertEqual(ordered, ["feature-x", "bugfix"])
     }
 
     func test_orderedBranches_deduplicates() {
         let ordered = GitDiffRunner.orderedBranches(
-            recency: ["main", "feature-x", "feature-x"], default: "main")
-        XCTAssertEqual(ordered, ["main", "feature-x"])
+            recency: ["main", "feature-x", "feature-x"], default: "main", current: "feature-x")
+        XCTAssertEqual(ordered, ["main"])  // feature-x is the current branch, dropped
     }
 
     // MARK: untracked fold (always unstaged)
