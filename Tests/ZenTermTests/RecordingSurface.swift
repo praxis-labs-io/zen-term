@@ -37,7 +37,10 @@ final class RecordingSurface: NSObject, TerminalSurface {
     }
     func focus() { isFocused = true }
     func terminate() { terminated = true }
-    func paste(_ text: String) {}
+    /// Records paste text so a test can assert a ⌘V was (or was not) routed into a surface — the
+    /// discriminator for "did the modal card swallow paste, or did it fall through to the terminal".
+    private(set) var pastes: [String] = []
+    func paste(_ text: String) { pastes.append(text) }
     func copySelection() -> String? { nil }
     func scrollToBottom() {}
 }

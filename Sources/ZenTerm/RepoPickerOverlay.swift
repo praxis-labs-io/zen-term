@@ -61,11 +61,9 @@ final class RepoPickerOverlay: PaletteOverlay {
     override func makeRow(at index: Int) -> PaletteRowView {
         switch rows[index] {
         case .add:
-            return AddRowView { [weak self] clickCount in self?.selectRow(at: index, clickCount: clickCount) }
+            return AddRowView { [weak self] in self?.activateRow(at: index) }
         case .workspace(let workspace):
-            return RowView(workspace: workspace) { [weak self] clickCount in
-                self?.selectRow(at: index, clickCount: clickCount)
-            }
+            return RowView(workspace: workspace) { [weak self] in self?.activateRow(at: index) }
         }
     }
 
@@ -99,7 +97,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// The persistent "＋ New Workspace…" action row, tinted with the accent so it reads as an
     /// affordance distinct from the workspace list below it.
     private final class AddRowView: SelectableRowView {
-        override init(onClick: @escaping (Int) -> Void) {
+        override init(onClick: @escaping () -> Void) {
             super.init(onClick: onClick)
 
             let icon = NSImageView()
@@ -129,7 +127,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     /// One workspace row: title (left) and a muted git icon (right) when its dir is a repo.
     private final class RowView: SelectableRowView {
-        init(workspace: Workspace, onClick: @escaping (Int) -> Void) {
+        init(workspace: Workspace, onClick: @escaping () -> Void) {
             super.init(onClick: onClick)
 
             let name = NSTextField(labelWithString: workspace.title)

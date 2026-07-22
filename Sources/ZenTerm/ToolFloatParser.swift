@@ -217,7 +217,7 @@ enum ToolFloatParser {
     static func resolveDir(_ text: String) -> URL? {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
-        return URL(fileURLWithPath: NSString(string: trimmed).expandingTildeInPath).standardizedFileURL
+        return URL(fileURLWithPath: PathDisplay.expandingHome(trimmed)).standardizedFileURL
     }
 
     /// Split on whitespace, but keep runs inside double quotes intact so a quoted value can

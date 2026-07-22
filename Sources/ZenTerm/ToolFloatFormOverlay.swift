@@ -43,7 +43,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private let persistSegment = SegmentedControl(
         options: persistOptions.map(\.title), selectedIndex: 0
     ) { _ in }
-    private let dirField = FieldBox(placeholder: "~/notes")
+    private let dirPicker = DirectoryPickerField(placeholder: "Type a path, or Choose")
 
     private var titleGroup: LabeledField?
     private var iconGroup: LabeledField?
@@ -166,7 +166,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         header.textColor = Theme.current.chrome.foreground.nsColor
 
         let controls: [ThemeReapplying] = [
-            titleField, commandField, dirField, widthField, heightField, gitSegment,
+            titleField, commandField, dirPicker, widthField, heightField, gitSegment,
             persistSegment, cancelButton, submitButton, deleteButton,
         ]
         controls.forEach { $0.reapplyTheme() }
@@ -220,9 +220,13 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         let commandGroup = LabeledField(caption: caption("COMMAND", required: true), control: commandField)
         self.commandGroup = commandGroup
 
-        wireField(dirField)
-        dirField.onChange = { [weak self] in self?.refreshValidity() }
-        let dirGroup = LabeledField(caption: caption("DIRECTORY", required: false), control: dirField)
+        wireField(dirPicker.field)
+        dirPicker.field.onChange = { [weak self] in self?.refreshValidity() }
+        dirPicker.onPicked = { [weak self] _ in self?.refreshValidity() }
+        dirPicker.wireNav(
+            onVertical: { [weak self] in self?.moveVertical($0) },
+            onTabForward: { [weak self] in self?.moveTab(1) })
+        let dirGroup = LabeledField(caption: caption("DIRECTORY", required: false), control: dirPicker)
         self.dirGroup = dirGroup
 
         // Width × Height share one row (a fraction of the tile). Width is the row's vertical stop;
@@ -330,7 +334,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             heightField.setText(ToolFloatParser.fractionText(float.heightFraction))
         }
         gitSegment.setSelection(float.requiresGitRepo ? 1 : 0)
-        if let dir = float.dir { dirField.setText(PathDisplay.abbreviatingHome(dir.path)) }
+        if let dir = float.dir { dirPicker.setText(PathDisplay.abbreviatingHome(dir.path)) }
         if let index = Self.persistOptions.firstIndex(where: { $0.mode == float.persist }) {
             persistSegment.setSelection(index)  // programmatic sync must not fire onChange
         }
@@ -475,7 +479,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private func verticalStops() -> [NSView] {
         [
             titleField.field, iconPicker, chordChip, commandField.field,
-            dirField.field, widthField.field, gitSegment, persistSegment, submitButton,
+            dirPicker.field.field, widthField.field, gitSegment, persistSegment, submitButton,
         ]
     }
 
@@ -501,6 +505,8 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private func currentVerticalAnchor(in stops: [NSView]) -> NSView? {
         if let direct = stops.first(where: isFocused) { return direct }
         if isFocused(heightField.field) { return widthField.field }
+        // The Choose button shares the directory field's vertical stop; it's reached with Right.
+        if isFocused(dirPicker.chooseButton) { return dirPicker.field.field }
         if isFocused(cancelButton) || isFocused(deleteButton) { return submitButton }
         return nil
     }
@@ -550,7 +556,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         let command = commandField.text.trimmingCharacters(in: .whitespaces)
         let id = ToolFloatParser.slug(forTitle: title)
         guard !id.isEmpty, !command.isEmpty, let chord = capturedChord else { return nil }
-        let pinnedDir = dirField.text.trimmingCharacters(in: .whitespaces)
+        let pinnedDir = dirPicker.text.trimmingCharacters(in: .whitespaces)
         return ToolFloat(
             id: id,
             order: editingFloat?.order ?? Self.nextOrder(),
@@ -616,7 +622,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         // "follow the pane's cwd" rather than a folder that must exist. The exists check runs on
         // submit only (`includeRequired`): it stats the filesystem on the main thread, and a path
         // under a dead network mount can block for seconds — per keystroke that's a beachball.
-        let dirText = dirField.text.trimmingCharacters(in: .whitespaces)
+        let dirText = dirPicker.text.trimmingCharacters(in: .whitespaces)
         var dirMessage: String?
         if dirText.contains("\"") {
             dirMessage = "Can't contain a \" character."  // the grammar has no escape
@@ -625,7 +631,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         {
             dirMessage = "That folder doesn't exist."
         }
-        flag(dirGroup, field: dirField.field, dirMessage)
+        flag(dirGroup, field: dirPicker.field.field, dirMessage)
 
         if includeRequired, capturedChord == nil {
             flag(chordGroup, field: chordChip, "Set a shortcut (needs ⌘ ⇧ ⌥ or ⌃).")

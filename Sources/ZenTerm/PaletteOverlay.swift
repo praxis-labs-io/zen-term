@@ -13,13 +13,13 @@ struct PaletteHint {
 }
 
 /// A selectable palette row with the shared selection chrome: rounded corners, an iris
-/// highlight when selected, and click forwarding (`clickCount` distinguishes single from
-/// double click). Subclasses add their own content in `init` after calling `super.init`.
+/// highlight when selected, and a single click that runs the row (Raycast / Spotlight, not a
+/// select-then-double-click). Subclasses add their own content in `init` after calling `super.init`.
 class SelectableRowView: NSView, PaletteRowView {
-    private let onClick: (Int) -> Void
+    private let onClick: () -> Void
     var isSelected = false { didSet { updateBackground() } }
 
-    init(onClick: @escaping (Int) -> Void) {
+    init(onClick: @escaping () -> Void) {
         self.onClick = onClick
         super.init(frame: .zero)
         wantsLayer = true
@@ -28,7 +28,12 @@ class SelectableRowView: NSView, PaletteRowView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    override func mouseDown(with event: NSEvent) { onClick(event.clickCount) }
+    // Accept the press so the matching mouseUp lands here, then run the row on release — but only
+    // if it lands back inside the row, so a press-and-drag-off cancels like any button.
+    override func mouseDown(with event: NSEvent) {}
+    override func mouseUp(with event: NSEvent) {
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { onClick() }
+    }
 
     private func updateBackground() {
         layer?.backgroundColor = (isSelected ? PaletteOverlay.selectionBackground : .clear).cgColor
@@ -310,15 +315,15 @@ class PaletteOverlay: NSView, ModalOverlay {
 
     // MARK: selection + list (base-owned)
 
-    /// Row click handler subclasses route their row taps to: single click selects,
-    /// double click activates. Clicks on non-selectable rows (headers) are ignored.
-    /// A double-click activates with the default action (no modifiers) — modifier-qualified
-    /// activation (e.g. Shift+Enter to replace) is keyboard-only, matching the prior picker.
-    func selectRow(at index: Int, clickCount: Int) {
+    /// Run the row at `index` from a click: select it, then activate with the default action.
+    /// Clicks on non-selectable rows (headers) are ignored. A click activates with no modifiers —
+    /// modifier-qualified activation (e.g. Shift+Enter to replace) stays keyboard-only, matching
+    /// the prior picker.
+    func activateRow(at index: Int) {
         guard isSelectable(at: index) else { return }
         selected = index
         updateHighlight()
-        if clickCount >= 2 { activate(index: index, modifiers: []) }
+        activate(index: index, modifiers: [])
     }
 
     private func reloadRows() {
