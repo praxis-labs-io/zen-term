@@ -135,6 +135,12 @@ One-time setup: a "Developer ID Application" cert in the keychain, and
   off-main and hop back to main for the UI update.
 - Per global rules: no `TODO`/`FIXME`/`HACK` markers — fix it now, or file a
   Linear ticket for genuinely out-of-scope work.
+- **AppKit gotchas live in `docs/swift-conventions.md`** — the traps past what a
+  linter catches (windows resized by modals via missing `contentMinSize`,
+  menu-action routing through the window delegate, no sheets mid-`mouseDown`,
+  layer-shadow re-sync, synthetic-event limits in tests). Read it before touching
+  window sizing, event routing, layers, or interaction tests; add to it when a new
+  one bites.
 
 ## Copy: read `docs/brand-voice.md` first (load-bearing)
 
