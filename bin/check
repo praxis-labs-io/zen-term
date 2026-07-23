@@ -4,6 +4,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Harmless linker noise from the prebuilt CodeEditLanguages xcframework (debug info pointing at its
+# maintainer's build paths) and libghostty-fat.a — filtered off stderr so real output stands out.
+# `-Xlinker -w` doesn't suppress these on the current linker.
+LINKER_NOISE='unable to open object file|could not find symbol .* in object file'
+
 if ! command -v swiftlint >/dev/null 2>&1; then
     echo "✗ swiftlint not found — install it with: brew install swiftlint" >&2
     exit 1
@@ -19,10 +24,10 @@ if [[ "${1:-}" == "--fix" ]]; then
 fi
 
 echo "▸ swift build"
-swift build
+swift build > >(grep --line-buffered -vE "$LINKER_NOISE") 2>&1
 
 echo "▸ swift test"
-swift test
+swift test > >(grep --line-buffered -vE "$LINKER_NOISE") 2>&1
 
 echo "▸ swift format lint"
 swift format lint --strict --recursive Sources Tests
