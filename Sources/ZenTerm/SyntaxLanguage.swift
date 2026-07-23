@@ -55,10 +55,27 @@ enum SyntaxLanguage {
             forResource: "highlights", withExtension: "scm", subdirectory: "SyntaxQueries/tree-sitter-\(tsName)")
     }
 
-    /// Load and compile the bundled `highlights.scm` for a grammar from the app's resource bundle.
+    /// Grammars that are supersets of another one. Their bundled query carries only the *additions* —
+    /// TypeScript's has types and `interface`/`abstract` but no string/comment/function patterns, and
+    /// C++'s has templates but not C's basics — so the parent's query is concatenated first or the
+    /// language highlights sparsely. Parent first, so the subset's more specific patterns win.
+    private static let inheritedQuery: [String: String] = ["typescript": "javascript", "cpp": "c"]
+
+    /// Load and compile the bundled `highlights.scm` for a grammar from the app's resource bundle,
+    /// prepending its parent grammar's query when it has one.
     private static func highlightQuery(tsName: String, language: Language) -> Query? {
-        guard let url = queryURL(tsName: tsName), let data = try? Data(contentsOf: url) else { return nil }
-        return try? Query(language: language, data: data)
+        guard let own = queryData(tsName) else { return nil }
+        if let parent = inheritedQuery[tsName], let inherited = queryData(parent) {
+            // A combined query fails to compile if the parent names nodes this grammar lacks — fall back
+            // to the language's own patterns rather than losing highlighting entirely.
+            if let combined = try? Query(language: language, data: inherited + own) { return combined }
+        }
+        return try? Query(language: language, data: own)
+    }
+
+    private static func queryData(_ tsName: String) -> Data? {
+        guard let url = queryURL(tsName: tsName) else { return nil }
+        return try? Data(contentsOf: url)
     }
 
     /// Maps a tree-sitter highlight capture (e.g. `keyword.function`, `string`, `punctuation.bracket`)
@@ -67,13 +84,28 @@ enum SyntaxLanguage {
     static func role(forCapture nameComponents: [String]) -> SyntaxRole? {
         guard let head = nameComponents.first else { return nil }
         switch head {
-        case "keyword", "conditional", "repeat", "include", "boolean": return .keyword
-        case "string", "character": return .string
+        case "keyword", "conditional", "repeat", "include", "boolean", "preproc": return .keyword
+        case "string", "character", "escape": return .string
         case "comment": return .comment
         case "number", "float", "constant": return .number
-        case "type", "constructor": return .type
+        case "type", "constructor", "attribute": return .type
         case "function", "method": return .function
         case "operator", "punctuation", "delimiter": return .punctuation
+        case "text": return textRole(nameComponents)
+        // Deliberately uncolored (base foreground): `variable`, `parameter`, `property`, `field`,
+        // `label`, `spell`, `none` — identifiers read better plain, and `property` would make every
+        // JS/TS member access loud.
+        default: return nil
+        }
+    }
+
+    /// Markdown's query is almost entirely `text.*`, so without these a `.md` file renders colorless.
+    private static func textRole(_ nameComponents: [String]) -> SyntaxRole? {
+        switch nameComponents.dropFirst().first {
+        case "title": return .keyword  // headings
+        case "literal": return .string  // inline and fenced code
+        case "uri": return .string  // link targets
+        case "reference": return .function  // link text / references
         default: return nil
         }
     }

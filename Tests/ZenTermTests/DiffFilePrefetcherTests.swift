@@ -17,7 +17,7 @@ final class DiffFilePrefetcherTests: XCTestCase {
 
     func test_candidates_spanAllThreeSlices_excludingSelectedAndUnsupported() {
         let load = status(
-            unstaged: [file("A.swift"), file("readme.md")],  // .md query not bundled → unsupported
+            unstaged: [file("A.swift"), file("notes.xyzzy")],  // unknown language → never highlights
             staged: [file("B.swift", scope: .staged)],
             committed: [file("C.swift", scope: .committed)])
 
@@ -25,7 +25,8 @@ final class DiffFilePrefetcherTests: XCTestCase {
             in: load, excluding: file("A.swift").highlightKey, store: DiffHighlightStore()
         ).map(\.path)
 
-        XCTAssertEqual(Set(paths), ["B.swift", "C.swift"], "excludes the selected file and unsupported .md")
+        XCTAssertEqual(
+            Set(paths), ["B.swift", "C.swift"], "excludes the selected file and the unsupported language")
     }
 
     func test_candidates_sameNameInTwoSlicesAreDistinctCandidates() {
