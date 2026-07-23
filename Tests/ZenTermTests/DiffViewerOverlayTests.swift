@@ -151,13 +151,13 @@ final class DiffViewerOverlayTests: XCTestCase {
     /// Narrowing the diff pane below the fold width auto-folds to inline without a pin; widening back past
     /// the unfold width auto-restores side-by-side. A dead `onWidthChange` wire, or a `reconcileLayout()`
     /// that never re-renders, would leave this stuck on the initial layout. Widths are chosen so the diff
-    /// pane lands well clear of the fold/unfold thresholds (≈649/709 today), not boundary-flaky.
+    /// pane lands well clear of the fold/unfold thresholds (~660/720 today), not boundary-flaky.
     func test_narrowingThePane_autoFoldsToInline_andWideningRestoresSideBySide() {
         let (overlay, _) = mount(unstaged: [file("One.swift")])
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .sideBySide)
 
         resize(overlay, toWidth: 480)
-        XCTAssertLessThan(overlay.paneWidthForTesting, 649, "sanity: the pane actually shrank below foldWidth")
+        XCTAssertLessThan(overlay.paneWidthForTesting, 300, "sanity: the pane actually shrank well below the fold")
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline, "too narrow for two columns")
 
         resize(overlay, toWidth: 1200)

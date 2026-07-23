@@ -81,10 +81,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// two columns stop being worth the cramping (≈40 monospace chars per side at `DiffCellMetrics.font`),
     /// not the point they become literally unreadable. Runbook-tunable: raise it to fold at wider windows.
     private static let minSideBySideColumnWidth: CGFloat = 280
-    /// The pane width at which `DiffLineCell.columnWidth(forTotalWidth:)` drops below
-    /// `minSideBySideColumnWidth` — inverts that cell's own formula (two gutters + the 1pt center rule,
-    /// split evenly), so it tracks the gutter width automatically. Narrower than this: auto-fold to inline.
-    private static let foldWidth: CGFloat = 2 * DiffCellMetrics.gutterWidth + 1 + 2 * minSideBySideColumnWidth
+    /// The pane width at which a side-by-side column drops below `minSideBySideColumnWidth` — inverts the
+    /// cell's own formula (two gutters + the 1pt center rule, split evenly). Uses the nominal (5-digit)
+    /// gutter so the fold point stays stable across files rather than shifting with each file's own gutter.
+    private static let foldWidth: CGFloat = 2 * DiffCellMetrics.nominalGutterWidth + 1 + 2 * minSideBySideColumnWidth
     /// `foldWidth` plus a dead-band the pane must clear before auto-unfolding back to side-by-side, so a
     /// resize sitting on the boundary can't flap the renderer tick to tick.
     private static let unfoldWidth: CGFloat = foldWidth + 60

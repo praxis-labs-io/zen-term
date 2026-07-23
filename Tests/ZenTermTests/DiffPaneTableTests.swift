@@ -42,8 +42,10 @@ final class DiffPaneTableTests: XCTestCase {
     }
 
     func test_columnWidth_clampsToZeroWhenGuttersExceedTotal_andGrowsWithWidth() {
-        XCTAssertEqual(DiffLineCell.columnWidth(forTotalWidth: 10), 0)
+        let gutter = DiffCellMetrics.nominalGutterWidth
+        XCTAssertEqual(DiffLineCell.columnWidth(forTotalWidth: 10, gutterWidth: gutter), 0)
         XCTAssertGreaterThan(
-            DiffLineCell.columnWidth(forTotalWidth: 600), DiffLineCell.columnWidth(forTotalWidth: 300))
+            DiffLineCell.columnWidth(forTotalWidth: 600, gutterWidth: gutter),
+            DiffLineCell.columnWidth(forTotalWidth: 300, gutterWidth: gutter))
     }
 }
