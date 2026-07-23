@@ -64,6 +64,9 @@ final class UnifiedLineCell: NSView, DiffPanningCell {
             text.stringValue = lineText
             text.textColor = SyntaxAttributedText.flatColor(for: kind, chrome: chrome)
         }
+        // Resize the text to the new content *now* — see `DiffLineCell.configure`: a cell reused from a
+        // shorter row would otherwise keep that row's narrower frame and clip this line's tail.
+        repositionText()
         needsLayout = true
     }
 

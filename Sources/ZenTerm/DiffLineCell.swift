@@ -67,6 +67,10 @@ final class DiffLineCell: NSView, DiffPanningCell {
             isHeader = false
             for view in subviews { view.isHidden = true }
         }
+        // Resize the text to the new content *now*, not on the next layout pass: a cell reused from a
+        // shorter row would otherwise keep that row's narrower text frame and clip this line's tail
+        // (whole lines rendered blank after a very short one) until something else triggered layout.
+        repositionText()
         needsLayout = true
     }
 
