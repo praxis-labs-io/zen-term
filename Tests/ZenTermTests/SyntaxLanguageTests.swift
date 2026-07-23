@@ -22,6 +22,19 @@ final class SyntaxLanguageTests: XCTestCase {
         XCTAssertFalse(SyntaxLanguage.isSupported(path: "notes.xyzzy"))
     }
 
+    func test_isSupported_agreesWithResolve() {
+        // The viewer withholds the first paint for anything `isSupported` claims, so a file it calls
+        // supported but `resolve` can't actually highlight would stall on the safety cap.
+        for path in [
+            "Foo.swift", "data.json", "app.ts", "README.md", "script.py", "main.rs", "run.sh",
+            "notes.xyzzy", "noextension", "Config.toml",
+        ] {
+            XCTAssertEqual(
+                SyntaxLanguage.isSupported(path: path), SyntaxLanguage.resolve(path: path) != nil,
+                "isSupported must match resolve for \(path)")
+        }
+    }
+
     func test_typescript_inheritsJavaScriptPatterns() throws {
         // TS's own query has no string/comment/function patterns — those come from the inherited
         // JavaScript query. Without the inheritance a .ts file highlights almost nothing.

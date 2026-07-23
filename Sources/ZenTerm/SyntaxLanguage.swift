@@ -47,7 +47,11 @@ enum SyntaxLanguage {
     /// lookup. Lets the viewer decide up front whether to wait for a highlight or paint plain now.
     static func isSupported(path: String) -> Bool {
         let code = CodeLanguage.detectLanguageFrom(url: URL(fileURLWithPath: path))
-        return code.id != .plainText && queryURL(tsName: code.tsName) != nil
+        // Must agree with `resolve` on all three conditions, grammar included: a language whose id is
+        // known but whose grammar pointer is nil would otherwise be called supported, and the viewer
+        // would withhold the first paint for the full safety cap waiting on a highlight that can never
+        // arrive. Cheap — `language` is a pointer switch, no I/O.
+        return code.id != .plainText && code.language != nil && queryURL(tsName: code.tsName) != nil
     }
 
     private static func queryURL(tsName: String) -> URL? {
