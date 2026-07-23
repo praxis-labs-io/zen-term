@@ -16,6 +16,7 @@ final class KeybindParserTests: XCTestCase {
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
             .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
             .toggleRepoPicker, .toggleCommandPalette, .openSettings, .reloadConfig, .checkForUpdates,
+            .toggleDiffLayout,
             .selectTab(1), .selectTab(9), .toggleToolFloat("gitdash"),
         ]
         for chord in cases {
@@ -34,6 +35,13 @@ final class KeybindParserTests: XCTestCase {
     func test_fillScreen_token() {
         XCTAssertEqual(KeyInterceptor.ReservedChord.fillScreen.actionToken, "fill_screen")
         XCTAssertEqual(action(from: "fill_screen"), .fillScreen)
+    }
+
+    func test_toggleDiffLayout_token_andDefaultBinding() {
+        XCTAssertEqual(KeyInterceptor.ReservedChord.toggleDiffLayout.actionToken, "toggle_diff_layout")
+        XCTAssertEqual(action(from: "toggle_diff_layout"), .toggleDiffLayout)
+        XCTAssertEqual(
+            KeymapDefaults.map[Chord(command: true, key: "i")], .toggleDiffLayout, "defaults to ⌘I")
     }
 
     func test_checkForUpdates_token_hasNoDefaultBinding() {

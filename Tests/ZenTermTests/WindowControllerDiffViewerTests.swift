@@ -6,7 +6,7 @@ import XCTest
 
 /// The diff viewer's off-main open path (ZEN-234). The repo-root walk is filesystem I/O, so
 /// `openDiffViewer()` resolves it off the main thread and presents on the hop back — which means it
-/// must NOT present within its own turn, and a second ⌘⇧D landing in the resolve gap must not queue
+/// must NOT present within its own turn, and a second ⌘D landing in the resolve gap must not queue
 /// a second viewer. Both are things a state-only check would miss (the modal slot only fills after
 /// the resolve), so they're driven through the real controller with an injected resolver.
 @MainActor
@@ -83,7 +83,7 @@ final class WindowControllerDiffViewerTests: XCTestCase {
         XCTAssertTrue(diffOverlays(c).isEmpty, "a non-repo must not present a viewer")
     }
 
-    /// A second ⌘⇧D in the resolve gap is dropped, not queued — otherwise the resolve completion
+    /// A second ⌘D in the resolve gap is dropped, not queued — otherwise the resolve completion
     /// would present a second viewer over the first.
     func test_openDiffViewer_doublePressMidResolve_presentsOne() {
         let c = makeWindow()

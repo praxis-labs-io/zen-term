@@ -55,9 +55,10 @@ enum CommandCatalog {
         case .checkForUpdates: return config("Check for Updates", glyph, chord)
         case .reportIssue: return help("Report an Issue…", glyph, chord)
         case .openDiffViewer: return tool("Diff Viewer", glyph, chord)
-        // Present for exhaustiveness; both are omitted from `commands(tabCount:)`.
+        // Present for exhaustiveness; all are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
+        case .toggleDiffLayout: return tool("Toggle Diff Layout", glyph, chord)
         }
     }
 

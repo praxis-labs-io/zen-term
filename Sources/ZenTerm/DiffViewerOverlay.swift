@@ -2,18 +2,20 @@ import AppKit
 
 /// The diff viewer: a chrome-native modal card over the active tile. The left column is a single file
 /// tree split into three sections — Unstaged, Staged, Committed (top to bottom) — the right column is
-/// the side-by-side diff of the selected file, and a full-width footer carries the totals and the key
-/// hints. A `ModalOverlay` sharing the card + backdrop + spring and Esc model with the other
-/// overlays. Git work is injected as `loader`; the caller only opens this over a real repo (a non-repo
-/// shows a toast), so there is no not-a-repo state.
+/// the diff of the selected file, and a full-width footer carries the totals and the key hints. A
+/// `ModalOverlay` sharing the card + backdrop + spring and Esc model with the other overlays. Git work
+/// is injected as `loader`; the caller only opens this over a real repo (a non-repo shows a toast), so
+/// there is no not-a-repo state.
 ///
 /// Navigation uses the app's pane chords rather than Tab: ⌘h/⌘l move between the tree and the diff,
 /// ⌘j/⌘k jump to the next/previous change (file in the tree, hunk in the diff). Those arrive through
 /// `handleNavChord` (WindowController forwards them, since KeyInterceptor consumes chords before the
 /// responder chain). Plain arrows move line-by-line; Left/Right fold sections and directories.
 ///
-/// The `FileDiff` -> side-by-side rows step lives in `SideBySideDiff`; ZEN-228's unified layout swaps
-/// that transform, not this shell.
+/// The diff renders in one of two layouts (ZEN-228): `SideBySideDiff` (old │ new) or `UnifiedDiff`
+/// (inline), toggled by the `.toggleDiffLayout` command (⌘I). Both transforms feed the same
+/// `DiffPaneTable` behind the layout-agnostic `DiffRow` model; the effective layout is the session
+/// override (`layoutOverride`), else the `diff-layout` config default.
 final class DiffViewerOverlay: NSView, ModalOverlay {
     typealias StatusResult = Result<GitDiffRunner.StatusLoad, GitDiffRunner.Failure>
     /// Loads the repo status for a chosen base (nil = the repo's default) and calls back on the main
@@ -54,6 +56,14 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private let hintsStack = NSStackView()
 
     private var selectedFilePath: String?
+    /// The parsed diff currently shown, kept so a layout flip re-renders without a git re-run.
+    private var currentFileDiff: FileDiff?
+    /// The layout the shown rows were built with — a config-default change only re-renders when it
+    /// actually differs, so a theme change alone doesn't reset the scroll or selection.
+    private var renderedLayout: GeneralConfig.DiffLayout?
+    /// A per-session layout override set by the layout-toggle command (⌘I), never persisted; nil defers
+    /// to the config default (`GeneralConfig.current.diffLayout`).
+    private var layoutOverride: GeneralConfig.DiffLayout?
     /// The status currently on screen — a background refresh that returns the same thing is a no-op,
     /// so a reopen from the same dir doesn't yank the view (or flash) when nothing has changed.
     private var displayedStatus: GitDiffRunner.StatusLoad?
@@ -168,7 +178,14 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         fillHints()
         if let status = displayedStatus { statsLabel.attributedStringValue = Self.statsText(for: status) }
         outline.reloadData()
-        diffTable.reapplyTheme()
+        // A config change can also change the default diff layout — re-render only if the effective
+        // layout actually differs from what's shown (no override pinned). Otherwise just recolor, so a
+        // plain theme change never resets the diff's scroll or selection.
+        if currentFileDiff != nil, effectiveLayout != renderedLayout {
+            renderCurrentFile()
+        } else {
+            diffTable.reapplyTheme()
+        }
     }
 
     // MARK: pane-chord navigation
@@ -189,6 +206,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             if treeIsFocused { moveFileSelection(1) } else { diffTable.jumpToNextChange() }
         case .navUp:
             if treeIsFocused { moveFileSelection(-1) } else { diffTable.jumpToPrevChange() }
+        case .toggleDiffLayout:
+            toggleLayout()
         default:
             return false
         }
@@ -489,6 +508,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         let groups: [(keys: [String], label: String)] = [
             ([glyph(.navLeft), glyph(.navRight)], "panes"),
             ([glyph(.navDown), glyph(.navUp)], "jump"),
+            ([glyph(.toggleDiffLayout)], "layout"),
             (["←", "→"], "fold"),
             (["esc"], "close"),
         ]
@@ -560,13 +580,34 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // and re-selecting the shown file shouldn't re-render.
         guard selectedFilePath != file.path else { return }
         selectedFilePath = file.path
+        currentFileDiff = file
         messageLabel.isHidden = true
         diffTable.isHidden = false
-        diffTable.show(SideBySideDiff.rows(for: file))
+        renderCurrentFile()
+    }
+
+    /// The layout a diff renders in: the layout-toggle session override, else the config default.
+    private var effectiveLayout: GeneralConfig.DiffLayout { layoutOverride ?? GeneralConfig.current.diffLayout }
+
+    /// The layout-toggle command flips the layout and pins the choice for the session; re-renders the shown file in place.
+    func toggleLayout() {
+        layoutOverride = effectiveLayout == .sideBySide ? .inline : .sideBySide
+        renderCurrentFile()
+    }
+
+    /// (Re)render the shown file in the effective layout — no git re-run. Called on file select and on
+    /// a layout change (the toggle command, or a config-default change while no override is pinned).
+    private func renderCurrentFile() {
+        guard let file = currentFileDiff else { return }
+        let layout = effectiveLayout
+        renderedLayout = layout
+        diffTable.show(layout == .inline ? UnifiedDiff.rows(for: file) : SideBySideDiff.rows(for: file))
     }
 
     private func showMessage(_ text: String) {
         selectedFilePath = nil
+        currentFileDiff = nil
+        renderedLayout = nil
         messageLabel.stringValue = text
         messageLabel.isHidden = false
         diffTable.isHidden = true
@@ -608,6 +649,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     var selectedFilePathForTesting: String? { selectedFilePath }
     /// The number of visual diff rows rendered in the right pane.
     var diffRowCountForTesting: Int { diffTable.rowCountForTesting }
+
+    var renderedDiffLayoutForTesting: GeneralConfig.DiffLayout? { renderedLayout }
     /// Drive a tree selection the way a click/arrow would, so a test exercises the real selection path.
     func selectRowForTesting(_ row: Int) {
         outline.selectRowIndexes([row], byExtendingSelection: false)
