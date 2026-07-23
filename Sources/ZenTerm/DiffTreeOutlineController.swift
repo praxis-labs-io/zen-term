@@ -15,10 +15,10 @@ private enum DiffRowMetrics {
 /// The data source + delegate for the diff viewer's file tree: three top-level section rows
 /// (Unstaged / Staged / Committed), each holding a folded file tree. A single flexible column — the
 /// indented name — takes the full width; a file's change magnitude reads from its status-tinted icon
-/// (added / deleted / renamed / modified), a section header carries its slice's `+n −m` line total, and
-/// the branch grand total lives in the footer. Selecting a file reports it through `onSelect`; a section or directory just
-/// doesn't change the diff. Row views are reused and read `Theme.current` at configure time, so a live
-/// theme swap (`reloadData`) recolors.
+/// (added / deleted / renamed / modified), and a section header carries its slice's `+n −m` line total
+/// (the footer shows the repo name and branch, not a grand total). Selecting a file reports it through
+/// `onSelect`; a section or directory just doesn't change the diff. Row views are reused and read
+/// `Theme.current` at configure time, so a live theme swap (`reloadData`) recolors.
 final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
     private(set) var roots: [DiffOutlineItem]
     private let onSelect: (FileDiff) -> Void
