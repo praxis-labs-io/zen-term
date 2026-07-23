@@ -14,6 +14,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(chrome.destructive, TerminalColor(hex: "#eb6f92"))  // love / palette[1]
         XCTAssertEqual(chrome.accent, TerminalColor(hex: "#c4a7e7"))  // iris / palette[5]
         XCTAssertEqual(chrome.attention, TerminalColor(hex: "#ea9a97"))  // rose / palette[6]
+        XCTAssertEqual(chrome.positive, TerminalColor(hex: "#3e8fb0"))  // pine / palette[2] (ANSI green)
         // muted = foreground (#e0def4 = 224,222,244) blended over background (#191724 =
         // 25,23,36) at 0.55: round(fg*0.55 + bg*0.45) per channel.
         //   R: 224*0.55 + 25*0.45 = 123.2 + 11.25 = 134.45 -> 134

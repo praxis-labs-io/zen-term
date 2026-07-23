@@ -1,0 +1,867 @@
+import AppKit
+
+/// The diff viewer: a chrome-native modal card over the active tile. The left column is a single file
+/// tree split into three sections — Unstaged, Staged, Committed (top to bottom) — the right column is
+/// the diff of the selected file, and a full-width footer carries the repo name + branch and the key hints. A
+/// `ModalOverlay` sharing the card + backdrop + spring and Esc model with the other overlays. Git work
+/// is injected as `loader`; the caller only opens this over a real repo (a non-repo shows a toast), so
+/// there is no not-a-repo state.
+///
+/// Navigation uses the app's pane chords rather than Tab: ⌘h/⌘l move between the tree and the diff,
+/// ⌘j/⌘k jump to the next/previous change (file in the tree, hunk in the diff). Those arrive through
+/// `handleNavChord` (WindowController forwards them, since KeyInterceptor consumes chords before the
+/// responder chain). Plain arrows move line-by-line; Left/Right fold sections and directories.
+///
+/// The diff renders in one of two layouts (ZEN-228): `SideBySideDiff` (old │ new) or `UnifiedDiff`
+/// (inline), toggled by the `.toggleDiffLayout` command (⌘I). Both transforms feed the same
+/// `DiffPaneTable` behind the layout-agnostic `DiffRow` model; the effective layout is the session
+/// override (`layoutOverride`), else the `diff-layout` config default.
+final class DiffViewerOverlay: NSView, ModalOverlay {
+    typealias StatusResult = Result<GitDiffRunner.StatusLoad, GitDiffRunner.Failure>
+    /// Loads the repo status for a chosen base (nil = the repo's default) and calls back on the main
+    /// thread. Injected so the overlay never touches `Process` itself; `WindowController` wires this to
+    /// a `GitDiffRunner`.
+    typealias Loader = (String?, @escaping (StatusResult) -> Void) -> Void
+    /// Loads the repo's branches (base-picker order) and calls back on the main thread.
+    typealias BranchesLoader = (@escaping ([String]) -> Void) -> Void
+
+    private let loader: Loader
+    private let branchesLoader: BranchesLoader
+    private let onCancel: () -> Void
+
+    /// The base the committed slice is compared against once the user overrides the default via the
+    /// base dropdown; nil defers to the repo's default (main/master).
+    private var baseOverride: String?
+    /// The repo's branches, loaded in the background and refreshed on each status load, so the base
+    /// dropdown is populated (git branch listing is fast, but async).
+    private var branches: [String] = []
+
+    private let card = CardView()
+    private var dismiss = DismissGate()
+
+    /// The static header above the tree: the branch dropdown, its trigger reading `Base: <branch>`.
+    /// Shown only when the committed slice has a resolved base; hidden (zero height) otherwise, so a
+    /// repo with no commits vs. its base shows just the tree.
+    private let baseHeader = NSView()
+    private var baseDropdown: Dropdown!  // created in buildLayout (its onChange needs self)
+    private var baseHeaderHeight: NSLayoutConstraint!
+
+    private let outline = NavOutlineView()
+    private var outlineController: DiffTreeOutlineController?
+    private let treeRule = NSView()
+    private let diffTable = DiffPaneTable()
+    private let messageLabel = NSTextField(wrappingLabelWithString: "")
+    private let footerDivider = NSView()
+    /// The footer's leading identity: repo name, a branch glyph, and the checked-out branch. The branch
+    /// glyph + name collapse when the repo is detached (no current branch).
+    private let repoBranchStack = NSStackView()
+    private let repoLabel = NSTextField(labelWithString: "")
+    private let branchIcon = NSImageView()
+    private let branchLabel = NSTextField(labelWithString: "")
+    private let hintsStack = NSStackView()
+    /// The repo the viewer is showing, shown in the footer. The last path component of the repo root.
+    private let repoName: String
+
+    private var selectedFilePath: String?
+    /// The parsed diff currently shown, kept so a layout flip re-renders without a git re-run.
+    private var currentFileDiff: FileDiff?
+    /// The layout the shown rows were built with — a config-default change only re-renders when it
+    /// actually differs, so a theme change alone doesn't reset the scroll or selection.
+    private var renderedLayout: GeneralConfig.DiffLayout?
+    /// A per-session layout override set by the layout-toggle command (⌘I) while the pane is wide, never
+    /// persisted; nil defers to the config default (`GeneralConfig.current.diffLayout`). Only governs the
+    /// wide state — a narrow pane force-folds to inline regardless (ZEN-243).
+    private var layoutOverride: GeneralConfig.DiffLayout?
+    /// Whether the pane is currently narrow enough to force inline. A stored dead-band decision, not a
+    /// pure function of the current width — it only flips true below `foldWidth` and back to false above
+    /// `unfoldWidth`, so a width sitting between the two keeps whatever it last decided (no flapping).
+    private var isNarrow = false
+
+    /// The narrowest a side-by-side column may usefully get before folding to inline — set for the point
+    /// two columns stop being worth the cramping (≈40 monospace chars per side at `DiffCellMetrics.font`),
+    /// not the point they become literally unreadable. Runbook-tunable: raise it to fold at wider windows.
+    private static let minSideBySideColumnWidth: CGFloat = 280
+    /// The pane width at which a side-by-side column drops below `minSideBySideColumnWidth` — inverts the
+    /// cell's own formula (two gutters + the 1pt center rule, split evenly). Uses the nominal (5-digit)
+    /// gutter so the fold point stays stable across files rather than shifting with each file's own gutter.
+    private static let foldWidth: CGFloat = 2 * DiffCellMetrics.nominalGutterWidth + 1 + 2 * minSideBySideColumnWidth
+    /// `foldWidth` plus a dead-band the pane must clear before auto-unfolding back to side-by-side, so a
+    /// resize sitting on the boundary can't flap the renderer tick to tick.
+    private static let unfoldWidth: CGFloat = foldWidth + 60
+    /// The status currently on screen — a background refresh that returns the same thing is a no-op,
+    /// so a reopen from the same dir doesn't yank the view (or flash) when nothing has changed.
+    private var displayedStatus: GitDiffRunner.StatusLoad?
+    /// Guards against a slower older load overwriting a newer one.
+    private var loadToken = 0
+
+    init(
+        background: NSColor, repoName: String, initialStatus: GitDiffRunner.StatusLoad?,
+        loader: @escaping Loader, branchesLoader: @escaping BranchesLoader, onCancel: @escaping () -> Void
+    ) {
+        self.repoName = repoName
+        self.loader = loader
+        self.branchesLoader = branchesLoader
+        self.onCancel = onCancel
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+
+        let backdrop = BackdropView(onClick: onCancel)
+        backdrop.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(backdrop)
+
+        CardChrome.apply(to: card, background: background, halo: true)
+        card.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(card)
+
+        buildLayout()
+
+        NSLayoutConstraint.activate([
+            backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
+            backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
+            backdrop.topAnchor.constraint(equalTo: topAnchor),
+            backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            card.centerXAnchor.constraint(equalTo: centerXAnchor),
+            card.centerYAnchor.constraint(equalTo: centerYAnchor),
+            aspect(card.widthAnchor, to: widthAnchor, 0.85, priority: .defaultHigh),
+            aspect(card.heightAnchor, to: heightAnchor, 0.85, priority: .defaultHigh),
+            card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
+            card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
+        ])
+
+        // Warm open: render the cached status instantly and refresh silently behind it. Cold open:
+        // show the spinner while the first load runs.
+        if let initialStatus {
+            apply(initialStatus)
+            reload(showSpinner: false)
+        } else {
+            reload(showSpinner: true)
+        }
+        refreshBranches()
+    }
+
+    /// Pull the repo's branches so the base dropdown is populated. Cheap (a local `for-each-ref`);
+    /// refreshed on each status load so a newly-created branch appears, then the dropdown rebuilds.
+    private func refreshBranches() {
+        branchesLoader { [weak self] branches in
+            self?.branches = branches
+            self?.updateBaseHeader()
+        }
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    private func aspect(
+        _ anchor: NSLayoutDimension, to other: NSLayoutDimension, _ multiplier: CGFloat,
+        priority: NSLayoutConstraint.Priority
+    ) -> NSLayoutConstraint {
+        let constraint = anchor.constraint(equalTo: other, multiplier: multiplier)
+        constraint.priority = priority
+        return constraint
+    }
+
+    // MARK: ModalOverlay
+
+    func focusInitialResponder() {
+        // The tree always exists and always takes focus, so keystrokes never fall through to the
+        // terminal behind the card (even while loading or when there are no changes).
+        window?.makeFirstResponder(outline)
+    }
+
+    func animateIn() {
+        superview?.layoutSubtreeIfNeeded()
+        Motion.springScaleFade(card, appearing: true)
+    }
+
+    func animateOut(completion: @escaping () -> Void) {
+        guard dismiss.begin() else { return }
+        Motion.springScaleFade(card, appearing: false, completion: completion)
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        dismiss.isDismissing ? nil : super.hitTest(point)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // A bare Esc reaches the focused control's keyDown first, so an open base dropdown closes its
+        // own list there before this ever runs; here Esc closes the viewer.
+        if ModalEscape.handle(
+            event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() }
+        ) {
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    func reapplyTheme() {
+        CardChrome.reapplyTheme(to: card, halo: true)
+        treeRule.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        footerDivider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        baseDropdown.reapplyTheme()
+        messageLabel.textColor = Theme.current.chrome.muted.nsColor
+        fillHints()
+        updateRepoBranch()
+        outline.reloadData()
+        // A config change can also change the default diff layout — re-render only if the effective
+        // layout actually differs from what's shown. Otherwise just recolor, so a plain theme change
+        // never resets the diff's scroll or selection.
+        if !reconcileLayout() {
+            diffTable.reapplyTheme()
+        }
+    }
+
+    // MARK: pane-chord navigation
+
+    /// The pane-nav chords, forwarded by `WindowController` while this overlay is open (KeyInterceptor
+    /// consumes chords before the responder chain, so the overlay can't see them itself). ⌘h/⌘l move
+    /// between the tree and the diff; ⌘j/⌘k jump to the next/previous change in the focused pane.
+    /// Returns true when it consumed the chord.
+    func handleNavChord(_ chord: KeyInterceptor.ReservedChord) -> Bool {
+        switch chord {
+        case .navLeft:
+            window?.makeFirstResponder(outline)
+            refreshFocusStyling()
+        case .navRight:
+            window?.makeFirstResponder(diffTable.scrollFocusTarget)
+            refreshFocusStyling()
+        case .navDown:
+            if treeIsFocused { moveFileSelection(1) } else { diffTable.jumpToNextChange() }
+        case .navUp:
+            if treeIsFocused { moveFileSelection(-1) } else { diffTable.jumpToPrevChange() }
+        case .toggleDiffLayout:
+            toggleLayout()
+        default:
+            return false
+        }
+        return true
+    }
+
+    private var treeIsFocused: Bool { window?.firstResponder === outline }
+
+    /// Redraw both panes' selection when focus moves between them: the tree's selected file switches
+    /// between a solid fill (focused) and a quiet outline (not), and the diff's cursor line only
+    /// shows while the diff is focused. AppKit's `isEmphasized` redraw across two views in one window
+    /// isn't reliable, so nudge it.
+    private func refreshFocusStyling() {
+        outline.enumerateAvailableRowViews { rowView, _ in rowView.needsDisplay = true }
+        diffTable.redrawSelection()
+    }
+
+    /// Move the tree selection to the next / previous file, skipping section headers and directories.
+    private func moveFileSelection(_ delta: Int) {
+        let count = outline.numberOfRows
+        var row = outline.selectedRow + delta
+        while row >= 0, row < count {
+            if let item = outline.item(atRow: row) as? DiffOutlineItem, item.fileDiff != nil {
+                outline.selectRowIndexes([row], byExtendingSelection: false)
+                outline.scrollRowToVisible(row)
+                return
+            }
+            row += delta
+        }
+    }
+
+    // MARK: base dropdown
+
+    /// The branch order backing the dropdown (the loaded branches, with the current base guaranteed
+    /// present), so `onChange`'s index maps back to a branch name.
+    private var baseItems: [String] = []
+
+    /// Rebuild the base dropdown from the current status + loaded branches, and show or hide the header
+    /// with it: shown whenever a base resolved (so the base is always changeable), hidden when there's
+    /// none (a repo with no base). Called on each load and whenever the branch list refreshes.
+    private func updateBaseHeader() {
+        guard let currentBase = displayedStatus?.baseBranch else {
+            baseHeader.isHidden = true
+            baseHeaderHeight.constant = 0
+            return
+        }
+        var items = branches
+        if !items.contains(currentBase) { items.insert(currentBase, at: 0) }  // an override off the list
+        baseItems = items
+        let selected = items.firstIndex(of: currentBase) ?? 0
+        baseDropdown.setItems(
+            items.map { DropdownItem(title: $0, group: nil, note: nil, isSelected: $0 == currentBase) },
+            selectedIndex: selected)
+        baseHeader.isHidden = false
+        baseHeaderHeight.constant = Self.baseHeaderShownHeight
+    }
+
+    /// Compare the committed slice against the chosen branch: re-run against it, keeping the current
+    /// diff on screen until the new one lands (no spinner flash). Reselecting the current base is a
+    /// no-op.
+    private func chooseBaseAt(_ index: Int) {
+        guard baseItems.indices.contains(index) else { return }
+        let branch = baseItems[index]
+        guard branch != displayedStatus?.baseBranch else { return }
+        baseOverride = branch
+        reload(showSpinner: false)
+    }
+
+    /// Move focus from the base dropdown down into the tree (Down from the closed dropdown), and back
+    /// up from the top of the tree (Up at the first row) — so the dropdown is reachable by the arrows.
+    private func focusTreeTop() {
+        window?.makeFirstResponder(outline)
+        if outline.numberOfRows > 0 { outline.selectRowIndexes([0], byExtendingSelection: false) }
+        refreshFocusStyling()
+    }
+
+    private func focusBaseDropdown() {
+        guard !baseHeader.isHidden else { return }
+        window?.makeFirstResponder(baseDropdown)
+    }
+
+    // MARK: layout
+
+    private func buildLayout() {
+        // One flexible column: the indented name, filling the tree's full width. A file's change
+        // magnitude reads from its status-tinted icon and the branch total sits in the footer, so no
+        // row reserves width for a stat.
+        let nameColumn = NSTableColumn(identifier: DiffTreeOutlineController.nameColumnID)
+        // No legacy autoresizing mask / `.firstColumnOnlyAutoresizingStyle` here — that machinery
+        // resizes the column by the DELTA between the outline's old and new width, not by filling
+        // whatever's left. `reload()` populates the tree inside `init()`, before this view is ever
+        // in a window, so the column's first "resize" event fires against a stale pre-Auto-Layout
+        // width (NSTableColumn's 100pt default vs. the outline's placeholder frame) and never
+        // recovers — `NavOutlineView.layout()` drives `nameColumn.width` explicitly instead (ZEN-226).
+        nameColumn.resizingMask = []
+        outline.addTableColumn(nameColumn)
+        outline.outlineTableColumn = nameColumn
+        outline.headerView = nil
+        outline.rowSizeStyle = .small
+        outline.indentationPerLevel = 12
+        outline.backgroundColor = .clear
+        outline.focusRingType = .none  // no system-blue ring on focus-in (ZEN-27: chrome is theme-only)
+        // Force plain style: the default `.automatic` resolves to the inset/source-list family, whose
+        // tiling reserves a constant +32pt in the outline's own frame *beyond* the column width (and
+        // reports intercellSpacing as (17, 0), not the classic (3, 2)). That baked-in padding is what
+        // made the document permanently wider than the clip regardless of content. `.plain` restores
+        // the documented `documentWidth = columnWidth + intercellSpacing.width` relation, and zeroing
+        // the width component makes `NavOutlineView.layout()`'s fill math exact (target == clip width).
+        outline.style = .plain
+        outline.intercellSpacing = NSSize(width: 0, height: outline.intercellSpacing.height)
+        outline.onEscape = { [weak self] in self?.onCancel() }
+        outline.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
+        outline.onHalfPageDiff = { [weak self] direction in self?.diffTable.halfPage(direction) }
+        diffTable.onEscape = { [weak self] in self?.onCancel() }
+        // Re-evaluate the auto-fold policy whenever the diff pane's width changes (ZEN-243). The frame
+        // notification fires with the pane's *final* frame on every resize — reliable where piggybacking
+        // on a `layout()` pass isn't (the inner table tiles after that runs, so it reads a stale width).
+        diffTable.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(paneFrameDidChange), name: NSView.frameDidChangeNotification, object: diffTable)
+
+        buildBaseHeader()
+
+        let treeScroll = NSScrollView()
+        // A single wide column can leave the outline's document a hair wider than the clip; lock the
+        // clip's horizontal axis so the tree can never pan sideways (it only ever truncates names).
+        let treeClip = LockedHorizontalClipView()
+        treeClip.drawsBackground = false
+        treeScroll.contentView = treeClip
+        treeScroll.drawsBackground = false
+        treeScroll.hasVerticalScroller = true
+        treeScroll.verticalScroller = SlimScroller()
+        treeScroll.scrollerStyle = .overlay
+        treeScroll.autohidesScrollers = true
+        treeScroll.documentView = outline
+        treeScroll.automaticallyAdjustsContentInsets = false
+        // Horizontal insets are 0 on purpose: NSScrollView `contentInsets` extend the clip's
+        // *scrollable range*, not padding, so any left/right inset pans the tree sideways by that
+        // amount (`LockedHorizontalClipView` then has nothing to fight). Vertical is a real scroll
+        // axis, so its inset is fine. Left/right breathing room lives in the row content, not here.
+        treeScroll.contentInsets = NSEdgeInsets(top: 10, left: 0, bottom: 10, right: 0)
+        // The clip-lock pins the scroll *offset* at 0, but horizontal elasticity still lets a two-finger
+        // swipe rubber-band the tree sideways past it. Kill the axis outright so the nav can only ever
+        // truncate names, never pan.
+        treeScroll.horizontalScrollElasticity = .none
+        treeScroll.translatesAutoresizingMaskIntoConstraints = false
+
+        treeRule.wantsLayer = true
+        treeRule.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        treeRule.translatesAutoresizingMaskIntoConstraints = false
+
+        diffTable.translatesAutoresizingMaskIntoConstraints = false
+
+        messageLabel.alignment = .center
+        messageLabel.font = .systemFont(ofSize: 13)
+        messageLabel.textColor = Theme.current.chrome.muted.nsColor
+        messageLabel.translatesAutoresizingMaskIntoConstraints = false
+        messageLabel.isHidden = true
+
+        let diffHost = NSView()
+        diffHost.translatesAutoresizingMaskIntoConstraints = false
+        diffHost.addSubview(diffTable)
+        diffHost.addSubview(messageLabel)
+
+        let footer = buildFooter()
+
+        // The tree width is ~1/5 of the card, clamped to a min (never collapses) and a max (never
+        // sprawls on a wide monitor). The proportional term is the load-bearing detail: a resizable
+        // NSWindow treats its own frame as a layout variable at priority 500
+        // (`NSLayoutPriorityWindowSizeStayPut`). This proportional *equality* traces to the window
+        // through the overlay's edge pins, and on a wide display `0.2 × card` overshoots the 360 cap,
+        // making the equality infeasible at the current size. Above priority 500, AppKit resolves that
+        // by RESIZING THE WINDOW smaller (cheaper than leaving the equality in error) — the recurring
+        // cross-feature shrink, and it only shows on a big monitor because that's the only place the
+        // fraction crosses the cap. Kept below 500 (`.defaultLow`), the equality yields (the tree
+        // clamps to 360) and the window is left alone. The min/max clamps are inequalities and don't
+        // trip this, so their priority is free to stay above the proportional term so it wins.
+        let treeWidthProportional = treeScroll.widthAnchor.constraint(equalTo: card.widthAnchor, multiplier: 0.2)
+        treeWidthProportional.priority = .defaultLow
+        let treeMinWidth = treeScroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 200)
+        treeMinWidth.priority = .defaultHigh
+        let treeMaxWidth = treeScroll.widthAnchor.constraint(lessThanOrEqualToConstant: 360)
+        treeMaxWidth.priority = .defaultHigh
+
+        card.addSubview(baseHeader)
+        card.addSubview(treeScroll)
+        card.addSubview(treeRule)
+        card.addSubview(diffHost)
+        card.addSubview(footerDivider)
+        card.addSubview(footer)
+
+        baseHeaderHeight = baseHeader.heightAnchor.constraint(equalToConstant: 0)
+
+        NSLayoutConstraint.activate([
+            // The base dropdown header spans the tree column (left of the vertical rule), above the
+            // tree. Its height toggles 0 ⇄ shown, so a repo with no base shows just the tree.
+            baseHeader.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            baseHeader.trailingAnchor.constraint(equalTo: treeRule.leadingAnchor),
+            baseHeader.topAnchor.constraint(equalTo: card.topAnchor),
+            baseHeaderHeight,
+
+            footerDivider.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            footerDivider.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            footerDivider.heightAnchor.constraint(equalToConstant: 1),
+            footerDivider.bottomAnchor.constraint(equalTo: footer.topAnchor),
+
+            footer.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            footer.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            footer.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+            footer.heightAnchor.constraint(equalToConstant: 30),
+
+            treeScroll.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            treeScroll.topAnchor.constraint(equalTo: baseHeader.bottomAnchor),
+            treeScroll.bottomAnchor.constraint(equalTo: footerDivider.topAnchor),
+            treeWidthProportional, treeMinWidth, treeMaxWidth,
+
+            treeRule.leadingAnchor.constraint(equalTo: treeScroll.trailingAnchor),
+            treeRule.topAnchor.constraint(equalTo: card.topAnchor),
+            treeRule.bottomAnchor.constraint(equalTo: footerDivider.topAnchor),
+            treeRule.widthAnchor.constraint(equalToConstant: 1),
+
+            diffHost.leadingAnchor.constraint(equalTo: treeRule.trailingAnchor),
+            diffHost.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            diffHost.topAnchor.constraint(equalTo: card.topAnchor),
+            diffHost.bottomAnchor.constraint(equalTo: footerDivider.topAnchor),
+
+            // A small horizontal margin off the tree divider and the card edge, matching the current-line
+            // pill's own inset so the content gap and the pill gap read as one consistent margin (the
+            // `.plain` table style already removed the source-list inset that made it too wide).
+            diffTable.leadingAnchor.constraint(equalTo: diffHost.leadingAnchor, constant: 6),
+            diffTable.trailingAnchor.constraint(equalTo: diffHost.trailingAnchor, constant: -6),
+            diffTable.topAnchor.constraint(equalTo: diffHost.topAnchor),
+            diffTable.bottomAnchor.constraint(equalTo: diffHost.bottomAnchor),
+
+            messageLabel.centerXAnchor.constraint(equalTo: diffHost.centerXAnchor),
+            messageLabel.centerYAnchor.constraint(equalTo: diffHost.centerYAnchor),
+            messageLabel.leadingAnchor.constraint(greaterThanOrEqualTo: diffHost.leadingAnchor, constant: 24),
+            messageLabel.trailingAnchor.constraint(lessThanOrEqualTo: diffHost.trailingAnchor, constant: -24),
+        ])
+    }
+
+    private static let baseHeaderShownHeight: CGFloat = 44
+
+    /// The static header above the tree: just the branch dropdown, its trigger reading `Base: <branch>`
+    /// (no separate caption, no bottom border — the padding alone separates it from the tree). The
+    /// dropdown is the reused chrome `Dropdown` (anchored list, keyboard nav, checks), so this is not a
+    /// modal; Down from the dropdown drops into the tree, Up from the tree's top row returns to it.
+    private func buildBaseHeader() {
+        baseHeader.translatesAutoresizingMaskIntoConstraints = false
+        baseHeader.clipsToBounds = true  // stays tidy when collapsed to zero height
+
+        baseDropdown = Dropdown(items: [], selectedIndex: 0) { [weak self] index in self?.chooseBaseAt(index) }
+        baseDropdown.titlePrefix = "Base: "
+        baseDropdown.onArrowDown = { [weak self] in self?.focusTreeTop() }
+
+        baseHeader.addSubview(baseDropdown)
+        NSLayoutConstraint.activate([
+            baseDropdown.leadingAnchor.constraint(equalTo: baseHeader.leadingAnchor, constant: 10),
+            baseDropdown.trailingAnchor.constraint(equalTo: baseHeader.trailingAnchor, constant: -10),
+            baseDropdown.centerYAnchor.constraint(equalTo: baseHeader.centerYAnchor),
+        ])
+    }
+
+    private func buildFooter() -> NSView {
+        repoLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        branchLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        // A long branch name must truncate, not push the card (and the window) wider than the pane needs
+        // — the labels themselves have to yield, not just their stack, or their intrinsic width holds the
+        // footer open and the window can't reach its own min (ZEN-243).
+        repoLabel.lineBreakMode = .byTruncatingTail
+        branchLabel.lineBreakMode = .byTruncatingMiddle
+        for label in [repoLabel, branchLabel] {
+            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        }
+        branchIcon.image = NSImage(systemSymbolName: "arrow.triangle.branch", accessibilityDescription: "branch")?
+            .withSymbolConfiguration(.init(pointSize: 10, weight: .regular))
+        branchIcon.imageScaling = .scaleProportionallyDown
+        repoBranchStack.orientation = .horizontal
+        repoBranchStack.spacing = 5
+        repoBranchStack.alignment = .centerY
+        repoBranchStack.setViews([repoLabel, branchIcon, branchLabel], in: .leading)
+        // Yield (truncate) before the footer can grow a too-narrow window, same rule as the hints.
+        repoBranchStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        repoBranchStack.translatesAutoresizingMaskIntoConstraints = false
+        updateRepoBranch()
+
+        hintsStack.orientation = .horizontal
+        hintsStack.spacing = 16
+        hintsStack.alignment = .centerY
+        // Resist compression (hints shouldn't clip) but below 500 — a `.required` floor here would
+        // *grow* the window on a display too narrow to fit the hints, the same NSWindow stay-put
+        // mechanism the tree width dodges above. Hugging can stay high: refusing to grow past
+        // intrinsic size never pushes the window.
+        hintsStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        hintsStack.setContentHuggingPriority(.required, for: .horizontal)
+        hintsStack.translatesAutoresizingMaskIntoConstraints = false
+        fillHints()
+
+        footerDivider.wantsLayer = true
+        footerDivider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        footerDivider.translatesAutoresizingMaskIntoConstraints = false
+
+        let footer = NSView()
+        footer.translatesAutoresizingMaskIntoConstraints = false
+        footer.addSubview(repoBranchStack)
+        footer.addSubview(hintsStack)
+        NSLayoutConstraint.activate([
+            repoBranchStack.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 14),
+            repoBranchStack.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
+            hintsStack.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -14),
+            hintsStack.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
+            hintsStack.leadingAnchor.constraint(greaterThanOrEqualTo: repoBranchStack.trailingAnchor, constant: 12),
+        ])
+        return footer
+    }
+
+    /// The footer identity: repo name always, then a branch glyph + the checked-out branch when there is
+    /// one (collapsed when detached). Reads `Theme.current`, so a live theme swap recolors it.
+    private func updateRepoBranch() {
+        let chrome = Theme.current.chrome
+        repoLabel.stringValue = repoName
+        repoLabel.textColor = chrome.ink(alpha: 0.5)
+        branchIcon.contentTintColor = chrome.ink(alpha: 0.5)
+        let branch = displayedStatus?.currentBranch
+        branchLabel.stringValue = branch ?? ""
+        branchLabel.textColor = chrome.foreground.nsColor
+        branchIcon.isHidden = branch == nil
+        branchLabel.isHidden = branch == nil
+    }
+
+    /// The footer's key legend as real keycaps, built from the live keymap so it shows the user's own
+    /// pane/jump bindings (not the defaults). Rebuilt in full on a theme/keymap change — every keycap
+    /// bakes its colors in at construction, so it's re-created rather than mutated.
+    private func fillHints() {
+        hintsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        func glyph(_ chord: KeyInterceptor.ReservedChord) -> String { CommandCatalog.spec(for: chord).shortcut }
+        // Each key is its own command, so each gets its own keycap — never two glyphs crammed in one
+        // box. A pair that shares a caption (the two pane keys, the two jump keys) sits as two boxes
+        // before the label.
+        var groups: [(keys: [String], label: String)] = [
+            ([glyph(.navLeft), glyph(.navRight)], "panes"),
+            ([glyph(.navDown), glyph(.navUp)], "jump"),
+        ]
+        // The layout toggle only exists while the pane is wide — narrow force-folds to inline, so the
+        // command is disabled and its shortcut hidden (ZEN-243).
+        if !isNarrow { groups.append(([glyph(.toggleDiffLayout)], "layout")) }
+        groups.append(contentsOf: [
+            (keys: ["←", "→"], label: "fold"),
+            (keys: ["esc"], label: "close"),
+        ])
+        for group in groups { hintsStack.addArrangedSubview(Self.hintGroup(keys: group.keys, label: group.label)) }
+    }
+
+    /// One legend entry for the footer: a keycap per key, then a muted caption. The keys sit tight
+    /// together; the caption gets a wider gap so it reads as their shared label.
+    private static func hintGroup(keys: [String], label: String) -> NSView {
+        let caps: [NSView] = keys.map { KeycapView(shortcut: $0) }
+        let caption = NSTextField(labelWithString: label)
+        caption.font = .systemFont(ofSize: 11)
+        caption.textColor = Theme.current.chrome.ink(alpha: 0.45)
+        let stack = NSStackView(views: caps + [caption])
+        stack.orientation = .horizontal
+        stack.spacing = 3  // tight between the keycaps
+        stack.alignment = .centerY
+        if let lastCap = caps.last { stack.setCustomSpacing(6, after: lastCap) }  // wider before the caption
+        return stack
+    }
+
+    // MARK: loading
+
+    private func reload(showSpinner: Bool) {
+        loadToken += 1
+        let token = loadToken
+        if showSpinner { showMessage("Loading…") }
+        loader(baseOverride) { [weak self] result in
+            guard let self, token == self.loadToken else { return }
+            switch result {
+            case .success(let status):
+                guard status != self.displayedStatus else { return }  // unchanged — keep the view
+                self.apply(status)
+            case .failure(let failure):
+                self.displayedStatus = nil
+                self.updateRepoBranch()
+                self.showMessage(self.failureMessage(for: failure))
+            }
+        }
+    }
+
+    private func apply(_ status: GitDiffRunner.StatusLoad) {
+        displayedStatus = status
+        updateBaseHeader()  // reflect the base this load resolved to
+        refreshBranches()  // and refresh the branch list behind it
+        updateRepoBranch()  // reflect the checked-out branch this load carries
+
+        let controller = DiffTreeOutlineController(
+            sections: DiffOutlineItem.sections(from: status),
+            onSelect: { [weak self] file in self?.selectFile(file) })
+        outlineController = controller
+        outline.dataSource = controller
+        outline.delegate = controller
+        outline.reloadData()
+        outline.expandItem(nil, expandChildren: true)
+
+        selectedFilePath = nil
+        guard let first = controller.firstFile, let file = first.fileDiff else {
+            showMessage("No changes")
+            return
+        }
+        let row = outline.row(forItem: first)
+        if row >= 0 { outline.selectRowIndexes([row], byExtendingSelection: false) }
+        selectFile(file)
+    }
+
+    private func selectFile(_ file: FileDiff) {
+        // Dedup: the load both selects the row (firing this via the delegate) and calls here directly,
+        // and re-selecting the shown file shouldn't re-render.
+        guard selectedFilePath != file.path else { return }
+        selectedFilePath = file.path
+        currentFileDiff = file
+        messageLabel.isHidden = true
+        diffTable.isHidden = false
+        renderCurrentFile()
+    }
+
+    /// The layout a diff renders in. A narrow pane force-folds to inline — that view is objectively best
+    /// when two columns can't fit, so it isn't a choice (the toggle is disabled and its hint hidden while
+    /// narrow). While wide: the session pin (⌘I), else the config default (ZEN-243).
+    private var effectiveLayout: GeneralConfig.DiffLayout {
+        isNarrow ? .inline : (layoutOverride ?? GeneralConfig.current.diffLayout)
+    }
+
+    /// The diff pane resized — re-evaluate the fold, refresh the footer hints if narrowness flipped, and
+    /// re-render only if the effective layout actually changed.
+    @objc private func paneFrameDidChange() {
+        if updateIsNarrow(forWidth: diffTable.bounds.width) { fillHints() }
+        reconcileLayout()
+    }
+
+    /// Fold below `foldWidth`, unfold above `unfoldWidth` — a dead-band so a resize landing between the
+    /// two thresholds keeps its last decision. Returns whether the narrow state actually flipped (the
+    /// caller refreshes the footer hints only then).
+    @discardableResult
+    private func updateIsNarrow(forWidth width: CGFloat) -> Bool {
+        if isNarrow, width > Self.unfoldWidth {
+            isNarrow = false
+        } else if !isNarrow, width < Self.foldWidth {
+            isNarrow = true
+        } else {
+            return false
+        }
+        return true
+    }
+
+    /// The single funnel for anything that can change `effectiveLayout` without a new file: a resize
+    /// crossing the fold/unfold band, a config-default change, or the ⌘I toggle. Re-renders only when the
+    /// effective layout truly differs from what's on screen, so a resize tick or theme change never
+    /// resets the diff's scroll or current line. Returns whether it re-rendered.
+    @discardableResult
+    private func reconcileLayout() -> Bool {
+        guard currentFileDiff != nil, effectiveLayout != renderedLayout else { return false }
+        renderCurrentFile()
+        return true
+    }
+
+    /// The layout-toggle command (⌘I) flips the pinned layout for the session; disabled while narrow,
+    /// where inline is forced and the choice doesn't exist.
+    func toggleLayout() {
+        guard !isNarrow else { return }
+        layoutOverride = effectiveLayout == .sideBySide ? .inline : .sideBySide
+        reconcileLayout()
+    }
+
+    /// (Re)render the shown file in the effective layout — no git re-run. Called on file select and on
+    /// a layout change (a resize crossing the fold band, the toggle command, or a config-default change).
+    private func renderCurrentFile() {
+        guard let file = currentFileDiff else { return }
+        let layout = effectiveLayout
+        renderedLayout = layout
+        diffTable.show(layout == .inline ? UnifiedDiff.rows(for: file) : SideBySideDiff.rows(for: file))
+    }
+
+    private func showMessage(_ text: String) {
+        selectedFilePath = nil
+        currentFileDiff = nil
+        renderedLayout = nil
+        messageLabel.stringValue = text
+        messageLabel.isHidden = false
+        diffTable.isHidden = true
+    }
+
+    private func failureMessage(for failure: GitDiffRunner.Failure) -> String {
+        switch failure {
+        case .gitUnavailable: return "git isn't available"
+        case .gitError(let message): return message.isEmpty ? "Couldn't read the diff" : message
+        }
+    }
+
+    // MARK: test hooks
+
+    /// The number of rows the file tree currently shows (sections + expanded files).
+    var treeRowCountForTesting: Int { outline.numberOfRows }
+    /// The path of the file whose diff is in the right pane, or nil when a message is shown.
+    var selectedFilePathForTesting: String? { selectedFilePath }
+    /// The number of visual diff rows rendered in the right pane.
+    var diffRowCountForTesting: Int { diffTable.rowCountForTesting }
+
+    var renderedDiffLayoutForTesting: GeneralConfig.DiffLayout? { renderedLayout }
+    /// The footer's repo name, and the branch it shows (nil when the branch glyph/name are collapsed).
+    var footerRepoNameForTesting: String { repoLabel.stringValue }
+    var footerBranchForTesting: String? { branchLabel.isHidden ? nil : branchLabel.stringValue }
+    /// The captions of the footer's key-hint legend (e.g. "panes", "jump", "layout"), so a test can
+    /// assert the layout shortcut is present only while the pane is wide.
+    var footerHintCaptionsForTesting: [String] {
+        hintsStack.arrangedSubviews.compactMap { group in
+            (group as? NSStackView)?.arrangedSubviews.compactMap { $0 as? NSTextField }.last?.stringValue
+        }
+    }
+    /// The live diff-pane width — for a resize-driven fold test to confirm the pane actually shrank.
+    var paneWidthForTesting: CGFloat { diffTable.contentWidthForTesting }
+    /// Drive a tree selection the way a click/arrow would, so a test exercises the real selection path.
+    func selectRowForTesting(_ row: Int) {
+        outline.selectRowIndexes([row], byExtendingSelection: false)
+    }
+    /// Whether the base dropdown header is shown (a base resolved for the committed slice).
+    var isBaseHeaderShownForTesting: Bool { !baseHeader.isHidden }
+    /// The base dropdown, for asserting its branch list and driving a pick through the real control.
+    var baseDropdownForTesting: Dropdown { baseDropdown }
+    /// Choose a base branch the way the dropdown's `onChange` does, to exercise the base-override load.
+    func chooseBaseForTesting(_ branch: String) {
+        guard let index = baseItems.firstIndex(of: branch) else { return }
+        chooseBaseAt(index)
+    }
+    /// The file tree, so a test can send a real `keyDown` (Esc / Up-at-top / Return-to-fold) through
+    /// `NavOutlineView`'s handler rather than only its selection path.
+    var treeOutlineForTesting: NSOutlineView { outline }
+    /// Which pane holds first responder, for asserting `handleNavChord`'s focus moves landed.
+    var isTreeFocusedForTesting: Bool { window?.firstResponder === outline }
+    var isDiffFocusedForTesting: Bool { window?.firstResponder === diffTable.scrollFocusTarget }
+    var isBaseDropdownFocusedForTesting: Bool { window?.firstResponder === baseDropdown }
+}
+
+/// A clip view that refuses to scroll horizontally: it pins the visible rect's x to 0, so the single
+/// wide column can never pan the file tree sideways whatever rounding leaves the document a hair wider
+/// than the clip (the tree only ever truncates names, so nothing is lost to the clamp).
+private final class LockedHorizontalClipView: NSClipView {
+    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
+        var rect = super.constrainBoundsRect(proposedBounds)
+        rect.origin.x = 0
+        return rect
+    }
+}
+
+/// The file tree's outline view. Accepts first responder even when empty (so keystrokes never leak to
+/// the terminal behind the card). Navigation is driven by forwarded pane chords, not Tab; the only
+/// key it claims is Esc, so it closes the viewer instead of the outline eating it as a deselect.
+private final class NavOutlineView: NSOutlineView {
+    var onEscape: (() -> Void)?
+    /// Move focus up out of the tree to the base dropdown — fired by Up at the top row, so the
+    /// dropdown is reachable by the arrows without leaving the keyboard.
+    var onFocusBase: (() -> Void)?
+    /// Ctrl-D / Ctrl-U half-page the diff pane while the tree keeps focus (+1 down / -1 up), so a file
+    /// can be scanned without stepping over into the diff.
+    var onHalfPageDiff: ((Int) -> Void)?
+
+    override var acceptsFirstResponder: Bool { true }
+
+    /// Size the sole name column to fill the enclosing scroll view. AppKit's own column-autoresizing
+    /// styles are delta-based (they nudge the column by the *change* in the table's width since the
+    /// last resize, not a fresh "fill remaining space" calculation), so the very first resize — which
+    /// for this tree fires while `DiffViewerOverlay` is still mid-`init()`, before the surrounding Auto
+    /// Layout has ever resolved a real width — permanently anchors the column to the wrong size.
+    /// Reading from `enclosingScrollView.contentSize` instead of `self.bounds` matters too: the
+    /// outline's own bounds is exactly the value that legacy machinery leaves in a bad state, where the
+    /// scroll view's content size is the one number here that Auto Layout actually resolves (ZEN-226).
+    override func layout() {
+        super.layout()
+        guard let nameColumn = outlineTableColumn,
+            let contentWidth = enclosingScrollView?.contentSize.width
+        else { return }
+        let target = max(40, contentWidth - intercellSpacing.width)
+        if abs(nameColumn.width - target) > 0.5 {
+            nameColumn.width = target
+        }
+    }
+
+    // Level-0 section rows get no indentation, so their disclosure triangle lands hard against the
+    // column edge — left of the selection pill's inner edge, poking out its left border. Push sections
+    // right by one indent level so their chevron lines up with the folder chevrons *inside* the pill;
+    // shifting both the disclosure and the content cell keeps the chevron-to-title gap intact.
+    private func sectionShift(forRow row: Int) -> CGFloat {
+        level(forRow: row) == 0 ? indentationPerLevel : 0
+    }
+
+    override func frameOfOutlineCell(atRow row: Int) -> NSRect {
+        var f = super.frameOfOutlineCell(atRow: row)
+        f.origin.x += sectionShift(forRow: row)
+        return f
+    }
+
+    override func frameOfCell(atColumn column: Int, row: Int) -> NSRect {
+        var f = super.frameOfCell(atColumn: column, row: row)
+        let shift = sectionShift(forRow: row)
+        f.origin.x += shift
+        f.size.width -= shift
+        return f
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if let direction = DiffPaneTable.halfPageDirection(for: event) {
+            onHalfPageDiff?(direction)
+            return
+        }
+        switch KeyboardFocus.key(for: event) {
+        case .escape:
+            onEscape?()
+            return
+        case .up where selectedRow <= 0:
+            onFocusBase?()  // at the top already — step up to the base dropdown
+            return
+        case .activate:
+            // Return/Enter on a folder or section folds it, matching Left/Right; a file just stays
+            // selected (its diff is already shown).
+            if let item = item(atRow: selectedRow), isExpandable(item) {
+                if isItemExpanded(item) { collapseItem(item) } else { expandItem(item) }
+                return
+            }
+        default:
+            break
+        }
+        super.keyDown(with: event)
+    }
+}

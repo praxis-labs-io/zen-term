@@ -28,6 +28,11 @@ final class LayoutFormatTests: XCTestCase {
         XCTAssertEqual(LayoutFormat.reduceMotionToken(.off), "off")
     }
 
+    func test_diffLayout_tokens() {
+        XCTAssertEqual(LayoutFormat.diffLayoutToken(.sideBySide), "side-by-side")
+        XCTAssertEqual(LayoutFormat.diffLayoutToken(.inline), "inline")
+    }
+
     func test_args_joinSplitRoundTrips() {
         XCTAssertEqual(LayoutFormat.joinArgs(["-l", "--login"]), "-l --login")
         XCTAssertEqual(LayoutFormat.splitArgs("  -l   --login "), ["-l", "--login"])

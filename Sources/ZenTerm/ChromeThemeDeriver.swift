@@ -16,7 +16,8 @@ enum ChromeThemeDeriver {
             destructive: slot(1),
             accent: slot(5),
             attention: slot(6),
-            muted: blend(terminal.foreground, terminal.background, 0.55))
+            muted: blend(terminal.foreground, terminal.background, 0.55),
+            positive: slot(2))
     }
 
     /// A per-channel weighted average of `a` and `b` at `t` (`t` = 1 keeps `a`, `t` = 0 keeps

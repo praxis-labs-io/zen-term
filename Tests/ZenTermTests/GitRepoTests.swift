@@ -43,4 +43,34 @@ final class GitRepoTests: XCTestCase {
     func test_isGitRepo_missingDirIsFalse() {
         XCTAssertFalse(GitRepo.isGitRepo(root.appendingPathComponent("does-not-exist", isDirectory: true)))
     }
+
+    func test_resolveRepoRoot_deliversRootOnMain() throws {
+        let repo = try makeDir("proj", git: true)
+        let nested = repo.appendingPathComponent("src/deep", isDirectory: true)
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+
+        let done = expectation(description: "resolved")
+        var resolved: URL?
+        var onMain = false
+        GitRepo.resolveRepoRoot(for: nested) { root in
+            resolved = root
+            onMain = Thread.isMainThread
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 2)
+
+        XCTAssertTrue(onMain, "the completion must land on the main thread")
+        XCTAssertEqual(resolved?.standardizedFileURL, repo.standardizedFileURL)
+    }
+
+    func test_resolveRepoRoot_nilOutsideARepo() {
+        let done = expectation(description: "resolved")
+        var resolved: URL? = root
+        GitRepo.resolveRepoRoot(for: root) { root in
+            resolved = root
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 2)
+        XCTAssertNil(resolved, "a directory with no enclosing .git resolves to nil")
+    }
 }

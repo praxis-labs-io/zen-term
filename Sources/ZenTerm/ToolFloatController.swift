@@ -55,6 +55,18 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// needs it most: a dismissed `persist:` agent has no on-screen trace at all.
     var onNotification: ((TerminalNotification, ToolFloat) -> Void)?
 
+    /// Resolves the git repo root off the main thread (ZEN-90/ZEN-234) for the git guard and the
+    /// `.directory` anchor, injected so a test can drive a deterministic resolver. Defaults to the
+    /// real filesystem walk. Contract: the completion must be delivered on the **main thread** — the
+    /// continuation mutates controller state and presents the overlay; the default resolver hops back
+    /// to main, and any injected resolver must too.
+    var resolveRepoRoot: (URL?, @escaping (URL?) -> Void) -> Void = {
+        GitRepo.resolveRepoRoot(for: $0, completion: $1)
+    }
+    /// True while a toggle is waiting on its off-main repo-root resolve, so a second press in that
+    /// gap doesn't queue a second open.
+    private var isResolvingToggle = false
+
     init(
         presentOverlay: @escaping (SurfaceFloatOverlay) -> Void,
         focusedCWD: @escaping () -> URL?,
@@ -107,13 +119,25 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// Where a float's command runs: its pinned `dir:` when it has one, else the focused pane's cwd.
     private func floatCWD(_ spec: ToolFloat) -> URL? { spec.dir ?? focusedCWD() }
 
-    /// Toggle a tool float: same id open → close; otherwise run the git guard and open.
+    /// Toggle a tool float: same id open → close; otherwise resolve the repo root off-main (the git
+    /// guard and the `.directory` anchor share it) and open. A second press before the resolve lands
+    /// is dropped, not queued.
     func toggle(_ spec: ToolFloat) {
         if activeFloat?.spec.id == spec.id { close(); return }
+        if isResolvingToggle { return }
+        isResolvingToggle = true
+        // One ancestor walk per press, off-main: each `isGitRepo` probe is filesystem I/O (ZEN-90).
+        resolveRepoRoot(floatCWD(spec)) { [weak self] repoRoot in
+            guard let self else { return }
+            self.isResolvingToggle = false
+            self.openResolved(spec, repoRoot: repoRoot)
+        }
+    }
+
+    /// Open `spec` once its repo root is resolved: switch away from any open float, run the git
+    /// guard, and present. Split out of `toggle` so the off-main resolve hands back to a plain body.
+    private func openResolved(_ spec: ToolFloat, repoRoot: URL?) {
         if activeFloat != nil { close() }  // switch floats
-        // One ancestor walk per press: the git guard and the `.directory` anchor share the same
-        // repo-root lookup, and each `isGitRepo` probe is main-thread filesystem I/O.
-        let repoRoot = GitRepo.repoRoot(for: floatCWD(spec))
         if spec.requiresGitRepo, repoRoot == nil {
             onRequestToast?(gitGuardToast(for: spec))
             return

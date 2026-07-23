@@ -49,6 +49,74 @@ synthesized `modifierFlags: .option` event is a keystroke macOS never sends: it 
 ⌥-arrow reorder past four green tests and a mutation check, because both only ever exercised the fake
 event (ZEN-145).
 
+## Scroll views
+
+**A single-column `NSOutlineView` left at the default `.automatic` style is permanently wider than
+its clip.** `.automatic` resolves to the inset/source-list family, whose tiling reserves a constant
+**+32pt in the outline's own frame beyond the column width**, and reports `intercellSpacing` as
+`(17, 0)` — not the classic `(3, 2)` most code assumes. So an outline sized to fill its clip with the
+documented formula (`column.width = clipWidth - intercellSpacing.width`) still leaves the document
+~15pt wider than the clip at *every* width, independent of row content — a static geometry overflow,
+not a scroll artifact, so a `constrainBoundsRect` origin-clamp and `horizontalScrollElasticity = .none`
+defend against dragging into it but never remove it. Force `outline.style = .plain` and zero the
+intercell width (`intercellSpacing = NSSize(width: 0, height: intercellSpacing.height)`); `.plain`
+restores the real `documentWidth = columnWidth + intercellSpacing.width` relation, making the fill
+math exact. `.plain` also stops silently overriding `rowSizeStyle` (row height drops 24→17 for
+`.small`). `.plain` draws level-0 rows hard against the column edge, so a section header's disclosure
+triangle pokes left of a selection pill: shift level-0 cells right by one `indentationPerLevel` in
+`frameOfOutlineCell`/`frameOfCell` to seat them inside the pill (ZEN-236).
+
+**`NSTableView` shares the same `.automatic` inset trap.** Left at the default style, a plain
+`NSTableView` reserves a source-list-style horizontal row inset, so its rows — and any full-row
+selection or background — sit off the pane's leading and trailing edges by a fixed margin you never
+asked for. The diff pane read as gapped from the tree divider on the left and the card edge on the
+right until `table.style = .plain` removed it. Once it's `.plain`, add whatever margin you *do* want
+explicitly (a leading/trailing constant on the table, or the row content's own insets) so the amount
+is yours, not the framework's — and a full-row pill takes no extra inset of its own on top of that
+margin, or it nests a second gap inside the first (ZEN-243).
+
+**`NSScrollView.contentInsets` is scrollable range, not padding.** A nonzero inset on an edge
+extends the clip view's pannable range by exactly that many points on that edge — same model as
+`UIScrollView.contentInset` — *even when the document view exactly fills the clip on that axis*. A
+single-column `NSOutlineView` sized to fill its clip's width exactly still scrolled sideways by a
+fixed few points at every window width because `contentInsets.left`/`.right` were nonzero (wanted
+for visual breathing room); no amount of recomputing the column's width against
+`contentView.bounds` could cancel it, because the pannable range is additive on top of the
+document/clip width relationship, not derived from it. Reserve `contentInsets` for axes that are
+actually meant to scroll (e.g. `top`/`bottom` breathing room above/below the first/last row); get
+edge padding on a non-scrolling axis from the row content's own insets instead (`DiffTreeRowView`,
+`DiffTreeOutlineController.swift`), which affect where content draws/truncates, never the
+document's reported frame width (ZEN-226).
+
+## Auto Layout, resize, and text sizing
+
+**A width-responsive relayout must key off a frame-change notification, not a child's `bounds` read
+inside `layout()`.** AppKit resolves a view's own frame before its `layout()` runs, but a *descendant*
+(an `NSScrollView`'s document, a table tiling its rows) gets its new frame *after* the ancestor's
+`layout()` returns — so reading `table.bounds.width` from the enclosing view's `layout()` sees the
+*previous* width on a live window resize. It looks correct in a unit test only because
+`layoutSubtreeIfNeeded()` flushes the whole subtree first, which the app's incremental passes don't.
+For "do X when this view's width crosses a threshold," observe the view itself:
+`view.postsFrameChangedNotifications = true` + `NSView.frameDidChangeNotification`, which fires with
+the *final* frame on every resize and on first layout. The diff viewer's auto-fold was dead in the app
+(green in tests) until it moved off a `layout()` width read onto the pane's frame notification
+(ZEN-243).
+
+**An `NSTextField` label sized to the exact glyph advances truncates to `…`.** A label insets its text
+a couple of points inside its frame, so a column sized to `characters * digitWidth` is a hair too
+narrow and clips even a single digit. Size a content-fit label to its string plus a few points of
+padding (`DiffCellMetrics.numberColumnWidth`), or measure the actual string with the label's own
+attributes and pad — never the raw advance sum (ZEN-243).
+
+**A non-truncating label holds its container — and the window — open.** A label defaults to a high
+horizontal compression resistance and no truncation, so its intrinsic width becomes a hard floor for
+everything it's pinned inside. A long value (a footer showing the full branch name) propagated up
+through the card's proportional width constraint and *stopped the window from reaching its own
+`contentMinSize`*. For any label that should yield when space is tight, set a truncating
+`lineBreakMode` **and** lower its horizontal compression resistance
+(`setContentCompressionResistancePriority(.defaultLow, for: .horizontal)`) — setting it on the
+enclosing `NSStackView` is not enough; the child label resists on its own (ZEN-243).
+
 ## Layers, shadows, and colors
 
 **Static layer shadows go on `NSView.shadow`, not `layer.shadowOpacity`.** Setting
