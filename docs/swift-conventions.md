@@ -117,6 +117,24 @@ through the card's proportional width constraint and *stopped the window from re
 (`setContentCompressionResistancePriority(.defaultLow, for: .horizontal)`) — setting it on the
 enclosing `NSStackView` is not enough; the child label resists on its own (ZEN-243).
 
+**A label's `lineBreakMode` governs `stringValue` only; an attributed string carries its own.** Set
+`attributedStringValue` and the label's `lineBreakMode`, `alignment` and `font` stop applying: the
+string's attributes win, and any attribute you leave out falls back to the system default rather than
+to the label's setting. The default `NSParagraphStyle` wraps (`.byWordWrapping`), so an attributed
+line in a label with `maximumNumberOfLines = 1` draws only its first wrapped line and silently loses
+whole words off the end. That is far more destructive than the `.byClipping` the label declared, which
+would merely cut mid-glyph. Whenever a view can render either a plain or an attributed string, put
+every layout-affecting attribute (paragraph style and font) on the attributed string so both paths
+behave alike (`SyntaxAttributedText`). The diff viewer shipped this: highlighted lines rendered
+`] as const;` as `] as`, and short lines vanished entirely, while the same diff was complete before
+highlighting existed (ZEN-239).
+
+**Asserting a label's frame width does not prove its text is drawn.** The bug above passed every test,
+including window-based ones through the real table, because they measured `frame.width` against the
+string's measured width and those matched. The frame was never wrong; the *drawing* was. For text that
+must appear in full, assert the property that governs drawing (here the paragraph style's
+`lineBreakMode`), not the geometry around it (ZEN-239).
+
 ## Layers, shadows, and colors
 
 **Static layer shadows go on `NSView.shadow`, not `layer.shadowOpacity`.** Setting
