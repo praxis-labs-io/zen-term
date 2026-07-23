@@ -1,3 +1,4 @@
+import AppLog
 import CodeEditLanguages
 import Foundation
 import SwiftTreeSitter
@@ -74,7 +75,15 @@ enum SyntaxLanguage {
             // to the language's own patterns rather than losing highlighting entirely.
             if let combined = try? Query(language: language, data: inherited + own) { return combined }
         }
-        return try? Query(language: language, data: own)
+        do {
+            return try Query(language: language, data: own)
+        } catch {
+            // A grammar we claim to support whose query won't compile is a bug signal, not a normal
+            // outcome like an absent blob: the result is cached, so that language silently never
+            // highlights for the rest of the run. Leave a trail so a bug report can name it.
+            Log.warning("syntax: highlight query failed to compile for \(tsName): \(error)", category: .app)
+            return nil
+        }
     }
 
     private static func queryData(_ tsName: String) -> Data? {

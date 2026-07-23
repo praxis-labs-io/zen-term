@@ -66,6 +66,38 @@ final class DiffHighlighterTests: XCTestCase {
             "`func` should be a keyword at column 0 of line 2")
     }
 
+    // MARK: - Query predicates must actually gate their captures
+
+    func test_swift_dottedAccessBase_isNotTaggedAsAType() throws {
+        // Swift's query has `((navigation_expression (simple_identifier) @type) (#match? @type "^[A-Z]"))`.
+        // Unresolved, that predicate fires on the base of *every* dotted access, so ordinary lowercase
+        // identifiers (`chrome.background`, `file.path`) render in the type colour — which is most lines
+        // of idiomatic Swift.
+        guard let (language, query) = SyntaxLanguage.resolve(path: "Sample.swift") else {
+            return XCTFail("Swift should resolve")
+        }
+        let spans = DiffHighlighter.perLineSpans(text: "chrome.background = other\n", language: language, query: query)
+
+        let chrome = NSRange(location: 0, length: 6)
+        XCTAssertFalse(
+            (spans[1] ?? []).contains { $0.range == chrome && $0.role == .type },
+            "`chrome` is lowercase, so the #match? guard must stop it being typed")
+    }
+
+    func test_typescript_lowercaseIdentifiers_areNotTaggedAsTypes() throws {
+        // TypeScript's `((identifier) @type (#match? @type "^[A-Z]"))` is a bare identifier pattern:
+        // unresolved it tags every identifier in the file as a type.
+        guard let (language, query) = SyntaxLanguage.resolve(path: "app.ts") else {
+            return XCTFail("TypeScript should resolve")
+        }
+        let spans = DiffHighlighter.perLineSpans(
+            text: "const value = compute(input)\n", language: language, query: query)
+
+        XCTAssertFalse(
+            (spans[1] ?? []).contains { $0.role == .type },
+            "no identifier on this line is capitalised, so none should be typed")
+    }
+
     func test_swiftSource_leavesPlainIdentifiersUnspanned() throws {
         guard let (language, query) = SyntaxLanguage.resolve(path: "Sample.swift") else {
             return XCTFail("Swift grammar should resolve")

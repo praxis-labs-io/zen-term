@@ -752,6 +752,12 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // Supported + uncached: withhold the first paint until the highlight lands, so even a cold open
         // goes straight from the loading state to highlighted — never a flash of unhighlighted text. The
         // token drops a stale file-switch; the safety cap paints plain if the highlighter never answers.
+        //
+        // Clear the pane first. Withholding the paint would otherwise leave the *previously* selected
+        // file's rows on screen under the new selection for as long as the fetch+parse takes (up to the
+        // safety cap on a big file, a cold object store, or a network volume) — showing content that
+        // doesn't match what's selected, which reads as a click that did nothing.
+        diffTable.show([])
         highlightToken += 1
         let token = highlightToken
         var painted = false

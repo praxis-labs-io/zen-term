@@ -47,14 +47,16 @@ final class DiffViewerHighlightOrchestrationTests: XCTestCase {
 
     private func mount(
         store: DiffHighlightStore, loader: @escaping DiffViewerOverlay.Loader,
-        initialStatus: GitDiffRunner.StatusLoad? = nil, branches: [String] = ["main", "develop"]
+        initialStatus: GitDiffRunner.StatusLoad? = nil, branches: [String] = ["main", "develop"],
+        // Non-existent by default: the highlighter no-ops and never spawns git, so what lands in the
+        // rows comes only from the store — which is what most of these tests are about. Pass a real
+        // directory to exercise the branch that waits on a highlight.
+        repoRoot: URL = URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo")
     ) -> DiffViewerOverlay {
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
             repoName: "repo",
-            // Non-existent on purpose: the highlighter no-ops and never spawns git, so what lands in the
-            // rows comes only from the store — which is exactly what these tests are about.
-            repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo"),
+            repoRoot: repoRoot,
             highlightStore: store,
             initialStatus: initialStatus,
             loader: loader,
@@ -96,6 +98,40 @@ final class DiffViewerHighlightOrchestrationTests: XCTestCase {
 
         XCTAssertEqual(overlay.selectedFilePathForTesting, "A.swift")
         XCTAssertEqual(spans(of: overlay.renderedDiffRowsForTesting), [expected])
+    }
+
+    func test_selectingAnUncachedFile_clearsThePaneRatherThanLeavingThePreviousFileOnScreen() throws {
+        // With a real repo root the "supported but uncached" branch runs, which withholds the paint
+        // until the highlight lands. It has to clear the pane first: otherwise the file you just
+        // clicked shows the *previous* file's diff until the parse finishes (up to the safety cap on a
+        // big file or slow storage), which reads as a click that did nothing.
+        let repo = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("zenterm-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: repo) }
+
+        let first = file("A.swift")
+        let second = file("B.swift")
+        let store = DiffHighlightStore()
+        // Seed the first file so it paints real rows immediately; those are what must not linger.
+        store.store(
+            first.highlightKey,
+            DiffFileSpans(old: [1: [TokenSpan(range: NSRange(location: 0, length: 3), role: .keyword)]], new: [:]))
+        let load = status([first, second])
+        let overlay = mount(
+            store: store, loader: { _, completion in completion(.success(load)) },
+            initialStatus: load, repoRoot: repo)
+
+        XCTAssertEqual(overlay.selectedFilePathForTesting, "A.swift")
+        XCTAssertFalse(overlay.renderedDiffRowsForTesting.isEmpty, "precondition: the first file painted")
+
+        // Row 0 is the "Unstaged" section header, then A.swift, then B.swift.
+        overlay.selectRowForTesting(2)
+
+        XCTAssertEqual(overlay.selectedFilePathForTesting, "B.swift")
+        XCTAssertTrue(
+            overlay.renderedDiffRowsForTesting.isEmpty,
+            "the pane must clear while awaiting the highlight, not keep showing A.swift's diff")
     }
 
     func test_unhighlightableFile_isResolvedInTheCacheSoItIsNotRetried() {

@@ -23,9 +23,11 @@ final class DiffHighlightStore {
     /// cache hit still means "don't re-parse".
     private var spans: [String: DiffFileSpans?] = [:]
 
-    /// Keyed by `FileDiff.highlightKey` (scope+base+path), not bare path. Lock-guarded because the
-    /// background prefetcher (`DiffFilePrefetcher`) may read `cached` off-main while the main thread
-    /// stores/clears — all three are O(1), so a single `NSLock` is the right shape.
+    /// Keyed by `FileDiff.highlightKey` (scope+base+path), not bare path. Every caller today touches
+    /// this on the main thread (the prefetcher reads `cached` from `schedule`, which is main-only, and
+    /// hops its writes back to main), so the lock is insurance for a future off-main caller rather than
+    /// load-bearing right now — don't go hunting for a race it's holding back. All three operations are
+    /// O(1), so a single `NSLock` is the right shape and costs nothing on main.
     func cached(_ key: String) -> DiffFileSpans?? {
         lock.lock()
         defer { lock.unlock() }

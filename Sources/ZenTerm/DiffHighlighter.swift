@@ -60,7 +60,15 @@ enum DiffHighlighter {
         do { try parser.setLanguage(language) } catch { return [:] }
         guard let tree = parser.parse(text), let root = tree.rootNode else { return [:] }
         var captures: [(range: NSRange, role: SyntaxRole)] = []
-        for match in query.execute(node: root, in: tree) {
+        // Resolve query predicates (`#match?`, `#eq?`, `#is-not?`) instead of taking every syntactic
+        // match. 27 of the bundled grammars gate captures behind one, and an unresolved predicate fires
+        // regardless: Swift's `((navigation_expression (simple_identifier) @type) (#match? @type "^[A-Z]"))`
+        // would tag the base of *every* dotted access (`chrome.background`) as a type, and TypeScript's
+        // bare `(identifier) @type` would tag every identifier. `Context(string:)` builds a caching text
+        // provider over the same source these ranges index into. Purely subtractive: it can only drop
+        // matches whose guard fails, never invent one.
+        let resolved = query.execute(node: root, in: tree).resolve(with: Predicate.Context(string: text))
+        for match in resolved {
             for capture in match.captures {
                 guard let role = SyntaxLanguage.role(forCapture: capture.nameComponents) else { continue }
                 let range = capture.node.range
