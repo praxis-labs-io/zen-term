@@ -27,6 +27,10 @@ final class DiffPaneTable: NSView {
         table.addTableColumn(column)
         table.headerView = nil
         table.backgroundColor = .clear
+        // `.automatic` reserves horizontal row insets (a source-list-style margin), which pushes the diff
+        // content off the pane edges — a gap from the tree divider on the left and the card edge on the
+        // right. `.plain` removes it so rows span the full pane width (same trap ZEN-236 hit on the tree).
+        table.style = .plain
         table.gridStyleMask = []
         table.intercellSpacing = NSSize(width: 0, height: 0)
         table.focusRingType = .none  // no system-blue ring on focus-in (ZEN-27: chrome is theme-only)
@@ -394,9 +398,10 @@ private final class DiffTableView: NSTableView {
 /// the diff from the tree still shows where the cursor is, without claiming focus. Theme-only (ZEN-27);
 /// no system selection color.
 private final class DiffLineRowView: NSTableRowView {
-    /// Match the file tree's selection pill: inset from the pane edges with the same corner radius, so
-    /// the current line reads as a pill rather than a full-bleed band.
-    private static let horizontalInset: CGFloat = 6
+    /// The current-line pill spans the content: the diff pane already carries a horizontal margin off its
+    /// edges (`diffTable`'s inset), so the pill takes no *additional* horizontal inset — it aligns with
+    /// the content rather than nesting a second gap inside it. Rounded corners keep it reading as a pill.
+    private static let horizontalInset: CGFloat = 0
     private static let verticalInset: CGFloat = 1.5
     private static let cornerRadius: CGFloat = 3
 

@@ -459,8 +459,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             diffHost.topAnchor.constraint(equalTo: card.topAnchor),
             diffHost.bottomAnchor.constraint(equalTo: footerDivider.topAnchor),
 
-            diffTable.leadingAnchor.constraint(equalTo: diffHost.leadingAnchor),
-            diffTable.trailingAnchor.constraint(equalTo: diffHost.trailingAnchor),
+            // A small horizontal margin off the tree divider and the card edge, matching the current-line
+            // pill's own inset so the content gap and the pill gap read as one consistent margin (the
+            // `.plain` table style already removed the source-list inset that made it too wide).
+            diffTable.leadingAnchor.constraint(equalTo: diffHost.leadingAnchor, constant: 6),
+            diffTable.trailingAnchor.constraint(equalTo: diffHost.trailingAnchor, constant: -6),
             diffTable.topAnchor.constraint(equalTo: diffHost.topAnchor),
             diffTable.bottomAnchor.constraint(equalTo: diffHost.bottomAnchor),
 
