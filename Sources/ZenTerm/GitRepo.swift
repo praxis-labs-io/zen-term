@@ -26,4 +26,15 @@ enum GitRepo {
             dir = parent
         }
     }
+
+    /// `repoRoot(for:)` resolved off the main thread and delivered back on it. The walk is
+    /// filesystem I/O — a `stat` per level, which can block on a slow/asleep volume — so a
+    /// main-thread caller must never run it inline (ZEN-90). Mirrors the `GitDiffRunner` idiom:
+    /// hop to a background queue, walk, hop back to main for the completion.
+    static func resolveRepoRoot(for cwd: URL?, completion: @escaping (URL?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let root = repoRoot(for: cwd)
+            DispatchQueue.main.async { completion(root) }
+        }
+    }
 }
