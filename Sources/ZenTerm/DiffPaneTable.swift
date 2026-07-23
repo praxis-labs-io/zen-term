@@ -63,6 +63,8 @@ final class DiffPaneTable: NSView {
     /// The view to make first responder so arrows move the current line and scroll the pane.
     var scrollFocusTarget: NSView { table }
     var rowCountForTesting: Int { source.rows.count }
+    /// The live content width the fold policy keys off — for a resize-driven interaction test.
+    var contentWidthForTesting: CGFloat { table.bounds.width }
 
     func show(_ rows: [DiffRow]) {
         source.rows = rows

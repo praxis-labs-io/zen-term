@@ -68,9 +68,26 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// The layout the shown rows were built with — a config-default change only re-renders when it
     /// actually differs, so a theme change alone doesn't reset the scroll or selection.
     private var renderedLayout: GeneralConfig.DiffLayout?
-    /// A per-session layout override set by the layout-toggle command (⌘I), never persisted; nil defers
-    /// to the config default (`GeneralConfig.current.diffLayout`).
+    /// A per-session layout override set by the layout-toggle command (⌘I) while the pane is wide, never
+    /// persisted; nil defers to the config default (`GeneralConfig.current.diffLayout`). Only governs the
+    /// wide state — a narrow pane force-folds to inline regardless (ZEN-243).
     private var layoutOverride: GeneralConfig.DiffLayout?
+    /// Whether the pane is currently narrow enough to force inline. A stored dead-band decision, not a
+    /// pure function of the current width — it only flips true below `foldWidth` and back to false above
+    /// `unfoldWidth`, so a width sitting between the two keeps whatever it last decided (no flapping).
+    private var isNarrow = false
+
+    /// The narrowest a side-by-side column may usefully get before folding to inline — set for the point
+    /// two columns stop being worth the cramping (≈40 monospace chars per side at `DiffCellMetrics.font`),
+    /// not the point they become literally unreadable. Runbook-tunable: raise it to fold at wider windows.
+    private static let minSideBySideColumnWidth: CGFloat = 280
+    /// The pane width at which `DiffLineCell.columnWidth(forTotalWidth:)` drops below
+    /// `minSideBySideColumnWidth` — inverts that cell's own formula (two gutters + the 1pt center rule,
+    /// split evenly), so it tracks the gutter width automatically. Narrower than this: auto-fold to inline.
+    private static let foldWidth: CGFloat = 2 * DiffCellMetrics.gutterWidth + 1 + 2 * minSideBySideColumnWidth
+    /// `foldWidth` plus a dead-band the pane must clear before auto-unfolding back to side-by-side, so a
+    /// resize sitting on the boundary can't flap the renderer tick to tick.
+    private static let unfoldWidth: CGFloat = foldWidth + 60
     /// The status currently on screen — a background refresh that returns the same thing is a no-op,
     /// so a reopen from the same dir doesn't yank the view (or flash) when nothing has changed.
     private var displayedStatus: GitDiffRunner.StatusLoad?
@@ -135,6 +152,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    deinit { NotificationCenter.default.removeObserver(self) }
+
     private func aspect(
         _ anchor: NSLayoutDimension, to other: NSLayoutDimension, _ multiplier: CGFloat,
         priority: NSLayoutConstraint.Priority
@@ -187,11 +206,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         updateRepoBranch()
         outline.reloadData()
         // A config change can also change the default diff layout — re-render only if the effective
-        // layout actually differs from what's shown (no override pinned). Otherwise just recolor, so a
-        // plain theme change never resets the diff's scroll or selection.
-        if currentFileDiff != nil, effectiveLayout != renderedLayout {
-            renderCurrentFile()
-        } else {
+        // layout actually differs from what's shown. Otherwise just recolor, so a plain theme change
+        // never resets the diff's scroll or selection.
+        if !reconcileLayout() {
             diffTable.reapplyTheme()
         }
     }
@@ -330,6 +347,12 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         outline.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
         outline.onHalfPageDiff = { [weak self] direction in self?.diffTable.halfPage(direction) }
         diffTable.onEscape = { [weak self] in self?.onCancel() }
+        // Re-evaluate the auto-fold policy whenever the diff pane's width changes (ZEN-243). The frame
+        // notification fires with the pane's *final* frame on every resize — reliable where piggybacking
+        // on a `layout()` pass isn't (the inner table tiles after that runs, so it reads a stale width).
+        diffTable.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(paneFrameDidChange), name: NSView.frameDidChangeNotification, object: diffTable)
 
         buildBaseHeader()
 
@@ -473,6 +496,14 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private func buildFooter() -> NSView {
         repoLabel.font = .systemFont(ofSize: 11, weight: .medium)
         branchLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        // A long branch name must truncate, not push the card (and the window) wider than the pane needs
+        // — the labels themselves have to yield, not just their stack, or their intrinsic width holds the
+        // footer open and the window can't reach its own min (ZEN-243).
+        repoLabel.lineBreakMode = .byTruncatingTail
+        branchLabel.lineBreakMode = .byTruncatingMiddle
+        for label in [repoLabel, branchLabel] {
+            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        }
         branchIcon.image = NSImage(systemSymbolName: "arrow.triangle.branch", accessibilityDescription: "branch")?
             .withSymbolConfiguration(.init(pointSize: 10, weight: .regular))
         branchIcon.imageScaling = .scaleProportionallyDown
@@ -538,13 +569,17 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // Each key is its own command, so each gets its own keycap — never two glyphs crammed in one
         // box. A pair that shares a caption (the two pane keys, the two jump keys) sits as two boxes
         // before the label.
-        let groups: [(keys: [String], label: String)] = [
+        var groups: [(keys: [String], label: String)] = [
             ([glyph(.navLeft), glyph(.navRight)], "panes"),
             ([glyph(.navDown), glyph(.navUp)], "jump"),
-            ([glyph(.toggleDiffLayout)], "layout"),
-            (["←", "→"], "fold"),
-            (["esc"], "close"),
         ]
+        // The layout toggle only exists while the pane is wide — narrow force-folds to inline, so the
+        // command is disabled and its shortcut hidden (ZEN-243).
+        if !isNarrow { groups.append(([glyph(.toggleDiffLayout)], "layout")) }
+        groups.append(contentsOf: [
+            (keys: ["←", "→"], label: "fold"),
+            (keys: ["esc"], label: "close"),
+        ])
         for group in groups { hintsStack.addArrangedSubview(Self.hintGroup(keys: group.keys, label: group.label)) }
     }
 
@@ -619,17 +654,56 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         renderCurrentFile()
     }
 
-    /// The layout a diff renders in: the layout-toggle session override, else the config default.
-    private var effectiveLayout: GeneralConfig.DiffLayout { layoutOverride ?? GeneralConfig.current.diffLayout }
+    /// The layout a diff renders in. A narrow pane force-folds to inline — that view is objectively best
+    /// when two columns can't fit, so it isn't a choice (the toggle is disabled and its hint hidden while
+    /// narrow). While wide: the session pin (⌘I), else the config default (ZEN-243).
+    private var effectiveLayout: GeneralConfig.DiffLayout {
+        isNarrow ? .inline : (layoutOverride ?? GeneralConfig.current.diffLayout)
+    }
 
-    /// The layout-toggle command flips the layout and pins the choice for the session; re-renders the shown file in place.
-    func toggleLayout() {
-        layoutOverride = effectiveLayout == .sideBySide ? .inline : .sideBySide
+    /// The diff pane resized — re-evaluate the fold, refresh the footer hints if narrowness flipped, and
+    /// re-render only if the effective layout actually changed.
+    @objc private func paneFrameDidChange() {
+        if updateIsNarrow(forWidth: diffTable.bounds.width) { fillHints() }
+        reconcileLayout()
+    }
+
+    /// Fold below `foldWidth`, unfold above `unfoldWidth` — a dead-band so a resize landing between the
+    /// two thresholds keeps its last decision. Returns whether the narrow state actually flipped (the
+    /// caller refreshes the footer hints only then).
+    @discardableResult
+    private func updateIsNarrow(forWidth width: CGFloat) -> Bool {
+        if isNarrow, width > Self.unfoldWidth {
+            isNarrow = false
+        } else if !isNarrow, width < Self.foldWidth {
+            isNarrow = true
+        } else {
+            return false
+        }
+        return true
+    }
+
+    /// The single funnel for anything that can change `effectiveLayout` without a new file: a resize
+    /// crossing the fold/unfold band, a config-default change, or the ⌘I toggle. Re-renders only when the
+    /// effective layout truly differs from what's on screen, so a resize tick or theme change never
+    /// resets the diff's scroll or current line. Returns whether it re-rendered.
+    @discardableResult
+    private func reconcileLayout() -> Bool {
+        guard currentFileDiff != nil, effectiveLayout != renderedLayout else { return false }
         renderCurrentFile()
+        return true
+    }
+
+    /// The layout-toggle command (⌘I) flips the pinned layout for the session; disabled while narrow,
+    /// where inline is forced and the choice doesn't exist.
+    func toggleLayout() {
+        guard !isNarrow else { return }
+        layoutOverride = effectiveLayout == .sideBySide ? .inline : .sideBySide
+        reconcileLayout()
     }
 
     /// (Re)render the shown file in the effective layout — no git re-run. Called on file select and on
-    /// a layout change (the toggle command, or a config-default change while no override is pinned).
+    /// a layout change (a resize crossing the fold band, the toggle command, or a config-default change).
     private func renderCurrentFile() {
         guard let file = currentFileDiff else { return }
         let layout = effectiveLayout
@@ -666,6 +740,15 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// The footer's repo name, and the branch it shows (nil when the branch glyph/name are collapsed).
     var footerRepoNameForTesting: String { repoLabel.stringValue }
     var footerBranchForTesting: String? { branchLabel.isHidden ? nil : branchLabel.stringValue }
+    /// The captions of the footer's key-hint legend (e.g. "panes", "jump", "layout"), so a test can
+    /// assert the layout shortcut is present only while the pane is wide.
+    var footerHintCaptionsForTesting: [String] {
+        hintsStack.arrangedSubviews.compactMap { group in
+            (group as? NSStackView)?.arrangedSubviews.compactMap { $0 as? NSTextField }.last?.stringValue
+        }
+    }
+    /// The live diff-pane width — for a resize-driven fold test to confirm the pane actually shrank.
+    var paneWidthForTesting: CGFloat { diffTable.contentWidthForTesting }
     /// Drive a tree selection the way a click/arrow would, so a test exercises the real selection path.
     func selectRowForTesting(_ row: Int) {
         outline.selectRowIndexes([row], byExtendingSelection: false)
