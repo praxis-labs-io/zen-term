@@ -772,10 +772,20 @@ final class WindowController: NSObject {
         // Reopening on the same repo renders the last status instantly and refreshes behind the card
         // instead of flashing a spinner; the loader restamps the cache on every successful load.
         let initial = diffCache.flatMap { $0.repoRoot == repoRoot ? $0.load : nil }
+        // Reuse the repo's highlight cache across opens so a reopen paints highlighted immediately; a
+        // different repo starts fresh.
+        let highlightStore: DiffHighlightStore
+        if let existing = diffHighlightStore, existing.repoRoot == repoRoot {
+            highlightStore = existing.store
+        } else {
+            highlightStore = DiffHighlightStore()
+            diffHighlightStore = (repoRoot, highlightStore)
+        }
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
             repoName: repoRoot.lastPathComponent,
             repoRoot: repoRoot,
+            highlightStore: highlightStore,
             initialStatus: initial,
             loader: { [weak self] base, completion in
                 runner.loadStatus(base: base) { result in
@@ -793,6 +803,10 @@ final class WindowController: NSObject {
     /// The last diff-viewer load, kept so reopening on the same repo renders instantly and refreshes
     /// behind the card instead of flashing a spinner. A different repo root ignores it.
     private var diffCache: (repoRoot: URL, load: GitDiffRunner.StatusLoad)?
+
+    /// The repo's syntax-highlight cache, kept across viewer opens so a reopen paints highlighted with no
+    /// re-parse or flash. A different repo root gets its own store.
+    private var diffHighlightStore: (repoRoot: URL, store: DiffHighlightStore)?
 
     /// Which section the Settings card opens on. `.tools` / `.workspaces` are used when a sub-form
     /// (tool-float or workspace editor) hands back to the section it was launched from; the

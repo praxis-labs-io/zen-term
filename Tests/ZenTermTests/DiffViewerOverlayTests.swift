@@ -64,6 +64,7 @@ final class DiffViewerOverlayTests: XCTestCase {
             // A path that doesn't exist, so the syntax highlighter no-ops (these tests exercise layout
             // and selection, not highlighting) and never spawns git.
             repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo"),
+            highlightStore: DiffHighlightStore(),
             initialStatus: nil,
             loader: { base, completion in spy.load(base, completion) },
             branchesLoader: { completion in completion(spy.branches) },

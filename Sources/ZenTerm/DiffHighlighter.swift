@@ -21,15 +21,18 @@ enum DiffHighlighter {
     /// against a stale result (a fast file-switch) with its own generation token.
     static func enrich(file: FileDiff, repoRoot: URL, completion: @escaping (DiffFileSpans?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
-            guard let (language, query) = SyntaxLanguage.resolve(path: file.path) else {
-                DispatchQueue.main.async { completion(nil) }
-                return
-            }
-            let old = sideSpans(GitDiffRunner.blobText(for: file, side: .old, repoRoot: repoRoot), language, query)
-            let new = sideSpans(GitDiffRunner.blobText(for: file, side: .new, repoRoot: repoRoot), language, query)
-            let result = old.isEmpty && new.isEmpty ? nil : DiffFileSpans(old: old, new: new)
+            let result = enrichSync(file: file, repoRoot: repoRoot)
             DispatchQueue.main.async { completion(result) }
         }
+    }
+
+    /// The synchronous body of `enrich`, for a caller already off-main (the prefetch queue) that shouldn't
+    /// pay for another dispatch. Resolve → fetch both sides → parse → map; nil if unsupported or no spans.
+    static func enrichSync(file: FileDiff, repoRoot: URL) -> DiffFileSpans? {
+        guard let (language, query) = SyntaxLanguage.resolve(path: file.path) else { return nil }
+        let old = sideSpans(GitDiffRunner.blobText(for: file, side: .old, repoRoot: repoRoot), language, query)
+        let new = sideSpans(GitDiffRunner.blobText(for: file, side: .new, repoRoot: repoRoot), language, query)
+        return old.isEmpty && new.isEmpty ? nil : DiffFileSpans(old: old, new: new)
     }
 
     /// Whether a blob is small enough to parse on the shared queue without hitching (ZEN-90): under the
