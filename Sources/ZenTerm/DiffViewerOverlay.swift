@@ -298,6 +298,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         outline.focusRingType = .none  // no system-blue ring on focus-in (ZEN-27: chrome is theme-only)
         outline.onEscape = { [weak self] in self?.onCancel() }
         outline.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
+        outline.onHalfPageDiff = { [weak self] direction in self?.diffTable.halfPage(direction) }
         diffTable.onEscape = { [weak self] in self?.onCancel() }
 
         buildBaseHeader()
@@ -621,6 +622,9 @@ private final class NavOutlineView: NSOutlineView {
     /// Move focus up out of the tree to the base dropdown — fired by Up at the top row, so the
     /// dropdown is reachable by the arrows without leaving the keyboard.
     var onFocusBase: (() -> Void)?
+    /// Ctrl-D / Ctrl-U half-page the diff pane while the tree keeps focus (+1 down / -1 up), so a file
+    /// can be scanned without stepping over into the diff.
+    var onHalfPageDiff: ((Int) -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -646,6 +650,10 @@ private final class NavOutlineView: NSOutlineView {
     }
 
     override func keyDown(with event: NSEvent) {
+        if let direction = DiffPaneTable.halfPageDirection(for: event) {
+            onHalfPageDiff?(direction)
+            return
+        }
         switch KeyboardFocus.key(for: event) {
         case .escape:
             onEscape?()

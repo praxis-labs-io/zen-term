@@ -10,6 +10,14 @@ final class DiffPaneTable: NSView {
     private let scroll = NSScrollView()
     private let source = Source()
 
+    /// The shared horizontal pan applied to every row's two text columns (0 = left-aligned).
+    private var horizontalOffset: CGFloat = 0
+    /// The widest line across both columns, measured per file — sets the horizontal scroll range.
+    private var maxContentWidth: CGFloat = 0
+    /// Slack past the widest line so its last characters aren't flush to the column edge.
+    private static let trailingPad: CGFloat = 12
+    private static let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("row"))
@@ -26,6 +34,10 @@ final class DiffPaneTable: NSView {
         table.usesAutomaticRowHeights = false
         table.dataSource = source
         table.delegate = source
+        table.onHorizontalScroll = { [weak self] deltaX in self?.panHorizontally(by: deltaX) }
+        table.onHorizontalStep = { [weak self] direction in self?.panByKey(direction) }
+        table.onHalfPage = { [weak self] direction in self?.halfPage(direction) }
+        table.onSelectionMoved = { [weak self] in self?.centerSelectedRow() }
 
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
@@ -52,8 +64,99 @@ final class DiffPaneTable: NSView {
 
     func show(_ rows: [SideBySideRow]) {
         source.rows = rows
+        maxContentWidth = Self.widestLine(in: rows)
+        horizontalOffset = 0
+        source.offset = 0
         table.reloadData()
+        // Always start with a current line so its highlight (a quiet outline while the tree holds focus)
+        // is there to see immediately — the diff can be paged from the tree before it's ever focused.
+        // Land it on the first real line, not the leading hunk header, so the pill reads as a line.
+        if let firstLine = rows.firstIndex(where: { if case .lines = $0 { return true } else { return false } }) {
+            table.selectRowIndexes([firstLine], byExtendingSelection: false)
+        }
         table.scrollRowToVisible(0)
+    }
+
+    /// The horizontal scroll range: how far the widest line overhangs one column. 0 = nothing to pan.
+    private var maxHorizontalOffset: CGFloat {
+        let column = DiffLineCell.columnWidth(forTotalWidth: table.bounds.width)
+        return max(0, maxContentWidth + Self.trailingPad - column)
+    }
+
+    private func panHorizontally(by deltaX: CGFloat) {
+        // Swipe left (negative deltaX) reveals the tail on the right, so the offset grows.
+        setHorizontalOffset(horizontalOffset - deltaX)
+    }
+
+    /// One Left/Right arrow press worth of pan (a handful of characters), so holding the key glides.
+    private static let keyStep: CGFloat = 32
+    private func panByKey(_ direction: Int) {
+        setHorizontalOffset(horizontalOffset + CGFloat(direction) * Self.keyStep)
+    }
+
+    /// Ctrl-D / Ctrl-U (vim half-page): +1 down, -1 up, nil otherwise. Left un-reserved on purpose —
+    /// Ctrl-D is terminal EOF, so it only means half-page while the viewer holds first responder, never
+    /// leaking to the shell behind it. Match the reservable modifier set exactly so ⌘⌃D etc. don't hit.
+    static func halfPageDirection(for event: NSEvent) -> Int? {
+        guard event.modifierFlags.intersection([.command, .shift, .option, .control]) == .control else {
+            return nil
+        }
+        switch event.keyCode {
+        case 2: return 1  // D
+        case 32: return -1  // U
+        default: return nil
+        }
+    }
+
+    /// Half-page scroll that carries the current-line highlight with it, so the cursor stays put on
+    /// screen instead of sliding off. Driven from both panes (Ctrl-D/U) — when the tree holds focus the
+    /// line isn't painted (the tree owns the focus indicator), but the selection still moves so it's
+    /// where you left it when you step back into the diff.
+    func halfPage(_ direction: Int) {
+        guard !source.rows.isEmpty else { return }
+        let visibleRows = max(1, Int(scroll.contentView.bounds.height / table.rowHeight))
+        let page = max(1, visibleRows / 2)
+        let current = table.selectedRow >= 0 ? table.selectedRow : table.rows(in: table.visibleRect).location
+        let target = min(max(0, current + direction * page), source.rows.count - 1)
+        table.selectRowIndexes([target], byExtendingSelection: false)
+        centerRow(target)
+    }
+
+    private func setHorizontalOffset(_ value: CGFloat) {
+        let clamped = min(max(0, value), maxHorizontalOffset)
+        guard clamped != horizontalOffset else { return }
+        horizontalOffset = clamped
+        source.offset = clamped
+        table.enumerateAvailableRowViews { rowView, _ in
+            for case let cell as DiffLineCell in rowView.subviews { cell.horizontalOffset = clamped }
+        }
+    }
+
+    /// The widest line across both columns, for the horizontal scroll range (hunk headers don't pan).
+    /// The font is monospaced, so a line's UTF-16 length is a faithful proxy for its width: scan by
+    /// length (cheap) and lay out only the single longest line, rather than measuring every line's text
+    /// on the main thread — the latter hitches when switching to a large file (ZEN-90).
+    private static func widestLine(in rows: [SideBySideRow]) -> CGFloat {
+        var longest = ""
+        var longestLength = 0
+        func consider(_ text: String) {
+            let length = text.utf16.count
+            if length > longestLength {
+                longest = text
+                longestLength = length
+            }
+        }
+        for case .lines(let left, let right) in rows {
+            if let left { consider(left.text) }
+            if let right { consider(right.text) }
+        }
+        return longestLength == 0 ? 0 : (longest as NSString).size(withAttributes: [.font: font]).width.rounded(.up)
+    }
+
+    override func layout() {
+        super.layout()
+        // The column width changed with the pane, so the scroll range did too — re-clamp the offset.
+        setHorizontalOffset(horizontalOffset)
     }
 
     /// Recolor the visible cells after a live theme change — each cell reads `Theme.current` when
@@ -95,7 +198,7 @@ final class DiffPaneTable: NSView {
         while index >= 0, index < rows.count {
             if isChangeClusterStart(at: index, in: rows) {
                 table.selectRowIndexes([index], byExtendingSelection: false)
-                scrollRowToTop(max(0, index - 2))  // a couple lines of context above the change
+                centerRow(index)
                 return
             }
             index += direction
@@ -114,16 +217,26 @@ final class DiffPaneTable: NSView {
         return left?.kind == .removed || right?.kind == .added
     }
 
-    private func scrollRowToTop(_ row: Int) {
+    /// Scroll so `row` sits vertically centered, clamped at the file's ends — the diff keeps the
+    /// current line in the middle (like `scrolloff=999`) so there's always context above and below.
+    func centerRow(_ row: Int) {
         let clip = scroll.contentView
-        let target = CGFloat(row) * table.rowHeight
+        let targetY = table.rect(ofRow: row).midY - clip.bounds.height / 2
         let maxY = max(0, table.frame.height - clip.bounds.height)
-        clip.scroll(to: NSPoint(x: 0, y: min(max(0, target), maxY)))
+        clip.scroll(to: NSPoint(x: 0, y: min(max(0, targetY), maxY)))
         scroll.reflectScrolledClipView(clip)
+    }
+
+    /// Re-center after the current line moves by arrow key (fired from the table's Up/Down).
+    func centerSelectedRow() {
+        guard table.selectedRow >= 0 else { return }
+        centerRow(table.selectedRow)
     }
 
     private final class Source: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         var rows: [SideBySideRow] = []
+        /// The current shared pan, so a row scrolled into view lands already aligned with its siblings.
+        var offset: CGFloat = 0
 
         func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
 
@@ -131,6 +244,7 @@ final class DiffPaneTable: NSView {
             let id = NSUserInterfaceItemIdentifier("cell")
             let cell = tableView.makeView(withIdentifier: id, owner: self) as? DiffLineCell ?? DiffLineCell(id: id)
             cell.configure(rows[row])
+            cell.horizontalOffset = offset
             return cell
         }
 
@@ -151,8 +265,41 @@ final class DiffPaneTable: NSView {
 /// to see and move. Arrows move the line and scroll (default `NSTableView` behavior).
 private final class DiffTableView: NSTableView {
     var onEscape: (() -> Void)?
+    /// A horizontal-dominant scroll pans the diff columns instead of the table (which scrolls only
+    /// vertically). Reports the raw `scrollingDeltaX`; the pane turns it into a clamped offset.
+    var onHorizontalScroll: ((CGFloat) -> Void)?
+    /// A Left/Right arrow press: pan the columns one step (+1 right / -1 left). Plain arrows are free
+    /// in the diff pane — Up/Down move the current line, Left/Right fold rows only in the tree.
+    var onHorizontalStep: ((Int) -> Void)?
+    /// Ctrl-D / Ctrl-U half-page scroll (+1 down / -1 up).
+    var onHalfPage: ((Int) -> Void)?
+    /// Fired after Up/Down moved the current line, so the pane can re-center it.
+    var onSelectionMoved: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
+
+    /// The axis a trackpad gesture committed to at its start, held for the whole gesture (incl.
+    /// momentum) so a diagonal or jittery scroll can't flip mid-stream and drift the columns sideways.
+    private var gesturePansHorizontally: Bool?
+
+    override func scrollWheel(with event: NSEvent) {
+        // Decide the axis once, at the gesture's start, from its initial dominant delta.
+        if event.phase == .began {
+            gesturePansHorizontally = abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY)
+        }
+        // Fall back to per-event dominance for a legacy mouse wheel (no gesture phases).
+        let horizontal =
+            gesturePansHorizontally ?? (abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY))
+        if event.phase == .ended || event.phase == .cancelled || event.momentumPhase == .ended {
+            gesturePansHorizontally = nil
+        }
+        if horizontal {
+            let step = event.hasPreciseScrollingDeltas ? event.scrollingDeltaX : event.scrollingDeltaX * 16
+            onHorizontalScroll?(step)
+            return
+        }
+        super.scrollWheel(with: event)
+    }
 
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
@@ -166,23 +313,50 @@ private final class DiffTableView: NSTableView {
     }
 
     override func keyDown(with event: NSEvent) {
-        // Claim Esc before the table's own cancelOperation (which would just clear selection), so it
-        // closes the viewer.
-        if KeyboardFocus.key(for: event) == .escape {
-            onEscape?()
+        if let direction = DiffPaneTable.halfPageDirection(for: event) {
+            onHalfPage?(direction)
             return
         }
-        super.keyDown(with: event)
+        switch KeyboardFocus.key(for: event) {
+        case .escape:
+            // Claim Esc before the table's own cancelOperation (which would just clear selection).
+            onEscape?()
+        case .left:
+            onHorizontalStep?(-1)
+        case .right:
+            onHorizontalStep?(1)
+        case .up, .down:
+            super.keyDown(with: event)  // moves the current line…
+            onSelectionMoved?()  // …then the pane re-centers it
+        default:
+            super.keyDown(with: event)
+        }
     }
 }
 
-/// A diff row's current-line highlight: a full-width accent fill, drawn only while the diff pane
-/// holds focus (`isEmphasized`). When focus is in the tree there's no cursor line — the tree owns the
-/// focus indicator then. Theme-only (ZEN-27); no system selection color.
+/// A diff row's current-line highlight, mirroring the file tree's selection: a solid accent fill while
+/// the diff pane holds focus (`isEmphasized`), and a quiet accent outline when it doesn't — so paging
+/// the diff from the tree still shows where the cursor is, without claiming focus. Theme-only (ZEN-27);
+/// no system selection color.
 private final class DiffLineRowView: NSTableRowView {
+    /// Match the file tree's selection pill: inset from the pane edges with the same corner radius, so
+    /// the current line reads as a pill rather than a full-bleed band.
+    private static let horizontalInset: CGFloat = 6
+    private static let verticalInset: CGFloat = 1.5
+    private static let cornerRadius: CGFloat = 3
+
     override func drawSelection(in dirtyRect: NSRect) {
-        guard isSelected, isEmphasized else { return }
-        Theme.current.chrome.accent.nsColor.withAlphaComponent(0.16).setFill()
-        bounds.fill()
+        guard isSelected else { return }
+        let accent = Theme.current.chrome.accent.nsColor
+        let rect = bounds.insetBy(dx: Self.horizontalInset, dy: Self.verticalInset)
+        let path = NSBezierPath(roundedRect: rect, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius)
+        if isEmphasized {
+            accent.withAlphaComponent(0.16).setFill()
+            path.fill()
+        } else {
+            accent.withAlphaComponent(0.4).setStroke()
+            path.lineWidth = 1
+            path.stroke()
+        }
     }
 }
