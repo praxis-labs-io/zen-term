@@ -63,9 +63,14 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private let repoName: String
 
     private var selectedFilePath: String?
-    /// Produces syntax spans for the shown file (ZEN-238). The placeholder now; the tree-sitter
-    /// `DiffHighlighter` swaps in here (ZEN-239) without the render or model layers changing.
-    private let spanSource: SyntaxSpanSource = PlaceholderSpanSource()
+    /// The repo root, for the syntax highlighter's blob fetch (ZEN-239).
+    private let repoRoot: URL
+    /// Discards a stale highlight result when the selection moved on before the off-main parse landed
+    /// (fast file-switching) — mirrors `loadToken`.
+    private var highlightToken = 0
+    /// The last file's computed spans (or nil = plain), so a layout flip re-renders from cache instead of
+    /// re-parsing. Single-entry: re-opening an earlier file re-highlights.
+    private var highlightCache: (path: String, spans: DiffFileSpans?)?
     /// The parsed diff currently shown, kept so a layout flip re-renders without a git re-run.
     private var currentFileDiff: FileDiff?
     /// The layout the shown rows were built with — a config-default change only re-renders when it
@@ -98,10 +103,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private var loadToken = 0
 
     init(
-        background: NSColor, repoName: String, initialStatus: GitDiffRunner.StatusLoad?,
+        background: NSColor, repoName: String, repoRoot: URL, initialStatus: GitDiffRunner.StatusLoad?,
         loader: @escaping Loader, branchesLoader: @escaping BranchesLoader, onCancel: @escaping () -> Void
     ) {
         self.repoName = repoName
+        self.repoRoot = repoRoot
         self.loader = loader
         self.branchesLoader = branchesLoader
         self.onCancel = onCancel
@@ -712,14 +718,37 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// a layout change (a resize crossing the fold band, the toggle command, or a config-default change).
     private func renderCurrentFile() {
         guard let file = currentFileDiff else { return }
+        // Render from the highlight cache when it's this file (a layout flip), else render plain now and
+        // kick the off-main highlighter — it re-renders with spans when it lands (ZEN-239).
+        if let cache = highlightCache, cache.path == file.path {
+            renderRows(file, spans: cache.spans)
+        } else {
+            renderRows(file, spans: nil)
+            kickHighlight(for: file)
+        }
+    }
+
+    /// Build and show the rows for `file` in the effective layout, with optional syntax spans.
+    private func renderRows(_ file: FileDiff, spans: DiffFileSpans?) {
         let layout = effectiveLayout
         renderedLayout = layout
-        // Syntax spans for the shown file (ZEN-238 placeholder; the tree-sitter engine swaps in behind
-        // `spanSource` in ZEN-239). Computed here so both layouts and every re-render pick it up.
-        let spans = spanSource.spans(for: file)
         diffTable.show(
             layout == .inline
                 ? UnifiedDiff.rows(for: file, spans: spans) : SideBySideDiff.rows(for: file, spans: spans))
+    }
+
+    /// Kick the off-main syntax highlighter for `file`; apply its spans only if the same file is still
+    /// selected when the parse lands (the token guards against a fast file-switch).
+    private func kickHighlight(for file: FileDiff) {
+        // No repo on disk, no blobs to fetch — leave the file plain (also keeps tests from spawning git).
+        guard FileManager.default.fileExists(atPath: repoRoot.path) else { return }
+        highlightToken += 1
+        let token = highlightToken
+        DiffHighlighter.enrich(file: file, repoRoot: repoRoot) { [weak self] spans in
+            guard let self, token == self.highlightToken, self.currentFileDiff?.path == file.path else { return }
+            self.highlightCache = (file.path, spans)
+            self.renderRows(file, spans: spans)
+        }
     }
 
     private func showMessage(_ text: String) {

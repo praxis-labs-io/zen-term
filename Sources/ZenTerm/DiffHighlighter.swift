@@ -10,6 +10,46 @@ import SwiftTreeSitter
 /// fixture without a grammar. The off-main orchestration (blob fetch, size ceiling, generation token)
 /// lives in the caller.
 enum DiffHighlighter {
+    /// Skip a side larger than this — a huge or generated file would hitch the parse. Protects the main
+    /// thread's responsiveness (ZEN-90); an oversized side renders plain.
+    private static let maxBytes = 256 * 1024
+    private static let maxLines = 2000
+
+    /// Resolve the grammar, fetch both sides' whole-file blobs, parse and map them to per-side line spans
+    /// — all off the main thread — then hand the result back on main. Returns nil when the language is
+    /// unsupported or neither side produced spans, so the caller leaves the file plain. The caller guards
+    /// against a stale result (a fast file-switch) with its own generation token.
+    static func enrich(file: FileDiff, repoRoot: URL, completion: @escaping (DiffFileSpans?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let (language, query) = SyntaxLanguage.resolve(path: file.path) else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            let old = sideSpans(GitDiffRunner.blobText(for: file, side: .old, repoRoot: repoRoot), language, query)
+            let new = sideSpans(GitDiffRunner.blobText(for: file, side: .new, repoRoot: repoRoot), language, query)
+            let result = old.isEmpty && new.isEmpty ? nil : DiffFileSpans(old: old, new: new)
+            DispatchQueue.main.async { completion(result) }
+        }
+    }
+
+    /// Whether a blob is small enough to parse on the shared queue without hitching (ZEN-90): under the
+    /// byte and line ceilings. A file over either renders plain.
+    static func isWithinSizeCeiling(_ text: String) -> Bool {
+        guard text.utf8.count <= maxBytes else { return false }
+        var lineCount = 1
+        for byte in text.utf8 where byte == 0x0A {
+            lineCount += 1
+            if lineCount > maxLines { return false }
+        }
+        return true
+    }
+
+    /// Per-line spans for one side's blob, or empty when the blob is absent or over the size ceiling.
+    private static func sideSpans(_ text: String?, _ language: Language, _ query: Query) -> [Int: [TokenSpan]] {
+        guard let text, isWithinSizeCeiling(text) else { return [:] }
+        return perLineSpans(text: text, language: language, query: query)
+    }
+
     /// Parse `text` with `language`, run the highlight `query`, and return colored spans keyed by
     /// 1-based file line number. Returns empty on a parse failure.
     static func perLineSpans(text: String, language: Language, query: Query) -> [Int: [TokenSpan]] {

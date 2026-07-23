@@ -28,6 +28,22 @@ final class DiffHighlighterTests: XCTestCase {
         XCTAssertTrue(DiffHighlighter.perLineSpans(text: "let x = 1", captures: []).isEmpty)
     }
 
+    // MARK: - Size ceiling (ZEN-90 guard)
+
+    func test_sizeCeiling_acceptsSmallFile() {
+        XCTAssertTrue(DiffHighlighter.isWithinSizeCeiling("let x = 1\nlet y = 2\n"))
+    }
+
+    func test_sizeCeiling_rejectsTooManyLines() {
+        let manyLines = String(repeating: "x\n", count: 2001)
+        XCTAssertFalse(DiffHighlighter.isWithinSizeCeiling(manyLines))
+    }
+
+    func test_sizeCeiling_rejectsTooManyBytes() {
+        let big = String(repeating: "x", count: 256 * 1024 + 1)
+        XCTAssertFalse(DiffHighlighter.isWithinSizeCeiling(big))
+    }
+
     // MARK: - Real tree-sitter pipeline (CodeEditLanguages Swift grammar)
 
     func test_swiftSource_producesKeywordAndNumberAndFunctionRoles() throws {
