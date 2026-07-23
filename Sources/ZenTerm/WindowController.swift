@@ -774,6 +774,7 @@ final class WindowController: NSObject {
         let initial = diffCache.flatMap { $0.repoRoot == repoRoot ? $0.load : nil }
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
+            repoName: repoRoot.lastPathComponent,
             initialStatus: initial,
             loader: { [weak self] base, completion in
                 runner.loadStatus(base: base) { result in

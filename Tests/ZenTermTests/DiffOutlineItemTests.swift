@@ -29,7 +29,7 @@ final class DiffOutlineItemTests: XCTestCase {
                 file("README.md", added: 1, removed: 0),
             ],
             staged: [],
-            committed: [], baseBranch: nil, baseSHA: nil)
+            committed: [], baseBranch: nil, baseSHA: nil, currentBranch: nil)
 
         let sections = DiffOutlineItem.sections(from: status)
 
@@ -40,7 +40,8 @@ final class DiffOutlineItemTests: XCTestCase {
 
     func test_fileNode_reportsItsOwnCounts() {
         let status = GitDiffRunner.StatusLoad(
-            unstaged: [file("a.swift", added: 4, removed: 7)], staged: [], committed: [], baseBranch: nil, baseSHA: nil)
+            unstaged: [file("a.swift", added: 4, removed: 7)], staged: [], committed: [], baseBranch: nil,
+            baseSHA: nil, currentBranch: nil)
 
         let leaf = DiffOutlineItem.sections(from: status)[0].firstLeafForTesting
         XCTAssertEqual(leaf?.addedCount, 4)

@@ -2,7 +2,7 @@ import AppKit
 
 /// The diff viewer: a chrome-native modal card over the active tile. The left column is a single file
 /// tree split into three sections — Unstaged, Staged, Committed (top to bottom) — the right column is
-/// the diff of the selected file, and a full-width footer carries the totals and the key hints. A
+/// the diff of the selected file, and a full-width footer carries the repo name + branch and the key hints. A
 /// `ModalOverlay` sharing the card + backdrop + spring and Esc model with the other overlays. Git work
 /// is injected as `loader`; the caller only opens this over a real repo (a non-repo shows a toast), so
 /// there is no not-a-repo state.
@@ -52,8 +52,15 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private let diffTable = DiffPaneTable()
     private let messageLabel = NSTextField(wrappingLabelWithString: "")
     private let footerDivider = NSView()
-    private let statsLabel = NSTextField(labelWithString: "")
+    /// The footer's leading identity: repo name, a branch glyph, and the checked-out branch. The branch
+    /// glyph + name collapse when the repo is detached (no current branch).
+    private let repoBranchStack = NSStackView()
+    private let repoLabel = NSTextField(labelWithString: "")
+    private let branchIcon = NSImageView()
+    private let branchLabel = NSTextField(labelWithString: "")
     private let hintsStack = NSStackView()
+    /// The repo the viewer is showing, shown in the footer. The last path component of the repo root.
+    private let repoName: String
 
     private var selectedFilePath: String?
     /// The parsed diff currently shown, kept so a layout flip re-renders without a git re-run.
@@ -71,9 +78,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private var loadToken = 0
 
     init(
-        background: NSColor, initialStatus: GitDiffRunner.StatusLoad?, loader: @escaping Loader,
-        branchesLoader: @escaping BranchesLoader, onCancel: @escaping () -> Void
+        background: NSColor, repoName: String, initialStatus: GitDiffRunner.StatusLoad?,
+        loader: @escaping Loader, branchesLoader: @escaping BranchesLoader, onCancel: @escaping () -> Void
     ) {
+        self.repoName = repoName
         self.loader = loader
         self.branchesLoader = branchesLoader
         self.onCancel = onCancel
@@ -176,7 +184,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         baseDropdown.reapplyTheme()
         messageLabel.textColor = Theme.current.chrome.muted.nsColor
         fillHints()
-        if let status = displayedStatus { statsLabel.attributedStringValue = Self.statsText(for: status) }
+        updateRepoBranch()
         outline.reloadData()
         // A config change can also change the default diff layout — re-render only if the effective
         // layout actually differs from what's shown (no override pinned). Otherwise just recolor, so a
@@ -463,8 +471,19 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     private func buildFooter() -> NSView {
-        statsLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        statsLabel.translatesAutoresizingMaskIntoConstraints = false
+        repoLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        branchLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        branchIcon.image = NSImage(systemSymbolName: "arrow.triangle.branch", accessibilityDescription: "branch")?
+            .withSymbolConfiguration(.init(pointSize: 10, weight: .regular))
+        branchIcon.imageScaling = .scaleProportionallyDown
+        repoBranchStack.orientation = .horizontal
+        repoBranchStack.spacing = 5
+        repoBranchStack.alignment = .centerY
+        repoBranchStack.setViews([repoLabel, branchIcon, branchLabel], in: .leading)
+        // Yield (truncate) before the footer can grow a too-narrow window, same rule as the hints.
+        repoBranchStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        repoBranchStack.translatesAutoresizingMaskIntoConstraints = false
+        updateRepoBranch()
 
         hintsStack.orientation = .horizontal
         hintsStack.spacing = 16
@@ -484,16 +503,30 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
         let footer = NSView()
         footer.translatesAutoresizingMaskIntoConstraints = false
-        footer.addSubview(statsLabel)
+        footer.addSubview(repoBranchStack)
         footer.addSubview(hintsStack)
         NSLayoutConstraint.activate([
-            statsLabel.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 14),
-            statsLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
+            repoBranchStack.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 14),
+            repoBranchStack.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
             hintsStack.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -14),
             hintsStack.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
-            hintsStack.leadingAnchor.constraint(greaterThanOrEqualTo: statsLabel.trailingAnchor, constant: 12),
+            hintsStack.leadingAnchor.constraint(greaterThanOrEqualTo: repoBranchStack.trailingAnchor, constant: 12),
         ])
         return footer
+    }
+
+    /// The footer identity: repo name always, then a branch glyph + the checked-out branch when there is
+    /// one (collapsed when detached). Reads `Theme.current`, so a live theme swap recolors it.
+    private func updateRepoBranch() {
+        let chrome = Theme.current.chrome
+        repoLabel.stringValue = repoName
+        repoLabel.textColor = chrome.ink(alpha: 0.5)
+        branchIcon.contentTintColor = chrome.ink(alpha: 0.5)
+        let branch = displayedStatus?.currentBranch
+        branchLabel.stringValue = branch ?? ""
+        branchLabel.textColor = chrome.foreground.nsColor
+        branchIcon.isHidden = branch == nil
+        branchLabel.isHidden = branch == nil
     }
 
     /// The footer's key legend as real keycaps, built from the live keymap so it shows the user's own
@@ -544,7 +577,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
                 self.apply(status)
             case .failure(let failure):
                 self.displayedStatus = nil
-                self.statsLabel.stringValue = ""
+                self.updateRepoBranch()
                 self.showMessage(self.failureMessage(for: failure))
             }
         }
@@ -554,7 +587,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         displayedStatus = status
         updateBaseHeader()  // reflect the base this load resolved to
         refreshBranches()  // and refresh the branch list behind it
-        statsLabel.attributedStringValue = Self.statsText(for: status)
+        updateRepoBranch()  // reflect the checked-out branch this load carries
 
         let controller = DiffTreeOutlineController(
             sections: DiffOutlineItem.sections(from: status),
@@ -620,13 +653,6 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         }
     }
 
-    private static func statsText(for status: GitDiffRunner.StatusLoad) -> NSAttributedString {
-        let files = status.unstaged + status.staged + status.committed
-        return DiffStatText.attributed(
-            added: files.reduce(0) { $0 + $1.addedCount },
-            removed: files.reduce(0) { $0 + $1.removedCount })
-    }
-
     // MARK: test hooks
 
     /// The number of rows the file tree currently shows (sections + expanded files).
@@ -637,6 +663,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     var diffRowCountForTesting: Int { diffTable.rowCountForTesting }
 
     var renderedDiffLayoutForTesting: GeneralConfig.DiffLayout? { renderedLayout }
+    /// The footer's repo name, and the branch it shows (nil when the branch glyph/name are collapsed).
+    var footerRepoNameForTesting: String { repoLabel.stringValue }
+    var footerBranchForTesting: String? { branchLabel.isHidden ? nil : branchLabel.stringValue }
     /// Drive a tree selection the way a click/arrow would, so a test exercises the real selection path.
     func selectRowForTesting(_ row: Int) {
         outline.selectRowIndexes([row], byExtendingSelection: false)

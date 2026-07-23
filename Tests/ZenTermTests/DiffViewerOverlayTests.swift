@@ -56,10 +56,11 @@ final class DiffViewerOverlayTests: XCTestCase {
     ) -> (overlay: DiffViewerOverlay, spy: LoaderSpy) {
         let status = GitDiffRunner.StatusLoad(
             unstaged: unstaged, staged: staged, committed: committed,
-            baseBranch: base?.branch, baseSHA: base?.sha)
+            baseBranch: base?.branch, baseSHA: base?.sha, currentBranch: "feature")
         let spy = LoaderSpy(status: status, failure: failure, branches: branches)
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
+            repoName: "repo",
             initialStatus: nil,
             loader: { base, completion in spy.load(base, completion) },
             branchesLoader: { completion in completion(spy.branches) },
@@ -122,6 +123,15 @@ final class DiffViewerOverlayTests: XCTestCase {
         XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .sideBySide, "toggles back")
         XCTAssertEqual(overlay.diffRowCountForTesting, sideBySideRows)
+    }
+
+    /// The footer shows the repo name always, and the checked-out branch the load carried — proving the
+    /// StatusLoad → footer plumbing is live, not just that a label exists.
+    func test_footer_showsRepoNameAndLoadedBranch() {
+        let (overlay, _) = mount(unstaged: [file("One.swift")])
+
+        XCTAssertEqual(overlay.footerRepoNameForTesting, "repo")
+        XCTAssertEqual(overlay.footerBranchForTesting, "feature")
     }
 
     func test_selectingAFileInTheTree_drivesTheRightPane() {
