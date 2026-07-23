@@ -63,6 +63,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private let repoName: String
 
     private var selectedFilePath: String?
+    /// Produces syntax spans for the shown file (ZEN-238). The placeholder now; the tree-sitter
+    /// `DiffHighlighter` swaps in here (ZEN-239) without the render or model layers changing.
+    private let spanSource: SyntaxSpanSource = PlaceholderSpanSource()
     /// The parsed diff currently shown, kept so a layout flip re-renders without a git re-run.
     private var currentFileDiff: FileDiff?
     /// The layout the shown rows were built with — a config-default change only re-renders when it
@@ -711,7 +714,12 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         guard let file = currentFileDiff else { return }
         let layout = effectiveLayout
         renderedLayout = layout
-        diffTable.show(layout == .inline ? UnifiedDiff.rows(for: file) : SideBySideDiff.rows(for: file))
+        // Syntax spans for the shown file (ZEN-238 placeholder; the tree-sitter engine swaps in behind
+        // `spanSource` in ZEN-239). Computed here so both layouts and every re-render pick it up.
+        let spans = spanSource.spans(for: file)
+        diffTable.show(
+            layout == .inline
+                ? UnifiedDiff.rows(for: file, spans: spans) : SideBySideDiff.rows(for: file, spans: spans))
     }
 
     private func showMessage(_ text: String) {

@@ -81,17 +81,22 @@ final class DiffLineCell: NSView, DiffPanningCell {
             return
         }
         gutter.stringValue = "\(cell.lineNumber)"
-        text.stringValue = cell.text
+        // The kind-based background tint is unchanged; syntax colors ride on top of it.
         switch cell.kind {
         case .added:
-            text.textColor = chrome.positive.nsColor
             clip.layer?.backgroundColor = chrome.positive.nsColor.withAlphaComponent(0.14).cgColor
         case .removed:
-            text.textColor = chrome.destructive.nsColor
             clip.layer?.backgroundColor = chrome.destructive.nsColor.withAlphaComponent(0.14).cgColor
         case .context:
-            text.textColor = chrome.foreground.nsColor
             clip.layer?.backgroundColor = NSColor.clear.cgColor
+        }
+        // With spans: syntax foreground over the tint (GitHub/Zed style). Without: today's flat fg per kind.
+        if let spans = cell.spans {
+            text.attributedStringValue = SyntaxAttributedText.make(
+                cell.text, spans: spans, base: chrome.foreground.nsColor, font: DiffCellMetrics.font, chrome: chrome)
+        } else {
+            text.stringValue = cell.text
+            text.textColor = SyntaxAttributedText.flatColor(for: cell.kind, chrome: chrome)
         }
     }
 

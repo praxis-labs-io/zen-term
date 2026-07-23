@@ -166,7 +166,7 @@ final class DiffPaneTable: NSView {
             case .split(let left, let right):
                 if let left { consider(left.text) }
                 if let right { consider(right.text) }
-            case .unified(let text, _, _, _):
+            case .unified(let text, _, _, _, _):
                 consider(text)
             }
         }
@@ -237,7 +237,7 @@ final class DiffPaneTable: NSView {
         switch row {
         case .hunkHeader: return false
         case .split(let left, let right): return left?.kind == .removed || right?.kind == .added
-        case .unified(_, let kind, _, _): return kind == .added || kind == .removed
+        case .unified(_, let kind, _, _, _): return kind == .added || kind == .removed
         }
     }
 
@@ -266,7 +266,7 @@ final class DiffPaneTable: NSView {
             case .hunkHeader: break
             case .split(let left, let right):
                 maxNumber = max(maxNumber, left?.lineNumber ?? 0, right?.lineNumber ?? 0)
-            case .unified(_, _, let old, let new):
+            case .unified(_, _, let old, let new, _):
                 maxNumber = max(maxNumber, old ?? 0, new ?? 0)
             }
         }

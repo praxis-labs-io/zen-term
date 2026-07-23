@@ -35,29 +35,34 @@ final class UnifiedLineCell: NSView, DiffPanningCell {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func configure(_ row: DiffRow) {
-        guard case .unified(let lineText, let kind, let old, let new) = row else { return }
+        guard case .unified(let lineText, let kind, let old, let new, let spans) = row else { return }
         let chrome = Theme.current.chrome
         layer?.backgroundColor = NSColor.clear.cgColor
         oldGutter.textColor = chrome.muted.nsColor
         newGutter.textColor = chrome.muted.nsColor
         oldGutter.stringValue = old.map(String.init) ?? ""
         newGutter.stringValue = new.map(String.init) ?? ""
-        text.stringValue = lineText
+        // The sign and kind-based background tint are unchanged; syntax colors ride on top of the tint.
         switch kind {
         case .added:
             sign.stringValue = "+"
             sign.textColor = chrome.positive.nsColor
-            text.textColor = chrome.positive.nsColor
             clip.layer?.backgroundColor = chrome.positive.nsColor.withAlphaComponent(0.14).cgColor
         case .removed:
             sign.stringValue = "−"
             sign.textColor = chrome.destructive.nsColor
-            text.textColor = chrome.destructive.nsColor
             clip.layer?.backgroundColor = chrome.destructive.nsColor.withAlphaComponent(0.14).cgColor
         case .context:
             sign.stringValue = ""
-            text.textColor = chrome.foreground.nsColor
             clip.layer?.backgroundColor = NSColor.clear.cgColor
+        }
+        // With spans: syntax foreground over the tint. Without: today's flat fg per kind.
+        if let spans {
+            text.attributedStringValue = SyntaxAttributedText.make(
+                lineText, spans: spans, base: chrome.foreground.nsColor, font: DiffCellMetrics.font, chrome: chrome)
+        } else {
+            text.stringValue = lineText
+            text.textColor = SyntaxAttributedText.flatColor(for: kind, chrome: chrome)
         }
         needsLayout = true
     }

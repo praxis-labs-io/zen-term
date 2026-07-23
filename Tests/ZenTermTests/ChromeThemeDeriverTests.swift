@@ -23,6 +23,35 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(chrome.muted, TerminalColor(red: 134, green: 132, blue: 150))
     }
 
+    func test_derivesAllSevenSyntaxRolesFromPalette() {
+        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
+        XCTAssertEqual(chrome.synKeyword, TerminalColor(hex: "#c4a7e7"))  // iris / palette[5]
+        XCTAssertEqual(chrome.synString, TerminalColor(hex: "#3e8fb0"))  // pine / palette[2]
+        XCTAssertEqual(chrome.synNumber, TerminalColor(hex: "#f6c177"))  // gold / palette[3]
+        XCTAssertEqual(chrome.synType, TerminalColor(hex: "#ea9a97"))  // rose / palette[6]
+        XCTAssertEqual(chrome.synFunction, TerminalColor(hex: "#9ccfd8"))  // foam / palette[4]
+        XCTAssertEqual(chrome.synPunctuation, TerminalColor(hex: "#eb6f92"))  // love / palette[1]
+        // comment = foreground (#e0def4 = 224,222,244) blended over background (#191724 =
+        // 25,23,36) at 0.45 (fainter than muted's 0.55): round(fg*0.45 + bg*0.55) per channel.
+        //   R: 224*0.45 + 25*0.55 = 100.8 + 13.75 = 114.55 -> 115
+        //   G: 222*0.45 + 23*0.55 =  99.9 + 12.65 = 112.55 -> 113
+        //   B: 244*0.45 + 36*0.55 = 109.8 + 19.8  = 129.6  -> 130
+        XCTAssertEqual(chrome.synComment, TerminalColor(red: 115, green: 113, blue: 130))
+    }
+
+    func test_chromeThemeStaysEquatable_acrossAllFields() {
+        // A round-trip equality that touches every stored field, including the seven new syntax roles —
+        // guards the synthesized `Equatable` conformance the row model relies on.
+        XCTAssertEqual(
+            ChromeThemeDeriver.derive(from: Theme.rosePineMoon),
+            ChromeThemeDeriver.derive(from: Theme.rosePineMoon))
+        var recolored = Theme.rosePineMoon
+        recolored.ansi[5] = TerminalColor(red: 255, green: 255, blue: 255)  // shifts synKeyword (slot 5) alone
+        XCTAssertNotEqual(
+            ChromeThemeDeriver.derive(from: Theme.rosePineMoon),
+            ChromeThemeDeriver.derive(from: recolored))
+    }
+
     func test_inkIsThemeForegroundAtBoostedAlpha() {
         let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
         let expected = min(1, 0.55 * ChromeTheme.inkBoost)

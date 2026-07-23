@@ -19,6 +19,17 @@ struct ChromeTheme: Equatable {
     /// viewer's added-line fg/bg (ZEN-226). Named for meaning, not hue, like the other roles.
     let positive: TerminalColor
 
+    /// Syntax-highlighting roles for the diff viewer (ZEN-238), resolved via `SyntaxRole`. Named
+    /// for token meaning, not hue, and derived from the ANSI-16 set so a bring-your-own theme
+    /// recolors them; `synComment` is a faint fg/bg blend (like `muted`) rather than an ANSI slot.
+    let synKeyword: TerminalColor
+    let synString: TerminalColor
+    let synComment: TerminalColor
+    let synNumber: TerminalColor
+    let synType: TerminalColor
+    let synFunction: TerminalColor
+    let synPunctuation: TerminalColor
+
     /// Readability multiplier applied to every ink opacity. The chrome's per-site opacities
     /// were tuned for light-on-dark; a dark ink at the same opacity on a light theme reads
     /// fainter, so we lift them all. Applied in both modes (a small lift helps dark's faint

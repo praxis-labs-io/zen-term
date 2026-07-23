@@ -5,13 +5,21 @@ import Foundation
 /// `+`/`−`/` ` sign and tint. Parallel to `SideBySideDiff`; both feed the same `DiffPaneTable` behind
 /// the layout-agnostic `DiffRow` model.
 enum UnifiedDiff {
-    static func rows(for file: FileDiff) -> [DiffRow] {
+    static func rows(for file: FileDiff, spans: DiffFileSpans? = nil) -> [DiffRow] {
         var rows: [DiffRow] = []
         for hunk in file.hunks {
             rows.append(.hunkHeader(hunk.header))
             for line in hunk.lines {
+                // A removed line is old-side text; added and context render the new-side text.
+                let lineSpans: [TokenSpan]?
+                switch line.kind {
+                case .removed: lineSpans = spans?.old(line.oldLineNumber)
+                case .added, .context: lineSpans = spans?.new(line.newLineNumber)
+                }
                 rows.append(
-                    .unified(text: line.text, kind: line.kind, old: line.oldLineNumber, new: line.newLineNumber))
+                    .unified(
+                        text: line.text, kind: line.kind, old: line.oldLineNumber, new: line.newLineNumber,
+                        spans: lineSpans))
             }
         }
         return rows
