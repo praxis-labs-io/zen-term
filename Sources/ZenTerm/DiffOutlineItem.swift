@@ -15,31 +15,21 @@ final class DiffOutlineItem {
     }
     let kind: Kind
     let children: [DiffOutlineItem]
-    /// Cached at build so a scrolled-into-view row doesn't re-reduce the file's hunks each time it is
-    /// rendered (the row view is reused, but `configure` still reads these).
-    let addedCount: Int
-    let removedCount: Int
 
     init(node: DiffTreeNode) {
         switch node {
         case .directory(let name, let nodes):
             kind = .directory(name)
             children = nodes.map(DiffOutlineItem.init)
-            addedCount = 0
-            removedCount = 0
         case .file(let file):
             kind = .file(file)
             children = []
-            addedCount = file.addedCount
-            removedCount = file.removedCount
         }
     }
 
-    private init(kind: Kind, added: Int, removed: Int, children: [DiffOutlineItem]) {
+    private init(kind: Kind, children: [DiffOutlineItem]) {
         self.kind = kind
         self.children = children
-        addedCount = added
-        removedCount = removed
     }
 
     var isSection: Bool {
@@ -71,10 +61,7 @@ final class DiffOutlineItem {
         func add(_ title: String, _ files: [FileDiff]) {
             guard !files.isEmpty else { return }
             let children = DiffTree.build(files).map(DiffOutlineItem.init)
-            let added = files.reduce(0) { $0 + $1.addedCount }
-            let removed = files.reduce(0) { $0 + $1.removedCount }
-            roots.append(
-                DiffOutlineItem(kind: .section(title: title), added: added, removed: removed, children: children))
+            roots.append(DiffOutlineItem(kind: .section(title: title), children: children))
         }
         add("Unstaged", status.unstaged)
         add("Staged", status.staged)

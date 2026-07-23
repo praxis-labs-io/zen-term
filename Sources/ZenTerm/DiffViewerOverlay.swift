@@ -273,8 +273,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     // MARK: layout
 
     private func buildLayout() {
-        // Two columns: the name (indented outline column, flexible) and the +n −m stat (fixed width,
-        // right-aligned) so stats align on a common right edge and never clip on a nested file.
+        // One flexible column: the indented name, filling the tree's full width. A file's change
+        // magnitude reads from its status-tinted icon and the branch total sits in the footer, so no
+        // row reserves width for a stat.
         let nameColumn = NSTableColumn(identifier: DiffTreeOutlineController.nameColumnID)
         // No legacy autoresizing mask / `.firstColumnOnlyAutoresizingStyle` here — that machinery
         // resizes the column by the DELTA between the outline's old and new width, not by filling
@@ -283,19 +284,21 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // width (NSTableColumn's 100pt default vs. the outline's placeholder frame) and never
         // recovers — `NavOutlineView.layout()` drives `nameColumn.width` explicitly instead (ZEN-226).
         nameColumn.resizingMask = []
-        let statColumn = NSTableColumn(identifier: DiffTreeOutlineController.statColumnID)
-        statColumn.width = 78
-        statColumn.minWidth = 78
-        statColumn.maxWidth = 78
-        statColumn.resizingMask = []
         outline.addTableColumn(nameColumn)
-        outline.addTableColumn(statColumn)
         outline.outlineTableColumn = nameColumn
         outline.headerView = nil
         outline.rowSizeStyle = .small
         outline.indentationPerLevel = 12
         outline.backgroundColor = .clear
         outline.focusRingType = .none  // no system-blue ring on focus-in (ZEN-27: chrome is theme-only)
+        // Force plain style: the default `.automatic` resolves to the inset/source-list family, whose
+        // tiling reserves a constant +32pt in the outline's own frame *beyond* the column width (and
+        // reports intercellSpacing as (17, 0), not the classic (3, 2)). That baked-in padding is what
+        // made the document permanently wider than the clip regardless of content. `.plain` restores
+        // the documented `documentWidth = columnWidth + intercellSpacing.width` relation, and zeroing
+        // the width component makes `NavOutlineView.layout()`'s fill math exact (target == clip width).
+        outline.style = .plain
+        outline.intercellSpacing = NSSize(width: 0, height: outline.intercellSpacing.height)
         outline.onEscape = { [weak self] in self?.onCancel() }
         outline.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
         diffTable.onEscape = { [weak self] in self?.onCancel() }
@@ -303,6 +306,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         buildBaseHeader()
 
         let treeScroll = NSScrollView()
+        // A single wide column can leave the outline's document a hair wider than the clip; lock the
+        // clip's horizontal axis so the tree can never pan sideways (it only ever truncates names).
+        let treeClip = LockedHorizontalClipView()
+        treeClip.drawsBackground = false
+        treeScroll.contentView = treeClip
         treeScroll.drawsBackground = false
         treeScroll.hasVerticalScroller = true
         treeScroll.verticalScroller = SlimScroller()
@@ -310,7 +318,15 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         treeScroll.autohidesScrollers = true
         treeScroll.documentView = outline
         treeScroll.automaticallyAdjustsContentInsets = false
-        treeScroll.contentInsets = NSEdgeInsets(top: 10, left: 8, bottom: 10, right: 8)
+        // Horizontal insets are 0 on purpose: NSScrollView `contentInsets` extend the clip's
+        // *scrollable range*, not padding, so any left/right inset pans the tree sideways by that
+        // amount (`LockedHorizontalClipView` then has nothing to fight). Vertical is a real scroll
+        // axis, so its inset is fine. Left/right breathing room lives in the row content, not here.
+        treeScroll.contentInsets = NSEdgeInsets(top: 10, left: 0, bottom: 10, right: 0)
+        // The clip-lock pins the scroll *offset* at 0, but horizontal elasticity still lets a two-finger
+        // swipe rubber-band the tree sideways past it. Kill the axis outright so the nav can only ever
+        // truncate names, never pan.
+        treeScroll.horizontalScrollElasticity = .none
         treeScroll.translatesAutoresizingMaskIntoConstraints = false
 
         treeRule.wantsLayer = true
@@ -613,6 +629,17 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     var isBaseDropdownFocusedForTesting: Bool { window?.firstResponder === baseDropdown }
 }
 
+/// A clip view that refuses to scroll horizontally: it pins the visible rect's x to 0, so the single
+/// wide column can never pan the file tree sideways whatever rounding leaves the document a hair wider
+/// than the clip (the tree only ever truncates names, so nothing is lost to the clamp).
+private final class LockedHorizontalClipView: NSClipView {
+    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
+        var rect = super.constrainBoundsRect(proposedBounds)
+        rect.origin.x = 0
+        return rect
+    }
+}
+
 /// The file tree's outline view. Accepts first responder even when empty (so keystrokes never leak to
 /// the terminal behind the card). Navigation is driven by forwarded pane chords, not Tab; the only
 /// key it claims is Esc, so it closes the viewer instead of the outline eating it as a deselect.
@@ -624,25 +651,45 @@ private final class NavOutlineView: NSOutlineView {
 
     override var acceptsFirstResponder: Bool { true }
 
-    /// Size the name column to fill whatever's left of the enclosing scroll view once the fixed
-    /// stat column is accounted for. AppKit's own column-autoresizing styles are delta-based (they
-    /// nudge the column by the *change* in the table's width since the last resize, not a fresh
-    /// "fill remaining space" calculation), so the very first resize — which for this tree fires
-    /// while `DiffViewerOverlay` is still mid-`init()`, before the surrounding Auto Layout has ever
-    /// resolved a real width — permanently anchors the column to the wrong size. Reading from
-    /// `enclosingScrollView.contentSize` instead of `self.bounds` matters too: the outline's own
-    /// bounds is exactly the value that legacy machinery leaves in a bad state, where the scroll
-    /// view's content size is the one number here that Auto Layout actually resolves (ZEN-226).
+    /// Size the sole name column to fill the enclosing scroll view. AppKit's own column-autoresizing
+    /// styles are delta-based (they nudge the column by the *change* in the table's width since the
+    /// last resize, not a fresh "fill remaining space" calculation), so the very first resize — which
+    /// for this tree fires while `DiffViewerOverlay` is still mid-`init()`, before the surrounding Auto
+    /// Layout has ever resolved a real width — permanently anchors the column to the wrong size.
+    /// Reading from `enclosingScrollView.contentSize` instead of `self.bounds` matters too: the
+    /// outline's own bounds is exactly the value that legacy machinery leaves in a bad state, where the
+    /// scroll view's content size is the one number here that Auto Layout actually resolves (ZEN-226).
     override func layout() {
         super.layout()
         guard let nameColumn = outlineTableColumn,
-            let statColumn = tableColumns.first(where: { $0 !== nameColumn }),
             let contentWidth = enclosingScrollView?.contentSize.width
         else { return }
-        let target = max(40, contentWidth - statColumn.width - intercellSpacing.width)
+        let target = max(40, contentWidth - intercellSpacing.width)
         if abs(nameColumn.width - target) > 0.5 {
             nameColumn.width = target
         }
+    }
+
+    // Level-0 section rows get no indentation, so their disclosure triangle lands hard against the
+    // column edge — left of the selection pill's inner edge, poking out its left border. Push sections
+    // right by one indent level so their chevron lines up with the folder chevrons *inside* the pill;
+    // shifting both the disclosure and the content cell keeps the chevron-to-title gap intact.
+    private func sectionShift(forRow row: Int) -> CGFloat {
+        level(forRow: row) == 0 ? indentationPerLevel : 0
+    }
+
+    override func frameOfOutlineCell(atRow row: Int) -> NSRect {
+        var f = super.frameOfOutlineCell(atRow: row)
+        f.origin.x += sectionShift(forRow: row)
+        return f
+    }
+
+    override func frameOfCell(atColumn column: Int, row: Int) -> NSRect {
+        var f = super.frameOfCell(atColumn: column, row: row)
+        let shift = sectionShift(forRow: row)
+        f.origin.x += shift
+        f.size.width -= shift
+        return f
     }
 
     override func keyDown(with event: NSEvent) {
