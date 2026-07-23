@@ -9,6 +9,11 @@ let package = Package(
         // rides on the ZenTerm target and never crosses the TerminalKit seam. Pinned by the
         // committed Package.resolved.
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.0"),
+        // Tree-sitter grammars + highlight queries for the diff viewer's syntax highlighting
+        // (ZEN-239). A prebuilt xcframework bundling all v1 languages incl. Swift, so no generated
+        // parser.c lives in this repo; pulls in SwiftTreeSitter. Chrome-only, rides on ZenTerm, never
+        // crosses the TerminalKit seam. Pinned by Package.resolved.
+        .package(url: "https://github.com/CodeEditApp/CodeEditLanguages", from: "0.1.21"),
     ],
     targets: [
         // libghostty as a prebuilt static-library xcframework (ZEN-40 spike). Built from
@@ -63,11 +68,17 @@ let package = Package(
             dependencies: [
                 "TerminalKit", "PaneKit", "TabKit", "AppLog",  // chrome — no backend
                 .product(name: "Sparkle", package: "Sparkle"),  // auto-updates (ZEN-118), chrome-side
+                // Syntax highlighting for the diff viewer (ZEN-239), chrome-side.
+                .product(name: "CodeEditLanguages", package: "CodeEditLanguages"),
             ],
             resources: [
                 .copy("Resources"),  // brand marks (GitHub, git, origami) SVGs for the dock + Settings
                 .copy("Themes"),  // bundled ghostty theme catalog for the Settings theme picker
                 .copy("Shaders"),  // bundled, vetted GLSL custom shaders selected by `custom-shader`
+                // Tree-sitter highlight queries per language (ZEN-239). Loaded via the app's own safe
+                // resource bundle rather than CodeEditLanguages' loader, whose Bundle.module path
+                // resolves wrong in terminal-native SwiftPM. Grammars still come from CodeEditLanguages.
+                .copy("SyntaxQueries"),
             ],
             // swift build links Sparkle.framework but doesn't embed it; the shipped bundle carries
             // it under Contents/Frameworks (bin/package-app), so the binary must resolve it there.
