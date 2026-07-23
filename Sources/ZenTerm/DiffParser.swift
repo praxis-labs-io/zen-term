@@ -61,6 +61,12 @@ enum DiffParser {
         var renameTo: String?
         var isRename = false
         var isBinary = false
+        // `new file mode`/`deleted file mode` header lines are the authoritative add/delete signal: git
+        // omits the `--- `/`+++ ` lines entirely for an *empty* file being added or deleted (nothing to
+        // head a hunk with), so `old/newIsDevNull` never fire and the kind would otherwise fall to
+        // `.modified`. A `.gitkeep` or empty stub is exactly this case.
+        var isNewFile = false
+        var isDeletedFile = false
         var started = false  // a `diff --git` was seen, so an empty-hunk file (binary/rename) still emits
         var hunks: [Hunk] = []
 
@@ -91,6 +97,8 @@ enum DiffParser {
                 renameTo = nil
                 isRename = false
                 isBinary = false
+                isNewFile = false
+                isDeletedFile = false
                 started = false
                 hunks = []
             }
@@ -100,9 +108,9 @@ enum DiffParser {
                 kind = .binary
             } else if isRename {
                 kind = .renamed
-            } else if oldIsDevNull {
+            } else if oldIsDevNull || isNewFile {
                 kind = .added
-            } else if newIsDevNull {
+            } else if newIsDevNull || isDeletedFile {
                 kind = .deleted
             } else {
                 kind = .modified
@@ -138,6 +146,14 @@ enum DiffParser {
             }
             if line.hasPrefix("Binary files ") || line.hasPrefix("GIT binary patch") {
                 isBinary = true
+                continue
+            }
+            if line.hasPrefix("new file mode ") {
+                isNewFile = true
+                continue
+            }
+            if line.hasPrefix("deleted file mode ") {
+                isDeletedFile = true
                 continue
             }
             // `--- `/`+++ ` are file headers only in the preamble. Inside a hunk they must fall

@@ -104,6 +104,35 @@ final class DiffParserTests: XCTestCase {
         XCTAssertEqual(file.removedCount, 2)
     }
 
+    // An *empty* added file (e.g. `.gitkeep`) has no content, so git emits no `--- /dev/null` / `+++`
+    // lines and no hunks — only `new file mode`. The `.map(devNull)` path never fires here, so the kind
+    // must come from the mode line, or it wrongly reads as `.modified`.
+    func test_parse_emptyAddedFile_isAddedKind() {
+        let diff = """
+            diff --git a/.gitkeep b/.gitkeep
+            new file mode 100644
+            index 0000000..e69de29
+            """
+
+        let file = DiffParser.parse(diff)[0]
+        XCTAssertEqual(file.path, ".gitkeep")
+        XCTAssertEqual(file.changeKind, .added)
+        XCTAssertEqual(file.addedCount, 0)
+    }
+
+    func test_parse_emptyDeletedFile_isDeletedKind() {
+        let diff = """
+            diff --git a/.gitkeep b/.gitkeep
+            deleted file mode 100644
+            index e69de29..0000000
+            """
+
+        let file = DiffParser.parse(diff)[0]
+        XCTAssertEqual(file.path, ".gitkeep")
+        XCTAssertEqual(file.changeKind, .deleted)
+        XCTAssertEqual(file.removedCount, 0)
+    }
+
     func test_parse_renamedFile_setsOldPath() {
         let diff = """
             diff --git a/Old.swift b/New.swift

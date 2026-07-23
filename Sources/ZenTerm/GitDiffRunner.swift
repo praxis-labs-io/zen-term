@@ -150,16 +150,23 @@ final class GitDiffRunner {
         let unstagedPatch = try runGit(diffArguments(scope: .unstaged, mergeBase: ""), in: repoRoot)
         let stagedPatch = try runGit(diffArguments(scope: .staged, mergeBase: ""), in: repoRoot)
 
+        // The committed slice degrades gracefully: a base that can't be resolved (no default, unrelated
+        // histories so `merge-base` fails, or a picked branch deleted since the picker loaded) leaves the
+        // committed section empty rather than failing the whole load — the unstaged/staged diffs above are
+        // already fetched, and losing them to an unrelated committed-slice error would be the worse bug.
         var baseBranch: String?
         var baseSHA: String?
         var committedPatch = ""
         if let resolved = base ?? (try? resolveDefaultBase(in: repoRoot)) {
             let ref = existingRef(for: resolved, in: repoRoot)
-            let mergeBase = try runGit(["merge-base", ref, "HEAD"], in: repoRoot)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            baseBranch = defaultBranchName(fromSymbolicRef: resolved)
-            baseSHA = String(mergeBase.prefix(7))
-            committedPatch = try runGit(diffArguments(scope: .committed, mergeBase: mergeBase), in: repoRoot)
+            if let mergeBase = (try? runGit(["merge-base", ref, "HEAD"], in: repoRoot))?
+                .trimmingCharacters(in: .whitespacesAndNewlines), !mergeBase.isEmpty,
+                let patch = try? runGit(diffArguments(scope: .committed, mergeBase: mergeBase), in: repoRoot)
+            {
+                baseBranch = defaultBranchName(fromSymbolicRef: resolved)
+                baseSHA = String(mergeBase.prefix(7))
+                committedPatch = patch
+            }
         }
 
         // The checked-out branch for the footer. `--abbrev-ref HEAD` yields the literal "HEAD" when
