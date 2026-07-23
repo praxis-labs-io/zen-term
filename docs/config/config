@@ -94,6 +94,12 @@
 # In-app Settings edit: applies live.
 # reduce-motion = system              # system | on | off
 
+# Layout the diff viewer opens with. `side-by-side` shows old and new in two
+# columns; `inline` shows one column with +/- lines. The in-viewer toggle (⌘I,
+# rebindable as toggle_diff_layout) overrides it for the session.
+# In-app Settings edit: applies live.
+# diff-layout = side-by-side          # side-by-side | inline
+
 # Shell for new panes. Unset → $SHELL, then /bin/zsh. When set, it launches
 # login+interactive by default; override the flags with shell-args.
 # In-app Settings edit: applies to new tabs.
@@ -194,7 +200,8 @@
 #   resize_left  resize_right  resize_up  resize_down
 #   new_tab  new_window  prev_tab  next_tab  select_tab_1 … select_tab_9
 #   toggle_bottom_drawer  toggle_right_drawer  toggle_focus_mode  fill_screen
-#   toggle_workspace_picker  toggle_command_palette  diff_viewer  open_settings  reload_config
+#   toggle_workspace_picker  toggle_command_palette  diff_viewer  toggle_diff_layout
+#   open_settings  reload_config
 #   check_for_updates   (no default binding; bind a chord to reach it by keyboard)
 #   report_issue        (no default binding; also in the command palette and Help menu)
 #   toggle_float:<id>   (bind a second chord to one of your floats)
@@ -222,6 +229,7 @@
 # keybind = fill_screen=cmd+shift+f              # the window fills the desktop
 # keybind = toggle_workspace_picker=cmd+shift+p
 # keybind = toggle_command_palette=cmd+p
-# keybind = diff_viewer=cmd+shift+d               # side-by-side diff of the focused repo
+# keybind = diff_viewer=cmd+d                    # diff of the focused repo
+# keybind = toggle_diff_layout=cmd+i              # flip the diff layout (side-by-side | inline)
 # keybind = open_settings=cmd+,
 # keybind = reload_config=cmd+opt+r

@@ -1,22 +1,24 @@
 import AppKit
 
-/// The right pane's side-by-side diff, rendered as a virtualized `NSTableView`: fixed-height
-/// monospace rows, only the visible ones built and reused. Switching files is a whole-table
-/// `reloadData`, so arrowing quickly through the tree stays cheap no matter the file's size. A
-/// current-line highlight (like a normal diff viewer) moves with the arrow keys; ⌘j/⌘k jump between
-/// hunks (driven from the overlay).
+/// The right pane's diff, rendered as a virtualized `NSTableView`: fixed-height monospace rows, only
+/// the visible ones built and reused. It's layout-agnostic — it renders whatever `DiffRow`s it's given
+/// (side-by-side or inline), picking `DiffLineCell` or `UnifiedLineCell` per row — so switching layout
+/// is just a re-`show`. Switching files is a whole-table `reloadData`, so arrowing quickly through the
+/// tree stays cheap no matter the file's size. A current-line highlight moves with the arrow keys;
+/// ⌘j/⌘k jump between changes (driven from the overlay).
 final class DiffPaneTable: NSView {
     private let table = DiffTableView()
     private let scroll = NSScrollView()
     private let source = Source()
 
-    /// The shared horizontal pan applied to every row's two text columns (0 = left-aligned).
+    /// The shared horizontal pan applied to every visible row's text column(s) (0 = left-aligned).
     private var horizontalOffset: CGFloat = 0
-    /// The widest line across both columns, measured per file — sets the horizontal scroll range.
+    /// The widest line in the current file, measured per file — sets the horizontal scroll range.
     private var maxContentWidth: CGFloat = 0
+    /// Which layout the current rows use, so the pan range subtracts the right content-column width.
+    private var isUnifiedLayout = false
     /// Slack past the widest line so its last characters aren't flush to the column edge.
     private static let trailingPad: CGFloat = 12
-    private static let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -30,7 +32,7 @@ final class DiffPaneTable: NSView {
         table.focusRingType = .none  // no system-blue ring on focus-in (ZEN-27: chrome is theme-only)
         table.allowsMultipleSelection = false
         table.allowsEmptySelection = true
-        table.rowHeight = DiffLineCell.rowHeight
+        table.rowHeight = DiffCellMetrics.rowHeight
         table.usesAutomaticRowHeights = false
         table.dataSource = source
         table.delegate = source
@@ -62,8 +64,9 @@ final class DiffPaneTable: NSView {
     var scrollFocusTarget: NSView { table }
     var rowCountForTesting: Int { source.rows.count }
 
-    func show(_ rows: [SideBySideRow]) {
+    func show(_ rows: [DiffRow]) {
         source.rows = rows
+        isUnifiedLayout = rows.contains { if case .unified = $0 { return true } else { return false } }
         maxContentWidth = Self.widestLine(in: rows)
         horizontalOffset = 0
         source.offset = 0
@@ -71,15 +74,19 @@ final class DiffPaneTable: NSView {
         // Always start with a current line so its highlight (a quiet outline while the tree holds focus)
         // is there to see immediately — the diff can be paged from the tree before it's ever focused.
         // Land it on the first real line, not the leading hunk header, so the pill reads as a line.
-        if let firstLine = rows.firstIndex(where: { if case .lines = $0 { return true } else { return false } }) {
+        if let firstLine = rows.firstIndex(where: { if case .hunkHeader = $0 { return false } else { return true } }) {
             table.selectRowIndexes([firstLine], byExtendingSelection: false)
         }
         table.scrollRowToVisible(0)
     }
 
-    /// The horizontal scroll range: how far the widest line overhangs one column. 0 = nothing to pan.
+    /// The horizontal scroll range: how far the widest line overhangs its content column. 0 = nothing
+    /// to pan. The content column differs by layout (two half-width columns vs. one full-width one).
     private var maxHorizontalOffset: CGFloat {
-        let column = DiffLineCell.columnWidth(forTotalWidth: table.bounds.width)
+        let column =
+            isUnifiedLayout
+            ? UnifiedLineCell.columnWidth(forTotalWidth: table.bounds.width)
+            : DiffLineCell.columnWidth(forTotalWidth: table.bounds.width)
         return max(0, maxContentWidth + Self.trailingPad - column)
     }
 
@@ -128,7 +135,7 @@ final class DiffPaneTable: NSView {
         horizontalOffset = clamped
         source.offset = clamped
         table.enumerateAvailableRowViews { rowView, _ in
-            for case let cell as DiffLineCell in rowView.subviews { cell.horizontalOffset = clamped }
+            for case let cell as DiffPanningCell in rowView.subviews { cell.horizontalOffset = clamped }
         }
     }
 
@@ -136,7 +143,7 @@ final class DiffPaneTable: NSView {
     /// The font is monospaced, so a line's UTF-16 length is a faithful proxy for its width: scan by
     /// length (cheap) and lay out only the single longest line, rather than measuring every line's text
     /// on the main thread — the latter hitches when switching to a large file (ZEN-90).
-    private static func widestLine(in rows: [SideBySideRow]) -> CGFloat {
+    private static func widestLine(in rows: [DiffRow]) -> CGFloat {
         var longest = ""
         var longestLength = 0
         func consider(_ text: String) {
@@ -146,11 +153,18 @@ final class DiffPaneTable: NSView {
                 longestLength = length
             }
         }
-        for case .lines(let left, let right) in rows {
-            if let left { consider(left.text) }
-            if let right { consider(right.text) }
+        for row in rows {
+            switch row {
+            case .hunkHeader: break
+            case .split(let left, let right):
+                if let left { consider(left.text) }
+                if let right { consider(right.text) }
+            case .unified(let text, _, _, _):
+                consider(text)
+            }
         }
-        return longestLength == 0 ? 0 : (longest as NSString).size(withAttributes: [.font: font]).width.rounded(.up)
+        return longestLength == 0
+            ? 0 : (longest as NSString).size(withAttributes: [.font: DiffCellMetrics.font]).width.rounded(.up)
     }
 
     override func layout() {
@@ -207,14 +221,17 @@ final class DiffPaneTable: NSView {
 
     /// A change line (a row with an added or removed cell) whose predecessor isn't itself a change —
     /// i.e. the first line of a contiguous edit, the thing worth stopping on.
-    private func isChangeClusterStart(at index: Int, in rows: [SideBySideRow]) -> Bool {
+    private func isChangeClusterStart(at index: Int, in rows: [DiffRow]) -> Bool {
         guard Self.isChangeLine(rows[index]) else { return false }
         return index == 0 || !Self.isChangeLine(rows[index - 1])
     }
 
-    private static func isChangeLine(_ row: SideBySideRow) -> Bool {
-        guard case .lines(let left, let right) = row else { return false }
-        return left?.kind == .removed || right?.kind == .added
+    private static func isChangeLine(_ row: DiffRow) -> Bool {
+        switch row {
+        case .hunkHeader: return false
+        case .split(let left, let right): return left?.kind == .removed || right?.kind == .added
+        case .unified(_, let kind, _, _): return kind == .added || kind == .removed
+        }
     }
 
     /// Scroll so `row` sits vertically centered, clamped at the file's ends — the diff keeps the
@@ -234,16 +251,31 @@ final class DiffPaneTable: NSView {
     }
 
     private final class Source: NSObject, NSTableViewDataSource, NSTableViewDelegate {
-        var rows: [SideBySideRow] = []
+        var rows: [DiffRow] = []
         /// The current shared pan, so a row scrolled into view lands already aligned with its siblings.
         var offset: CGFloat = 0
+
+        private static let splitID = NSUserInterfaceItemIdentifier("split-cell")
+        private static let unifiedID = NSUserInterfaceItemIdentifier("unified-cell")
 
         func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
 
         func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-            let id = NSUserInterfaceItemIdentifier("cell")
-            let cell = tableView.makeView(withIdentifier: id, owner: self) as? DiffLineCell ?? DiffLineCell(id: id)
-            cell.configure(rows[row])
+            // Inline lines get `UnifiedLineCell`; headers and side-by-side pairs get `DiffLineCell`.
+            let cell: DiffPanningCell
+            if case .unified = rows[row] {
+                let unified =
+                    tableView.makeView(withIdentifier: Self.unifiedID, owner: self) as? UnifiedLineCell
+                    ?? UnifiedLineCell(id: Self.unifiedID)
+                unified.configure(rows[row])
+                cell = unified
+            } else {
+                let split =
+                    tableView.makeView(withIdentifier: Self.splitID, owner: self) as? DiffLineCell
+                    ?? DiffLineCell(id: Self.splitID)
+                split.configure(rows[row])
+                cell = split
+            }
             cell.horizontalOffset = offset
             return cell
         }

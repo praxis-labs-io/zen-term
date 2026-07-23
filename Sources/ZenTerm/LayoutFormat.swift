@@ -26,6 +26,14 @@ enum LayoutFormat {
         }
     }
 
+    /// The `diff-layout` config token for the native diff viewer's default layout.
+    static func diffLayoutToken(_ layout: GeneralConfig.DiffLayout) -> String {
+        switch layout {
+        case .sideBySide: return "side-by-side"
+        case .inline: return "inline"
+        }
+    }
+
     static func joinArgs(_ args: [String]) -> String { args.joined(separator: " ") }
 
     static func splitArgs(_ text: String) -> [String] {

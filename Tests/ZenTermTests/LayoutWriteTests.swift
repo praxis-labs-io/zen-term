@@ -23,15 +23,20 @@ final class LayoutWriteTests: XCTestCase {
         let dir = try makeTempDir()
         // Write two edited knobs the way the section does.
         try ConfigWriter.apply(
-            scalars: ["backdrop-alpha": LayoutFormat.number(0.5), "reduce-motion": "on"], configRoot: dir)
+            scalars: [
+                "backdrop-alpha": LayoutFormat.number(0.5), "reduce-motion": "on",
+                "diff-layout": LayoutFormat.diffLayoutToken(.inline),
+            ], configRoot: dir)
         var loaded = ConfigLoader.loadGeneralConfig(configRoot: dir)
         XCTAssertEqual(loaded.backdropAlpha, 0.5, accuracy: 0.0001)
         XCTAssertEqual(loaded.reduceMotion, .on)
+        XCTAssertEqual(loaded.diffLayout, .inline)
 
         // Per-row reset = removal → the key drops out, parser returns builtIn.
-        try ConfigWriter.apply(removals: ["backdrop-alpha", "reduce-motion"], configRoot: dir)
+        try ConfigWriter.apply(removals: ["backdrop-alpha", "reduce-motion", "diff-layout"], configRoot: dir)
         loaded = ConfigLoader.loadGeneralConfig(configRoot: dir)
         XCTAssertEqual(loaded.backdropAlpha, GeneralConfig.builtIn.backdropAlpha, accuracy: 0.0001)
         XCTAssertEqual(loaded.reduceMotion, GeneralConfig.builtIn.reduceMotion)
+        XCTAssertEqual(loaded.diffLayout, GeneralConfig.builtIn.diffLayout)
     }
 }

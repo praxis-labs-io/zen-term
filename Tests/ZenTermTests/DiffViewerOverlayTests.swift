@@ -8,8 +8,17 @@ import XCTest
 /// failure mode the project's interaction-test rule guards against.
 final class DiffViewerOverlayTests: XCTestCase {
     private var window: NSWindow?
+    private var originalConfig: GeneralConfig!
+
+    override func setUp() {
+        super.setUp()
+        // Pin the diff-layout default so the tester's own config can't decide the initial layout.
+        originalConfig = GeneralConfig.current
+        GeneralConfig.setCurrentForTesting(.builtIn)
+    }
 
     override func tearDown() {
+        GeneralConfig.setCurrentForTesting(originalConfig)
         window = nil
         super.tearDown()
     }
@@ -93,6 +102,26 @@ final class DiffViewerOverlayTests: XCTestCase {
 
         XCTAssertEqual(overlay.selectedFilePathForTesting, "a/b/One.swift")
         XCTAssertGreaterThan(overlay.diffRowCountForTesting, 0)
+    }
+
+    /// The layout-toggle chord (⌘I by default) must actually swap the rendered pane, not just flip a
+    /// flag — the "control looks wired but the screen never moved" failure. Driven through the real
+    /// `handleNavChord` path WindowController uses; the row count changes because side-by-side pairs
+    /// +/- lines while inline lists each, so a stale render would keep the old count.
+    func test_toggleLayoutChord_swapsTheRenderedLayoutLive_andBack() {
+        let (overlay, _) = mount(unstaged: [file("One.swift")])
+        XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .sideBySide)
+        let sideBySideRows = overlay.diffRowCountForTesting
+
+        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))
+        XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline)
+        XCTAssertNotEqual(
+            overlay.diffRowCountForTesting, sideBySideRows,
+            "the pane must re-render in the new layout, not just flip a flag")
+
+        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))
+        XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .sideBySide, "toggles back")
+        XCTAssertEqual(overlay.diffRowCountForTesting, sideBySideRows)
     }
 
     func test_selectingAFileInTheTree_drivesTheRightPane() {

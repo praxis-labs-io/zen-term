@@ -169,7 +169,7 @@ final class WindowController: NSObject {
         GitRepo.resolveRepoRoot(for: $0, completion: $1)
     }
     /// True while a diff-viewer open is waiting on its off-main repo-root resolve, so a second
-    /// ⌘⇧D landing in that gap doesn't queue a second viewer (the top-of-`openDiffViewer` toggle
+    /// ⌘D landing in that gap doesn't queue a second viewer (the top-of-`openDiffViewer` toggle
     /// check can't catch it — nothing is presented yet).
     private var isResolvingDiffRepo = false
 
@@ -747,7 +747,7 @@ final class WindowController: NSObject {
     func openDiffViewer() {
         if modal?.kind == .diffViewer { closeModal(); return }
         // The repo-root walk is filesystem I/O — resolve it off-main (ZEN-90/ZEN-234), then present
-        // on main. That gap means a second ⌘⇧D before the resolve lands must be dropped, not queued.
+        // on main. That gap means a second ⌘D before the resolve lands must be dropped, not queued.
         if isResolvingDiffRepo { return }
         isResolvingDiffRepo = true
         resolveRepoRoot(focusedCWD) { [weak self] repoRoot in
@@ -819,7 +819,7 @@ final class WindowController: NSObject {
             return .terminal
         case "theme", "window-chrome", "backdrop-alpha", "window-gutter", "pane-gap",
             "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",
-            "reduce-motion":
+            "reduce-motion", "diff-layout":
             return .appearance
         case "agent-notifications", "automatic-update-checks":
             return .general
@@ -1266,6 +1266,7 @@ final class WindowController: NSObject {
         case .openSettings: openSettings()
         case .reportIssue: openReportIssue()
         case .openDiffViewer: openDiffViewer()
+        case .toggleDiffLayout: break  // diff-viewer-only; handled by the overlay when open, else a no-op
         }
     }
 
