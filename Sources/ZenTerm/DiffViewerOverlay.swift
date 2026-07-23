@@ -63,9 +63,17 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private let repoName: String
 
     private var selectedFilePath: String?
-    /// Produces syntax spans for the shown file (ZEN-238). The placeholder now; the tree-sitter
-    /// `DiffHighlighter` swaps in here (ZEN-239) without the render or model layers changing.
-    private let spanSource: SyntaxSpanSource = PlaceholderSpanSource()
+    /// The repo root, for the syntax highlighter's blob fetch (ZEN-239).
+    private let repoRoot: URL
+    /// Discards a stale highlight result when the selection moved on before the off-main parse landed
+    /// (fast file-switching) — mirrors `loadToken`.
+    private var highlightToken = 0
+    /// Per-repo highlight cache, shared with the `WindowController` so it survives a viewer close/reopen
+    /// (a reopened repo paints highlighted immediately). Cleared on a changed reload (see `reload`).
+    private let highlightStore: DiffHighlightStore
+    /// Warms the highlight cache for the non-selected files in the background, so navigation lands on a
+    /// warm cache instead of a fetch+parse wait. Rescheduled on every `apply`, cancelled on `deinit`.
+    private let prefetcher: DiffFilePrefetcher
     /// The parsed diff currently shown, kept so a layout flip re-renders without a git re-run.
     private var currentFileDiff: FileDiff?
     /// The layout the shown rows were built with — a config-default change only re-renders when it
@@ -98,10 +106,14 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private var loadToken = 0
 
     init(
-        background: NSColor, repoName: String, initialStatus: GitDiffRunner.StatusLoad?,
+        background: NSColor, repoName: String, repoRoot: URL, highlightStore: DiffHighlightStore,
+        initialStatus: GitDiffRunner.StatusLoad?,
         loader: @escaping Loader, branchesLoader: @escaping BranchesLoader, onCancel: @escaping () -> Void
     ) {
         self.repoName = repoName
+        self.repoRoot = repoRoot
+        self.highlightStore = highlightStore
+        self.prefetcher = DiffFilePrefetcher(repoRoot: repoRoot, highlightStore: highlightStore)
         self.loader = loader
         self.branchesLoader = branchesLoader
         self.onCancel = onCancel
@@ -155,7 +167,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    deinit { NotificationCenter.default.removeObserver(self) }
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        prefetcher.cancelAll()
+    }
 
     private func aspect(
         _ anchor: NSLayoutDimension, to other: NSLayoutDimension, _ multiplier: CGFloat,
@@ -614,7 +629,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             guard let self, token == self.loadToken else { return }
             switch result {
             case .success(let status):
-                guard status != self.displayedStatus else { return }  // unchanged — keep the view
+                guard status != self.displayedStatus else { return }  // unchanged — keep the view (and cache)
+                self.highlightStore.clear()  // content changed — cached spans may be stale
                 self.apply(status)
             case .failure(let failure):
                 self.displayedStatus = nil
@@ -641,12 +657,15 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
         selectedFilePath = nil
         guard let first = controller.firstFile, let file = first.fileDiff else {
+            prefetcher.schedule(status, excluding: nil)  // no files — just retire any prior pass
             showMessage("No changes")
             return
         }
         let row = outline.row(forItem: first)
         if row >= 0 { outline.selectRowIndexes([row], byExtendingSelection: false) }
         selectFile(file)
+        // Warm every other file in the background so navigating to it is a highlighted cache hit.
+        prefetcher.schedule(status, excluding: file.highlightKey)
     }
 
     private func selectFile(_ file: FileDiff) {
@@ -710,13 +729,50 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     /// (Re)render the shown file in the effective layout — no git re-run. Called on file select and on
     /// a layout change (a resize crossing the fold band, the toggle command, or a config-default change).
+    /// Safety cap: if the off-main highlighter hasn't answered by now, paint plain rather than hold the
+    /// view. Only trips for a pathologically slow parse/fetch — the highlight normally lands in tens of ms.
+    private static let highlightSafetyCap: TimeInterval = 0.8
+
     private func renderCurrentFile() {
         guard let file = currentFileDiff else { return }
+        let key = file.highlightKey  // scope+base+path — the same path in two slices caches separately
+        // Already highlighted this file (a revisit, a layout flip, or a reopen)? Paint it highlighted
+        // immediately — no flash, no re-parse. A cached value of nil means "resolved, no spans".
+        if let cached = highlightStore.cached(key) {
+            renderRows(file, spans: cached)
+            return
+        }
+        // Won't ever highlight (no repo on disk, or unsupported language) — plain now is the final state.
+        guard FileManager.default.fileExists(atPath: repoRoot.path), SyntaxLanguage.isSupported(path: file.path)
+        else {
+            highlightStore.store(key, nil)
+            renderRows(file, spans: nil)
+            return
+        }
+        // Supported + uncached: withhold the first paint until the highlight lands, so even a cold open
+        // goes straight from the loading state to highlighted — never a flash of unhighlighted text. The
+        // token drops a stale file-switch; the safety cap paints plain if the highlighter never answers.
+        highlightToken += 1
+        let token = highlightToken
+        var painted = false
+        DiffHighlighter.enrich(file: file, repoRoot: repoRoot) { [weak self] spans in
+            guard let self else { return }
+            self.highlightStore.store(key, spans)
+            guard token == self.highlightToken, self.currentFileDiff?.highlightKey == key else { return }
+            painted = true
+            self.renderRows(file, spans: spans)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.highlightSafetyCap) { [weak self] in
+            guard let self, !painted, token == self.highlightToken, self.currentFileDiff?.highlightKey == key
+            else { return }
+            self.renderRows(file, spans: nil)
+        }
+    }
+
+    /// Build and show the rows for `file` in the effective layout, with optional syntax spans.
+    private func renderRows(_ file: FileDiff, spans: DiffFileSpans?) {
         let layout = effectiveLayout
         renderedLayout = layout
-        // Syntax spans for the shown file (ZEN-238 placeholder; the tree-sitter engine swaps in behind
-        // `spanSource` in ZEN-239). Computed here so both layouts and every re-render pick it up.
-        let spans = spanSource.spans(for: file)
         diffTable.show(
             layout == .inline
                 ? UnifiedDiff.rows(for: file, spans: spans) : SideBySideDiff.rows(for: file, spans: spans))
@@ -746,6 +802,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     var selectedFilePathForTesting: String? { selectedFilePath }
     /// The number of visual diff rows rendered in the right pane.
     var diffRowCountForTesting: Int { diffTable.rowCountForTesting }
+    var renderedDiffRowsForTesting: [DiffRow] { diffTable.rowsForTesting }
+    /// Re-run the loader the way a background refresh does, so a test can assert what a load carrying
+    /// *changed* content does to the highlight cache.
+    func reloadForTesting() { reload(showSpinner: false) }
 
     var renderedDiffLayoutForTesting: GeneralConfig.DiffLayout? { renderedLayout }
     /// The footer's repo name, and the branch it shows (nil when the branch glyph/name are collapsed).

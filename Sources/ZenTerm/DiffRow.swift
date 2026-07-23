@@ -12,7 +12,7 @@ struct TokenSpan: Equatable {
 /// right), carrying that side's line number for the gutter and copy-ref.
 ///
 /// `spans` is the syntax highlighting for this line: `nil` means not highlighted (flat fallback);
-/// non-`nil` drives per-range attributed coloring. The producer is the `SyntaxSpanSource` seam.
+/// non-`nil` drives per-range attributed coloring. Produced by `DiffHighlighter` (ZEN-239).
 struct DiffCell: Equatable {
     let lineNumber: Int
     let text: String

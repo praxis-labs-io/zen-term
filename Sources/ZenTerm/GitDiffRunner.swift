@@ -156,6 +156,7 @@ final class GitDiffRunner {
         // already fetched, and losing them to an unrelated committed-slice error would be the worse bug.
         var baseBranch: String?
         var baseSHA: String?
+        var committedBase: String?  // full merge-base SHA, for the committed slice's old-side blob fetch
         var committedPatch = ""
         if let resolved = base ?? (try? resolveDefaultBase(in: repoRoot)) {
             let ref = existingRef(for: resolved, in: repoRoot)
@@ -165,6 +166,7 @@ final class GitDiffRunner {
             {
                 baseBranch = defaultBranchName(fromSymbolicRef: resolved)
                 baseSHA = String(mergeBase.prefix(7))
+                committedBase = mergeBase
                 committedPatch = patch
             }
         }
@@ -178,12 +180,62 @@ final class GitDiffRunner {
         var unstaged = DiffParser.parse(unstagedPatch)
         unstaged += syntheticUntrackedDiffs(untrackedFiles: readUntracked(repoRoot: repoRoot))
         return StatusLoad(
-            unstaged: unstaged,
-            staged: DiffParser.parse(stagedPatch),
-            committed: DiffParser.parse(committedPatch),
+            unstaged: stamp(unstaged, scope: .unstaged, baseSHA: nil),
+            staged: stamp(DiffParser.parse(stagedPatch), scope: .staged, baseSHA: nil),
+            committed: stamp(DiffParser.parse(committedPatch), scope: .committed, baseSHA: committedBase),
             baseBranch: baseBranch,
             baseSHA: baseSHA,
             currentBranch: currentBranch)
+    }
+
+    /// Stamp a parsed slice with the scope it came from and (for committed) its base SHA, so the syntax
+    /// highlighter can pick the right refs for each side's whole-file blob (ZEN-239).
+    private static func stamp(_ diffs: [FileDiff], scope: DiffScope, baseSHA: String?) -> [FileDiff] {
+        diffs.map {
+            var diff = $0
+            diff.scope = scope
+            diff.baseSHA = baseSHA
+            return diff
+        }
+    }
+
+    /// One side of a file's diff: the pre-change (`old`) or post-change (`new`) revision.
+    enum Side { case old, new }
+
+    /// Where one side's whole-file blob comes from: a `git show` invocation, or the working-tree file.
+    enum BlobSource: Equatable {
+        case git([String])
+        case workingTree(path: String)
+    }
+
+    /// The source for one side of `file`'s blob, by scope: unstaged is index-vs-working-tree, staged is
+    /// HEAD-vs-index, committed is base-vs-HEAD. nil when there's no ref (a committed slice with no base).
+    /// Pure, so the ref selection is unit-testable without a repo. A rename's old content lives at the old
+    /// path; the new side is always the current path.
+    static func blobSource(for file: FileDiff, side: Side) -> BlobSource? {
+        let oldPath = file.oldPath ?? file.path
+        switch (file.scope, side) {
+        case (.unstaged, .old): return .git(["show", ":\(oldPath)"])
+        case (.unstaged, .new): return .workingTree(path: file.path)
+        case (.staged, .old): return .git(["show", "HEAD:\(oldPath)"])
+        case (.staged, .new): return .git(["show", ":\(file.path)"])
+        case (.committed, .old):
+            guard let sha = file.baseSHA else { return nil }
+            return .git(["show", "\(sha):\(oldPath)"])
+        case (.committed, .new): return .git(["show", "HEAD:\(file.path)"])
+        }
+    }
+
+    /// The whole-file text for one side of `file`, for syntax highlighting (ZEN-239). A side whose blob
+    /// doesn't exist (an added file's old side, a deleted file's new side) makes `git show` fail and
+    /// returns nil, so the caller renders that side plain. Blocking git — call off-main.
+    static func blobText(for file: FileDiff, side: Side, repoRoot: URL) -> String? {
+        switch blobSource(for: file, side: side) {
+        case .none: return nil
+        case .git(let args): return try? runGit(args, in: repoRoot)
+        case .workingTree(let path):
+            return try? String(contentsOf: repoRoot.appendingPathComponent(path), encoding: .utf8)
+        }
     }
 
     /// The ref the committed slice forks from, when the caller doesn't name one: the repo's default

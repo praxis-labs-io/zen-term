@@ -95,7 +95,15 @@ BIN=".build/release/ZenTerm"
 # re-emits exactly the set Package.swift declares, so the app follows the manifest
 # instead of whatever this machine happens to have built. Cheap: re-emitting a
 # bundle is a resource copy, not a relink.
-EXPECTED_BUNDLES=(ZenTerm_TerminalKit.bundle ZenTerm_ZenTerm.bundle)
+#
+# CodeEditLanguages_CodeEditLanguages.bundle (ZEN-239) is not optional even though the app never
+# reads it: our highlight queries ship in ZenTerm_ZenTerm.bundle (SyntaxQueries/) and the grammars
+# link statically out of the xcframework. But `CodeLanguage` initialises a stored
+# `resourceURL = Bundle.module.resourceURL`, so *constructing* one — which
+# `CodeLanguage.detectLanguageFrom` does on the first diff opened — evaluates that dependency's
+# Bundle.module accessor, and the generated accessor calls `Swift.fatalError` when its bundle is
+# absent. Dropping it would crash the signed app on first use, the same shape as the v0.1.1 crash.
+EXPECTED_BUNDLES=(ZenTerm_TerminalKit.bundle ZenTerm_ZenTerm.bundle CodeEditLanguages_CodeEditLanguages.bundle)
 
 echo "▸ Building release…"
 rm -rf .build/release/*.bundle
