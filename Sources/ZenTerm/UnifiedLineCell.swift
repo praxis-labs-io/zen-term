@@ -18,6 +18,11 @@ final class UnifiedLineCell: NSView, DiffPanningCell {
         didSet { if horizontalOffset != oldValue { repositionText() } }
     }
 
+    /// The line-number gutter width for the current file, sized to its widest line number by the pane.
+    var gutterWidth: CGFloat = DiffCellMetrics.nominalGutterWidth {
+        didSet { if gutterWidth != oldValue { needsLayout = true } }
+    }
+
     init(id: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
         identifier = id
@@ -57,22 +62,32 @@ final class UnifiedLineCell: NSView, DiffPanningCell {
         needsLayout = true
     }
 
-    /// The text column's width for a total row width — the inline pane's scroll range is the widest
-    /// line minus this.
-    static func columnWidth(forTotalWidth totalWidth: CGFloat) -> CGFloat {
-        max(0, totalWidth - 2 * DiffCellMetrics.gutterWidth - signWidth)
+    /// The text column's width for a total row width and gutter width — the inline pane's scroll range
+    /// is the widest line minus this. The two number columns sit adjacent (one trailing gap between),
+    /// then the sign, so the reserved lead is `inset + 2·digits + 2·gap + sign`, not two full gutters.
+    static func columnWidth(forTotalWidth totalWidth: CGFloat, gutterWidth: CGFloat) -> CGFloat {
+        max(0, totalWidth - contentX(gutterWidth: gutterWidth))
+    }
+
+    /// Where the panning text column begins: past the old and new number columns and the sign.
+    private static func contentX(gutterWidth: CGFloat) -> CGFloat {
+        let numbers = max(0, gutterWidth - DiffCellMetrics.gutterInset - DiffCellMetrics.gutterTrailing)
+        return DiffCellMetrics.gutterInset + 2 * numbers + 2 * DiffCellMetrics.gutterTrailing + signWidth
     }
 
     override func layout() {
         super.layout()
-        let gutter = DiffCellMetrics.gutterWidth
-        let gap = DiffCellMetrics.gutterGap
+        let inset = DiffCellMetrics.gutterInset
+        let trailing = DiffCellMetrics.gutterTrailing
+        let numbers = max(0, gutterWidth - inset - trailing)  // one line-number column's digit width
         let textHeight = DiffCellMetrics.textHeight
         let textY = ((bounds.height - textHeight) / 2).rounded()
-        oldGutter.frame = NSRect(x: 0, y: textY, width: gutter - gap, height: textHeight)
-        newGutter.frame = NSRect(x: gutter, y: textY, width: gutter - gap, height: textHeight)
-        sign.frame = NSRect(x: 2 * gutter, y: textY, width: Self.signWidth, height: textHeight)
-        let clipX = 2 * gutter + Self.signWidth
+        // Old and new numbers left-align adjacent — the old under the hunk header at `inset`, the new one
+        // trailing-gap past it — then the sign, then the panning text.
+        oldGutter.frame = NSRect(x: inset, y: textY, width: numbers, height: textHeight)
+        newGutter.frame = NSRect(x: inset + numbers + trailing, y: textY, width: numbers, height: textHeight)
+        sign.frame = NSRect(x: inset + 2 * numbers + 2 * trailing, y: textY, width: Self.signWidth, height: textHeight)
+        let clipX = Self.contentX(gutterWidth: gutterWidth)
         clip.frame = NSRect(x: clipX, y: 0, width: max(0, bounds.width - clipX), height: bounds.height)
         repositionText()
     }

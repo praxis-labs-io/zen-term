@@ -24,6 +24,12 @@ final class DiffLineCell: NSView, DiffPanningCell {
         didSet { if horizontalOffset != oldValue { repositionText() } }
     }
 
+    /// The line-number gutter width for the current file, sized to its widest line number by the pane so
+    /// short files don't waste horizontal space. Defaults to the nominal width until the pane sets it.
+    var gutterWidth: CGFloat = DiffCellMetrics.nominalGutterWidth {
+        didSet { if gutterWidth != oldValue { needsLayout = true } }
+    }
+
     init(id: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
         identifier = id
@@ -89,30 +95,33 @@ final class DiffLineCell: NSView, DiffPanningCell {
         }
     }
 
-    /// One text column's width for a given total row width — the pane's horizontal scroll range in
-    /// side-by-side is the widest line minus this.
-    static func columnWidth(forTotalWidth totalWidth: CGFloat) -> CGFloat {
-        let available = max(0, totalWidth - 2 * DiffCellMetrics.gutterWidth - 1)
+    /// One text column's width for a given total row width and gutter width — the pane's horizontal
+    /// scroll range in side-by-side is the widest line minus this.
+    static func columnWidth(forTotalWidth totalWidth: CGFloat, gutterWidth: CGFloat) -> CGFloat {
+        let available = max(0, totalWidth - 2 * gutterWidth - 1)
         return (available / 2).rounded(.down)
     }
 
     override func layout() {
         super.layout()
-        let gutter = DiffCellMetrics.gutterWidth
+        let inset = DiffCellMetrics.gutterInset
+        let gutter = gutterWidth
         let textHeight = DiffCellMetrics.textHeight
         let height = bounds.height
         let textY = ((height - textHeight) / 2).rounded()
         if isHeader {
-            headerLabel.frame = NSRect(x: 8, y: textY, width: max(0, bounds.width - 8), height: textHeight)
+            headerLabel.frame = NSRect(x: inset, y: textY, width: max(0, bounds.width - inset), height: textHeight)
             return
         }
         let available = max(0, bounds.width - 2 * gutter - 1)
         let half = (available / 2).rounded(.down)
-        leftGutter.frame = NSRect(x: 0, y: textY, width: gutter - DiffCellMetrics.gutterGap, height: textHeight)
+        // Gutters left-align at `inset` (under the header); their labels span to the column edge so the
+        // digits start at the inset and the trailing gap sits between them and the content.
+        leftGutter.frame = NSRect(x: inset, y: textY, width: gutter - inset, height: textHeight)
         leftClip.frame = NSRect(x: gutter, y: 0, width: half, height: height)
         rule.frame = NSRect(x: gutter + half, y: 0, width: 1, height: height)
         rightGutter.frame = NSRect(
-            x: gutter + half + 1, y: textY, width: gutter - DiffCellMetrics.gutterGap, height: textHeight)
+            x: gutter + half + 1 + inset, y: textY, width: gutter - inset, height: textHeight)
         rightClip.frame = NSRect(x: 2 * gutter + half + 1, y: 0, width: available - half, height: height)
         repositionText()
     }

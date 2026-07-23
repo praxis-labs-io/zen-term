@@ -15,10 +15,10 @@ private enum DiffRowMetrics {
 /// The data source + delegate for the diff viewer's file tree: three top-level section rows
 /// (Unstaged / Staged / Committed), each holding a folded file tree. A single flexible column — the
 /// indented name — takes the full width; a file's change magnitude reads from its status-tinted icon
-/// (added / deleted / renamed / modified) and the branch total lives in the footer, so no row reserves
-/// width for a stat. Selecting a file reports it through `onSelect`; a section or directory just
-/// doesn't change the diff. Row views are reused and read `Theme.current` at configure time, so a live
-/// theme swap (`reloadData`) recolors.
+/// (added / deleted / renamed / modified), and a section header carries its slice's `+n −m` line total
+/// (the footer shows the repo name and branch, not a grand total). Selecting a file reports it through
+/// `onSelect`; a section or directory just doesn't change the diff. Row views are reused and read
+/// `Theme.current` at configure time, so a live theme swap (`reloadData`) recolors.
 final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
     private(set) var roots: [DiffOutlineItem]
     private let onSelect: (FileDiff) -> Void
@@ -131,7 +131,10 @@ private final class ThemedSelectionRowView: NSTableRowView {
     }
 }
 
-/// A section header row: the slice name (Unstaged / Staged / Committed) in muted small caps.
+/// A section header row: the slice name (Unstaged / Staged / Committed) in muted small caps, with the
+/// slice's `+n −m` line total inline right after it — the grand total lives in the footer, this scopes
+/// it per section so each slice reads its own magnitude at a glance. Title and stat share one label (one
+/// attributed string) so the badge rides in the title's own frame and can't be clipped by its own math.
 private final class DiffSectionRowView: NSView {
     private let titleLabel = NSTextField(labelWithString: "")
 
@@ -143,7 +146,6 @@ private final class DiffSectionRowView: NSView {
     init(id: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
         identifier = id
-        titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
         titleLabel.lineBreakMode = .byTruncatingTail
         addSubview(titleLabel)
     }
@@ -151,8 +153,18 @@ private final class DiffSectionRowView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func configure(_ item: DiffOutlineItem) {
-        titleLabel.stringValue = item.displayName.uppercased()
-        titleLabel.textColor = Theme.current.chrome.ink(alpha: 0.55)
+        let line = NSMutableAttributedString(
+            string: item.displayName.uppercased(),
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+                .foregroundColor: Theme.current.chrome.ink(alpha: 0.55),
+            ])
+        let stat = DiffStatText.attributed(added: item.addedCount, removed: item.removedCount)
+        if stat.length > 0 {
+            line.append(NSAttributedString(string: "   ", attributes: [.font: NSFont.systemFont(ofSize: 11)]))
+            line.append(stat)
+        }
+        titleLabel.attributedStringValue = line
         needsLayout = true
     }
 

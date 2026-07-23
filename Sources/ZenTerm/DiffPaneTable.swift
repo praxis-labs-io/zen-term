@@ -27,6 +27,10 @@ final class DiffPaneTable: NSView {
         table.addTableColumn(column)
         table.headerView = nil
         table.backgroundColor = .clear
+        // `.automatic` reserves horizontal row insets (a source-list-style margin), which pushes the diff
+        // content off the pane edges — a gap from the tree divider on the left and the card edge on the
+        // right. `.plain` removes it so rows span the full pane width (same trap ZEN-236 hit on the tree).
+        table.style = .plain
         table.gridStyleMask = []
         table.intercellSpacing = NSSize(width: 0, height: 0)
         table.focusRingType = .none  // no system-blue ring on focus-in (ZEN-27: chrome is theme-only)
@@ -63,10 +67,13 @@ final class DiffPaneTable: NSView {
     /// The view to make first responder so arrows move the current line and scroll the pane.
     var scrollFocusTarget: NSView { table }
     var rowCountForTesting: Int { source.rows.count }
+    /// The live content width the fold policy keys off — for a resize-driven interaction test.
+    var contentWidthForTesting: CGFloat { table.bounds.width }
 
     func show(_ rows: [DiffRow]) {
         source.rows = rows
         isUnifiedLayout = rows.contains { if case .unified = $0 { return true } else { return false } }
+        source.gutterWidth = DiffCellMetrics.gutterWidth(forDigits: Self.maxLineNumberDigits(in: rows))
         maxContentWidth = Self.widestLine(in: rows)
         horizontalOffset = 0
         source.offset = 0
@@ -85,8 +92,8 @@ final class DiffPaneTable: NSView {
     private var maxHorizontalOffset: CGFloat {
         let column =
             isUnifiedLayout
-            ? UnifiedLineCell.columnWidth(forTotalWidth: table.bounds.width)
-            : DiffLineCell.columnWidth(forTotalWidth: table.bounds.width)
+            ? UnifiedLineCell.columnWidth(forTotalWidth: table.bounds.width, gutterWidth: source.gutterWidth)
+            : DiffLineCell.columnWidth(forTotalWidth: table.bounds.width, gutterWidth: source.gutterWidth)
         return max(0, maxContentWidth + Self.trailingPad - column)
     }
 
@@ -250,10 +257,28 @@ final class DiffPaneTable: NSView {
         centerRow(table.selectedRow)
     }
 
+    /// The widest line-number digit count across the file's rows — sizes the gutters so a short file
+    /// doesn't reserve room for digits it never shows.
+    private static func maxLineNumberDigits(in rows: [DiffRow]) -> Int {
+        var maxNumber = 0
+        for row in rows {
+            switch row {
+            case .hunkHeader: break
+            case .split(let left, let right):
+                maxNumber = max(maxNumber, left?.lineNumber ?? 0, right?.lineNumber ?? 0)
+            case .unified(_, _, let old, let new):
+                maxNumber = max(maxNumber, old ?? 0, new ?? 0)
+            }
+        }
+        return max(1, String(maxNumber).count)
+    }
+
     private final class Source: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         var rows: [DiffRow] = []
         /// The current shared pan, so a row scrolled into view lands already aligned with its siblings.
         var offset: CGFloat = 0
+        /// The gutter width for the current file, sized to its widest line number and applied to each cell.
+        var gutterWidth: CGFloat = DiffCellMetrics.nominalGutterWidth
 
         private static let splitID = NSUserInterfaceItemIdentifier("split-cell")
         private static let unifiedID = NSUserInterfaceItemIdentifier("unified-cell")
@@ -267,12 +292,14 @@ final class DiffPaneTable: NSView {
                 let unified =
                     tableView.makeView(withIdentifier: Self.unifiedID, owner: self) as? UnifiedLineCell
                     ?? UnifiedLineCell(id: Self.unifiedID)
+                unified.gutterWidth = gutterWidth
                 unified.configure(rows[row])
                 cell = unified
             } else {
                 let split =
                     tableView.makeView(withIdentifier: Self.splitID, owner: self) as? DiffLineCell
                     ?? DiffLineCell(id: Self.splitID)
+                split.gutterWidth = gutterWidth
                 split.configure(rows[row])
                 cell = split
             }
@@ -371,9 +398,10 @@ private final class DiffTableView: NSTableView {
 /// the diff from the tree still shows where the cursor is, without claiming focus. Theme-only (ZEN-27);
 /// no system selection color.
 private final class DiffLineRowView: NSTableRowView {
-    /// Match the file tree's selection pill: inset from the pane edges with the same corner radius, so
-    /// the current line reads as a pill rather than a full-bleed band.
-    private static let horizontalInset: CGFloat = 6
+    /// The current-line pill spans the content: the diff pane already carries a horizontal margin off its
+    /// edges (`diffTable`'s inset), so the pill takes no *additional* horizontal inset — it aligns with
+    /// the content rather than nesting a second gap inside it. Rounded corners keep it reading as a pill.
+    private static let horizontalInset: CGFloat = 0
     private static let verticalInset: CGFloat = 1.5
     private static let cornerRadius: CGFloat = 3
 

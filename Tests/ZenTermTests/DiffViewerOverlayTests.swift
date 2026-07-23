@@ -56,16 +56,19 @@ final class DiffViewerOverlayTests: XCTestCase {
     ) -> (overlay: DiffViewerOverlay, spy: LoaderSpy) {
         let status = GitDiffRunner.StatusLoad(
             unstaged: unstaged, staged: staged, committed: committed,
-            baseBranch: base?.branch, baseSHA: base?.sha)
+            baseBranch: base?.branch, baseSHA: base?.sha, currentBranch: "feature")
         let spy = LoaderSpy(status: status, failure: failure, branches: branches)
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
+            repoName: "repo",
             initialStatus: nil,
             loader: { base, completion in spy.load(base, completion) },
             branchesLoader: { completion in completion(spy.branches) },
             onCancel: onCancel)
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
+            // Wide enough that the diff pane defaults to side-by-side (above the auto-fold threshold);
+            // the fold tests resize narrower to cross it.
+            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 600),
             styleMask: [.borderless], backing: .buffered, defer: false)
         win.contentView?.addSubview(overlay)
         overlay.frame = win.contentView!.bounds
@@ -122,6 +125,89 @@ final class DiffViewerOverlayTests: XCTestCase {
         XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .sideBySide, "toggles back")
         XCTAssertEqual(overlay.diffRowCountForTesting, sideBySideRows)
+    }
+
+    /// The footer shows the repo name always, and the checked-out branch the load carried — proving the
+    /// StatusLoad → footer plumbing is live, not just that a label exists.
+    func test_footer_showsRepoNameAndLoadedBranch() {
+        let (overlay, _) = mount(unstaged: [file("One.swift")])
+
+        XCTAssertEqual(overlay.footerRepoNameForTesting, "repo")
+        XCTAssertEqual(overlay.footerBranchForTesting, "feature")
+    }
+
+    // MARK: auto-fold on narrow width (ZEN-243)
+
+    /// Resize the overlay to a real width and force a layout pass so `DiffPaneTable.layout()` fires the
+    /// width callback. The overlay is `translatesAutoresizingMaskIntoConstraints = false`, so its frame
+    /// isn't expressed to the constraint engine on its own — flip it authoritative for the test so the
+    /// card (and thus the diff pane) recomputes against the new width.
+    private func resize(_ overlay: DiffViewerOverlay, toWidth width: CGFloat) {
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        overlay.frame = NSRect(x: 0, y: 0, width: width, height: 600)
+        overlay.layoutSubtreeIfNeeded()
+    }
+
+    /// Narrowing the diff pane below the fold width auto-folds to inline without a pin; widening back past
+    /// the unfold width auto-restores side-by-side. A dead `onWidthChange` wire, or a `reconcileLayout()`
+    /// that never re-renders, would leave this stuck on the initial layout. Widths are chosen so the diff
+    /// pane lands well clear of the fold/unfold thresholds (~660/720 today), not boundary-flaky.
+    func test_narrowingThePane_autoFoldsToInline_andWideningRestoresSideBySide() {
+        let (overlay, _) = mount(unstaged: [file("One.swift")])
+        XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .sideBySide)
+
+        resize(overlay, toWidth: 480)
+        XCTAssertLessThan(overlay.paneWidthForTesting, 300, "sanity: the pane actually shrank well below the fold")
+        XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline, "too narrow for two columns")
+
+        resize(overlay, toWidth: 1200)
+        XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .sideBySide, "wide again — auto-unfolds")
+    }
+
+    /// While narrow, inline is forced and the ⌘I toggle is disabled: it must not touch the pin. Since a
+    /// narrow pane renders inline regardless of the override, a broken guard is only observable on a later
+    /// widen — so pin inline while wide (differs from the side-by-side default), narrow, toggle (must
+    /// no-op), then widen and confirm the pin survived. Without the guard the narrow toggle would flip the
+    /// pin to side-by-side and this final assertion would catch it.
+    func test_whileNarrow_layoutToggleIsDisabled_andDoesNotTouchThePin() {
+        let (overlay, _) = mount(unstaged: [file("One.swift")])
+        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))  // pin inline while wide
+        XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline)
+
+        resize(overlay, toWidth: 480)
+        XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline, "narrow forces inline")
+
+        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))  // consumed, but a no-op while narrow
+        XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline)
+
+        resize(overlay, toWidth: 1200)
+        XCTAssertEqual(
+            overlay.renderedDiffLayoutForTesting, .inline, "the wide pin must survive a no-op narrow toggle")
+    }
+
+    /// A ⌘I pin set while wide governs only the wide state, and survives a narrow→wide round trip: it
+    /// returns to the pinned layout, not the config default. (Default is side-by-side; the pin is inline.)
+    func test_widePin_survivesNarrowRoundTrip() {
+        let (overlay, _) = mount(unstaged: [file("One.swift")])
+        XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .sideBySide)
+
+        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))  // pins inline while wide
+        XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline)
+
+        resize(overlay, toWidth: 480)
+        XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline, "narrow forces inline")
+
+        resize(overlay, toWidth: 1200)
+        XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline, "wide again — pin honored, not the default")
+    }
+
+    /// The "layout" shortcut hint is shown while wide and hidden while narrow, matching the disabled toggle.
+    func test_layoutHint_shownWhileWide_hiddenWhileNarrow() {
+        let (overlay, _) = mount(unstaged: [file("One.swift")])
+        XCTAssertTrue(overlay.footerHintCaptionsForTesting.contains("layout"), "shown while wide")
+
+        resize(overlay, toWidth: 480)
+        XCTAssertFalse(overlay.footerHintCaptionsForTesting.contains("layout"), "hidden while narrow")
     }
 
     func test_selectingAFileInTheTree_drivesTheRightPane() {

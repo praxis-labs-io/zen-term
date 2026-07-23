@@ -96,7 +96,8 @@
 
 # Layout the diff viewer opens with. `side-by-side` shows old and new in two
 # columns; `inline` shows one column with +/- lines. The in-viewer toggle (⌘I,
-# rebindable as toggle_diff_layout) overrides it for the session.
+# rebindable as toggle_diff_layout) overrides it for the session. A narrow pane always
+# shows inline (two columns stop reading as code); the toggle returns when it's wide again.
 # In-app Settings edit: applies live.
 # diff-layout = side-by-side          # side-by-side | inline
 

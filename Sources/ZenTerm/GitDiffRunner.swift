@@ -15,12 +15,14 @@ final class GitDiffRunner {
 
     /// A full status: the three diff slices the viewer stacks. `baseBranch`/`baseSHA` describe the
     /// fork point the committed slice is measured from (nil when no base could be resolved).
+    /// `currentBranch` is the checked-out branch (nil when detached), for the viewer's footer.
     struct StatusLoad: Equatable {
         let unstaged: [FileDiff]
         let staged: [FileDiff]
         let committed: [FileDiff]
         let baseBranch: String?
         let baseSHA: String?
+        let currentBranch: String?
 
         var isEmpty: Bool { unstaged.isEmpty && staged.isEmpty && committed.isEmpty }
 
@@ -160,6 +162,12 @@ final class GitDiffRunner {
             committedPatch = try runGit(diffArguments(scope: .committed, mergeBase: mergeBase), in: repoRoot)
         }
 
+        // The checked-out branch for the footer. `--abbrev-ref HEAD` yields the literal "HEAD" when
+        // detached, which isn't a branch name — treat that as none.
+        let head = (try? runGit(["rev-parse", "--abbrev-ref", "HEAD"], in: repoRoot))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentBranch = (head == nil || head == "HEAD" || head?.isEmpty == true) ? nil : head
+
         var unstaged = DiffParser.parse(unstagedPatch)
         unstaged += syntheticUntrackedDiffs(untrackedFiles: readUntracked(repoRoot: repoRoot))
         return StatusLoad(
@@ -167,7 +175,8 @@ final class GitDiffRunner {
             staged: DiffParser.parse(stagedPatch),
             committed: DiffParser.parse(committedPatch),
             baseBranch: baseBranch,
-            baseSHA: baseSHA)
+            baseSHA: baseSHA,
+            currentBranch: currentBranch)
     }
 
     /// The ref the committed slice forks from, when the caller doesn't name one: the repo's default
