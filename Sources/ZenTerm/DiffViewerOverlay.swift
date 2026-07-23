@@ -622,23 +622,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     private static func statsText(for status: GitDiffRunner.StatusLoad) -> NSAttributedString {
         let files = status.unstaged + status.staged + status.committed
-        let added = files.reduce(0) { $0 + $1.addedCount }
-        let removed = files.reduce(0) { $0 + $1.removedCount }
-        let chrome = Theme.current.chrome
-        let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        let text = NSMutableAttributedString()
-        if added > 0 {
-            text.append(
-                NSAttributedString(
-                    string: "+\(added)", attributes: [.foregroundColor: chrome.positive.nsColor, .font: font]))
-        }
-        if removed > 0 {
-            if text.length > 0 { text.append(NSAttributedString(string: "  ", attributes: [.font: font])) }
-            text.append(
-                NSAttributedString(
-                    string: "−\(removed)", attributes: [.foregroundColor: chrome.destructive.nsColor, .font: font]))
-        }
-        return text
+        return DiffStatText.attributed(
+            added: files.reduce(0) { $0 + $1.addedCount },
+            removed: files.reduce(0) { $0 + $1.removedCount })
     }
 
     // MARK: test hooks

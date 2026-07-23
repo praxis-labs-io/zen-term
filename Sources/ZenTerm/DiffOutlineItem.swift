@@ -47,6 +47,18 @@ final class DiffOutlineItem {
         return nil
     }
 
+    /// Added/removed line totals for the subtree rooted here — a file's own counts, or the sum across
+    /// descendants for a section or directory. Derived from the hunks each time, so a section header's
+    /// badge can never drift from the lines under it.
+    var addedCount: Int {
+        if let file = fileDiff { return file.addedCount }
+        return children.reduce(0) { $0 + $1.addedCount }
+    }
+    var removedCount: Int {
+        if let file = fileDiff { return file.removedCount }
+        return children.reduce(0) { $0 + $1.removedCount }
+    }
+
     var displayName: String {
         switch kind {
         case .section(let title): return title
