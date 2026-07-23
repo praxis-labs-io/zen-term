@@ -7,11 +7,24 @@ import AppKit
 /// (`DiffLineCell`) and inline (`UnifiedLineCell`) renderers. Only used when spans are present; a line
 /// with no spans keeps the flat `stringValue`/`textColor` path.
 enum SyntaxAttributedText {
+    /// Diff lines never wrap — they pan inside a clip (ZEN-241), so the tail is revealed by scrolling.
+    /// `DiffCellMetrics.contentLabel()` sets `lineBreakMode = .byClipping` on the *label*, which governs
+    /// `stringValue`; an attributed string instead carries its own paragraph style, and with none set it
+    /// inherits the default — `.byWordWrapping`. Combined with `maximumNumberOfLines = 1` that renders
+    /// only the first wrapped line, silently dropping whole words off the end of a line the moment the
+    /// frame is a hair short. Carrying the label's clipping mode here is what keeps the attributed path
+    /// behaving like the plain one.
+    private static let clipping: NSParagraphStyle = {
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byClipping
+        return style
+    }()
+
     static func make(
         _ text: String, spans: [TokenSpan], base: NSColor, font: NSFont, chrome: ChromeTheme
     ) -> NSAttributedString {
         let attributed = NSMutableAttributedString(
-            string: text, attributes: [.foregroundColor: base, .font: font])
+            string: text, attributes: [.foregroundColor: base, .font: font, .paragraphStyle: clipping])
         let full = NSRange(location: 0, length: attributed.length)
         for span in spans {
             // Clamp to the rendered text so a span computed against a different revision of the line

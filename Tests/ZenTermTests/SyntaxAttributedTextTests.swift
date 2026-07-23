@@ -68,6 +68,22 @@ final class SyntaxAttributedTextTests: XCTestCase {
         for index in 0..<4 { XCTAssertEqual(color(attributed, at: index), base) }
     }
 
+    func test_make_carriesTheLabelsClippingLineBreakMode() {
+        // A diff line pans inside a clip and must never wrap. The label's own `.byClipping` only governs
+        // `stringValue`; an attributed string carries its own paragraph style, and with none set it
+        // inherits `.byWordWrapping` — which, with maximumNumberOfLines = 1, silently drops whole words
+        // off the end of the line. That is the "missing text" bug, so assert the mode explicitly.
+        let attributed = SyntaxAttributedText.make(
+            "] as const;", spans: [TokenSpan(range: NSRange(location: 0, length: 1), role: .punctuation)],
+            base: chrome.foreground.nsColor, font: font, chrome: chrome)
+
+        let style = attributed.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        XCTAssertEqual(style?.lineBreakMode, .byClipping, "attributed lines must clip, never wrap")
+        XCTAssertNotEqual(
+            NSParagraphStyle.default.lineBreakMode, .byClipping,
+            "guard: the default really is a wrapping mode, so omitting the style would regress")
+    }
+
     func test_flatColor_mapsKindToWholeLineColor() {
         XCTAssertEqual(SyntaxAttributedText.flatColor(for: .added, chrome: chrome), chrome.positive.nsColor)
         XCTAssertEqual(
