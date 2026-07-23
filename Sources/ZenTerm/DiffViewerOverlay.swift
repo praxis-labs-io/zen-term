@@ -802,6 +802,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     var selectedFilePathForTesting: String? { selectedFilePath }
     /// The number of visual diff rows rendered in the right pane.
     var diffRowCountForTesting: Int { diffTable.rowCountForTesting }
+    var renderedDiffRowsForTesting: [DiffRow] { diffTable.rowsForTesting }
+    /// Re-run the loader the way a background refresh does, so a test can assert what a load carrying
+    /// *changed* content does to the highlight cache.
+    func reloadForTesting() { reload(showSpinner: false) }
 
     var renderedDiffLayoutForTesting: GeneralConfig.DiffLayout? { renderedLayout }
     /// The footer's repo name, and the branch it shows (nil when the branch glyph/name are collapsed).
