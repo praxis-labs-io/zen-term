@@ -27,7 +27,6 @@ final class DiffCommentComposer: NSView {
     private let surface = NSView()
     private let noteScroll = NSScrollView()
     private let note = SubmitAwareTextView()
-    private let placeholder = NSTextField(labelWithString: "Leave a note")
     private var targetDropdown: Dropdown!  // built in init once `self` can be captured
     private let sendButton = AppButton(title: "Send", variant: .primary)
     private let submitButton = AppButton(title: "Send + submit", variant: .muted)
@@ -94,11 +93,6 @@ final class DiffCommentComposer: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    override func layout() {
-        super.layout()
-        placeholder.isHidden = !note.string.isEmpty
-    }
-
     // MARK: build
 
     private func buildSurface() {
@@ -120,10 +114,10 @@ final class DiffCommentComposer: NSView {
             width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         note.autoresizingMask = [.width]
         note.textContainer?.widthTracksTextView = true
+        note.placeholder = "Leave a note"
         note.onSubmit = { [weak self] submit in self?.send(submit: submit) }
         note.onCancel = { [weak self] in self?.onCancel() }
         note.onArrowDown = { [weak self] in self?.focusTarget() }
-        note.onChange = { [weak self] in self?.layoutPlaceholder() }
 
         noteScroll.drawsBackground = false
         noteScroll.hasVerticalScroller = true
@@ -132,13 +126,6 @@ final class DiffCommentComposer: NSView {
         noteScroll.documentView = note
         noteScroll.translatesAutoresizingMaskIntoConstraints = false
 
-        placeholder.font = .systemFont(ofSize: 13)
-        placeholder.translatesAutoresizingMaskIntoConstraints = false
-        noteScroll.addSubview(placeholder)
-        NSLayoutConstraint.activate([
-            placeholder.leadingAnchor.constraint(equalTo: noteScroll.leadingAnchor, constant: 8),
-            placeholder.topAnchor.constraint(equalTo: noteScroll.topAnchor, constant: 4),
-        ])
         applyNoteTheme()
     }
 
@@ -224,10 +211,8 @@ final class DiffCommentComposer: NSView {
         let chrome = Theme.current.chrome
         note.textColor = chrome.foreground.nsColor
         note.insertionPointColor = chrome.foreground.nsColor
-        placeholder.textColor = chrome.ink(alpha: 0.4)
+        note.placeholderColor = chrome.ink(alpha: 0.4)
     }
-
-    private func layoutPlaceholder() { placeholder.isHidden = !note.string.isEmpty }
 
     private func focusNote() { window?.makeFirstResponder(note) }
     private func focusTarget() { window?.makeFirstResponder(targetDropdown) }
@@ -255,11 +240,25 @@ private final class SubmitAwareTextView: NSTextView {
     var onSubmit: ((_ submit: Bool) -> Void)?
     var onCancel: (() -> Void)?
     var onArrowDown: (() -> Void)?
-    var onChange: (() -> Void)?
+
+    /// Shown when the note is empty. Drawn by the text view itself rather than as a floating label, so
+    /// it lands exactly on the first glyph's origin (text-container inset + line-fragment padding) —
+    /// a separate label can't track that origin and drifts off the cursor.
+    var placeholder = ""
+    var placeholderColor: NSColor = .clear { didSet { needsDisplay = true } }
 
     override func didChangeText() {
         super.didChangeText()
-        onChange?()
+        needsDisplay = true  // repaint so the placeholder clears the instant the first character lands
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard string.isEmpty, !placeholder.isEmpty, let font else { return }
+        let x = textContainerInset.width + (textContainer?.lineFragmentPadding ?? 0)
+        placeholder.draw(
+            at: NSPoint(x: x, y: textContainerInset.height),
+            withAttributes: [.font: font, .foregroundColor: placeholderColor])
     }
 
     override func insertNewline(_ sender: Any?) {
