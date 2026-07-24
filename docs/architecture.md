@@ -246,11 +246,13 @@ and is reachable from the tree by arrow key or bare `b`. Navigation is vim-nativ
 local to the card (ZEN-262). ⌘h/⌘l move focus between the tree and the diff (the app's
 own pane chords, forwarded from `WindowController.handle` since `KeyInterceptor` consumes
 chords before the responder chain); everything else is a bare key the panes handle in
-`keyDown`. j/k step files or lines, h/l (and ←/→) fold the tree or open a file into the
-diff, {/} jump changes, Ctrl-j/k and Ctrl-↑/↓ soft half-page the focused pane with the
-cursor kept centered (Ctrl-D/U too; from the tree those instead scroll the diff without
-leaving it), b focuses the base, `\` toggles the layout, q/esc close. Because the bare
-keys aren't reserved, they pass through to the terminal when the viewer is closed, and the
+`keyDown`. In the tree, j/k step files, h/l (and ←/→) fold a directory or open a file into
+the diff, Ctrl-j/k and Ctrl-↑/↓ jump the file selection half a page (centered), Ctrl-D/U
+scroll the diff without leaving the tree, and b focuses the base. In the diff, j/k move the
+cursor, {/} jump changes, 0/$ pan to the start/end of the line, Ctrl-D/U half-page, V
+selects, y/Y yank, ⏎ comments, and h returns to the tree. `\` toggles the layout and q/esc
+close from either pane. Because the bare keys aren't reserved, they pass through to the
+terminal when the viewer is closed, and the
 comment composer captures them as text while it's open, so no global chord is spent on a
 view-only command. The footer legend scopes to the focused pane and leaves pane-switching
 off (it's natural and discoverable, and it was the crowding the trim removed). The card

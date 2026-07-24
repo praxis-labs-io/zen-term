@@ -111,6 +111,14 @@ final class DiffVimKeyTests: XCTestCase {
         XCTAssertEqual(DiffPaneTable.viewerCommand(for: try keyDown("\\", flags: .function)), .toggleLayout)
     }
 
+    func test_decodesLineStartAndEnd() throws {
+        XCTAssertEqual(DiffPaneTable.vimKey(for: try keyDown("0")), .lineStart)
+        // `$` is matched on the typed character first (so a non-US layout works), and on shift-4 whose
+        // `charactersIgnoringModifiers` is "4" on a US layout.
+        XCTAssertEqual(DiffPaneTable.vimKey(for: try keyDown("$", unshifted: "$")), .lineEnd)
+        XCTAssertEqual(DiffPaneTable.vimKey(for: try keyDown("$", unshifted: "4", flags: .shift)), .lineEnd)
+    }
+
     // MARK: pageDirection
 
     private func ctrlCode(_ keyCode: UInt16, flags: NSEvent.ModifierFlags = .control) throws -> NSEvent {

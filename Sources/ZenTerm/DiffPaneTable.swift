@@ -353,6 +353,8 @@ final class DiffPaneTable: NSView {
         case .nextChange: jumpToNextChange()
         case .yankCode: onYank?(false)
         case .yankReference: onYank?(true)
+        case .lineStart: setHorizontalOffset(0)
+        case .lineEnd: setHorizontalOffset(maxHorizontalOffset)
         }
     }
 
@@ -469,6 +471,7 @@ final class DiffPaneTable: NSView {
         case top, bottom  // gg / G
         case prevChange, nextChange  // { / }
         case yankCode, yankReference  // y / Y
+        case lineStart, lineEnd  // 0 / $ — pan to the start / end of the line (ZEN-262)
     }
 
     /// Return / keypad Enter with no modifiers — comment on the selection (ZEN-257). Decoded by key
@@ -492,6 +495,7 @@ final class DiffPaneTable: NSView {
         switch event.characters {
         case "{": return .prevChange
         case "}": return .nextChange
+        case "$": return .lineEnd  // typed character first, so a layout that isn't shift-4 still works
         default: break
         }
         let shift = event.modifierFlags.contains(.shift)
@@ -505,6 +509,8 @@ final class DiffPaneTable: NSView {
         case ("y", true): return .yankReference
         case ("[", true): return .prevChange
         case ("]", true): return .nextChange
+        case ("0", false): return .lineStart
+        case ("4", true): return .lineEnd  // shift-4 on a US layout, where `charactersIgnoringModifiers` is "4"
         default: return nil
         }
     }
@@ -539,10 +545,10 @@ final class DiffPaneTable: NSView {
         }
     }
 
-    /// Ctrl-j/k and Ctrl-↑/↓: a soft half-page in the focused pane, cursor kept centered (ZEN-262).
+    /// Ctrl-j/k and Ctrl-↑/↓ in the tree: jump the file selection about half a page, centered (ZEN-262).
     /// Deliberately separate from `halfPageDirection` (Ctrl-D/U) so the tree can page its own file list
-    /// with these while Ctrl-D/U keeps scrolling the diff underneath it. +1 down, -1 up. Same
-    /// exact-`.control` match, so ⌘/⌥ combinations fall through to their own handlers.
+    /// with these while Ctrl-D/U keeps scrolling the diff underneath it. The diff pane doesn't use this
+    /// (its half-page stays on Ctrl-D/U). +1 down, -1 up. Same exact-`.control` match, so ⌘/⌥ fall through.
     static func pageDirection(for event: NSEvent) -> Int? {
         guard event.modifierFlags.intersection(reservableModifiers) == .control else { return nil }
         switch event.keyCode {
@@ -867,7 +873,7 @@ private final class DiffTableView: NSTableView {
     func disarmPendingKeys() { sawG = false }
 
     override func keyDown(with event: NSEvent) {
-        if let direction = DiffPaneTable.halfPageDirection(for: event) ?? DiffPaneTable.pageDirection(for: event) {
+        if let direction = DiffPaneTable.halfPageDirection(for: event) {
             sawG = false
             onHalfPage?(direction)
             return
