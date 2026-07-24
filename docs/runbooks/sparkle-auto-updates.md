@@ -95,6 +95,10 @@ real. This is the shared setup for steps 3–6 and 11.
       place, then "Ready to install" with Relaunch. It never steals keys from the
       terminal and never takes first responder (type into a pane behind it while
       it's up).
+- [ ] **4a. Install morphs with a foreign window key.** Install, then immediately open a
+      save panel (or click into another app) so ZenTerm's window isn't key while Sparkle
+      finishes. The card still reaches "Ready to install" with live Relaunch/Later buttons
+      rather than stranding on the progress bar (ZEN-248).
 - [ ] **5. Skip / Later persistence.** Skip, then relaunch: no card. Later, then
       relaunch: the card returns.
 - [ ] **6. Re-home on window close.** With a card up, close the window hosting it:

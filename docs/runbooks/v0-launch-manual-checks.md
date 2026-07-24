@@ -137,13 +137,17 @@ chunky rather than obviously broken. Compare against a window born on the target
       drawer and a tool float, then drag: every surface re-renders, not just the focused
       one.
 
-## Cursor shader on unfocused panes (ZEN-237)
+## Cursor shader on unfocused panes (ZEN-237, ZEN-271)
 
 Needs a cursor shader on (Settings → Terminal → Cursor shader → Cursor Warp, the more
 visible of the two) and at least two surfaces. It's all GPU output, so no test sees any of
 it. ghostty runs the shader's draw timer only while a surface is focused, so a blurred pane
 freezes whatever frame it stopped on; ZenTerm stands the shader down to a passthrough while
 unfocused so there's nothing to freeze.
+
+The focus libghostty is told about is `paneFocused && isAppActive`, and the host view
+reports its window's occlusion, so the draw timer also stops when ZenTerm isn't frontmost
+and when the window is covered or minimized (ZEN-271).
 
 - [ ] **A fresh workspace leaves no tracer.** Open a workspace with the bottom and right
       drawers, so they land unfocused while their shells are still starting. No frozen
@@ -157,3 +161,11 @@ unfocused so there's nothing to freeze.
       regressed to removing the shader outright.
 - [ ] **Rapid switching stays clean.** Tab between panes quickly for a few seconds. No
       tracer accumulates, and no flicker on the panes being entered or left.
+- [ ] **Leaving the app stops the drawing.** Switch to another app with a pane focused.
+      GPU time for ZenTerm drops to idle (Activity Monitor's GPU column, or the wattage
+      reading in a menu-bar monitor), and coming back leaves no smear flying in.
+- [ ] **A covered window stops too.** Stay in ZenTerm and fully cover its window with
+      another app's window, or minimize it. Same drop, and no tracer on the way back.
+- [ ] **A theme swap lands on a stood-down pane.** With two panes and a shader on, swap
+      the theme (`⌘,` → Appearance). The unfocused pane recolors with the focused one
+      rather than holding the old theme until you click into it (ZEN-271).

@@ -183,9 +183,8 @@ To check on your own, open the command palette (⌘P) and run Check for Updates;
 nothing is waiting it tells you you're on the latest. To check only when you ask,
 turn off the background checks in Settings → General, and the command still works.
 
-One catch, this first time only: updating from a build older than this one still
-means downloading the DMG by hand, because that older build shipped without the
-updater. After this, updates come to you.
+Builds before v0.2.0 shipped without the updater, so getting off one of those
+means downloading the DMG by hand. From v0.2.0 on, updates come to you.
 
 ## Editing config by hand
 
