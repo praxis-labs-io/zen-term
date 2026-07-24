@@ -21,12 +21,19 @@ final class GhosttySurfaceFocusTests: XCTestCase {
         _ = NSApplication.shared
     }
 
+    /// Post the real notification, then give the main queue a turn before returning.
+    /// `observeAppActive` registers with `queue: .main`, so delivery is an enqueued operation
+    /// rather than a guaranteed same-turn call. Asserting straight after the post would ride on
+    /// that timing and could go green or flaky for reasons unrelated to the focus logic.
     private func postAppActive(_ active: Bool) {
         NotificationCenter.default.post(
             name: active
                 ? NSApplication.didBecomeActiveNotification
                 : NSApplication.didResignActiveNotification,
             object: NSApp)
+        let drained = expectation(description: "main queue drained")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 1)
     }
 
     func test_appDeactivationUnfocusesAFocusedPane() {
