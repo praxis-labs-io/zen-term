@@ -45,6 +45,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         // The "Check for Updates" command started this check (ZEN-20). Remember it so the outcome
         // reports back — an up-to-date or failure toast a scheduled check would swallow silently.
         userInitiated = true
+        Log.info("manual update check started", category: .update)
     }
 
     // MARK: - Update found → the "available" card
@@ -56,6 +57,9 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     ) {
         pendingVersion = appcastItem.displayVersionString
         userInitiated = false  // the card carries the result now; no separate toast
+        Log.info(
+            "update found: \(appcastItem.displayVersionString) (stage \(Self.label(state.stage)))",
+            category: .update)
         let choose = Self.fireOnce(reply)
         var actions = UpdateCardView.Actions()
         actions.install = { choose(.install) }
@@ -83,6 +87,8 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     // MARK: - Nothing to show (stay silent)
 
     func showUpdateNotFoundWithError(_ error: any Error, acknowledgement: @escaping () -> Void) {
+        // Unconditional (ZEN-248): a scheduled check that finds nothing left no trace at all.
+        Log.info("no update available: \(error.localizedDescription)", category: .update)
         controller?.dismiss()
         if userInitiated {
             userInitiated = false
@@ -95,11 +101,12 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     }
 
     func showUpdaterError(_ error: any Error, acknowledgement: @escaping () -> Void) {
+        // Unconditional (ZEN-248): before this, a failure after Install produced no card, no toast,
+        // and no log line — the reason the report couldn't be traced in a diagnostics bundle.
+        Log.warning("update failed: \(error.localizedDescription)", category: .update)
         controller?.dismiss()
         if userInitiated {
             userInitiated = false
-            Log.warning(
-                "ZenTerm: update check failed — \(error.localizedDescription)", category: .update)
             controller?.announce(
                 ToastContent(
                     variant: .warning, title: "Couldn't check for updates",
@@ -113,11 +120,14 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     func showDownloadInitiated(cancellation: @escaping () -> Void) {
         expectedLength = nil
         receivedLength = 0
+        Log.info("update download started", category: .update)
         controller?.present(state: .downloading(fraction: nil), actions: .init())
     }
 
     func showDownloadDidReceiveExpectedContentLength(_ expectedContentLength: UInt64) {
         expectedLength = expectedContentLength
+        // Logged once here, not per chunk: showDownloadDidReceiveData fires hundreds of times.
+        Log.info("update download expected length: \(expectedContentLength) bytes", category: .update)
         controller?.present(state: .downloading(fraction: downloadFraction), actions: .init())
     }
 
@@ -127,16 +137,22 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     }
 
     func showDownloadDidStartExtractingUpdate() {
+        Log.info("update download complete, extracting", category: .update)
         controller?.present(state: .downloading(fraction: nil), actions: .init())
     }
 
     func showExtractionReceivedProgress(_ progress: Double) {
+        // Start and finish only — Sparkle fires this continuously through extraction.
+        if progress <= 0 || progress >= 1 {
+            Log.info("update extraction progress: \(Int(progress * 100))%", category: .update)
+        }
         controller?.present(state: .downloading(fraction: progress), actions: .init())
     }
 
     // MARK: - Ready → the relaunch card
 
     func showReady(toInstallAndRelaunch reply: @escaping @Sendable (SPUUserUpdateChoice) -> Void) {
+        Log.info("update ready to install: \(pendingVersion ?? AppVersion.current)", category: .update)
         let choose = Self.fireOnce(reply)
         var actions = UpdateCardView.Actions()
         actions.relaunch = { choose(.install) }
@@ -150,9 +166,11 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         retryTerminatingApplication: @escaping () -> Void
     ) {
         // The app is quitting to install; the card goes with it. Nothing to morph.
+        Log.info("update installing (app terminated: \(applicationTerminated))", category: .update)
     }
 
     func showUpdateInstalledAndRelaunched(_ relaunched: Bool, acknowledgement: @escaping () -> Void) {
+        Log.info("update installed and relaunched: \(relaunched)", category: .update)
         controller?.dismiss()
         acknowledgement()
     }
@@ -160,6 +178,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     func showUpdateInFocus() {}
 
     func dismissUpdateInstallation() {
+        Log.info("update installation dismissed", category: .update)
         controller?.dismiss()
     }
 
@@ -180,9 +199,36 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     ) -> (SPUUserUpdateChoice) -> Void {
         var fired = false
         return { choice in
-            guard !fired else { return }
+            guard !fired else {
+                // ZEN-248: a swallowed repeat. Paired with the tap log, this separates "clicked five
+                // times, forwarded once" (working as designed) from "clicked five, forwarded zero".
+                Log.info("update choice ignored, already answered: \(Self.label(choice))", category: .update)
+                return
+            }
             fired = true
+            Log.info("update choice forwarded to Sparkle: \(Self.label(choice))", category: .update)
             reply(choice)
+        }
+    }
+
+    /// A non-sensitive label for a Sparkle choice, for the diagnostic log (ZEN-248).
+    private static func label(_ choice: SPUUserUpdateChoice) -> String {
+        switch choice {
+        case .install: return "install"
+        case .dismiss: return "dismiss"
+        case .skip: return "skip"
+        @unknown default: return "unknown"
+        }
+    }
+
+    /// A non-sensitive label for the update's stage at `showUpdateFound` — it changes what `.install`
+    /// does inside Sparkle (resume a downloaded update vs. start one), so the log names it (ZEN-248).
+    private static func label(_ stage: SPUUserUpdateStage) -> String {
+        switch stage {
+        case .notDownloaded: return "not-downloaded"
+        case .downloaded: return "downloaded"
+        case .installing: return "installing"
+        @unknown default: return "unknown"
         }
     }
 

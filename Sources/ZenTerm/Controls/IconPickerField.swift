@@ -111,6 +111,16 @@ final class IconPickerField: NSView {
     }
     override func drawFocusRingMask() {}
 
+    /// The grid popover is parented to the window's content view (to escape this field's bounds),
+    /// not to this field's subtree — so removing the field, or an ancestor like the workspace /
+    /// tool-float form, doesn't take it along. Closing it when the field leaves the window binds the
+    /// popover's lifetime to the control, so a tab-switch `closeModal()` can't strand a dead grid on
+    /// the content view over every tab (ZEN-268, same class as `Dropdown`).
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { closePopover() }
+    }
+
     override func keyDown(with event: NSEvent) {
         if popover != nil {
             switch KeyboardFocus.key(for: event) {
