@@ -48,7 +48,10 @@ final class UpdateController {
 
     /// Start scheduled update checks. A no-op in an unpackaged build. Safe to call once at launch.
     func start() {
-        guard Self.isSupported else { return }
+        guard Self.isSupported else {
+            Log.info("update checks inert — unpackaged build (no feed URL)", category: .update)
+            return
+        }
         do {
             try updater.start()
         } catch {
@@ -57,6 +60,9 @@ final class UpdateController {
             return
         }
         started = true
+        Log.info(
+            "update checks live (auto-check \(GeneralConfig.current.automaticUpdateChecks ? "on" : "off"))",
+            category: .update)
         applyAutoCheckSetting()
         windowCloseObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: nil, queue: .main
@@ -115,7 +121,10 @@ final class UpdateController {
 
     private func render() {
         guard let state else {
-            if let card, let host { host.dismissUpdateCard(card) }
+            if let card, let host {
+                host.dismissUpdateCard(card)
+                Log.info("update card torn down", category: .update)
+            }
             card = nil
             host = nil
             return
@@ -131,19 +140,31 @@ final class UpdateController {
         // *closes* mid-flow, not as focus wanders between windows.
         if let card, host != nil {
             card.update(to: state, actions: actions)
+            Log.info("update card morphed in place: \(state.logLabel)", category: .update)
             return
         }
-        guard let controller = keyController() else { return }  // no host yet to show it; re-render on the next state
+        guard let controller = keyController() else {
+            // The leading candidate from ZEN-248, which previously left no trace: distinguish the two
+            // `keyController()` failure modes — no key window at all vs. a foreign one (an open save/
+            // open panel, or another app frontmost).
+            let keyState = NSApp.keyWindow == nil ? "no key window" : "foreign key window"
+            Log.warning(
+                "update card dropped — no host to show it (\(keyState)); retries on next state",
+                category: .update)
+            return
+        }
         let fresh = UpdateCardView(state: state, actions: actions)
         controller.presentUpdateCard(fresh)
         card = fresh
         host = controller
+        Log.info("update card presented: \(state.logLabel)", category: .update)
     }
 
     /// The hosting window is closing. Drop the card (it dies with that window's view tree) and
     /// re-present into whatever becomes key. `willClose` fires before key moves, so hop a tick.
     private func hostWindowMaybeClosing(_ window: NSWindow?) {
         guard state != nil, let host, window === host.window else { return }
+        Log.info("update card host window closing — re-homing on next render", category: .update)
         card = nil
         self.host = nil
         DispatchQueue.main.async { [weak self] in self?.render() }

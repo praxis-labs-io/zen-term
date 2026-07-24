@@ -106,7 +106,41 @@ final class UpdateCardTests: XCTestCase {
         XCTAssertEqual(counter.n, 1)
     }
 
+    // MARK: - The buttons are live (ZEN-248)
+
+    /// The card measured its notes and parsed its bullets but never pressed a button, so a dead
+    /// button — the whole point of the "dead click" report — would ship green. Drive the real
+    /// NSButton action end to end and confirm the wired action runs.
+    func test_installButton_firesItsActionWhenClicked() {
+        final class Flag: @unchecked Sendable { var tapped = false }
+        let flag = Flag()
+        var actions = UpdateCardView.Actions()
+        actions.install = { flag.tapped = true }
+        let card = UpdateCardView(
+            state: .available(version: "9.9.9", current: "You're on 1.0", notes: [], notesURL: nil),
+            actions: actions)
+        card.translatesAutoresizingMaskIntoConstraints = false
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView!.addSubview(card)
+
+        let install = firstButton(in: card) { $0 == "Install" }
+        XCTAssertNotNil(install, "the available card must show an Install button")
+        install?.performClick(nil)
+
+        XCTAssertTrue(flag.tapped, "clicking Install must fire its wired action end to end")
+    }
+
     // MARK: - Helpers
+
+    private func firstButton(in view: NSView, where match: (String) -> Bool) -> AppButton? {
+        for sub in view.subviews {
+            if let button = sub as? AppButton, match(button.title) { return button }
+            if let found = firstButton(in: sub, where: match) { return found }
+        }
+        return nil
+    }
 
     private func firstTextField(in view: NSView, where match: (String) -> Bool) -> NSTextField? {
         for sub in view.subviews {
