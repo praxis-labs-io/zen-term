@@ -5,7 +5,7 @@ import Foundation
 /// the two columns stay row-aligned. The parallel inline transform is `UnifiedDiff`; both feed the
 /// same `DiffPaneTable` (see `DiffRow`).
 enum SideBySideDiff {
-    static func rows(for file: FileDiff) -> [DiffRow] {
+    static func rows(for file: FileDiff, spans: DiffFileSpans? = nil) -> [DiffRow] {
         var rows: [DiffRow] = []
         for hunk in file.hunks {
             rows.append(.hunkHeader(hunk.header))
@@ -27,19 +27,21 @@ enum SideBySideDiff {
                 switch line.kind {
                 case .removed:
                     if let old = line.oldLineNumber {
-                        pendingRemoved.append(DiffCell(lineNumber: old, text: line.text, kind: .removed))
+                        pendingRemoved.append(
+                            DiffCell(lineNumber: old, text: line.text, kind: .removed, spans: spans?.old(old)))
                     }
                 case .added:
                     if let new = line.newLineNumber {
-                        pendingAdded.append(DiffCell(lineNumber: new, text: line.text, kind: .added))
+                        pendingAdded.append(
+                            DiffCell(lineNumber: new, text: line.text, kind: .added, spans: spans?.new(new)))
                     }
                 case .context:
                     flushChangeBlock()
                     guard let old = line.oldLineNumber, let new = line.newLineNumber else { continue }
                     rows.append(
                         .split(
-                            left: DiffCell(lineNumber: old, text: line.text, kind: .context),
-                            right: DiffCell(lineNumber: new, text: line.text, kind: .context)))
+                            left: DiffCell(lineNumber: old, text: line.text, kind: .context, spans: spans?.old(old)),
+                            right: DiffCell(lineNumber: new, text: line.text, kind: .context, spans: spans?.new(new))))
                 }
             }
             flushChangeBlock()

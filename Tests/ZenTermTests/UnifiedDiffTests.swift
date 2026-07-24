@@ -35,10 +35,10 @@ final class UnifiedDiffTests: XCTestCase {
             UnifiedDiff.rows(for: file),
             [
                 .hunkHeader("@@ -1,3 +1,3 @@"),
-                .unified(text: "import Foundation", kind: .context, old: 1, new: 1),
-                .unified(text: "let x = 1", kind: .removed, old: 2, new: nil),
-                .unified(text: "let x = 2", kind: .added, old: nil, new: 2),
-                .unified(text: "let y = 3", kind: .context, old: 3, new: 3),
+                .unified(text: "import Foundation", kind: .context, old: 1, new: 1, spans: nil),
+                .unified(text: "let x = 1", kind: .removed, old: 2, new: nil, spans: nil),
+                .unified(text: "let x = 2", kind: .added, old: nil, new: 2, spans: nil),
+                .unified(text: "let y = 3", kind: .context, old: 3, new: 3, spans: nil),
             ])
     }
 

@@ -29,11 +29,18 @@ struct Hunk: Equatable {
 
 /// One changed file. `oldPath` is set only when the path moved (rename). Add/remove counts
 /// are derived from the hunks so they can never drift from the lines actually rendered.
+///
+/// `scope` and `baseSHA` are stamped by `GitDiffRunner.loadSync` (the parser doesn't know them) so the
+/// syntax highlighter can fetch each side's whole-file blob (ZEN-239): old vs new refs depend on the
+/// scope, and the committed scope's old side is `baseSHA`. Both default so parser-only call sites and
+/// tests are unaffected.
 struct FileDiff: Equatable {
     let path: String
     let oldPath: String?
     let changeKind: ChangeKind
     let hunks: [Hunk]
+    var scope: DiffScope = .unstaged
+    var baseSHA: String?
 
     var addedCount: Int {
         hunks.reduce(0) { $0 + $1.lines.lazy.filter { $0.kind == .added }.count }

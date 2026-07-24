@@ -13,4 +13,11 @@ if [[ ! -d Frameworks/GhosttyKit.xcframework ]] \
     exit 1
 fi
 
-exec swift run ZenTerm "$@"
+# Filter the harmless linker noise so real app logs stand out: the prebuilt CodeEditLanguages
+# xcframework (ZEN-239) carries debug info pointing at its maintainer's build paths ("unable to
+# open object file /Users/Khan/…"), and libghostty-fat.a has a couple of "could not find symbol …
+# in object file" lines. Neither is a real problem, and `-Xlinker -w` doesn't suppress them on the
+# current linker. The `> >(…) 2>&1` process substitution filters both streams while `exec` keeps
+# the app's exit code, signals, and debug symbols intact.
+LINKER_NOISE='unable to open object file|could not find symbol .* in object file'
+exec swift run ZenTerm "$@" > >(grep --line-buffered -vE "$LINKER_NOISE") 2>&1

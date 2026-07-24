@@ -1,0 +1,124 @@
+import Foundation
+import SwiftTreeSitter
+
+/// Turns a whole-file source string into per-line syntax spans (ZEN-239). tree-sitter parses whole
+/// documents, so we parse the full blob (a bare hunk parses to garbage at its edges) and then map each
+/// colored capture onto the file lines it covers. Ranges come out as UTF-16 `NSRange`s aligned to the
+/// text, because `SwiftTreeSitter.Parser` parses UTF-16LE and `Node.range` is already UTF-16.
+///
+/// The parsing and the range→line mapping are separate statics so the mapping is unit-testable on a
+/// fixture without a grammar. The off-main orchestration (blob fetch, size ceiling, generation token)
+/// lives in the caller.
+enum DiffHighlighter {
+    /// Skip a side larger than this — a huge or generated file would hitch the parse. Protects the main
+    /// thread's responsiveness (ZEN-90); an oversized side renders plain.
+    private static let maxBytes = 256 * 1024
+    private static let maxLines = 2000
+
+    /// Resolve the grammar, fetch both sides' whole-file blobs, parse and map them to per-side line spans
+    /// — all off the main thread — then hand the result back on main. Returns nil when the language is
+    /// unsupported or neither side produced spans, so the caller leaves the file plain. The caller guards
+    /// against a stale result (a fast file-switch) with its own generation token.
+    static func enrich(file: FileDiff, repoRoot: URL, completion: @escaping (DiffFileSpans?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = enrichSync(file: file, repoRoot: repoRoot)
+            DispatchQueue.main.async { completion(result) }
+        }
+    }
+
+    /// The synchronous body of `enrich`, for a caller already off-main (the prefetch queue) that shouldn't
+    /// pay for another dispatch. Resolve → fetch both sides → parse → map; nil if unsupported or no spans.
+    static func enrichSync(file: FileDiff, repoRoot: URL) -> DiffFileSpans? {
+        guard let (language, query) = SyntaxLanguage.resolve(path: file.path) else { return nil }
+        let old = sideSpans(GitDiffRunner.blobText(for: file, side: .old, repoRoot: repoRoot), language, query)
+        let new = sideSpans(GitDiffRunner.blobText(for: file, side: .new, repoRoot: repoRoot), language, query)
+        return old.isEmpty && new.isEmpty ? nil : DiffFileSpans(old: old, new: new)
+    }
+
+    /// Whether a blob is small enough to parse on the shared queue without hitching (ZEN-90): under the
+    /// byte and line ceilings. A file over either renders plain.
+    static func isWithinSizeCeiling(_ text: String) -> Bool {
+        guard text.utf8.count <= maxBytes else { return false }
+        var lineCount = 1
+        for byte in text.utf8 where byte == 0x0A {
+            lineCount += 1
+            if lineCount > maxLines { return false }
+        }
+        return true
+    }
+
+    /// Per-line spans for one side's blob, or empty when the blob is absent or over the size ceiling.
+    private static func sideSpans(_ text: String?, _ language: Language, _ query: Query) -> [Int: [TokenSpan]] {
+        guard let text, isWithinSizeCeiling(text) else { return [:] }
+        return perLineSpans(text: text, language: language, query: query)
+    }
+
+    /// Parse `text` with `language`, run the highlight `query`, and return colored spans keyed by
+    /// 1-based file line number. Returns empty on a parse failure.
+    static func perLineSpans(text: String, language: Language, query: Query) -> [Int: [TokenSpan]] {
+        let parser = Parser()
+        do { try parser.setLanguage(language) } catch { return [:] }
+        guard let tree = parser.parse(text), let root = tree.rootNode else { return [:] }
+        var captures: [(range: NSRange, role: SyntaxRole)] = []
+        // Resolve query predicates (`#match?`, `#eq?`, `#is-not?`) instead of taking every syntactic
+        // match. 27 of the bundled grammars gate captures behind one, and an unresolved predicate fires
+        // regardless: Swift's `((navigation_expression (simple_identifier) @type) (#match? @type "^[A-Z]"))`
+        // would tag the base of *every* dotted access (`chrome.background`) as a type, and TypeScript's
+        // bare `(identifier) @type` would tag every identifier. `Context(string:)` builds a caching text
+        // provider over the same source these ranges index into. Purely subtractive: it can only drop
+        // matches whose guard fails, never invent one.
+        let resolved = query.execute(node: root, in: tree).resolve(with: Predicate.Context(string: text))
+        for match in resolved {
+            for capture in match.captures {
+                guard let role = SyntaxLanguage.role(forCapture: capture.nameComponents) else { continue }
+                let range = capture.node.range
+                guard range.length > 0 else { continue }
+                captures.append((range, role))
+            }
+        }
+        return perLineSpans(text: text, captures: captures)
+    }
+
+    /// Distribute whole-text capture ranges onto the lines they cover, as line-relative spans keyed by
+    /// 1-based line number. A capture that crosses a newline (a multiline string or comment) contributes
+    /// a clamped span to each line it touches. Pure over its inputs — no grammar needed — so the mapping
+    /// is testable directly.
+    static func perLineSpans(text: String, captures: [(range: NSRange, role: SyntaxRole)]) -> [Int: [TokenSpan]] {
+        let ns = text as NSString
+        var lineRanges: [NSRange] = []
+        ns.enumerateSubstrings(
+            in: NSRange(location: 0, length: ns.length), options: [.byLines, .substringNotRequired]
+        ) { _, substringRange, _, _ in
+            lineRanges.append(substringRange)
+        }
+        guard !lineRanges.isEmpty else { return [:] }
+
+        var result: [Int: [TokenSpan]] = [:]
+        for (range, role) in captures {
+            // Binary-search the first line whose content could still intersect the capture (its end is
+            // past the capture's start), then walk forward while lines begin before the capture ends.
+            var low = 0
+            var high = lineRanges.count
+            while low < high {
+                let mid = (low + high) / 2
+                if lineRanges[mid].location + lineRanges[mid].length <= range.location {
+                    low = mid + 1
+                } else {
+                    high = mid
+                }
+            }
+            let rangeEnd = range.location + range.length
+            var index = low
+            while index < lineRanges.count, lineRanges[index].location < rangeEnd {
+                let intersection = NSIntersectionRange(range, lineRanges[index])
+                if intersection.length > 0 {
+                    let relative = NSRange(
+                        location: intersection.location - lineRanges[index].location, length: intersection.length)
+                    result[index + 1, default: []].append(TokenSpan(range: relative, role: role))
+                }
+                index += 1
+            }
+        }
+        return result
+    }
+}

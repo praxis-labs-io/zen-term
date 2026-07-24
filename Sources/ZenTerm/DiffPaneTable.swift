@@ -67,6 +67,7 @@ final class DiffPaneTable: NSView {
     /// The view to make first responder so arrows move the current line and scroll the pane.
     var scrollFocusTarget: NSView { table }
     var rowCountForTesting: Int { source.rows.count }
+    var rowsForTesting: [DiffRow] { source.rows }
     /// The live content width the fold policy keys off — for a resize-driven interaction test.
     var contentWidthForTesting: CGFloat { table.bounds.width }
 
@@ -166,7 +167,7 @@ final class DiffPaneTable: NSView {
             case .split(let left, let right):
                 if let left { consider(left.text) }
                 if let right { consider(right.text) }
-            case .unified(let text, _, _, _):
+            case .unified(let text, _, _, _, _):
                 consider(text)
             }
         }
@@ -237,7 +238,7 @@ final class DiffPaneTable: NSView {
         switch row {
         case .hunkHeader: return false
         case .split(let left, let right): return left?.kind == .removed || right?.kind == .added
-        case .unified(_, let kind, _, _): return kind == .added || kind == .removed
+        case .unified(_, let kind, _, _, _): return kind == .added || kind == .removed
         }
     }
 
@@ -266,7 +267,7 @@ final class DiffPaneTable: NSView {
             case .hunkHeader: break
             case .split(let left, let right):
                 maxNumber = max(maxNumber, left?.lineNumber ?? 0, right?.lineNumber ?? 0)
-            case .unified(_, _, let old, let new):
+            case .unified(_, _, let old, let new, _):
                 maxNumber = max(maxNumber, old ?? 0, new ?? 0)
             }
         }

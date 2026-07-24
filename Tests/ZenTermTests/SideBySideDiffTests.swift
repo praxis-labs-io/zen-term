@@ -41,14 +41,14 @@ final class SideBySideDiffTests: XCTestCase {
             [
                 .hunkHeader("@@ -1,3 +1,3 @@"),
                 .split(
-                    left: DiffCell(lineNumber: 1, text: "import Foundation", kind: .context),
-                    right: DiffCell(lineNumber: 1, text: "import Foundation", kind: .context)),
+                    left: DiffCell(lineNumber: 1, text: "import Foundation", kind: .context, spans: nil),
+                    right: DiffCell(lineNumber: 1, text: "import Foundation", kind: .context, spans: nil)),
                 .split(
-                    left: DiffCell(lineNumber: 2, text: "let x = 1", kind: .removed),
-                    right: DiffCell(lineNumber: 2, text: "let x = 2", kind: .added)),
+                    left: DiffCell(lineNumber: 2, text: "let x = 1", kind: .removed, spans: nil),
+                    right: DiffCell(lineNumber: 2, text: "let x = 2", kind: .added, spans: nil)),
                 .split(
-                    left: DiffCell(lineNumber: 3, text: "let y = 3", kind: .context),
-                    right: DiffCell(lineNumber: 3, text: "let y = 3", kind: .context)),
+                    left: DiffCell(lineNumber: 3, text: "let y = 3", kind: .context, spans: nil),
+                    right: DiffCell(lineNumber: 3, text: "let y = 3", kind: .context, spans: nil)),
             ])
     }
 
@@ -66,8 +66,8 @@ final class SideBySideDiffTests: XCTestCase {
             rows,
             [
                 .hunkHeader("@@ -0,0 +1,2 @@"),
-                .split(left: nil, right: DiffCell(lineNumber: 1, text: "line one", kind: .added)),
-                .split(left: nil, right: DiffCell(lineNumber: 2, text: "line two", kind: .added)),
+                .split(left: nil, right: DiffCell(lineNumber: 1, text: "line one", kind: .added, spans: nil)),
+                .split(left: nil, right: DiffCell(lineNumber: 2, text: "line two", kind: .added, spans: nil)),
             ])
     }
 
@@ -85,8 +85,8 @@ final class SideBySideDiffTests: XCTestCase {
             rows,
             [
                 .hunkHeader("@@ -1,2 +0,0 @@"),
-                .split(left: DiffCell(lineNumber: 1, text: "line one", kind: .removed), right: nil),
-                .split(left: DiffCell(lineNumber: 2, text: "line two", kind: .removed), right: nil),
+                .split(left: DiffCell(lineNumber: 1, text: "line one", kind: .removed, spans: nil), right: nil),
+                .split(left: DiffCell(lineNumber: 2, text: "line two", kind: .removed, spans: nil), right: nil),
             ])
     }
 
@@ -106,9 +106,9 @@ final class SideBySideDiffTests: XCTestCase {
             [
                 .hunkHeader("@@ -1,2 +1,1 @@"),
                 .split(
-                    left: DiffCell(lineNumber: 1, text: "old a", kind: .removed),
-                    right: DiffCell(lineNumber: 1, text: "new a", kind: .added)),
-                .split(left: DiffCell(lineNumber: 2, text: "old b", kind: .removed), right: nil),
+                    left: DiffCell(lineNumber: 1, text: "old a", kind: .removed, spans: nil),
+                    right: DiffCell(lineNumber: 1, text: "new a", kind: .added, spans: nil)),
+                .split(left: DiffCell(lineNumber: 2, text: "old b", kind: .removed, spans: nil), right: nil),
             ])
     }
 
@@ -128,9 +128,9 @@ final class SideBySideDiffTests: XCTestCase {
             [
                 .hunkHeader("@@ -1,1 +1,2 @@"),
                 .split(
-                    left: DiffCell(lineNumber: 1, text: "old a", kind: .removed),
-                    right: DiffCell(lineNumber: 1, text: "new a", kind: .added)),
-                .split(left: nil, right: DiffCell(lineNumber: 2, text: "new b", kind: .added)),
+                    left: DiffCell(lineNumber: 1, text: "old a", kind: .removed, spans: nil),
+                    right: DiffCell(lineNumber: 1, text: "new a", kind: .added, spans: nil)),
+                .split(left: nil, right: DiffCell(lineNumber: 2, text: "new b", kind: .added, spans: nil)),
             ])
     }
 
@@ -150,11 +150,11 @@ final class SideBySideDiffTests: XCTestCase {
             [
                 .hunkHeader("@@ -1,2 +1,2 @@"),
                 .split(
-                    left: DiffCell(lineNumber: 1, text: "old a", kind: .removed),
-                    right: DiffCell(lineNumber: 1, text: "new a", kind: .added)),
+                    left: DiffCell(lineNumber: 1, text: "old a", kind: .removed, spans: nil),
+                    right: DiffCell(lineNumber: 1, text: "new a", kind: .added, spans: nil)),
                 .split(
-                    left: DiffCell(lineNumber: 2, text: "shared", kind: .context),
-                    right: DiffCell(lineNumber: 2, text: "shared", kind: .context)),
+                    left: DiffCell(lineNumber: 2, text: "shared", kind: .context, spans: nil),
+                    right: DiffCell(lineNumber: 2, text: "shared", kind: .context, spans: nil)),
             ])
     }
 
