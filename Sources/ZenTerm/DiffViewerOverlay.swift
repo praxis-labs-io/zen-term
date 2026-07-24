@@ -403,23 +403,35 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         return true
     }
 
-    /// Hand focus to the file tree (⌘h, or bare `h` from the diff pane).
+    /// Hand focus to the file tree (⌘h, or bare `h` from the diff pane). Inert while the composer is up:
+    /// its controls sit under the diff table in the responder chain, so a bare key that bubbles up from a
+    /// focused Submit/Queue button must not move focus out from under an open note (see `guardComposer`).
     private func focusTree() {
+        guard guardComposer() else { return }
         window?.makeFirstResponder(outline)
         refreshFocusStyling()
     }
 
     /// Hand focus to the diff (⌘l, or bare `l` on a file in the tree).
     private func focusDiff() {
+        guard guardComposer() else { return }
         window?.makeFirstResponder(diffTable.scrollFocusTarget)
         refreshFocusStyling()
     }
 
+    /// The viewer's bare keys (`\` `b` `q` `h`) are decoded in the panes' `keyDown`, and the comment
+    /// composer's box is a subview of the diff table — so a bare key pressed while a composer button holds
+    /// focus bubbles up the responder chain into the diff table and would fire the viewer command. Gate
+    /// every viewer command on this so a stray key can't re-render, refocus, or close the viewer out from
+    /// under an open note (the same protection `handleNavChord` gives the ⌘-chords). Returns true when it's
+    /// safe to act.
+    private func guardComposer() -> Bool { composer == nil }
+
     /// Resync everything that keys off which pane holds focus: the tree's selected file switches between
     /// a solid fill (focused) and a quiet outline (not), the diff's cursor line only shows while the diff
     /// is focused, and the footer legend scopes to the focused pane. AppKit's `isEmphasized` redraw
-    /// across two views in one window isn't reliable, so nudge it. Called on every focus transition —
-    /// the keyboard focus moves and, via the panes' `become`/`resignFirstResponder`, a mouse click.
+    /// across two views in one window isn't reliable, so nudge it. Called on every tree↔diff focus move —
+    /// the keyboard paths (⌘h/⌘l, bare h/l), and via each pane's `becomeFirstResponder` a mouse click.
     private func refreshFocusStyling() {
         outline.enumerateAvailableRowViews { rowView, _ in rowView.needsDisplay = true }
         diffTable.redrawSelection()
@@ -438,6 +450,29 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             }
             row += delta
         }
+    }
+
+    /// Ctrl-j/k / Ctrl-↑↓ in the tree: jump the file selection about half a visible page and center it,
+    /// the tree's echo of the diff's soft half-page. Steps file-by-file (so it lands on a real file, not a
+    /// header or directory) `page` times, then centers the row — a long changed-file list moves without a
+    /// key-repeat, staying near the middle of the pane the way the diff cursor does.
+    private func pageFileSelection(_ direction: Int) {
+        let clipHeight = outline.enclosingScrollView?.contentView.bounds.height ?? outline.bounds.height
+        let rowHeight = outline.numberOfRows > 0 ? outline.rect(ofRow: 0).height : 0
+        let page = rowHeight > 0 ? max(1, Int(clipHeight / rowHeight) / 2) : 5
+        for _ in 0..<page { moveFileSelection(direction) }
+        centerSelectedTreeRow()
+    }
+
+    /// Scroll the selected tree row to the vertical center of the clip (clamped to the document), so
+    /// paging leaves the file near the middle instead of flush against an edge.
+    private func centerSelectedTreeRow() {
+        let row = outline.selectedRow
+        guard row >= 0, let clip = outline.enclosingScrollView?.contentView else { return }
+        let rowRect = outline.rect(ofRow: row)
+        let maxY = max(0, outline.bounds.height - clip.bounds.height)
+        let target = min(max(0, rowRect.midY - clip.bounds.height / 2), maxY)
+        outline.scroll(NSPoint(x: 0, y: target))
     }
 
     // MARK: base dropdown
@@ -486,9 +521,18 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     private func focusBaseDropdown() {
-        guard !baseHeader.isHidden else { return }
+        guard guardComposer(), !baseHeader.isHidden else { return }
+        // The base dropdown is a header control, not a pane, and it isn't reachable via the panes'
+        // `becomeFirstResponder` hook — so it inherits whichever pane legend is up rather than flipping
+        // it, keeping the keyboard (`b`) and the mouse (click) paths consistent.
         window?.makeFirstResponder(baseDropdown)
-        refreshFocusStyling()  // the legend falls back to the tree set once the diff no longer holds focus
+    }
+
+    /// Close from a bare `q`. Inert while the composer is up: its own Esc/close cancels the note; a `q`
+    /// bubbling up from a focused Submit/Queue button must not discard it by closing the whole viewer.
+    private func requestClose() {
+        guard guardComposer() else { return }
+        onCancel()
     }
 
     // MARK: layout
@@ -526,9 +570,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         outline.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
         outline.onHalfPageDiff = { [weak self] direction in self?.diffTable.halfPage(direction) }
         outline.onMoveFile = { [weak self] delta in self?.moveFileSelection(delta) }
+        outline.onPageFiles = { [weak self] direction in self?.pageFileSelection(direction) }
         outline.onToggleLayout = { [weak self] in self?.toggleLayout() }
         outline.onFocusDiff = { [weak self] in self?.focusDiff() }
-        outline.onClose = { [weak self] in self?.onCancel() }
+        outline.onClose = { [weak self] in self?.requestClose() }
         outline.onBecameFirstResponder = { [weak self] in self?.refreshFocusStyling() }
         diffTable.onEscape = { [weak self] in self?.onCancel() }
         diffTable.onYank = { [weak self] wantsReference in self?.yank(reference: wantsReference) }
@@ -536,7 +581,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         diffTable.onToggleLayout = { [weak self] in self?.toggleLayout() }
         diffTable.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
         diffTable.onFocusTree = { [weak self] in self?.focusTree() }
-        diffTable.onClose = { [weak self] in self?.onCancel() }
+        diffTable.onClose = { [weak self] in self?.requestClose() }
         diffTable.onFocusChanged = { [weak self] in self?.refreshFocusStyling() }
         // Re-evaluate the auto-fold policy whenever the diff pane's width changes (ZEN-243). The frame
         // notification fires with the pane's *final* frame on every resize — reliable where piggybacking
@@ -754,23 +799,22 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         branchLabel.isHidden = branch == nil
     }
 
-    /// The footer's key legend as compact keycaps, scoped to the focused pane so it stays lean: the
-    /// tree shows the fold/file/base keys, the diff shows the change/select/yank/comment keys, and both
-    /// lead with the ⌘h/⌘l pane switch and end with layout + close. The pane keys read from the live
-    /// keymap (rebindable global nav); everything else is the viewer's own bare key. Rebuilt on a
-    /// theme/keymap change, a narrowness flip, and a focus move — every keycap bakes its colors in at
-    /// construction, so it's re-created rather than mutated.
+    /// The footer's key legend as compact keycaps, scoped to the focused pane so it stays lean: the tree
+    /// shows the file/fold/base keys, the diff shows the change/select/yank/comment keys, and both end
+    /// with layout + close. Switching panes (⌘h/⌘l, or bare h/l) is left off the legend on purpose — it's
+    /// natural and discoverable, and spending two keycaps advertising it is what made the old footer
+    /// crowded. Rebuilt on a theme/keymap change, a narrowness flip, and a focus move — every keycap bakes
+    /// its colors in at construction, so it's re-created rather than mutated.
     private func fillHints() {
         hintsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        func glyph(_ chord: KeyInterceptor.ReservedChord) -> String { CommandCatalog.spec(for: chord).shortcut }
         // Default to the tree legend for anything that isn't the diff itself (the base dropdown, or the
         // initial build before a pane holds focus) — the tree is the viewer's entry point.
         let diffIsFocused = window?.firstResponder === diffTable.scrollFocusTarget
-        var groups: [(keys: [String], label: String)] = [([glyph(.navLeft), glyph(.navRight)], "panes")]
+        var groups: [(keys: [String], label: String)]
         if diffIsFocused {
-            groups += [(["{", "}"], "change"), (["V"], "select"), (["y", "Y"], "yank"), (["⏎"], "comment")]
+            groups = [(["{", "}"], "change"), (["V"], "select"), (["y", "Y"], "yank"), (["⏎"], "comment")]
         } else {
-            groups += [(["j", "k"], "files"), (["h", "l"], "fold"), (["b"], "base")]
+            groups = [(["j", "k"], "files"), (["h", "l"], "fold"), (["b"], "base")]
         }
         // Layout only exists while wide — narrow force-folds to inline, so the toggle is disabled and its
         // key hidden (ZEN-243).
@@ -981,7 +1025,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// The layout toggle (bare `\`) flips the pinned layout for the session; disabled while narrow,
     /// where inline is forced and the choice doesn't exist.
     func toggleLayout() {
-        guard !isNarrow else { return }
+        guard guardComposer(), !isNarrow else { return }
         layoutOverride = effectiveLayout == .sideBySide ? .inline : .sideBySide
         reconcileLayout()
     }
@@ -1146,6 +1190,8 @@ private final class NavOutlineView: NSOutlineView {
     /// Ctrl-D / Ctrl-U half-page the diff pane while the tree keeps focus (+1 down / -1 up), so a file
     /// can be scanned without stepping over into the diff.
     var onHalfPageDiff: ((Int) -> Void)?
+    /// Ctrl-j/k / Ctrl-↑↓ soft half-page the tree's own file selection (+1 down / -1 up), centered.
+    var onPageFiles: ((Int) -> Void)?
     /// j / k move to the next / previous file, so the tree reads the same way as the diff pane.
     var onMoveFile: ((Int) -> Void)?
     /// Bare `\` — flip the viewer between inline and side-by-side (ZEN-262).
@@ -1210,6 +1256,10 @@ private final class NavOutlineView: NSOutlineView {
     override func keyDown(with event: NSEvent) {
         if let direction = DiffPaneTable.halfPageDirection(for: event) {
             onHalfPageDiff?(direction)
+            return
+        }
+        if let direction = DiffPaneTable.pageDirection(for: event) {
+            onPageFiles?(direction)
             return
         }
         if let command = DiffPaneTable.viewerCommand(for: event) {

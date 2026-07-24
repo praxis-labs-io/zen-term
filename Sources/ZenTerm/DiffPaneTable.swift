@@ -539,6 +539,19 @@ final class DiffPaneTable: NSView {
         }
     }
 
+    /// Ctrl-j/k and Ctrl-↑/↓: a soft half-page in the focused pane, cursor kept centered (ZEN-262).
+    /// Deliberately separate from `halfPageDirection` (Ctrl-D/U) so the tree can page its own file list
+    /// with these while Ctrl-D/U keeps scrolling the diff underneath it. +1 down, -1 up. Same
+    /// exact-`.control` match, so ⌘/⌥ combinations fall through to their own handlers.
+    static func pageDirection(for event: NSEvent) -> Int? {
+        guard event.modifierFlags.intersection(reservableModifiers) == .control else { return nil }
+        switch event.keyCode {
+        case 38, 125: return 1  // j / ↓
+        case 40, 126: return -1  // k / ↑
+        default: return nil
+        }
+    }
+
     /// Half-page scroll that carries the current-line highlight with it, so the cursor stays put on
     /// screen instead of sliding off. Driven from both panes (Ctrl-D/U) — when the tree holds focus the
     /// line isn't painted (the tree owns the focus indicator), but the selection still moves so it's
@@ -854,7 +867,7 @@ private final class DiffTableView: NSTableView {
     func disarmPendingKeys() { sawG = false }
 
     override func keyDown(with event: NSEvent) {
-        if let direction = DiffPaneTable.halfPageDirection(for: event) {
+        if let direction = DiffPaneTable.halfPageDirection(for: event) ?? DiffPaneTable.pageDirection(for: event) {
             sawG = false
             onHalfPage?(direction)
             return

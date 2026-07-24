@@ -111,6 +111,31 @@ final class DiffVimKeyTests: XCTestCase {
         XCTAssertEqual(DiffPaneTable.viewerCommand(for: try keyDown("\\", flags: .function)), .toggleLayout)
     }
 
+    // MARK: pageDirection
+
+    private func ctrlCode(_ keyCode: UInt16, flags: NSEvent.ModifierFlags = .control) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0,
+                context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: keyCode))
+    }
+
+    func test_pageDirection_decodesCtrlJKAndCtrlArrows() throws {
+        XCTAssertEqual(DiffPaneTable.pageDirection(for: try ctrlCode(38)), 1)  // Ctrl-j
+        XCTAssertEqual(DiffPaneTable.pageDirection(for: try ctrlCode(40)), -1)  // Ctrl-k
+        // Ctrl-↓ / Ctrl-↑ carry .function/.numericPad on top of .control; the exact-.control match ignores them.
+        XCTAssertEqual(
+            DiffPaneTable.pageDirection(for: try ctrlCode(125, flags: [.control, .function, .numericPad])), 1)
+        XCTAssertEqual(
+            DiffPaneTable.pageDirection(for: try ctrlCode(126, flags: [.control, .function, .numericPad])), -1)
+    }
+
+    func test_pageDirection_ignoresPlainAndOtherModifiers() throws {
+        XCTAssertNil(DiffPaneTable.pageDirection(for: try ctrlCode(38, flags: [])), "a plain j is a motion, not a page")
+        XCTAssertNil(
+            DiffPaneTable.pageDirection(for: try ctrlCode(38, flags: [.command, .control])), "⌘⌃j isn't a page")
+    }
+
     // MARK: yankShortcut
 
     func test_yankShortcut_separatesCodeFromReference() throws {

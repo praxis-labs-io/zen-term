@@ -431,6 +431,21 @@ final class DiffViewerOverlayTests: XCTestCase {
         XCTAssertTrue(cancelled, "q closes the viewer")
     }
 
+    private func ctrlKey(_ keyCode: UInt16) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: .control, timestamp: 0, windowNumber: 0,
+            context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: keyCode)!
+    }
+
+    func test_ctrlJK_inTree_pageTheFileSelection() {
+        let (overlay, _) = mount(unstaged: [file("One.swift"), file("Two.swift"), file("Three.swift")])
+        // The test window is tall, so half a page is larger than this list — one page lands on the end.
+        overlay.treeOutlineForTesting.keyDown(with: ctrlKey(38))  // Ctrl-j
+        XCTAssertEqual(overlay.selectedFilePathForTesting, "Three.swift", "Ctrl-j pages down the file list")
+        overlay.treeOutlineForTesting.keyDown(with: ctrlKey(40))  // Ctrl-k
+        XCTAssertEqual(overlay.selectedFilePathForTesting, "One.swift", "Ctrl-k pages back up")
+    }
+
     func test_footerLegend_scopesToTheFocusedPane() {
         let (overlay, _) = mount(unstaged: [file("One.swift"), file("Two.swift")])
 

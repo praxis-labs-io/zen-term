@@ -243,15 +243,18 @@ isn't guessed). A static header above the tree carries a `Base: <branch>` `Dropd
 (the same control the theme picker uses; branches default-first then by recency, the
 checked-out branch excluded) that re-runs the committed slice against the chosen branch
 and is reachable from the tree by arrow key or bare `b`. Navigation is vim-native and
-local to the card (ZEN-262). ⌘h/⌘l move focus between the tree and the diff — the app's
+local to the card (ZEN-262). ⌘h/⌘l move focus between the tree and the diff (the app's
 own pane chords, forwarded from `WindowController.handle` since `KeyInterceptor` consumes
-chords before the responder chain — and everything else is a bare key the panes handle in
-`keyDown`: j/k step files or lines, h/l (and ←/→) fold the tree or open a file into the
-diff, {/} jump changes, b focuses the base, `\` toggles the layout, q/esc close. Because
-the bare keys aren't reserved, they pass through to the terminal when the viewer is closed
-and are captured as text by the comment composer while it's open — no global chord is spent
-on a view-only command. It wears the accent halo and the pane behind yields focus, the way
-a configured tool float does.
+chords before the responder chain); everything else is a bare key the panes handle in
+`keyDown`. j/k step files or lines, h/l (and ←/→) fold the tree or open a file into the
+diff, {/} jump changes, Ctrl-j/k and Ctrl-↑/↓ soft half-page the focused pane with the
+cursor kept centered (Ctrl-D/U too; from the tree those instead scroll the diff without
+leaving it), b focuses the base, `\` toggles the layout, q/esc close. Because the bare
+keys aren't reserved, they pass through to the terminal when the viewer is closed, and the
+comment composer captures them as text while it's open, so no global chord is spent on a
+view-only command. The footer legend scopes to the focused pane and leaves pane-switching
+off (it's natural and discoverable, and it was the crowding the trim removed). The card
+wears the accent halo and the pane behind yields focus, the way a configured tool float does.
 
 **Selection is linewise, and vim-flavored.** Nothing typed inside the card reaches a
 terminal, so the plain letters are free: `j`/`k` move, `V` starts a visual selection

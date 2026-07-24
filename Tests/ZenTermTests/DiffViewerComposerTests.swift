@@ -249,6 +249,34 @@ final class DiffViewerComposerTests: XCTestCase {
             "moving pane focus under an open comment would leave it pointing at lines it can't see")
     }
 
+    func test_bareViewerKeysFromAComposerControlDoNotEscapeToTheViewer() throws {
+        let overlay = mount([file()])
+        try pressReturn(into: overlay)  // open the composer (focus lands on the note)
+        let composer = try XCTUnwrap(overlay.composerForTesting)
+        let layoutBefore = overlay.renderedDiffLayoutForTesting
+        let closesBefore = closes
+
+        // Down / Tab auto-advances focus from the note to the Submit button, and the composer box is a
+        // subview of the diff table — so a bare key pressed there bubbles up the responder chain into the
+        // table's keyDown. It must stay inert while the composer is up: `q` would otherwise close the whole
+        // viewer and discard the in-progress note, and `\` would re-render the layout under it (ZEN-262).
+        let submit = composer.submitButtonForTesting
+        submit.keyDown(with: bareKey("q"))
+        submit.keyDown(with: bareKey("\\"))
+
+        XCTAssertNotNil(overlay.composerForTesting, "the composer stays open")
+        XCTAssertEqual(closes, closesBefore, "q must not close the viewer from the composer's Submit button")
+        XCTAssertEqual(
+            overlay.renderedDiffLayoutForTesting, layoutBefore, "\\ must not re-render under the composer")
+    }
+
+    private func bareKey(_ character: String, keyCode: UInt16 = 0) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: character, charactersIgnoringModifiers: character, isARepeat: false,
+            keyCode: keyCode)!
+    }
+
     // MARK: the footer says so
 
     func test_theFooterAdvertisesTheCommentKey() {
