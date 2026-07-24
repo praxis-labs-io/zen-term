@@ -121,19 +121,31 @@ final class DiffPaneTable: NSView {
         syncCursorAfterMouseSelection()
     }
 
+    /// The cursor's line numbers — a row identity the caller can hold across a rows swap the pane can't
+    /// bridge itself. The reload path clears the pane (`show([])`) while the new file's highlight is
+    /// parsed, so by the time its rows arrive the pane has no cursor left to carry (ZEN-233).
+    var cursorLine: DiffSelection.LineNumbers? { DiffSelection.lineNumbers(at: cursorRow, in: source.rows) }
+
     /// Render `rows`. `preservingSelection` is for a re-render of the *same* file — a layout flip
     /// (⌘I) or a resize crossing the auto-fold band — where losing the cursor and any running
     /// selection is a real loss: you were mid-review, and the layout change wasn't about the
     /// selection. The row *indices* differ between layouts (side-by-side pairs +/− lines that inline
     /// lists separately), so the cursor is carried by its line numbers and re-found, never by index.
-    func show(_ rows: [DiffRow], preservingSelection: Bool = false) {
+    ///
+    /// `restoringCursor` puts a cursor back from the *caller's* memory of it, for a reload that rebuilt
+    /// the same file's rows from changed content. Only the cursor: a visual selection was made over
+    /// lines that have since moved, so it collapses rather than re-anchoring somewhere it wasn't drawn.
+    func show(
+        _ rows: [DiffRow], preservingSelection: Bool = false,
+        restoringCursor: DiffSelection.LineNumbers? = nil
+    ) {
         let carried =
             preservingSelection
             ? (
-                cursor: DiffSelection.lineNumbers(at: cursorRow, in: source.rows),
+                cursor: cursorLine,
                 anchor: anchorRow.flatMap { DiffSelection.lineNumbers(at: $0, in: source.rows) }
             )
-            : (cursor: nil, anchor: nil)
+            : (cursor: restoringCursor, anchor: nil)
 
         cancelFlash()
         table.disarmPendingKeys()

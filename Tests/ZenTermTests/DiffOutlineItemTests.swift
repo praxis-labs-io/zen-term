@@ -47,6 +47,42 @@ final class DiffOutlineItemTests: XCTestCase {
         XCTAssertEqual(leaf?.addedCount, 4)
         XCTAssertEqual(leaf?.removedCount, 7)
     }
+
+    // MARK: identity (ZEN-233)
+
+    private func identities(in items: [DiffOutlineItem]) -> [String] {
+        items.flatMap { [$0.identity] + identities(in: $0.children) }
+    }
+
+    func test_identity_isStableAcrossARebuildFromTheSameStatus() {
+        let status = GitDiffRunner.StatusLoad(
+            unstaged: [file("src/app/main.swift", added: 1, removed: 0), file("README.md", added: 1, removed: 0)],
+            staged: [], committed: [], baseBranch: nil, baseSHA: nil, currentBranch: nil)
+
+        // Two independent boxings of the same status — the rebuild a reload does — must agree, or the
+        // folds and selection have nothing to match against.
+        let first = identities(in: DiffOutlineItem.sections(from: status))
+        let second = identities(in: DiffOutlineItem.sections(from: status))
+        XCTAssertEqual(first, second)
+        XCTAssertTrue(first.contains("Unstaged\u{1}src/app/main.swift"))
+        // The single-child chain src > app folds into one directory node, so its identity is the
+        // folded path.
+        XCTAssertTrue(first.contains("Unstaged\u{1}src/app"), "the folded directory carries its path")
+    }
+
+    func test_identity_distinguishesTheSamePathInTwoSections() {
+        // A file changed in the working tree and since the base appears in both slices — same path, two
+        // rows, so two identities (the same reason `highlightKey` carries scope).
+        let status = GitDiffRunner.StatusLoad(
+            unstaged: [file("a.swift", added: 1, removed: 0)], staged: [],
+            committed: [file("a.swift", added: 1, removed: 0)], baseBranch: "main", baseSHA: "abc",
+            currentBranch: "feature")
+
+        let all = identities(in: DiffOutlineItem.sections(from: status))
+        XCTAssertTrue(all.contains("Unstaged\u{1}a.swift"))
+        XCTAssertTrue(all.contains("Committed\u{1}a.swift"))
+        XCTAssertEqual(Set(all).count, all.count, "no two rows share an identity")
+    }
 }
 
 extension DiffOutlineItem {

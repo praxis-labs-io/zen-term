@@ -43,10 +43,15 @@ struct DiffSelection: Equatable {
             anchorNewLine: newNumbers.isEmpty ? Self.anchorNewLine(above: selected.first, in: rows) : nil)
     }
 
+    /// A row's identity across a re-render: the file line numbers it carries, on either side. Row
+    /// *indices* can't play that part — the two layouts index differently, and a reload changes the
+    /// content under them (ZEN-233).
+    typealias LineNumbers = (old: Int?, new: Int?)
+
     /// The line numbers a row occupies, or nil for a hunk header or an out-of-range index. This pair
     /// is a row's identity *across* a layout change — the row indices differ between side-by-side and
     /// inline, so a cursor carried over a re-render is carried as this and re-found with `row(for:)`.
-    static func lineNumbers(at index: Int, in rows: [DiffRow]) -> (old: Int?, new: Int?)? {
+    static func lineNumbers(at index: Int, in rows: [DiffRow]) -> LineNumbers? {
         guard rows.indices.contains(index), let line = Self.line(at: index, in: rows) else { return nil }
         guard line.old != nil || line.new != nil else { return nil }
         return (line.old, line.new)
@@ -54,7 +59,7 @@ struct DiffSelection: Equatable {
 
     /// Find the row carrying `lineNumbers`. Matches on the new side first — that's the file on disk,
     /// and it's the side both layouts agree on for anything that isn't a deletion.
-    static func row(for lineNumbers: (old: Int?, new: Int?), in rows: [DiffRow]) -> Int? {
+    static func row(for lineNumbers: LineNumbers, in rows: [DiffRow]) -> Int? {
         if let new = lineNumbers.new,
             let match = rows.indices.first(where: { Self.line(at: $0, in: rows)?.new == new })
         {

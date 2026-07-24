@@ -34,16 +34,13 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
         self.onSelect = onSelect
     }
 
-    /// The first file in tree order, or nil for an empty tree — the initial selection.
-    var firstFile: DiffOutlineItem? {
-        func firstLeaf(in items: [DiffOutlineItem]) -> DiffOutlineItem? {
-            for item in items {
-                if item.fileDiff != nil { return item }
-                if let nested = firstLeaf(in: item.children) { return nested }
-            }
-            return nil
+    /// Every file row in tree order — the rows a selection can land on. The first is where a load with
+    /// nothing to restore lands; the whole list is what a restored selection is matched against (ZEN-233).
+    var fileItems: [DiffOutlineItem] {
+        func leaves(in items: [DiffOutlineItem]) -> [DiffOutlineItem] {
+            items.flatMap { $0.fileDiff != nil ? [$0] : leaves(in: $0.children) }
         }
-        return firstLeaf(in: roots)
+        return leaves(in: roots)
     }
 
     // MARK: data source
