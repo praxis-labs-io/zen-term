@@ -48,7 +48,10 @@ final class UpdateController {
 
     /// Start scheduled update checks. A no-op in an unpackaged build. Safe to call once at launch.
     func start() {
-        guard Self.isSupported else { return }
+        guard Self.isSupported else {
+            Log.info("update checks inert — unpackaged build (no feed URL)", category: .update)
+            return
+        }
         do {
             try updater.start()
         } catch {
@@ -57,6 +60,9 @@ final class UpdateController {
             return
         }
         started = true
+        Log.info(
+            "update checks live (auto-check \(GeneralConfig.current.automaticUpdateChecks ? "on" : "off"))",
+            category: .update)
         applyAutoCheckSetting()
         windowCloseObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: nil, queue: .main
@@ -115,28 +121,50 @@ final class UpdateController {
 
     private func render() {
         guard let state else {
-            if let card, let host { host.dismissUpdateCard(card) }
+            if let card, let host {
+                host.dismissUpdateCard(card)
+                Log.info("update card torn down", category: .update)
+            }
             card = nil
             host = nil
             return
         }
-        guard let controller = keyController() else { return }  // nothing to host it; re-home on close
-
-        if let card, host === controller {
-            card.update(to: state, actions: actions)  // morph in place
+        // A card already showing in a live host morphs in place — and must do so even when
+        // `keyController()` can't resolve a host right now. A foreign key window (an open save/open
+        // panel, or another app frontmost) makes `keyController()` nil; gating this morph on it is
+        // what stranded the card on a stale state whose `fireOnce` reply had already fired, so
+        // Later / Relaunch did nothing and the card couldn't be dismissed (ZEN-248). Re-homing to a
+        // *closed* host is handled by `hostWindowMaybeClosing`, which nils `host` first — so a
+        // non-nil `host` here always means a live window still showing this card. Not gating on the
+        // key window also matches the card's documented intent: it re-homes only when its host
+        // *closes* mid-flow, not as focus wanders between windows.
+        if let card, host != nil {
+            card.update(to: state, actions: actions)
+            Log.info("update card morphed in place: \(state.logLabel)", category: .update)
             return
         }
-        if let card, let host { host.dismissUpdateCard(card) }
+        guard let controller = keyController() else {
+            // The leading candidate from ZEN-248, which previously left no trace: distinguish the two
+            // `keyController()` failure modes — no key window at all vs. a foreign one (an open save/
+            // open panel, or another app frontmost).
+            let keyState = NSApp.keyWindow == nil ? "no key window" : "foreign key window"
+            Log.warning(
+                "update card dropped — no host to show it (\(keyState)); retries on next state",
+                category: .update)
+            return
+        }
         let fresh = UpdateCardView(state: state, actions: actions)
         controller.presentUpdateCard(fresh)
         card = fresh
         host = controller
+        Log.info("update card presented: \(state.logLabel)", category: .update)
     }
 
     /// The hosting window is closing. Drop the card (it dies with that window's view tree) and
     /// re-present into whatever becomes key. `willClose` fires before key moves, so hop a tick.
     private func hostWindowMaybeClosing(_ window: NSWindow?) {
         guard state != nil, let host, window === host.window else { return }
+        Log.info("update card host window closing — re-homing on next render", category: .update)
         card = nil
         self.host = nil
         DispatchQueue.main.async { [weak self] in self?.render() }

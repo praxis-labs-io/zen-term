@@ -78,6 +78,40 @@ final class DropdownTests: XCTestCase {
         XCTAssertFalse(dropdown.isPopoverOpen, "Esc in the dropdown's keyDown closes the list")
     }
 
+    /// ZEN-268: the open list card lives on `window.contentView`, not inside the dropdown's own
+    /// subtree, so tearing the dropdown's host out of the window (what a tab-switch `closeModal()`
+    /// does to the Settings card) must still take the card with it. Without a leave-the-window hook
+    /// the card orphans on the content view — stuck on every tab, no way to clear but restart.
+    func test_removingHostFromWindow_closesOpenList() {
+        let items = [
+            DropdownItem(title: "A", group: nil, note: nil, isSelected: true),
+            DropdownItem(title: "B", group: nil, note: nil, isSelected: false),
+        ]
+        let dropdown = Dropdown(items: items, selectedIndex: 0) { _ in }
+        dropdown.translatesAutoresizingMaskIntoConstraints = true
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        // Host the dropdown inside a container standing in for the Settings modal overlay, so the
+        // teardown removes an ANCESTOR of the dropdown (not the dropdown directly) — exactly the
+        // `closeModal()` path.
+        let host = NSView(frame: window.contentView!.bounds)
+        window.contentView?.addSubview(host)
+        host.addSubview(dropdown)
+        dropdown.frame = NSRect(x: 20, y: 200, width: 220, height: 30)
+        window.makeFirstResponder(dropdown)
+        dropdown.openListForTesting()
+        XCTAssertTrue(dropdown.isPopoverOpen)
+        XCTAssertTrue(window.contentView!.subviews.contains { $0 is ShadowCardView })
+
+        host.removeFromSuperview()  // the Settings card being torn down out from under the dropdown
+
+        XCTAssertFalse(dropdown.isPopoverOpen, "list closes when the dropdown leaves the window")
+        XCTAssertFalse(
+            window.contentView!.subviews.contains { $0 is ShadowCardView },
+            "no orphaned list card left drawn on the content view")
+    }
+
     func test_arrowNavigation_scrollsHighlightIntoView() {
         // 15 rows overflow the ~260pt list cap, so the last row starts below the fold.
         let items = (0..<15).map {

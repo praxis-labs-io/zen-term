@@ -135,6 +135,16 @@ final class Dropdown: NSView {
     }
     override func drawFocusRingMask() {}
 
+    /// The open list card is parented to the window's content view (so it escapes the dropdown's
+    /// own bounds), not to the dropdown's subtree — so removing the dropdown, or an ancestor like
+    /// the Settings modal, doesn't take the card with it. Closing it when the dropdown leaves the
+    /// window binds the card's lifetime to the control: a tab-switch `closeModal()` that tears out
+    /// the host can no longer strand a dead list on the content view, stuck over every tab (ZEN-268).
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { closeList() }
+    }
+
     private func restyle() {
         let chrome = Theme.current.chrome
         let open = listCard != nil
