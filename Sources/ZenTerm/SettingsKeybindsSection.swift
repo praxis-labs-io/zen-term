@@ -19,7 +19,7 @@ final class SettingsKeybindsSection: SettingsSection {
         ("Drawers", [.toggleBottomDrawer, .toggleRightDrawer]),
         (
             "Surfaces & Tools",
-            [.toggleRepoPicker, .toggleCommandPalette, .openDiffViewer, .toggleDiffLayout, .openSettings]
+            [.toggleRepoPicker, .toggleCommandPalette, .openDiffViewer, .openSettings]
         ),
     ]
 

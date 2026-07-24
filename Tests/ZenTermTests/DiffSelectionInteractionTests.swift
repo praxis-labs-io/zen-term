@@ -107,9 +107,22 @@ final class DiffSelectionInteractionTests: XCTestCase {
     private func copied() -> String? { board.string(forType: .string) }
 
     private func inline(_ overlay: DiffViewerOverlay) {
-        // Inline layout is one row per line, so a row index maps to a line without pairing rules.
-        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))
+        // Inline layout is one row per line, so a row index maps to a line without pairing rules. Toggle
+        // via the real bare `\` key the diff pane decodes (ZEN-262).
+        let event = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "\\", charactersIgnoringModifiers: "\\", isARepeat: false, keyCode: 42)!
+        overlay.diffPaneForTesting.scrollFocusTarget.keyDown(with: event)
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline)
+    }
+
+    /// Send a bare vim key into the tree outline, the way `NavOutlineView` decodes j/k.
+    private func typeInTree(_ characters: String, keyCode: UInt16, into overlay: DiffViewerOverlay) {
+        overlay.treeOutlineForTesting.keyDown(
+            with: NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                context: nil, characters: characters, charactersIgnoringModifiers: characters,
+                isARepeat: false, keyCode: keyCode)!)
     }
 
     // MARK: selection + yank
@@ -315,7 +328,7 @@ final class DiffSelectionInteractionTests: XCTestCase {
         let rowsBefore = overlay.diffPaneForTesting.selectedRows
         XCTAssertEqual(rowsBefore, IndexSet(4...5), "precondition: the inline rows")
 
-        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))
+        try type("\\", into: overlay)
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .sideBySide, "precondition: it re-rendered")
         XCTAssertEqual(
             overlay.diffPaneForTesting.selectedRows, IndexSet(2...3),
@@ -336,7 +349,7 @@ final class DiffSelectionInteractionTests: XCTestCase {
         XCTAssertTrue(overlay.diffPaneForTesting.hasVisualSelection)
 
         XCTAssertTrue(overlay.handleNavChord(.navLeft))
-        XCTAssertTrue(overlay.handleNavChord(.navDown))  // to Two.swift
+        typeInTree("j", keyCode: 38, into: overlay)  // to Two.swift
         XCTAssertEqual(overlay.selectedFilePathForTesting, "Two.swift")
         XCTAssertFalse(
             overlay.diffPaneForTesting.hasVisualSelection, "a different file is not the same review")
@@ -351,7 +364,7 @@ final class DiffSelectionInteractionTests: XCTestCase {
         let bottom = overlay.diffPaneForTesting.cursorRowForTesting
         try type("g", into: overlay)  // armed
 
-        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))  // re-render
+        try type("\\", into: overlay)  // re-render
         try type("g", into: overlay)
         XCTAssertNotEqual(
             overlay.diffPaneForTesting.cursorRowForTesting, 0,

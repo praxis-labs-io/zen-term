@@ -58,7 +58,6 @@ enum CommandCatalog {
         // Present for exhaustiveness; all are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
-        case .toggleDiffLayout: return tool("Toggle Diff Layout", glyph, chord)
         }
     }
 

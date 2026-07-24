@@ -7,15 +7,17 @@ import AppKit
 /// is injected as `loader`; the caller only opens this over a real repo (a non-repo shows a toast), so
 /// there is no not-a-repo state.
 ///
-/// Navigation uses the app's pane chords rather than Tab: ⌘h/⌘l move between the tree and the diff,
-/// ⌘j/⌘k jump to the next/previous change (file in the tree, hunk in the diff). Those arrive through
-/// `handleNavChord` (WindowController forwards them, since KeyInterceptor consumes chords before the
-/// responder chain). Plain arrows move line-by-line; Left/Right fold sections and directories.
+/// Navigation is vim-native and local to this view (ZEN-262). ⌘h/⌘l move focus between the tree and
+/// the diff — the app's pane chords, forwarded through `handleNavChord` since KeyInterceptor consumes
+/// chords before the responder chain — and everything else is a bare key the panes handle in `keyDown`.
+/// In the tree: j/k step files, h/l (and ←/→) fold or open a file into the diff, b focuses the base. In
+/// the diff: j/k move the cursor, {/} jump changes, V selects, y/Y yank, ⏎ comments, h returns to the
+/// tree. `\` toggles the layout and q/esc close, from either pane.
 ///
 /// The diff renders in one of two layouts (ZEN-228): `SideBySideDiff` (old │ new) or `UnifiedDiff`
-/// (inline), toggled by the `.toggleDiffLayout` command (⌘I). Both transforms feed the same
-/// `DiffPaneTable` behind the layout-agnostic `DiffRow` model; the effective layout is the session
-/// override (`layoutOverride`), else the `diff-layout` config default.
+/// (inline), toggled by bare `\`. Both transforms feed the same `DiffPaneTable` behind the
+/// layout-agnostic `DiffRow` model; the effective layout is the session override (`layoutOverride`),
+/// else the `diff-layout` config default.
 final class DiffViewerOverlay: NSView, ModalOverlay {
     typealias StatusResult = Result<GitDiffRunner.StatusLoad, GitDiffRunner.Failure>
     /// Loads the repo status for a chosen base (nil = the repo's default) and calls back on the main
@@ -97,7 +99,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// The layout the shown rows were built with — a config-default change only re-renders when it
     /// actually differs, so a theme change alone doesn't reset the scroll or selection.
     private var renderedLayout: GeneralConfig.DiffLayout?
-    /// A per-session layout override set by the layout-toggle command (⌘I) while the pane is wide, never
+    /// A per-session layout override set by the bare `\` layout toggle while the pane is wide, never
     /// persisted; nil defers to the config default (`GeneralConfig.current.diffLayout`). Only governs the
     /// wide state — a narrow pane force-folds to inline regardless (ZEN-243).
     private var layoutOverride: GeneralConfig.DiffLayout?
@@ -385,40 +387,43 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     /// The pane-nav chords, forwarded by `WindowController` while this overlay is open (KeyInterceptor
     /// consumes chords before the responder chain, so the overlay can't see them itself). ⌘h/⌘l move
-    /// between the tree and the diff; ⌘j/⌘k jump to the next/previous change in the focused pane.
-    /// Returns true when it consumed the chord.
+    /// focus between the tree and the diff (left/right); ⌘j/⌘k (up/down) have nothing stacked to focus,
+    /// so they fall through as no-ops. Everything else the viewer does — jump changes, fold, layout,
+    /// base, yank, close — is a bare key the panes handle in `keyDown`. Returns true when it consumed
+    /// the chord.
     func handleNavChord(_ chord: KeyInterceptor.ReservedChord) -> Bool {
-        // Consumed, not acted on, while the composer is up: moving the pane focus or flipping the
-        // layout underneath an open comment would leave it pointing at lines you can no longer see.
+        // Consumed, not acted on, while the composer is up: moving the pane focus underneath an open
+        // comment would leave it pointing at lines you can no longer see.
         guard composer == nil else { return true }
         switch chord {
-        case .navLeft:
-            window?.makeFirstResponder(outline)
-            refreshFocusStyling()
-        case .navRight:
-            window?.makeFirstResponder(diffTable.scrollFocusTarget)
-            refreshFocusStyling()
-        case .navDown:
-            if treeIsFocused { moveFileSelection(1) } else { diffTable.jumpToNextChange() }
-        case .navUp:
-            if treeIsFocused { moveFileSelection(-1) } else { diffTable.jumpToPrevChange() }
-        case .toggleDiffLayout:
-            toggleLayout()
-        default:
-            return false
+        case .navLeft: focusTree()
+        case .navRight: focusDiff()
+        default: return false
         }
         return true
     }
 
-    private var treeIsFocused: Bool { window?.firstResponder === outline }
+    /// Hand focus to the file tree (⌘h, or bare `h` from the diff pane).
+    private func focusTree() {
+        window?.makeFirstResponder(outline)
+        refreshFocusStyling()
+    }
 
-    /// Redraw both panes' selection when focus moves between them: the tree's selected file switches
-    /// between a solid fill (focused) and a quiet outline (not), and the diff's cursor line only
-    /// shows while the diff is focused. AppKit's `isEmphasized` redraw across two views in one window
-    /// isn't reliable, so nudge it.
+    /// Hand focus to the diff (⌘l, or bare `l` on a file in the tree).
+    private func focusDiff() {
+        window?.makeFirstResponder(diffTable.scrollFocusTarget)
+        refreshFocusStyling()
+    }
+
+    /// Resync everything that keys off which pane holds focus: the tree's selected file switches between
+    /// a solid fill (focused) and a quiet outline (not), the diff's cursor line only shows while the diff
+    /// is focused, and the footer legend scopes to the focused pane. AppKit's `isEmphasized` redraw
+    /// across two views in one window isn't reliable, so nudge it. Called on every focus transition —
+    /// the keyboard focus moves and, via the panes' `become`/`resignFirstResponder`, a mouse click.
     private func refreshFocusStyling() {
         outline.enumerateAvailableRowViews { rowView, _ in rowView.needsDisplay = true }
         diffTable.redrawSelection()
+        fillHints()
     }
 
     /// Move the tree selection to the next / previous file, skipping section headers and directories.
@@ -483,6 +488,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private func focusBaseDropdown() {
         guard !baseHeader.isHidden else { return }
         window?.makeFirstResponder(baseDropdown)
+        refreshFocusStyling()  // the legend falls back to the tree set once the diff no longer holds focus
     }
 
     // MARK: layout
@@ -520,9 +526,18 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         outline.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
         outline.onHalfPageDiff = { [weak self] direction in self?.diffTable.halfPage(direction) }
         outline.onMoveFile = { [weak self] delta in self?.moveFileSelection(delta) }
+        outline.onToggleLayout = { [weak self] in self?.toggleLayout() }
+        outline.onFocusDiff = { [weak self] in self?.focusDiff() }
+        outline.onClose = { [weak self] in self?.onCancel() }
+        outline.onBecameFirstResponder = { [weak self] in self?.refreshFocusStyling() }
         diffTable.onEscape = { [weak self] in self?.onCancel() }
         diffTable.onYank = { [weak self] wantsReference in self?.yank(reference: wantsReference) }
         diffTable.onCompose = { [weak self] in self?.openComposer() }
+        diffTable.onToggleLayout = { [weak self] in self?.toggleLayout() }
+        diffTable.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
+        diffTable.onFocusTree = { [weak self] in self?.focusTree() }
+        diffTable.onClose = { [weak self] in self?.onCancel() }
+        diffTable.onFocusChanged = { [weak self] in self?.refreshFocusStyling() }
         // Re-evaluate the auto-fold policy whenever the diff pane's width changes (ZEN-243). The frame
         // notification fires with the pane's *final* frame on every resize — reliable where piggybacking
         // on a `layout()` pass isn't (the inner table tiles after that runs, so it reads a stale width).
@@ -739,36 +754,35 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         branchLabel.isHidden = branch == nil
     }
 
-    /// The footer's key legend as real keycaps, built from the live keymap so it shows the user's own
-    /// pane/jump bindings (not the defaults). Rebuilt in full on a theme/keymap change — every keycap
-    /// bakes its colors in at construction, so it's re-created rather than mutated.
+    /// The footer's key legend as compact keycaps, scoped to the focused pane so it stays lean: the
+    /// tree shows the fold/file/base keys, the diff shows the change/select/yank/comment keys, and both
+    /// lead with the ⌘h/⌘l pane switch and end with layout + close. The pane keys read from the live
+    /// keymap (rebindable global nav); everything else is the viewer's own bare key. Rebuilt on a
+    /// theme/keymap change, a narrowness flip, and a focus move — every keycap bakes its colors in at
+    /// construction, so it's re-created rather than mutated.
     private func fillHints() {
         hintsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         func glyph(_ chord: KeyInterceptor.ReservedChord) -> String { CommandCatalog.spec(for: chord).shortcut }
-        // Each key is its own command, so each gets its own keycap — never two glyphs crammed in one
-        // box. A pair that shares a caption (the two pane keys, the two jump keys) sits as two boxes
-        // before the label.
-        var groups: [(keys: [String], label: String)] = [
-            ([glyph(.navLeft), glyph(.navRight)], "panes"),
-            ([glyph(.navDown), glyph(.navUp)], "jump"),
-        ]
-        // The layout toggle only exists while the pane is wide — narrow force-folds to inline, so the
-        // command is disabled and its shortcut hidden (ZEN-243).
-        if !isNarrow { groups.append(([glyph(.toggleDiffLayout)], "layout")) }
-        groups.append(contentsOf: [
-            (keys: ["←", "→"], label: "fold"),
-            (keys: ["V"], label: "select"),
-            (keys: ["y", "Y"], label: "yank"),
-            (keys: ["⏎"], label: "comment"),
-            (keys: ["esc"], label: "close"),
-        ])
+        // Default to the tree legend for anything that isn't the diff itself (the base dropdown, or the
+        // initial build before a pane holds focus) — the tree is the viewer's entry point.
+        let diffIsFocused = window?.firstResponder === diffTable.scrollFocusTarget
+        var groups: [(keys: [String], label: String)] = [([glyph(.navLeft), glyph(.navRight)], "panes")]
+        if diffIsFocused {
+            groups += [(["{", "}"], "change"), (["V"], "select"), (["y", "Y"], "yank"), (["⏎"], "comment")]
+        } else {
+            groups += [(["j", "k"], "files"), (["h", "l"], "fold"), (["b"], "base")]
+        }
+        // Layout only exists while wide — narrow force-folds to inline, so the toggle is disabled and its
+        // key hidden (ZEN-243).
+        if !isNarrow { groups.append((["\\"], "layout")) }
+        groups.append((["esc"], "close"))
         for group in groups { hintsStack.addArrangedSubview(Self.hintGroup(keys: group.keys, label: group.label)) }
     }
 
-    /// One legend entry for the footer: a keycap per key, then a muted caption. The keys sit tight
-    /// together; the caption gets a wider gap so it reads as their shared label.
+    /// One legend entry for the footer: a compact keycap per key, then a muted caption. The keys sit
+    /// tight together; the caption gets a wider gap so it reads as their shared label.
     private static func hintGroup(keys: [String], label: String) -> NSView {
-        let caps: [NSView] = keys.map { KeycapView(shortcut: $0) }
+        let caps: [NSView] = keys.map { KeycapView(shortcut: $0, size: .compact) }
         let caption = NSTextField(labelWithString: label)
         caption.font = .systemFont(ofSize: 11)
         caption.textColor = Theme.current.chrome.ink(alpha: 0.45)
@@ -926,7 +940,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     /// The layout a diff renders in. A narrow pane force-folds to inline — that view is objectively best
     /// when two columns can't fit, so it isn't a choice (the toggle is disabled and its hint hidden while
-    /// narrow). While wide: the session pin (⌘I), else the config default (ZEN-243).
+    /// narrow). While wide: the session pin (the `\` toggle), else the config default (ZEN-243).
     private var effectiveLayout: GeneralConfig.DiffLayout {
         isNarrow ? .inline : (layoutOverride ?? GeneralConfig.current.diffLayout)
     }
@@ -954,7 +968,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     /// The single funnel for anything that can change `effectiveLayout` without a new file: a resize
-    /// crossing the fold/unfold band, a config-default change, or the ⌘I toggle. Re-renders only when the
+    /// crossing the fold/unfold band, a config-default change, or the `\` toggle. Re-renders only when the
     /// effective layout truly differs from what's on screen, so a resize tick or theme change never
     /// resets the diff's scroll or current line. Returns whether it re-rendered.
     @discardableResult
@@ -964,7 +978,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         return true
     }
 
-    /// The layout-toggle command (⌘I) flips the pinned layout for the session; disabled while narrow,
+    /// The layout toggle (bare `\`) flips the pinned layout for the session; disabled while narrow,
     /// where inline is forced and the choice doesn't exist.
     func toggleLayout() {
         guard !isNarrow else { return }
@@ -1073,8 +1087,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// The footer's repo name, and the branch it shows (nil when the branch glyph/name are collapsed).
     var footerRepoNameForTesting: String { repoLabel.stringValue }
     var footerBranchForTesting: String? { branchLabel.isHidden ? nil : branchLabel.stringValue }
-    /// The captions of the footer's key-hint legend (e.g. "panes", "jump", "layout"), so a test can
-    /// assert the layout shortcut is present only while the pane is wide.
+    /// The captions of the footer's key-hint legend (e.g. "panes", "fold", "layout"), so a test can
+    /// assert the legend scopes to the focused pane and drops "layout" while the pane is narrow.
     var footerHintCaptionsForTesting: [String] {
         hintsStack.arrangedSubviews.compactMap { group in
             (group as? NSStackView)?.arrangedSubviews.compactMap { $0 as? NSTextField }.last?.stringValue
@@ -1134,8 +1148,23 @@ private final class NavOutlineView: NSOutlineView {
     var onHalfPageDiff: ((Int) -> Void)?
     /// j / k move to the next / previous file, so the tree reads the same way as the diff pane.
     var onMoveFile: ((Int) -> Void)?
+    /// Bare `\` — flip the viewer between inline and side-by-side (ZEN-262).
+    var onToggleLayout: (() -> Void)?
+    /// `l` on a file (nvim "open") — hand focus to the diff pane.
+    var onFocusDiff: (() -> Void)?
+    /// Bare `q` — close the viewer.
+    var onClose: (() -> Void)?
+    /// Focus landed here (a click or a keyboard move) — the overlay resyncs focus styling and the
+    /// footer legend, so a mouse click between panes tracks the same as ⌘h/⌘l.
+    var onBecameFirstResponder: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
+
+    override func becomeFirstResponder() -> Bool {
+        let ok = super.becomeFirstResponder()
+        if ok { onBecameFirstResponder?() }
+        return ok
+    }
 
     /// Size the sole name column to fill the enclosing scroll view. AppKit's own column-autoresizing
     /// styles are delta-based (they nudge the column by the *change* in the table's width since the
@@ -1183,8 +1212,16 @@ private final class NavOutlineView: NSOutlineView {
             onHalfPageDiff?(direction)
             return
         }
-        // Only j/k are claimed here: the rest of the vim set acts on a diff selection, which the tree
-        // doesn't have. They'd read as dead keys either way, so the tree leaves them alone.
+        if let command = DiffPaneTable.viewerCommand(for: event) {
+            switch command {
+            case .toggleLayout: onToggleLayout?()
+            case .focusBase: onFocusBase?()
+            case .close: onClose?()
+            }
+            return
+        }
+        // Only j/k are claimed from the vim set here: the rest acts on a diff selection, which the
+        // tree doesn't have. They'd read as dead keys either way, so the tree leaves them alone.
         switch DiffPaneTable.vimKey(for: event) {
         case .down:
             onMoveFile?(1)
@@ -1195,6 +1232,12 @@ private final class NavOutlineView: NSOutlineView {
         default:
             break
         }
+        // nvim-tree fold: h / ← collapse (or step to the parent), l / → expand (or open a file into
+        // the diff). The arrows mirror the bare letters.
+        if let fold = foldDirection(for: event) {
+            fold == .left ? foldLeftOrParent() : expandOrOpen()
+            return
+        }
         switch KeyboardFocus.key(for: event) {
         case .escape:
             onEscape?()
@@ -1203,8 +1246,8 @@ private final class NavOutlineView: NSOutlineView {
             onFocusBase?()  // at the top already — step up to the base dropdown
             return
         case .activate:
-            // Return/Enter on a folder or section folds it, matching Left/Right; a file just stays
-            // selected (its diff is already shown).
+            // Return/Enter on a folder or section folds it, matching h/l; a file just stays selected
+            // (its diff is already shown).
             if let item = item(atRow: selectedRow), isExpandable(item) {
                 if isItemExpanded(item) { collapseItem(item) } else { expandItem(item) }
                 return
@@ -1213,5 +1256,48 @@ private final class NavOutlineView: NSOutlineView {
             break
         }
         super.keyDown(with: event)
+    }
+
+    private enum FoldDirection { case left, right }
+
+    /// Decode a fold keystroke: bare `h` / ← collapse-ward, bare `l` / → expand-ward. Bare letters
+    /// only — a ⌘ chord is global pane nav, not a fold.
+    private func foldDirection(for event: NSEvent) -> FoldDirection? {
+        switch KeyboardFocus.key(for: event) {
+        case .left: return .left
+        case .right: return .right
+        default: break
+        }
+        guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return nil }
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "h": return .left
+        case "l": return .right
+        default: return nil
+        }
+    }
+
+    /// `h` / ←: collapse an open folder; on a leaf or already-collapsed row, step to the parent so a
+    /// second press walks up the tree (nvim-tree's "close, else go up").
+    private func foldLeftOrParent() {
+        guard let item = item(atRow: selectedRow) else { return }
+        if isExpandable(item), isItemExpanded(item) {
+            collapseItem(item)
+            return
+        }
+        guard let parent = parent(forItem: item) else { return }
+        let parentRow = row(forItem: parent)
+        guard parentRow >= 0 else { return }
+        selectRowIndexes([parentRow], byExtendingSelection: false)
+        scrollRowToVisible(parentRow)
+    }
+
+    /// `l` / →: expand a collapsed folder; on a file, hand focus to the diff (nvim-tree's "open").
+    private func expandOrOpen() {
+        guard let item = item(atRow: selectedRow) else { return }
+        if isExpandable(item) {
+            if !isItemExpanded(item) { expandItem(item) }
+        } else {
+            onFocusDiff?()
+        }
     }
 }

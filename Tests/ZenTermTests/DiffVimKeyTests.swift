@@ -91,6 +91,26 @@ final class DiffVimKeyTests: XCTestCase {
         XCTAssertEqual(DiffPaneTable.vimKey(for: try keyDown("}", unshifted: "]", flags: .shift)), .nextChange)
     }
 
+    // MARK: viewerCommand
+
+    func test_viewerCommand_decodesTheBareViewerKeys() throws {
+        XCTAssertEqual(DiffPaneTable.viewerCommand(for: try keyDown("\\")), .toggleLayout)
+        XCTAssertEqual(DiffPaneTable.viewerCommand(for: try keyDown("b")), .focusBase)
+        XCTAssertEqual(DiffPaneTable.viewerCommand(for: try keyDown("q")), .close)
+    }
+
+    func test_viewerCommand_modifiedFormsFallThrough_soGlobalChordsStillWork() throws {
+        // ⌘\ is the right drawer, ⌘b the bottom drawer — reserved globally and consumed before the
+        // responder chain, so the viewer must not also claim the modified forms.
+        XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("\\", flags: .command)))
+        XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("b", flags: .command)))
+        XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("q", flags: .control)))
+    }
+
+    func test_viewerCommand_toleratesTheBitsAppKitStamps() throws {
+        XCTAssertEqual(DiffPaneTable.viewerCommand(for: try keyDown("\\", flags: .function)), .toggleLayout)
+    }
+
     // MARK: yankShortcut
 
     func test_yankShortcut_separatesCodeFromReference() throws {

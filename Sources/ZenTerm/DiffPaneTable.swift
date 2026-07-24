@@ -38,6 +38,16 @@ final class DiffPaneTable: NSView {
     var onEscape: (() -> Void)?
     /// ⏎ on the diff — open the comment composer for the current selection (ZEN-257).
     var onCompose: (() -> Void)?
+    /// Bare `\` — flip the viewer between inline and side-by-side (ZEN-262).
+    var onToggleLayout: (() -> Void)?
+    /// Bare `b` — focus the base-ref selector.
+    var onFocusBase: (() -> Void)?
+    /// Bare `h` — hand focus back to the file tree (nvim "go left").
+    var onFocusTree: (() -> Void)?
+    /// Bare `q` — close the viewer.
+    var onClose: (() -> Void)?
+    /// The diff took focus (a click or a keyboard move) — the overlay resyncs focus styling + legend.
+    var onFocusChanged: (() -> Void)?
 
     /// The shared horizontal pan applied to every visible row's text column(s) (0 = left-aligned).
     private var horizontalOffset: CGFloat = 0
@@ -80,6 +90,16 @@ final class DiffPaneTable: NSView {
         table.onVimKey = { [weak self] key in self?.handleVimKey(key) }
         table.onEscape = { [weak self] in self?.handleEscape() }
         table.onCompose = { [weak self] in self?.onCompose?() }
+        table.onViewerCommand = { [weak self] command in
+            guard let self else { return }
+            switch command {
+            case .toggleLayout: self.onToggleLayout?()
+            case .focusBase: self.onFocusBase?()
+            case .close: self.onClose?()
+            }
+        }
+        table.onFocusTree = { [weak self] in self?.onFocusTree?() }
+        table.onBecameFirstResponder = { [weak self] in self?.onFocusChanged?() }
         table.onMouseSelectionChanged = { [weak self] in self?.syncCursorAfterMouseSelection() }
         source.decorate = { [weak self] rowView, row in self?.decorate(rowView, row: row) }
 
@@ -489,6 +509,22 @@ final class DiffPaneTable: NSView {
         }
     }
 
+    /// The viewer-wide bare keys both panes honor (ZEN-262): they act on the whole viewer, not a
+    /// pane's selection, so the tree and the diff decode them identically. Context-specific keys
+    /// (h/l fold, focus moves) stay in each pane's own `keyDown`. ⌘/⌥/⌃ fall through — a modified
+    /// chord belongs to the global keymap or another handler.
+    enum ViewerCommand: Equatable { case toggleLayout, focusBase, close }
+
+    static func viewerCommand(for event: NSEvent) -> ViewerCommand? {
+        guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return nil }
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "\\": return .toggleLayout
+        case "b": return .focusBase
+        case "q": return .close
+        default: return nil
+        }
+    }
+
     /// Ctrl-D / Ctrl-U (vim half-page): +1 down, -1 up, nil otherwise. Left un-reserved on purpose —
     /// Ctrl-D is terminal EOF, so it only means half-page while the viewer holds first responder, never
     /// leaking to the shell behind it. Match the reservable modifier set exactly so ⌘⌃D etc. don't hit.
@@ -754,6 +790,13 @@ private final class DiffTableView: NSTableView {
     var onMouseSelectionChanged: (() -> Void)?
     /// ⏎ / keypad Enter — comment on the selection.
     var onCompose: (() -> Void)?
+    /// A viewer-wide bare key (`\` layout, `b` base, `q` close) — see `DiffPaneTable.viewerCommand`.
+    var onViewerCommand: ((DiffPaneTable.ViewerCommand) -> Void)?
+    /// Bare `h` — hand focus back to the tree.
+    var onFocusTree: (() -> Void)?
+    /// Focus landed on the diff (a click or a keyboard move) — the pane forwards it so the overlay
+    /// resyncs focus styling and the footer legend.
+    var onBecameFirstResponder: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -794,6 +837,7 @@ private final class DiffTableView: NSTableView {
             onMouseSelectionChanged?()  // adopt it as the cursor — the pane didn't write this one
             scrollRowToVisible(target)
         }
+        if ok { onBecameFirstResponder?() }
         return ok
     }
 
@@ -813,6 +857,19 @@ private final class DiffTableView: NSTableView {
         if let direction = DiffPaneTable.halfPageDirection(for: event) {
             sawG = false
             onHalfPage?(direction)
+            return
+        }
+        if let command = DiffPaneTable.viewerCommand(for: event) {
+            sawG = false
+            onViewerCommand?(command)
+            return
+        }
+        // Bare `h` hands focus to the tree (nvim "go left"); ←/→ keep panning long lines here.
+        if event.modifierFlags.intersection([.command, .option, .control]).isEmpty,
+            event.charactersIgnoringModifiers?.lowercased() == "h"
+        {
+            sawG = false
+            onFocusTree?()
             return
         }
         if let key = DiffPaneTable.vimKey(for: event) {
