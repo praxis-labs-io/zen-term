@@ -72,7 +72,15 @@ final class DiffCommentComposer: NSView {
 
         surface.addSubview(noteScroll)
         surface.addSubview(footer)
+        // The box's own frame is set by the pane (a table subview), but everything inside lays out with
+        // Auto Layout off that frame — the surface pinned into `self` with an inset, then the note above
+        // the footer. `footer` hugs its content at the bottom so the note scroll takes the rest.
         NSLayoutConstraint.activate([
+            surface.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
+            surface.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
+            surface.topAnchor.constraint(equalTo: topAnchor, constant: Self.inset),
+            surface.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Self.inset),
+
             noteScroll.leadingAnchor.constraint(equalTo: surface.leadingAnchor, constant: 12),
             noteScroll.trailingAnchor.constraint(equalTo: surface.trailingAnchor, constant: -12),
             noteScroll.topAnchor.constraint(equalTo: surface.topAnchor, constant: 10),
@@ -88,9 +96,6 @@ final class DiffCommentComposer: NSView {
 
     override func layout() {
         super.layout()
-        // The box is frame-driven inside the table (a document-view subview), so the surface tracks
-        // the box's own bounds by hand rather than via constraints on a floating parent.
-        surface.frame = bounds.insetBy(dx: Self.inset, dy: Self.inset)
         placeholder.isHidden = !note.string.isEmpty
     }
 

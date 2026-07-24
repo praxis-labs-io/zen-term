@@ -175,6 +175,11 @@ final class DiffPaneTable: NSView {
         let selection = table.selectedRowIndexes
         table.reloadData()
         if !selection.isEmpty { table.selectRowIndexes(selection, byExtendingSelection: false) }
+        // `reloadData` rebuilds row views while the selection is momentarily empty, so `rowViewForRow`
+        // decorates them against no selection at all; `selectRowIndexes` above restores AppKit's own
+        // `isSelected` but not our block-position/cursor/flash stamping — re-stamp explicitly or a
+        // multi-row selection silently loses its block shaping the moment the composer opens or closes.
+        refreshDecoration()
     }
 
     /// Frame the box into the room reserved under its anchor line. Re-run on every layout pass, so a

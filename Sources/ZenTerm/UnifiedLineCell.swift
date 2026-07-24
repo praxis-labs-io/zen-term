@@ -89,27 +89,35 @@ final class UnifiedLineCell: NSView, DiffPanningCell {
         let trailing = DiffCellMetrics.gutterTrailing
         let numbers = max(0, gutterWidth - inset - trailing)  // one line-number column's digit width
         let lineHeight = DiffCellMetrics.lineHeight(in: bounds)
+        // The cell is non-flipped (y=0 is the bottom), so a row grown for the comment box (ZEN-257)
+        // needs the slice pinned explicitly to the top rather than centred in the whole, taller bounds.
+        let sliceY = DiffCellMetrics.lineSliceY(in: bounds)
         // Old and new numbers left-align adjacent — the old under the hunk header at `inset`, the new one
         // trailing-gap past it — then the sign, then the panning text.
-        oldGutter.frame = NSRect(x: inset, y: textY, width: numbers, height: DiffCellMetrics.textHeight)
+        oldGutter.frame = NSRect(x: inset, y: gutterTextY, width: numbers, height: DiffCellMetrics.textHeight)
         newGutter.frame = NSRect(
-            x: inset + numbers + trailing, y: textY, width: numbers, height: DiffCellMetrics.textHeight)
+            x: inset + numbers + trailing, y: gutterTextY, width: numbers, height: DiffCellMetrics.textHeight)
         sign.frame = NSRect(
-            x: inset + 2 * numbers + 2 * trailing, y: textY, width: Self.signWidth,
+            x: inset + 2 * numbers + 2 * trailing, y: gutterTextY, width: Self.signWidth,
             height: DiffCellMetrics.textHeight)
         let clipX = Self.contentX(gutterWidth: gutterWidth)
-        clip.frame = NSRect(x: clipX, y: 0, width: max(0, bounds.width - clipX), height: lineHeight)
+        clip.frame = NSRect(x: clipX, y: sliceY, width: max(0, bounds.width - clipX), height: lineHeight)
         repositionText()
     }
 
-    /// Where the line's text sits inside the cell. A row can be **taller** than one line — the inline
-    /// comment box reserves the rest of it (ZEN-257) — so the text centres in the line's own slice at
-    /// the top, never in the whole row, which would drop it into the middle of the reserved gap.
-    private var textY: CGFloat {
-        ((DiffCellMetrics.lineHeight(in: bounds) - DiffCellMetrics.textHeight) / 2).rounded()
+    /// Where the gutters and sign sit in the CELL's own (non-flipped) coordinate space. A row can be
+    /// **taller** than one line — the inline comment box reserves the rest of it (ZEN-257) — so this
+    /// centres in the line's own slice at the top, never in the whole row, which would drop it into the
+    /// middle of the reserved gap.
+    private var gutterTextY: CGFloat {
+        DiffCellMetrics.lineCenteredY(in: bounds, height: DiffCellMetrics.textHeight)
     }
 
+    /// Slide the text label to the shared offset. `text` is a subview of `clip`, which `layout()` keeps
+    /// exactly `lineHeight` tall and pins to the row's top slice — so, unlike `gutterTextY`, this centres
+    /// purely within `clip`'s own bounds, with no slice offset of its own to add.
     private func repositionText() {
+        let textY = ((DiffCellMetrics.lineHeight(in: bounds) - DiffCellMetrics.textHeight) / 2).rounded()
         text.frame = NSRect(
             x: -horizontalOffset, y: textY, width: text.intrinsicContentSize.width,
             height: DiffCellMetrics.textHeight)
