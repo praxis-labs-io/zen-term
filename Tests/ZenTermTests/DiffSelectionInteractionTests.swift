@@ -53,11 +53,8 @@ final class DiffSelectionInteractionTests: XCTestCase {
             baseBranch: nil, baseSHA: nil, currentBranch: "feature")
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
-            repoName: "repo",
-            // Nonexistent, so the highlighter no-ops and never spawns git.
-            repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo"),
-            highlightStore: DiffHighlightStore(),
-            initialStatus: nil,
+            // A nonexistent repo root, so the highlighter no-ops and never spawns git.
+            session: DiffViewerSession(repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo")),
             loader: { _, completion in completion(.success(status)) },
             branchesLoader: { completion in completion([]) },
             onCancel: {})
@@ -241,9 +238,8 @@ final class DiffSelectionInteractionTests: XCTestCase {
             unstaged: [file()], staged: [], committed: [],
             baseBranch: nil, baseSHA: nil, currentBranch: "feature")
         let overlay = DiffViewerOverlay(
-            background: Theme.current.chrome.background.nsColor, repoName: "repo",
-            repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo"),
-            highlightStore: DiffHighlightStore(), initialStatus: nil,
+            background: Theme.current.chrome.background.nsColor,
+            session: DiffViewerSession(repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo")),
             loader: { _, completion in completion(.success(status)) },
             branchesLoader: { completion in completion([]) },
             onCancel: { closed += 1 })

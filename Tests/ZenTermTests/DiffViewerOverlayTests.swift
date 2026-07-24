@@ -30,7 +30,9 @@ final class DiffViewerOverlayTests: XCTestCase {
         /// The `base` the overlay asked each load for — nil on the default-base load, the picked branch
         /// after a base override.
         var lastBase: String?
-        let status: GitDiffRunner.StatusLoad
+        /// A `var` so a test can hand the *next* load different content — a changed reload is the whole
+        /// trigger for the restore this file exercises (ZEN-233).
+        var status: GitDiffRunner.StatusLoad
         let failure: GitDiffRunner.Failure?
         let branches: [String]
         init(status: GitDiffRunner.StatusLoad, failure: GitDiffRunner.Failure?, branches: [String]) {
@@ -49,23 +51,33 @@ final class DiffViewerOverlayTests: XCTestCase {
         }
     }
 
+    private func makeStatus(
+        unstaged: [FileDiff] = [], staged: [FileDiff] = [], committed: [FileDiff] = [],
+        base: (branch: String, sha: String)? = nil
+    ) -> GitDiffRunner.StatusLoad {
+        GitDiffRunner.StatusLoad(
+            unstaged: unstaged, staged: staged, committed: committed,
+            baseBranch: base?.branch, baseSHA: base?.sha, currentBranch: "feature")
+    }
+
     private func mount(
         unstaged: [FileDiff] = [], staged: [FileDiff] = [], committed: [FileDiff] = [],
         base: (branch: String, sha: String)? = nil, branches: [String] = [],
-        failure: GitDiffRunner.Failure? = nil, onCancel: @escaping () -> Void = {}
+        failure: GitDiffRunner.Failure? = nil, onCancel: @escaping () -> Void = {},
+        // A shared session mounts overlay B on the state overlay A left behind — the reopen path.
+        session: DiffViewerSession? = nil
     ) -> (overlay: DiffViewerOverlay, spy: LoaderSpy) {
-        let status = GitDiffRunner.StatusLoad(
-            unstaged: unstaged, staged: staged, committed: committed,
-            baseBranch: base?.branch, baseSHA: base?.sha, currentBranch: "feature")
+        let status = makeStatus(unstaged: unstaged, staged: staged, committed: committed, base: base)
         let spy = LoaderSpy(status: status, failure: failure, branches: branches)
+        // A path that doesn't exist, so the syntax highlighter no-ops (these tests exercise layout and
+        // selection, not highlighting) and never spawns git. Its last component is the footer's repo
+        // name, so it reads `repo`.
+        let session =
+            session
+            ?? DiffViewerSession(repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo/repo"))
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
-            repoName: "repo",
-            // A path that doesn't exist, so the syntax highlighter no-ops (these tests exercise layout
-            // and selection, not highlighting) and never spawns git.
-            repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo"),
-            highlightStore: DiffHighlightStore(),
-            initialStatus: nil,
+            session: session,
             loader: { base, completion in spy.load(base, completion) },
             branchesLoader: { completion in completion(spy.branches) },
             onCancel: onCancel)
@@ -362,5 +374,156 @@ final class DiffViewerOverlayTests: XCTestCase {
         overlay.treeOutlineForTesting.keyDown(with: keyDown(36))  // Return
 
         XCTAssertEqual(overlay.treeRowCountForTesting, 2, "collapsing the directory hides its files")
+    }
+
+    // MARK: sticky place across a changed reload (ZEN-233)
+
+    /// Send a real vim `j` into the diff pane, the way `DiffPaneTable` decodes it (lowercased
+    /// `charactersIgnoringModifiers`), so a cursor move is exercised through the actual key path.
+    private func pressJInDiff(_ overlay: DiffViewerOverlay) {
+        let event = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "j", charactersIgnoringModifiers: "j", isARepeat: false, keyCode: 38)!
+        overlay.diffPaneForTesting.scrollFocusTarget.keyDown(with: event)
+    }
+
+    func test_changedReload_keepsAFoldedDirectoryFolded() {
+        let (overlay, spy) = mount(unstaged: [file("a/One.swift"), file("a/Two.swift"), file("Top.swift")])
+        // Rows: Unstaged=0, a=1, One=2, Two=3, Top=4 (directories sort before files).
+        XCTAssertEqual(overlay.treeRowCountForTesting, 5)
+        overlay.selectRowForTesting(1)  // the "a" directory
+        overlay.treeOutlineForTesting.keyDown(with: keyDown(36))  // Return folds it
+        XCTAssertEqual(overlay.treeRowCountForTesting, 3, "precondition: a's files are hidden")
+
+        // A load that adds an unrelated file — a changed status, so the tree rebuilds.
+        spy.status = makeStatus(unstaged: [
+            file("a/One.swift"), file("a/Two.swift"), file("Top.swift"), file("Zeta.swift"),
+        ])
+        overlay.reloadForTesting()
+
+        // a is still folded (its two files stay hidden); the new file shows. Expanded, it would be 6.
+        XCTAssertEqual(
+            overlay.treeRowCountForTesting, 4, "the folded directory must survive the rebuild, still folded")
+    }
+
+    func test_changedReload_keepsTheSelectedFileAndItsCursorLine() {
+        let (overlay, spy) = mount(unstaged: [file("One.swift"), file("Two.swift")])
+        overlay.handleNavChord(.navDown)  // focus tree isn't needed; select second file below instead
+        overlay.selectRowForTesting(2)  // Two.swift (Unstaged=0, One=1, Two=2)
+        XCTAssertEqual(overlay.selectedFilePathForTesting, "Two.swift")
+
+        overlay.handleNavChord(.navRight)  // focus the diff pane
+        pressJInDiff(overlay)  // move the cursor off the first line
+        let parkedCursor = overlay.diffPaneForTesting.cursorLine
+        XCTAssertNotNil(parkedCursor?.new, "precondition: the cursor is on a real line")
+
+        spy.status = makeStatus(unstaged: [file("One.swift"), file("Two.swift"), file("Three.swift")])
+        overlay.reloadForTesting()
+
+        XCTAssertEqual(overlay.selectedFilePathForTesting, "Two.swift", "the open file survives the reload")
+        XCTAssertEqual(
+            overlay.diffPaneForTesting.cursorLine?.new, parkedCursor?.new,
+            "the cursor lands back on the same line, not snapped to the top")
+    }
+
+    func test_changedReload_followsAFileThatWasStaged() {
+        // The review loop: park on a file, `git add` it in another pane. It moves Unstaged -> Staged —
+        // a new tree row, but the same file, so the selection follows it rather than snapping to the top.
+        let (overlay, spy) = mount(unstaged: [file("One.swift"), file("Two.swift")])
+        overlay.selectRowForTesting(1)  // One.swift
+        XCTAssertEqual(overlay.selectedFilePathForTesting, "One.swift")
+
+        spy.status = makeStatus(unstaged: [file("Two.swift")], staged: [file("One.swift")])
+        overlay.reloadForTesting()
+
+        XCTAssertEqual(
+            overlay.selectedFilePathForTesting, "One.swift",
+            "the selection follows the file into the Staged section")
+    }
+
+    func test_changedReload_fallsBackToTheFirstFile_whenTheSelectedFileIsGone() {
+        let (overlay, spy) = mount(unstaged: [file("One.swift"), file("Two.swift")])
+        overlay.selectRowForTesting(2)  // Two.swift
+        XCTAssertEqual(overlay.selectedFilePathForTesting, "Two.swift")
+
+        spy.status = makeStatus(unstaged: [file("One.swift")])  // Two.swift is gone
+        overlay.reloadForTesting()
+
+        XCTAssertEqual(
+            overlay.selectedFilePathForTesting, "One.swift", "a vanished file falls back to the first")
+    }
+
+    func test_changedReload_expandsADirectoryThatFirstAppears() {
+        let (overlay, spy) = mount(unstaged: [file("a/One.swift")])
+        XCTAssertEqual(overlay.treeRowCountForTesting, 3)  // Unstaged, a, One
+
+        spy.status = makeStatus(unstaged: [file("a/One.swift"), file("b/Two.swift")])
+        overlay.reloadForTesting()
+
+        // b is new, so it comes up expanded like any first-seen row: Unstaged, a, One, b, Two.
+        XCTAssertEqual(
+            overlay.treeRowCountForTesting, 5, "a directory the reload first shows opens, it isn't born folded")
+    }
+
+    // MARK: reopen memory (ZEN-233)
+
+    func test_reopen_restoresFoldsSelectionCursorAndBase() {
+        let session = DiffViewerSession(repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo/repo"))
+        let files = [file("a/One.swift"), file("a/Two.swift"), file("Top.swift")]
+
+        // Overlay A: fold "a", open Top.swift, move the cursor, pick a non-default base, then close.
+        let (overlayA, _) = mount(
+            unstaged: files, base: (branch: "main", sha: "abc1234"),
+            branches: ["main", "develop"], session: session)
+        overlayA.selectRowForTesting(1)  // the "a" directory
+        overlayA.treeOutlineForTesting.keyDown(with: keyDown(36))  // fold it
+        overlayA.selectRowForTesting(2)  // Top.swift (Unstaged=0, a=1, Top=2 while a is folded)
+        XCTAssertEqual(overlayA.selectedFilePathForTesting, "Top.swift")
+        overlayA.handleNavChord(.navRight)
+        pressJInDiff(overlayA)
+        let parkedCursor = overlayA.diffPaneForTesting.cursorLine
+        overlayA.chooseBaseForTesting("develop")
+        overlayA.removeFromSuperview()  // fires the teardown snapshot into the session
+
+        // Overlay B: same session, a fresh load. It must land where A left off.
+        let (overlayB, spyB) = mount(
+            unstaged: files, base: (branch: "main", sha: "abc1234"),
+            branches: ["main", "develop"], session: session)
+
+        XCTAssertEqual(spyB.lastBase, "develop", "the picked base is re-run on reopen")
+        XCTAssertEqual(overlayB.selectedFilePathForTesting, "Top.swift", "the open file comes back")
+        XCTAssertEqual(
+            overlayB.diffPaneForTesting.cursorLine?.new, parkedCursor?.new, "the cursor line comes back")
+        // a folded: Unstaged, a, Top = 3. Expanded it would be 5.
+        XCTAssertEqual(overlayB.treeRowCountForTesting, 3, "the fold comes back")
+    }
+
+    func test_reopen_snapshotsAtCloseStart_notAtAnimationEnd() {
+        // `closeModal` defers `removeFromSuperview` into the close spring's completion, so a snapshot
+        // taken only on `viewDidMoveToWindow` lands after a fast reopen has already read the session. The
+        // place must be captured when the close begins (`animateOut`). Here overlay A is closed via
+        // `animateOut` but NOT removed, and overlay B — built while A's card is still animating out —
+        // must still see A's place.
+        let session = DiffViewerSession(repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo/repo"))
+        let files = [file("a/One.swift"), file("a/Two.swift"), file("Top.swift")]
+
+        let (overlayA, _) = mount(unstaged: files, session: session)
+        overlayA.selectRowForTesting(1)  // the "a" directory
+        overlayA.treeOutlineForTesting.keyDown(with: keyDown(36))  // fold it
+        overlayA.selectRowForTesting(2)  // Top.swift
+        XCTAssertEqual(overlayA.selectedFilePathForTesting, "Top.swift")
+        overlayA.animateOut {}  // close begins — the snapshot must happen now, not on removal
+
+        let (overlayB, _) = mount(unstaged: files, session: session)
+        XCTAssertEqual(overlayB.selectedFilePathForTesting, "Top.swift", "reopen sees A's file mid-close")
+        XCTAssertEqual(overlayB.treeRowCountForTesting, 3, "reopen sees A's fold mid-close")
+    }
+
+    func test_freshRepo_doesNotInheritAnotherReposPlace() {
+        // A different repo gets its own session in the app; assert the overlay doesn't restore a place
+        // it was never given — a fresh session opens fully expanded on the first file.
+        let (overlay, _) = mount(unstaged: [file("a/One.swift"), file("a/Two.swift")])
+        XCTAssertEqual(overlay.treeRowCountForTesting, 4, "a fresh open is fully expanded")
+        XCTAssertEqual(overlay.selectedFilePathForTesting, "a/One.swift", "and sits on the first file")
     }
 }

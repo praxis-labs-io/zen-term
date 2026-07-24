@@ -269,6 +269,19 @@ deletions references the new-side line it follows, and a deleted file gets a bar
 The keys are view-local, not `ReservedChord`s, so they never enter the keymap and never
 compete with a terminal binding.
 
+**The viewer keeps your place.** A background refresh and a base switch both rebuild the
+tree, and the `NSOutlineView` holds its rows by object identity, so the new objects can't
+inherit the old ones' folds or selection. `DiffOutlineItem` carries a value `identity`
+(section title + path) that survives the rebuild, and `apply` captures where the reader was
+(folded rows, open file, cursor line) before the rebuild and restores it after: folds
+re-close, the selection follows its file even when a `git add` moves it Unstaged → Staged,
+and the cursor lands back on its line by number (never index). A directory a load is the
+first to show comes up expanded, like any first-seen row. `DiffViewerSession` holds that
+place plus the status cache, the highlight cache, and the picked base for the repo the
+viewer last opened, so ⌘D reopens where you left off; it lives as long as the window and is
+never written to disk, and a different repo starts fresh. The overlay snapshots the place
+into the session on teardown (`viewDidMoveToWindow` with no window), not per keystroke.
+
 Its git work is `GitDiffRunner`, the app's first real subprocess: `git diff` runs off
 the main thread on a global queue, both pipes drained to EOF before `waitUntilExit`,
 then back to main with a parsed `[FileDiff]`. The model half (`DiffParser`, `DiffTree`,

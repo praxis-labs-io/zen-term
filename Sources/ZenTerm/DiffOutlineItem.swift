@@ -15,21 +15,38 @@ final class DiffOutlineItem {
     }
     let kind: Kind
     let children: [DiffOutlineItem]
+    /// A value name for this row that survives the rebuild every changed load does (ZEN-233), so the
+    /// folds and the selection can be put back on the new objects: the section title plus the row's
+    /// path, `\u{1}`-separated the way `FileDiff.highlightKey` is. Section-qualified for the same reason
+    /// that key carries scope — one path can sit in two slices at once (changed in the working tree
+    /// *and* since the base), and those are two rows, not one.
+    ///
+    /// Directories name themselves by their folded path, which is not perfectly stable: `DiffTree`
+    /// folds single-child chains into one `a/b` node, so a load that gives `a` a second child splits
+    /// that row into `a` > `b` and mints new identities. A row the viewer can't match comes back at its
+    /// default (expanded), which is what a row it has never seen should look like.
+    let identity: String
 
-    init(node: DiffTreeNode) {
+    init(node: DiffTreeNode, section: String, parentPath: String) {
         switch node {
         case .directory(let name, let nodes):
             kind = .directory(name)
-            children = nodes.map(DiffOutlineItem.init)
+            let path = parentPath.isEmpty ? name : parentPath + "/" + name
+            identity = "\(section)\u{1}\(path)"
+            children = nodes.map { DiffOutlineItem(node: $0, section: section, parentPath: path) }
         case .file(let file):
             kind = .file(file)
+            // The file's own repo-relative path, not the accumulated one: it says the same thing and
+            // can't be re-folded out from under the row.
+            identity = "\(section)\u{1}\(file.path)"
             children = []
         }
     }
 
-    private init(kind: Kind, children: [DiffOutlineItem]) {
+    private init(kind: Kind, children: [DiffOutlineItem], identity: String) {
         self.kind = kind
         self.children = children
+        self.identity = identity
     }
 
     var isSection: Bool {
@@ -72,8 +89,10 @@ final class DiffOutlineItem {
         var roots: [DiffOutlineItem] = []
         func add(_ title: String, _ files: [FileDiff]) {
             guard !files.isEmpty else { return }
-            let children = DiffTree.build(files).map(DiffOutlineItem.init)
-            roots.append(DiffOutlineItem(kind: .section(title: title), children: children))
+            let children = DiffTree.build(files).map {
+                DiffOutlineItem(node: $0, section: title, parentPath: "")
+            }
+            roots.append(DiffOutlineItem(kind: .section(title: title), children: children, identity: title))
         }
         add("Unstaged", status.unstaged)
         add("Staged", status.staged)
