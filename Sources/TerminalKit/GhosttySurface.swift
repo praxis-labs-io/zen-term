@@ -30,7 +30,25 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// Focus as libghostty last heard it, which is what tells a real focus change from a repeat.
     /// `start` sets it to what it actually told libghostty; until then it matches libghostty's
     /// own default (`flags.focused = true`, "up to the apprt to set the correct value").
-    private var lastFocused = true
+    ///
+    /// This is the *effective* focus — `paneFocused && isAppActive`, not either one alone.
+    private(set) var lastFocused = true
+
+    /// Whether this surface is the focused pane inside its own window, from the responder chain
+    /// and the chrome's `setFocused`. On its own it says nothing about whether the app is in
+    /// front, which is why it isn't what libghostty gets told.
+    private var paneFocused = true
+
+    /// Whether the app is frontmost. Load-bearing for more than cursor blink: ghostty runs the
+    /// custom-shader draw timer at `DRAW_INTERVAL` (8ms, 120fps) for as long as its surface
+    /// believes it is focused (`renderer/Thread.zig`, `syncDrawTimer`), and only
+    /// `ghostty_surface_set_focus` moves that flag — app-level focus doesn't reach it. Without
+    /// this, switching apps left the focused pane animating a shader nobody could see, at 120fps,
+    /// until you came back (ZEN-271).
+    private var isAppActive = true
+
+    /// NSApp activate/resign observers feeding `isAppActive`.
+    private var appActiveObservers: [NSObjectProtocol] = []
 
     /// The pending shader strip that follows a settle-burst. Cancelled by a refocus inside the
     /// window, and by `terminate`.
@@ -68,6 +86,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public override init() {
         super.init()
         hostView.owner = self
+        observeAppActive()
     }
 
     public func start(_ config: TerminalSurfaceConfig) {
@@ -125,19 +144,40 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
         // A fresh libghostty surface defaults to focused=true, and only `resignFirstResponder`
         // ever flips it false — so a surface that never becomes first responder (a hidden drawer,
-        // a background pane, a dismissed tool float) would keep an active/blinking cursor. Sync focus to the
-        // real first-responder state now that the surface exists. This also covers a view that
+        // a background pane, a dismissed tool float) would keep an active/blinking cursor. Sync
+        // focus to the real first-responder and app-active state now that the surface exists,
+        // so a surface born while the app is in the background starts quiet. This also covers a view that
         // became first responder before `surfacePtr` was set (the `becomeFirstResponder` true
         // was skipped under its `if let surfacePtr` guard).
-        let bornFocused = hostView.window?.firstResponder === hostView
+        paneFocused = hostView.window?.firstResponder === hostView
+        isAppActive = NSApp.isActive
+        let bornFocused = paneFocused && isAppActive
         ghostty_surface_set_focus(surfacePtr, bornFocused)
         // Track what we just told libghostty, so the first real focus change is measured against
         // the truth rather than against an assumption.
         lastFocused = bornFocused
+        // libghostty defaults a new surface to visible, so a surface born into a covered or
+        // minimized window would draw until the first occlusion change moved it.
+        hostView.syncOcclusion()
         // A surface born unfocused gets no blur to trigger the stand-down, and it's the case that
         // shows the tracer worst: the drawers of a new workspace land unfocused and their shells
         // then reach a first prompt, moving the cursor with no timer running to decay the smear.
-        if !bornFocused { startShaderSettle() }
+        //
+        // Decided a turn later, not here, because at this point NOTHING is focused yet — the view
+        // becomes first responder after `start` returns, so a pane that is about to be focused is
+        // indistinguishable from a drawer that never will be. Standing down immediately meant every
+        // surface stood down and then restored, a pair of `GhosttyApp.updateSurfaceConfig` calls
+        // per pane that bought nothing. Those are cheap now that configs are cached; before that
+        // they were a synchronous file write, read and parse each, on the main thread, which a
+        // workspace open paid by the dozen. One turn is far inside the window
+        // that matters: what this guards against is a shell reaching its first prompt, which is
+        // orders of magnitude slower.
+        if !bornFocused {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !self.lastFocused else { return }
+                self.startShaderSettle()
+            }
+        }
 
         // libghostty just made hostView layer-hosting (its Metal layer is now
         // hostView.layer). The host window is transparent for the vibrancy backdrop, so
@@ -146,13 +186,17 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // redraw gap. Mark the layer opaque over the terminal background so it composites
         // as a solid surface and gaps show the terminal bg, not the window behind it.
         //
-        // Exception: with a custom shader active, ghostty's shader pass writes real alpha into
-        // the drawable; an opaque layer tells Core Animation to ignore that alpha, which flashes
-        // the backdrop through on the alt-screen full redraw. So drop opacity when a shader is
-        // on, but keep the opaque backgroundColor so an ordinary redraw gap still shows the
-        // terminal bg rather than the window behind it.
+        // This holds with a cursor shader active too. ZEN-188 carved out an exception — drop the
+        // layer out of opaque whenever a shader is on, so the alpha ghostty's shader pass writes
+        // reaches Core Animation instead of being ignored — against an alt-screen white flash.
+        // That flash was root-caused by reading the code, never reproduced with the shaders that
+        // shipped, and the guard went in preemptively alongside them, so its own "no flash across
+        // vim/less/fzf" verification only ever ran with the guard already in place. Re-tested with
+        // it removed (backdrop-alpha 0.5, cursor_warp, 5K) across vim, nvim, less, fzf and
+        // lazygit: no flash. It also bought nothing — the window is translucent below
+        // backdrop-alpha 1 regardless, so the compositor blends it either way (ZEN-271).
         if let layer = hostView.layer {
-            layer.isOpaque = (config.behavior ?? .default).cursorShader == nil
+            layer.isOpaque = true
             layer.backgroundColor = (config.theme?.background.nsColor ?? .black).cgColor
         }
 
@@ -218,11 +262,29 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         lastTheme = theme
         lastBehavior = behavior
         GhosttyApp.shared.updateConfig(theme: theme, behavior: behavior)
+        // A stood-down surface runs its own config, which the app-global swap above does not
+        // reach, so without this it keeps the old theme until something happens to refocus it.
+        // Re-apply whichever shape it is currently in, rebuilt from the theme and behavior that
+        // just landed. Raised by review on the ZEN-237 PR and left open there; ZEN-271 widened it
+        // by standing a pane down when the app deactivates, not only when the pane blurs.
+        if hasPerSurfaceShaderConfig {
+            if behavior.cursorShader == nil {
+                // The shader was turned off outright. The app-global config it just picked up has
+                // none either, so drop the override rather than pinning a passthrough onto a
+                // surface that is meant to have no shader at all.
+                cancelShaderSettle()
+                hasPerSurfaceShaderConfig = false
+            } else if shaderSettleWorkItem != nil {
+                applyShaderConfig(behavior, animation: .always)  // mid-burst, still decaying
+            } else {
+                applyShaderConfig(stoodDownBehavior, animation: .whileFocused)  // already stood down
+            }
+        }
         if let layer = hostView.layer {
             // Reset the opaque-layer background (the same trick start(_:) uses) so redraw gaps
-            // show the new terminal bg, not the old one; and re-derive opacity, since toggling a
-            // cursor shader on/off flips whether the layer must pass the drawable's real alpha.
-            layer.isOpaque = behavior.cursorShader == nil
+            // show the new terminal bg, not the old one. Opacity doesn't move with the cursor
+            // shader any more — see start(_:).
+            layer.isOpaque = true
             layer.backgroundColor = theme.background.nsColor.cgColor
         }
         hostView.scrollMultiplier = behavior.scrollMultiplier
@@ -232,23 +294,59 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public func focus() { hostView.window?.makeFirstResponder(hostView) }
 
     public func setFocused(_ focused: Bool) {
-        if let surfacePtr { ghostty_surface_set_focus(surfacePtr, focused) }
         handleFocusChange(focused)
     }
 
-    /// Both focus paths converge here: the chrome's `setFocused`, and the responder-chain
+    /// Both pane-focus paths converge here: the chrome's `setFocused`, and the responder-chain
     /// transitions the host view reports through `focusDidChange`. Either can be the only one
     /// to fire — a click focuses a pane through the responder chain — so hanging the shader
     /// stand-down off just one of them leaves a pane stuck on the passthrough, its shader
     /// silently dead until some later focus cycle happens to resync it.
-    ///
-    /// Deduped because both paths repeat themselves: the chrome re-sends every surface's focus
-    /// state on any focus change, and a stand-down per repeat would re-shape idle panes for
-    /// nothing. libghostty dedupes its own side, so the forwarding above stays unconditional.
     private func handleFocusChange(_ focused: Bool) {
+        paneFocused = focused
+        syncFocus()
+    }
+
+    /// The app came forward or went away. Panes keep their own focus across it — the pane you
+    /// left is the pane you come back to — so this moves only the app half of the pair.
+    private func handleAppActiveChange(_ active: Bool) {
+        isAppActive = active
+        syncFocus()
+    }
+
+    /// The single place libghostty is told whether this surface is focused, from both halves.
+    /// A pane is focused only while the app is also frontmost: a focused pane in a background
+    /// app is exactly the case that used to animate at 120fps behind another app's window.
+    ///
+    /// The shader work is deduped because both halves repeat themselves — the chrome re-sends
+    /// every surface's focus state on any focus change, and a stand-down per repeat would
+    /// re-shape idle panes for nothing. libghostty dedupes its own side, so the forwarding
+    /// stays unconditional.
+    private func syncFocus() {
+        let focused = paneFocused && isAppActive
+        if let surfacePtr { ghostty_surface_set_focus(surfacePtr, focused) }
         guard focused != lastFocused else { return }
         lastFocused = focused
         if focused { restoreShader() } else { startShaderSettle() }
+    }
+
+    /// Keep `isAppActive` tracking NSApp. Registered at init, not in `start`, so there is no
+    /// window in which an activation change is missed — the handlers no-op against a nil surface.
+    private func observeAppActive() {
+        let center = NotificationCenter.default
+        appActiveObservers = [
+            center.addObserver(
+                forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+            ) { [weak self] _ in self?.handleAppActiveChange(true) },
+            center.addObserver(
+                forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
+            ) { [weak self] _ in self?.handleAppActiveChange(false) },
+        ]
+    }
+
+    private func removeAppActiveObservers() {
+        appActiveObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        appActiveObservers = []
     }
 
     /// Let a blurred surface's cursor tail finish, then stand the real shader down (ZEN-237).
@@ -272,9 +370,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
         let settle = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            var stoodDown = self.lastBehavior
-            stoodDown.cursorShader = TerminalKitResources.passthroughShaderPath
-            self.applyShaderConfig(stoodDown, animation: .whileFocused)
+            self.applyShaderConfig(self.stoodDownBehavior, animation: .whileFocused)
             self.shaderSettleWorkItem = nil
         }
         shaderSettleWorkItem = settle
@@ -288,6 +384,15 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         guard hasPerSurfaceShaderConfig else { return }
         applyShaderConfig(lastBehavior, animation: .whileFocused)
         hasPerSurfaceShaderConfig = false
+    }
+
+    /// What a stood-down surface runs: the passthrough in place of the real shader, over the
+    /// behavior last applied. Shared by the settle and by `applyAppearance`, which has to rebuild
+    /// the same shape when the theme moves under a surface that is already stood down.
+    private var stoodDownBehavior: TerminalBehavior {
+        var stoodDown = lastBehavior
+        stoodDown.cursorShader = TerminalKitResources.passthroughShaderPath
+        return stoodDown
     }
 
     private func applyShaderConfig(
@@ -305,9 +410,10 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
     public func terminate() {
         SecureInput.shared.removeScoped(secureInputID)
-        // Before the surface is freed: the pending drop-back would otherwise fire against a
-        // dangling pointer.
+        // Before the surface is freed: the pending drop-back and a late app-active change would
+        // otherwise fire against a dangling pointer.
         cancelShaderSettle()
+        removeAppActiveObservers()
         guard let surfacePtr else { return }
         ghostty_surface_free(surfacePtr)
         self.surfacePtr = nil
@@ -322,6 +428,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // strong ref, our `owner` back-ref is weak) so a stray event after free doesn't
         // call ghostty_surface_* on freed memory. Mirrors terminate().
         SecureInput.shared.removeScoped(secureInputID)
+        removeAppActiveObservers()
         if let surfacePtr {
             ghostty_surface_free(surfacePtr)
             hostView.surfacePtr = nil

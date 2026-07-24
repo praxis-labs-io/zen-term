@@ -17,6 +17,7 @@ final class GhosttyHostView: NSView {
 
     /// Token for the `NSWindow.didChangeScreenNotification` observer (see `observeScreenChanges`).
     private var screenChangeObserver: NSObjectProtocol?
+    private var occlusionObserver: NSObjectProtocol?
 
     /// The cursor libghostty last asked for via `GHOSTTY_ACTION_MOUSE_SHAPE` (I-beam over
     /// text, pointing hand over a ⌘-hovered link, …). Applied through cursor rects
@@ -108,9 +109,36 @@ final class GhosttyHostView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         observeScreenChanges()
+        observeOcclusion()
         syncDisplayID()
+        syncOcclusion()
         syncLayerContentsScale()
         syncSizeAndScale()
+    }
+
+    /// Tell libghostty whether this surface is actually on screen. Its render thread skips every
+    /// frame while a surface is invisible (`renderer/Thread.zig`, `drawFrame`), and nothing else
+    /// moves that flag — so without this a covered or minimized window keeps drawing, which with
+    /// a cursor shader means a full-screen post-process pass at 120fps for nobody (ZEN-271).
+    ///
+    /// A nil window reads as not visible: an unmounted view has nothing to show.
+    func syncOcclusion() {
+        guard let surfacePtr else { return }
+        ghostty_surface_set_occlusion(surfacePtr, window?.occlusionState.contains(.visible) ?? false)
+    }
+
+    /// Registered once, for any window, and filtered to ours — the same shape
+    /// `observeScreenChanges` uses, and for the same reason: this view is re-parented across
+    /// windows over its life.
+    private func observeOcclusion() {
+        guard occlusionObserver == nil else { return }
+        occlusionObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            guard let self, let window = self.window, notification.object as? NSWindow === window
+            else { return }
+            self.syncOcclusion()
+        }
     }
 
     override func viewDidChangeBackingProperties() {
@@ -152,6 +180,9 @@ final class GhosttyHostView: NSView {
         if let screenChangeObserver {
             NotificationCenter.default.removeObserver(screenChangeObserver)
         }
+        if let occlusionObserver {
+            NotificationCenter.default.removeObserver(occlusionObserver)
+        }
     }
 
     override func updateTrackingAreas() {
@@ -166,16 +197,20 @@ final class GhosttyHostView: NSView {
 
     // MARK: Focus
 
+    // Responder transitions report pane focus to the owner and nothing else. They must NOT call
+    // `ghostty_surface_set_focus` themselves: what libghostty is told is `paneFocused &&
+    // isAppActive` (ZEN-271), and a direct write here races the owner's. Becoming first responder
+    // while the app is still inactive — every launch, since the first window is built from
+    // `applicationDidFinishLaunching` — wrote `true` here and then the owner immediately corrected
+    // it to `false`, leaving the first surface unfocused and its cursor not blinking.
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
-        if let surfacePtr { ghostty_surface_set_focus(surfacePtr, true) }
         owner?.focusDidChange(true)
         return ok
     }
 
     override func resignFirstResponder() -> Bool {
         let ok = super.resignFirstResponder()
-        if let surfacePtr { ghostty_surface_set_focus(surfacePtr, false) }
         owner?.focusDidChange(false)
         return ok
     }

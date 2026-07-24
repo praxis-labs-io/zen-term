@@ -7,6 +7,11 @@ const float DURATION = 0.15; // in seconds (zen-term: a touch slower than the up
 const float MAX_TRAIL_LENGTH = 0.2;
 const float THRESHOLD_MIN_DISTANCE = 1.5; // min distance to show trail (units of cursor width)
 const float BLUR = 2.0; // blur size in pixels (for antialiasing)
+// zen-term: fade gradient along the trail, ported from cursor_warp — this shader shipped without
+// one. The exponent is gentler than warp's 5.0 because this trail is both shorter and shorter-lived
+// (0.15s), and a 5th-power falloff over it leaves almost nothing on screen.
+const float FADE_ENABLED = 1.0; // 1.0 to enable fade gradient along the trail, 0.0 to disable
+const float FADE_EXPONENT = 3.0; // higher = the trail fades out closer to the head
 
 // --- CONSTANTS for easing functions ---
 const float PI = 3.14159265359;
@@ -227,10 +232,26 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord){
         
         vec4 trail = TRAIL_COLOR;
         float trailAlpha = antialising(sdfTrail);
+
+        // zen-term: fade along the trail's length, ported from cursor_warp. Projecting the fragment
+        // onto the movement vector gives 0 at the tail and 1 at the head; the exponent biases the
+        // falloff toward the head. The epsilon keeps a zero-length move from dividing by zero.
+        if (FADE_ENABLED > 0.5) {
+            vec2 moveVec = centerCC - centerCP;
+            vec2 fragVec = vu - centerCP;
+            float fadeProgress = clamp(dot(fragVec, moveVec) / (dot(moveVec, moveVec) + 1e-6), 0.0, 1.0);
+            trailAlpha *= pow(fadeProgress, FADE_EXPONENT);
+        }
+
         newColor = mix(newColor, trail, trailAlpha);
 
         // punch hole
-        newColor = mix(newColor, fragColor, step(sdfCurrentCursor, 0.));
+        // zen-term: antialiased to match the trail, not a hard `step(sdfCurrentCursor, 0.)`. The
+        // trail is drawn with a smoothstep fringe BLUR wide, so a hard-edged hole leaves that
+        // fringe stranded around the cursor — and once the animation settles, v0-v3 collapse onto
+        // the cursor rect, so the leftover rim is all that's still drawn. It showed as faint dots
+        // at the corners, where the parallelogram and rectangle SDFs disagree most.
+        newColor = mix(newColor, fragColor, antialising(sdfCurrentCursor));
     }
 
     fragColor = newColor;

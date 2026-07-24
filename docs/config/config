@@ -53,6 +53,11 @@
 # `cursor_tail` a lighter comet. Unset = none. Also in Settings → Terminal → Cursor
 # shader, which applies live. These are cursor effects, so they show on cursor
 # moves and read most in editors like neovim; they do not affect scrolling.
+#
+# A shader redraws the whole terminal surface every frame while a pane is focused,
+# so what it costs scales with the pixels on screen. On a 5K display that measured
+# as most of the GPU. Drawing stops when ZenTerm is not frontmost, and when the
+# window is covered, so a shader costs nothing in the background.
 # cursor-shader = cursor_warp         # cursor_warp | cursor_tail
 
 # ─── Chrome ──────────────────────────────────────────────────────────────────
