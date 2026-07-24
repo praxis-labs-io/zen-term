@@ -157,6 +157,16 @@ final class DiffPaneTable: NSView {
         table.scrollToVisible(table.rect(ofRow: anchor))
     }
 
+    /// Grow (or shrink) the reserved room to a new box height as the note gains or loses lines
+    /// (ZEN-257) — re-tile so the lines below follow, and re-frame the box into the new room.
+    func setComposerHeight(_ height: CGFloat) {
+        guard composerBox != nil, let anchor = source.composerAnchor, source.composerHeight != height
+        else { return }
+        source.composerHeight = height
+        noteHeight(of: anchor)
+        layoutComposer()
+    }
+
     func hideComposer() {
         guard let box = composerBox else { return }
         let anchor = source.composerAnchor

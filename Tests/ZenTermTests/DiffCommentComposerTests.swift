@@ -150,6 +150,35 @@ final class DiffCommentComposerTests: XCTestCase {
         XCTAssertEqual(sent.count, 1)
     }
 
+    // MARK: growth
+
+    func test_theBoxGrowsWithTheNoteThenCapsSoAScrollTakesOver() throws {
+        let composer = mount()
+        var heights: [CGFloat] = []
+        composer.onRequestHeight = { heights.append($0) }
+
+        // Three lines fits the default; nothing is requested until the note outgrows it.
+        composer.noteViewForTesting.string = "one\ntwo\nthree"
+        composer.noteViewForTesting.didChangeText()
+        XCTAssertTrue(heights.isEmpty, "the default holds the first few lines — no re-tile yet")
+
+        composer.noteViewForTesting.string = "1\n2\n3\n4\n5\n6"
+        composer.noteViewForTesting.didChangeText()
+        let sixLines = try XCTUnwrap(heights.last)
+        XCTAssertGreaterThan(sixLines, DiffCommentComposer.height, "six lines grew the box")
+
+        composer.noteViewForTesting.string = Array(1...20).map(String.init).joined(separator: "\n")
+        composer.noteViewForTesting.didChangeText()
+        let twentyLines = try XCTUnwrap(heights.last)
+        XCTAssertGreaterThan(twentyLines, sixLines, "and it kept growing past six")
+
+        composer.noteViewForTesting.string = Array(1...40).map(String.init).joined(separator: "\n")
+        composer.noteViewForTesting.didChangeText()
+        XCTAssertEqual(
+            heights.last, twentyLines,
+            "but caps: past the ceiling the box stops growing and the note scrolls inside itself")
+    }
+
     // MARK: target
 
     func test_theDefaultTargetIsTheFirstOne() throws {
@@ -194,6 +223,45 @@ final class DiffCommentComposerTests: XCTestCase {
 
         XCTAssertFalse(dropdown.isPopoverOpen)
         XCTAssertEqual(cancels, 0, "a comment isn't thrown away by closing a dropdown")
+    }
+
+    // MARK: focus ring
+
+    /// Drive Tab (or Shift-Tab) into whatever currently holds focus, the way a keystroke would, and
+    /// return the responder it landed on. The note is an `NSTextView` and the buttons/dropdown are
+    /// plain responders, so this sends the raw `keyDown` to the current first responder rather than
+    /// through the field editor.
+    private func tab(shift: Bool = false) throws -> NSResponder? {
+        var flags: NSEvent.ModifierFlags = []
+        if shift { flags.insert(.shift) }
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0,
+                context: nil, characters: "\t", charactersIgnoringModifiers: "\t", isARepeat: false,
+                keyCode: 48))
+        (window!.firstResponder as? NSView)?.keyDown(with: event)
+        return window!.firstResponder
+    }
+
+    func test_tabRingReachesEveryStopAndWraps() throws {
+        let composer = mount()
+        window!.makeFirstResponder(composer.noteViewForTesting)
+
+        XCTAssertIdentical(try tab() as? NSView, composer.targetDropdownForTesting, "note → target")
+        XCTAssertIdentical(try tab() as? NSView, composer.cancelButtonForTesting, "target → Cancel")
+        XCTAssertIdentical(try tab() as? NSView, composer.submitButtonForTesting, "Cancel → Send + submit")
+        XCTAssertIdentical(try tab() as? NSView, composer.sendButtonForTesting, "Send + submit → Send")
+        XCTAssertIdentical(try tab() as? NSView, composer.noteViewForTesting, "Send → note (wraps)")
+    }
+
+    func test_shiftTabRetreatsThroughTheRing() throws {
+        let composer = mount()
+        window!.makeFirstResponder(composer.sendButtonForTesting)
+
+        XCTAssertIdentical(try tab(shift: true) as? NSView, composer.submitButtonForTesting, "Send ← submit")
+        XCTAssertIdentical(try tab(shift: true) as? NSView, composer.cancelButtonForTesting, "submit ← Cancel")
+        XCTAssertIdentical(try tab(shift: true) as? NSView, composer.targetDropdownForTesting, "Cancel ← target")
+        XCTAssertIdentical(try tab(shift: true) as? NSView, composer.noteViewForTesting, "target ← note")
     }
 
     private func returnEvent() throws -> NSEvent {

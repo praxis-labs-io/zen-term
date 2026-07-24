@@ -266,6 +266,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             targets: targets,
             onSend: { [weak self] message, target, submit in self?.send(message, to: target, submit: submit) },
             onCancel: { [weak self] in self?.closeComposer() })
+        composer.onRequestHeight = { [weak self] height in self?.diffTable.setComposerHeight(height) }
         self.composer = composer
         // The box hangs under the *last* selected line so that line, and everything above it, stays
         // put — only what's below is pushed down (`selectedRows.max()`, not the table's reported

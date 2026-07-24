@@ -32,10 +32,21 @@ final class DiffCommentComposer: NSView {
     private let submitButton = AppButton(title: "Send + submit", variant: .muted)
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
 
-    /// How tall the box is in the diff — the room the pane reserves for it. Fixed rather than
-    /// content-driven: a box that grew as you typed would re-push the lines under it on every keystroke.
+    /// The box's default height in the diff — the room the pane reserves for it before the note grows.
+    /// Comfortable for a few lines; the note grows past it (up to `maxNoteLines`) as you type.
     static let height: CGFloat = 128
     private static let inset: CGFloat = 10
+
+    /// The note grows a line at a time past `baseNoteLines` (which the default `height` already holds),
+    /// then stops at `maxNoteLines` and scrolls inside itself — so a long note can't push the box over
+    /// the whole diff.
+    private static let baseNoteLines = 3
+    private static let maxNoteLines = 8
+
+    /// Fired when the note's line count crosses into a taller (or shorter) box, so the pane can
+    /// re-reserve the room and re-push the lines below. Carries the box's new total height.
+    var onRequestHeight: ((CGFloat) -> Void)?
+    private var requestedHeight = DiffCommentComposer.height
 
     init(
         reference: String, removedLines: [String], targets: [DiffSendTarget],
@@ -56,6 +67,7 @@ final class DiffCommentComposer: NSView {
         sendButton.onTap = { [weak self] in self?.send(submit: false) }
         submitButton.onTap = { [weak self] in self?.send(submit: true) }
         cancelButton.onTap = { [weak self] in self?.onCancel() }
+        wireFocusRing()
 
         let buttons = NSStackView(views: [cancelButton, submitButton, sendButton])
         buttons.orientation = .horizontal
@@ -117,7 +129,7 @@ final class DiffCommentComposer: NSView {
         note.placeholder = "Leave a note"
         note.onSubmit = { [weak self] submit in self?.send(submit: submit) }
         note.onCancel = { [weak self] in self?.onCancel() }
-        note.onArrowDown = { [weak self] in self?.focusTarget() }
+        note.onChange = { [weak self] in self?.updateHeight() }
 
         noteScroll.drawsBackground = false
         noteScroll.hasVerticalScroller = true
@@ -130,14 +142,40 @@ final class DiffCommentComposer: NSView {
     }
 
     private func buildTargetDropdown() -> Dropdown {
-        let dropdown = Dropdown(
+        Dropdown(
             items: targets.enumerated().map { index, target in
                 DropdownItem(title: target.label, group: nil, note: nil, isSelected: index == 0)
             },
             selectedIndex: 0,
             onChange: { _ in })
-        dropdown.onArrowUp = { [weak self] in self?.focusNote() }
-        return dropdown
+    }
+
+    /// One keyboard ring through the box, on Tab / Shift-Tab only: note → target → Cancel →
+    /// Send + submit → Send, wrapping. Send is the primary, so tabbing out of the note walks the ring
+    /// to it.
+    ///
+    /// The footer deliberately claims **no** arrows: a Left/Right there falls through the responder
+    /// chain to the diff pane, so the diff keeps panning horizontally with the box open — which is why
+    /// the ring is Tab-driven, not arrow-driven. The note keeps its own arrows for the caret, and Down
+    /// off its last line drops into the ring.
+    private func wireFocusRing() {
+        [cancelButton, submitButton, sendButton].forEach { $0.isKeyboardFocusable = true }
+
+        note.onTab = { [weak self] in self?.focusTarget() }
+        note.onBacktab = { [weak self] in self?.focus(self?.sendButton) }
+        note.onArrowDown = { [weak self] in self?.focusTarget() }
+
+        targetDropdown.onTab = { [weak self] in self?.focus(self?.cancelButton) }
+        targetDropdown.onBacktab = { [weak self] in self?.focusNote() }
+
+        cancelButton.onTab = { [weak self] in self?.focus(self?.submitButton) }
+        cancelButton.onBacktab = { [weak self] in self?.focusTarget() }
+
+        submitButton.onTab = { [weak self] in self?.focus(self?.sendButton) }
+        submitButton.onBacktab = { [weak self] in self?.focus(self?.cancelButton) }
+
+        sendButton.onTab = { [weak self] in self?.focusNote() }
+        sendButton.onBacktab = { [weak self] in self?.focus(self?.submitButton) }
     }
 
     // MARK: lifecycle
@@ -214,8 +252,41 @@ final class DiffCommentComposer: NSView {
         note.placeholderColor = chrome.ink(alpha: 0.4)
     }
 
+    /// Recompute the box height the note now wants and, if it changed the reserved room, ask the pane
+    /// to grow (or shrink) around it. Only the crossings fire — typing within a line's worth of text
+    /// doesn't re-tile the diff on every keystroke.
+    private func updateHeight() {
+        let height = boxHeight(forLines: noteLineCount)
+        guard height != requestedHeight else { return }
+        requestedHeight = height
+        onRequestHeight?(height)
+    }
+
+    /// The laid-out line count of the note (at least 1), from the layout manager's used height.
+    private var noteLineCount: Int {
+        guard let layout = note.layoutManager, let container = note.textContainer else { return 1 }
+        layout.ensureLayout(for: container)
+        let used = layout.usedRect(for: container).height
+        return max(1, Int((used / noteLineHeight).rounded()))
+    }
+
+    private var noteLineHeight: CGFloat {
+        note.layoutManager?.defaultLineHeight(for: note.font ?? .systemFont(ofSize: 13)) ?? 16
+    }
+
+    /// The box height for `lines` of note: the default holds `baseNoteLines`, then each further line up
+    /// to `maxNoteLines` adds one line-height; past that the note scrolls and the box stops growing.
+    private func boxHeight(forLines lines: Int) -> CGFloat {
+        let extra = max(0, min(lines, Self.maxNoteLines) - Self.baseNoteLines)
+        return Self.height + CGFloat(extra) * noteLineHeight
+    }
+
     private func focusNote() { window?.makeFirstResponder(note) }
     private func focusTarget() { window?.makeFirstResponder(targetDropdown) }
+    private func focus(_ view: NSView?) {
+        guard let view else { return }
+        window?.makeFirstResponder(view)
+    }
 
     // MARK: test hooks
 
@@ -228,6 +299,7 @@ final class DiffCommentComposer: NSView {
     var targetDropdownForTesting: Dropdown { targetDropdown }
     var sendButtonForTesting: AppButton { sendButton }
     var submitButtonForTesting: AppButton { submitButton }
+    var cancelButtonForTesting: AppButton { cancelButton }
     var selectedTargetForTesting: DiffSendTarget? {
         targets.indices.contains(targetDropdown.selectedIndex) ? targets[targetDropdown.selectedIndex] : nil
     }
@@ -240,6 +312,9 @@ private final class SubmitAwareTextView: NSTextView {
     var onSubmit: ((_ submit: Bool) -> Void)?
     var onCancel: (() -> Void)?
     var onArrowDown: (() -> Void)?
+    var onTab: (() -> Void)?
+    var onBacktab: (() -> Void)?
+    var onChange: (() -> Void)?
 
     /// Shown when the note is empty. Drawn by the text view itself rather than as a floating label, so
     /// it lands exactly on the first glyph's origin (text-container inset + line-fragment padding) —
@@ -250,6 +325,7 @@ private final class SubmitAwareTextView: NSTextView {
     override func didChangeText() {
         super.didChangeText()
         needsDisplay = true  // repaint so the placeholder clears the instant the first character lands
+        onChange?()
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -279,5 +355,23 @@ private final class SubmitAwareTextView: NSTextView {
             return
         }
         onArrowDown()
+    }
+
+    /// Tab moves focus out of the note rather than inserting a tab character — the note is one stop in
+    /// the box's focus ring, not a place to indent.
+    override func insertTab(_ sender: Any?) {
+        guard let onTab else {
+            super.insertTab(sender)
+            return
+        }
+        onTab()
+    }
+
+    override func insertBacktab(_ sender: Any?) {
+        guard let onBacktab else {
+            super.insertBacktab(sender)
+            return
+        }
+        onBacktab()
     }
 }
