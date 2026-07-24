@@ -17,7 +17,7 @@ final class DiffCommentComposerTests: XCTestCase {
     private struct Sent {
         let message: String
         let target: DiffSendTarget
-        let submit: Bool
+        let action: DiffSendAction
     }
     private var sent: [Sent] = []
     private var cancels = 0
@@ -50,8 +50,8 @@ final class DiffCommentComposerTests: XCTestCase {
     ) -> DiffCommentComposer {
         let composer = DiffCommentComposer(
             reference: reference, removedLines: removedLines, targets: targets,
-            onSend: { [weak self] message, target, submit in
-                self?.sent.append(Sent(message: message, target: target, submit: submit))
+            onSend: { [weak self] message, target, action in
+                self?.sent.append(Sent(message: message, target: target, action: action))
             },
             onCancel: { [weak self] in self?.cancels += 1 })
         let win = NSWindow(
@@ -87,26 +87,26 @@ final class DiffCommentComposerTests: XCTestCase {
 
     // MARK: send
 
-    func test_returnSendsWithoutSubmitting() throws {
+    func test_returnSubmitsByDefault() throws {
         let composer = mount()
         type("reuse centerRow here", into: composer)
 
         XCTAssertTrue(try press(keyCode: 36), "the composer claims a bare Return")
         XCTAssertEqual(sent.count, 1)
         XCTAssertEqual(sent.first?.message, "Sources/App/Foo.swift:42-44 reuse centerRow here")
-        XCTAssertEqual(
-            sent.first?.submit, false,
-            "⏎ leaves the message in the input — an agent mid-run must not be fired at by accident")
+        XCTAssertEqual(sent.first?.action, .submit, "⏎ is the default: send it and fire Return")
     }
 
-    func test_commandReturnSendsAndSubmits() throws {
+    func test_commandReturnQueues() throws {
         let composer = mount()
-        type("ship it", into: composer)
+        type("first note", into: composer)
 
         XCTAssertTrue(try press(keyCode: 36, flags: .command))
         XCTAssertEqual(sent.count, 1)
-        XCTAssertEqual(sent.first?.message, "Sources/App/Foo.swift:42-44 ship it")
-        XCTAssertEqual(sent.first?.submit, true)
+        XCTAssertEqual(sent.first?.message, "Sources/App/Foo.swift:42-44 first note")
+        XCTAssertEqual(
+            sent.first?.action, .queue,
+            "⌘⏎ stacks the comment in the input to add more before submitting")
     }
 
     func test_shiftReturnIsLeftToTheTextView() throws {
@@ -243,25 +243,25 @@ final class DiffCommentComposerTests: XCTestCase {
         return window!.firstResponder
     }
 
-    func test_tabRingReachesEveryStopAndWraps() throws {
+    func test_tabRingLandsOnSubmitFirstThenWalksRightToLeftAndWraps() throws {
         let composer = mount()
         window!.makeFirstResponder(composer.noteViewForTesting)
 
-        XCTAssertIdentical(try tab() as? NSView, composer.targetDropdownForTesting, "note → target")
-        XCTAssertIdentical(try tab() as? NSView, composer.cancelButtonForTesting, "target → Cancel")
-        XCTAssertIdentical(try tab() as? NSView, composer.submitButtonForTesting, "Cancel → Send + submit")
-        XCTAssertIdentical(try tab() as? NSView, composer.sendButtonForTesting, "Send + submit → Send")
-        XCTAssertIdentical(try tab() as? NSView, composer.noteViewForTesting, "Send → note (wraps)")
+        // The first Tab out of the note lands on Submit (the primary), then walks the footer right to
+        // left back to the target and wraps — so the fast path is note → ⏎ or note → Tab → Space.
+        XCTAssertIdentical(try tab() as? NSView, composer.submitButtonForTesting, "note → Submit")
+        XCTAssertIdentical(try tab() as? NSView, composer.queueButtonForTesting, "Submit → Queue")
+        XCTAssertIdentical(try tab() as? NSView, composer.targetDropdownForTesting, "Queue → target")
+        XCTAssertIdentical(try tab() as? NSView, composer.noteViewForTesting, "target → note (wraps)")
     }
 
     func test_shiftTabRetreatsThroughTheRing() throws {
         let composer = mount()
-        window!.makeFirstResponder(composer.sendButtonForTesting)
+        window!.makeFirstResponder(composer.targetDropdownForTesting)
 
-        XCTAssertIdentical(try tab(shift: true) as? NSView, composer.submitButtonForTesting, "Send ← submit")
-        XCTAssertIdentical(try tab(shift: true) as? NSView, composer.cancelButtonForTesting, "submit ← Cancel")
-        XCTAssertIdentical(try tab(shift: true) as? NSView, composer.targetDropdownForTesting, "Cancel ← target")
-        XCTAssertIdentical(try tab(shift: true) as? NSView, composer.noteViewForTesting, "target ← note")
+        XCTAssertIdentical(try tab(shift: true) as? NSView, composer.queueButtonForTesting, "target ← Queue")
+        XCTAssertIdentical(try tab(shift: true) as? NSView, composer.submitButtonForTesting, "Queue ← Submit")
+        XCTAssertIdentical(try tab(shift: true) as? NSView, composer.noteViewForTesting, "Submit ← note")
     }
 
     private func returnEvent() throws -> NSEvent {

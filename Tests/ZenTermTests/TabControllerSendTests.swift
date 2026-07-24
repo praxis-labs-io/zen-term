@@ -86,61 +86,67 @@ final class TabControllerSendTests: XCTestCase {
 
     // MARK: sending
 
-    func test_theMessageArrivesAsOnePaste() throws {
-        let controller = mount()
-        let target = try XCTUnwrap(controller.sendTargets().first)
-        let pane = try XCTUnwrap(surfaces.first)
-
-        controller.send("Foo.swift:42 look at this", to: target, submit: false)
-
-        XCTAssertEqual(
-            pane.pastes, ["Foo.swift:42 look at this"],
-            "one paste: bracketed, so even a multi-line message reaches the input as a block")
-    }
-
     func test_submitSendsARealReturnKeyNotAPastedCarriageReturn() throws {
         let controller = mount()
         let target = try XCTUnwrap(controller.sendTargets().first)
         let pane = try XCTUnwrap(surfaces.first)
 
-        controller.send("Foo.swift:42 ship it", to: target, submit: true)
+        controller.send("Foo.swift:42 ship it", to: target, action: .submit)
 
         XCTAssertEqual(
             pane.pastes, ["Foo.swift:42 ship it"],
-            "only the message is pasted — the Return is a keypress, not a bracketed \"\\r\" the TUI "
-                + "would read as a newline")
+            "one paste of the message — bracketed, so a multi-line message arrives as a block; the "
+                + "Return is a keypress, not a bracketed \"\\r\" the TUI would read as a newline")
         XCTAssertEqual(pane.submitCount, 1, "and the submit went through the real key path")
     }
 
-    func test_noSubmitSendsNoReturnKey() throws {
+    func test_queuePastesAMessagePlusANewlineAndDoesNotSubmit() throws {
         let controller = mount()
         let target = try XCTUnwrap(controller.sendTargets().first)
         let pane = try XCTUnwrap(surfaces.first)
 
-        controller.send("Foo.swift:42 look", to: target, submit: false)
+        controller.send("Foo.swift:42 first", to: target, action: .queue)
+        controller.send("Bar.swift:7 second", to: target, action: .queue)
 
-        XCTAssertEqual(pane.pastes, ["Foo.swift:42 look"])
-        XCTAssertEqual(pane.submitCount, 0, "⏎ leaves the message in the input, unsent")
+        XCTAssertEqual(
+            pane.pastes, ["Foo.swift:42 first\n", "Bar.swift:7 second\n"],
+            "each queued comment lands on its own line, ready to stack the next above the prompt")
+        XCTAssertEqual(pane.submitCount, 0, "queue never fires Return — a later submit sends them all")
     }
 
-    func test_sendingFocusesTheTargetSoYouLandWhereTheTextWent() throws {
+    func test_submitFocusesTheTargetSoYouLandWhereTheTextWent() throws {
         let controller = mount()
-        controller.toggleBottomDrawer()
-        // The pane, not the drawer that just took focus — the case where focus has to move.
+        controller.toggleBottomDrawer()  // focuses the drawer
         let pane = try XCTUnwrap(controller.sendTargets().first { $0.label.hasPrefix("pane 1") })
         let paneSurface = try XCTUnwrap(surfaces.first)
+        let focusBefore = paneSurface.focusCount
 
-        controller.send("Foo.swift:1 over here", to: pane, submit: false)
+        controller.send("Foo.swift:1 over here", to: pane, action: .submit)
 
         XCTAssertEqual(paneSurface.pastes, ["Foo.swift:1 over here"])
-        XCTAssertTrue(paneSurface.isFocused, "focus follows the message")
+        XCTAssertGreaterThan(paneSurface.focusCount, focusBefore, "focus follows a submitted message")
+    }
+
+    func test_queueDoesNotStealFocus() throws {
+        let controller = mount()
+        controller.toggleBottomDrawer()  // focuses the drawer
+        let pane = try XCTUnwrap(controller.sendTargets().first { $0.label.hasPrefix("pane 1") })
+        let paneSurface = try XCTUnwrap(surfaces.first)
+        let focusBefore = paneSurface.focusCount
+
+        controller.send("Foo.swift:1 queued", to: pane, action: .queue)
+
+        XCTAssertEqual(paneSurface.pastes, ["Foo.swift:1 queued\n"])
+        XCTAssertEqual(
+            paneSurface.focusCount, focusBefore,
+            "queue stays out of the way — you keep reviewing while comments stack in the target")
     }
 
     func test_aSendToADeadTargetIsANoOp() throws {
         let controller = mount()
         let ghost = DiffSendTarget(id: PaneID(9999), label: "gone")
 
-        controller.send("Foo.swift:1 anyone?", to: ghost, submit: true)
+        controller.send("Foo.swift:1 anyone?", to: ghost, action: .submit)
 
         XCTAssertTrue(
             surfaces.allSatisfy { $0.pastes.isEmpty },

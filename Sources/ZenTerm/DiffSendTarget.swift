@@ -10,3 +10,13 @@ struct DiffSendTarget: Equatable {
     let id: PaneID
     let label: String
 }
+
+/// What a finished diff comment does to its target terminal (ZEN-257).
+enum DiffSendAction: Equatable {
+    /// Paste the comment and press Return — the agent gets it now. The viewer closes.
+    case submit
+    /// Paste the comment followed by a newline, without submitting or stealing focus, and leave the
+    /// viewer open. Lets several comments stack in the target's input (each on its own line) before a
+    /// final `submit` fires them together.
+    case queue
+}

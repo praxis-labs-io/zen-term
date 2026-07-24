@@ -383,15 +383,25 @@ final class TabController: NSObject {
         return "\(place) · \(title)"
     }
 
-    /// Paste a composed diff comment into `target` and focus it. `submit` follows the paste with a
-    /// real Return keypress (`submitLine`), not a pasted `"\r"` — a pasted carriage return lands
-    /// inside the bracketed-paste block, where a TUI reads it as a literal newline and the message
-    /// sits in the input unsent.
-    func send(_ message: String, to target: DiffSendTarget, submit: Bool) {
+    /// Deliver a composed diff comment to `target`.
+    ///
+    /// `submit` focuses the target, pastes, and presses Return (`submitLine`, a real keypress — not a
+    /// pasted `"\r"`, which lands inside the bracketed-paste block where a TUI reads it as a literal
+    /// newline and never sends).
+    ///
+    /// `queue` pastes the message plus a trailing newline **without** focusing or submitting, so
+    /// several comments can stack in the target's input (each on its own line) and the reviewer stays
+    /// in the diff to add more before a final submit fires them together.
+    func send(_ message: String, to target: DiffSendTarget, action: DiffSendAction) {
         guard let surface = surface(for: target.id) else { return }
-        focusPanel(target.id)
-        surface.paste(message)
-        if submit { surface.submitLine() }
+        switch action {
+        case .submit:
+            focusPanel(target.id)
+            surface.paste(message)
+            surface.submitLine()
+        case .queue:
+            surface.paste(message + "\n")
+        }
     }
 
     /// The surface behind a panel id in the shared nav id space — a drawer sentinel or a pane leaf.

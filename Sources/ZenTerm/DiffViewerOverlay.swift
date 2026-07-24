@@ -27,9 +27,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// The terminals in the active tab a comment can go to, **focused one first** — the composer
     /// defaults to index 0, so a send with no dropdown interaction lands where you were working.
     typealias SendTargets = () -> [DiffSendTarget]
-    /// Deliver a composed comment: paste it into `target` and focus that panel, submitting it (⇧⏎)
-    /// rather than leaving it in the input (⏎). The host closes the viewer around this.
-    typealias Sender = (_ message: String, _ target: DiffSendTarget, _ submit: Bool) -> Void
+    /// Deliver a composed comment to `target`: `submit` (⏎) pastes and presses Return and the host
+    /// closes the viewer; `queue` (⌘⏎) pastes a line to stack for later and leaves the viewer open.
+    typealias Sender = (_ message: String, _ target: DiffSendTarget, _ action: DiffSendAction) -> Void
 
     private let loader: Loader
     private let branchesLoader: BranchesLoader
@@ -264,7 +264,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
                 path: file.path, changeKind: file.changeKind, selection: selection),
             removedLines: removedLines,
             targets: targets,
-            onSend: { [weak self] message, target, submit in self?.send(message, to: target, submit: submit) },
+            onSend: { [weak self] message, target, action in self?.send(message, to: target, action: action) },
             onCancel: { [weak self] in self?.closeComposer() })
         composer.onRequestHeight = { [weak self] height in self?.diffTable.setComposerHeight(height) }
         self.composer = composer
@@ -286,9 +286,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         refreshFocusStyling()
     }
 
-    private func send(_ message: String, to target: DiffSendTarget, submit: Bool) {
+    private func send(_ message: String, to target: DiffSendTarget, action: DiffSendAction) {
+        // Close the box either way; the viewer itself only closes on submit (the host decides that
+        // from the action), so a queue leaves you in the diff to line up the next comment.
         closeComposer()
-        sender(message, target, submit)
+        sender(message, target, action)
     }
 
     /// ⌘C (code) / ⌘⇧C (reference), or nil for anything else. Compares against the reservable set so

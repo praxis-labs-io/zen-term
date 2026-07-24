@@ -137,7 +137,7 @@ final class DiffViewerComposerTests: XCTestCase {
         try pressReturn(into: overlay)
         let composer = try XCTUnwrap(overlay.composerForTesting, "⏎ on the diff opens the composer")
         XCTAssertEqual(
-            composer.messageForTesting, "Sources/App/Foo.swift:11",
+            composer.messageForTesting, "@Sources/App/Foo.swift:11",
             "with no visual selection the cursor line is the selection, so there's always something "
                 + "to comment on")
     }
@@ -150,7 +150,7 @@ final class DiffViewerComposerTests: XCTestCase {
 
         try pressReturn(into: overlay)
         let composer = try XCTUnwrap(overlay.composerForTesting)
-        XCTAssertEqual(composer.messageForTesting, "Sources/App/Foo.swift:11-12")
+        XCTAssertEqual(composer.messageForTesting, "@Sources/App/Foo.swift:11-12")
     }
 
     func test_aRemovalOnlySelectionCarriesTheRemovedLines() throws {

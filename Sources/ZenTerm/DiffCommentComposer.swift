@@ -14,9 +14,9 @@ import AppKit
 /// It owns none of the sending. It hands back a finished message and the chosen terminal; the viewer
 /// closes and `TabController` does the paste.
 final class DiffCommentComposer: NSView {
-    /// The finished message, the terminal it goes to, and whether to submit it (⌘⏎) rather than just
-    /// leave it in the input (⏎).
-    typealias Send = (_ message: String, _ target: DiffSendTarget, _ submit: Bool) -> Void
+    /// The finished message, the terminal it goes to, and what to do with it — `submit` (⏎, the
+    /// default) sends and fires Return; `queue` (⌘⏎) stacks it in the input to add more first.
+    typealias Send = (_ message: String, _ target: DiffSendTarget, _ action: DiffSendAction) -> Void
 
     private let reference: String
     private let removedLines: [String]
@@ -28,9 +28,9 @@ final class DiffCommentComposer: NSView {
     private let noteScroll = NSScrollView()
     private let note = SubmitAwareTextView()
     private var targetDropdown: Dropdown!  // built in init once `self` can be captured
-    private let sendButton = AppButton(title: "Send", variant: .primary)
-    private let submitButton = AppButton(title: "Send + submit", variant: .muted)
-    private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
+    private let submitButton = AppButton(title: "Submit", variant: .primary)
+    private let queueButton = AppButton(title: "Queue", variant: .muted)
+    private var closeButton: IconButton!  // built in init (its onClick needs self)
 
     /// The box's default height in the diff — the room the pane reserves for it before the note grows.
     /// Comfortable for a few lines; the note grows past it (up to `maxNoteLines`) as you type.
@@ -63,13 +63,15 @@ final class DiffCommentComposer: NSView {
         buildSurface()
         buildNote()
         targetDropdown = buildTargetDropdown()
+        closeButton = IconButton(
+            symbol: "xmark", size: NSSize(width: 22, height: 22), pointSize: 11,
+            accessibilityLabel: "Close", onClick: { [weak self] in self?.onCancel() })
 
-        sendButton.onTap = { [weak self] in self?.send(submit: false) }
-        submitButton.onTap = { [weak self] in self?.send(submit: true) }
-        cancelButton.onTap = { [weak self] in self?.onCancel() }
+        submitButton.onTap = { [weak self] in self?.send(.submit) }
+        queueButton.onTap = { [weak self] in self?.send(.queue) }
         wireFocusRing()
 
-        let buttons = NSStackView(views: [cancelButton, submitButton, sendButton])
+        let buttons = NSStackView(views: [queueButton, submitButton])
         buttons.orientation = .horizontal
         buttons.spacing = 8
         buttons.setContentHuggingPriority(.required, for: .horizontal)
@@ -81,11 +83,14 @@ final class DiffCommentComposer: NSView {
         footer.translatesAutoresizingMaskIntoConstraints = false
         targetDropdown.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
         surface.addSubview(noteScroll)
         surface.addSubview(footer)
+        surface.addSubview(closeButton)
         // The box's own frame is set by the pane (a table subview), but everything inside lays out with
         // Auto Layout off that frame — the surface pinned into `self` with an inset, then the note above
-        // the footer. `footer` hugs its content at the bottom so the note scroll takes the rest.
+        // the footer. `footer` hugs its content at the bottom so the note scroll takes the rest. The
+        // close button floats in the top-right corner, above the note.
         NSLayoutConstraint.activate([
             surface.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
             surface.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
@@ -100,6 +105,9 @@ final class DiffCommentComposer: NSView {
             footer.topAnchor.constraint(equalTo: noteScroll.bottomAnchor, constant: 8),
             footer.bottomAnchor.constraint(equalTo: surface.bottomAnchor, constant: -10),
             targetDropdown.widthAnchor.constraint(lessThanOrEqualToConstant: 240),
+
+            closeButton.trailingAnchor.constraint(equalTo: surface.trailingAnchor, constant: -6),
+            closeButton.topAnchor.constraint(equalTo: surface.topAnchor, constant: 6),
         ])
     }
 
@@ -127,7 +135,7 @@ final class DiffCommentComposer: NSView {
         note.autoresizingMask = [.width]
         note.textContainer?.widthTracksTextView = true
         note.placeholder = "Leave a note"
-        note.onSubmit = { [weak self] submit in self?.send(submit: submit) }
+        note.onSubmit = { [weak self] action in self?.send(action) }
         note.onCancel = { [weak self] in self?.onCancel() }
         note.onChange = { [weak self] in self?.updateHeight() }
 
@@ -150,32 +158,30 @@ final class DiffCommentComposer: NSView {
             onChange: { _ in })
     }
 
-    /// One keyboard ring through the box, on Tab / Shift-Tab only: note → target → Cancel →
-    /// Send + submit → Send, wrapping. Send is the primary, so tabbing out of the note walks the ring
-    /// to it.
+    /// One keyboard ring through the box, on Tab / Shift-Tab only. Tab runs the footer **right to
+    /// left** so the very first Tab out of the note lands on Submit, the primary: note → Submit →
+    /// Queue → target → note, wrapping. Shift-Tab reverses it.
     ///
     /// The footer deliberately claims **no** arrows: a Left/Right there falls through the responder
     /// chain to the diff pane, so the diff keeps panning horizontally with the box open — which is why
     /// the ring is Tab-driven, not arrow-driven. The note keeps its own arrows for the caret, and Down
-    /// off its last line drops into the ring.
+    /// off its last line drops onto Submit. The close button isn't a ring stop — it's the mouse
+    /// affordance for Esc.
     private func wireFocusRing() {
-        [cancelButton, submitButton, sendButton].forEach { $0.isKeyboardFocusable = true }
+        [queueButton, submitButton].forEach { $0.isKeyboardFocusable = true }
 
-        note.onTab = { [weak self] in self?.focusTarget() }
-        note.onBacktab = { [weak self] in self?.focus(self?.sendButton) }
-        note.onArrowDown = { [weak self] in self?.focusTarget() }
+        note.onTab = { [weak self] in self?.focus(self?.submitButton) }
+        note.onBacktab = { [weak self] in self?.focusTarget() }
+        note.onArrowDown = { [weak self] in self?.focus(self?.submitButton) }
 
-        targetDropdown.onTab = { [weak self] in self?.focus(self?.cancelButton) }
-        targetDropdown.onBacktab = { [weak self] in self?.focusNote() }
+        submitButton.onTab = { [weak self] in self?.focus(self?.queueButton) }
+        submitButton.onBacktab = { [weak self] in self?.focusNote() }
 
-        cancelButton.onTab = { [weak self] in self?.focus(self?.submitButton) }
-        cancelButton.onBacktab = { [weak self] in self?.focusTarget() }
+        queueButton.onTab = { [weak self] in self?.focusTarget() }
+        queueButton.onBacktab = { [weak self] in self?.focus(self?.submitButton) }
 
-        submitButton.onTab = { [weak self] in self?.focus(self?.sendButton) }
-        submitButton.onBacktab = { [weak self] in self?.focus(self?.cancelButton) }
-
-        sendButton.onTab = { [weak self] in self?.focusNote() }
-        sendButton.onBacktab = { [weak self] in self?.focus(self?.submitButton) }
+        targetDropdown.onTab = { [weak self] in self?.focusNote() }
+        targetDropdown.onBacktab = { [weak self] in self?.focus(self?.queueButton) }
     }
 
     // MARK: lifecycle
@@ -198,38 +204,38 @@ final class DiffCommentComposer: NSView {
             onCancel()
             return true
         }
-        guard let submit = Self.sendShortcut(for: event) else { return false }
-        send(submit: submit)
+        guard let action = Self.sendShortcut(for: event) else { return false }
+        send(action)
         return true
     }
 
-    /// ⏎ (send) / ⌘⏎ (send and submit), or nil for anything else — including ⇧⏎, which falls through
-    /// so the text view takes a new line. The chat-input convention, because that's the muscle memory
-    /// this box sits next to all day.
+    /// ⏎ (submit) / ⌘⏎ (queue), or nil for anything else — including ⇧⏎, which falls through so the
+    /// text view takes a new line. The chat-input convention, because that's the muscle memory this box
+    /// sits next to all day.
     ///
     /// Matched against the reservable set, never `deviceIndependentFlagsMask`, which keeps the extra
     /// bits AppKit stamps on and so never compares equal to a bare modifier (ZEN-145).
-    static func sendShortcut(for event: NSEvent) -> Bool? {
+    static func sendShortcut(for event: NSEvent) -> DiffSendAction? {
         guard event.keyCode == 36 || event.keyCode == 76 else { return nil }  // Return, keypad Enter
         switch event.modifierFlags.intersection(DiffPaneTable.reservableModifiers) {
-        case []: return false
-        case .command: return true
+        case []: return .submit
+        case .command: return .queue
         default: return nil
         }
     }
 
-    private func send(submit: Bool) {
+    private func send(_ action: DiffSendAction) {
         guard targets.indices.contains(targetDropdown.selectedIndex) else { return }
         let message = DiffComment.message(
             reference: reference, note: note.string, removedLines: removedLines)
-        onSend(message, targets[targetDropdown.selectedIndex], submit)
+        onSend(message, targets[targetDropdown.selectedIndex], action)
     }
 
     func reapplyTheme() {
         applySurfaceTheme()
         applyNoteTheme()
         targetDropdown.reapplyTheme()
-        [sendButton, submitButton, cancelButton].forEach { $0.reapplyTheme() }
+        [queueButton, submitButton].forEach { $0.reapplyTheme() }
     }
 
     // MARK: theming
@@ -297,19 +303,18 @@ final class DiffCommentComposer: NSView {
     }
     var noteViewForTesting: NSTextView { note }
     var targetDropdownForTesting: Dropdown { targetDropdown }
-    var sendButtonForTesting: AppButton { sendButton }
     var submitButtonForTesting: AppButton { submitButton }
-    var cancelButtonForTesting: AppButton { cancelButton }
+    var queueButtonForTesting: AppButton { queueButton }
     var selectedTargetForTesting: DiffSendTarget? {
         targets.indices.contains(targetDropdown.selectedIndex) ? targets[targetDropdown.selectedIndex] : nil
     }
 }
 
-/// The note's text view. ⏎ and ⌘⏎ submit (they never insert), ⇧⏎ takes a new line, Esc cancels, and
-/// Down from the last line leaves for the target picker — so the box is fully keyboard-driven and the
-/// text view never swallows the send.
+/// The note's text view. ⏎ submits and ⌘⏎ queues (neither inserts), ⇧⏎ takes a new line, Esc cancels,
+/// and Down from the last line leaves for the target picker — so the box is fully keyboard-driven and
+/// the text view never swallows the send.
 private final class SubmitAwareTextView: NSTextView {
-    var onSubmit: ((_ submit: Bool) -> Void)?
+    var onSubmit: ((_ action: DiffSendAction) -> Void)?
     var onCancel: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onTab: (() -> Void)?
@@ -338,12 +343,12 @@ private final class SubmitAwareTextView: NSTextView {
     }
 
     override func insertNewline(_ sender: Any?) {
-        // ⇧⏎ is the new-line escape hatch; a bare (or ⌘) Return submits and never types.
+        // ⇧⏎ is the new-line escape hatch; a bare Return submits, ⌘⏎ queues, and neither types.
         if NSApp.currentEvent?.modifierFlags.contains(.shift) == true {
             super.insertNewline(sender)
             return
         }
-        onSubmit?(NSApp.currentEvent?.modifierFlags.contains(.command) == true)
+        onSubmit?(NSApp.currentEvent?.modifierFlags.contains(.command) == true ? .queue : .submit)
     }
 
     override func cancelOperation(_ sender: Any?) { onCancel?() }
