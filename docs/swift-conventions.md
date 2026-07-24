@@ -145,6 +145,18 @@ half-configured). Use `NSView.shadow = NSShadow(...)` for static shadows (surviv
 combines fine with an explicit `layer.shadowPath`). Direct `layer.shadow*` writes are only safe
 *after* insertion, which is why animated focus glows driven post-mount work (ZEN-54).
 
+**A layer-*hosting* view owns its own `contentsScale`, and screen moves need their own
+notification.** AppKit syncs `layer.contentsScale` to the window's backing scale factor only for
+layer-*backed* views. `GhosttyHostView` is layer-hosting (libghostty attaches its Metal layer, so the
+view must never set `wantsLayer`), so nothing updates it for us and the renderer keeps sizing its
+drawable at the scale it was born with: text on a window dragged to a display of a different density
+stays at the old pixel density, rescaled by the compositor. Set it in
+`viewDidChangeBackingProperties` inside a `CATransaction` with `setDisableActions(true)` (otherwise
+Core Animation animates the scale change and it reads as jank). AppKit also does not reliably deliver
+that callback on a screen move, so observe `NSWindow.didChangeScreenNotification` and re-run the same
+path on the next main-loop turn: the window's `backingScaleFactor` is not updated yet when the
+notification lands (ZEN-247, ghostty-org/ghostty#2731).
+
 **Never hardcode a color, and remember that system-derived colors count.** They do not look like
 colors but they resolve against the view's `effectiveAppearance`, not `Theme.current`, so they wash
 out on light themes: `NSTextField.placeholderString` (renders in the system `placeholderTextColor`),
