@@ -69,6 +69,15 @@ final class KeycapView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// Report the width the internal leading/trailing pins already produce, so Auto Layout's
+    /// hugging/compression machinery actually engages: without an intrinsic size, a keycap is the one
+    /// elastic view in a stack and absorbs any slack, stretching a one-glyph box into a wide pill next to
+    /// a lower-hugging label. This only *reports* the existing geometry — it adds no constraint — so every
+    /// consumer that never wanted a stretched keycap (all of them) is unaffected.
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: tokenStack.fittingSize.width + size.horizontalInset * 2, height: size.height)
+    }
+
     /// Re-apply the live chrome colors after a config change — no relaunch. Every token (modifier
     /// icon tint, key-label ink) bakes its color in at construction, so rebuild them fresh against
     /// `Theme.current` rather than mutate in place — the same pattern `KeybindRow.reapplyTheme()`
@@ -77,6 +86,7 @@ final class KeycapView: NSView {
         if showsBackground { layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor }
         tokenStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         Self.tokens(for: shortcut, size: size).forEach { tokenStack.addArrangedSubview($0) }
+        invalidateIntrinsicContentSize()  // the token run changed, so the reported width may have too
     }
 
     /// Split the shortcut into views: an SF Symbol per modifier glyph and a monospaced
