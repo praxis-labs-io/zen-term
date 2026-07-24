@@ -76,9 +76,19 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// Discards a stale highlight result when the selection moved on before the off-main parse landed
     /// (fast file-switching) — mirrors `loadToken`.
     private var highlightToken = 0
+    /// What this repo's viewer remembers between opens: the highlight cache, the last status, the picked
+    /// base, and where the reader was. Read at init, written back when the card leaves the window.
+    private let session: DiffViewerSession
     /// Per-repo highlight cache, shared with the `WindowController` so it survives a viewer close/reopen
     /// (a reopened repo paints highlighted immediately). Cleared on a changed reload (see `reload`).
     private let highlightStore: DiffHighlightStore
+    /// The place a reopen has to land on, held until the first load has a tree to put it back into. Nil
+    /// afterwards: every later load reads the place off the live view instead (ZEN-233).
+    private var pendingPlace: DiffViewerPlace?
+    /// A cursor line waiting for its file's rows to arrive, tagged with the path it belongs to — the
+    /// highlight can land after the reader has moved on, and a cursor restored into the wrong file would
+    /// jump them somewhere they never were.
+    private var pendingCursor: (path: String, line: DiffSelection.LineNumbers)?
     /// Warms the highlight cache for the non-selected files in the background, so navigation lands on a
     /// warm cache instead of a fetch+parse wait. Rescheduled on every `apply`, cancelled on `deinit`.
     private let prefetcher: DiffFilePrefetcher
@@ -114,15 +124,17 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private var loadToken = 0
 
     init(
-        background: NSColor, repoName: String, repoRoot: URL, highlightStore: DiffHighlightStore,
-        initialStatus: GitDiffRunner.StatusLoad?,
+        background: NSColor, session: DiffViewerSession,
         loader: @escaping Loader, branchesLoader: @escaping BranchesLoader,
         sendTargets: @escaping SendTargets, sender: @escaping Sender, onCancel: @escaping () -> Void
     ) {
-        self.repoName = repoName
-        self.repoRoot = repoRoot
-        self.highlightStore = highlightStore
-        self.prefetcher = DiffFilePrefetcher(repoRoot: repoRoot, highlightStore: highlightStore)
+        self.session = session
+        self.repoName = session.repoRoot.lastPathComponent
+        self.repoRoot = session.repoRoot
+        self.highlightStore = session.highlights
+        self.baseOverride = session.baseOverride
+        self.pendingPlace = session.place
+        self.prefetcher = DiffFilePrefetcher(repoRoot: session.repoRoot, highlightStore: session.highlights)
         self.loader = loader
         self.branchesLoader = branchesLoader
         self.sendTargets = sendTargets
@@ -157,14 +169,36 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         ])
 
         // Warm open: render the cached status instantly and refresh silently behind it. Cold open:
-        // show the spinner while the first load runs.
-        if let initialStatus {
-            apply(initialStatus)
+        // show the spinner while the first load runs. A session carrying a picked base can't take the
+        // warm path — the cached status is the *default* base's, so rendering it would show the wrong
+        // comparison until the re-run lands.
+        if let cached = session.lastStatus, baseOverride == nil {
+            apply(cached)
             reload(showSpinner: false)
         } else {
             reload(showSpinner: true)
         }
         refreshBranches()
+    }
+
+    /// A fallback snapshot for a teardown that skips `animateOut` — the whole window closing (⌘W) pulls
+    /// the card without a close spring. The normal close goes through `animateOut`, which snapshots
+    /// earlier; `snapshotPlace` runs once, so whichever fires first wins (ZEN-233).
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window == nil else { return }
+        snapshotPlace()
+    }
+
+    /// Write where the reader was (folds, open file, cursor line) and the picked base back into the
+    /// session, so the next ⌘D on this repo opens where they left off. Once only: the earliest teardown
+    /// signal takes it, and a later one must not clobber the session a fast-reopened overlay now shares.
+    private var didSnapshotPlace = false
+    private func snapshotPlace() {
+        guard !didSnapshotPlace else { return }
+        didSnapshotPlace = true
+        session.place = currentPlace()
+        session.baseOverride = baseOverride
     }
 
     /// Pull the repo's branches so the base dropdown is populated. Cheap (a local `for-each-ref`);
@@ -207,6 +241,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     func animateOut(completion: @escaping () -> Void) {
         guard dismiss.begin() else { return }
+        // Snapshot the place here, at close-start: `closeModal` defers `removeFromSuperview` into the
+        // spring's completion, so `viewDidMoveToWindow` alone would snapshot only at the animation's
+        // end — after a fast reopen (⌘D toggles closed, ⌘D again) has already built the next overlay
+        // and read the stale session. `animateOut` runs synchronously when the close begins.
+        snapshotPlace()
         Motion.springScaleFade(card, appearing: false, completion: completion)
     }
 
@@ -762,7 +801,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         }
     }
 
+    /// Render a status: rebuild the tree, then put the reader back where they were. The rebuild is
+    /// unavoidable (the `NSOutlineView` holds its rows by object identity, and a changed status means
+    /// new objects), so the folds, the selected file and the cursor line are carried across it by value
+    /// instead — from the session on the first load, off the live view on every one after (ZEN-233).
     private func apply(_ status: GitDiffRunner.StatusLoad) {
+        let place = pendingPlace ?? currentPlace()
+        pendingPlace = nil
         displayedStatus = status
         updateBaseHeader()  // reflect the base this load resolved to
         refreshBranches()  // and refresh the branch list behind it
@@ -775,19 +820,78 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         outline.dataSource = controller
         outline.delegate = controller
         outline.reloadData()
+        // Expand everything, then re-close what the reader had closed: a directory this load is the
+        // first to show has never been folded, so it belongs open like every other new row.
         outline.expandItem(nil, expandChildren: true)
+        collapse(place.collapsed, in: controller.roots)
 
         selectedFilePath = nil
-        guard let first = controller.firstFile, let file = first.fileDiff else {
+        guard let target = resolveSelection(place, in: controller), let file = target.fileDiff else {
             prefetcher.schedule(status, excluding: nil)  // no files — just retire any prior pass
             showMessage("No changes")
             return
         }
-        let row = outline.row(forItem: first)
+        // The cursor only carries within one file; landing on a different one starts at its first line.
+        pendingCursor = place.cursorLine.flatMap { line in
+            file.path == place.selectedPath ? (path: file.path, line: line) : nil
+        }
+        // A file inside a folder the reader folded shut has no row to select. Its diff still shows —
+        // they folded the folder, they didn't close the file.
+        let row = outline.row(forItem: target)
         if row >= 0 { outline.selectRowIndexes([row], byExtendingSelection: false) }
         selectFile(file)
         // Warm every other file in the background so navigating to it is a highlighted cache hit.
         prefetcher.schedule(status, excluding: file.highlightKey)
+    }
+
+    /// Where the viewer is looking right now — the folded rows, the selected one, and the cursor's line.
+    private func currentPlace() -> DiffViewerPlace {
+        var place = DiffViewerPlace()
+        if let roots = outlineController?.roots { place.collapsed = collapsedIdentities(in: roots) }
+        let selected = outline.item(atRow: outline.selectedRow) as? DiffOutlineItem
+        place.selectedIdentity = selected?.identity
+        // The shown file, not the selected row's: the selection can sit on a directory or a section
+        // header, and it's the file in the right pane that the reader is actually reading.
+        place.selectedPath = selectedFilePath
+        place.cursorLine = diffTable.cursorLine
+        return place
+    }
+
+    /// The identities of every folded row, including ones nested inside another fold (the outline keeps
+    /// their state while they're hidden, and so does this).
+    private func collapsedIdentities(in items: [DiffOutlineItem]) -> Set<String> {
+        var folded: Set<String> = []
+        for item in items where !item.children.isEmpty {
+            if !outline.isItemExpanded(item) { folded.insert(item.identity) }
+            folded.formUnion(collapsedIdentities(in: item.children))
+        }
+        return folded
+    }
+
+    /// Re-close the folded rows, children before parents: collapsing a parent first would hide its
+    /// children, and a hidden row can't be told to fold.
+    private func collapse(_ identities: Set<String>, in items: [DiffOutlineItem]) {
+        guard !identities.isEmpty else { return }
+        for item in items where !item.children.isEmpty {
+            collapse(identities, in: item.children)
+            if identities.contains(item.identity) { outline.collapseItem(item) }
+        }
+    }
+
+    /// Which file the rebuilt tree should show: the same row when it's still there; else the same file
+    /// wherever it moved to (a `git add` mid-review carries a file from Unstaged to Staged — a different
+    /// row, the same file to whoever is reading it); else the first file, where a fresh load lands.
+    private func resolveSelection(
+        _ place: DiffViewerPlace, in controller: DiffTreeOutlineController
+    ) -> DiffOutlineItem? {
+        let files = controller.fileItems
+        if let identity = place.selectedIdentity, let match = files.first(where: { $0.identity == identity }) {
+            return match
+        }
+        if let path = place.selectedPath, let match = files.first(where: { $0.fileDiff?.path == path }) {
+            return match
+        }
+        return files.first
     }
 
     private func selectFile(_ file: FileDiff) {
@@ -900,17 +1004,21 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         }
     }
 
-    /// Build and show the rows for `file` in the effective layout, with optional syntax spans.
+    /// Build and show the rows for `file` in the effective layout, with optional syntax spans. A cursor
+    /// line a reload left waiting for this file is spent here — one paint gets it, and the ones the
+    /// highlight race loses don't (`renderCurrentFile` guards those out anyway).
     private func renderRows(_ file: FileDiff, spans: DiffFileSpans?, keepingSelection: Bool = false) {
         // The box hangs off a row index, and these rows are about to be replaced — a comment left
         // open across that would point at a line the diff no longer has there.
         closeComposer()
         let layout = effectiveLayout
         renderedLayout = layout
+        let carried = pendingCursor.flatMap { $0.path == file.path ? $0.line : nil }
+        pendingCursor = nil
         diffTable.show(
             layout == .inline
                 ? UnifiedDiff.rows(for: file, spans: spans) : SideBySideDiff.rows(for: file, spans: spans),
-            preservingSelection: keepingSelection)
+            preservingSelection: keepingSelection, restoringCursor: carried)
     }
 
     private func showMessage(_ text: String) {

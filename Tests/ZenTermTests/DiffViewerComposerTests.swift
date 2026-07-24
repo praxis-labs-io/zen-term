@@ -77,10 +77,7 @@ final class DiffViewerComposerTests: XCTestCase {
             baseBranch: nil, baseSHA: nil, currentBranch: "feature")
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
-            repoName: "repo",
-            repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo"),
-            highlightStore: DiffHighlightStore(),
-            initialStatus: nil,
+            session: DiffViewerSession(repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo")),
             loader: { _, completion in completion(.success(status)) },
             branchesLoader: { completion in completion([]) },
             sendTargets: { targets },

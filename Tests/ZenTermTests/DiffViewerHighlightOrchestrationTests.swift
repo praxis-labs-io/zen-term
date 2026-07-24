@@ -45,20 +45,23 @@ final class DiffViewerHighlightOrchestrationTests: XCTestCase {
             baseBranch: "main", baseSHA: "abc1234", currentBranch: "feature")
     }
 
-    private func mount(
-        store: DiffHighlightStore, loader: @escaping DiffViewerOverlay.Loader,
-        initialStatus: GitDiffRunner.StatusLoad? = nil, branches: [String] = ["main", "develop"],
-        // Non-existent by default: the highlighter no-ops and never spawns git, so what lands in the
-        // rows comes only from the store — which is what most of these tests are about. Pass a real
-        // directory to exercise the branch that waits on a highlight.
+    /// A fresh session for one repo. The root is non-existent by default: the highlighter no-ops and
+    /// never spawns git, so what lands in the rows comes only from the session's store — which is what
+    /// most of these tests are about. Pass a real directory to exercise the branch that waits on a
+    /// highlight.
+    private func makeSession(
         repoRoot: URL = URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo")
+    ) -> DiffViewerSession {
+        DiffViewerSession(repoRoot: repoRoot)
+    }
+
+    private func mount(
+        session: DiffViewerSession, loader: @escaping DiffViewerOverlay.Loader,
+        branches: [String] = ["main", "develop"]
     ) -> DiffViewerOverlay {
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
-            repoName: "repo",
-            repoRoot: repoRoot,
-            highlightStore: store,
-            initialStatus: initialStatus,
+            session: session,
             loader: loader,
             branchesLoader: { completion in completion(branches) },
             sendTargets: { [] },
@@ -90,13 +93,14 @@ final class DiffViewerHighlightOrchestrationTests: XCTestCase {
         // thing that paints there. A cold open deliberately clears instead: with no prior status it
         // can't know the content is unchanged (see `test_changedReload_dropsTheCachedSpans`).
         let diff = file("A.swift")
-        let store = DiffHighlightStore()
+        let session = makeSession()
+        let store = session.highlights
         let expected = TokenSpan(range: NSRange(location: 0, length: 3), role: .keyword)
         store.store(diff.highlightKey, DiffFileSpans(old: [1: [expected]], new: [:]))
         let load = status([diff])
+        session.lastStatus = load
 
-        let overlay = mount(
-            store: store, loader: { _, completion in completion(.success(load)) }, initialStatus: load)
+        let overlay = mount(session: session, loader: { _, completion in completion(.success(load)) })
 
         XCTAssertEqual(overlay.selectedFilePathForTesting, "A.swift")
         XCTAssertEqual(spans(of: overlay.renderedDiffRowsForTesting), [expected])
@@ -114,15 +118,15 @@ final class DiffViewerHighlightOrchestrationTests: XCTestCase {
 
         let first = file("A.swift")
         let second = file("B.swift")
-        let store = DiffHighlightStore()
+        let session = makeSession(repoRoot: repo)
+        let store = session.highlights
         // Seed the first file so it paints real rows immediately; those are what must not linger.
         store.store(
             first.highlightKey,
             DiffFileSpans(old: [1: [TokenSpan(range: NSRange(location: 0, length: 3), role: .keyword)]], new: [:]))
         let load = status([first, second])
-        let overlay = mount(
-            store: store, loader: { _, completion in completion(.success(load)) },
-            initialStatus: load, repoRoot: repo)
+        session.lastStatus = load
+        let overlay = mount(session: session, loader: { _, completion in completion(.success(load)) })
 
         XCTAssertEqual(overlay.selectedFilePathForTesting, "A.swift")
         XCTAssertFalse(overlay.renderedDiffRowsForTesting.isEmpty, "precondition: the first file painted")
@@ -140,10 +144,11 @@ final class DiffViewerHighlightOrchestrationTests: XCTestCase {
         // No repo on disk => this file will never highlight. It must be recorded as resolved-to-nil, or
         // every re-render would kick a fresh (pointless) highlight.
         let diff = file("A.swift")
-        let store = DiffHighlightStore()
+        let session = makeSession()
+        let store = session.highlights
         let load = status([diff])
 
-        _ = mount(store: store, loader: { _, completion in completion(.success(load)) })
+        _ = mount(session: session, loader: { _, completion in completion(.success(load)) })
 
         guard let cached = store.cached(diff.highlightKey) else {
             return XCTFail("an unhighlightable file should still be cached as resolved")
@@ -160,12 +165,13 @@ final class DiffViewerHighlightOrchestrationTests: XCTestCase {
         // would pass even with the clear removed.
         let selected = file("A.swift")
         let other = file("B.swift")
-        let store = DiffHighlightStore()
+        let session = makeSession()
+        let store = session.highlights
         let spy = ChangingLoaderSpy([
             status([selected, other]),
             status([file("A.swift", text: "let y = 2"), other]),
         ])
-        let overlay = mount(store: store, loader: { base, completion in spy.load(base, completion) })
+        let overlay = mount(session: session, loader: { base, completion in spy.load(base, completion) })
 
         let stale = DiffFileSpans(
             old: [1: [TokenSpan(range: NSRange(location: 0, length: 3), role: .keyword)]], new: [:])
@@ -183,9 +189,10 @@ final class DiffViewerHighlightOrchestrationTests: XCTestCase {
         // The mirror image: an identical refresh is a no-op, so a reopen on unchanged content still
         // paints highlighted immediately instead of re-parsing every file.
         let diff = file("A.swift")
-        let store = DiffHighlightStore()
+        let session = makeSession()
+        let store = session.highlights
         let load = status([diff])
-        let overlay = mount(store: store, loader: { _, completion in completion(.success(load)) })
+        let overlay = mount(session: session, loader: { _, completion in completion(.success(load)) })
 
         let cached = DiffFileSpans(
             old: [1: [TokenSpan(range: NSRange(location: 0, length: 3), role: .keyword)]], new: [:])

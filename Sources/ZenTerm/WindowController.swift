@@ -769,29 +769,25 @@ final class WindowController: NSObject {
         }
         if modal != nil { closeModal() }  // single slot — dismiss whatever's up first
         let runner = GitDiffRunner(repoRoot: repoRoot)
-        // Reopening on the same repo renders the last status instantly and refreshes behind the card
-        // instead of flashing a spinner; the loader restamps the cache on every successful load.
-        let initial = diffCache.flatMap { $0.repoRoot == repoRoot ? $0.load : nil }
-        // Reuse the repo's highlight cache across opens so a reopen paints highlighted immediately; a
-        // different repo starts fresh.
-        let highlightStore: DiffHighlightStore
-        if let existing = diffHighlightStore, existing.repoRoot == repoRoot {
-            highlightStore = existing.store
+        // One session per repo, reused across opens: it carries the last status (so a reopen renders
+        // instantly and refreshes behind the card instead of flashing a spinner), the highlight cache
+        // (so it paints highlighted with no re-parse), and where the reader left off. A different repo
+        // starts fresh rather than accumulating a session per repo the window has ever visited.
+        let session: DiffViewerSession
+        if let existing = diffViewerSession, existing.repoRoot == repoRoot {
+            session = existing
         } else {
-            highlightStore = DiffHighlightStore()
-            diffHighlightStore = (repoRoot, highlightStore)
+            session = DiffViewerSession(repoRoot: repoRoot)
+            diffViewerSession = session
         }
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
-            repoName: repoRoot.lastPathComponent,
-            repoRoot: repoRoot,
-            highlightStore: highlightStore,
-            initialStatus: initial,
-            loader: { [weak self] base, completion in
+            session: session,
+            loader: { base, completion in
                 runner.loadStatus(base: base) { result in
                     // Only the default-base load restamps the cache — a picked base is a transient
                     // override, not the state a plain reopen should render.
-                    if base == nil, case .success(let load) = result { self?.diffCache = (repoRoot, load) }
+                    if base == nil, case .success(let load) = result { session.lastStatus = load }
                     completion(result)
                 }
             },
@@ -808,13 +804,8 @@ final class WindowController: NSObject {
         presentModal(overlay, kind: .diffViewer)
     }
 
-    /// The last diff-viewer load, kept so reopening on the same repo renders instantly and refreshes
-    /// behind the card instead of flashing a spinner. A different repo root ignores it.
-    private var diffCache: (repoRoot: URL, load: GitDiffRunner.StatusLoad)?
-
-    /// The repo's syntax-highlight cache, kept across viewer opens so a reopen paints highlighted with no
-    /// re-parse or flash. A different repo root gets its own store.
-    private var diffHighlightStore: (repoRoot: URL, store: DiffHighlightStore)?
+    /// What the diff viewer remembers about the repo it last opened — see `DiffViewerSession`.
+    private var diffViewerSession: DiffViewerSession?
 
     /// Which section the Settings card opens on. `.tools` / `.workspaces` are used when a sub-form
     /// (tool-float or workspace editor) hands back to the section it was launched from; the
