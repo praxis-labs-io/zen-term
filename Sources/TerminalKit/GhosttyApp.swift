@@ -44,6 +44,20 @@ final class GhosttyApp {
     // Dedupe redundant app-global swaps: N per-surface `applyAppearance` callers for one
     // config change should trigger at most one real ghostty_app_update_config.
     private var lastConfigText: String?
+    /// Finalized per-surface configs, keyed by the config text that produced them.
+    ///
+    /// libghostty takes configuration only from files, so building one means a synchronous write,
+    /// read and parse — on the main thread, inside whatever interaction triggered it. The ZEN-237
+    /// settle path makes that a hot path: with a cursor shader on, switching panes stands one
+    /// surface down and restores another, which was three of those round-trips per switch. The
+    /// shapes involved are few and fully determined by the theme and behavior, so caching them
+    /// means only the first of each pays.
+    ///
+    /// Safe to share one config across surfaces and across calls: `ghostty_surface_update_config`
+    /// derives its own copy (`Surface.updateConfig` → `DerivedConfig.init`) and never retains the
+    /// pointer we pass. Cleared and freed whenever the app-global config changes, since every
+    /// cached shape is derived from the theme and behavior that just moved.
+    private var surfaceConfigCache: [String: ghostty_config_t] = [:]
     // NSApp activate/resign observers keeping libghostty's app-level focus in sync.
     private var focusObservers: [NSObjectProtocol] = []
 
@@ -90,7 +104,10 @@ final class GhosttyApp {
         observeAppFocus()
     }
 
-    deinit { focusObservers.forEach { NotificationCenter.default.removeObserver($0) } }
+    deinit {
+        focusObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        clearSurfaceConfigCache()
+    }
 
     func tick() { ghostty_app_tick(app) }
 
@@ -136,6 +153,7 @@ final class GhosttyApp {
         config = cfg
         ghostty_config_free(old)
         lastConfigText = text
+        clearSurfaceConfigCache()
         tick()
     }
 
@@ -149,6 +167,13 @@ final class GhosttyApp {
         _ surfacePtr: ghostty_surface_t, theme: TerminalTheme?, behavior: TerminalBehavior,
         shaderAnimation: GhosttyConfigWriter.ShaderAnimation
     ) {
+        let text = GhosttyConfigWriter.configText(
+            for: theme, behavior: behavior, shaderAnimation: shaderAnimation)
+        if let cached = surfaceConfigCache[text] {
+            ghostty_surface_update_config(surfacePtr, cached)
+            tick()
+            return
+        }
         guard let cfg = ghostty_config_new() else { return }
         guard
             let path = GhosttyConfigWriter.writeConfig(
@@ -162,9 +187,17 @@ final class GhosttyApp {
         }
         ghostty_config_load_file(cfg, path)
         ghostty_config_finalize(cfg)
+        // Retained, not freed: it goes in the cache for every later call with this same shape.
+        surfaceConfigCache[text] = cfg
         ghostty_surface_update_config(surfacePtr, cfg)
-        ghostty_config_free(cfg)
         tick()
+    }
+
+    /// Free every cached per-surface config. Called when the app-global config moves, because each
+    /// cached shape was derived from the theme and behavior that just changed.
+    private func clearSurfaceConfigCache() {
+        surfaceConfigCache.values.forEach { ghostty_config_free($0) }
+        surfaceConfigCache.removeAll()
     }
 
     /// Point `GHOSTTY_RESOURCES_DIR` at the resources bin/build-ghosttykit staged into
