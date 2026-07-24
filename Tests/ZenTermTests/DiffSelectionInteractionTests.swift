@@ -392,6 +392,35 @@ final class DiffSelectionInteractionTests: XCTestCase {
         XCTAssertEqual(pane.selectedRows, IndexSet(integer: 4), "j moved on from the clicked row")
     }
 
+    func test_aShiftClickAboveTheCursorPutsTheCursorAtTheTopEnd() throws {
+        // Taking the lower end on faith gets this backwards: extending upward means the mouse landed
+        // on the selection's *first* row, so that's the cursor and the row we came from is the anchor.
+        // Get it wrong and the next keystroke extends from the wrong end of the block.
+        let overlay = mount([file()])
+        inline(overlay)
+        try type("j", into: overlay)
+        try type("j", into: overlay)
+        try type("j", into: overlay)  // cursor on row 4
+        let pane = overlay.diffPaneForTesting
+        pane.selectRowsFromMouseForTesting(IndexSet(1...4))  // shift-click up to row 1
+        XCTAssertEqual(pane.cursorRowForTesting, 1, "the mouse landed at the top of the block")
+
+        try type("j", into: overlay)  // shrinks from the top, because that's where the cursor is
+        XCTAssertEqual(pane.selectedRows, IndexSet(2...4))
+    }
+
+    func test_aShiftClickBelowTheCursorPutsTheCursorAtTheBottomEnd() throws {
+        let overlay = mount([file()])
+        inline(overlay)
+        let pane = overlay.diffPaneForTesting
+        XCTAssertEqual(pane.cursorRowForTesting, 1, "precondition: starts at the first line")
+        pane.selectRowsFromMouseForTesting(IndexSet(1...4))  // shift-click down to row 4
+        XCTAssertEqual(pane.cursorRowForTesting, 4, "the mouse landed at the bottom of the block")
+
+        try type("k", into: overlay)
+        XCTAssertEqual(pane.selectedRows, IndexSet(1...3), "shrinks from the bottom")
+    }
+
     func test_aDiscontiguousClickSelectionIsNormalizedImmediately() throws {
         // ⌘-click can leave gaps, but the pane's model is one anchor and one cursor, so the next
         // motion would fill them anyway. Filling them now means the block you see is the block you

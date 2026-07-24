@@ -252,17 +252,17 @@ terminal, so the plain letters are free: `j`/`k` move, `V` starts a visual selec
 anchored on the cursor, `gg`/`G` go to the ends, `{`/`}` reuse the change jump, and
 `y`/`Y` (or ⌘C/⌘⇧C) yank the selected code or a `path:42-44` reference. `DiffPaneTable`
 tracks the cursor and the visual anchor itself rather than reading `NSTableView`'s
-`selectedRow`, which reports the *last* index in the set — the anchor, not the cursor,
+`selectedRow`, which reports the *last* index in the set: the anchor, not the cursor,
 whenever a selection was extended upward. Esc is two-stage: it collapses a selection
 before it closes the viewer. Character-level selection is deliberately absent: each line
 renders as its own `NSTextField` inside a panned clip view, so charwise would mean
 replacing that render path, and a diff reference is a line range regardless. Resolving a
-selection is pure — `DiffSelection` reads the rendered `[DiffRow]` (either layout) into
+selection is pure. `DiffSelection` reads the rendered `[DiffRow]` (either layout) into
 the selected text plus a line range per side, and `DiffReference` renders the string. A
 yank pulses the yanked rows and fades, the way nvim's `on_yank` does: a copy leaves
 nothing on screen, so one that silently didn't take would look identical to one that did.
 A re-render of the *same* file (⌘I, or a resize crossing the fold band) carries the cursor
-and selection over by their **line numbers**, never by row index — the two layouts index
+and selection over by their **line numbers**, never by row index: the two layouts index
 differently, since side-by-side pairs the +/− lines inline lists separately.
 Only the *new* side can be named, since that's the file on disk: a selection of pure
 deletions references the new-side line it follows, and a deleted file gets a bare path.
