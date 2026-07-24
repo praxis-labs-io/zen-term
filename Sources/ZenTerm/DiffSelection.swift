@@ -43,6 +43,27 @@ struct DiffSelection: Equatable {
             anchorNewLine: newNumbers.isEmpty ? Self.anchorNewLine(above: selected.first, in: rows) : nil)
     }
 
+    /// The line numbers a row occupies, or nil for a hunk header or an out-of-range index. This pair
+    /// is a row's identity *across* a layout change — the row indices differ between side-by-side and
+    /// inline, so a cursor carried over a re-render is carried as this and re-found with `row(for:)`.
+    static func lineNumbers(at index: Int, in rows: [DiffRow]) -> (old: Int?, new: Int?)? {
+        guard rows.indices.contains(index), let line = Self.line(at: index, in: rows) else { return nil }
+        guard line.old != nil || line.new != nil else { return nil }
+        return (line.old, line.new)
+    }
+
+    /// Find the row carrying `lineNumbers`. Matches on the new side first — that's the file on disk,
+    /// and it's the side both layouts agree on for anything that isn't a deletion.
+    static func row(for lineNumbers: (old: Int?, new: Int?), in rows: [DiffRow]) -> Int? {
+        if let new = lineNumbers.new,
+            let match = rows.indices.first(where: { Self.line(at: $0, in: rows)?.new == new })
+        {
+            return match
+        }
+        guard let old = lineNumbers.old else { return nil }
+        return rows.indices.first { Self.line(at: $0, in: rows)?.old == old }
+    }
+
     /// One row flattened to the fields a selection cares about, or nil for a hunk header.
     private static func line(at index: Int, in rows: [DiffRow]) -> (text: String, old: Int?, new: Int?)? {
         switch rows[index] {

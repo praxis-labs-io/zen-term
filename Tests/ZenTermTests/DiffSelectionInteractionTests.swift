@@ -274,6 +274,137 @@ final class DiffSelectionInteractionTests: XCTestCase {
         XCTAssertEqual(closed, 1, "the second Esc closes")
     }
 
+    // MARK: surviving a re-render
+
+    /// A file whose two layouts index *differently*: side-by-side pairs each removed line with an added
+    /// one, so it has fewer rows than inline, which lists them separately. Required for the layout-flip
+    /// test to mean anything — with an add-only file the two layouts happen to line up row for row, and
+    /// carrying the cursor by raw index would pass while being wrong.
+    private func pairedFile() -> FileDiff {
+        FileDiff(
+            path: "Sources/App/Paired.swift", oldPath: nil, changeKind: .modified,
+            hunks: [
+                Hunk(
+                    header: "@@ -10,4 +10,4 @@", oldStart: 10, newStart: 10,
+                    lines: [
+                        DiffLine(kind: .context, oldLineNumber: 10, newLineNumber: 10, text: "line ten"),
+                        DiffLine(kind: .removed, oldLineNumber: 11, newLineNumber: nil, text: "was eleven"),
+                        DiffLine(kind: .removed, oldLineNumber: 12, newLineNumber: nil, text: "was twelve"),
+                        DiffLine(kind: .added, oldLineNumber: nil, newLineNumber: 11, text: "now eleven"),
+                        DiffLine(kind: .added, oldLineNumber: nil, newLineNumber: 12, text: "now twelve"),
+                        DiffLine(kind: .context, oldLineNumber: 13, newLineNumber: 13, text: "line thirteen"),
+                    ])
+            ])
+    }
+
+    func test_layoutFlipKeepsTheSelectionAndTheCursorOnTheSameLines() throws {
+        // ⌘I (and a resize crossing the auto-fold band) re-renders the same file. Losing the selection
+        // there wipes out work mid-review, and because the row *indices* differ between the layouts,
+        // carrying the index instead of the line would silently land on a different line.
+        let overlay = mount([pairedFile()])
+        inline(overlay)
+        // Inline rows: 0 header, 1 ctx10, 2 rm11, 3 rm12, 4 add11, 5 add12, 6 ctx13.
+        // Side-by-side pairs the removals with the additions: 0 header, 1 ctx, 2 pair11, 3 pair12, 4 ctx.
+        try type("j", into: overlay)
+        try type("j", into: overlay)
+        try type("j", into: overlay)  // cursor on inline row 4, the added line 11
+        try type("V", unshifted: "v", flags: .shift, into: overlay)
+        try type("j", into: overlay)  // extend over added line 12
+        try type("Y", unshifted: "y", flags: .shift, into: overlay)
+        XCTAssertEqual(copied(), "Sources/App/Paired.swift:11-12")
+        let rowsBefore = overlay.diffPaneForTesting.selectedRows
+        XCTAssertEqual(rowsBefore, IndexSet(4...5), "precondition: the inline rows")
+
+        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))
+        XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .sideBySide, "precondition: it re-rendered")
+        XCTAssertEqual(
+            overlay.diffPaneForTesting.selectedRows, IndexSet(2...3),
+            "the same *lines*, at the row indices this layout gives them — not the old indices")
+        XCTAssertNotEqual(
+            overlay.diffPaneForTesting.selectedRows, rowsBefore,
+            "precondition: the indices genuinely moved, so carrying the index would be wrong")
+
+        try type("Y", unshifted: "y", flags: .shift, into: overlay)
+        XCTAssertEqual(copied(), "Sources/App/Paired.swift:11-12", "the selection still names the same lines")
+    }
+
+    func test_switchingFilesStartsFresh() throws {
+        let overlay = mount([file(path: "One.swift"), file(path: "Two.swift")])
+        inline(overlay)
+        try type("V", unshifted: "v", flags: .shift, into: overlay)
+        try type("j", into: overlay)
+        XCTAssertTrue(overlay.diffPaneForTesting.hasVisualSelection)
+
+        XCTAssertTrue(overlay.handleNavChord(.navLeft))
+        XCTAssertTrue(overlay.handleNavChord(.navDown))  // to Two.swift
+        XCTAssertEqual(overlay.selectedFilePathForTesting, "Two.swift")
+        XCTAssertFalse(
+            overlay.diffPaneForTesting.hasVisualSelection, "a different file is not the same review")
+    }
+
+    func test_aReRenderDisarmsAHalfTypedGG() throws {
+        // `g` arms silently. If the arm survived a re-render, the next single `g` would fire a jump
+        // the user never asked for — and there's nothing on screen that would explain it.
+        let overlay = mount([file()])
+        inline(overlay)
+        try type("G", unshifted: "g", flags: .shift, into: overlay)
+        let bottom = overlay.diffPaneForTesting.cursorRowForTesting
+        try type("g", into: overlay)  // armed
+
+        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))  // re-render
+        try type("g", into: overlay)
+        XCTAssertNotEqual(
+            overlay.diffPaneForTesting.cursorRowForTesting, 0,
+            "the arm must not survive the re-render")
+        XCTAssertGreaterThan(bottom, 0, "precondition: G had somewhere to go")
+    }
+
+    // MARK: yank feedback
+
+    func test_yankFlashesTheYankedLines_andOnlyAfterACopyActuallyLands() throws {
+        // A yank leaves nothing on screen, so the flash is the only confirmation it took. Wired to the
+        // pasteboard write, not the keystroke: a no-op yank must not flash.
+        let overlay = mount([file()])
+        inline(overlay)
+        XCTAssertFalse(overlay.diffPaneForTesting.isFlashingForTesting, "nothing has been yanked yet")
+
+        try type("V", unshifted: "v", flags: .shift, into: overlay)
+        try type("j", into: overlay)
+        try type("y", into: overlay)
+        XCTAssertTrue(overlay.diffPaneForTesting.isFlashingForTesting, "the copy landed, so it flashes")
+        XCTAssertEqual(
+            overlay.diffPaneForTesting.flashedRowsForTesting, IndexSet(1...2),
+            "the flash covers what was yanked, not the whole file")
+    }
+
+    // MARK: mouse
+
+    func test_aClickAdoptsTheCursorSoTheNextKeystrokeExtendsFromThere() throws {
+        // The mouse path writes the table's selection directly; without adopting it, the next
+        // keystroke would snap back to wherever the keyboard cursor had been left.
+        let overlay = mount([file()])
+        inline(overlay)
+        let pane = overlay.diffPaneForTesting
+        pane.selectRowsFromMouseForTesting(IndexSet(integer: 3))
+        XCTAssertEqual(pane.cursorRowForTesting, 3, "the click's row became the cursor")
+
+        try type("j", into: overlay)
+        XCTAssertEqual(pane.selectedRows, IndexSet(integer: 4), "j moved on from the clicked row")
+    }
+
+    func test_aDiscontiguousClickSelectionIsNormalizedImmediately() throws {
+        // ⌘-click can leave gaps, but the pane's model is one anchor and one cursor, so the next
+        // motion would fill them anyway. Filling them now means the block you see is the block you
+        // yank, instead of it quietly growing under the next keystroke.
+        let overlay = mount([file()])
+        inline(overlay)
+        let pane = overlay.diffPaneForTesting
+        var gapped = IndexSet(integer: 1)
+        gapped.insert(4)
+        pane.selectRowsFromMouseForTesting(gapped)
+        XCTAssertEqual(pane.selectedRows, IndexSet(1...4), "the gap is closed up front, not on the next key")
+    }
+
     // MARK: the tree
 
     func test_jAndKMoveTheFileSelectionInTheTree() throws {

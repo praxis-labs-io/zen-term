@@ -258,7 +258,12 @@ before it closes the viewer. Character-level selection is deliberately absent: e
 renders as its own `NSTextField` inside a panned clip view, so charwise would mean
 replacing that render path, and a diff reference is a line range regardless. Resolving a
 selection is pure — `DiffSelection` reads the rendered `[DiffRow]` (either layout) into
-the selected text plus a line range per side, and `DiffReference` renders the string.
+the selected text plus a line range per side, and `DiffReference` renders the string. A
+yank pulses the yanked rows and fades, the way nvim's `on_yank` does: a copy leaves
+nothing on screen, so one that silently didn't take would look identical to one that did.
+A re-render of the *same* file (⌘I, or a resize crossing the fold band) carries the cursor
+and selection over by their **line numbers**, never by row index — the two layouts index
+differently, since side-by-side pairs the +/− lines inline lists separately.
 Only the *new* side can be named, since that's the file on disk: a selection of pure
 deletions references the new-side line it follows, and a deleted file gets a bare path.
 The keys are view-local, not `ReservedChord`s, so they never enter the keymap and never

@@ -113,4 +113,40 @@ final class DiffSelectionTests: XCTestCase {
         XCTAssertEqual(selection.codeText, "")
         XCTAssertNil(selection.anchorNewLine, "no selection means nothing to anchor above")
     }
+
+    // MARK: carrying a row across a layout change
+
+    func test_lineNumbers_areNilForAHunkHeaderOrAStaleIndex() {
+        let rows = UnifiedDiff.rows(for: file)
+        XCTAssertNil(DiffSelection.lineNumbers(at: 0, in: rows), "a hunk header holds no line")
+        XCTAssertNil(DiffSelection.lineNumbers(at: 99, in: rows))
+        XCTAssertNil(DiffSelection.lineNumbers(at: -1, in: rows))
+    }
+
+    func test_aRowSurvivesTheLayoutFlipByItsLineNumbers() {
+        // The whole point: row *indices* differ between the two layouts, so a cursor carried across a
+        // re-render has to be carried as line numbers and re-found. Carrying the index would land on
+        // an unrelated line, which is exactly what nothing on screen would tell you.
+        let inlineRows = UnifiedDiff.rows(for: file)
+        let splitRows = SideBySideDiff.rows(for: file)
+
+        // Inline row 3 is the added line (new 11); side-by-side pairs it into row 2.
+        let carried = try? XCTUnwrap(DiffSelection.lineNumbers(at: 3, in: inlineRows))
+        XCTAssertEqual(carried?.new, 11)
+        XCTAssertEqual(DiffSelection.row(for: (old: nil, new: 11), in: splitRows), 2)
+        XCTAssertNotEqual(2, 3, "precondition: the index genuinely moved between layouts")
+    }
+
+    func test_row_matchesTheNewSideFirst_thenFallsBackToTheOld() {
+        let rows = UnifiedDiff.rows(for: file)
+        XCTAssertEqual(DiffSelection.row(for: (old: 10, new: 10), in: rows), 1, "the context line")
+        // A removed line has only an old number, so the old side is the only way back to it.
+        XCTAssertEqual(DiffSelection.row(for: (old: 11, new: nil), in: rows), 2)
+    }
+
+    func test_row_isNilWhenTheLineIsGoneFromTheNewRows() {
+        let rows = UnifiedDiff.rows(for: file)
+        XCTAssertNil(DiffSelection.row(for: (old: 999, new: 999), in: rows))
+        XCTAssertNil(DiffSelection.row(for: (old: nil, new: nil), in: rows))
+    }
 }

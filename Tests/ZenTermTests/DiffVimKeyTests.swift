@@ -58,6 +58,39 @@ final class DiffVimKeyTests: XCTestCase {
             DiffPaneTable.vimKey(for: try keyDown("V", unshifted: "v", flags: [.shift, .function])), .visual)
     }
 
+    func test_capsLockDoesNotChangeWhatAKeyMeans() throws {
+        // Caps Lock uppercases the characters without setting .shift, so reading shiftedness off the
+        // character's case makes j a dead key and turns a single g into a jump to the bottom. The
+        // shift has to come from the flags. Nothing on screen would explain either symptom.
+        XCTAssertEqual(
+            DiffPaneTable.vimKey(for: try keyDown("J", unshifted: "J", flags: .capsLock)), .down)
+        XCTAssertEqual(
+            DiffPaneTable.vimKey(for: try keyDown("K", unshifted: "K", flags: .capsLock)), .up)
+        XCTAssertEqual(
+            DiffPaneTable.vimKey(for: try keyDown("G", unshifted: "G", flags: .capsLock)), .pendingTop,
+            "still only arms — Caps Lock is not Shift")
+        XCTAssertEqual(
+            DiffPaneTable.vimKey(for: try keyDown("Y", unshifted: "Y", flags: .capsLock)), .yankCode,
+            "a plain yank, not the reference")
+    }
+
+    func test_capsLockWithShiftStillReachesTheShiftedForms() throws {
+        // With Caps Lock on, Shift *lowercases* the typed character, but the flag is what we read.
+        XCTAssertEqual(
+            DiffPaneTable.vimKey(for: try keyDown("v", unshifted: "v", flags: [.capsLock, .shift])), .visual)
+        XCTAssertEqual(
+            DiffPaneTable.vimKey(for: try keyDown("y", unshifted: "y", flags: [.capsLock, .shift])),
+            .yankReference)
+    }
+
+    func test_bracesDecodeFromTheTypedCharacterAndFromShiftBracket() throws {
+        // The literal brace covers any layout that produces one; shift-bracket covers the US layout's
+        // charactersIgnoringModifiers, which reports the unshifted bracket.
+        XCTAssertEqual(DiffPaneTable.vimKey(for: try keyDown("{", unshifted: "{")), .prevChange)
+        XCTAssertEqual(DiffPaneTable.vimKey(for: try keyDown("{", unshifted: "[", flags: .shift)), .prevChange)
+        XCTAssertEqual(DiffPaneTable.vimKey(for: try keyDown("}", unshifted: "]", flags: .shift)), .nextChange)
+    }
+
     // MARK: yankShortcut
 
     func test_yankShortcut_separatesCodeFromReference() throws {

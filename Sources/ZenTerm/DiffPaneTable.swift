@@ -21,9 +21,15 @@ final class DiffPaneTable: NSView {
     private var cursorRow = -1
     /// The fixed end of a linewise visual selection, or nil when no selection is being extended.
     private var anchorRow: Int?
-    /// Set while `applySelection` drives the table, so the selection-changed hook can tell our own
-    /// writes from a mouse drag or shift-click and only resync the cursor for the latter.
-    private var isApplyingSelection = false
+
+    /// How far through the post-yank flash we are (1 = full, 0 = gone). Vim's `on_yank` pulse: the
+    /// yank leaves nothing on screen otherwise, so a copy that silently didn't take looks identical
+    /// to one that did.
+    private var flashLevel: CGFloat = 0
+    private var flashedRows = IndexSet()
+    private var flashTimer: Timer?
+    private static let flashDuration: TimeInterval = 0.22
+    private static let flashFrame: TimeInterval = 1.0 / 60
 
     /// Yank the current selection: `true` copies a `path:line` reference, `false` the code text.
     /// The pane holds the rows but not the file's path, so the overlay composes the string.
@@ -104,20 +110,51 @@ final class DiffPaneTable: NSView {
     var hasVisualSelection: Bool { anchorRow != nil }
     /// The cursor's row, for asserting a motion actually moved it.
     var cursorRowForTesting: Int { cursorRow }
+    /// Whether the post-yank flash is running, so a test can assert the confirmation is wired to a
+    /// copy that actually landed (the timing and the color are the runbook's, not a test's).
+    var isFlashingForTesting: Bool { flashLevel > 0 }
+    var flashedRowsForTesting: IndexSet { flashedRows }
+    /// Drive the mouse selection path the way a click or a ⌘-click does — `super.mouseDown` writes the
+    /// table's selection and then the pane adopts it, which a synthesized click can't reach reliably.
+    func selectRowsFromMouseForTesting(_ rows: IndexSet) {
+        table.selectRowIndexes(rows, byExtendingSelection: false)
+        syncCursorAfterMouseSelection()
+    }
 
-    func show(_ rows: [DiffRow]) {
+    /// Render `rows`. `preservingSelection` is for a re-render of the *same* file — a layout flip
+    /// (⌘I) or a resize crossing the auto-fold band — where losing the cursor and any running
+    /// selection is a real loss: you were mid-review, and the layout change wasn't about the
+    /// selection. The row *indices* differ between layouts (side-by-side pairs +/− lines that inline
+    /// lists separately), so the cursor is carried by its line numbers and re-found, never by index.
+    func show(_ rows: [DiffRow], preservingSelection: Bool = false) {
+        let carried =
+            preservingSelection
+            ? (
+                cursor: DiffSelection.lineNumbers(at: cursorRow, in: source.rows),
+                anchor: anchorRow.flatMap { DiffSelection.lineNumbers(at: $0, in: source.rows) }
+            )
+            : (cursor: nil, anchor: nil)
+
+        cancelFlash()
+        table.disarmPendingKeys()
         source.rows = rows
         isUnifiedLayout = rows.contains { if case .unified = $0 { return true } else { return false } }
         source.gutterWidth = DiffCellMetrics.gutterWidth(forDigits: Self.maxLineNumberDigits(in: rows))
         maxContentWidth = Self.widestLine(in: rows)
         horizontalOffset = 0
         source.offset = 0
-        anchorRow = nil  // a new file starts with no selection to extend
+        anchorRow = nil
         cursorRow = -1
         table.reloadData()
-        // Always start with a current line so its highlight (a quiet outline while the tree holds focus)
-        // is there to see immediately — the diff can be paged from the tree before it's ever focused.
-        // Land it on the first real line, not the leading hunk header, so the pill reads as a line.
+
+        if let carriedCursor = carried.cursor, let row = DiffSelection.row(for: carriedCursor, in: rows) {
+            anchorRow = carried.anchor.flatMap { DiffSelection.row(for: $0, in: rows) }
+            setCursor(row)
+            return
+        }
+        // A new file: start with a current line so its highlight (a quiet outline while the tree holds
+        // focus) is there to see immediately — the diff can be paged from the tree before it's ever
+        // focused. Land it on the first real line, not the leading hunk header, so the pill reads as a line.
         if let firstLine = rows.firstIndex(where: { if case .hunkHeader = $0 { return false } else { return true } }) {
             setCursor(firstLine, center: false)
         }
@@ -146,9 +183,7 @@ final class DiffPaneTable: NSView {
         } else {
             rows = IndexSet(integer: cursorRow)
         }
-        isApplyingSelection = true
         table.selectRowIndexes(rows, byExtendingSelection: false)
-        isApplyingSelection = false
         refreshDecoration()
     }
 
@@ -203,10 +238,14 @@ final class DiffPaneTable: NSView {
         }
     }
 
-    /// A drag or a shift-click moved the selection behind our back: adopt it, so the next keystroke
-    /// extends from where the mouse left off instead of snapping back to the old cursor.
+    /// A drag, shift-click, or ⌘-click moved the selection behind our back: adopt it, so the next
+    /// keystroke extends from where the mouse left off instead of snapping back to the old cursor.
+    ///
+    /// The adopted selection is normalized to a contiguous range. A ⌘-click can leave gaps, but this
+    /// pane's model is one anchor and one cursor, so the very next motion would fill those gaps in
+    /// anyway — filling them now means the block you see is the block you'll yank, instead of it
+    /// quietly growing under the next keystroke.
     private func syncCursorAfterMouseSelection() {
-        guard !isApplyingSelection else { return }
         let selected = table.selectedRowIndexes
         guard let last = selected.last else {
             anchorRow = nil
@@ -215,6 +254,47 @@ final class DiffPaneTable: NSView {
         }
         cursorRow = last
         anchorRow = selected.count > 1 ? selected.first : nil
+        applySelection()
+    }
+
+    // MARK: yank flash
+
+    /// Pulse the yanked rows and fade out, the way nvim's `on_yank` does. Called by the overlay after
+    /// a yank actually reaches the pasteboard, so it confirms the copy rather than the keystroke.
+    func flashYank() {
+        cancelFlash()
+        flashedRows = table.selectedRowIndexes
+        guard !flashedRows.isEmpty else { return }
+        flashLevel = 1
+        refreshDecoration()
+        guard !Motion.isReduceMotionEnabled() else {
+            // No fade, but still a beat of highlight — the flash *is* the confirmation, so it can't
+            // be dropped entirely, only made still.
+            flashTimer = Timer.scheduledTimer(withTimeInterval: Self.flashDuration, repeats: false) {
+                [weak self] _ in self?.cancelFlash()
+            }
+            return
+        }
+        let step = CGFloat(Self.flashFrame / Self.flashDuration)
+        flashTimer = Timer.scheduledTimer(withTimeInterval: Self.flashFrame, repeats: true) {
+            [weak self] _ in
+            guard let self else { return }
+            self.flashLevel -= step
+            if self.flashLevel <= 0 {
+                self.cancelFlash()
+            } else {
+                self.refreshDecoration()
+            }
+        }
+    }
+
+    /// Drop the flash immediately — on a new one, on a re-render, and at the fade's end.
+    private func cancelFlash() {
+        flashTimer?.invalidate()
+        flashTimer = nil
+        guard flashLevel != 0 else { return }
+        flashLevel = 0
+        flashedRows = IndexSet()
         refreshDecoration()
     }
 
@@ -258,21 +338,31 @@ final class DiffPaneTable: NSView {
     }
 
     /// Decode a `keyDown` into the vim key it types, or nil for anything the pane doesn't claim.
-    /// Reads `characters` rather than a keyCode so it follows the user's keyboard layout, and so the
-    /// shifted forms (`V`, `G`, `Y`, `{`, `}`) identify themselves without a separate flag check.
+    ///
+    /// The base key is the *lowercased* `charactersIgnoringModifiers` and the shifted-ness comes from
+    /// the modifier flags, never from the character's case: Caps Lock also uppercases, so reading case
+    /// alone would turn `j` into a dead key and make a single `g` jump to the bottom the moment Caps
+    /// Lock was on. Braces are matched on the typed character first, so a layout that doesn't put them
+    /// on shift-bracket still works.
     static func vimKey(for event: NSEvent) -> VimKey? {
-        // Shift is carried by the character itself; the other three mean this is somebody else's chord.
+        // Shift is read from the flags; the other three mean this is somebody else's chord.
         guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return nil }
         switch event.characters {
-        case "j": return .down
-        case "k": return .up
-        case "V": return .visual
-        case "g": return .pendingTop
-        case "G": return .bottom
         case "{": return .prevChange
         case "}": return .nextChange
-        case "y": return .yankCode
-        case "Y": return .yankReference
+        default: break
+        }
+        let shift = event.modifierFlags.contains(.shift)
+        switch (event.charactersIgnoringModifiers?.lowercased() ?? "", shift) {
+        case ("j", false): return .down
+        case ("k", false): return .up
+        case ("v", true): return .visual
+        case ("g", false): return .pendingTop
+        case ("g", true): return .bottom
+        case ("y", false): return .yankCode
+        case ("y", true): return .yankReference
+        case ("[", true): return .prevChange
+        case ("]", true): return .nextChange
         default: return nil
         }
     }
@@ -378,6 +468,7 @@ final class DiffPaneTable: NSView {
         let selected = table.selectedRowIndexes
         rowView.blockPosition = Self.blockPosition(of: row, in: selected)
         rowView.isCursorRow = row == cursorRow && selected.count > 1
+        rowView.flashLevel = flashedRows.contains(row) ? flashLevel : 0
         rowView.needsDisplay = true
     }
 
@@ -562,6 +653,7 @@ private final class DiffTableView: NSTableView {
 
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
+        sawG = false  // a half-typed `gg` doesn't survive leaving and coming back
         if ok, selectedRow == -1, numberOfRows > 0 {
             let visible = rows(in: visibleRect)
             let target = visible.length > 0 ? visible.location : 0
@@ -575,9 +667,14 @@ private final class DiffTableView: NSTableView {
     /// A drag or shift-click landed. `super` has already written the selection; tell the pane so it
     /// adopts the new cursor instead of snapping back on the next keystroke.
     override func mouseDown(with event: NSEvent) {
+        sawG = false  // reaching for the mouse abandons a half-typed `gg`
         super.mouseDown(with: event)
         onMouseSelectionChanged?()
     }
+
+    /// Disarm a half-typed `gg` — called when the pane re-renders, so an armed `g` can't survive into
+    /// a different file and turn the next single `g` into a jump.
+    func disarmPendingKeys() { sawG = false }
 
     override func keyDown(with event: NSEvent) {
         if let direction = DiffPaneTable.halfPageDirection(for: event) {
@@ -634,6 +731,9 @@ final class DiffLineRowView: NSTableRowView {
     /// Whether this row carries the cursor *inside* a multi-row selection — it takes a stronger fill so
     /// the moving end stays findable. False for a single-row selection, which is already just the cursor.
     var isCursorRow = false
+    /// How far through the post-yank flash this row is (1 = full, 0 = none). Drawn over the selection
+    /// fill, so it reads as the block pulsing rather than as a second highlight.
+    var flashLevel: CGFloat = 0
 
     /// The selection pill spans the content: the diff pane already carries a horizontal margin off its
     /// edges (`diffTable`'s inset), so the pill takes no *additional* horizontal inset — it aligns with
@@ -641,6 +741,10 @@ final class DiffLineRowView: NSTableRowView {
     private static let horizontalInset: CGFloat = 0
     private static let verticalInset: CGFloat = 1.5
     private static let cornerRadius: CGFloat = 3
+
+    /// The flash's peak fill, well above the resting selection so the pulse is unmistakable without
+    /// washing the code out.
+    private static let flashPeakAlpha: CGFloat = 0.5
 
     override func drawSelection(in dirtyRect: NSRect) {
         guard isSelected else { return }
@@ -659,6 +763,11 @@ final class DiffLineRowView: NSTableRowView {
             path.lineWidth = 1
             path.stroke()
         }
+        // The yank pulse rides on top of whichever of the two the row just drew, so it reads the same
+        // whether the pane holds focus or not.
+        guard flashLevel > 0 else { return }
+        accent.withAlphaComponent(Self.flashPeakAlpha * min(1, flashLevel)).setFill()
+        path.fill()
     }
 
     /// The pill, grown past the row's own edge on whichever side continues into a selected neighbour —

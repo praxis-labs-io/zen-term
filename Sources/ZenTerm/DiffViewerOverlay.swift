@@ -248,6 +248,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             : selection.codeText
         yankPasteboard.clearContents()
         yankPasteboard.setString(text, forType: .string)
+        // Confirm it after the write, not on the keystroke: a yank leaves nothing on screen, so a copy
+        // that didn't take would otherwise look exactly like one that did.
+        diffTable.flashYank()
     }
 
     func reapplyTheme() {
@@ -757,7 +760,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     @discardableResult
     private func reconcileLayout() -> Bool {
         guard currentFileDiff != nil, effectiveLayout != renderedLayout else { return false }
-        renderCurrentFile()
+        renderCurrentFile(keepingSelection: true)  // same file — the cursor and selection carry over
         return true
     }
 
@@ -775,20 +778,23 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// view. Only trips for a pathologically slow parse/fetch — the highlight normally lands in tens of ms.
     private static let highlightSafetyCap: TimeInterval = 0.8
 
-    private func renderCurrentFile() {
+    /// `keepingSelection` is true for a re-render of the *same* file (a layout flip or a resize
+    /// crossing the fold band), where the cursor and any running selection must survive — you were
+    /// mid-review and the layout change wasn't about the selection.
+    private func renderCurrentFile(keepingSelection: Bool = false) {
         guard let file = currentFileDiff else { return }
         let key = file.highlightKey  // scope+base+path — the same path in two slices caches separately
         // Already highlighted this file (a revisit, a layout flip, or a reopen)? Paint it highlighted
         // immediately — no flash, no re-parse. A cached value of nil means "resolved, no spans".
         if let cached = highlightStore.cached(key) {
-            renderRows(file, spans: cached)
+            renderRows(file, spans: cached, keepingSelection: keepingSelection)
             return
         }
         // Won't ever highlight (no repo on disk, or unsupported language) — plain now is the final state.
         guard FileManager.default.fileExists(atPath: repoRoot.path), SyntaxLanguage.isSupported(path: file.path)
         else {
             highlightStore.store(key, nil)
-            renderRows(file, spans: nil)
+            renderRows(file, spans: nil, keepingSelection: keepingSelection)
             return
         }
         // Supported + uncached: withhold the first paint until the highlight lands, so even a cold open
@@ -818,12 +824,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     /// Build and show the rows for `file` in the effective layout, with optional syntax spans.
-    private func renderRows(_ file: FileDiff, spans: DiffFileSpans?) {
+    private func renderRows(_ file: FileDiff, spans: DiffFileSpans?, keepingSelection: Bool = false) {
         let layout = effectiveLayout
         renderedLayout = layout
         diffTable.show(
             layout == .inline
-                ? UnifiedDiff.rows(for: file, spans: spans) : SideBySideDiff.rows(for: file, spans: spans))
+                ? UnifiedDiff.rows(for: file, spans: spans) : SideBySideDiff.rows(for: file, spans: spans),
+            preservingSelection: keepingSelection)
     }
 
     private func showMessage(_ text: String) {
