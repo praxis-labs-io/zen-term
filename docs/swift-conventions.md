@@ -117,6 +117,34 @@ through the card's proportional width constraint and *stopped the window from re
 (`setContentCompressionResistancePriority(.defaultLow, for: .horizontal)`) — setting it on the
 enclosing `NSStackView` is not enough; the child label resists on its own (ZEN-243).
 
+**A custom `NSView` with no `intrinsicContentSize` cannot resist stretching in a stack, at any
+priority.** Content-hugging and compression-resistance only install their constraints on an axis where
+`intrinsicContentSize` returns a real value. A view sized purely by its own internal constraints (a
+`KeycapView`: an inner token stack pinned leading/trailing + a height constant) returns
+`noIntrinsicMetric`, so `setContentHuggingPriority(.required, …)` **on that view** is a silent no-op —
+there is nothing for the priority to attach to. Inside an `NSStackView` (default `.fill` distribution)
+it is then the only elastic member and absorbs every point of slack: a one-glyph keycap stretched into
+a wide pill, because the neighboring `NSTextField` ships with horizontal hugging 251 — one above the
+keycap's transitively-inherited 250 — and wins the tie for who does *not* stretch. Override
+`intrinsicContentSize` to report the width the view's own constraints already produce
+(`tokenStack.fittingSize.width + insets`), and `invalidateIntrinsicContentSize()` when its content
+changes; only then do hugging/compression priorities engage. Setting those priorities at the call site
+is correct code aimed at nothing until the view itself reports an intrinsic size (ZEN-262).
+
+**In an `NSStackView`, name the view that absorbs the slack — the solver's default is rarely what you
+meant.** When a stack's main axis is larger than the sum of its content, `distribution` hands the extra
+to the arranged views; the default `.fill` grows the **lowest** content-hugging view first. The slack is
+often invisible in the code: a `.leading`- or `.trailing`-aligned *cross*-axis still sizes the stack to
+its widest child, so every narrower row is stretched to that width and one view inside each has to take
+up the difference. Keep it deterministic in two moves — give anything that should hold its natural size
+a real width (an `intrinsicContentSize`, per above, or an explicit constraint) so it is not a growth
+candidate, and make the one thing that *should* flex (a trailing spacer, or a label with a truncating
+`lineBreakMode`) the lowest-hugging so the slack lands there on purpose. Spacing follows the same "be
+explicit" rule: uniform `spacing` sits between every pair, and `setCustomSpacing(_:after:)` overrides a
+single gap — reach for it rather than padding a view to fake a wider gap, since a padded view is one
+more thing the distribution can stretch. The keycap-pill bug was the general failure in miniature: the
+keycap was the only view with no real resistance, so it was the one that grew (ZEN-262).
+
 **A label's `lineBreakMode` governs `stringValue` only; an attributed string carries its own.** Set
 `attributedStringValue` and the label's `lineBreakMode`, `alignment` and `font` stop applying: the
 string's attributes win, and any attribute you leave out falls back to the system default rather than

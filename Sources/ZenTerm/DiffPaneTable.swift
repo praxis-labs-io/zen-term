@@ -38,6 +38,18 @@ final class DiffPaneTable: NSView {
     var onEscape: (() -> Void)?
     /// ⏎ on the diff — open the comment composer for the current selection (ZEN-257).
     var onCompose: (() -> Void)?
+    /// Bare `\` — flip the viewer between inline and side-by-side (ZEN-262).
+    var onToggleLayout: (() -> Void)?
+    /// Bare `b` — focus the base-ref selector.
+    var onFocusBase: (() -> Void)?
+    /// Bare `h` — hand focus back to the file tree (nvim "go left").
+    var onFocusTree: (() -> Void)?
+    /// Bare `q` — close the viewer.
+    var onClose: (() -> Void)?
+    /// Bare `?` — toggle the key-reference popover.
+    var onShowKeys: (() -> Void)?
+    /// The diff took focus (a click or a keyboard move) — the overlay resyncs focus styling + legend.
+    var onFocusChanged: (() -> Void)?
 
     /// The shared horizontal pan applied to every visible row's text column(s) (0 = left-aligned).
     private var horizontalOffset: CGFloat = 0
@@ -80,6 +92,17 @@ final class DiffPaneTable: NSView {
         table.onVimKey = { [weak self] key in self?.handleVimKey(key) }
         table.onEscape = { [weak self] in self?.handleEscape() }
         table.onCompose = { [weak self] in self?.onCompose?() }
+        table.onViewerCommand = { [weak self] command in
+            guard let self else { return }
+            switch command {
+            case .toggleLayout: self.onToggleLayout?()
+            case .focusBase: self.onFocusBase?()
+            case .close: self.onClose?()
+            case .showKeys: self.onShowKeys?()
+            }
+        }
+        table.onFocusTree = { [weak self] in self?.onFocusTree?() }
+        table.onBecameFirstResponder = { [weak self] in self?.onFocusChanged?() }
         table.onMouseSelectionChanged = { [weak self] in self?.syncCursorAfterMouseSelection() }
         source.decorate = { [weak self] rowView, row in self?.decorate(rowView, row: row) }
 
@@ -333,6 +356,8 @@ final class DiffPaneTable: NSView {
         case .nextChange: jumpToNextChange()
         case .yankCode: onYank?(false)
         case .yankReference: onYank?(true)
+        case .lineStart: setHorizontalOffset(0)
+        case .lineEnd: setHorizontalOffset(maxHorizontalOffset)
         }
     }
 
@@ -449,6 +474,7 @@ final class DiffPaneTable: NSView {
         case top, bottom  // gg / G
         case prevChange, nextChange  // { / }
         case yankCode, yankReference  // y / Y
+        case lineStart, lineEnd  // 0 / $ — pan to the start / end of the line (ZEN-262)
     }
 
     /// Return / keypad Enter with no modifiers — comment on the selection (ZEN-257). Decoded by key
@@ -472,6 +498,7 @@ final class DiffPaneTable: NSView {
         switch event.characters {
         case "{": return .prevChange
         case "}": return .nextChange
+        case "$": return .lineEnd  // typed character first, so a layout that isn't shift-4 still works
         default: break
         }
         let shift = event.modifierFlags.contains(.shift)
@@ -485,6 +512,28 @@ final class DiffPaneTable: NSView {
         case ("y", true): return .yankReference
         case ("[", true): return .prevChange
         case ("]", true): return .nextChange
+        case ("0", false): return .lineStart
+        case ("4", true): return .lineEnd  // shift-4 on a US layout, where `charactersIgnoringModifiers` is "4"
+        default: return nil
+        }
+    }
+
+    /// The viewer-wide bare keys both panes honor (ZEN-262): they act on the whole viewer, not a
+    /// pane's selection, so the tree and the diff decode them identically. Context-specific keys
+    /// (h/l fold, focus moves) stay in each pane's own `keyDown`. Any reservable modifier falls
+    /// through — these are truly bare, so Shift-\ (`|`), ⌘\, etc. belong to another handler.
+    enum ViewerCommand: Equatable { case toggleLayout, focusBase, close, showKeys }
+
+    static func viewerCommand(for event: NSEvent) -> ViewerCommand? {
+        // ⌘/⌥/⌃ belong to another handler. `?` (Shift-/) is the one shifted member — matched on the typed
+        // character so it works on any layout; everything else is truly bare, so Shift falls through.
+        guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return nil }
+        if event.characters == "?" { return .showKeys }
+        guard !event.modifierFlags.contains(.shift) else { return nil }
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "\\": return .toggleLayout
+        case "b": return .focusBase
+        case "q": return .close
         default: return nil
         }
     }
@@ -499,6 +548,19 @@ final class DiffPaneTable: NSView {
         switch event.keyCode {
         case 2: return 1  // D
         case 32: return -1  // U
+        default: return nil
+        }
+    }
+
+    /// Ctrl-j/k and Ctrl-↑/↓ in the tree: jump the file selection about half a page, centered (ZEN-262).
+    /// Deliberately separate from `halfPageDirection` (Ctrl-D/U) so the tree can page its own file list
+    /// with these while Ctrl-D/U keeps scrolling the diff underneath it. The diff pane doesn't use this
+    /// (its half-page stays on Ctrl-D/U). +1 down, -1 up. Same exact-`.control` match, so ⌘/⌥ fall through.
+    static func pageDirection(for event: NSEvent) -> Int? {
+        guard event.modifierFlags.intersection(reservableModifiers) == .control else { return nil }
+        switch event.keyCode {
+        case 38, 125: return 1  // j / ↓
+        case 40, 126: return -1  // k / ↑
         default: return nil
         }
     }
@@ -754,6 +816,13 @@ private final class DiffTableView: NSTableView {
     var onMouseSelectionChanged: (() -> Void)?
     /// ⏎ / keypad Enter — comment on the selection.
     var onCompose: (() -> Void)?
+    /// A viewer-wide bare key (`\` layout, `b` base, `q` close) — see `DiffPaneTable.viewerCommand`.
+    var onViewerCommand: ((DiffPaneTable.ViewerCommand) -> Void)?
+    /// Bare `h` — hand focus back to the tree.
+    var onFocusTree: (() -> Void)?
+    /// Focus landed on the diff (a click or a keyboard move) — the pane forwards it so the overlay
+    /// resyncs focus styling and the footer legend.
+    var onBecameFirstResponder: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -794,6 +863,7 @@ private final class DiffTableView: NSTableView {
             onMouseSelectionChanged?()  // adopt it as the cursor — the pane didn't write this one
             scrollRowToVisible(target)
         }
+        if ok { onBecameFirstResponder?() }
         return ok
     }
 
@@ -813,6 +883,19 @@ private final class DiffTableView: NSTableView {
         if let direction = DiffPaneTable.halfPageDirection(for: event) {
             sawG = false
             onHalfPage?(direction)
+            return
+        }
+        if let command = DiffPaneTable.viewerCommand(for: event) {
+            sawG = false
+            onViewerCommand?(command)
+            return
+        }
+        // Bare `h` hands focus to the tree (nvim "go left"); ←/→ keep panning long lines here.
+        if event.modifierFlags.intersection(DiffPaneTable.reservableModifiers).isEmpty,
+            event.charactersIgnoringModifiers?.lowercased() == "h"
+        {
+            sawG = false
+            onFocusTree?()
             return
         }
         if let key = DiffPaneTable.vimKey(for: event) {

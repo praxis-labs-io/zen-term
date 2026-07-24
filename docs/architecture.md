@@ -231,21 +231,36 @@ live.
 left split into three status sections (Unstaged → Staged → Committed, empty ones
 hidden, each header carrying its slice's `+n −m` total), the diff of the selected file
 on the right, and a full-width footer carrying the repo name + checked-out branch on the
-left and the live-keymap key hints (real `KeycapView`s) on the right. The diff renders in
-one of two layouts (`SideBySideDiff` old │ new, or the inline `UnifiedDiff`), toggled by
-⌘I (`.toggleDiffLayout`) and defaulted by the `diff-layout` config key; both transforms
-feed one `DiffPaneTable` behind the layout-agnostic `DiffRow` model. A narrow pane
-force-folds to inline (two columns stop reading as code), where the ⌘I toggle is disabled
-and its footer hint hidden; a ⌘I pin governs only the wide state. The committed slice forks from the repo's default branch
+left and the focus-scoped key hints (compact `KeycapView`s, the set narrowed to the pane
+that holds focus) on the right. The diff renders in one of two layouts (`SideBySideDiff`
+old │ new, or the inline `UnifiedDiff`), toggled by bare `\` and defaulted by the
+`diff-layout` config key; both transforms feed one `DiffPaneTable` behind the
+layout-agnostic `DiffRow` model. A narrow pane force-folds to inline (two columns stop
+reading as code), where the `\` toggle is disabled and its footer hint hidden; a `\` pin
+governs only the wide state. The committed slice forks from the repo's default branch
 (`origin/HEAD`, else main/master; git records no parent, so a stacked branch's parent
 isn't guessed). A static header above the tree carries a `Base: <branch>` `Dropdown`
 (the same control the theme picker uses; branches default-first then by recency, the
 checked-out branch excluded) that re-runs the committed slice against the chosen branch
-and is reachable from the tree by arrow key. Navigation is the
-app's own pane chords, not Tab: ⌘h/⌘l move between the tree and the diff, ⌘j/⌘k jump to
-the next/previous change; they're forwarded from `WindowController.handle` because
-`KeyInterceptor` consumes chords before the responder chain. It wears the accent halo
-and the pane behind yields focus, the way a configured tool float does.
+and is reachable from the tree by arrow key or bare `b`. Navigation is vim-native and
+local to the card (ZEN-262). ⌘h/⌘l move focus between the tree and the diff (the app's
+own pane chords, forwarded from `WindowController.handle` since `KeyInterceptor` consumes
+chords before the responder chain); everything else is a bare key the panes handle in
+`keyDown`. In the tree, j/k step files, h/l (and ←/→) fold a directory or open a file into
+the diff, Ctrl-j/k and Ctrl-↑/↓ jump the file selection half a page (centered), Ctrl-D/U
+scroll the diff without leaving the tree, and b focuses the base. In the diff, j/k move the
+cursor, {/} jump changes, 0/$ pan to the start/end of the line, Ctrl-D/U half-page, V
+selects, y/Y yank, ⏎ comments, and h returns to the tree. `\` toggles the layout and q/esc
+close from either pane. Because the bare keys aren't reserved, they pass through to the
+terminal when the viewer is closed, and the
+comment composer captures them as text while it's open, so no global chord is spent on a
+view-only command. The footer legend scopes to the focused pane and leaves pane-switching
+off (it's natural and discoverable, and it was the crowding the trim removed); bare `?` opens
+the full key reference, so the legend can stay lean. That reference is a `ChromePopover` (a
+composable primitive: caller supplies the trigger and the content, the popover owns the
+themed chrome, the fade, and a click-outside backdrop) holding `DiffKeymapSheet`'s three
+grouped columns, floated above the footer's trailing edge. The card wears the accent halo and the pane behind
+yields focus, the way a configured tool float does.
 
 **Selection is linewise, and vim-flavored.** Nothing typed inside the card reaches a
 terminal, so the plain letters are free: `j`/`k` move, `V` starts a visual selection
@@ -262,7 +277,7 @@ selection is pure. `DiffSelection` reads the rendered `[DiffRow]` (either layout
 the selected text plus a line range per side, and `DiffReference` renders the string. A
 yank pulses the yanked rows and fades, the way nvim's `on_yank` does: a copy leaves
 nothing on screen, so one that silently didn't take would look identical to one that did.
-A re-render of the *same* file (⌘I, or a resize crossing the fold band) carries the cursor
+A re-render of the *same* file (the `\` toggle, or a resize crossing the fold band) carries the cursor
 and selection over by their **line numbers**, never by row index: the two layouts index
 differently, since side-by-side pairs the +/− lines inline lists separately.
 Only the *new* side can be named, since that's the file on disk: a selection of pure

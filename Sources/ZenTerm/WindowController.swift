@@ -1281,7 +1281,6 @@ final class WindowController: NSObject {
         case .openSettings: openSettings()
         case .reportIssue: openReportIssue()
         case .openDiffViewer: openDiffViewer()
-        case .toggleDiffLayout: break  // diff-viewer-only; handled by the overlay when open, else a no-op
         }
     }
 

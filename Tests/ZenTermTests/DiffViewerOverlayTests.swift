@@ -125,22 +125,22 @@ final class DiffViewerOverlayTests: XCTestCase {
         XCTAssertGreaterThan(overlay.diffRowCountForTesting, 0)
     }
 
-    /// The layout-toggle chord (⌘I by default) must actually swap the rendered pane, not just flip a
-    /// flag — the "control looks wired but the screen never moved" failure. Driven through the real
-    /// `handleNavChord` path WindowController uses; the row count changes because side-by-side pairs
-    /// +/- lines while inline lists each, so a stale render would keep the old count.
-    func test_toggleLayoutChord_swapsTheRenderedLayoutLive_andBack() {
+    /// The bare `\` layout key must actually swap the rendered pane, not just flip a flag — the "control
+    /// looks wired but the screen never moved" failure. Driven through a real `\` keyDown into the diff
+    /// pane (ZEN-262); the row count changes because side-by-side pairs +/- lines while inline lists each,
+    /// so a stale render would keep the old count.
+    func test_backslashKey_swapsTheRenderedLayoutLive_andBack() {
         let (overlay, _) = mount(unstaged: [file("One.swift")])
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .sideBySide)
         let sideBySideRows = overlay.diffRowCountForTesting
 
-        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))
+        overlay.diffPaneForTesting.scrollFocusTarget.keyDown(with: bareKey("\\", keyCode: 42))
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline)
         XCTAssertNotEqual(
             overlay.diffRowCountForTesting, sideBySideRows,
             "the pane must re-render in the new layout, not just flip a flag")
 
-        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))
+        overlay.diffPaneForTesting.scrollFocusTarget.keyDown(with: bareKey("\\", keyCode: 42))
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .sideBySide, "toggles back")
         XCTAssertEqual(overlay.diffRowCountForTesting, sideBySideRows)
     }
@@ -182,20 +182,22 @@ final class DiffViewerOverlayTests: XCTestCase {
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .sideBySide, "wide again — auto-unfolds")
     }
 
-    /// While narrow, inline is forced and the ⌘I toggle is disabled: it must not touch the pin. Since a
-    /// narrow pane renders inline regardless of the override, a broken guard is only observable on a later
-    /// widen — so pin inline while wide (differs from the side-by-side default), narrow, toggle (must
-    /// no-op), then widen and confirm the pin survived. Without the guard the narrow toggle would flip the
-    /// pin to side-by-side and this final assertion would catch it.
+    /// While narrow, inline is forced and the `\` layout toggle is disabled: it must not touch the pin.
+    /// Since a narrow pane renders inline regardless of the override, a broken guard is only observable on
+    /// a later widen — so pin inline while wide (differs from the side-by-side default), narrow, toggle
+    /// (must no-op), then widen and confirm the pin survived. Without the guard the narrow toggle would
+    /// flip the pin to side-by-side and this final assertion would catch it.
     func test_whileNarrow_layoutToggleIsDisabled_andDoesNotTouchThePin() {
         let (overlay, _) = mount(unstaged: [file("One.swift")])
-        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))  // pin inline while wide
+        // Pin inline while wide.
+        overlay.diffPaneForTesting.scrollFocusTarget.keyDown(with: bareKey("\\", keyCode: 42))
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline)
 
         resize(overlay, toWidth: 480)
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline, "narrow forces inline")
 
-        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))  // consumed, but a no-op while narrow
+        // A no-op while narrow.
+        overlay.diffPaneForTesting.scrollFocusTarget.keyDown(with: bareKey("\\", keyCode: 42))
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline)
 
         resize(overlay, toWidth: 1200)
@@ -203,13 +205,14 @@ final class DiffViewerOverlayTests: XCTestCase {
             overlay.renderedDiffLayoutForTesting, .inline, "the wide pin must survive a no-op narrow toggle")
     }
 
-    /// A ⌘I pin set while wide governs only the wide state, and survives a narrow→wide round trip: it
-    /// returns to the pinned layout, not the config default. (Default is side-by-side; the pin is inline.)
+    /// A pin set while wide governs only the wide state, and survives a narrow→wide round trip: it returns
+    /// to the pinned layout, not the config default. (Default is side-by-side; the pin is inline.)
     func test_widePin_survivesNarrowRoundTrip() {
         let (overlay, _) = mount(unstaged: [file("One.swift")])
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .sideBySide)
 
-        XCTAssertTrue(overlay.handleNavChord(.toggleDiffLayout))  // pins inline while wide
+        // Pin inline while wide.
+        overlay.diffPaneForTesting.scrollFocusTarget.keyDown(with: bareKey("\\", keyCode: 42))
         XCTAssertEqual(overlay.renderedDiffLayoutForTesting, .inline)
 
         resize(overlay, toWidth: 480)
@@ -326,6 +329,15 @@ final class DiffViewerOverlayTests: XCTestCase {
             isARepeat: false, keyCode: keyCode)!
     }
 
+    /// A bare-letter `keyDown` (no modifiers) — the panes decode the vim/viewer keys by
+    /// `charactersIgnoringModifiers`, not keyCode, so the character is what matters.
+    private func bareKey(_ character: String, keyCode: UInt16 = 0) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: character, charactersIgnoringModifiers: character, isARepeat: false,
+            keyCode: keyCode)!
+    }
+
     func test_navChords_moveFocusBetweenTreeAndDiff() {
         let (overlay, _) = mount(unstaged: [file("One.swift"), file("Two.swift")])
 
@@ -335,14 +347,13 @@ final class DiffViewerOverlayTests: XCTestCase {
         XCTAssertTrue(overlay.isTreeFocusedForTesting)
     }
 
-    func test_navDownAndUpInTree_stepThroughFilesSkippingHeaders() {
+    func test_jkInTree_stepThroughFilesSkippingHeaders() {
         let (overlay, _) = mount(unstaged: [file("One.swift"), file("Two.swift")])
-        overlay.handleNavChord(.navLeft)  // focus the tree
 
         XCTAssertEqual(overlay.selectedFilePathForTesting, "One.swift")  // auto-selected first file
-        overlay.handleNavChord(.navDown)
+        overlay.treeOutlineForTesting.keyDown(with: bareKey("j", keyCode: 38))
         XCTAssertEqual(overlay.selectedFilePathForTesting, "Two.swift")
-        overlay.handleNavChord(.navUp)
+        overlay.treeOutlineForTesting.keyDown(with: bareKey("k", keyCode: 40))
         XCTAssertEqual(overlay.selectedFilePathForTesting, "One.swift")  // stepped back past the section
     }
 
@@ -378,6 +389,126 @@ final class DiffViewerOverlayTests: XCTestCase {
         XCTAssertEqual(overlay.treeRowCountForTesting, 2, "collapsing the directory hides its files")
     }
 
+    func test_lAndHInTree_expandAndCollapseADirectory() {
+        let (overlay, _) = mount(unstaged: [file("a/One.swift"), file("a/Two.swift")])
+        // Rows: Unstaged=0, a=1, One.swift=2, Two.swift=3.
+        XCTAssertEqual(overlay.treeRowCountForTesting, 4)
+        overlay.selectRowForTesting(1)  // the "a" directory
+
+        overlay.treeOutlineForTesting.keyDown(with: bareKey("h", keyCode: 4))  // collapse
+        XCTAssertEqual(overlay.treeRowCountForTesting, 2, "h collapses the directory")
+
+        overlay.treeOutlineForTesting.keyDown(with: bareKey("l", keyCode: 37))  // expand
+        XCTAssertEqual(overlay.treeRowCountForTesting, 4, "l expands it again")
+    }
+
+    func test_shiftHInTree_doesNotFold_theFoldKeysAreBare() {
+        let (overlay, _) = mount(unstaged: [file("a/One.swift"), file("a/Two.swift")])
+        XCTAssertEqual(overlay.treeRowCountForTesting, 4)
+        overlay.selectRowForTesting(1)  // the "a" directory, expanded
+
+        overlay.treeOutlineForTesting.keyDown(
+            with: NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: .shift, timestamp: 0, windowNumber: 0,
+                context: nil, characters: "H", charactersIgnoringModifiers: "H", isARepeat: false, keyCode: 4)!)
+
+        XCTAssertEqual(overlay.treeRowCountForTesting, 4, "Shift-h must not collapse — fold is a bare key")
+    }
+
+    func test_lOnAFileInTree_focusesTheDiff() {
+        let (overlay, _) = mount(unstaged: [file("One.swift"), file("Two.swift")])
+        XCTAssertTrue(overlay.handleNavChord(.navLeft))  // start in the tree
+        overlay.selectRowForTesting(1)  // One.swift (Unstaged=0, One=1, Two=2)
+
+        overlay.treeOutlineForTesting.keyDown(with: bareKey("l", keyCode: 37))
+
+        XCTAssertTrue(overlay.isDiffFocusedForTesting, "l on a file opens it into the diff")
+    }
+
+    func test_bInTree_focusesTheBaseSelector() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main", "feature-x"])
+
+        overlay.treeOutlineForTesting.keyDown(with: bareKey("b", keyCode: 11))
+
+        XCTAssertTrue(overlay.isBaseDropdownFocusedForTesting, "b focuses the base-ref selector")
+    }
+
+    func test_qInTree_closesTheViewer() {
+        var cancelled = false
+        let (overlay, _) = mount(unstaged: [file("One.swift")], onCancel: { cancelled = true })
+
+        overlay.treeOutlineForTesting.keyDown(with: bareKey("q", keyCode: 12))
+
+        XCTAssertTrue(cancelled, "q closes the viewer")
+    }
+
+    private func ctrlKey(_ keyCode: UInt16) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: .control, timestamp: 0, windowNumber: 0,
+            context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: keyCode)!
+    }
+
+    func test_ctrlJK_inTree_pageTheFileSelection() {
+        let (overlay, _) = mount(unstaged: [file("One.swift"), file("Two.swift"), file("Three.swift")])
+        // The test window is tall, so half a page is larger than this list — one page lands on the end.
+        overlay.treeOutlineForTesting.keyDown(with: ctrlKey(38))  // Ctrl-j
+        XCTAssertEqual(overlay.selectedFilePathForTesting, "Three.swift", "Ctrl-j pages down the file list")
+        overlay.treeOutlineForTesting.keyDown(with: ctrlKey(40))  // Ctrl-k
+        XCTAssertEqual(overlay.selectedFilePathForTesting, "One.swift", "Ctrl-k pages back up")
+    }
+
+    func test_questionKey_togglesTheKeySheet() {
+        let (overlay, _) = mount(unstaged: [file("One.swift")])
+        let question = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: .shift, timestamp: 0, windowNumber: 0,
+            context: nil, characters: "?", charactersIgnoringModifiers: "?", isARepeat: false, keyCode: 44)!
+
+        XCTAssertFalse(overlay.isKeySheetShownForTesting)
+        overlay.diffPaneForTesting.scrollFocusTarget.keyDown(with: question)
+        XCTAssertTrue(overlay.isKeySheetShownForTesting, "? opens the key sheet")
+        overlay.diffPaneForTesting.scrollFocusTarget.keyDown(with: question)
+        XCTAssertFalse(overlay.isKeySheetShownForTesting, "? again closes it")
+    }
+
+    func test_escWhileKeySheetOpen_closesTheSheetNotTheViewer() {
+        var cancelled = false
+        let (overlay, _) = mount(unstaged: [file("One.swift")], onCancel: { cancelled = true })
+        let diff = overlay.diffPaneForTesting.scrollFocusTarget
+        diff.keyDown(with: bareKey("?", keyCode: 44))
+        XCTAssertTrue(overlay.isKeySheetShownForTesting, "precondition: the sheet is open")
+
+        diff.keyDown(with: keyDown(53))  // Esc into the focused pane
+
+        XCTAssertFalse(overlay.isKeySheetShownForTesting, "Esc closes the sheet")
+        XCTAssertFalse(cancelled, "Esc must not close the viewer while the sheet is open")
+    }
+
+    func test_keySheetHint_showsInBothFocusLegends() {
+        let (overlay, _) = mount(unstaged: [file("One.swift")])
+        XCTAssertTrue(overlay.handleNavChord(.navLeft))  // tree
+        XCTAssertTrue(overlay.footerHintCaptionsForTesting.contains("keys"))
+        XCTAssertTrue(overlay.handleNavChord(.navRight))  // diff
+        XCTAssertTrue(overlay.footerHintCaptionsForTesting.contains("keys"))
+    }
+
+    func test_footerLegend_scopesToTheFocusedPane() {
+        let (overlay, _) = mount(unstaged: [file("One.swift"), file("Two.swift")])
+
+        XCTAssertTrue(overlay.handleNavChord(.navLeft))  // focus the tree
+        let treeCaptions = overlay.footerHintCaptionsForTesting
+        XCTAssertTrue(treeCaptions.contains("fold"), "the tree legend shows the fold keys")
+        XCTAssertTrue(treeCaptions.contains("base"))
+        XCTAssertFalse(treeCaptions.contains("yank"), "diff-only keys stay off the tree legend")
+
+        XCTAssertTrue(overlay.handleNavChord(.navRight))  // focus the diff
+        let diffCaptions = overlay.footerHintCaptionsForTesting
+        XCTAssertTrue(diffCaptions.contains("yank"), "the diff legend shows the selection keys")
+        XCTAssertTrue(diffCaptions.contains("comment"))
+        XCTAssertFalse(diffCaptions.contains("fold"), "tree-only keys stay off the diff legend")
+    }
+
     // MARK: sticky place across a changed reload (ZEN-233)
 
     /// Send a real vim `j` into the diff pane, the way `DiffPaneTable` decodes it (lowercased
@@ -410,7 +541,6 @@ final class DiffViewerOverlayTests: XCTestCase {
 
     func test_changedReload_keepsTheSelectedFileAndItsCursorLine() {
         let (overlay, spy) = mount(unstaged: [file("One.swift"), file("Two.swift")])
-        overlay.handleNavChord(.navDown)  // focus tree isn't needed; select second file below instead
         overlay.selectRowForTesting(2)  // Two.swift (Unstaged=0, One=1, Two=2)
         XCTAssertEqual(overlay.selectedFilePathForTesting, "Two.swift")
 

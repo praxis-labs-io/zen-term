@@ -91,6 +91,73 @@ final class DiffVimKeyTests: XCTestCase {
         XCTAssertEqual(DiffPaneTable.vimKey(for: try keyDown("}", unshifted: "]", flags: .shift)), .nextChange)
     }
 
+    // MARK: viewerCommand
+
+    func test_viewerCommand_decodesTheBareViewerKeys() throws {
+        XCTAssertEqual(DiffPaneTable.viewerCommand(for: try keyDown("\\")), .toggleLayout)
+        XCTAssertEqual(DiffPaneTable.viewerCommand(for: try keyDown("b")), .focusBase)
+        XCTAssertEqual(DiffPaneTable.viewerCommand(for: try keyDown("q")), .close)
+    }
+
+    func test_viewerCommand_modifiedFormsFallThrough_soGlobalChordsStillWork() throws {
+        // ⌘\ is the right drawer, ⌘b the bottom drawer — reserved globally and consumed before the
+        // responder chain, so the viewer must not also claim the modified forms.
+        XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("\\", flags: .command)))
+        XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("b", flags: .command)))
+        XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("q", flags: .control)))
+    }
+
+    func test_viewerCommand_shiftFormsFallThrough_theKeysAreTrulyBare() throws {
+        // Shift-\ types `|`, Shift-b is `B`, Shift-q is `Q` — none should trigger layout/base/close.
+        XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("|", unshifted: "\\", flags: .shift)))
+        XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("B", unshifted: "b", flags: .shift)))
+        XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("Q", unshifted: "q", flags: .shift)))
+    }
+
+    func test_viewerCommand_bareQuestionShowsKeys_butCmdQuestionFallsThrough() throws {
+        // `?` is Shift-/ — the one shifted member, matched on the typed character. ⌘? is the menu's help
+        // shortcut and must fall through to it, not the viewer.
+        XCTAssertEqual(DiffPaneTable.viewerCommand(for: try keyDown("?", unshifted: "/", flags: .shift)), .showKeys)
+        XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("?", unshifted: "/", flags: [.command, .shift])))
+    }
+
+    func test_viewerCommand_toleratesTheBitsAppKitStamps() throws {
+        XCTAssertEqual(DiffPaneTable.viewerCommand(for: try keyDown("\\", flags: .function)), .toggleLayout)
+    }
+
+    func test_decodesLineStartAndEnd() throws {
+        XCTAssertEqual(DiffPaneTable.vimKey(for: try keyDown("0")), .lineStart)
+        // `$` is matched on the typed character first (so a non-US layout works), and on shift-4 whose
+        // `charactersIgnoringModifiers` is "4" on a US layout.
+        XCTAssertEqual(DiffPaneTable.vimKey(for: try keyDown("$", unshifted: "$")), .lineEnd)
+        XCTAssertEqual(DiffPaneTable.vimKey(for: try keyDown("$", unshifted: "4", flags: .shift)), .lineEnd)
+    }
+
+    // MARK: pageDirection
+
+    private func ctrlCode(_ keyCode: UInt16, flags: NSEvent.ModifierFlags = .control) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0,
+                context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: keyCode))
+    }
+
+    func test_pageDirection_decodesCtrlJKAndCtrlArrows() throws {
+        XCTAssertEqual(DiffPaneTable.pageDirection(for: try ctrlCode(38)), 1)  // Ctrl-j
+        XCTAssertEqual(DiffPaneTable.pageDirection(for: try ctrlCode(40)), -1)  // Ctrl-k
+        // Ctrl-↓ / Ctrl-↑ carry .function/.numericPad on top of .control; the exact-.control match ignores them.
+        XCTAssertEqual(
+            DiffPaneTable.pageDirection(for: try ctrlCode(125, flags: [.control, .function, .numericPad])), 1)
+        XCTAssertEqual(
+            DiffPaneTable.pageDirection(for: try ctrlCode(126, flags: [.control, .function, .numericPad])), -1)
+    }
+
+    func test_pageDirection_ignoresPlainAndOtherModifiers() throws {
+        XCTAssertNil(DiffPaneTable.pageDirection(for: try ctrlCode(38, flags: [])), "a plain j is a motion, not a page")
+        XCTAssertNil(
+            DiffPaneTable.pageDirection(for: try ctrlCode(38, flags: [.command, .control])), "⌘⌃j isn't a page")
+    }
+
     // MARK: yankShortcut
 
     func test_yankShortcut_separatesCodeFromReference() throws {

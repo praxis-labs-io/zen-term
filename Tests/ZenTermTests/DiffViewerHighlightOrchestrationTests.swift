@@ -10,8 +10,19 @@ import XCTest
 /// Colors on screen remain the runbook's; this asserts only presence/staleness of spans.
 final class DiffViewerHighlightOrchestrationTests: XCTestCase {
     private var window: NSWindow?
+    private var originalConfig: GeneralConfig!
+
+    override func setUp() {
+        super.setUp()
+        // Pin the diff-layout default so the tester's own config (or a prior test's leftover) can't decide
+        // the layout: a span lands in different rows in side-by-side vs inline, and `spans(of:)` reads them
+        // differently, so an ambient layout made this pass or fail by test order (ZEN-239 isolation).
+        originalConfig = GeneralConfig.current
+        GeneralConfig.setCurrentForTesting(.builtIn)
+    }
 
     override func tearDown() {
+        GeneralConfig.setCurrentForTesting(originalConfig)
         window = nil
         super.tearDown()
     }
