@@ -166,9 +166,10 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // Decided a turn later, not here, because at this point NOTHING is focused yet — the view
         // becomes first responder after `start` returns, so a pane that is about to be focused is
         // indistinguishable from a drawer that never will be. Standing down immediately meant every
-        // surface stood down and then restored, and each of those is a synchronous config file
-        // write plus a read and parse on the main thread (`GhosttyApp.updateSurfaceConfig`) — two
-        // per pane, so a workspace open paid them by the dozen. One turn is far inside the window
+        // surface stood down and then restored, a pair of `GhosttyApp.updateSurfaceConfig` calls
+        // per pane that bought nothing. Those are cheap now that configs are cached; before that
+        // they were a synchronous file write, read and parse each, on the main thread, which a
+        // workspace open paid by the dozen. One turn is far inside the window
         // that matters: what this guards against is a shell reaching its first prompt, which is
         // orders of magnitude slower.
         if !bornFocused {
@@ -261,6 +262,24 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         lastTheme = theme
         lastBehavior = behavior
         GhosttyApp.shared.updateConfig(theme: theme, behavior: behavior)
+        // A stood-down surface runs its own config, which the app-global swap above does not
+        // reach, so without this it keeps the old theme until something happens to refocus it.
+        // Re-apply whichever shape it is currently in, rebuilt from the theme and behavior that
+        // just landed. Raised by review on the ZEN-237 PR and left open there; ZEN-271 widened it
+        // by standing a pane down when the app deactivates, not only when the pane blurs.
+        if hasPerSurfaceShaderConfig {
+            if behavior.cursorShader == nil {
+                // The shader was turned off outright. The app-global config it just picked up has
+                // none either, so drop the override rather than pinning a passthrough onto a
+                // surface that is meant to have no shader at all.
+                cancelShaderSettle()
+                hasPerSurfaceShaderConfig = false
+            } else if shaderSettleWorkItem != nil {
+                applyShaderConfig(behavior, animation: .always)  // mid-burst, still decaying
+            } else {
+                applyShaderConfig(stoodDownBehavior, animation: .whileFocused)  // already stood down
+            }
+        }
         if let layer = hostView.layer {
             // Reset the opaque-layer background (the same trick start(_:) uses) so redraw gaps
             // show the new terminal bg, not the old one. Opacity doesn't move with the cursor
@@ -351,9 +370,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
         let settle = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            var stoodDown = self.lastBehavior
-            stoodDown.cursorShader = TerminalKitResources.passthroughShaderPath
-            self.applyShaderConfig(stoodDown, animation: .whileFocused)
+            self.applyShaderConfig(self.stoodDownBehavior, animation: .whileFocused)
             self.shaderSettleWorkItem = nil
         }
         shaderSettleWorkItem = settle
@@ -367,6 +384,15 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         guard hasPerSurfaceShaderConfig else { return }
         applyShaderConfig(lastBehavior, animation: .whileFocused)
         hasPerSurfaceShaderConfig = false
+    }
+
+    /// What a stood-down surface runs: the passthrough in place of the real shader, over the
+    /// behavior last applied. Shared by the settle and by `applyAppearance`, which has to rebuild
+    /// the same shape when the theme moves under a surface that is already stood down.
+    private var stoodDownBehavior: TerminalBehavior {
+        var stoodDown = lastBehavior
+        stoodDown.cursorShader = TerminalKitResources.passthroughShaderPath
+        return stoodDown
     }
 
     private func applyShaderConfig(

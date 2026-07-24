@@ -160,9 +160,11 @@ final class GhosttyApp {
     /// Apply a config to ONE surface, leaving the app-global config (and every other surface)
     /// untouched. `GhosttySurface` uses this for the shader settle-burst (ZEN-237).
     ///
-    /// The config is freed on the way out, unlike the app-global one: `ghostty_app_update_config`
-    /// keeps the pointer it's handed, while the surface path derives its own copy
-    /// (`Surface.updateConfig` → `DerivedConfig.init`) and never retains ours.
+    /// The config is cached and reused rather than freed on the way out, unlike the app-global
+    /// one: `ghostty_app_update_config` keeps the pointer it is handed, while the surface path
+    /// derives its own copy (`Surface.updateConfig` → `DerivedConfig.init`) and never retains
+    /// ours. That is what makes a single cached config safe to hand to every surface and every
+    /// later call. See `surfaceConfigCache`.
     func updateSurfaceConfig(
         _ surfacePtr: ghostty_surface_t, theme: TerminalTheme?, behavior: TerminalBehavior,
         shaderAnimation: GhosttyConfigWriter.ShaderAnimation
