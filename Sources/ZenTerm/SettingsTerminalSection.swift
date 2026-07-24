@@ -83,7 +83,7 @@ final class SettingsTerminalSection: SettingsFormSection {
         shaderDropdown = dropdown
 
         addCustomRow(
-            key: "cursor-shader", caption: "Cursor shader", description: "Applies instantly",
+            key: "cursor-shader", caption: "Cursor shader", description: "Cursor animations. GPU intensive.",
             control: dropdown, focusStop: dropdown, controlNote: nil, width: 220,
             refresh: { [weak self] in self?.refreshShaderRow() })
     }
