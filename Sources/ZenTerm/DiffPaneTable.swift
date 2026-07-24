@@ -66,10 +66,10 @@ final class DiffPaneTable: NSView {
         table.allowsEmptySelection = true
         // The vim keys are plain letters, so AppKit's type-select would race them for every keystroke.
         table.allowsTypeSelect = false
-        // Height comes from the delegate's `heightOfRow`, not this fixed value: an explicitly set
-        // `rowHeight` puts the table in uniform-height mode and the delegate is never consulted, so the
-        // comment box couldn't grow its anchor row (ZEN-257). `rowHeight` stays set as the fallback the
-        // scroller and first-render use before the delegate runs.
+        // The delegate's `heightOfRow` grows the comment box's anchor row (ZEN-257); it's consulted per
+        // row regardless of this base value. `rowHeight` still has to be the real 20, not AppKit's
+        // default — `halfPage()` divides the visible height by it to size a Ctrl-D/U jump.
+        table.rowHeight = DiffCellMetrics.rowHeight
         table.usesAutomaticRowHeights = false
         table.dataSource = source
         table.delegate = source

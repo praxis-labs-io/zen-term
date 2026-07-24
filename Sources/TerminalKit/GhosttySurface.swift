@@ -351,13 +351,16 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public func submitLine() {
         guard let surfacePtr else { return }
         // A press then a release, as a real keystroke delivers — some line editors act on the release.
+        // The field shapes mirror what a real Return keyDown builds in `GhosttyHostView.ghosttyKeyEvent`
+        // (text = "\r", unshifted_codepoint = the CR scalar), so libghostty encodes it to the pty the same
+        // way the live key path does rather than through a shape it's never handed in practice.
         for action in [GHOSTTY_ACTION_PRESS, GHOSTTY_ACTION_RELEASE] {
             var key = ghostty_input_key_s()
             key.action = action
             key.keycode = Self.returnKeyCode
             key.mods = GHOSTTY_MODS_NONE
             key.consumed_mods = GHOSTTY_MODS_NONE
-            key.unshifted_codepoint = 0
+            key.unshifted_codepoint = UInt32(("\r" as Unicode.Scalar).value)
             key.composing = false
             "\r".withCString {
                 key.text = $0; _ = ghostty_surface_key(surfacePtr, key)
