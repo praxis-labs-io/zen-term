@@ -120,13 +120,20 @@ final class UpdateController {
             host = nil
             return
         }
-        guard let controller = keyController() else { return }  // nothing to host it; re-home on close
-
-        if let card, host === controller {
-            card.update(to: state, actions: actions)  // morph in place
+        // A card already showing in a live host morphs in place — and must do so even when
+        // `keyController()` can't resolve a host right now. A foreign key window (an open save/open
+        // panel, or another app frontmost) makes `keyController()` nil; gating this morph on it is
+        // what stranded the card on a stale state whose `fireOnce` reply had already fired, so
+        // Later / Relaunch did nothing and the card couldn't be dismissed (ZEN-248). Re-homing to a
+        // *closed* host is handled by `hostWindowMaybeClosing`, which nils `host` first — so a
+        // non-nil `host` here always means a live window still showing this card. Not gating on the
+        // key window also matches the card's documented intent: it re-homes only when its host
+        // *closes* mid-flow, not as focus wanders between windows.
+        if let card, host != nil {
+            card.update(to: state, actions: actions)
             return
         }
-        if let card, let host { host.dismissUpdateCard(card) }
+        guard let controller = keyController() else { return }  // no host yet to show it; re-render on the next state
         let fresh = UpdateCardView(state: state, actions: actions)
         controller.presentUpdateCard(fresh)
         card = fresh
