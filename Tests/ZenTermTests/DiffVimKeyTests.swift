@@ -107,6 +107,13 @@ final class DiffVimKeyTests: XCTestCase {
         XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("q", flags: .control)))
     }
 
+    func test_viewerCommand_shiftFormsFallThrough_theKeysAreTrulyBare() throws {
+        // Shift-\ types `|`, Shift-b is `B`, Shift-q is `Q` — none should trigger layout/base/close.
+        XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("|", unshifted: "\\", flags: .shift)))
+        XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("B", unshifted: "b", flags: .shift)))
+        XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("Q", unshifted: "q", flags: .shift)))
+    }
+
     func test_viewerCommand_toleratesTheBitsAppKitStamps() throws {
         XCTAssertEqual(DiffPaneTable.viewerCommand(for: try keyDown("\\", flags: .function)), .toggleLayout)
     }

@@ -457,9 +457,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// header or directory) `page` times, then centers the row — a long changed-file list moves without a
     /// key-repeat, staying near the middle of the pane the way the diff cursor does.
     private func pageFileSelection(_ direction: Int) {
-        let clipHeight = outline.enclosingScrollView?.contentView.bounds.height ?? outline.bounds.height
-        let rowHeight = outline.numberOfRows > 0 ? outline.rect(ofRow: 0).height : 0
-        let page = rowHeight > 0 ? max(1, Int(clipHeight / rowHeight) / 2) : 5
+        // Count the rows actually on screen rather than dividing the clip height by a row height: the tree
+        // mixes 34pt section headers with 20pt file rows, so any single sampled height mis-sizes the page
+        // (row 0 is always a section header). Half the visible rows is a page; step that many files.
+        let page = max(1, outline.rows(in: outline.visibleRect).length / 2)
         for _ in 0..<page { moveFileSelection(direction) }
         centerSelectedTreeRow()
     }
@@ -1310,15 +1311,17 @@ private final class NavOutlineView: NSOutlineView {
 
     private enum FoldDirection { case left, right }
 
-    /// Decode a fold keystroke: bare `h` / ← collapse-ward, bare `l` / → expand-ward. Bare letters
-    /// only — a ⌘ chord is global pane nav, not a fold.
+    /// Decode a fold keystroke: bare `h` / ← collapse-ward, bare `l` / → expand-ward. The letters are
+    /// truly bare (any reservable modifier falls through, so Shift-h / ⌘h aren't folds); the arrows go
+    /// through `KeyboardFocus.key`, which ignores modifiers the same way the rest of the tree's arrow
+    /// handling does.
     private func foldDirection(for event: NSEvent) -> FoldDirection? {
         switch KeyboardFocus.key(for: event) {
         case .left: return .left
         case .right: return .right
         default: break
         }
-        guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return nil }
+        guard event.modifierFlags.intersection(DiffPaneTable.reservableModifiers).isEmpty else { return nil }
         switch event.charactersIgnoringModifiers?.lowercased() {
         case "h": return .left
         case "l": return .right

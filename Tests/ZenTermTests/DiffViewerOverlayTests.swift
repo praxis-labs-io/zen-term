@@ -402,6 +402,19 @@ final class DiffViewerOverlayTests: XCTestCase {
         XCTAssertEqual(overlay.treeRowCountForTesting, 4, "l expands it again")
     }
 
+    func test_shiftHInTree_doesNotFold_theFoldKeysAreBare() {
+        let (overlay, _) = mount(unstaged: [file("a/One.swift"), file("a/Two.swift")])
+        XCTAssertEqual(overlay.treeRowCountForTesting, 4)
+        overlay.selectRowForTesting(1)  // the "a" directory, expanded
+
+        overlay.treeOutlineForTesting.keyDown(
+            with: NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: .shift, timestamp: 0, windowNumber: 0,
+                context: nil, characters: "H", charactersIgnoringModifiers: "H", isARepeat: false, keyCode: 4)!)
+
+        XCTAssertEqual(overlay.treeRowCountForTesting, 4, "Shift-h must not collapse — fold is a bare key")
+    }
+
     func test_lOnAFileInTree_focusesTheDiff() {
         let (overlay, _) = mount(unstaged: [file("One.swift"), file("Two.swift")])
         XCTAssertTrue(overlay.handleNavChord(.navLeft))  // start in the tree

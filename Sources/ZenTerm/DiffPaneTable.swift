@@ -517,12 +517,12 @@ final class DiffPaneTable: NSView {
 
     /// The viewer-wide bare keys both panes honor (ZEN-262): they act on the whole viewer, not a
     /// pane's selection, so the tree and the diff decode them identically. Context-specific keys
-    /// (h/l fold, focus moves) stay in each pane's own `keyDown`. ⌘/⌥/⌃ fall through — a modified
-    /// chord belongs to the global keymap or another handler.
+    /// (h/l fold, focus moves) stay in each pane's own `keyDown`. Any reservable modifier falls
+    /// through — these are truly bare, so Shift-\ (`|`), ⌘\, etc. belong to another handler.
     enum ViewerCommand: Equatable { case toggleLayout, focusBase, close }
 
     static func viewerCommand(for event: NSEvent) -> ViewerCommand? {
-        guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return nil }
+        guard event.modifierFlags.intersection(reservableModifiers).isEmpty else { return nil }
         switch event.charactersIgnoringModifiers?.lowercased() {
         case "\\": return .toggleLayout
         case "b": return .focusBase
@@ -884,7 +884,7 @@ private final class DiffTableView: NSTableView {
             return
         }
         // Bare `h` hands focus to the tree (nvim "go left"); ←/→ keep panning long lines here.
-        if event.modifierFlags.intersection([.command, .option, .control]).isEmpty,
+        if event.modifierFlags.intersection(DiffPaneTable.reservableModifiers).isEmpty,
             event.charactersIgnoringModifiers?.lowercased() == "h"
         {
             sawG = false
