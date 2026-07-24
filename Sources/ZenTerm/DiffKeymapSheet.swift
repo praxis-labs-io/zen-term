@@ -10,7 +10,7 @@ enum DiffKeymapSheet {
             "Tree",
             [
                 (["j", "k"], "Prev / next file"),
-                (["h", "l"], "Fold · open file"),
+                (["h", "l"], "Fold / open file"),
                 (["⌃j", "⌃k"], "Page files"),
                 (["⌃d", "⌃u"], "Scroll diff"),
                 (["b"], "Base branch"),
