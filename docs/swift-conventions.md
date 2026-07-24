@@ -117,6 +117,20 @@ through the card's proportional width constraint and *stopped the window from re
 (`setContentCompressionResistancePriority(.defaultLow, for: .horizontal)`) — setting it on the
 enclosing `NSStackView` is not enough; the child label resists on its own (ZEN-243).
 
+**A custom `NSView` with no `intrinsicContentSize` cannot resist stretching in a stack, at any
+priority.** Content-hugging and compression-resistance only install their constraints on an axis where
+`intrinsicContentSize` returns a real value. A view sized purely by its own internal constraints (a
+`KeycapView`: an inner token stack pinned leading/trailing + a height constant) returns
+`noIntrinsicMetric`, so `setContentHuggingPriority(.required, …)` **on that view** is a silent no-op —
+there is nothing for the priority to attach to. Inside an `NSStackView` (default `.fill` distribution)
+it is then the only elastic member and absorbs every point of slack: a one-glyph keycap stretched into
+a wide pill, because the neighboring `NSTextField` ships with horizontal hugging 251 — one above the
+keycap's transitively-inherited 250 — and wins the tie for who does *not* stretch. Override
+`intrinsicContentSize` to report the width the view's own constraints already produce
+(`tokenStack.fittingSize.width + insets`), and `invalidateIntrinsicContentSize()` when its content
+changes; only then do hugging/compression priorities engage. Setting those priorities at the call site
+is correct code aimed at nothing until the view itself reports an intrinsic size (ZEN-262).
+
 **A label's `lineBreakMode` governs `stringValue` only; an attributed string carries its own.** Set
 `attributedStringValue` and the label's `lineBreakMode`, `alignment` and `font` stop applying: the
 string's attributes win, and any attribute you leave out falls back to the system default rather than
