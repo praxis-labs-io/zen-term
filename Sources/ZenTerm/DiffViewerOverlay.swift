@@ -553,6 +553,17 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         onCancel()
     }
 
+    /// Esc from a focused pane: close the key sheet first if it's up, else close the viewer. A bare Esc
+    /// reaches the pane's `keyDown` before `performKeyEquivalent` (that's what makes the diff's two-stage
+    /// Esc work), so the sheet check has to live on this path too, not only in `performKeyEquivalent`.
+    private func handleViewerEscape() {
+        if keySheet?.isShown == true {
+            keySheet?.hide()
+            return
+        }
+        onCancel()
+    }
+
     // MARK: layout
 
     private func buildLayout() {
@@ -584,7 +595,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         outline.intercellSpacing = NSSize(width: 0, height: outline.intercellSpacing.height)
         // The vim keys are plain letters, so AppKit's type-select would race j/k for every keystroke.
         outline.allowsTypeSelect = false
-        outline.onEscape = { [weak self] in self?.onCancel() }
+        outline.onEscape = { [weak self] in self?.handleViewerEscape() }
         outline.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
         outline.onHalfPageDiff = { [weak self] direction in self?.diffTable.halfPage(direction) }
         outline.onMoveFile = { [weak self] delta in self?.moveFileSelection(delta) }
@@ -594,7 +605,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         outline.onClose = { [weak self] in self?.requestClose() }
         outline.onShowKeys = { [weak self] in self?.toggleKeySheet() }
         outline.onBecameFirstResponder = { [weak self] in self?.refreshFocusStyling() }
-        diffTable.onEscape = { [weak self] in self?.onCancel() }
+        diffTable.onEscape = { [weak self] in self?.handleViewerEscape() }
         diffTable.onYank = { [weak self] wantsReference in self?.yank(reference: wantsReference) }
         diffTable.onCompose = { [weak self] in self?.openComposer() }
         diffTable.onToggleLayout = { [weak self] in self?.toggleLayout() }

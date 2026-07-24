@@ -472,6 +472,19 @@ final class DiffViewerOverlayTests: XCTestCase {
         XCTAssertFalse(overlay.isKeySheetShownForTesting, "? again closes it")
     }
 
+    func test_escWhileKeySheetOpen_closesTheSheetNotTheViewer() {
+        var cancelled = false
+        let (overlay, _) = mount(unstaged: [file("One.swift")], onCancel: { cancelled = true })
+        let diff = overlay.diffPaneForTesting.scrollFocusTarget
+        diff.keyDown(with: bareKey("?", keyCode: 44))
+        XCTAssertTrue(overlay.isKeySheetShownForTesting, "precondition: the sheet is open")
+
+        diff.keyDown(with: keyDown(53))  // Esc into the focused pane
+
+        XCTAssertFalse(overlay.isKeySheetShownForTesting, "Esc closes the sheet")
+        XCTAssertFalse(cancelled, "Esc must not close the viewer while the sheet is open")
+    }
+
     func test_keySheetHint_showsInBothFocusLegends() {
         let (overlay, _) = mount(unstaged: [file("One.swift")])
         XCTAssertTrue(overlay.handleNavChord(.navLeft))  // tree
