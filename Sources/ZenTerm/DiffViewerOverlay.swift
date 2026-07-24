@@ -170,12 +170,22 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         refreshBranches()
     }
 
-    /// The card is torn out of the window when the viewer closes (`WindowController.closeModal`), and
-    /// that is the last moment the tree and the diff still hold where the reader was — snapshot it into
-    /// the session so the next ⌘D on this repo opens on the same file, line, and folds (ZEN-233).
+    /// A fallback snapshot for a teardown that skips `animateOut` — the whole window closing (⌘W) pulls
+    /// the card without a close spring. The normal close goes through `animateOut`, which snapshots
+    /// earlier; `snapshotPlace` runs once, so whichever fires first wins (ZEN-233).
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         guard window == nil else { return }
+        snapshotPlace()
+    }
+
+    /// Write where the reader was (folds, open file, cursor line) and the picked base back into the
+    /// session, so the next ⌘D on this repo opens where they left off. Once only: the earliest teardown
+    /// signal takes it, and a later one must not clobber the session a fast-reopened overlay now shares.
+    private var didSnapshotPlace = false
+    private func snapshotPlace() {
+        guard !didSnapshotPlace else { return }
+        didSnapshotPlace = true
         session.place = currentPlace()
         session.baseOverride = baseOverride
     }
@@ -220,6 +230,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     func animateOut(completion: @escaping () -> Void) {
         guard dismiss.begin() else { return }
+        // Snapshot the place here, at close-start: `closeModal` defers `removeFromSuperview` into the
+        // spring's completion, so `viewDidMoveToWindow` alone would snapshot only at the animation's
+        // end — after a fast reopen (⌘D toggles closed, ⌘D again) has already built the next overlay
+        // and read the stale session. `animateOut` runs synchronously when the close begins.
+        snapshotPlace()
         Motion.springScaleFade(card, appearing: false, completion: completion)
     }
 

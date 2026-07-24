@@ -498,6 +498,27 @@ final class DiffViewerOverlayTests: XCTestCase {
         XCTAssertEqual(overlayB.treeRowCountForTesting, 3, "the fold comes back")
     }
 
+    func test_reopen_snapshotsAtCloseStart_notAtAnimationEnd() {
+        // `closeModal` defers `removeFromSuperview` into the close spring's completion, so a snapshot
+        // taken only on `viewDidMoveToWindow` lands after a fast reopen has already read the session. The
+        // place must be captured when the close begins (`animateOut`). Here overlay A is closed via
+        // `animateOut` but NOT removed, and overlay B — built while A's card is still animating out —
+        // must still see A's place.
+        let session = DiffViewerSession(repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo/repo"))
+        let files = [file("a/One.swift"), file("a/Two.swift"), file("Top.swift")]
+
+        let (overlayA, _) = mount(unstaged: files, session: session)
+        overlayA.selectRowForTesting(1)  // the "a" directory
+        overlayA.treeOutlineForTesting.keyDown(with: keyDown(36))  // fold it
+        overlayA.selectRowForTesting(2)  // Top.swift
+        XCTAssertEqual(overlayA.selectedFilePathForTesting, "Top.swift")
+        overlayA.animateOut {}  // close begins — the snapshot must happen now, not on removal
+
+        let (overlayB, _) = mount(unstaged: files, session: session)
+        XCTAssertEqual(overlayB.selectedFilePathForTesting, "Top.swift", "reopen sees A's file mid-close")
+        XCTAssertEqual(overlayB.treeRowCountForTesting, 3, "reopen sees A's fold mid-close")
+    }
+
     func test_freshRepo_doesNotInheritAnotherReposPlace() {
         // A different repo gets its own session in the app; assert the overlay doesn't restore a place
         // it was never given — a fresh session opens fully expanded on the first file.

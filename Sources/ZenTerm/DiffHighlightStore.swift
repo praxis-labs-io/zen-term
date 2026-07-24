@@ -12,9 +12,10 @@ extension FileDiff {
     }
 }
 
-/// Per-repo syntax-highlight cache that outlives a single diff-viewer open (ZEN-239). Held by the
-/// `WindowController` and handed to each `DiffViewerOverlay`, so reopening the same repo paints its
-/// files highlighted immediately instead of re-parsing from scratch. Keyed by file path; the overlay
+/// Per-repo syntax-highlight cache that outlives a single diff-viewer open (ZEN-239). Owned by the
+/// repo's `DiffViewerSession` (which the `WindowController` holds) and handed to each
+/// `DiffViewerOverlay` as `session.highlights`, so reopening the same repo paints its files
+/// highlighted immediately instead of re-parsing from scratch. Keyed by file path; the overlay
 /// clears it when a reload brings changed content, so a cached span set can never go stale. A reference
 /// type on purpose — the store is shared, not copied.
 final class DiffHighlightStore {
