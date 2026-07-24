@@ -6,10 +6,30 @@ import AppKit
 /// is just a re-`show`. Switching files is a whole-table `reloadData`, so arrowing quickly through the
 /// tree stays cheap no matter the file's size. A current-line highlight moves with the arrow keys;
 /// ⌘j/⌘k jump between changes (driven from the overlay).
+///
+/// Selection is **linewise** (ZEN-227): `V` starts a visual selection anchored on the cursor, movement
+/// extends it, and `y`/`Y` yank the selected code or a `path:line` reference. The cursor is tracked
+/// explicitly rather than read back from `NSTableView.selectedRow`, which reports the *last* index in
+/// the set — that's the anchor, not the cursor, whenever a selection was extended upward.
 final class DiffPaneTable: NSView {
     private let table = DiffTableView()
     private let scroll = NSScrollView()
     private let source = Source()
+
+    /// The row the cursor sits on. In a visual selection it's the moving end; otherwise it is the
+    /// whole selection. -1 when there are no rows.
+    private var cursorRow = -1
+    /// The fixed end of a linewise visual selection, or nil when no selection is being extended.
+    private var anchorRow: Int?
+    /// Set while `applySelection` drives the table, so the selection-changed hook can tell our own
+    /// writes from a mouse drag or shift-click and only resync the cursor for the latter.
+    private var isApplyingSelection = false
+
+    /// Yank the current selection: `true` copies a `path:line` reference, `false` the code text.
+    /// The pane holds the rows but not the file's path, so the overlay composes the string.
+    var onYank: ((Bool) -> Void)?
+    /// Esc with nothing to clear — wired to close the viewer. A visual selection is collapsed first.
+    var onEscape: (() -> Void)?
 
     /// The shared horizontal pan applied to every visible row's text column(s) (0 = left-aligned).
     private var horizontalOffset: CGFloat = 0
@@ -34,8 +54,10 @@ final class DiffPaneTable: NSView {
         table.gridStyleMask = []
         table.intercellSpacing = NSSize(width: 0, height: 0)
         table.focusRingType = .none  // no system-blue ring on focus-in (ZEN-27: chrome is theme-only)
-        table.allowsMultipleSelection = false
+        table.allowsMultipleSelection = true  // linewise selection: drag, shift-click, V (ZEN-227)
         table.allowsEmptySelection = true
+        // The vim keys are plain letters, so AppKit's type-select would race them for every keystroke.
+        table.allowsTypeSelect = false
         table.rowHeight = DiffCellMetrics.rowHeight
         table.usesAutomaticRowHeights = false
         table.dataSource = source
@@ -43,7 +65,11 @@ final class DiffPaneTable: NSView {
         table.onHorizontalScroll = { [weak self] deltaX in self?.panHorizontally(by: deltaX) }
         table.onHorizontalStep = { [weak self] direction in self?.panByKey(direction) }
         table.onHalfPage = { [weak self] direction in self?.halfPage(direction) }
-        table.onSelectionMoved = { [weak self] in self?.centerSelectedRow() }
+        table.onMoveCursor = { [weak self] delta, extend in self?.moveCursor(by: delta, extending: extend) }
+        table.onVimKey = { [weak self] key in self?.handleVimKey(key) }
+        table.onEscape = { [weak self] in self?.handleEscape() }
+        table.onMouseSelectionChanged = { [weak self] in self?.syncCursorAfterMouseSelection() }
+        source.decorate = { [weak self] rowView, row in self?.decorate(rowView, row: row) }
 
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
@@ -67,9 +93,17 @@ final class DiffPaneTable: NSView {
     /// The view to make first responder so arrows move the current line and scroll the pane.
     var scrollFocusTarget: NSView { table }
     var rowCountForTesting: Int { source.rows.count }
-    var rowsForTesting: [DiffRow] { source.rows }
+    /// The rows currently rendered — the other half of resolving a selection (with `selectedRows`).
+    var rows: [DiffRow] { source.rows }
     /// The live content width the fold policy keys off — for a resize-driven interaction test.
     var contentWidthForTesting: CGFloat { table.bounds.width }
+
+    /// The rows the selection covers — what a yank or a comment acts on.
+    var selectedRows: IndexSet { table.selectedRowIndexes }
+    /// Whether a visual selection is being extended (so Esc has something to collapse).
+    var hasVisualSelection: Bool { anchorRow != nil }
+    /// The cursor's row, for asserting a motion actually moved it.
+    var cursorRowForTesting: Int { cursorRow }
 
     func show(_ rows: [DiffRow]) {
         source.rows = rows
@@ -78,14 +112,110 @@ final class DiffPaneTable: NSView {
         maxContentWidth = Self.widestLine(in: rows)
         horizontalOffset = 0
         source.offset = 0
+        anchorRow = nil  // a new file starts with no selection to extend
+        cursorRow = -1
         table.reloadData()
         // Always start with a current line so its highlight (a quiet outline while the tree holds focus)
         // is there to see immediately — the diff can be paged from the tree before it's ever focused.
         // Land it on the first real line, not the leading hunk header, so the pill reads as a line.
         if let firstLine = rows.firstIndex(where: { if case .hunkHeader = $0 { return false } else { return true } }) {
-            table.selectRowIndexes([firstLine], byExtendingSelection: false)
+            setCursor(firstLine, center: false)
         }
         table.scrollRowToVisible(0)
+    }
+
+    // MARK: linewise selection (ZEN-227)
+
+    /// Move the cursor to `row`, extending the visual selection when one is active. The single funnel
+    /// for every cursor move — arrows, vim keys, change jumps, half-pages — so the selection, the
+    /// centering, and the row decoration can never drift apart.
+    private func setCursor(_ row: Int, center: Bool = true) {
+        let count = source.rows.count
+        guard count > 0 else { return }
+        cursorRow = min(max(0, row), count - 1)
+        applySelection()
+        if center { centerRow(cursorRow) }
+    }
+
+    /// Push the cursor (and the anchor, when extending) onto the table's own selection.
+    private func applySelection() {
+        guard cursorRow >= 0 else { return }
+        let rows: IndexSet
+        if let anchor = anchorRow, source.rows.indices.contains(anchor) {
+            rows = IndexSet(min(anchor, cursorRow)...max(anchor, cursorRow))
+        } else {
+            rows = IndexSet(integer: cursorRow)
+        }
+        isApplyingSelection = true
+        table.selectRowIndexes(rows, byExtendingSelection: false)
+        isApplyingSelection = false
+        refreshDecoration()
+    }
+
+    /// Move the cursor by `delta` rows. `extending` starts a visual selection first (shift-arrow), so
+    /// the mouse-free path to a multi-line selection doesn't require `V`.
+    func moveCursor(by delta: Int, extending: Bool = false) {
+        guard !source.rows.isEmpty else { return }
+        if extending, anchorRow == nil { anchorRow = max(0, cursorRow) }
+        setCursor((cursorRow < 0 ? 0 : cursorRow) + delta)
+    }
+
+    /// `V` — start a linewise visual selection anchored on the cursor, or collapse the one already
+    /// running (pressing V twice leaves you where you started, as in vim).
+    func toggleVisual() {
+        guard !source.rows.isEmpty else { return }
+        if anchorRow != nil {
+            clearVisual()
+        } else {
+            anchorRow = max(0, cursorRow)
+            applySelection()
+        }
+    }
+
+    /// Collapse the selection back to the cursor line, leaving the cursor where it is.
+    func clearVisual() {
+        anchorRow = nil
+        applySelection()
+    }
+
+    /// Esc: collapse a running selection first, and only close the viewer once there's nothing left
+    /// to clear — the same two-stage Esc vim has.
+    private func handleEscape() {
+        if hasVisualSelection {
+            clearVisual()
+        } else {
+            onEscape?()
+        }
+    }
+
+    private func handleVimKey(_ key: VimKey) {
+        switch key {
+        case .down: moveCursor(by: 1)
+        case .up: moveCursor(by: -1)
+        case .visual: toggleVisual()
+        case .pendingTop: break  // the table resolves `gg` before it ever forwards one
+        case .top: setCursor(0)
+        case .bottom: setCursor(source.rows.count - 1)
+        case .prevChange: jumpToPrevChange()
+        case .nextChange: jumpToNextChange()
+        case .yankCode: onYank?(false)
+        case .yankReference: onYank?(true)
+        }
+    }
+
+    /// A drag or a shift-click moved the selection behind our back: adopt it, so the next keystroke
+    /// extends from where the mouse left off instead of snapping back to the old cursor.
+    private func syncCursorAfterMouseSelection() {
+        guard !isApplyingSelection else { return }
+        let selected = table.selectedRowIndexes
+        guard let last = selected.last else {
+            anchorRow = nil
+            refreshDecoration()
+            return
+        }
+        cursorRow = last
+        anchorRow = selected.count > 1 ? selected.first : nil
+        refreshDecoration()
     }
 
     /// The horizontal scroll range: how far the widest line overhangs its content column. 0 = nothing
@@ -109,11 +239,49 @@ final class DiffPaneTable: NSView {
         setHorizontalOffset(horizontalOffset + CGFloat(direction) * Self.keyStep)
     }
 
+    /// The modifiers a chord may claim. Everything else AppKit stamps on an event (`.function`,
+    /// `.numericPad`) is noise that must be masked off before comparing (ZEN-145).
+    static let reservableModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
+
+    /// The vim keys the diff pane claims while it holds first responder (ZEN-227). Nothing reaches a
+    /// terminal from here, so plain letters are free — but ⌘/⌃/⌥ must fall through, or ⌘C and ⌃D
+    /// would land here instead of their own handlers.
+    enum VimKey: Equatable {
+        case down, up  // j / k
+        case visual  // V
+        /// A bare `g`, which only means something paired: the table arms on the first and resolves the
+        /// second to `.top`. `.top` is never decoded directly.
+        case pendingTop
+        case top, bottom  // gg / G
+        case prevChange, nextChange  // { / }
+        case yankCode, yankReference  // y / Y
+    }
+
+    /// Decode a `keyDown` into the vim key it types, or nil for anything the pane doesn't claim.
+    /// Reads `characters` rather than a keyCode so it follows the user's keyboard layout, and so the
+    /// shifted forms (`V`, `G`, `Y`, `{`, `}`) identify themselves without a separate flag check.
+    static func vimKey(for event: NSEvent) -> VimKey? {
+        // Shift is carried by the character itself; the other three mean this is somebody else's chord.
+        guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return nil }
+        switch event.characters {
+        case "j": return .down
+        case "k": return .up
+        case "V": return .visual
+        case "g": return .pendingTop
+        case "G": return .bottom
+        case "{": return .prevChange
+        case "}": return .nextChange
+        case "y": return .yankCode
+        case "Y": return .yankReference
+        default: return nil
+        }
+    }
+
     /// Ctrl-D / Ctrl-U (vim half-page): +1 down, -1 up, nil otherwise. Left un-reserved on purpose —
     /// Ctrl-D is terminal EOF, so it only means half-page while the viewer holds first responder, never
     /// leaking to the shell behind it. Match the reservable modifier set exactly so ⌘⌃D etc. don't hit.
     static func halfPageDirection(for event: NSEvent) -> Int? {
-        guard event.modifierFlags.intersection([.command, .shift, .option, .control]) == .control else {
+        guard event.modifierFlags.intersection(reservableModifiers) == .control else {
             return nil
         }
         switch event.keyCode {
@@ -131,10 +299,8 @@ final class DiffPaneTable: NSView {
         guard !source.rows.isEmpty else { return }
         let visibleRows = max(1, Int(scroll.contentView.bounds.height / table.rowHeight))
         let page = max(1, visibleRows / 2)
-        let current = table.selectedRow >= 0 ? table.selectedRow : table.rows(in: table.visibleRect).location
-        let target = min(max(0, current + direction * page), source.rows.count - 1)
-        table.selectRowIndexes([target], byExtendingSelection: false)
-        centerRow(target)
+        let current = cursorRow >= 0 ? cursorRow : table.rows(in: table.visibleRect).location
+        setCursor(current + direction * page)
     }
 
     private func setHorizontalOffset(_ value: CGFloat) {
@@ -190,13 +356,39 @@ final class DiffPaneTable: NSView {
     /// Redraw the current-line highlight — called when focus enters or leaves the pane, since the
     /// cursor line is only drawn while the pane is focused.
     func redrawSelection() {
-        table.enumerateAvailableRowViews { rowView, _ in rowView.needsDisplay = true }
+        refreshDecoration()
     }
 
-    /// Esc out of the pane — wired to close the viewer.
-    var onEscape: (() -> Void)? {
-        get { table.onEscape }
-        set { table.onEscape = newValue }
+    /// Re-stamp every instantiated row with where it sits in the selected block and whether it holds
+    /// the cursor, then redraw. Row views aren't rebuilt when the selection changes, so this can't
+    /// ride on `rowViewForRow` alone — that path covers only rows scrolled into view afterwards.
+    private func refreshDecoration() {
+        table.enumerateAvailableRowViews { [weak self] rowView, row in
+            guard let self, let view = rowView as? DiffLineRowView else {
+                rowView.needsDisplay = true
+                return
+            }
+            self.decorate(view, row: row)
+        }
+    }
+
+    /// Tell one row view how to draw itself: its position in the contiguous selected block (so the
+    /// block reads as one shape rather than a stack of pills) and whether it carries the cursor.
+    private func decorate(_ rowView: DiffLineRowView, row: Int) {
+        let selected = table.selectedRowIndexes
+        rowView.blockPosition = Self.blockPosition(of: row, in: selected)
+        rowView.isCursorRow = row == cursorRow && selected.count > 1
+        rowView.needsDisplay = true
+    }
+
+    /// Where `row` sits in the run of selected rows around it — the two neighbours are all it takes.
+    static func blockPosition(of row: Int, in selected: IndexSet) -> DiffLineRowView.BlockPosition {
+        switch (selected.contains(row - 1), selected.contains(row + 1)) {
+        case (true, true): return .middle
+        case (true, false): return .last
+        case (false, true): return .first
+        case (false, false): return .only
+        }
     }
 
     /// Jump to the start of the next / previous change cluster — a contiguous run of +/− lines,
@@ -214,13 +406,11 @@ final class DiffPaneTable: NSView {
         // the same change); fall back to the viewport-top only after a trackpad scroll moved the
         // selection off screen.
         let visible = table.rows(in: table.visibleRect)
-        let selected = table.selectedRow
-        let anchor = selected >= 0 && NSLocationInRange(selected, visible) ? selected : visible.location
-        var index = anchor + direction
+        let from = cursorRow >= 0 && NSLocationInRange(cursorRow, visible) ? cursorRow : visible.location
+        var index = from + direction
         while index >= 0, index < rows.count {
             if isChangeClusterStart(at: index, in: rows) {
-                table.selectRowIndexes([index], byExtendingSelection: false)
-                centerRow(index)
+                setCursor(index)  // extends the selection when one is running, like `}` in vim's visual mode
                 return
             }
             index += direction
@@ -252,12 +442,6 @@ final class DiffPaneTable: NSView {
         scroll.reflectScrolledClipView(clip)
     }
 
-    /// Re-center after the current line moves by arrow key (fired from the table's Up/Down).
-    func centerSelectedRow() {
-        guard table.selectedRow >= 0 else { return }
-        centerRow(table.selectedRow)
-    }
-
     /// The widest line-number digit count across the file's rows — sizes the gutters so a short file
     /// doesn't reserve room for digits it never shows.
     private static func maxLineNumberDigits(in rows: [DiffRow]) -> Int {
@@ -280,6 +464,9 @@ final class DiffPaneTable: NSView {
         var offset: CGFloat = 0
         /// The gutter width for the current file, sized to its widest line number and applied to each cell.
         var gutterWidth: CGFloat = DiffCellMetrics.nominalGutterWidth
+        /// Stamps a row view with its selection-block position and cursor flag, so a row scrolled into
+        /// view mid-selection draws as part of the block instead of as a lone pill.
+        var decorate: ((DiffLineRowView, Int) -> Void)?
 
         private static let splitID = NSUserInterfaceItemIdentifier("split-cell")
         private static let unifiedID = NSUserInterfaceItemIdentifier("unified-cell")
@@ -310,19 +497,23 @@ final class DiffPaneTable: NSView {
 
         func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
             let id = NSUserInterfaceItemIdentifier("diff-row")
+            let view: DiffLineRowView
             if let reused = tableView.makeView(withIdentifier: id, owner: self) as? DiffLineRowView {
-                return reused
+                view = reused
+            } else {
+                view = DiffLineRowView()
+                view.identifier = id
             }
-            let view = DiffLineRowView()
-            view.identifier = id
+            decorate?(view, row)
             return view
         }
     }
 }
 
 /// The diff table. Accepts first responder even when empty (so keystrokes never leak to the terminal
-/// behind the card), and on focus-in selects the first visible line so there's always a current line
-/// to see and move. Arrows move the line and scroll (default `NSTableView` behavior).
+/// behind the card), and on focus-in puts the cursor on the first visible line so there's always one
+/// to see and move. It routes every key the pane owns outward rather than moving its own selection —
+/// the pane tracks the cursor and the visual anchor, and the two would drift if both wrote.
 private final class DiffTableView: NSTableView {
     var onEscape: (() -> Void)?
     /// A horizontal-dominant scroll pans the diff columns instead of the table (which scrolls only
@@ -333,10 +524,18 @@ private final class DiffTableView: NSTableView {
     var onHorizontalStep: ((Int) -> Void)?
     /// Ctrl-D / Ctrl-U half-page scroll (+1 down / -1 up).
     var onHalfPage: ((Int) -> Void)?
-    /// Fired after Up/Down moved the current line, so the pane can re-center it.
-    var onSelectionMoved: (() -> Void)?
+    /// Move the cursor by ±1 row; `extend` (shift held) starts a visual selection first.
+    var onMoveCursor: ((Int, Bool) -> Void)?
+    /// One of the vim keys the pane claims (`DiffPaneTable.vimKey`).
+    var onVimKey: ((DiffPaneTable.VimKey) -> Void)?
+    /// The selection changed from a drag or a shift-click rather than from the pane's own write.
+    var onMouseSelectionChanged: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
+
+    /// A bare `g` is waiting for its partner (`gg` jumps to the top). Any other key clears it — vim
+    /// puts no timeout on this, so neither does the pane.
+    private var sawG = false
 
     /// The axis a trackpad gesture committed to at its start, held for the whole gesture (incl.
     /// momentum) so a diagonal or jittery scroll can't flip mid-stream and drift the columns sideways.
@@ -367,16 +566,37 @@ private final class DiffTableView: NSTableView {
             let visible = rows(in: visibleRect)
             let target = visible.length > 0 ? visible.location : 0
             selectRowIndexes([target], byExtendingSelection: false)
+            onMouseSelectionChanged?()  // adopt it as the cursor — the pane didn't write this one
             scrollRowToVisible(target)
         }
         return ok
     }
 
+    /// A drag or shift-click landed. `super` has already written the selection; tell the pane so it
+    /// adopts the new cursor instead of snapping back on the next keystroke.
+    override func mouseDown(with event: NSEvent) {
+        super.mouseDown(with: event)
+        onMouseSelectionChanged?()
+    }
+
     override func keyDown(with event: NSEvent) {
         if let direction = DiffPaneTable.halfPageDirection(for: event) {
+            sawG = false
             onHalfPage?(direction)
             return
         }
+        if let key = DiffPaneTable.vimKey(for: event) {
+            // `gg` is the one two-key sequence: a bare `g` arms, the second fires, anything else disarms.
+            if key == .pendingTop {
+                sawG.toggle()
+                if !sawG { onVimKey?(.top) }
+                return
+            }
+            sawG = false
+            onVimKey?(key)
+            return
+        }
+        sawG = false
         switch KeyboardFocus.key(for: event) {
         case .escape:
             // Claim Esc before the table's own cancelOperation (which would just clear selection).
@@ -386,20 +606,36 @@ private final class DiffTableView: NSTableView {
         case .right:
             onHorizontalStep?(1)
         case .up, .down:
-            super.keyDown(with: event)  // moves the current line…
-            onSelectionMoved?()  // …then the pane re-centers it
+            // The pane owns the cursor, so never let `super` move the selection: shift-arrow would
+            // extend by AppKit's rules (from *its* anchor) and desync the two.
+            let extend = event.modifierFlags.intersection(DiffPaneTable.reservableModifiers) == .shift
+            onMoveCursor?(KeyboardFocus.key(for: event) == .down ? 1 : -1, extend)
         default:
             super.keyDown(with: event)
         }
     }
 }
 
-/// A diff row's current-line highlight, mirroring the file tree's selection: a solid accent fill while
-/// the diff pane holds focus (`isEmphasized`), and a quiet accent outline when it doesn't — so paging
-/// the diff from the tree still shows where the cursor is, without claiming focus. Theme-only (ZEN-27);
-/// no system selection color.
-private final class DiffLineRowView: NSTableRowView {
-    /// The current-line pill spans the content: the diff pane already carries a horizontal margin off its
+/// A diff row's selection highlight, mirroring the file tree's: a solid accent fill while the diff pane
+/// holds focus (`isEmphasized`), and a quiet accent outline when it doesn't — so paging the diff from
+/// the tree still shows where the cursor is, without claiming focus. Theme-only (ZEN-27); no system
+/// selection color.
+///
+/// A multi-row linewise selection has to read as one block, not a stack of pills (ZEN-227). Rather than
+/// build a per-corner path, each row draws a pill that overhangs into its selected neighbours by the
+/// corner radius and clips to its own bounds: the block's outer corners keep their curve, the interior
+/// seams come out square, and the outline case falls out of the same trick (the overhung edges clip
+/// away, leaving a continuous border around the block).
+final class DiffLineRowView: NSTableRowView {
+    /// Where this row sits in the run of selected rows around it. Stamped by `DiffPaneTable`.
+    enum BlockPosition { case only, first, middle, last }
+
+    var blockPosition: BlockPosition = .only
+    /// Whether this row carries the cursor *inside* a multi-row selection — it takes a stronger fill so
+    /// the moving end stays findable. False for a single-row selection, which is already just the cursor.
+    var isCursorRow = false
+
+    /// The selection pill spans the content: the diff pane already carries a horizontal margin off its
     /// edges (`diffTable`'s inset), so the pill takes no *additional* horizontal inset — it aligns with
     /// the content rather than nesting a second gap inside it. Rounded corners keep it reading as a pill.
     private static let horizontalInset: CGFloat = 0
@@ -408,16 +644,38 @@ private final class DiffLineRowView: NSTableRowView {
 
     override func drawSelection(in dirtyRect: NSRect) {
         guard isSelected else { return }
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        NSBezierPath(rect: bounds).setClip()  // the overhang below is for the neighbour, not for us
+
         let accent = Theme.current.chrome.accent.nsColor
-        let rect = bounds.insetBy(dx: Self.horizontalInset, dy: Self.verticalInset)
-        let path = NSBezierPath(roundedRect: rect, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius)
+        let path = NSBezierPath(
+            roundedRect: pillRect(), xRadius: Self.cornerRadius, yRadius: Self.cornerRadius)
         if isEmphasized {
-            accent.withAlphaComponent(0.16).setFill()
+            accent.withAlphaComponent(isCursorRow ? 0.28 : 0.16).setFill()
             path.fill()
         } else {
             accent.withAlphaComponent(0.4).setStroke()
             path.lineWidth = 1
             path.stroke()
         }
+    }
+
+    /// The pill, grown past the row's own edge on whichever side continues into a selected neighbour —
+    /// the clip above trims the overhang, which is what squares off the interior seams.
+    private func pillRect() -> NSRect {
+        var rect = bounds.insetBy(dx: Self.horizontalInset, dy: Self.verticalInset)
+        let overhang = Self.cornerRadius + Self.verticalInset
+        // The row is flipped (`isFlipped` is true for table rows), so minY is the row's top edge.
+        let growsUp = blockPosition == .middle || blockPosition == .last
+        let growsDown = blockPosition == .middle || blockPosition == .first
+        if growsUp {
+            rect.origin.y -= overhang
+            rect.size.height += overhang
+        }
+        if growsDown {
+            rect.size.height += overhang
+        }
+        return rect
     }
 }
