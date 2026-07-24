@@ -796,6 +796,13 @@ final class WindowController: NSObject {
                 }
             },
             branchesLoader: { completion in runner.loadBranches(completion: completion) },
+            sendTargets: { [weak self] in self?.activeController?.sendTargets() ?? [] },
+            // Close the viewer first: `closeModal` restores focus to the panel that had it, which
+            // would otherwise land *after* the send and pull focus off the terminal we just wrote to.
+            sender: { [weak self] message, target, submit in
+                self?.closeModal()
+                self?.activeController?.send(message, to: target, submit: submit)
+            },
             onCancel: { [weak self] in self?.closeModal() })
         presentModal(overlay, kind: .diffViewer)
     }

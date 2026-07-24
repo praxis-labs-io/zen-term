@@ -7,6 +7,11 @@ enum DiffCellMetrics {
     static let rowHeight: CGFloat = 20
     static let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
 
+    /// The slice of a cell its diff line occupies. Normally the whole thing, but a row can be grown to
+    /// reserve room for the inline comment box (ZEN-257) — and then the line stays in the top
+    /// `rowHeight` points instead of centring itself in the gap.
+    static func lineHeight(in bounds: CGRect) -> CGFloat { min(bounds.height, rowHeight) }
+
     /// Line-number gutters are left-aligned behind this inset, which the hunk header shares — so the
     /// numbers line up with the `@@ … @@` header text rather than floating right of it.
     static let gutterInset: CGFloat = 8

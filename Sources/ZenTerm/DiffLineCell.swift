@@ -116,7 +116,7 @@ final class DiffLineCell: NSView, DiffPanningCell {
         let inset = DiffCellMetrics.gutterInset
         let gutter = gutterWidth
         let textHeight = DiffCellMetrics.textHeight
-        let height = bounds.height
+        let height = DiffCellMetrics.lineHeight(in: bounds)
         let textY = ((height - textHeight) / 2).rounded()
         if isHeader {
             headerLabel.frame = NSRect(x: inset, y: textY, width: max(0, bounds.width - inset), height: textHeight)
@@ -135,10 +135,12 @@ final class DiffLineCell: NSView, DiffPanningCell {
         repositionText()
     }
 
-    /// Slide both text labels to the shared offset within their (fixed) clip columns.
+    /// Slide both text labels to the shared offset within their (fixed) clip columns. Vertically the
+    /// line centres in its own slice, not the whole row: a row grown to reserve room for the inline
+    /// comment box (ZEN-257) must keep its line at the top rather than in the middle of the gap.
     private func repositionText() {
         let textHeight = DiffCellMetrics.textHeight
-        let textY = ((bounds.height - textHeight) / 2).rounded()
+        let textY = ((DiffCellMetrics.lineHeight(in: bounds) - textHeight) / 2).rounded()
         leftText.frame = NSRect(
             x: -horizontalOffset, y: textY, width: leftText.intrinsicContentSize.width, height: textHeight)
         rightText.frame = NSRect(

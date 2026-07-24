@@ -60,6 +60,8 @@ final class DiffSelectionInteractionTests: XCTestCase {
             initialStatus: nil,
             loader: { _, completion in completion(.success(status)) },
             branchesLoader: { completion in completion([]) },
+            sendTargets: { [] },
+            sender: { _, _, _ in },
             onCancel: {})
         overlay.yankPasteboard = board
         let win = NSWindow(
@@ -246,6 +248,8 @@ final class DiffSelectionInteractionTests: XCTestCase {
             highlightStore: DiffHighlightStore(), initialStatus: nil,
             loader: { _, completion in completion(.success(status)) },
             branchesLoader: { completion in completion([]) },
+            sendTargets: { [] },
+            sender: { _, _, _ in },
             onCancel: { closed += 1 })
         overlay.yankPasteboard = board
         let win = NSWindow(

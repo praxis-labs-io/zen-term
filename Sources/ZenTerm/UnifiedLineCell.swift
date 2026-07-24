@@ -88,22 +88,30 @@ final class UnifiedLineCell: NSView, DiffPanningCell {
         let inset = DiffCellMetrics.gutterInset
         let trailing = DiffCellMetrics.gutterTrailing
         let numbers = max(0, gutterWidth - inset - trailing)  // one line-number column's digit width
-        let textHeight = DiffCellMetrics.textHeight
-        let textY = ((bounds.height - textHeight) / 2).rounded()
+        let lineHeight = DiffCellMetrics.lineHeight(in: bounds)
         // Old and new numbers left-align adjacent — the old under the hunk header at `inset`, the new one
         // trailing-gap past it — then the sign, then the panning text.
-        oldGutter.frame = NSRect(x: inset, y: textY, width: numbers, height: textHeight)
-        newGutter.frame = NSRect(x: inset + numbers + trailing, y: textY, width: numbers, height: textHeight)
-        sign.frame = NSRect(x: inset + 2 * numbers + 2 * trailing, y: textY, width: Self.signWidth, height: textHeight)
+        oldGutter.frame = NSRect(x: inset, y: textY, width: numbers, height: DiffCellMetrics.textHeight)
+        newGutter.frame = NSRect(
+            x: inset + numbers + trailing, y: textY, width: numbers, height: DiffCellMetrics.textHeight)
+        sign.frame = NSRect(
+            x: inset + 2 * numbers + 2 * trailing, y: textY, width: Self.signWidth,
+            height: DiffCellMetrics.textHeight)
         let clipX = Self.contentX(gutterWidth: gutterWidth)
-        clip.frame = NSRect(x: clipX, y: 0, width: max(0, bounds.width - clipX), height: bounds.height)
+        clip.frame = NSRect(x: clipX, y: 0, width: max(0, bounds.width - clipX), height: lineHeight)
         repositionText()
     }
 
+    /// Where the line's text sits inside the cell. A row can be **taller** than one line — the inline
+    /// comment box reserves the rest of it (ZEN-257) — so the text centres in the line's own slice at
+    /// the top, never in the whole row, which would drop it into the middle of the reserved gap.
+    private var textY: CGFloat {
+        ((DiffCellMetrics.lineHeight(in: bounds) - DiffCellMetrics.textHeight) / 2).rounded()
+    }
+
     private func repositionText() {
-        let textHeight = DiffCellMetrics.textHeight
-        let textY = ((bounds.height - textHeight) / 2).rounded()
         text.frame = NSRect(
-            x: -horizontalOffset, y: textY, width: text.intrinsicContentSize.width, height: textHeight)
+            x: -horizontalOffset, y: textY, width: text.intrinsicContentSize.width,
+            height: DiffCellMetrics.textHeight)
     }
 }

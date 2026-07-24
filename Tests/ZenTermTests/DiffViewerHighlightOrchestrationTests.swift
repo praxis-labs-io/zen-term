@@ -61,6 +61,8 @@ final class DiffViewerHighlightOrchestrationTests: XCTestCase {
             initialStatus: initialStatus,
             loader: loader,
             branchesLoader: { completion in completion(branches) },
+            sendTargets: { [] },
+            sender: { _, _, _ in },
             onCancel: {})
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 600),

@@ -350,6 +350,57 @@ final class TabController: NSObject {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
+    // MARK: send a diff comment (ZEN-257)
+
+    /// The terminals in this tab a diff comment can be sent to, **the focused one first** — the
+    /// composer defaults to index 0, so a comment with no target picked lands where you were working.
+    ///
+    /// Panes come in the tree's own order so their numbers read left to right; a drawer is listed only
+    /// while it's open, because pasting into a hidden one puts text somewhere you can't see it.
+    func sendTargets() -> [DiffSendTarget] {
+        var targets: [DiffSendTarget] = []
+        for (index, id) in paneCanvas.orderedLeafIDs.enumerated() {
+            targets.append(
+                DiffSendTarget(
+                    id: id, label: Self.targetLabel("pane \(index + 1)", surface: paneCanvas.surface(for: id))))
+        }
+        if isBottomOpen, let surface = bottomDrawerSurface {
+            targets.append(
+                DiffSendTarget(id: Self.bottomDrawerID, label: Self.targetLabel("bottom drawer", surface: surface)))
+        }
+        if isRightOpen, let surface = rightDrawerSurface {
+            targets.append(
+                DiffSendTarget(id: Self.rightDrawerID, label: Self.targetLabel("right drawer", surface: surface)))
+        }
+        let focused = currentPanelID
+        return targets.filter { $0.id == focused } + targets.filter { $0.id != focused }
+    }
+
+    /// The place plus what's running there ("pane 2 · claude"), so two shells in the same tab are
+    /// tellable apart. The place always leads: a terminal with no title is still `pane 2`.
+    private static func targetLabel(_ place: String, surface: TerminalSurface?) -> String {
+        guard let title = surface?.title, !title.isEmpty else { return place }
+        return "\(place) · \(title)"
+    }
+
+    /// Paste a composed diff comment into `target` and focus it. `submit` follows the paste with a
+    /// real Return keypress (`submitLine`), not a pasted `"\r"` — a pasted carriage return lands
+    /// inside the bracketed-paste block, where a TUI reads it as a literal newline and the message
+    /// sits in the input unsent.
+    func send(_ message: String, to target: DiffSendTarget, submit: Bool) {
+        guard let surface = surface(for: target.id) else { return }
+        focusPanel(target.id)
+        surface.paste(message)
+        if submit { surface.submitLine() }
+    }
+
+    /// The surface behind a panel id in the shared nav id space — a drawer sentinel or a pane leaf.
+    private func surface(for id: PaneID) -> TerminalSurface? {
+        if id == Self.bottomDrawerID { return bottomDrawerSurface }
+        if id == Self.rightDrawerID { return rightDrawerSurface }
+        return paneCanvas.surface(for: id)
+    }
+
     /// Paste into whichever panel holds unified focus (mirrors
     /// `PaneCanvasController.pasteToSurface` for the drawer case).
     @objc func pasteToSurface(_ sender: Any?) {
