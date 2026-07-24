@@ -136,3 +136,24 @@ chunky rather than obviously broken. Compare against a window born on the target
 - [ ] **Panes, drawers, and tool floats all follow.** Split a couple of panes, open a
       drawer and a tool float, then drag: every surface re-renders, not just the focused
       one.
+
+## Cursor shader on unfocused panes (ZEN-237)
+
+Needs a cursor shader on (Settings → Terminal → Cursor shader → Cursor Warp, the more
+visible of the two) and at least two surfaces. It's all GPU output, so no test sees any of
+it. ghostty runs the shader's draw timer only while a surface is focused, so a blurred pane
+freezes whatever frame it stopped on; ZenTerm stands the shader down to a passthrough while
+unfocused so there's nothing to freeze.
+
+- [ ] **A fresh workspace leaves no tracer.** Open a workspace with the bottom and right
+      drawers, so they land unfocused while their shells are still starting. No frozen
+      smear anywhere in either drawer once the prompts appear. This is the case that
+      shipped broken: the shell's first prompt moves the cursor *after* the pane blurred.
+- [ ] **Blur mid-smear leaves no tracer.** Move the cursor around a pane, then switch away
+      within a fraction of a second. The tail finishes decaying and leaves nothing behind.
+- [ ] **Focus doesn't fly a smear in.** Come back to a pane whose cursor moved while it was
+      unfocused (let an agent or a build write into it). The cursor is just there, with no
+      trail arriving from a stale position. A smear here means the passthrough stand-down
+      regressed to removing the shader outright.
+- [ ] **Rapid switching stays clean.** Tab between panes quickly for a few seconds. No
+      tracer accumulates, and no flicker on the panes being entered or left.

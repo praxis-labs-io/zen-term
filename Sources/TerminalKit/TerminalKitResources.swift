@@ -15,4 +15,11 @@ enum TerminalKitResources {
     /// Resolved once, from `Contents/Resources` in a packaged app (never the fataling
     /// `Bundle.module`, which only ever resolved on the build machine).
     static let bundle: Bundle = Bundle.zenResourceBundle(named: bundleName, fallback: .module)
+
+    /// The do-nothing cursor shader an unfocused surface runs in place of the real one
+    /// (ZEN-237). Nil if it's missing from the bundle, which leaves the surface shader-less:
+    /// still tracer-free, at the cost of a smear on the next focus.
+    static var passthroughShaderPath: String? {
+        bundle.url(forResource: "passthrough", withExtension: "glsl")?.path
+    }
 }

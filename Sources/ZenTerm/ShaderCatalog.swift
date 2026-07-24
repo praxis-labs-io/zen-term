@@ -1,7 +1,7 @@
 import Foundation
 
-/// The bundled custom-shader catalog. Shaders ship as `Shaders/<token>.glsl` app resources, and a
-/// `custom-shader = <token>` config line selects one by name. Bundled-only by design: only vetted,
+/// The bundled cursor-shader catalog. Shaders ship as `Shaders/<token>.glsl` app resources, and a
+/// `cursor-shader = <token>` config line selects one by name. Bundled-only by design: only vetted,
 /// tested shaders are selectable, so an un-vetted file can't black the window or tank the GPU.
 enum ShaderCatalog {
     /// The vetted catalog, in picker order. Each token has a `Shaders/<token>.glsl` resource.

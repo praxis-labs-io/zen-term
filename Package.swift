@@ -26,7 +26,12 @@ let package = Package(
             // libghostty's runtime resources (shell-integration, themes, terminfo),
             // staged from the pinned vendor/ghostty build by bin/build-ghosttykit.
             // Gitignored like the xcframework — both come from the same script run.
-            resources: [.copy("Resources/ghostty-resources")],
+            resources: [
+                .copy("Resources/ghostty-resources"),
+                // Stands in for the real cursor shader on an unfocused surface (ZEN-237);
+                // below the seam because it exists only to work around a libghostty behavior.
+                .copy("Resources/passthrough.glsl"),
+            ],
             // A static-library xcframework carries no link metadata, so the frameworks
             // libghostty's objects reference must be linked by the consumer. This set is
             // what Ghostty's own macOS app links; over-linking is harmless.
