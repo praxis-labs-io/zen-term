@@ -162,7 +162,21 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // A surface born unfocused gets no blur to trigger the stand-down, and it's the case that
         // shows the tracer worst: the drawers of a new workspace land unfocused and their shells
         // then reach a first prompt, moving the cursor with no timer running to decay the smear.
-        if !bornFocused { startShaderSettle() }
+        //
+        // Decided a turn later, not here, because at this point NOTHING is focused yet — the view
+        // becomes first responder after `start` returns, so a pane that is about to be focused is
+        // indistinguishable from a drawer that never will be. Standing down immediately meant every
+        // surface stood down and then restored, and each of those is a synchronous config file
+        // write plus a read and parse on the main thread (`GhosttyApp.updateSurfaceConfig`) — two
+        // per pane, so a workspace open paid them by the dozen. One turn is far inside the window
+        // that matters: what this guards against is a shell reaching its first prompt, which is
+        // orders of magnitude slower.
+        if !bornFocused {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !self.lastFocused else { return }
+                self.startShaderSettle()
+            }
+        }
 
         // libghostty just made hostView layer-hosting (its Metal layer is now
         // hostView.layer). The host window is transparent for the vibrancy backdrop, so
@@ -171,13 +185,17 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // redraw gap. Mark the layer opaque over the terminal background so it composites
         // as a solid surface and gaps show the terminal bg, not the window behind it.
         //
-        // Exception: with a custom shader active, ghostty's shader pass writes real alpha into
-        // the drawable; an opaque layer tells Core Animation to ignore that alpha, which flashes
-        // the backdrop through on the alt-screen full redraw. So drop opacity when a shader is
-        // on, but keep the opaque backgroundColor so an ordinary redraw gap still shows the
-        // terminal bg rather than the window behind it.
+        // This holds with a cursor shader active too. ZEN-188 carved out an exception — drop the
+        // layer out of opaque whenever a shader is on, so the alpha ghostty's shader pass writes
+        // reaches Core Animation instead of being ignored — against an alt-screen white flash.
+        // That flash was root-caused by reading the code, never reproduced with the shaders that
+        // shipped, and the guard went in preemptively alongside them, so its own "no flash across
+        // vim/less/fzf" verification only ever ran with the guard already in place. Re-tested with
+        // it removed (backdrop-alpha 0.5, cursor_warp, 5K) across vim, nvim, less, fzf and
+        // lazygit: no flash. It also bought nothing — the window is translucent below
+        // backdrop-alpha 1 regardless, so the compositor blends it either way (ZEN-271).
         if let layer = hostView.layer {
-            layer.isOpaque = (config.behavior ?? .default).cursorShader == nil
+            layer.isOpaque = true
             layer.backgroundColor = (config.theme?.background.nsColor ?? .black).cgColor
         }
 
@@ -245,9 +263,9 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         GhosttyApp.shared.updateConfig(theme: theme, behavior: behavior)
         if let layer = hostView.layer {
             // Reset the opaque-layer background (the same trick start(_:) uses) so redraw gaps
-            // show the new terminal bg, not the old one; and re-derive opacity, since toggling a
-            // cursor shader on/off flips whether the layer must pass the drawable's real alpha.
-            layer.isOpaque = behavior.cursorShader == nil
+            // show the new terminal bg, not the old one. Opacity doesn't move with the cursor
+            // shader any more — see start(_:).
+            layer.isOpaque = true
             layer.backgroundColor = theme.background.nsColor.cgColor
         }
         hostView.scrollMultiplier = behavior.scrollMultiplier

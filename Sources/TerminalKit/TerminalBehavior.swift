@@ -17,9 +17,8 @@ public struct TerminalBehavior: Equatable, Sendable {
     public var scrollMultiplier: Double
     /// Absolute path to a single GLSL cursor shader (a post-process pass), or nil for none. The
     /// chrome resolves a bundled shader name to this path before it crosses the seam; the backend
-    /// emits it to ghostty config and, when it's set, drops the surface layer's opacity so the
-    /// shader's real alpha reaches the compositor instead of being ignored. Single by design —
-    /// the chrome ships one selectable effect, not a stack.
+    /// emits it to ghostty config. Single by design — the chrome ships one selectable effect,
+    /// not a stack.
     public var cursorShader: String?
 
     public init(

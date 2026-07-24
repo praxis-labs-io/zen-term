@@ -197,16 +197,20 @@ final class GhosttyHostView: NSView {
 
     // MARK: Focus
 
+    // Responder transitions report pane focus to the owner and nothing else. They must NOT call
+    // `ghostty_surface_set_focus` themselves: what libghostty is told is `paneFocused &&
+    // isAppActive` (ZEN-271), and a direct write here races the owner's. Becoming first responder
+    // while the app is still inactive — every launch, since the first window is built from
+    // `applicationDidFinishLaunching` — wrote `true` here and then the owner immediately corrected
+    // it to `false`, leaving the first surface unfocused and its cursor not blinking.
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
-        if let surfacePtr { ghostty_surface_set_focus(surfacePtr, true) }
         owner?.focusDidChange(true)
         return ok
     }
 
     override func resignFirstResponder() -> Bool {
         let ok = super.resignFirstResponder()
-        if let surfacePtr { ghostty_surface_set_focus(surfacePtr, false) }
         owner?.focusDidChange(false)
         return ok
     }
