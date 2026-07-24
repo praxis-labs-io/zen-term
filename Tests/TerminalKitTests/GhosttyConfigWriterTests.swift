@@ -85,6 +85,39 @@ final class GhosttyConfigWriterTests: XCTestCase {
         XCTAssertTrue(text.contains("custom-shader-animation = true\n"))
     }
 
+    /// The settle-burst's whole mechanism is this one token: `always` is what keeps ghostty's
+    /// draw timer running on a blurred surface so the cursor tail can decay (ZEN-237). Emit
+    /// `true` here and the burst silently does nothing.
+    func test_alwaysAnimation_emitsAlways_soABlurredSurfaceKeepsAnimating() {
+        let behavior = TerminalBehavior(cursorShader: "/a/cursor_warp.glsl")
+        let text = GhosttyConfigWriter.configText(
+            for: theme, behavior: behavior, shaderAnimation: .always)
+        XCTAssertTrue(text.contains("custom-shader-animation = always\n"))
+        XCTAssertFalse(text.contains("custom-shader-animation = true\n"))
+    }
+
+    /// A per-surface config is written beside the app-global one, never over it: sharing the
+    /// path would leave every other surface loading one blurred pane's config.
+    func test_variantConfig_writesItsOwnFile_leavingTheAppGlobalOneIntact() throws {
+        let behavior = TerminalBehavior(cursorShader: "/a/cursor_warp.glsl")
+        let shared = try XCTUnwrap(GhosttyConfigWriter.writeConfig(for: theme, behavior: behavior))
+        let perSurface = try XCTUnwrap(
+            GhosttyConfigWriter.writeConfig(
+                for: theme, behavior: behavior, shaderAnimation: .always, variant: "surface"))
+        XCTAssertNotEqual(shared, perSurface)
+        let sharedText = try String(contentsOfFile: shared, encoding: .utf8)
+        XCTAssertTrue(sharedText.contains("custom-shader-animation = true\n"))
+    }
+
+    /// What actually stops a tracer: an unfocused surface runs no shader pass at all, so a
+    /// cursor move after the blur has nothing to freeze into a smear (ZEN-237).
+    func test_strippedShader_emitsNoShaderKeys_soAnUnfocusedSurfaceCannotSmear() {
+        var unshaded = TerminalBehavior(cursorShader: "/a/cursor_warp.glsl")
+        unshaded.cursorShader = nil
+        let text = GhosttyConfigWriter.configText(for: theme, behavior: unshaded)
+        XCTAssertFalse(text.contains("custom-shader"))
+    }
+
     func test_defaultBehavior() {
         let behavior = TerminalBehavior()
         XCTAssertEqual(behavior.cursorStyle, .block)

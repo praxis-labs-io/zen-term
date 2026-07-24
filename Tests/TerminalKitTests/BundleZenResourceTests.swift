@@ -69,4 +69,14 @@ final class BundleZenResourceTests: XCTestCase {
             "\(TerminalKitResources.bundleName).bundle",
             Bundle.module.bundleURL.lastPathComponent)
     }
+
+    /// The stand-down shader has to actually ship. Missing, it resolves nil and an unfocused
+    /// surface runs no shader at all — which still hides the tracer, so nothing looks broken
+    /// until a cursor smear flies in from a stale position on the next focus (ZEN-237).
+    func test_passthroughShaderIsBundled() throws {
+        let path = try XCTUnwrap(
+            TerminalKitResources.passthroughShaderPath, "passthrough.glsl missing from the bundle")
+        let source = try String(contentsOfFile: path, encoding: .utf8)
+        XCTAssertTrue(source.contains("void mainImage"), "must be a loadable shader")
+    }
 }
