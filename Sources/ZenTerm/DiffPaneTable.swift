@@ -245,15 +245,31 @@ final class DiffPaneTable: NSView {
     /// pane's model is one anchor and one cursor, so the very next motion would fill those gaps in
     /// anyway — filling them now means the block you see is the block you'll yank, instead of it
     /// quietly growing under the next keystroke.
+    ///
+    /// Which end is the cursor isn't always the bottom: a shift-click *above* the cursor extends
+    /// upward, so the mouse landed on the selection's first row. AppKit anchors a shift-click on the
+    /// previously selected row, so when the old cursor is still an endpoint, that endpoint is the
+    /// anchor and the other one is where the mouse went.
     private func syncCursorAfterMouseSelection() {
         let selected = table.selectedRowIndexes
-        guard let last = selected.last else {
+        guard let first = selected.first, let last = selected.last else {
             anchorRow = nil
             refreshDecoration()
             return
         }
-        cursorRow = last
-        anchorRow = selected.count > 1 ? selected.first : nil
+        guard first != last else {
+            cursorRow = last
+            anchorRow = nil
+            applySelection()
+            return
+        }
+        if cursorRow == last {
+            anchorRow = last
+            cursorRow = first
+        } else {
+            anchorRow = first
+            cursorRow = last
+        }
         applySelection()
     }
 
