@@ -36,6 +36,8 @@ final class DiffPaneTable: NSView {
     var onYank: ((Bool) -> Void)?
     /// Esc with nothing to clear — wired to close the viewer. A visual selection is collapsed first.
     var onEscape: (() -> Void)?
+    /// ⏎ on the diff — open the comment composer for the current selection (ZEN-257).
+    var onCompose: (() -> Void)?
 
     /// The shared horizontal pan applied to every visible row's text column(s) (0 = left-aligned).
     private var horizontalOffset: CGFloat = 0
@@ -64,6 +66,9 @@ final class DiffPaneTable: NSView {
         table.allowsEmptySelection = true
         // The vim keys are plain letters, so AppKit's type-select would race them for every keystroke.
         table.allowsTypeSelect = false
+        // The delegate's `heightOfRow` grows the comment box's anchor row (ZEN-257); it's consulted per
+        // row regardless of this base value. `rowHeight` still has to be the real 20, not AppKit's
+        // default — `halfPage()` divides the visible height by it to size a Ctrl-D/U jump.
         table.rowHeight = DiffCellMetrics.rowHeight
         table.usesAutomaticRowHeights = false
         table.dataSource = source
@@ -74,6 +79,7 @@ final class DiffPaneTable: NSView {
         table.onMoveCursor = { [weak self] delta, extend in self?.moveCursor(by: delta, extending: extend) }
         table.onVimKey = { [weak self] key in self?.handleVimKey(key) }
         table.onEscape = { [weak self] in self?.handleEscape() }
+        table.onCompose = { [weak self] in self?.onCompose?() }
         table.onMouseSelectionChanged = { [weak self] in self?.syncCursorAfterMouseSelection() }
         source.decorate = { [weak self] rowView, row in self?.decorate(rowView, row: row) }
 
@@ -114,12 +120,92 @@ final class DiffPaneTable: NSView {
     /// copy that actually landed (the timing and the color are the runbook's, not a test's).
     var isFlashingForTesting: Bool { flashLevel > 0 }
     var flashedRowsForTesting: IndexSet { flashedRows }
+    /// A row's top edge in the table's own coordinate space — so a test can assert the comment box
+    /// pushed the lines below it down by exactly its height.
+    func rowOriginForTesting(_ row: Int) -> CGFloat { table.rect(ofRow: row).minY }
     /// Drive the mouse selection path the way a click or a ⌘-click does — `super.mouseDown` writes the
     /// table's selection and then the pane adopts it, which a synthesized click can't reach reliably.
     func selectRowsFromMouseForTesting(_ rows: IndexSet) {
         table.selectRowIndexes(rows, byExtendingSelection: false)
         syncCursorAfterMouseSelection()
     }
+
+    // MARK: the inline comment box (ZEN-257)
+
+    /// The box currently hanging under the selection, or nil. Held as a plain subview of the table
+    /// rather than as a row's cell: a table recycles row views, and a recycled one would take a note
+    /// mid-typing (and the focus in it) with it the moment the row scrolled out of sight.
+    private var composerBox: NSView?
+
+    /// Drop `box` into the diff under `anchor`'s line, pushing the lines below it down by `height`.
+    /// The room comes from growing that row; the box floats in the room, so it scrolls with the
+    /// content for free (a table subview lives in the document's coordinate space).
+    ///
+    /// The caller passes the anchor (the last selected line) rather than this reading it back off the
+    /// table: `selectedRowIndexes.last` is the anchor of an *upward* selection, not its last line, so
+    /// reading it here would hang the box off the wrong end of the block.
+    func showComposer(_ box: NSView, below anchor: Int, height: CGFloat) {
+        hideComposer()
+        guard source.rows.indices.contains(anchor) else { return }
+        composerBox = box
+        source.composerAnchor = anchor
+        source.composerHeight = height
+        box.translatesAutoresizingMaskIntoConstraints = true
+        table.addSubview(box)
+        noteHeight(of: anchor)
+        layoutComposer()
+        table.scrollToVisible(table.rect(ofRow: anchor))
+    }
+
+    /// Grow (or shrink) the reserved room to a new box height as the note gains or loses lines
+    /// (ZEN-257) — re-tile so the lines below follow, and re-frame the box into the new room.
+    func setComposerHeight(_ height: CGFloat) {
+        guard composerBox != nil, let anchor = source.composerAnchor, source.composerHeight != height
+        else { return }
+        source.composerHeight = height
+        noteHeight(of: anchor)
+        layoutComposer()
+    }
+
+    func hideComposer() {
+        guard let box = composerBox else { return }
+        let anchor = source.composerAnchor
+        composerBox = nil
+        source.composerAnchor = nil
+        source.composerHeight = 0
+        box.removeFromSuperview()
+        if let anchor, source.rows.indices.contains(anchor) { noteHeight(of: anchor) }
+    }
+
+    /// Re-measure one row's height *now*: the row's new height is what pushes the lines below it.
+    /// `noteHeightOfRows` alone defers the re-tile past this call (the diff would jump a beat later),
+    /// so a `reloadData` forces the geometry now — with the selection captured and restored around it,
+    /// since `reloadData` otherwise collapses a multi-row selection to a single row.
+    private func noteHeight(of row: Int) {
+        let selection = table.selectedRowIndexes
+        table.reloadData()
+        if !selection.isEmpty { table.selectRowIndexes(selection, byExtendingSelection: false) }
+        // `reloadData` rebuilds row views while the selection is momentarily empty, so `rowViewForRow`
+        // decorates them against no selection at all; `selectRowIndexes` above restores AppKit's own
+        // `isSelected` but not our block-position/cursor/flash stamping — re-stamp explicitly or a
+        // multi-row selection silently loses its block shaping the moment the composer opens or closes.
+        refreshDecoration()
+    }
+
+    /// Frame the box into the room reserved under its anchor line. Re-run on every layout pass, so a
+    /// pane resize keeps it spanning the diff.
+    private func layoutComposer() {
+        guard let box = composerBox, let anchor = source.composerAnchor,
+            source.rows.indices.contains(anchor)
+        else { return }
+        let row = table.rect(ofRow: anchor)
+        box.frame = NSRect(
+            x: Self.composerInset, y: row.minY + DiffCellMetrics.rowHeight,
+            width: max(0, row.width - 2 * Self.composerInset), height: source.composerHeight)
+    }
+
+    /// Keeps the box off the pane's edges so it reads as sitting inside the diff, not replacing it.
+    private static let composerInset: CGFloat = 10
 
     /// The cursor's line numbers — a row identity the caller can hold across a rows swap the pane can't
     /// bridge itself. The reload path clears the pane (`show([])`) while the new file's highlight is
@@ -365,6 +451,14 @@ final class DiffPaneTable: NSView {
         case yankCode, yankReference  // y / Y
     }
 
+    /// Return / keypad Enter with no modifiers — comment on the selection (ZEN-257). Decoded by key
+    /// code rather than through `KeyboardFocus.key`, whose `.activate` also covers Space: Space keeps
+    /// paging the table, because a key that scrolls a diff shouldn't also open a form.
+    static func isComposeKey(_ event: NSEvent) -> Bool {
+        guard event.keyCode == 36 || event.keyCode == 76 else { return false }
+        return event.modifierFlags.intersection(reservableModifiers).isEmpty
+    }
+
     /// Decode a `keyDown` into the vim key it types, or nil for anything the pane doesn't claim.
     ///
     /// The base key is the *lowercased* `charactersIgnoringModifiers` and the shifted-ness comes from
@@ -463,6 +557,7 @@ final class DiffPaneTable: NSView {
         super.layout()
         // The column width changed with the pane, so the scroll range did too — re-clamp the offset.
         setHorizontalOffset(horizontalOffset)
+        layoutComposer()  // and the comment box spans the diff, so it follows the width too
     }
 
     /// Recolor the visible cells after a live theme change — each cell reads `Theme.current` when
@@ -586,6 +681,14 @@ final class DiffPaneTable: NSView {
         /// Stamps a row view with its selection-block position and cursor flag, so a row scrolled into
         /// view mid-selection draws as part of the block instead of as a lone pill.
         var decorate: ((DiffLineRowView, Int) -> Void)?
+        /// The row the inline comment box hangs under, and how much room it needs. That row is grown by
+        /// `composerHeight`, which is what pushes the lines below it down (ZEN-257).
+        var composerAnchor: Int?
+        var composerHeight: CGFloat = 0
+
+        func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+            DiffCellMetrics.rowHeight + (row == composerAnchor ? composerHeight : 0)
+        }
 
         private static let splitID = NSUserInterfaceItemIdentifier("split-cell")
         private static let unifiedID = NSUserInterfaceItemIdentifier("unified-cell")
@@ -649,6 +752,8 @@ private final class DiffTableView: NSTableView {
     var onVimKey: ((DiffPaneTable.VimKey) -> Void)?
     /// The selection changed from a drag or a shift-click rather than from the pane's own write.
     var onMouseSelectionChanged: (() -> Void)?
+    /// ⏎ / keypad Enter — comment on the selection.
+    var onCompose: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -722,6 +827,10 @@ private final class DiffTableView: NSTableView {
             return
         }
         sawG = false
+        if DiffPaneTable.isComposeKey(event) {
+            onCompose?()
+            return
+        }
         switch KeyboardFocus.key(for: event) {
         case .escape:
             // Claim Esc before the table's own cancelOperation (which would just clear selection).
@@ -778,7 +887,10 @@ final class DiffLineRowView: NSTableRowView {
         guard isSelected else { return }
         NSGraphicsContext.saveGraphicsState()
         defer { NSGraphicsContext.restoreGraphicsState() }
-        NSBezierPath(rect: bounds).setClip()  // the overhang below is for the neighbour, not for us
+        // The overhang below is for the neighbour, not for us. Clipped to the line's slice rather than
+        // the row's bounds, so the anchor row of an open comment box highlights its line and not the
+        // gap reserved under it (ZEN-257).
+        NSBezierPath(rect: lineBounds).setClip()
 
         let accent = Theme.current.chrome.accent.nsColor
         let path = NSBezierPath(
@@ -800,8 +912,13 @@ final class DiffLineRowView: NSTableRowView {
 
     /// The pill, grown past the row's own edge on whichever side continues into a selected neighbour —
     /// the clip above trims the overhang, which is what squares off the interior seams.
+    /// The row's own line, top-aligned — the whole row unless it's been grown to hold the comment box.
+    private var lineBounds: NSRect {
+        NSRect(x: 0, y: 0, width: bounds.width, height: DiffCellMetrics.lineHeight(in: bounds))
+    }
+
     private func pillRect() -> NSRect {
-        var rect = bounds.insetBy(dx: Self.horizontalInset, dy: Self.verticalInset)
+        var rect = lineBounds.insetBy(dx: Self.horizontalInset, dy: Self.verticalInset)
         let overhang = Self.cornerRadius + Self.verticalInset
         // The row is flipped (`isFlipped` is true for table rows), so minY is the row's top edge.
         let growsUp = blockPosition == .middle || blockPosition == .last

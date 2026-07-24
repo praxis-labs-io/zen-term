@@ -7,6 +7,23 @@ enum DiffCellMetrics {
     static let rowHeight: CGFloat = 20
     static let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
 
+    /// The slice of a cell its diff line occupies. Normally the whole thing, but a row can be grown to
+    /// reserve room for the inline comment box (ZEN-257) — and then the line stays in the top
+    /// `rowHeight` points instead of centring itself in the gap.
+    static func lineHeight(in bounds: CGRect) -> CGFloat { min(bounds.height, rowHeight) }
+
+    /// The y-origin, in the cell's own (non-flipped — y=0 is the BOTTOM) coordinate space, of that top
+    /// slice. 0 for a plain row (the slice fills the whole cell); positive for a row grown to hold the
+    /// comment box, where the reserved room sits *below* the line rather than at the origin.
+    static func lineSliceY(in bounds: CGRect) -> CGFloat { bounds.height - lineHeight(in: bounds) }
+
+    /// The y-origin for an element of `height` centered within that top slice — what the gutters, the
+    /// hunk header, and the inline sign column position against. A full-slice element (a text clip, the
+    /// center rule) is positioned with `lineSliceY` and `lineHeight` directly instead.
+    static func lineCenteredY(in bounds: CGRect, height: CGFloat) -> CGFloat {
+        (lineSliceY(in: bounds) + (lineHeight(in: bounds) - height) / 2).rounded()
+    }
+
     /// Line-number gutters are left-aligned behind this inset, which the hunk header shares — so the
     /// numbers line up with the `@@ … @@` header text rather than floating right of it.
     static let gutterInset: CGFloat = 8

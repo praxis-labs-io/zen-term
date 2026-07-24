@@ -250,7 +250,8 @@ and the pane behind yields focus, the way a configured tool float does.
 **Selection is linewise, and vim-flavored.** Nothing typed inside the card reaches a
 terminal, so the plain letters are free: `j`/`k` move, `V` starts a visual selection
 anchored on the cursor, `gg`/`G` go to the ends, `{`/`}` reuse the change jump, and
-`y`/`Y` (or ⌘C/⌘⇧C) yank the selected code or a `path:42-44` reference. `DiffPaneTable`
+`y`/`Y` (or ⌘C/⌘⇧C) yank the selected code or an `@path:42-44` reference (the `@` is the
+file-mention token Claude Code resolves, so a pasted reference reads as an attachment). `DiffPaneTable`
 tracks the cursor and the visual anchor itself rather than reading `NSTableView`'s
 `selectedRow`, which reports the *last* index in the set: the anchor, not the cursor,
 whenever a selection was extended upward. Esc is two-stage: it collapses a selection
@@ -268,6 +269,24 @@ Only the *new* side can be named, since that's the file on disk: a selection of 
 deletions references the new-side line it follows, and a deleted file gets a bare path.
 The keys are view-local, not `ReservedChord`s, so they never enter the keymap and never
 compete with a terminal binding.
+
+**A selection becomes a comment, and the comment lands in a terminal.** ⏎ on the diff opens
+`DiffCommentComposer`, an inline box that drops *into* the diff under the last selected line
+(the anchor row grows by the box's height and the lines below shift down, a PR review comment)
+so the code stays readable above it. It's a child of the pane, not a second `WindowController`
+modal, which holds one slot. The box carries the `@`-reference implicitly, a `Dropdown` of the
+tab's terminals (panes plus open drawers, focused one first so index 0 is where you were
+working), and a note. ⏎ **submits** (paste the `@ref note` then a real Return, and the viewer
+closes), ⌘⏎ **queues** (paste plus a newline, no submit, no focus steal, viewer stays open) so
+several comments stack in one input before a final submit fires them together; ⇧⏎ is a literal
+newline and esc closes just the box. Submit is a real Return keypress through the new
+`TerminalSurface.submitLine()` seam, **not** a pasted `"\r"`: a pasted carriage return lands
+inside bracketed paste, where a TUI reads it as a newline and never sends. The chrome never
+reaches for a controller: the overlay takes the target list and the send as injected closures,
+`TabController` owns `sendTargets()`/`send(_:to:action:)`, and the box hands back a finished
+message and a chosen target. The note grows a line at a time past its default up to eight, then
+scrolls; Tab walks note → Submit → Queue → target (right to left, so the first Tab lands on the
+primary), while the footer claims no arrows so Left/Right keep panning the diff behind it.
 
 **The viewer keeps your place.** A background refresh and a base switch both rebuild the
 tree, and the `NSOutlineView` holds its rows by object identity, so the new objects can't

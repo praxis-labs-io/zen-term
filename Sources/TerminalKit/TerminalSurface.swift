@@ -119,6 +119,12 @@ public protocol TerminalSurface: AnyObject {
     func paste(_ text: String)
     func copySelection() -> String?
     func scrollToBottom()
+
+    /// Deliver a Return **keypress** to the shell — a real Enter, not a pasted `"\r"`. A pasted
+    /// carriage return arrives inside bracketed paste, where a TUI (Claude Code, an editor) reads it
+    /// as a literal newline in its input rather than a submit. This is the chrome's way to submit a
+    /// line it just pasted (ZEN-257): paste the text, then `submitLine()`.
+    func submitLine()
 }
 
 public extension TerminalSurface {
@@ -134,4 +140,7 @@ public extension TerminalSurface {
 
     /// Default no-op: a backend that can't reconfigure live needs nothing here.
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {}
+
+    /// Default no-op: a backend with no key-injection path can't submit for the chrome.
+    func submitLine() {}
 }

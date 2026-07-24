@@ -64,6 +64,8 @@ final class DiffViewerHighlightOrchestrationTests: XCTestCase {
             session: session,
             loader: loader,
             branchesLoader: { completion in completion(branches) },
+            sendTargets: { [] },
+            sender: { _, _, _ in },
             onCancel: {})
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 600),
@@ -154,33 +156,39 @@ final class DiffViewerHighlightOrchestrationTests: XCTestCase {
         XCTAssertNil(cached, "resolved-but-no-spans is cached as nil, not left absent")
     }
 
-    func test_changedReload_dropsTheCachedSpansOfEveryFile() {
-        // A refresh that finds changed content invalidates *every* cached span set — they were computed
-        // from the previous revision's blobs, so keeping any would paint stale colors on new text.
+    func test_changedReload_dropsTheChangedFilesSpansButKeepsTheUnchangedOnes() {
+        // A refresh that finds changed content must invalidate the spans of the file that *changed* —
+        // they were computed from the old revision's blobs, so keeping them would paint stale colors on
+        // new text. But a file that DIDN'T change keeps its spans: re-parsing it would blank and re-fetch
+        // it for nothing, which made a warm reopen re-parse the whole repo like a cold open (ZEN-261).
         //
-        // Asserted on a file the reload does NOT re-render (only the first file is selected): the
-        // selected file's entry gets overwritten by its own re-render regardless, so asserting on it
-        // would pass even with the clear removed.
+        // Both files here are unselected (only the first, `selected`, is auto-picked): a selected file's
+        // entry gets overwritten by its own re-render regardless, so asserting on the two others isolates
+        // the eviction logic itself.
         let selected = file("A.swift")
-        let other = file("B.swift")
+        let changed = file("B.swift", text: "let x = 1")
+        let untouched = file("C.swift")
         let session = makeSession()
         let store = session.highlights
         let spy = ChangingLoaderSpy([
-            status([selected, other]),
-            status([file("A.swift", text: "let y = 2"), other]),
+            status([selected, changed, untouched]),
+            status([selected, file("B.swift", text: "let y = 2"), untouched]),  // only B changed
         ])
         let overlay = mount(session: session, loader: { base, completion in spy.load(base, completion) })
 
-        let stale = DiffFileSpans(
+        let spans = DiffFileSpans(
             old: [1: [TokenSpan(range: NSRange(location: 0, length: 3), role: .keyword)]], new: [:])
-        store.store(other.highlightKey, stale)
-        XCTAssertNotNil(store.cached(other.highlightKey), "precondition: cached before the refresh")
+        store.store(changed.highlightKey, spans)
+        store.store(untouched.highlightKey, spans)
 
-        overlay.reloadForTesting()  // second load carries different content
+        overlay.reloadForTesting()  // second load: B's content moved, C's didn't
 
         XCTAssertNil(
-            store.cached(other.highlightKey) ?? nil,
-            "a reload that changed the content must drop spans computed against the old revision")
+            store.cached(changed.highlightKey) ?? nil,
+            "the changed file's spans, computed against the old revision, must drop")
+        XCTAssertEqual(
+            store.cached(untouched.highlightKey) ?? nil, spans,
+            "the unchanged file keeps its spans — no re-parse, no cold-open flash (ZEN-261)")
     }
 
     func test_unchangedReload_keepsTheCachedSpans() {

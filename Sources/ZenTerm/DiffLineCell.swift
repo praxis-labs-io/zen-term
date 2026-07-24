@@ -116,8 +116,12 @@ final class DiffLineCell: NSView, DiffPanningCell {
         let inset = DiffCellMetrics.gutterInset
         let gutter = gutterWidth
         let textHeight = DiffCellMetrics.textHeight
-        let height = bounds.height
-        let textY = ((height - textHeight) / 2).rounded()
+        let height = DiffCellMetrics.lineHeight(in: bounds)
+        // The cell is non-flipped (y=0 is the bottom), so a row grown for the comment box (ZEN-257)
+        // needs its line explicitly pinned to the TOP slice rather than centred in the whole, taller
+        // bounds — sliceY is 0 for a plain row and the reserved room below it for a grown one.
+        let sliceY = DiffCellMetrics.lineSliceY(in: bounds)
+        let textY = DiffCellMetrics.lineCenteredY(in: bounds, height: textHeight)
         if isHeader {
             headerLabel.frame = NSRect(x: inset, y: textY, width: max(0, bounds.width - inset), height: textHeight)
             return
@@ -127,18 +131,21 @@ final class DiffLineCell: NSView, DiffPanningCell {
         // Gutters left-align at `inset` (under the header); their labels span to the column edge so the
         // digits start at the inset and the trailing gap sits between them and the content.
         leftGutter.frame = NSRect(x: inset, y: textY, width: gutter - inset, height: textHeight)
-        leftClip.frame = NSRect(x: gutter, y: 0, width: half, height: height)
-        rule.frame = NSRect(x: gutter + half, y: 0, width: 1, height: height)
+        leftClip.frame = NSRect(x: gutter, y: sliceY, width: half, height: height)
+        rule.frame = NSRect(x: gutter + half, y: sliceY, width: 1, height: height)
         rightGutter.frame = NSRect(
             x: gutter + half + 1 + inset, y: textY, width: gutter - inset, height: textHeight)
-        rightClip.frame = NSRect(x: 2 * gutter + half + 1, y: 0, width: available - half, height: height)
+        rightClip.frame = NSRect(x: 2 * gutter + half + 1, y: sliceY, width: available - half, height: height)
         repositionText()
     }
 
-    /// Slide both text labels to the shared offset within their (fixed) clip columns.
+    /// Slide both text labels to the shared offset within their (fixed) clip columns. `leftClip` /
+    /// `rightClip` are always exactly `lineHeight` tall and `layout()` pins them to the row's top slice
+    /// (ZEN-257) — so, unlike the gutters' `textY` in `layout()`, this centres purely within that
+    /// fixed-height clip, with no slice offset of its own to add.
     private func repositionText() {
         let textHeight = DiffCellMetrics.textHeight
-        let textY = ((bounds.height - textHeight) / 2).rounded()
+        let textY = ((DiffCellMetrics.lineHeight(in: bounds) - textHeight) / 2).rounded()
         leftText.frame = NSRect(
             x: -horizontalOffset, y: textY, width: leftText.intrinsicContentSize.width, height: textHeight)
         rightText.frame = NSRect(

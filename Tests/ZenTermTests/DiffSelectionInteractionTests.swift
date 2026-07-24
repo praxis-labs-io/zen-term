@@ -57,6 +57,8 @@ final class DiffSelectionInteractionTests: XCTestCase {
             session: DiffViewerSession(repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo")),
             loader: { _, completion in completion(.success(status)) },
             branchesLoader: { completion in completion([]) },
+            sendTargets: { [] },
+            sender: { _, _, _ in },
             onCancel: {})
         overlay.yankPasteboard = board
         let win = NSWindow(
@@ -133,7 +135,7 @@ final class DiffSelectionInteractionTests: XCTestCase {
         try type("V", unshifted: "v", flags: .shift, into: overlay)
         try type("j", into: overlay)
         try type("Y", unshifted: "y", flags: .shift, into: overlay)
-        XCTAssertEqual(copied(), "Sources/App/Foo.swift:10-11")
+        XCTAssertEqual(copied(), "@Sources/App/Foo.swift:10-11")
     }
 
     func test_yankWithNoVisualSelection_takesTheCursorLineAlone() throws {
@@ -141,7 +143,7 @@ final class DiffSelectionInteractionTests: XCTestCase {
         inline(overlay)
         try type("j", into: overlay)  // to "line eleven"
         try type("Y", unshifted: "y", flags: .shift, into: overlay)
-        XCTAssertEqual(copied(), "Sources/App/Foo.swift:11", "one line renders without a range")
+        XCTAssertEqual(copied(), "@Sources/App/Foo.swift:11", "one line renders without a range")
     }
 
     func test_commandCAndCommandShiftC_yankTheDiffNotTheTerminal() throws {
@@ -162,7 +164,7 @@ final class DiffSelectionInteractionTests: XCTestCase {
                 windowNumber: 0, context: nil, characters: "C", charactersIgnoringModifiers: "c",
                 isARepeat: false, keyCode: 8))
         XCTAssertTrue(overlay.performKeyEquivalent(with: shifted))
-        XCTAssertEqual(copied(), "Sources/App/Foo.swift:10")
+        XCTAssertEqual(copied(), "@Sources/App/Foo.swift:10")
     }
 
     // MARK: motions
@@ -242,6 +244,8 @@ final class DiffSelectionInteractionTests: XCTestCase {
             session: DiffViewerSession(repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo")),
             loader: { _, completion in completion(.success(status)) },
             branchesLoader: { completion in completion([]) },
+            sendTargets: { [] },
+            sender: { _, _, _ in },
             onCancel: { closed += 1 })
         overlay.yankPasteboard = board
         let win = NSWindow(
@@ -307,7 +311,7 @@ final class DiffSelectionInteractionTests: XCTestCase {
         try type("V", unshifted: "v", flags: .shift, into: overlay)
         try type("j", into: overlay)  // extend over added line 12
         try type("Y", unshifted: "y", flags: .shift, into: overlay)
-        XCTAssertEqual(copied(), "Sources/App/Paired.swift:11-12")
+        XCTAssertEqual(copied(), "@Sources/App/Paired.swift:11-12")
         let rowsBefore = overlay.diffPaneForTesting.selectedRows
         XCTAssertEqual(rowsBefore, IndexSet(4...5), "precondition: the inline rows")
 
@@ -321,7 +325,7 @@ final class DiffSelectionInteractionTests: XCTestCase {
             "precondition: the indices genuinely moved, so carrying the index would be wrong")
 
         try type("Y", unshifted: "y", flags: .shift, into: overlay)
-        XCTAssertEqual(copied(), "Sources/App/Paired.swift:11-12", "the selection still names the same lines")
+        XCTAssertEqual(copied(), "@Sources/App/Paired.swift:11-12", "the selection still names the same lines")
     }
 
     func test_switchingFilesStartsFresh() throws {

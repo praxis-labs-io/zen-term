@@ -24,9 +24,17 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     typealias Loader = (String?, @escaping (StatusResult) -> Void) -> Void
     /// Loads the repo's branches (base-picker order) and calls back on the main thread.
     typealias BranchesLoader = (@escaping ([String]) -> Void) -> Void
+    /// The terminals in the active tab a comment can go to, **focused one first** — the composer
+    /// defaults to index 0, so a send with no dropdown interaction lands where you were working.
+    typealias SendTargets = () -> [DiffSendTarget]
+    /// Deliver a composed comment to `target`: `submit` (⏎) pastes and presses Return and the host
+    /// closes the viewer; `queue` (⌘⏎) pastes a line to stack for later and leaves the viewer open.
+    typealias Sender = (_ message: String, _ target: DiffSendTarget, _ action: DiffSendAction) -> Void
 
     private let loader: Loader
     private let branchesLoader: BranchesLoader
+    private let sendTargets: SendTargets
+    private let sender: Sender
     private let onCancel: () -> Void
 
     /// The base the committed slice is compared against once the user overrides the default via the
@@ -117,7 +125,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     init(
         background: NSColor, session: DiffViewerSession,
-        loader: @escaping Loader, branchesLoader: @escaping BranchesLoader, onCancel: @escaping () -> Void
+        loader: @escaping Loader, branchesLoader: @escaping BranchesLoader,
+        sendTargets: @escaping SendTargets, sender: @escaping Sender, onCancel: @escaping () -> Void
     ) {
         self.session = session
         self.repoName = session.repoRoot.lastPathComponent
@@ -128,6 +137,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         self.prefetcher = DiffFilePrefetcher(repoRoot: session.repoRoot, highlightStore: session.highlights)
         self.loader = loader
         self.branchesLoader = branchesLoader
+        self.sendTargets = sendTargets
+        self.sender = sender
         self.onCancel = onCancel
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -243,6 +254,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // The composer is a child card, so while it's up it owns Esc (cancel the comment, not the
+        // viewer), ⏎/⇧⏎ (send) and ⌘C (copy the note being typed). Offered first for exactly that
+        // reason — otherwise this method's own Esc and yank would fire straight through it.
+        if let composer, composer.handleKeyEquivalent(event) { return true }
+        if composer != nil { return super.performKeyEquivalent(with: event) }
         // A bare Esc reaches the focused control's keyDown first, so an open base dropdown closes its
         // own list there before this ever runs; here Esc closes the viewer.
         if ModalEscape.handle(
@@ -258,6 +274,62 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             return true
         }
         return super.performKeyEquivalent(with: event)
+    }
+
+    // MARK: comment composer (ZEN-257)
+
+    /// The open composer, or nil. Held so the viewer can route keys to it and so a second ⏎ can't
+    /// stack two of them.
+    private var composer: DiffCommentComposer?
+
+    /// ⏎ on the diff pane: comment on the selected lines. With no visual selection running the
+    /// selection is the cursor line, so there is always something to comment on — but a message state
+    /// (no file) or a tab with no terminal to send to has nothing to say, and stays quiet.
+    ///
+    /// The box drops into the diff under the selection rather than over it, so the lines it's about
+    /// stay on screen while you write about them (the pane pushes what's below them down).
+    private func openComposer() {
+        guard composer == nil, let file = currentFileDiff else { return }
+        let selection = DiffSelection.make(rows: diffTable.rows, selected: diffTable.selectedRows)
+        guard !selection.isEmpty else { return }
+        let targets = sendTargets()
+        guard !targets.isEmpty else { return }
+
+        // Removed lines are in no file the agent can open, so a removals-only or deleted-file
+        // selection carries them in the message instead of only pointing at them.
+        let removedLines = selection.newRange == nil ? selection.lines : []
+        let composer = DiffCommentComposer(
+            reference: DiffReference.string(
+                path: file.path, changeKind: file.changeKind, selection: selection),
+            removedLines: removedLines,
+            targets: targets,
+            onSend: { [weak self] message, target, action in self?.send(message, to: target, action: action) },
+            onCancel: { [weak self] in self?.closeComposer() })
+        composer.onRequestHeight = { [weak self] height in self?.diffTable.setComposerHeight(height) }
+        self.composer = composer
+        // The box hangs under the *last* selected line so that line, and everything above it, stays
+        // put — only what's below is pushed down (`selectedRows.max()`, not the table's reported
+        // selectedRow, which is the anchor of an upward selection).
+        let anchor = diffTable.selectedRows.max() ?? 0
+        diffTable.showComposer(composer, below: anchor, height: DiffCommentComposer.height)
+        composer.focusInitialResponder()
+    }
+
+    /// Close the box and hand focus back to the diff, with the selection it was about still standing —
+    /// cancelling a comment shouldn't cost you the block you'd lined up.
+    private func closeComposer() {
+        guard composer != nil else { return }
+        composer = nil
+        diffTable.hideComposer()
+        window?.makeFirstResponder(diffTable.scrollFocusTarget)
+        refreshFocusStyling()
+    }
+
+    private func send(_ message: String, to target: DiffSendTarget, action: DiffSendAction) {
+        // Close the box either way; the viewer itself only closes on submit (the host decides that
+        // from the action), so a queue leaves you in the diff to line up the next comment.
+        closeComposer()
+        sender(message, target, action)
     }
 
     /// ⌘C (code) / ⌘⇧C (reference), or nil for anything else. Compares against the reservable set so
@@ -316,6 +388,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// between the tree and the diff; ⌘j/⌘k jump to the next/previous change in the focused pane.
     /// Returns true when it consumed the chord.
     func handleNavChord(_ chord: KeyInterceptor.ReservedChord) -> Bool {
+        // Consumed, not acted on, while the composer is up: moving the pane focus or flipping the
+        // layout underneath an open comment would leave it pointing at lines you can no longer see.
+        guard composer == nil else { return true }
         switch chord {
         case .navLeft:
             window?.makeFirstResponder(outline)
@@ -447,6 +522,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         outline.onMoveFile = { [weak self] delta in self?.moveFileSelection(delta) }
         diffTable.onEscape = { [weak self] in self?.onCancel() }
         diffTable.onYank = { [weak self] wantsReference in self?.yank(reference: wantsReference) }
+        diffTable.onCompose = { [weak self] in self?.openComposer() }
         // Re-evaluate the auto-fold policy whenever the diff pane's width changes (ZEN-243). The frame
         // notification fires with the pane's *final* frame on every resize — reliable where piggybacking
         // on a `layout()` pass isn't (the inner table tiles after that runs, so it reads a stale width).
@@ -683,6 +759,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             (keys: ["←", "→"], label: "fold"),
             (keys: ["V"], label: "select"),
             (keys: ["y", "Y"], label: "yank"),
+            (keys: ["⏎"], label: "comment"),
             (keys: ["esc"], label: "close"),
         ])
         for group in groups { hintsStack.addArrangedSubview(Self.hintGroup(keys: group.keys, label: group.label)) }
@@ -714,7 +791,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             switch result {
             case .success(let status):
                 guard status != self.displayedStatus else { return }  // unchanged — keep the view (and cache)
-                self.highlightStore.clear()  // content changed — cached spans may be stale
+                self.evictStaleHighlights(from: self.displayedStatus, to: status)
                 self.apply(status)
             case .failure(let failure):
                 self.displayedStatus = nil
@@ -722,6 +799,25 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
                 self.showMessage(self.failureMessage(for: failure))
             }
         }
+    }
+
+    /// Evict only the highlight-cache keys a changed reload actually moved, instead of wiping the whole
+    /// repo's spans (ZEN-261). A file whose `FileDiff` is byte-identical between the old and new load
+    /// keeps its cached spans and repaints with no re-parse; only the changed files (or ones that
+    /// vanished) pay the tree-sitter cost. Wiping everything made a warm reopen — the common case, since
+    /// you reopen the diff *because* you changed something — blank and re-parse like a cold open.
+    private func evictStaleHighlights(from old: GitDiffRunner.StatusLoad?, to new: GitDiffRunner.StatusLoad) {
+        guard let old else { return }  // first load: nothing cached to reconcile against
+        let newByKey = Dictionary(
+            (new.unstaged + new.staged + new.committed).map { ($0.highlightKey, $0) },
+            uniquingKeysWith: { first, _ in first })
+        // A key is stale when its file changed content (same key, different `FileDiff`) or is gone from
+        // the new load (no entry). A brand-new file isn't cached yet, so it needs no eviction.
+        var stale: Set<String> = []
+        for file in old.unstaged + old.staged + old.committed where newByKey[file.highlightKey] != file {
+            stale.insert(file.highlightKey)
+        }
+        highlightStore.evict(stale)
     }
 
     /// Render a status: rebuild the tree, then put the reader back where they were. The rebuild is
@@ -931,6 +1027,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// line a reload left waiting for this file is spent here — one paint gets it, and the ones the
     /// highlight race loses don't (`renderCurrentFile` guards those out anyway).
     private func renderRows(_ file: FileDiff, spans: DiffFileSpans?, keepingSelection: Bool = false) {
+        // The box hangs off a row index, and these rows are about to be replaced — a comment left
+        // open across that would point at a line the diff no longer has there.
+        closeComposer()
         let layout = effectiveLayout
         renderedLayout = layout
         let carried = pendingCursor.flatMap { $0.path == file.path ? $0.line : nil }
@@ -987,6 +1086,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     func selectRowForTesting(_ row: Int) {
         outline.selectRowIndexes([row], byExtendingSelection: false)
     }
+    /// The open comment composer, or nil — so a test can drive its real controls and assert what a
+    /// send actually composed.
+    var composerForTesting: DiffCommentComposer? { composer }
     /// Whether the base dropdown header is shown (a base resolved for the committed slice).
     var isBaseHeaderShownForTesting: Bool { !baseHeader.isHidden }
     /// The base dropdown, for asserting its branch list and driving a pick through the real control.

@@ -80,6 +80,8 @@ final class DiffViewerOverlayTests: XCTestCase {
             session: session,
             loader: { base, completion in spy.load(base, completion) },
             branchesLoader: { completion in completion(spy.branches) },
+            sendTargets: { [] },
+            sender: { _, _, _ in },
             onCancel: onCancel)
         let win = NSWindow(
             // Wide enough that the diff pane defaults to side-by-side (above the auto-fold threshold);
