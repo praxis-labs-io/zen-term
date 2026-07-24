@@ -119,3 +119,20 @@ target closes with no toast (ZEN-213). Drive each on a real window.
       ⇧⏎. Onto an idle tab it replaces silently; onto a tab with a running pane or
       drawer it confirms **"Replace Tab"** (Cancel keeps the tab). Plain ⏎ still opens
       a new tab.
+
+## Display density across monitors (ZEN-247)
+
+Needs two displays of **different backing scale** (a Retina laptop plus a non-Retina
+external is the usual pair), so no test can reach it. The terminal's Metal layer is
+layer-*hosting*, meaning AppKit never syncs its `contentsScale` for us; get this wrong and
+text stays at the old pixel density and the compositor rescales it, which reads as soft or
+chunky rather than obviously broken. Compare against a window born on the target display.
+
+- [ ] **Drag a window between displays.** Text re-renders crisp on the new display, and
+      matches a window opened fresh there (⌘N on that display). Drag it back and check
+      the same in reverse.
+- [ ] **The scale change doesn't animate.** The re-render snaps. A visible zoom/scale
+      tween on arrival means the `CATransaction` action-disabling regressed.
+- [ ] **Panes, drawers, and tool floats all follow.** Split a couple of panes, open a
+      drawer and a tool float, then drag: every surface re-renders, not just the focused
+      one.
