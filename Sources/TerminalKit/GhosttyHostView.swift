@@ -15,6 +15,9 @@ final class GhosttyHostView: NSView {
 
     private var trackingArea: NSTrackingArea?
 
+    /// Token for the `NSWindow.didChangeScreenNotification` observer (see `observeScreenChanges`).
+    private var screenChangeObserver: NSObjectProtocol?
+
     /// The cursor libghostty last asked for via `GHOSTTY_ACTION_MOUSE_SHAPE` (I-beam over
     /// text, pointing hand over a ⌘-hovered link, …). Applied through cursor rects
     /// (`resetCursorRects`) so AppKit owns when to assert it — the idiomatic mechanism, rather
@@ -70,14 +73,85 @@ final class GhosttyHostView: NSView {
         syncSizeAndScale()
     }
 
+    /// Match the Metal layer's `contentsScale` to the window's backing scale factor.
+    ///
+    /// libghostty sets `contentsScale` once, at renderer init, and thereafter sizes every
+    /// render target from `layer.bounds * layer.contentsScale`. It never re-reads the scale
+    /// we push through `ghostty_surface_set_content_scale`. AppKit doesn't sync it for us
+    /// either: libghostty attaches its own Metal layer, making this view layer-*hosting*, and
+    /// the automatic sync only applies to layer-backed views. Left alone, a window moved to a
+    /// display of a different density keeps rendering at the old pixel density and Core
+    /// Animation rescales the result (ZEN-247).
+    ///
+    /// Ref: High Resolution Guidelines for OS X.
+    private func syncLayerContentsScale() {
+        guard let window else { return }
+        CATransaction.begin()
+        // Without this, Core Animation animates the scale change and it reads as jank.
+        CATransaction.setDisableActions(true)
+        layer?.contentsScale = window.backingScaleFactor
+        CATransaction.commit()
+    }
+
+    /// Point libghostty's vsync display link at the display this view is actually on, so the
+    /// render loop follows that display's refresh rate. libghostty creates the display link at
+    /// renderer init and never revisits it, so without this a surface stays pinned to whatever
+    /// display it defaulted to — both for one born on a secondary display and for one whose
+    /// window later moves.
+    func syncDisplayID() {
+        // No sentinel when the id is missing: 0 is kCGNullDirectDisplay, which only makes
+        // libghostty fail the display-link call and log for it.
+        guard let surfacePtr, let displayID = window?.screen?.displayID else { return }
+        ghostty_surface_set_display_id(surfacePtr, displayID)
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        observeScreenChanges()
+        syncDisplayID()
+        syncLayerContentsScale()
         syncSizeAndScale()
     }
 
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
+        // Ahead of syncSizeAndScale: the size libghostty derives comes off the layer scale.
+        syncLayerContentsScale()
         syncSizeAndScale()
+    }
+
+    /// AppKit doesn't reliably send `viewDidChangeBackingProperties` when a window moves to a
+    /// display with a different backing scale (ghostty-org/ghostty#2731), so drive that path
+    /// off the window's screen change as well. Registered once, for any window: this view is
+    /// re-parented across windows over its life, and the handler filters to ours.
+    private func observeScreenChanges() {
+        guard screenChangeObserver == nil else { return }
+        screenChangeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeScreenNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            guard let self, let window = self.window, notification.object as? NSWindow === window
+            else { return }
+            self.windowDidChangeScreen()
+        }
+    }
+
+    private func windowDidChangeScreen() {
+        syncDisplayID()
+        // The same work `viewDidChangeBackingProperties` does, run directly rather than by
+        // calling that override: AppKit owns when its lifecycle methods fire. It runs next
+        // turn, not now, because the window's backing scale factor isn't updated yet when
+        // this notification lands.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.syncLayerContentsScale()
+            self.syncSizeAndScale()
+        }
+    }
+
+    deinit {
+        if let screenChangeObserver {
+            NotificationCenter.default.removeObserver(screenChangeObserver)
+        }
     }
 
     override func updateTrackingAreas() {
@@ -319,6 +393,14 @@ final class GhosttyHostView: NSView {
         // which is the deceleration stutter and needs upstream fractional-line rendering to smooth.
         let mods: ghostty_input_scroll_mods_t = precise ? 1 : 0
         ghostty_surface_mouse_scroll(surfacePtr, x, y, mods)
+    }
+}
+
+extension NSScreen {
+    /// The CoreGraphics display ID for this screen, which is what libghostty wants for
+    /// `ghostty_surface_set_display_id` (it drives the vsync display link).
+    var displayID: UInt32? {
+        deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? UInt32
     }
 }
 
