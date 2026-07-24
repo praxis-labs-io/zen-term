@@ -261,6 +261,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // reason — otherwise this method's own Esc and yank would fire straight through it.
         if let composer, composer.handleKeyEquivalent(event) { return true }
         if composer != nil { return super.performKeyEquivalent(with: event) }
+        // Esc closes the key sheet first if it's open, before it would close the viewer.
+        if keySheet?.isShown == true, KeyboardFocus.key(for: event) == .escape {
+            keySheet?.hide()
+            return true
+        }
         // A bare Esc reaches the focused control's keyDown first, so an open base dropdown closes its
         // own list there before this ever runs; here Esc closes the viewer.
         if ModalEscape.handle(
@@ -278,11 +283,22 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         return super.performKeyEquivalent(with: event)
     }
 
+    /// Toggle the bare `?` key-reference popover, anchored just above the footer's trailing edge.
+    private func toggleKeySheet() {
+        let sheet = keySheet ?? ChromePopover(makeContent: DiffKeymapSheet.makeContent)
+        keySheet = sheet
+        sheet.toggle(in: card, above: footerDivider)
+    }
+
     // MARK: comment composer (ZEN-257)
 
     /// The open composer, or nil. Held so the viewer can route keys to it and so a second ⏎ can't
     /// stack two of them.
     private var composer: DiffCommentComposer?
+
+    /// The bare `?` key-reference popover, created on first use. It floats above the footer's trailing edge
+    /// and carries the full keymap the lean footer legend doesn't (ZEN-262).
+    private var keySheet: ChromePopover?
 
     /// ⏎ on the diff pane: comment on the selected lines. With no visual selection running the
     /// selection is the cursor line, so there is always something to comment on — but a message state
@@ -371,6 +387,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         treeRule.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         footerDivider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
         baseDropdown.reapplyTheme()
+        keySheet?.reapplyTheme()
         messageLabel.textColor = Theme.current.chrome.muted.nsColor
         fillHints()
         updateRepoBranch()
@@ -575,6 +592,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         outline.onToggleLayout = { [weak self] in self?.toggleLayout() }
         outline.onFocusDiff = { [weak self] in self?.focusDiff() }
         outline.onClose = { [weak self] in self?.requestClose() }
+        outline.onShowKeys = { [weak self] in self?.toggleKeySheet() }
         outline.onBecameFirstResponder = { [weak self] in self?.refreshFocusStyling() }
         diffTable.onEscape = { [weak self] in self?.onCancel() }
         diffTable.onYank = { [weak self] wantsReference in self?.yank(reference: wantsReference) }
@@ -583,6 +601,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         diffTable.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
         diffTable.onFocusTree = { [weak self] in self?.focusTree() }
         diffTable.onClose = { [weak self] in self?.requestClose() }
+        diffTable.onShowKeys = { [weak self] in self?.toggleKeySheet() }
         diffTable.onFocusChanged = { [weak self] in self?.refreshFocusStyling() }
         // Re-evaluate the auto-fold policy whenever the diff pane's width changes (ZEN-243). The frame
         // notification fires with the pane's *final* frame on every resize — reliable where piggybacking
@@ -821,6 +840,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // key hidden (ZEN-243).
         if !isNarrow { groups.append((["\\"], "layout")) }
         groups.append((["esc"], "close"))
+        // The ? full key sheet is shown in both focus states — it's the affordance that lets the rest of
+        // the legend stay lean.
+        groups.append((["?"], "keys"))
         for group in groups { hintsStack.addArrangedSubview(Self.hintGroup(keys: group.keys, label: group.label)) }
     }
 
@@ -1148,6 +1170,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// The open comment composer, or nil — so a test can drive its real controls and assert what a
     /// send actually composed.
     var composerForTesting: DiffCommentComposer? { composer }
+    /// Whether the `?` key-reference popover is currently shown.
+    var isKeySheetShownForTesting: Bool { keySheet?.isShown == true }
     /// Whether the base dropdown header is shown (a base resolved for the committed slice).
     var isBaseHeaderShownForTesting: Bool { !baseHeader.isHidden }
     /// The base dropdown, for asserting its branch list and driving a pick through the real control.
@@ -1201,6 +1225,8 @@ private final class NavOutlineView: NSOutlineView {
     var onFocusDiff: (() -> Void)?
     /// Bare `q` — close the viewer.
     var onClose: (() -> Void)?
+    /// Bare `?` — toggle the key-reference popover.
+    var onShowKeys: (() -> Void)?
     /// Focus landed here (a click or a keyboard move) — the overlay resyncs focus styling and the
     /// footer legend, so a mouse click between panes tracks the same as ⌘h/⌘l.
     var onBecameFirstResponder: (() -> Void)?
@@ -1268,6 +1294,7 @@ private final class NavOutlineView: NSOutlineView {
             case .toggleLayout: onToggleLayout?()
             case .focusBase: onFocusBase?()
             case .close: onClose?()
+            case .showKeys: onShowKeys?()
             }
             return
         }

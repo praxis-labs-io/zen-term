@@ -114,6 +114,13 @@ final class DiffVimKeyTests: XCTestCase {
         XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("Q", unshifted: "q", flags: .shift)))
     }
 
+    func test_viewerCommand_bareQuestionShowsKeys_butCmdQuestionFallsThrough() throws {
+        // `?` is Shift-/ — the one shifted member, matched on the typed character. ⌘? is the menu's help
+        // shortcut and must fall through to it, not the viewer.
+        XCTAssertEqual(DiffPaneTable.viewerCommand(for: try keyDown("?", unshifted: "/", flags: .shift)), .showKeys)
+        XCTAssertNil(DiffPaneTable.viewerCommand(for: try keyDown("?", unshifted: "/", flags: [.command, .shift])))
+    }
+
     func test_viewerCommand_toleratesTheBitsAppKitStamps() throws {
         XCTAssertEqual(DiffPaneTable.viewerCommand(for: try keyDown("\\", flags: .function)), .toggleLayout)
     }

@@ -255,8 +255,12 @@ close from either pane. Because the bare keys aren't reserved, they pass through
 terminal when the viewer is closed, and the
 comment composer captures them as text while it's open, so no global chord is spent on a
 view-only command. The footer legend scopes to the focused pane and leaves pane-switching
-off (it's natural and discoverable, and it was the crowding the trim removed). The card
-wears the accent halo and the pane behind yields focus, the way a configured tool float does.
+off (it's natural and discoverable, and it was the crowding the trim removed); bare `?` opens
+the full key reference, so the legend can stay lean. That reference is a `ChromePopover` (a
+composable primitive: caller supplies the trigger and the content, the popover owns the
+themed chrome, the fade, and a click-outside backdrop) holding `DiffKeymapSheet`'s three
+grouped columns, floated above the footer's trailing edge. The card wears the accent halo and the pane behind
+yields focus, the way a configured tool float does.
 
 **Selection is linewise, and vim-flavored.** Nothing typed inside the card reaches a
 terminal, so the plain letters are free: `j`/`k` move, `V` starts a visual selection

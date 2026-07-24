@@ -46,6 +46,8 @@ final class DiffPaneTable: NSView {
     var onFocusTree: (() -> Void)?
     /// Bare `q` — close the viewer.
     var onClose: (() -> Void)?
+    /// Bare `?` — toggle the key-reference popover.
+    var onShowKeys: (() -> Void)?
     /// The diff took focus (a click or a keyboard move) — the overlay resyncs focus styling + legend.
     var onFocusChanged: (() -> Void)?
 
@@ -96,6 +98,7 @@ final class DiffPaneTable: NSView {
             case .toggleLayout: self.onToggleLayout?()
             case .focusBase: self.onFocusBase?()
             case .close: self.onClose?()
+            case .showKeys: self.onShowKeys?()
             }
         }
         table.onFocusTree = { [weak self] in self?.onFocusTree?() }
@@ -519,10 +522,14 @@ final class DiffPaneTable: NSView {
     /// pane's selection, so the tree and the diff decode them identically. Context-specific keys
     /// (h/l fold, focus moves) stay in each pane's own `keyDown`. Any reservable modifier falls
     /// through — these are truly bare, so Shift-\ (`|`), ⌘\, etc. belong to another handler.
-    enum ViewerCommand: Equatable { case toggleLayout, focusBase, close }
+    enum ViewerCommand: Equatable { case toggleLayout, focusBase, close, showKeys }
 
     static func viewerCommand(for event: NSEvent) -> ViewerCommand? {
-        guard event.modifierFlags.intersection(reservableModifiers).isEmpty else { return nil }
+        // ⌘/⌥/⌃ belong to another handler. `?` (Shift-/) is the one shifted member — matched on the typed
+        // character so it works on any layout; everything else is truly bare, so Shift falls through.
+        guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return nil }
+        if event.characters == "?" { return .showKeys }
+        guard !event.modifierFlags.contains(.shift) else { return nil }
         switch event.charactersIgnoringModifiers?.lowercased() {
         case "\\": return .toggleLayout
         case "b": return .focusBase

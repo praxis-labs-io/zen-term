@@ -459,6 +459,27 @@ final class DiffViewerOverlayTests: XCTestCase {
         XCTAssertEqual(overlay.selectedFilePathForTesting, "One.swift", "Ctrl-k pages back up")
     }
 
+    func test_questionKey_togglesTheKeySheet() {
+        let (overlay, _) = mount(unstaged: [file("One.swift")])
+        let question = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: .shift, timestamp: 0, windowNumber: 0,
+            context: nil, characters: "?", charactersIgnoringModifiers: "?", isARepeat: false, keyCode: 44)!
+
+        XCTAssertFalse(overlay.isKeySheetShownForTesting)
+        overlay.diffPaneForTesting.scrollFocusTarget.keyDown(with: question)
+        XCTAssertTrue(overlay.isKeySheetShownForTesting, "? opens the key sheet")
+        overlay.diffPaneForTesting.scrollFocusTarget.keyDown(with: question)
+        XCTAssertFalse(overlay.isKeySheetShownForTesting, "? again closes it")
+    }
+
+    func test_keySheetHint_showsInBothFocusLegends() {
+        let (overlay, _) = mount(unstaged: [file("One.swift")])
+        XCTAssertTrue(overlay.handleNavChord(.navLeft))  // tree
+        XCTAssertTrue(overlay.footerHintCaptionsForTesting.contains("keys"))
+        XCTAssertTrue(overlay.handleNavChord(.navRight))  // diff
+        XCTAssertTrue(overlay.footerHintCaptionsForTesting.contains("keys"))
+    }
+
     func test_footerLegend_scopesToTheFocusedPane() {
         let (overlay, _) = mount(unstaged: [file("One.swift"), file("Two.swift")])
 
