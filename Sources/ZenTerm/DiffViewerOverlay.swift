@@ -791,7 +791,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             switch result {
             case .success(let status):
                 guard status != self.displayedStatus else { return }  // unchanged — keep the view (and cache)
-                self.highlightStore.clear()  // content changed — cached spans may be stale
+                self.evictStaleHighlights(from: self.displayedStatus, to: status)
                 self.apply(status)
             case .failure(let failure):
                 self.displayedStatus = nil
@@ -799,6 +799,25 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
                 self.showMessage(self.failureMessage(for: failure))
             }
         }
+    }
+
+    /// Evict only the highlight-cache keys a changed reload actually moved, instead of wiping the whole
+    /// repo's spans (ZEN-261). A file whose `FileDiff` is byte-identical between the old and new load
+    /// keeps its cached spans and repaints with no re-parse; only the changed files (or ones that
+    /// vanished) pay the tree-sitter cost. Wiping everything made a warm reopen — the common case, since
+    /// you reopen the diff *because* you changed something — blank and re-parse like a cold open.
+    private func evictStaleHighlights(from old: GitDiffRunner.StatusLoad?, to new: GitDiffRunner.StatusLoad) {
+        guard let old else { return }  // first load: nothing cached to reconcile against
+        let newByKey = Dictionary(
+            (new.unstaged + new.staged + new.committed).map { ($0.highlightKey, $0) },
+            uniquingKeysWith: { first, _ in first })
+        // A key is stale when its file changed content (same key, different `FileDiff`) or is gone from
+        // the new load (no entry). A brand-new file isn't cached yet, so it needs no eviction.
+        var stale: Set<String> = []
+        for file in old.unstaged + old.staged + old.committed where newByKey[file.highlightKey] != file {
+            stale.insert(file.highlightKey)
+        }
+        highlightStore.evict(stale)
     }
 
     /// Render a status: rebuild the tree, then put the reader back where they were. The rebuild is
