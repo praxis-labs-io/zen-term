@@ -22,6 +22,33 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     private var wantsSecureInput = false
     private var secureInputID: ObjectIdentifier { ObjectIdentifier(self) }
 
+    /// The theme and behavior last applied, retained so the settle-burst can regenerate this
+    /// surface's config without the chrome handing them over again (ZEN-237).
+    private var lastTheme: TerminalTheme?
+    private var lastBehavior: TerminalBehavior = .default
+
+    /// Focus as libghostty last heard it, which is what tells a real blur from a repeat: the
+    /// chrome re-sends every surface's focus state on any focus change, and a settle-burst per
+    /// repeat would re-shape an idle pane's viewport for nothing.
+    ///
+    /// Seeded `true` to match libghostty, whose renderer thread defaults `flags.focused = true`
+    /// and leaves it "up to the apprt to set the correct value". Seeding `false` would swallow
+    /// the first real blur of a surface that was never focused — the new-workspace drawers.
+    private var lastFocused = true
+
+    /// The pending shader strip that follows a settle-burst. Cancelled by a refocus inside the
+    /// window, and by `terminate`.
+    private var shaderSettleWorkItem: DispatchWorkItem?
+
+    /// Whether this surface is running a per-surface config that differs from the app-global one
+    /// (mid-burst, or shader-stripped afterwards). Refocusing puts the app-global shape back.
+    private var hasPerSurfaceShaderConfig = false
+
+    /// How long a blurred surface keeps animating so its cursor tail can decay to nothing. The
+    /// bundled shaders decay in 0.35s (`cursor_warp`) and 0.15s (`cursor_tail`), so this clears
+    /// the slower one with margin while keeping the 120fps window on an unwatched pane short.
+    private static let shaderSettleDuration: TimeInterval = 0.5
+
     public weak var delegate: TerminalSurfaceDelegate?
 
     public var view: NSView { hostView }
@@ -96,6 +123,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             return
         }
 
+        lastTheme = config.theme
+        lastBehavior = config.behavior ?? .default
         hostView.scrollMultiplier = (config.behavior ?? .default).scrollMultiplier
 
         // A fresh libghostty surface defaults to focused=true, and only `resignFirstResponder`
@@ -182,6 +211,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// re-themes every surface via `GhosttyApp.updateConfig` (deduped there); the pieces
     /// scoped to this surface (opaque-layer bg, scroll multiplier, redraw) are applied here.
     public func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {
+        lastTheme = theme
+        lastBehavior = behavior
         GhosttyApp.shared.updateConfig(theme: theme, behavior: behavior)
         if let layer = hostView.layer {
             // Reset the opaque-layer background (the same trick start(_:) uses) so redraw gaps
@@ -197,11 +228,69 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public func focus() { hostView.window?.makeFirstResponder(hostView) }
 
     public func setFocused(_ focused: Bool) {
+        guard focused != lastFocused else { return }
+        lastFocused = focused
         if let surfacePtr { ghostty_surface_set_focus(surfacePtr, focused) }
+        if focused { restoreShader() } else { startShaderSettle() }
+    }
+
+    /// Let a blurred surface's cursor tail finish, then stand the real shader down (ZEN-237).
+    ///
+    /// Two steps, because a blurred surface has two ways to show a tracer. The tail already in
+    /// flight at blur needs frames to decay, which the burst into `always` gives it. But the
+    /// bigger case is a smear painted *after* the blur: `drawFrame` gates on visible, not
+    /// focused, so a cursor move on an unfocused pane (a shell reaching its first prompt, an
+    /// agent writing output) still draws one damage-driven frame, and with the focus-gated
+    /// timer stopped that frame is the last one — a fresh frozen smear no burst can reach.
+    /// Standing the shader down closes that off: nothing can freeze, whenever the cursor moves.
+    ///
+    /// It stands down to a passthrough rather than to no shader at all, because ghostty stops
+    /// updating its cursor uniforms when nothing is loaded — see `passthrough.glsl` for what
+    /// that costs on the way back.
+    private func startShaderSettle() {
+        guard lastBehavior.cursorShader != nil, surfacePtr != nil else { return }
+        cancelShaderSettle()
+        applyShaderConfig(lastBehavior, animation: .always)
+        hasPerSurfaceShaderConfig = true
+
+        let settle = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            var stoodDown = self.lastBehavior
+            stoodDown.cursorShader = TerminalKitResources.passthroughShaderPath
+            self.applyShaderConfig(stoodDown, animation: .whileFocused)
+            self.shaderSettleWorkItem = nil
+        }
+        shaderSettleWorkItem = settle
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.shaderSettleDuration, execute: settle)
+    }
+
+    /// Put the app-global shape back on focus: the shader returns and animates while focused.
+    /// Skipped entirely when this surface never deviated, so an ordinary focus costs nothing.
+    private func restoreShader() {
+        cancelShaderSettle()
+        guard hasPerSurfaceShaderConfig else { return }
+        applyShaderConfig(lastBehavior, animation: .whileFocused)
+        hasPerSurfaceShaderConfig = false
+    }
+
+    private func applyShaderConfig(
+        _ behavior: TerminalBehavior, animation: GhosttyConfigWriter.ShaderAnimation
+    ) {
+        guard let surfacePtr else { return }
+        GhosttyApp.shared.updateSurfaceConfig(
+            surfacePtr, theme: lastTheme, behavior: behavior, shaderAnimation: animation)
+    }
+
+    private func cancelShaderSettle() {
+        shaderSettleWorkItem?.cancel()
+        shaderSettleWorkItem = nil
     }
 
     public func terminate() {
         SecureInput.shared.removeScoped(secureInputID)
+        // Before the surface is freed: the pending drop-back would otherwise fire against a
+        // dangling pointer.
+        cancelShaderSettle()
         guard let surfacePtr else { return }
         ghostty_surface_free(surfacePtr)
         self.surfacePtr = nil

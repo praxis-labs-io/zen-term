@@ -139,6 +139,34 @@ final class GhosttyApp {
         tick()
     }
 
+    /// Apply a config to ONE surface, leaving the app-global config (and every other surface)
+    /// untouched. `GhosttySurface` uses this for the shader settle-burst (ZEN-237).
+    ///
+    /// The config is freed on the way out, unlike the app-global one: `ghostty_app_update_config`
+    /// keeps the pointer it's handed, while the surface path derives its own copy
+    /// (`Surface.updateConfig` → `DerivedConfig.init`) and never retains ours.
+    func updateSurfaceConfig(
+        _ surfacePtr: ghostty_surface_t, theme: TerminalTheme?, behavior: TerminalBehavior,
+        shaderAnimation: GhosttyConfigWriter.ShaderAnimation
+    ) {
+        guard let cfg = ghostty_config_new() else { return }
+        guard
+            let path = GhosttyConfigWriter.writeConfig(
+                for: theme, behavior: behavior, shaderAnimation: shaderAnimation,
+                variant: "surface")
+        else {
+            // Same reasoning as updateConfig: a failed write means keep what the surface has
+            // rather than push an effectively-default config that would drop its theme.
+            ghostty_config_free(cfg)
+            return
+        }
+        ghostty_config_load_file(cfg, path)
+        ghostty_config_finalize(cfg)
+        ghostty_surface_update_config(surfacePtr, cfg)
+        ghostty_config_free(cfg)
+        tick()
+    }
+
     /// Point `GHOSTTY_RESOURCES_DIR` at the resources bin/build-ghosttykit staged into
     /// TerminalKit's bundle, always overriding any inherited value. The env var points
     /// at the `ghostty/` dir; libghostty derives `TERMINFO` from its *sibling*
