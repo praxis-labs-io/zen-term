@@ -76,7 +76,7 @@ final class GhosttyHostView: NSView {
     /// Match the Metal layer's `contentsScale` to the window's backing scale factor.
     ///
     /// libghostty sets `contentsScale` once, at renderer init, and thereafter sizes every
-    /// render target from `layer.bounds * layer.contentsScale` — it never re-reads the scale
+    /// render target from `layer.bounds * layer.contentsScale`. It never re-reads the scale
     /// we push through `ghostty_surface_set_content_scale`. AppKit doesn't sync it for us
     /// either: libghostty attaches its own Metal layer, making this view layer-*hosting*, and
     /// the automatic sync only applies to layer-backed views. Left alone, a window moved to a
@@ -93,9 +93,22 @@ final class GhosttyHostView: NSView {
         CATransaction.commit()
     }
 
+    /// Point libghostty's vsync display link at the display this view is actually on, so the
+    /// render loop follows that display's refresh rate. libghostty creates the display link at
+    /// renderer init and never revisits it, so without this a surface stays pinned to whatever
+    /// display it defaulted to — both for one born on a secondary display and for one whose
+    /// window later moves.
+    func syncDisplayID() {
+        // No sentinel when the id is missing: 0 is kCGNullDirectDisplay, which only makes
+        // libghostty fail the display-link call and log for it.
+        guard let surfacePtr, let displayID = window?.screen?.displayID else { return }
+        ghostty_surface_set_display_id(surfacePtr, displayID)
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         observeScreenChanges()
+        syncDisplayID()
         syncLayerContentsScale()
         syncSizeAndScale()
     }
@@ -118,19 +131,21 @@ final class GhosttyHostView: NSView {
         ) { [weak self] notification in
             guard let self, let window = self.window, notification.object as? NSWindow === window
             else { return }
-            self.windowDidChangeScreen(window)
+            self.windowDidChangeScreen()
         }
     }
 
-    private func windowDidChangeScreen(_ window: NSWindow) {
-        // Point libghostty's vsync at the new display, so the render loop follows its refresh
-        // rate instead of staying pinned to the display the surface was born on.
-        if let surfacePtr, let screen = window.screen {
-            ghostty_surface_set_display_id(surfacePtr, screen.displayID ?? 0)
+    private func windowDidChangeScreen() {
+        syncDisplayID()
+        // The same work `viewDidChangeBackingProperties` does, run directly rather than by
+        // calling that override: AppKit owns when its lifecycle methods fire. It runs next
+        // turn, not now, because the window's backing scale factor isn't updated yet when
+        // this notification lands.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.syncLayerContentsScale()
+            self.syncSizeAndScale()
         }
-        // Next turn, not now: the window's backing scale factor isn't updated yet when this
-        // notification lands.
-        DispatchQueue.main.async { [weak self] in self?.viewDidChangeBackingProperties() }
     }
 
     deinit {

@@ -123,6 +123,9 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             layer.backgroundColor = (config.theme?.background.nsColor ?? .black).cgColor
         }
 
+        // The host view may already be mounted, in which case its own `viewDidMoveToWindow`
+        // ran before `surfacePtr` existed and couldn't push the display id.
+        hostView.syncDisplayID()
         hostView.syncSizeAndScale()
         GhosttyApp.shared.tick()
     }
