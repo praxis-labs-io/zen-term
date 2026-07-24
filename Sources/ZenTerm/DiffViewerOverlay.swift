@@ -211,7 +211,46 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         ) {
             return true
         }
+        // ⌘C / ⌘⇧C yank the diff selection. Claimed here because the view hierarchy is offered a key
+        // equivalent before the main menu is — otherwise both would reach the menu's `copyFromSurface:`
+        // and copy the *terminal's* selection while the viewer is up (ZEN-227).
+        if let wantsReference = Self.yankShortcut(for: event) {
+            yank(reference: wantsReference)
+            return true
+        }
         return super.performKeyEquivalent(with: event)
+    }
+
+    /// ⌘C (code) / ⌘⇧C (reference), or nil for anything else. Compares against the reservable set so
+    /// the `.function` bit AppKit stamps on can't stop ⌘C matching a bare Command (ZEN-145).
+    static func yankShortcut(for event: NSEvent) -> Bool? {
+        guard event.charactersIgnoringModifiers?.lowercased() == "c" else { return nil }
+        switch event.modifierFlags.intersection(DiffPaneTable.reservableModifiers) {
+        case .command: return false
+        case [.command, .shift]: return true
+        default: return nil
+        }
+    }
+
+    /// Where a yank lands. The system pasteboard in the app; a test points it at its own board so
+    /// running the suite never clobbers what the developer had copied.
+    var yankPasteboard: NSPasteboard = .general
+
+    /// Copy the diff selection: the reference (`path:42-44`) or the selected code text. A yank with
+    /// nothing selected, or on a message state with no file, is a no-op rather than an empty clipboard.
+    private func yank(reference: Bool) {
+        guard let file = currentFileDiff else { return }
+        let selection = DiffSelection.make(rows: diffTable.rows, selected: diffTable.selectedRows)
+        guard !selection.isEmpty else { return }
+        let text =
+            reference
+            ? DiffReference.string(path: file.path, changeKind: file.changeKind, selection: selection)
+            : selection.codeText
+        yankPasteboard.clearContents()
+        yankPasteboard.setString(text, forType: .string)
+        // Confirm it after the write, not on the keystroke: a yank leaves nothing on screen, so a copy
+        // that didn't take would otherwise look exactly like one that did.
+        diffTable.flashYank()
     }
 
     func reapplyTheme() {
@@ -361,10 +400,14 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // the width component makes `NavOutlineView.layout()`'s fill math exact (target == clip width).
         outline.style = .plain
         outline.intercellSpacing = NSSize(width: 0, height: outline.intercellSpacing.height)
+        // The vim keys are plain letters, so AppKit's type-select would race j/k for every keystroke.
+        outline.allowsTypeSelect = false
         outline.onEscape = { [weak self] in self?.onCancel() }
         outline.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
         outline.onHalfPageDiff = { [weak self] direction in self?.diffTable.halfPage(direction) }
+        outline.onMoveFile = { [weak self] delta in self?.moveFileSelection(delta) }
         diffTable.onEscape = { [weak self] in self?.onCancel() }
+        diffTable.onYank = { [weak self] wantsReference in self?.yank(reference: wantsReference) }
         // Re-evaluate the auto-fold policy whenever the diff pane's width changes (ZEN-243). The frame
         // notification fires with the pane's *final* frame on every resize — reliable where piggybacking
         // on a `layout()` pass isn't (the inner table tiles after that runs, so it reads a stale width).
@@ -599,6 +642,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         if !isNarrow { groups.append(([glyph(.toggleDiffLayout)], "layout")) }
         groups.append(contentsOf: [
             (keys: ["←", "→"], label: "fold"),
+            (keys: ["V"], label: "select"),
+            (keys: ["y", "Y"], label: "yank"),
             (keys: ["esc"], label: "close"),
         ])
         for group in groups { hintsStack.addArrangedSubview(Self.hintGroup(keys: group.keys, label: group.label)) }
@@ -715,7 +760,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     @discardableResult
     private func reconcileLayout() -> Bool {
         guard currentFileDiff != nil, effectiveLayout != renderedLayout else { return false }
-        renderCurrentFile()
+        renderCurrentFile(keepingSelection: true)  // same file — the cursor and selection carry over
         return true
     }
 
@@ -733,20 +778,23 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// view. Only trips for a pathologically slow parse/fetch — the highlight normally lands in tens of ms.
     private static let highlightSafetyCap: TimeInterval = 0.8
 
-    private func renderCurrentFile() {
+    /// `keepingSelection` is true for a re-render of the *same* file (a layout flip or a resize
+    /// crossing the fold band), where the cursor and any running selection must survive — you were
+    /// mid-review and the layout change wasn't about the selection.
+    private func renderCurrentFile(keepingSelection: Bool = false) {
         guard let file = currentFileDiff else { return }
         let key = file.highlightKey  // scope+base+path — the same path in two slices caches separately
         // Already highlighted this file (a revisit, a layout flip, or a reopen)? Paint it highlighted
         // immediately — no flash, no re-parse. A cached value of nil means "resolved, no spans".
         if let cached = highlightStore.cached(key) {
-            renderRows(file, spans: cached)
+            renderRows(file, spans: cached, keepingSelection: keepingSelection)
             return
         }
         // Won't ever highlight (no repo on disk, or unsupported language) — plain now is the final state.
         guard FileManager.default.fileExists(atPath: repoRoot.path), SyntaxLanguage.isSupported(path: file.path)
         else {
             highlightStore.store(key, nil)
-            renderRows(file, spans: nil)
+            renderRows(file, spans: nil, keepingSelection: keepingSelection)
             return
         }
         // Supported + uncached: withhold the first paint until the highlight lands, so even a cold open
@@ -776,12 +824,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     /// Build and show the rows for `file` in the effective layout, with optional syntax spans.
-    private func renderRows(_ file: FileDiff, spans: DiffFileSpans?) {
+    private func renderRows(_ file: FileDiff, spans: DiffFileSpans?, keepingSelection: Bool = false) {
         let layout = effectiveLayout
         renderedLayout = layout
         diffTable.show(
             layout == .inline
-                ? UnifiedDiff.rows(for: file, spans: spans) : SideBySideDiff.rows(for: file, spans: spans))
+                ? UnifiedDiff.rows(for: file, spans: spans) : SideBySideDiff.rows(for: file, spans: spans),
+            preservingSelection: keepingSelection)
     }
 
     private func showMessage(_ text: String) {
@@ -808,7 +857,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     var selectedFilePathForTesting: String? { selectedFilePath }
     /// The number of visual diff rows rendered in the right pane.
     var diffRowCountForTesting: Int { diffTable.rowCountForTesting }
-    var renderedDiffRowsForTesting: [DiffRow] { diffTable.rowsForTesting }
+    var renderedDiffRowsForTesting: [DiffRow] { diffTable.rows }
     /// Re-run the loader the way a background refresh does, so a test can assert what a load carrying
     /// *changed* content does to the highlight cache.
     func reloadForTesting() { reload(showSpinner: false) }
@@ -842,6 +891,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// The file tree, so a test can send a real `keyDown` (Esc / Up-at-top / Return-to-fold) through
     /// `NavOutlineView`'s handler rather than only its selection path.
     var treeOutlineForTesting: NSOutlineView { outline }
+    /// The diff pane, so a test can send real `keyDown`s down the vim path and read back what the
+    /// selection actually became.
+    var diffPaneForTesting: DiffPaneTable { diffTable }
     /// Which pane holds first responder, for asserting `handleNavChord`'s focus moves landed.
     var isTreeFocusedForTesting: Bool { window?.firstResponder === outline }
     var isDiffFocusedForTesting: Bool { window?.firstResponder === diffTable.scrollFocusTarget }
@@ -870,6 +922,8 @@ private final class NavOutlineView: NSOutlineView {
     /// Ctrl-D / Ctrl-U half-page the diff pane while the tree keeps focus (+1 down / -1 up), so a file
     /// can be scanned without stepping over into the diff.
     var onHalfPageDiff: ((Int) -> Void)?
+    /// j / k move to the next / previous file, so the tree reads the same way as the diff pane.
+    var onMoveFile: ((Int) -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -918,6 +972,18 @@ private final class NavOutlineView: NSOutlineView {
         if let direction = DiffPaneTable.halfPageDirection(for: event) {
             onHalfPageDiff?(direction)
             return
+        }
+        // Only j/k are claimed here: the rest of the vim set acts on a diff selection, which the tree
+        // doesn't have. They'd read as dead keys either way, so the tree leaves them alone.
+        switch DiffPaneTable.vimKey(for: event) {
+        case .down:
+            onMoveFile?(1)
+            return
+        case .up:
+            onMoveFile?(-1)
+            return
+        default:
+            break
         }
         switch KeyboardFocus.key(for: event) {
         case .escape:
