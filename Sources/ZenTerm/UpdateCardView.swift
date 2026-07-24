@@ -1,4 +1,5 @@
 import AppKit
+import AppLog
 
 /// The one auto-update card (ZEN-118), a sibling of `ToastView` on the shared overlay-card
 /// chrome (`FloatShadow` bg + neutral hairline + drop shadow) in the top-right toast stack. It
@@ -22,6 +23,17 @@ final class UpdateCardView: ShadowCardView {
         case available(version: String, current: String, notes: [String], notesURL: URL?)
         case downloading(fraction: Double?)  // nil until the expected length is known
         case ready(version: String)
+
+        /// A short, non-sensitive label for the update diagnostic log (ZEN-248). Only the version
+        /// string, already public in the appcast, appears here — nothing user-specific.
+        var logLabel: String {
+            switch self {
+            case .available(let version, _, _, _): return "available \(version)"
+            case .downloading(let fraction):
+                return "downloading \(fraction.map { "\(Int($0 * 100))%" } ?? "…")"
+            case .ready(let version): return "ready \(version)"
+            }
+        }
     }
 
     /// The card's button callbacks. Only the ones a given state shows are read.
@@ -232,7 +244,13 @@ final class UpdateCardView: ShadowCardView {
     }
 
     private func addButton(_ title: String, variant: AppButton.Variant, onTap: @escaping () -> Void) {
-        buttonRow.addArrangedSubview(AppButton(title: title, variant: variant, onTap: onTap))
+        buttonRow.addArrangedSubview(
+            AppButton(title: title, variant: variant) { [weak self] in
+                // ZEN-248: log the tap before the action runs, so a reporter's bundle shows whether
+                // repeated taps registered at the AppKit level at all (one line vs many).
+                Log.info("update card tap: \(title) [\(self?.state.logLabel ?? "gone")]", category: .update)
+                onTap()
+            })
     }
 
     // MARK: - Theme
