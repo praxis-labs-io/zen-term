@@ -27,13 +27,9 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     private var lastTheme: TerminalTheme?
     private var lastBehavior: TerminalBehavior = .default
 
-    /// Focus as libghostty last heard it, which is what tells a real blur from a repeat: the
-    /// chrome re-sends every surface's focus state on any focus change, and a settle-burst per
-    /// repeat would re-shape an idle pane's viewport for nothing.
-    ///
-    /// Seeded `true` to match libghostty, whose renderer thread defaults `flags.focused = true`
-    /// and leaves it "up to the apprt to set the correct value". Seeding `false` would swallow
-    /// the first real blur of a surface that was never focused — the new-workspace drawers.
+    /// Focus as libghostty last heard it, which is what tells a real focus change from a repeat.
+    /// `start` sets it to what it actually told libghostty; until then it matches libghostty's
+    /// own default (`flags.focused = true`, "up to the apprt to set the correct value").
     private var lastFocused = true
 
     /// The pending shader strip that follows a settle-burst. Cancelled by a refocus inside the
@@ -133,7 +129,15 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // real first-responder state now that the surface exists. This also covers a view that
         // became first responder before `surfacePtr` was set (the `becomeFirstResponder` true
         // was skipped under its `if let surfacePtr` guard).
-        ghostty_surface_set_focus(surfacePtr, hostView.window?.firstResponder === hostView)
+        let bornFocused = hostView.window?.firstResponder === hostView
+        ghostty_surface_set_focus(surfacePtr, bornFocused)
+        // Track what we just told libghostty, so the first real focus change is measured against
+        // the truth rather than against an assumption.
+        lastFocused = bornFocused
+        // A surface born unfocused gets no blur to trigger the stand-down, and it's the case that
+        // shows the tracer worst: the drawers of a new workspace land unfocused and their shells
+        // then reach a first prompt, moving the cursor with no timer running to decay the smear.
+        if !bornFocused { startShaderSettle() }
 
         // libghostty just made hostView layer-hosting (its Metal layer is now
         // hostView.layer). The host window is transparent for the vibrancy backdrop, so
@@ -228,9 +232,22 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public func focus() { hostView.window?.makeFirstResponder(hostView) }
 
     public func setFocused(_ focused: Bool) {
+        if let surfacePtr { ghostty_surface_set_focus(surfacePtr, focused) }
+        handleFocusChange(focused)
+    }
+
+    /// Both focus paths converge here: the chrome's `setFocused`, and the responder-chain
+    /// transitions the host view reports through `focusDidChange`. Either can be the only one
+    /// to fire — a click focuses a pane through the responder chain — so hanging the shader
+    /// stand-down off just one of them leaves a pane stuck on the passthrough, its shader
+    /// silently dead until some later focus cycle happens to resync it.
+    ///
+    /// Deduped because both paths repeat themselves: the chrome re-sends every surface's focus
+    /// state on any focus change, and a stand-down per repeat would re-shape idle panes for
+    /// nothing. libghostty dedupes its own side, so the forwarding above stays unconditional.
+    private func handleFocusChange(_ focused: Bool) {
         guard focused != lastFocused else { return }
         lastFocused = focused
-        if let surfacePtr { ghostty_surface_set_focus(surfacePtr, focused) }
         if focused { restoreShader() } else { startShaderSettle() }
     }
 
@@ -315,6 +332,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// transitions so the global lock follows the pane you're actually typing in.
     func focusDidChange(_ focused: Bool) {
         if wantsSecureInput { SecureInput.shared.setScoped(secureInputID, focused: focused) }
+        handleFocusChange(focused)
     }
 
     public func paste(_ text: String) {
