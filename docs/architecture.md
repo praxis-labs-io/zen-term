@@ -97,10 +97,21 @@ fails.
   `applyAppearance` on any surface calls `GhosttyApp.shared.updateConfig`, deduped
   by generated config text, so N surfaces cause one real swap. A consequence:
   **there is no per-surface theming.** Every pane shares one theme.
+- **One surface can still run its own config.** `updateSurfaceConfig` pushes a
+  config to a single surface without touching the app-global one, which is how the
+  cursor shader stands down on an unfocused pane (ZEN-237). Theming stays global:
+  the per-surface shape is rebuilt from the theme that just landed, so a stood-down
+  surface follows an appearance change instead of holding the old one (ZEN-271).
 - **libghostty accepts config only from files.** `GhosttyConfigWriter` writes to
   `$TMPDIR/zenterm-ghostty-config-<pid>`. It deliberately does *not* call
   `ghostty_config_load_default_files`, so a user's `~/.config/ghostty` cannot skew
-  ZenTerm's appearance.
+  ZenTerm's appearance. Because that means a synchronous write, read and parse on
+  the main thread, the per-surface configs are cached by their generated text and
+  cleared when the app-global config moves (ZEN-90, ZEN-271).
+- **Shader draw stops when nobody can see it.** The focus libghostty is told about
+  is `paneFocused && isAppActive`, and `GhosttyHostView` reports its window's
+  occlusion, so a backgrounded, covered or minimized window runs no shader draw
+  timer at all (ZEN-271).
 - **`GHOSTTY_RESOURCES_DIR` is force-overridden.** Launching ZenTerm from inside
   Ghostty.app would otherwise inherit a mismatched version's shell integration and
   terminfo.

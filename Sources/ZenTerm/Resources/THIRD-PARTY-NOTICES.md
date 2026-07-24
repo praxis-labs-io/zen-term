@@ -2947,7 +2947,7 @@ SOFTWARE.
 
 **MIT**
 
-The bundled cursor-trail shaders `cursor_warp.glsl` and `cursor_tail.glsl` (selectable in Settings → Terminal → Cursor shader), from Sahaj Bhatt's [ghostty-cursor-shaders](https://github.com/sahaj-b/ghostty-cursor-shaders). Adapted: the trail color is left in the cursor's sRGB space (an upstream sRGB-to-linear step darkened it in our pipeline) and the timing tuned. The distance-field technique follows Inigo Quilez's 2D distance functions article, credited in the shader source.
+The bundled cursor-trail shaders `cursor_warp.glsl` and `cursor_tail.glsl` (selectable in Settings → Terminal → Cursor shader), from Sahaj Bhatt's [ghostty-cursor-shaders](https://github.com/sahaj-b/ghostty-cursor-shaders). Adapted: the trail color is left in the cursor's sRGB space (an upstream sRGB-to-linear step darkened it in our pipeline), the timing tuned, the fade gradient along the trail turned on in both (ported into `cursor_tail`, which shipped without one), and `cursor_tail`'s cursor hole antialiased to match its trail. The distance-field technique follows Inigo Quilez's 2D distance functions article, credited in the shader source.
 
 ```text
 MIT License
