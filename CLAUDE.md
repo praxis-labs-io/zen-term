@@ -40,8 +40,16 @@ test — format-lint and swiftlint are part of the gate and CI enforces them).
 
 **Test what can be silently dead. Show the rest.** A test earns its keep where a
 thing can be broken while looking fine. Anything you'd catch by glancing at the
-screen goes to the runbook: Drew is at the machine and would rather look than read
+screen goes in the runbook: Drew is at the machine and would rather look than read
 an assertion.
+
+**A runbook is handed over in chat, one per PR. It is never written to `docs/`.**
+Print the checks in the response that hands the PR over, as a checklist Drew can
+work down at the machine. `docs/runbooks/` holds the standing ones that outlive a
+branch (release, updates, notices); a PR's own manual checks are for the person
+reviewing that PR, and appending them there leaves a doc that grows a stale
+section per ticket. Don't add to those files unless the ask is explicitly to
+change a standing runbook.
 
 - **AppKit controls get window-based interaction tests, not state-only tests** —
   drive the control in a real window, because a test that only checks the backing
@@ -55,15 +63,15 @@ an assertion.
   delivers them, and match modifiers against the reservable set (`[.command,
   .shift, .option, .control]`) rather than `.deviceIndependentFlagsMask`, which
   keeps those extra bits and so never compares equal to a bare modifier.
-- **A new chord goes to the runbook** even when it looks fully tested — a keyboard
-  path crosses `KeyInterceptor`'s event monitor *before* the responder chain, and
-  no view-level test covers that.
+- **A new chord goes in the handover runbook** even when it looks fully tested — a
+  keyboard path crosses `KeyInterceptor`'s event monitor *before* the responder
+  chain, and no view-level test covers that.
 
 **Layout, placement, motion and color are the runbook's, not a test's.** Where a
 view sits, how a card reads, whether a keycap landed in the right corner: show it,
 don't assert it. A frame-measuring test costs more than it catches, and goes green
 just as happily when the thing looks wrong. Build it, run `swift run ZenTerm`, and
-hand it over.
+hand it over as checks in the PR handover.
 
 **The one exception is a budget the eye can't check:** copy against a fixed wrap
 column (`ToastView.messageFont` / `messageMaxWidth`) wraps mid-phrase invisibly, so
