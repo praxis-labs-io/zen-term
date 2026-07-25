@@ -81,6 +81,11 @@ final class SettingsWorkspacesSection: SettingsSection {
         // whether focus was ours and put it back on the equivalent stop afterwards.
         let focusedStop = stack.window?.firstResponder as? NSView
         let hadFocus = focusedStop.map { stop in detailStops().contains { $0 === stop } } ?? false
+        // The add button is the only stop that survives the rebuild, so it's the only one that can
+        // be restored by identity. Restoring it matters: it's the stop the user lands on when they
+        // enter the detail before the rows arrive, and moving them to a row would put Return on a
+        // workspace they never selected.
+        let wasAddButton = focusedStop === addButton
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rows = []
 
@@ -125,9 +130,9 @@ final class SettingsWorkspacesSection: SettingsSection {
         addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
 
-        // Focus was in this section before the rebuild: land it on the first row, else the add
-        // button, so arrows and Return keep working without a click.
-        if hadFocus { stack.window?.makeFirstResponder(detailStops().first) }
+        // Focus was in this section before the rebuild, so put it back: on the add button if that's
+        // where it was, else the first stop, so arrows and Return keep working without a click.
+        if hadFocus { stack.window?.makeFirstResponder(wasAddButton ? addButton : detailStops().first) }
     }
 
     /// Bumped per mount, so a load belonging to an earlier one is dropped rather than rendered.

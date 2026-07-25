@@ -174,14 +174,15 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
         let window = try XCTUnwrap(self.window)
         let section = try XCTUnwrap(self.section)
         // Before the load the add button is the only stop, so that's what entering the detail lands on.
-        XCTAssertTrue(window.makeFirstResponder(section.detailStops().first))
+        let addButton = try XCTUnwrap(section.detailStops().first)
+        XCTAssertTrue(window.makeFirstResponder(addButton))
 
         waitForLoad(in: detail)
 
-        let focused = window.firstResponder as? NSView
         XCTAssertTrue(
-            section.detailStops().contains { $0 === focused },
-            "focus must land on a stop once the rows arrive, not fall back to the window")
+            window.firstResponder === addButton,
+            "the rows arriving must not move focus off the button the user was on: Return there adds "
+                + "a workspace, and on a row it opens one")
     }
 
     func test_rowActivate_invokesOnEditWorkspaceWithThatWorkspace() throws {
