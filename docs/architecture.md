@@ -394,8 +394,9 @@ the chrome never hardcodes a color.
   (ZEN-17). One serial queue carries writes *and* reloads: it replaces the
   ordering the main thread used to provide, without which two overlapping writes
   would both read the pre-edit file and the second would erase the first.
-  `reloadBlocking` is the synchronous form, and it exists for tests pinning the
-  statics in `setUp` — calling it from the main thread is the stall this removed.
+  `reloadBlocking` is the synchronous form. It is compiled out of release builds,
+  because it exists for tests pinning the statics in `setUp`: calling it from the
+  main thread is the stall this removed.
 
   **The statics stay main-thread-only.** `GeneralConfig.current` and
   `Theme.current` are read by every view, so the pair is resolved on the queue and
@@ -405,7 +406,7 @@ the chrome never hardcodes a color.
 
   **A caller that repaints from the reloaded config has to wait for it.** The
   ⌥↑/⌥↓ float reorder rebuilds from `GeneralConfig.current.floats`, so it rebuilds
-  from the write's completion — rebuilding straight after the call redraws the list
+  from the write's completion: rebuilding straight after the call redraws the list
   it already had and the float doesn't move (the ZEN-145 shape). The two Settings
   sections instead refresh from the completion and take **only the newest write**:
   writes are serialized, so an older completion carries a value the user has moved

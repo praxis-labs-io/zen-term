@@ -2,7 +2,8 @@ import Foundation
 
 extension Notification.Name {
     /// Posted after `AppConfig` re-resolves the config statics, so living consumers (the keymap,
-    /// chrome layout, terminal surfaces) re-apply. Always posted on the main thread.
+    /// chrome layout, terminal surfaces) re-apply. `persist` and `reload` post it on the main
+    /// thread, which is every path a shipping build has.
     static let configDidChange = Notification.Name("ZenTerm.configDidChange")
 }
 
@@ -61,16 +62,19 @@ enum AppConfig {
         }
     }
 
-    /// Resolve and apply on the calling thread, blocking on both file reads.
-    ///
-    /// This is what tests use to pin the statics to a known config in `setUp`, where the async form
-    /// would return before the swap landed. App code uses `persist` / `reload`: calling this from
-    /// the main thread is the stall they exist to remove.
-    static func reloadBlocking() {
-        apply(resolve())
-    }
-
     #if DEBUG
+        /// Test hook: resolve and apply on the calling thread, blocking on both file reads.
+        ///
+        /// Tests use it to pin the statics to a known config in `setUp`, where the async form would
+        /// return before the swap landed. **Call it on the main thread**, like every caller does: it
+        /// applies wherever it's called, so calling it off-main would swap the statics and post
+        /// `configDidChange` from another thread. Compiled out of release builds, so app code can't
+        /// reach for it: there, `persist` / `reload` are the only way in, and a blocking read on the
+        /// main queue is the stall they exist to remove.
+        static func reloadBlocking() {
+            apply(resolve())
+        }
+
         /// Test hook: call back on main once everything already enqueued has been applied.
         ///
         /// A barrier rather than a `reload`, because a reload would post its own `configDidChange`,
