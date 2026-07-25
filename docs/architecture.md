@@ -341,6 +341,13 @@ a second, and the ungated fan-out relaid out every tab, recolored every surface,
 and rebuilt the dock each time (~3.4 ms a post). Gated, a keybind rebind costs
 0.8 ms and a gutter drag 0.4 ms.
 
+Those figures are **relative shape, not release timings**: they come from a debug
+build driving a mounted `WindowController` (4 tabs, both drawers open) with stub
+surfaces, so the per-surface `GhosttyConfigWriter.configText` cost sits outside
+them. Treat them as which writes are expensive, not as what the shipped app
+spends. The test target doesn't build under `-c release`, so a release number
+needs Instruments against the real app.
+
 **A notification with no change set reads as `.all`.** That fail-safe is the point:
 too much re-apply is a wasted frame, too little is stale chrome, so a caller that
 doesn't diff keeps the old do-everything behavior.
