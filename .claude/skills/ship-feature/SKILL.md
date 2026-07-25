@@ -18,7 +18,9 @@ same regardless of remote.
 - If a formatter/linter is configured (`.swift-format`, `swiftlint`), run it and
   resolve findings. If none is configured, skip; do not add one here.
 - For work with GUI behavior no unit test covers, run `swift run ZenTerm` and
-  confirm the plan's manual runbook expectations.
+  confirm it yourself as far as the tool shell allows. What you can't verify
+  (anything needing eyes on screen) becomes the handover runbook in step 8 —
+  written in chat, never appended to `docs/runbooks/`.
 
 Do not proceed until build + tests are green.
 
@@ -80,3 +82,12 @@ Present the triage table to the user, apply the agreed fixes, then re-run
   invalidated every hardcoded id. If no ticket exists yet, note that and skip.
 - Report final state: branch, PR link (if any), build/test status, ticket status,
   and the triage summary.
+- **Hand over a runbook for this PR, in the response itself.** A markdown
+  checklist of what Drew should look at on screen, one per PR: the things a test
+  can't judge (layout, motion, color, a new chord crossing `KeyInterceptor`) and
+  anything the change could plausibly have broken that CI would still call green.
+  Each item names where to go, what to do, and what right looks like, so it can be
+  worked down without re-reading the diff. Lead with the check most likely to
+  catch a regression, and say plainly which behavior has no test behind it.
+  **Never write these to `docs/runbooks/`** — those are the standing runbooks that
+  outlive a branch, and a per-ticket section there goes stale the moment it ships.

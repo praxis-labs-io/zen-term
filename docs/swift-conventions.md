@@ -87,6 +87,35 @@ entry (`EnableSecureEventInput`) left engaged after you Cmd-Tab away from a `sud
 keyboard input system-wide in other apps. Scope such state to the *focused* surface and tie it to
 `NSApplication.didResignActive` / `didBecomeActive` (ZEN-72).
 
+## Carbon and the main thread
+
+**`TISCopyCurrentKeyboardLayoutInputSource` is main-thread-only in a GUI app, and violating it
+does not look like a crash.** Called from a background queue in a running app it takes the whole
+process down: exit code 6, no crash report, nothing on stderr, the Dock icon simply goes. There is
+no exception to catch and no stack to read, so it presents as "the app closed" with no evidence.
+
+It is reachable from further away than you would expect. Parsing the general config assembles the
+keymap, and `KeymapAssembler` asks `KeyboardLayout.canType` whether each bound chord can be typed
+on the current layout, which is the TIS call. So **`ConfigLoader.loadGeneralConfig` is
+main-thread-only**, and so is anything that reaches it, which includes every config reload.
+
+**`swift test` will not catch this.** TIS is available in the xctest process and answers happily
+off the main thread, so an off-main parse passes every test while killing the real app. This cost a
+day of bisecting on ZEN-17, through four green repro attempts, one of them using the real config
+verbatim. Anything moved onto a background queue near config, keybinds, or the keyboard layout has
+to be checked in `swift run ZenTerm`.
+
+Two things about finding it, since the symptom hides itself. `LogFileSink` writes on its own queue,
+so the lines that would have named the call were lost when the process died: the last line logged is
+a lower bound on where it got to, not the location. Probes have to `fsync` per call to be trusted.
+And because there is no crash report, an empty `~/Library/Logs/DiagnosticReports` is not evidence
+that the app exited cleanly.
+
+**If you want the config read off the main thread, the read is the only part that can move.** Split
+the file read from the parse, keep the parse on main, and verify in the app. ZEN-17 built exactly
+that and then dropped it: the measured win was about 2.5 ms against a 180 ms debounce, which did not
+justify the async seam it needed. The constraint above is the part worth keeping.
+
 ## Testing AppKit
 
 **AppKit controls get window-based interaction tests, not state-only tests.** A test that only reads
