@@ -33,23 +33,33 @@ enum ConfigLoader {
     }
 
     static func loadAppTheme(configRoot: URL = defaultRoot, general: GeneralConfig = .current) -> AppTheme {
-        let builtIn = Theme.rosePineMoon
+        makeAppTheme(themeText: readThemeText(configRoot: configRoot, general: general), general: general)
+    }
 
-        var terminal: TerminalTheme
-        if let themeURL = resolveThemeURL(configRoot: configRoot, general: general) {
-            do {
-                let text = try String(contentsOf: themeURL, encoding: .utf8)
-                terminal = GhosttyThemeParser.parse(
-                    text, fontName: builtIn.fontName, fontSize: builtIn.fontSize, fallback: builtIn)
-            } catch {
-                Log.warning(
-                    "ConfigLoader: could not read \(themeURL.path): \(error) — using built-in theme",
-                    category: .config)
-                terminal = builtIn
-            }
-        } else {
-            terminal = builtIn
+    /// Locate and read the active theme file. **Filesystem work, safe off the main thread** — this
+    /// is the half `AppConfig` runs on its queue (ZEN-17). nil means "use the built-in": no theme
+    /// file, a named theme that doesn't exist, or one that wouldn't read.
+    static func readThemeText(configRoot: URL = defaultRoot, general: GeneralConfig) -> String? {
+        guard let themeURL = resolveThemeURL(configRoot: configRoot, general: general) else { return nil }
+        do {
+            return try String(contentsOf: themeURL, encoding: .utf8)
+        } catch {
+            Log.warning(
+                "ConfigLoader: could not read \(themeURL.path): \(error) — using built-in theme",
+                category: .config)
+            return nil
         }
+    }
+
+    /// Build the theme from text already read. Pure: no filesystem, so the caller decides where the
+    /// I/O happened. `AppConfig` runs this on main, next to the general-config parse it pairs with.
+    static func makeAppTheme(themeText: String?, general: GeneralConfig) -> AppTheme {
+        let builtIn = Theme.rosePineMoon
+        var terminal =
+            themeText.map {
+                GhosttyThemeParser.parse(
+                    $0, fontName: builtIn.fontName, fontSize: builtIn.fontSize, fallback: builtIn)
+            } ?? builtIn
 
         // Font is a general-config knob, not a theme key (ghostty themes carry no font). Inject
         // it uniformly here so a custom font applies even with no theme file present.
@@ -80,21 +90,38 @@ enum ConfigLoader {
     }
 
     static func loadGeneralConfig(configRoot: URL = defaultRoot) -> GeneralConfig {
+        parseGeneralConfig(readGeneralConfigText(configRoot: configRoot))
+    }
+
+    /// Read the `config` file. **Filesystem work, safe off the main thread** — the half `AppConfig`
+    /// runs on its queue (ZEN-17). nil means "use the built-in": absent, or unreadable.
+    static func readGeneralConfigText(configRoot: URL = defaultRoot) -> String? {
         let configURL = configRoot.appendingPathComponent("config")
-        guard FileManager.default.fileExists(atPath: configURL.path) else {
-            return .builtIn
-        }
+        guard FileManager.default.fileExists(atPath: configURL.path) else { return nil }
         do {
-            let text = try String(contentsOf: configURL, encoding: .utf8)
-            var config = GeneralConfigParser.parse(text, fallback: .builtIn)
-            config.cursorShader = resolveShader(config.cursorShader)
-            return config
+            return try String(contentsOf: configURL, encoding: .utf8)
         } catch {
             Log.warning(
                 "ConfigLoader: could not read \(configURL.path): \(error) — using built-in config",
                 category: .config)
-            return .builtIn
+            return nil
         }
+    }
+
+    /// Parse text already read. **Main thread only, and not for a reason you'd guess:** the parse
+    /// assembles the keymap, which asks the keyboard layout what a chord can type, which calls
+    /// Carbon `TISCopyCurrentKeyboardLayoutInputSource`. TIS is main-thread-only in a GUI app and
+    /// takes the process down from a background queue — silently, with no crash report, and with a
+    /// green `swift test` (TIS answers fine off-main there). See `AppConfig` (ZEN-17).
+    static func parseGeneralConfig(_ text: String?) -> GeneralConfig {
+        // Not a defensive guard: off main this kills the process with no crash report and no failing
+        // test, which is how it shipped once. Trap here so the next person who moves config work
+        // onto a queue is told where, instead of hunting a silent quit.
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard let text else { return .builtIn }
+        var config = GeneralConfigParser.parse(text, fallback: .builtIn)
+        config.cursorShader = resolveShader(config.cursorShader)
+        return config
     }
 
     /// Resolve a bundled-shader name (from `cursor-shader = <name>`) to an absolute file path. A

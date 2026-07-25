@@ -387,31 +387,35 @@ the chrome never hardcodes a color.
   neither rows nor its empty-state hint until the load lands, because that hint
   is the answer for an empty *file* and flashing it mid-read reads as "your
   workspaces are gone".
-- **Config writes go through `AppConfig.persist`, which writes and re-resolves off the
-  main thread.** A write is a whole-file read-modify-rewrite plus two reads to
-  re-resolve, and Settings live-apply fires one every ~180ms while a control
-  settles, so on a network-backed or cloud-synced home it is the ZEN-90 stall
-  (ZEN-17). One serial queue carries writes *and* reloads: it replaces the
-  ordering the main thread used to provide, without which two overlapping writes
-  would both read the pre-edit file and the second would erase the first.
-  `reloadBlocking` is the synchronous form. It is compiled out of release builds,
-  because it exists for tests pinning the statics in `setUp`: calling it from the
-  main thread is the stall this removed.
+- **Config writes go through `AppConfig.persist`: every file read runs on its queue and
+  every parse runs on main.** A write is a whole-file read-modify-rewrite plus two reads to
+  re-resolve, and Settings live-apply fires one every ~180ms while a control settles, so
+  on a network-backed or cloud-synced home that is the ZEN-90 stall (ZEN-17). One serial
+  queue carries writes and reloads: it replaces the ordering the main thread used to
+  provide, without which two overlapping writes would both read the pre-edit file and the
+  second would erase the first.
 
-  **The statics stay main-thread-only.** `GeneralConfig.current` and
-  `Theme.current` are read by every view, so the pair is resolved on the queue and
-  adopted on main: that's why `adopt(_:)` takes a value rather than reading the
-  file, and why `ConfigLoader.loadAppTheme` takes its `general:` rather than
-  reading the static it would otherwise race.
+  **The parse cannot move off main**, and not for a reason the code shows locally: it
+  assembles the keymap, which asks the keyboard layout what a chord can type, which is a
+  Carbon TIS call. Off main that kills the process outright with no crash report, and
+  `swift test` does not reproduce it. See "Carbon and the main thread" in
+  `docs/swift-conventions.md` before moving anything here onto a queue.
 
-  **A caller that repaints from the reloaded config has to wait for it.** The
-  ⌥↑/⌥↓ float reorder rebuilds from `GeneralConfig.current.floats`, so it rebuilds
-  from the write's completion: rebuilding straight after the call redraws the list
-  it already had and the float doesn't move (the ZEN-145 shape). The two Settings
-  sections instead refresh from the completion and take **only the newest write**:
-  writes are serialized, so an older completion carries a value the user has moved
-  past, and a segmented control or dropdown (unlike a field, which skips itself
-  while it has an editor) would flick back through it.
+  So a resolve is four hops: read `config` on the queue, parse it on main, read the theme
+  on the queue (its name comes from the parse), build and adopt on main. A generation
+  counter drops a superseded pass rather than letting it pair its own config with a newer
+  theme, and `inFlight` is what lets a test drain the pipeline without knowing its depth.
+
+  **The statics stay main-thread-only.** `GeneralConfig.current` and `Theme.current` are
+  read by every view, so `adopt(_:)` takes a value rather than reading the file.
+
+  **A caller that repaints from the reloaded config has to wait for it.** The ⌥↑/⌥↓ float
+  reorder rebuilds from `GeneralConfig.current.floats`, so it rebuilds from the write's
+  completion: rebuilding straight after the call redraws the list it already had and the
+  float doesn't move (the ZEN-145 shape). The two Settings sections refresh from the
+  completion and take **only the newest write**: writes are serialized, so an older
+  completion carries a value the user has moved past, and a segmented control or dropdown
+  (unlike a field, which skips itself while it has an editor) would flick back through it.
 - **Interactive git probes go through `GitRepoStatus`, never `GitRepo` directly.**
   Both are filesystem I/O, which the main queue never blocks on: the ⌘⇧P picker and
   Settings → Workspaces render their badges from `GitRepoStatus.known` (nil until

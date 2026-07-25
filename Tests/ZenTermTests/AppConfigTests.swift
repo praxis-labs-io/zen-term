@@ -6,10 +6,14 @@ import XCTest
 /// write route through: it re-resolves the config statics and broadcasts `.configDidChange` so every
 /// live observer (keymap, motion, backdrop tint, terminal surfaces) re-applies.
 ///
-/// The thread contract is the part that can be silently dead (ZEN-17). A write that quietly moved
-/// back onto the main thread looks identical from the outside on a local disk, and only shows up as
-/// a beachball on the network-backed home this exists for, so the tests assert where the work runs
-/// rather than only what it produces.
+/// The thread contract is the part that can be silently dead (ZEN-17): file I/O on the queue, every
+/// parse on main. Work that quietly moved back onto the main thread looks identical on a local disk
+/// and only shows up as a beachball on the network-backed home this exists for, so these assert
+/// where the work runs rather than only what it produces.
+///
+/// **A green suite is not evidence for the other direction.** Moving the parse OFF main kills a real
+/// GUI app (Carbon TIS, see `ConfigLoader.parseGeneralConfig`) while every test here still passes —
+/// that shipped once. `ConfigLoader` traps on it now; the real check is `swift run ZenTerm`.
 final class AppConfigTests: XCTestCase {
     private var tempRoot: URL!
 
@@ -129,6 +133,22 @@ final class AppConfigTests: XCTestCase {
 
         XCTAssertTrue(reported.value is WriteFailure, "the completion carries the write's error")
         XCTAssertEqual(postCount, 0, "a failed write must not broadcast a config change")
+    }
+
+    /// The reads are the half that must be off main: they are the unbounded part on a network or
+    /// cloud-synced home, and they are what the split in `ConfigLoader` exists to make movable.
+    func test_theFileReadsAreSafeOffTheMainThread() throws {
+        try "font-size = 15\ntheme = nord\n".write(
+            to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+        let root = tempRoot!
+        let done = expectation(description: "read off main")
+        DispatchQueue.global(qos: .userInitiated).async {
+            let text = ConfigLoader.readGeneralConfigText(configRoot: root)
+            XCTAssertTrue(text?.contains("font-size = 15") == true)
+            _ = ConfigLoader.readThemeText(configRoot: root, general: .builtIn)
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 2)
     }
 
     /// A minimal box for a value written on the config queue and read on the main thread once the
