@@ -312,7 +312,10 @@ class SettingsFormSection: SettingsSection {
         }
     }
     private func resetAll() {
-        persist({ try ConfigWriter.apply(removals: Set(self.scalarKeys)) }, reportKey: nil) { [weak self] landed in
+        // Snapshot on main: the write closure runs on the config queue, and `scalarKeys` is rebuilt
+        // by `makeDetailView`, so reading it in there would read chrome state off the main thread.
+        let keys = Set(scalarKeys)
+        persist({ try ConfigWriter.apply(removals: keys) }, reportKey: nil) { [weak self] landed in
             guard landed else { return }  // persist showed the write error
             self?.resetAllMessage.flash("Defaults restored.")
         }

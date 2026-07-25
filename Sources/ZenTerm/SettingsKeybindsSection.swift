@@ -248,6 +248,10 @@ final class SettingsKeybindsSection: SettingsSection {
                 self.endCapture(row)
                 return
             }
+            // The bubble belongs to whatever row is armed now. Arming another one inside the write's
+            // window (a slow disk widens it) would otherwise put this row's "saved" on that row's
+            // bubble and drag the bubble back up here.
+            guard self.capturingRow === row else { return }
             self.hintBubble?.setPreview(chord.displayGlyph)
             self.hintBubble?.showSuccess("Shortcut saved.")
             self.positionBubble(for: row)

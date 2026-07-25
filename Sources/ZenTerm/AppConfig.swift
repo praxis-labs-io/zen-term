@@ -28,6 +28,10 @@ enum AppConfig {
     ///
     /// A failed write skips the re-resolve — nothing changed on disk, and re-applying would post a
     /// `configDidChange` that says otherwise.
+    ///
+    /// **`write` runs on the queue, so it must close over values, not chrome state.** Snapshot what
+    /// it needs on main first: reading a view model's array in there is a read of main-thread state
+    /// from another thread, and it can see an edit the user made after the write was enqueued.
     static func persist(_ write: @escaping () throws -> Void, completion: @escaping (Error?) -> Void) {
         queue.async {
             do {
