@@ -18,15 +18,25 @@ enum GitRepoStatus {
     /// The last-known answer for `dir`, or nil when nothing has probed it yet.
     static func known(_ dir: URL) -> Bool? { cache[dir.standardizedFileURL] }
 
-    /// Probe every directory in `dirs` off-main, then record the answers and run `completion`, both
-    /// on the main thread.
+    /// Probe every directory in `dirs` off-main, recording each answer and running `completion` on
+    /// the main thread as it lands.
+    ///
+    /// One probe per directory rather than one pass over all of them: a single unreachable path
+    /// would otherwise hold every other answer behind it, so the local repos in a list would sit
+    /// badgeless until a dead mount finally timed out. That is the unbounded wait this type exists
+    /// to remove, and batching would only have moved it off the main thread rather than removed it.
+    ///
+    /// `completion` therefore runs once per directory, not once per call, and never at all for an
+    /// empty list. Callers re-read `known` for everything they render, which makes each run
+    /// idempotent.
     static func refresh(_ dirs: [URL], completion: @escaping () -> Void) {
-        let paths = dirs.map(\.standardizedFileURL)
-        DispatchQueue.global(qos: .userInitiated).async {
-            let probed = paths.map { (dir: $0, isRepo: GitRepo.isGitRepo($0)) }
-            DispatchQueue.main.async {
-                for entry in probed { cache[entry.dir] = entry.isRepo }
-                completion()
+        for dir in dirs.map(\.standardizedFileURL) {
+            DispatchQueue.global(qos: .userInitiated).async {
+                let isRepo = GitRepo.isGitRepo(dir)
+                DispatchQueue.main.async {
+                    cache[dir] = isRepo
+                    completion()
+                }
             }
         }
     }

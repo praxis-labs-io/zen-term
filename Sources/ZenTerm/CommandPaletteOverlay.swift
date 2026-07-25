@@ -54,13 +54,15 @@ final class CommandPaletteOverlay: PaletteOverlay {
         }
     }
 
-    /// A row is the same row across a re-filter when it names the same section or the same command.
-    /// Titles are unique across the catalog (including its generated `Select Tab N` entries), and a
-    /// row renders nothing but its title and shortcut, so the title covers everything shown.
+    /// A row is the same row across a re-filter when it names the same section, or the same command
+    /// with the same shortcut. The identity has to cover everything the row renders, and a command
+    /// row renders both: a tool float's title comes from user config and nothing stops it colliding
+    /// with a built-in command's, so keying on the title alone would let one row inherit the other's
+    /// keycap and show a chord that doesn't run it.
     override func rowIdentity(at index: Int) -> AnyHashable? {
         switch rows[index] {
-        case .header(let title): return "header:\(title)"
-        case .command(let command): return "command:\(command.title)"
+        case .header(let title): return ["header", title]
+        case .command(let command): return ["command", command.title, command.shortcut]
         }
     }
 

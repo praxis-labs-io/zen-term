@@ -334,6 +334,37 @@ final class PaletteInteractionTests: XCTestCase {
         XCTAssertEqual(chosen?.0.title, "beta", "a reused row runs its current index, not the one it was built at")
     }
 
+    /// A tool float's title comes from the user's config and nothing stops it matching a built-in
+    /// command's, so two rows can share a title while rendering different chords. The keycap beside
+    /// a command has to be the chord that runs it, whichever row the filter reuses.
+    func test_commandPalette_commandsSharingATitle_keepTheirOwnShortcut() {
+        var ran: KeyInterceptor.ReservedChord?
+        let shortcuts: [KeyInterceptor.ReservedChord: String] = [.newTab: "⌘T", .toggleToolFloat("nt"): "⌘⇧J"]
+        let overlay = CommandPaletteOverlay(
+            commands: [
+                PaletteCommand(title: "New Tab", shortcut: "⌘T", category: "Tabs", chord: .newTab),
+                PaletteCommand(
+                    title: "New Tab", shortcut: "⌘⇧J", category: "Tools", chord: .toggleToolFloat("nt")),
+            ],
+            background: Theme.current.chrome.background.nsColor, onRun: { ran = $0 }, onDismiss: {})
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+
+        type("new", into: overlay)  // both match, and both rows carry the same title
+        window.layoutIfNeeded()
+
+        // Assert per row rather than by list position: which of the two sorts first is not the
+        // claim, and Swift's sort isn't stable on equal keys.
+        XCTAssertEqual(rows(in: overlay).count, 2)
+        for row in rows(in: overlay) {
+            let rendered = descendants(of: row).compactMap { ($0 as? KeycapView)?.shortcut }
+            click(row)
+            XCTAssertEqual(
+                rendered, [ran.flatMap { shortcuts[$0] }].compactMap { $0 },
+                "the keycap on a row must be the chord that row runs")
+        }
+    }
+
     func test_commandPalette_reusesTheRowOfACommandThatSurvivesTheFilter() {
         let overlay = makeCommandPalette()
         mount(overlay)

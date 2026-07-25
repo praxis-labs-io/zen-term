@@ -54,7 +54,13 @@ final class ToolFloatControllerTests: XCTestCase {
     /// (ZEN-90/ZEN-15), so a toggle that needs one takes a hop, and every assertion here would have
     /// to become an expectation. `onProbe` fires on each probe, for the tests that care whether one
     /// happened at all. What the async delivery itself does to the open path is a runbook step.
-    private func makeFloats(cwd: URL, onProbe: (() -> Void)? = nil) -> (
+    /// Pass `resolveRepoRoot` to hold the probe instead, which is the window the real walk leaves
+    /// open while it hits the filesystem: the tests that assert an open can be called off deliver
+    /// the answer by hand, after the cancelling event.
+    private func makeFloats(
+        cwd: URL, onProbe: (() -> Void)? = nil,
+        resolveRepoRoot: ((URL?, @escaping (URL?) -> Void) -> Void)? = nil
+    ) -> (
         floats: ToolFloatController, spawned: () -> [RecordingSurface], setCWD: (URL) -> Void
     ) {
         var spawned: [RecordingSurface] = []
@@ -83,7 +89,7 @@ final class ToolFloatControllerTests: XCTestCase {
                 spawned.append(surface)
                 return surface
             },
-            resolveRepoRoot: { cwd, deliver in
+            resolveRepoRoot: resolveRepoRoot ?? { cwd, deliver in
                 onProbe?()
                 deliver(GitRepo.repoRoot(for: cwd))
             })
@@ -397,6 +403,121 @@ final class ToolFloatControllerTests: XCTestCase {
 
         XCTAssertEqual(floatSurfaces(spawned(), command: "gitdash").count, 1)
         XCTAssertEqual(probes, 1, "one walk per press, shared by the guard and the anchor")
+    }
+
+    // MARK: calling off an open that is still resolving its repo root (ZEN-15)
+
+    /// A held probe plus the float engine driving it. `deliver` runs the walk's answer back, so a
+    /// test can put the cancelling event between the press and the landing.
+    private func makeHeldProbeFloats(cwd: URL) -> (
+        floats: ToolFloatController, spawned: () -> [RecordingSurface], setCWD: (URL) -> Void,
+        deliver: () -> Void
+    ) {
+        var held: [(cwd: URL?, deliver: (URL?) -> Void)] = []
+        let (floats, spawned, setCWD) = makeFloats(
+            cwd: cwd, resolveRepoRoot: { cwd, deliver in held.append((cwd, deliver)) })
+        return (
+            floats, spawned, setCWD,
+            {
+                let pending = held
+                held = []
+                for probe in pending { probe.deliver(GitRepo.repoRoot(for: probe.cwd)) }
+            }
+        )
+    }
+
+    /// The open crosses a queue hop now, so a close landing inside that window has to call it off.
+    /// Otherwise the card arrives after the user has already moved on — `closeFloatForTabChange`
+    /// no-ops on a float that isn't shown yet, and the float lands on the tab they switched to.
+    func test_closeDuringTheProbe_callsTheOpenOff() throws {
+        let repo = try makeDir("repo", git: true)
+        let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
+
+        floats.toggle(spec("lazygit", persist: .directory))
+        floats.close()  // what a tab change does
+        deliver()  // the walk finishes afterwards
+
+        XCTAssertTrue(
+            floatSurfaces(spawned(), command: "lazygit").isEmpty,
+            "a float closed while it was still probing must not open when the probe lands")
+        XCTAssertFalse(floats.isOpen)
+    }
+
+    /// Same window, at teardown: a probe landing after `shutdown()` would spawn a fresh shell into
+    /// the registry of a window that is gone, leaving a process nothing can reach.
+    func test_shutdownDuringTheProbe_callsTheOpenOff() throws {
+        let repo = try makeDir("repo", git: true)
+        let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
+
+        floats.toggle(spec("lazygit", persist: .directory))
+        floats.shutdown()
+        deliver()
+
+        XCTAssertTrue(
+            floatSurfaces(spawned(), command: "lazygit").isEmpty,
+            "the window is gone; nothing may spawn into it")
+    }
+
+    /// The window calls this when a modal card goes up, so the two can't end up stacked.
+    func test_cancelPendingOpen_stopsTheCardFromLanding() throws {
+        let repo = try makeDir("repo", git: true)
+        let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
+
+        floats.toggle(spec("lazygit", persist: .directory))
+        floats.cancelPendingOpen()
+        deliver()
+
+        XCTAssertTrue(floatSurfaces(spawned(), command: "lazygit").isEmpty)
+        XCTAssertFalse(floats.isOpen)
+    }
+
+    /// Two presses of a toggle must not leave it open. The second press can't see a card yet, so it
+    /// has to recognise the float already on its way in and call it off.
+    func test_secondPressDuringTheProbe_cancelsInsteadOfOpening() throws {
+        let repo = try makeDir("repo", git: true)
+        let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
+        let float = spec("lazygit", persist: .directory)
+
+        floats.toggle(float)
+        floats.toggle(float)  // impatient second press, nothing on screen yet
+        deliver()
+
+        XCTAssertTrue(
+            floatSurfaces(spawned(), command: "lazygit").isEmpty,
+            "press-press is open-then-close, not open-then-open")
+        XCTAssertFalse(floats.isOpen)
+    }
+
+    func test_pendingOpenForAFloatDeletedByAConfigReload_isCancelled() throws {
+        let repo = try makeDir("repo", git: true)
+        let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
+
+        floats.toggle(spec("lazygit", persist: .directory))
+        floats.prune(against: [])  // the float was removed from the config
+        deliver()
+
+        XCTAssertTrue(
+            floatSurfaces(spawned(), command: "lazygit").isEmpty,
+            "a float with no config entry left has no card to open")
+    }
+
+    /// The anchor a persistent float is registered under and the directory its shell actually runs
+    /// in have to come from one reading. They were the same call before the walk went async; now the
+    /// cwd is captured at the press, and `spawn` must use that rather than re-reading after the hop.
+    func test_directoryFloat_spawnsAtThePressTimeCWD_whenThePaneMovesDuringTheProbe() throws {
+        let repoA = try makeDir("a", git: true)
+        let repoB = try makeDir("b", git: true)
+        let (floats, spawned, setCWD, deliver) = makeHeldProbeFloats(cwd: repoA)
+
+        floats.toggle(spec("lazygit", persist: .directory))
+        setCWD(repoB)  // the focused pane cd'd while the walk was out
+        deliver()
+
+        let opened = floatSurfaces(spawned(), command: "lazygit")
+        XCTAssertEqual(opened.count, 1)
+        XCTAssertEqual(
+            opened[0].lastConfig?.workingDirectory, repoA,
+            "the shell must start where the anchor was resolved, not wherever the pane ended up")
     }
 
     // MARK: config-reload reconciliation (review findings on the shipped registry)

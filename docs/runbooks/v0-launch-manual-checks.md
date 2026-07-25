@@ -200,4 +200,8 @@ few entries, at least one of them a git repo and one not.
 - [ ] **Tool floats still gate on git.** Toggle a `git:true` float from a folder outside
       any repo (toast blocks it) and from inside one (it opens). Toggle a plain float:
       it opens with no perceptible delay. Double-press a git-gated float's chord fast:
-      one card, never two.
+      one card, never two, and if the second press beats the card it stays closed.
+- [ ] **Nothing lands after you've moved on.** A git-gated float's open now resolves a
+      beat after the press. Press its chord and immediately switch tabs, and separately
+      press it and immediately hit ⌘⇧P. In both cases no float card appears afterwards:
+      you get the tab you asked for, or the picker alone with the keyboard in it.

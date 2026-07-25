@@ -31,10 +31,14 @@ final class GitRepoStatusTests: XCTestCase {
         return dir
     }
 
+    /// `refresh` answers one directory at a time (a dead mount must not hold up the others), so its
+    /// completion runs once per directory. Counting those is what makes a RE-probe waitable: the
+    /// cache already holds an answer then, so waiting on "an answer exists" would return before the
+    /// fresh one landed and read the stale value.
     private func refresh(_ dirs: [URL]) {
-        let landed = expectation(description: "probe landed")
-        GitRepoStatus.refresh(dirs) { landed.fulfill() }
-        wait(for: [landed], timeout: 2)
+        var landed = 0
+        GitRepoStatus.refresh(dirs) { landed += 1 }
+        waitUntil(landed == dirs.count, "every probe to land")
     }
 
     /// Unknown is not "no": a row that read nil as false would flash the wrong answer, and a row
@@ -76,6 +80,22 @@ final class GitRepoStatusTests: XCTestCase {
         let unstandardized = repo.appendingPathComponent(".").appendingPathComponent("..")
             .appendingPathComponent("repo", isDirectory: true)
         XCTAssertEqual(GitRepoStatus.known(unstandardized), true)
+    }
+
+    /// One unreachable path must not hold the others' badges hostage, so each directory is probed
+    /// and published on its own rather than as one batch. No test can make a real path hang, but a
+    /// batched pass can only ever report once for the whole list, so the per-directory callback is
+    /// the property that pins the independence.
+    func test_refresh_answersEachDirectoryOnItsOwn() throws {
+        let repo = try makeDir("repo", git: true)
+        let plain = try makeDir("plain", git: false)
+        var landed = 0
+
+        GitRepoStatus.refresh([repo, plain]) { landed += 1 }
+
+        waitUntil(landed == 2, "an answer for each directory, not one for the batch")
+        XCTAssertEqual(GitRepoStatus.known(repo), true)
+        XCTAssertEqual(GitRepoStatus.known(plain), false)
     }
 
     func test_repoRoot_walksUpFromASubdirectory() throws {

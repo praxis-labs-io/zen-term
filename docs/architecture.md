@@ -375,6 +375,15 @@ the chrome never hardcodes a color.
   guard or `.directory` anchor actually needs one. Refreshing per open, rather than
   answering once per process, is what shows a freshly `git init`ed folder's badge
   without a relaunch.
+- **A tool float's open is cancellable while its repo-root probe is out.** The
+  walk is off-main, so a `git:`-gated or `.directory` float opens a queue hop
+  after the press, and for that window `pendingOpen` is the float's only trace:
+  `activeFloat` is still nil, so a close, a tab change, a config prune, a modal
+  card going up, or a second press of the same chord all have to reach it through
+  `cancelPendingOpen()`, which bumps the generation the probe's completion checks.
+  A float needing neither the guard nor an anchor skips the probe and opens
+  synchronously. The cwd is read once at the press and carried into `spawn`, so a
+  persistent float's anchor and its shell's directory can't disagree.
 - **A palette row is reused, so it never carries an index.** `PaletteOverlay`
   re-renders per keystroke and keeps the view of every row whose `rowIdentity`
   survived the filter, so the base rebinds each row's `onActivate` on every load and

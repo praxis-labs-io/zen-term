@@ -82,8 +82,8 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// nothing but the title and a git badge (which updates in place rather than by rebuilding).
     override func rowIdentity(at index: Int) -> AnyHashable? {
         switch rows[index] {
-        case .add: return "add"
-        case .workspace(let workspace): return "workspace:\(workspace.title)"
+        case .add: return ["add"]
+        case .workspace(let workspace): return ["workspace", workspace.title]
         }
     }
 
