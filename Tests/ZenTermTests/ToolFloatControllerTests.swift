@@ -49,7 +49,12 @@ final class ToolFloatControllerTests: XCTestCase {
     /// `surface.view.superview`, and `animateIn` lays out against a live window), and reaches the
     /// "focused pane's cwd" through the same closure seam `WindowController` wires up — so
     /// `setCWD` here stands in for a pane's shell `cd`-ing, which is exactly what the engine sees.
-    private func makeFloats(cwd: URL) -> (
+    ///
+    /// The repo-root probe is injected synchronously: in the app it runs off the main thread
+    /// (ZEN-90/ZEN-15), so a toggle that needs one takes a hop, and every assertion here would have
+    /// to become an expectation. `onProbe` fires on each probe, for the tests that care whether one
+    /// happened at all. What the async delivery itself does to the open path is a runbook step.
+    private func makeFloats(cwd: URL, onProbe: (() -> Void)? = nil) -> (
         floats: ToolFloatController, spawned: () -> [RecordingSurface], setCWD: (URL) -> Void
     ) {
         var spawned: [RecordingSurface] = []
@@ -77,6 +82,10 @@ final class ToolFloatControllerTests: XCTestCase {
                 let surface = RecordingSurface()
                 spawned.append(surface)
                 return surface
+            },
+            resolveRepoRoot: { cwd, deliver in
+                onProbe?()
+                deliver(GitRepo.repoRoot(for: cwd))
             })
         host.layoutSubtreeIfNeeded()
         windows.append(window)
@@ -363,6 +372,31 @@ final class ToolFloatControllerTests: XCTestCase {
         XCTAssertTrue(
             floatSurfaces(spawned(), command: "gitdash").isEmpty,
             "a float pinned to a non-repo dir: must be blocked even though the pane sits in a real repo")
+    }
+
+    /// The repo root feeds exactly two things — the `git:` guard and a `.directory` float's anchor —
+    /// so a float wanting neither must open without walking the filesystem at all (ZEN-15). The walk
+    /// is a run of stats per ancestor, unbounded on a network mount.
+    func test_plainEphemeralFloat_opensWithoutProbingTheFilesystem() throws {
+        let dir = try makeDir("plain", git: false)
+        var probes = 0
+        let (floats, spawned, _) = makeFloats(cwd: dir, onProbe: { probes += 1 })
+
+        floats.toggle(spec("yazi", persist: .ephemeral))
+
+        XCTAssertEqual(floatSurfaces(spawned(), command: "yazi").count, 1, "the float still opens")
+        XCTAssertEqual(probes, 0, "nothing needs the repo root, so nothing may walk for it")
+    }
+
+    func test_gitGatedFloat_probesForItsGuard() throws {
+        let repo = try makeDir("repo", git: true)
+        var probes = 0
+        let (floats, spawned, _) = makeFloats(cwd: repo, onProbe: { probes += 1 })
+
+        floats.toggle(spec("gitdash", persist: .ephemeral, git: true))
+
+        XCTAssertEqual(floatSurfaces(spawned(), command: "gitdash").count, 1)
+        XCTAssertEqual(probes, 1, "one walk per press, shared by the guard and the anchor")
     }
 
     // MARK: config-reload reconciliation (review findings on the shipped registry)

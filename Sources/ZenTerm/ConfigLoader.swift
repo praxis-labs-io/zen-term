@@ -127,10 +127,15 @@ enum ConfigLoader {
                 category: .workspace)
             return []
         }
-        for workspace in workspaces where !PathDisplay.isDirectory(workspace.path) {
-            Log.warning(
-                "ConfigLoader: workspace `\(workspace.title)` path \(workspace.path.path) isn't a directory",
-                category: .workspace)
+        // Diagnostic only, and one `stat` per workspace — unbounded on a network share, so it never
+        // runs on the main queue (ZEN-90). The callers all present UI off the return value; nothing
+        // waits on this.
+        DispatchQueue.global(qos: .utility).async {
+            for workspace in workspaces where !PathDisplay.isDirectory(workspace.path) {
+                Log.warning(
+                    "ConfigLoader: workspace `\(workspace.title)` path \(workspace.path.path) isn't a directory",
+                    category: .workspace)
+            }
         }
         return workspaces
     }

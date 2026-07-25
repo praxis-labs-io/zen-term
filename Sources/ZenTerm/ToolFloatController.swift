@@ -26,6 +26,13 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// The active tab takes its unified focus back when the card goes away.
     private let restoreFocus: () -> Void
     private let makeSurface: () -> TerminalSurface
+    /// The enclosing repo root for a cwd, answered asynchronously. The walk is filesystem I/O and
+    /// never runs on the main thread (ZEN-90); tests inject a synchronous probe so a toggle stays
+    /// one step.
+    private let resolveRepoRoot: (URL?, @escaping (URL?) -> Void) -> Void
+    /// Bumped on every toggle so an in-flight repo-root probe knows its press was superseded — two
+    /// fast presses of a git-gated float must not open two cards.
+    private var toggleGeneration = 0
 
     /// The tool float currently SHOWN. Floats are modal and mutually exclusive, so one slot
     /// suffices. Whether its surface dies on dismiss depends on `spec.persist`.
@@ -60,13 +67,15 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         focusedCWD: @escaping () -> URL?,
         yieldFocus: @escaping () -> Void,
         restoreFocus: @escaping () -> Void,
-        makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make
+        makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
+        resolveRepoRoot: @escaping (URL?, @escaping (URL?) -> Void) -> Void = GitRepoStatus.repoRoot
     ) {
         self.presentOverlay = presentOverlay
         self.focusedCWD = focusedCWD
         self.yieldFocus = yieldFocus
         self.restoreFocus = restoreFocus
         self.makeSurface = makeSurface
+        self.resolveRepoRoot = resolveRepoRoot
         super.init()
     }
 
@@ -108,20 +117,34 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     private func floatCWD(_ spec: ToolFloat) -> URL? { spec.dir ?? focusedCWD() }
 
     /// Toggle a tool float: same id open → close; otherwise run the git guard and open.
+    ///
+    /// The repo root feeds exactly two things — the `git:` guard and a `.directory` float's anchor —
+    /// so a float that needs neither opens without touching the filesystem at all. When it IS
+    /// needed, the ancestor walk goes off the main thread (ZEN-90), which makes the open path take
+    /// one hop; `toggleGeneration` drops a probe whose press has since been superseded.
     func toggle(_ spec: ToolFloat) {
+        toggleGeneration += 1
+        let generation = toggleGeneration
         if activeFloat?.spec.id == spec.id { close(); return }
         if activeFloat != nil { close() }  // switch floats
-        // One ancestor walk per press: the git guard and the `.directory` anchor share the same
-        // repo-root lookup, and each `isGitRepo` probe is main-thread filesystem I/O.
-        let repoRoot = GitRepo.repoRoot(for: floatCWD(spec))
-        if spec.requiresGitRepo, repoRoot == nil {
-            onRequestToast?(gitGuardToast(for: spec))
+
+        let cwd = floatCWD(spec)
+        guard spec.requiresGitRepo || spec.persist == .directory else {
+            show(spec, anchor: nil)
             return
         }
-        // Only `.directory` takes an anchor. `.window` deliberately gets nil: a nil anchor makes
-        // the reuse check unconditional, which IS "one instance per window that never re-anchors".
-        let anchor = spec.persist == .directory ? (repoRoot ?? floatCWD(spec)?.standardizedFileURL) : nil
-        show(spec, anchor: anchor)
+        // One ancestor walk per press: the guard and the anchor share the same lookup.
+        resolveRepoRoot(cwd) { [weak self] repoRoot in
+            guard let self, generation == self.toggleGeneration else { return }
+            if spec.requiresGitRepo, repoRoot == nil {
+                self.onRequestToast?(self.gitGuardToast(for: spec))
+                return
+            }
+            // Only `.directory` takes an anchor. `.window` deliberately gets nil: a nil anchor makes
+            // the reuse check unconditional, which IS "one instance per window that never re-anchors".
+            let anchor = spec.persist == .directory ? (repoRoot ?? cwd?.standardizedFileURL) : nil
+            self.show(spec, anchor: anchor)
+        }
     }
 
     /// The `git:true` block toast. A pinned `dir:` float is gated on the PINNED directory, so the

@@ -169,3 +169,35 @@ and when the window is covered or minimized (ZEN-271).
 - [ ] **A theme swap lands on a stood-down pane.** With two panes and a shader on, swap
       the theme (`⌘,` → Appearance). The unfocused pane recolors with the focused one
       rather than holding the old theme until you click into it (ZEN-271).
+
+## Palette row reuse and git badges (ZEN-15)
+
+Both palettes now keep a row's view when its identity survives a filter, instead of
+rebuilding the list on every keystroke, and the git badges are filled by a background
+probe rather than a main-thread `stat`. What's left to look at is what reuse can get
+wrong: a row running the wrong entry after the list re-orders, a stale palette after a
+theme swap, and a badge that never lands. Needs a `~/.config/zen-term/workspaces` with a
+few entries, at least one of them a git repo and one not.
+
+- [ ] **Typing tracks the list.** Open ⌘P, type a query through to nothing and backspace
+      all the way out. Rows follow the filter with no duplicates, no gaps, and no row left
+      behind at the bottom. Keycaps keep their glyphs (⌘ ⇧ ⌥ ⌃ ⏎), not blank boxes.
+- [ ] **Clicking a re-ordered row runs *that* row.** In ⌘P, type something that leaves
+      several matches in a different order than the unfiltered list, then click the second
+      or third one. It runs the command under the pointer. This is the reuse failure mode
+      with teeth: a stale index binding runs a neighbour instead.
+- [ ] **⌘⇧P the same.** Filter to re-order the workspaces, click one down the list, and
+      the workspace you clicked opens. ⏎ and the arrows agree with the click.
+- [ ] **A theme swap repaints the rows.** With a palette reachable, change the theme
+      (`⌘,` → Appearance), then reopen ⌘P and ⌘⇧P. Row titles, shortcuts and the ＋ row
+      are in the new palette. Rows still in the old colors mean the reuse index survived
+      the swap.
+- [ ] **Git badges land.** Open ⌘⇧P: repo workspaces show the git mark, plain folders
+      don't. It may appear a beat after the card on the first open of a session; on
+      later opens it's there immediately.
+- [ ] **A new repo shows up without a relaunch.** `git init` one of the plain workspace
+      folders, reopen ⌘⇧P, and it now carries a badge. Settings → Workspaces agrees.
+- [ ] **Tool floats still gate on git.** Toggle a `git:true` float from a folder outside
+      any repo (toast blocks it) and from inside one (it opens). Toggle a plain float:
+      it opens with no perceptible delay. Double-press a git-gated float's chord fast:
+      one card, never two.
