@@ -42,17 +42,13 @@ final class RepoPickerOverlay: PaletteOverlay {
             rowHeight: 32,
             onDismiss: onDismiss)
 
-        refreshGitStatus()
+        // One background pass per open: the rows are up with whatever git status was already known,
+        // and the badges fill in when the probes land. Per open rather than once per process, so a
+        // folder that just became a repo gets its badge without a relaunch.
+        GitRepoStatus.refresh(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    /// One background pass per list: the rows are up with whatever git status was already known, and
-    /// the badges fill in when the probes land. Per open rather than once per process, so a folder
-    /// that just became a repo gets its badge without a relaunch.
-    private func refreshGitStatus() {
-        GitRepoStatus.refresh(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
-    }
 
     /// Re-read every workspace row's badge from `GitRepoStatus`.
     private func applyGitStatus() {

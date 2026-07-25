@@ -114,32 +114,38 @@ enum ConfigLoader {
     /// Load the hand-curated `workspaces` file (the `⌘⇧P` picker) from the config root, off the
     /// main thread, and deliver the result on it.
     ///
-    /// This is what every UI caller uses. The read is one small file, but `~/.config` can sit on a
+    /// This is what every caller uses. The read is one small file, but `~/.config` can sit on a
     /// network-backed or cloud-synced home directory, and the chrome never blocks the main queue on
-    /// a filesystem answer (ZEN-90): a card presents now and fills in when the load lands, the same
-    /// way `GitRepoStatus` fills the git badges.
-    ///
-    /// The path validation rides this pass rather than dispatching its own, so opening the picker
-    /// walks the workspace list once rather than twice (ZEN-275).
+    /// a filesystem answer (ZEN-90), so the card that renders from this is built when the list
+    /// lands rather than presented empty and filled (ZEN-275).
     static func loadWorkspaces(configRoot: URL = defaultRoot, completion: @escaping ([Workspace]) -> Void) {
         loadQueue.async {
             let workspaces = loadWorkspaces(configRoot: configRoot)
-            warnAboutMissingDirectories(workspaces)
             DispatchQueue.main.async { completion(workspaces) }
+            // Hand the list over BEFORE validating it, and on another queue: the caller is a card
+            // waiting to be built, and the validation is one `stat` per workspace, unbounded on a
+            // network share. Running it here would gate the card on it, and running it on the load
+            // queue would leave a hung mount blocking the next load behind it.
+            validationQueue.async { warnAboutMissingDirectories(workspaces) }
         }
     }
 
-    /// Serial, so the `warnedPaths` set the validation dedupes against is only ever touched from one
-    /// thread — two windows opening their pickers at once would otherwise race on it. Serializing
-    /// costs nothing here: both loads are reading the same file.
+    /// Serial: two windows opening their pickers at once read the same file, so there's nothing to
+    /// gain from overlapping them, and serializing keeps the reads predictable.
     private static let loadQueue = DispatchQueue(label: "com.zenterm.config-load", qos: .userInitiated)
+
+    /// Serial too, and separate from the load queue: it's the only thread that touches
+    /// `warnedPaths`, so the set needs no lock, and an unbounded `stat` here can't hold up a load.
+    private static let validationQueue = DispatchQueue(
+        label: "com.zenterm.config-validate", qos: .utility)
 
     /// Read and parse the `workspaces` file. Absent or unreadable → an empty list; the parser drops
     /// any malformed section rather than throw.
     ///
-    /// Synchronous, so it must not be called on the main thread by anything interactive — the
-    /// completion-handler form above is the one the UI uses. This one is for a caller already off
-    /// main (that form) and for `WorkspacesWriter`, which reads to rewrite a section.
+    /// This is the parse step behind the completion-handler form above, which is what every caller
+    /// uses; it is separate only so the read can be driven from the load queue and from tests. It
+    /// blocks and it does not validate paths, so calling it directly from the main thread is the
+    /// ZEN-90 stall this whole path exists to remove.
     static func loadWorkspaces(configRoot: URL = defaultRoot) -> [Workspace] {
         let url = configRoot.appendingPathComponent("workspaces")
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
@@ -157,8 +163,8 @@ enum ConfigLoader {
     /// a typo surfaces instead of silently opening a shell at a bad cwd. The workspace is still kept
     /// — the directory may appear later.
     ///
-    /// Diagnostic only, and one `stat` per workspace, so it runs on the loading pass (already off
-    /// main) and nothing waits on it. Every ⌘⇧P open reloads the file, so warning on each pass would
+    /// Diagnostic only, and one `stat` per workspace, so it runs on its own queue after the list has
+    /// already been handed over: nothing waits on it. Every ⌘⇧P open reloads the file, so warning on each pass would
     /// reprint the same line for the life of the process; the seen set keeps the first one, which is
     /// the one that tells the user about the typo.
     private static var warnedPaths: Set<String> = []

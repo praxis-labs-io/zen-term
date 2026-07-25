@@ -60,13 +60,27 @@ final class SettingsWorkspacesSection: SettingsSection {
         // hint in the meantime: that hint is the answer for an empty FILE, and flashing it while the
         // file is still being read tells the user their workspaces are gone.
         populate(with: nil)
-        ConfigLoader.loadWorkspaces { [weak self] workspaces in self?.populate(with: workspaces) }
+        // The card rebuilds a section's detail on every switch, so a load from a previous mount can
+        // still land here. Its answer belongs to a view that's gone; repopulating from it would
+        // rebuild the current rows a second time under the user.
+        mountGeneration += 1
+        let generation = mountGeneration
+        ConfigLoader.loadWorkspaces { [weak self] workspaces in
+            guard let self, generation == self.mountGeneration else { return }
+            self.populate(with: workspaces)
+        }
     }
 
     /// Render the section. `workspaces` is nil while the load is still out: caption and add button
     /// only, no rows and no empty-state hint.
     private func populate(with workspaces: [Workspace]?) {
         guard let stack = rowsStack else { return }
+        // Rebuilding tears the current first responder out of the window, which resets focus to the
+        // window itself and leaves the card's keyboard dead until a click. The user can already be
+        // in here when the load lands (the add button is a stop from the first frame), so remember
+        // whether focus was ours and put it back on the equivalent stop afterwards.
+        let focusedStop = stack.window?.firstResponder as? NSView
+        let hadFocus = focusedStop.map { stop in detailStops().contains { $0 === stop } } ?? false
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rows = []
 
@@ -110,7 +124,14 @@ final class SettingsWorkspacesSection: SettingsSection {
         stack.addArrangedSubview(addRow)
         addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
+
+        // Focus was in this section before the rebuild: land it on the first row, else the add
+        // button, so arrows and Return keep working without a click.
+        if hadFocus { stack.window?.makeFirstResponder(detailStops().first) }
     }
+
+    /// Bumped per mount, so a load belonging to an earlier one is dropped rather than rendered.
+    private var mountGeneration = 0
 
     private func moveFocus(from view: NSView?, delta: Int) {
         guard let view else { return }

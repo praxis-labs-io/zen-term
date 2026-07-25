@@ -66,6 +66,16 @@ final class RepoPickerPresentationTests: XCTestCase {
         picker.rowViews.compactMap { $0 as? SelectableRowView }
     }
 
+    /// Wait for any load already enqueued to have landed. The load queue is serial and delivers on
+    /// main, so a load enqueued now can only complete after the ones before it: when this one's
+    /// completion runs, the card under test has had its chance to present. Waiting on a fixed delay
+    /// instead would pass because nothing had time to happen, which is no assertion at all.
+    private func waitForPendingLoads() {
+        var landed = false
+        ConfigLoader.loadWorkspaces { _ in landed = true }
+        waitUntil(landed, "every enqueued workspaces load to land")
+    }
+
     private let twoWorkspaces = """
         [Alpha]
         path = ~/Dev/alpha
@@ -99,31 +109,60 @@ final class RepoPickerPresentationTests: XCTestCase {
         c.handle(.toggleRepoPicker)
         c.handle(.toggleRepoPicker)  // pressed again before the load landed
 
-        // Give the load every chance to land and present.
-        let settled = expectation(description: "the load had time to land")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { settled.fulfill() }
-        wait(for: [settled], timeout: 2)
+        waitForPendingLoads()
 
         XCTAssertTrue(pickers(in: c).isEmpty, "press-press is open-then-close, not two cards")
         XCTAssertFalse(c.isModalOverlayOpen)
     }
 
-    /// Esc between the press and the card means the user changed their mind before anything was
-    /// drawn. The load landing afterwards must not put a card up.
-    func test_escapeBeforeTheCardArrives_stopsItFromAppearing() throws {
+    /// Opening another card between the press and the picker means the user moved on before
+    /// anything was drawn. The load landing afterwards must not put the picker up over it.
+    ///
+    /// Note what this does NOT cover: a bare Esc in that window. Esc is claimed by a card's own
+    /// `performKeyEquivalent`, and there is no card yet, so it reaches the terminal instead and the
+    /// picker still arrives. That gap is ZEN-277, and naming this test for Esc would have hidden it.
+    func test_anotherCardOpeningBeforeThePickerArrives_stopsItFromAppearing() throws {
         try seedWorkspaces(twoWorkspaces)
         let c = makeWindow()
 
         c.handle(.toggleRepoPicker)
-        c.handle(.toggleCommandPalette)  // any other card closes the pending one on its way up
+        c.handle(.toggleCommandPalette)  // any other card calls off the pending one on its way up
 
-        let settled = expectation(description: "the load had time to land")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { settled.fulfill() }
-        wait(for: [settled], timeout: 2)
+        waitForPendingLoads()
 
         XCTAssertTrue(pickers(in: c).isEmpty, "the picker the user moved on from must not arrive")
         XCTAssertFalse(
             descendants(of: c.window.contentView!).compactMap { $0 as? CommandPaletteOverlay }.isEmpty,
             "the card they did ask for is the one that's up")
+    }
+
+    /// A tool float is modal over the window too, and it opens synchronously when it needs no repo
+    /// root — so it can get on screen inside the picker's load window. The picker landing on top of
+    /// it is the two-stacked-surfaces state the whole guard exists to prevent.
+    func test_aFloatOpeningBeforeThePickerArrives_stopsItFromAppearing() throws {
+        try seedWorkspaces(twoWorkspaces)
+        GeneralConfig.setCurrentForTesting(floatConfig)
+        let c = makeWindow()
+
+        c.handle(.toggleRepoPicker)
+        c.handle(.toggleToolFloat("yazi"))  // opens right away: no git gate, no directory anchor
+
+        waitForPendingLoads()
+
+        XCTAssertTrue(pickers(in: c).isEmpty, "the picker must not land on top of an open float")
+        XCTAssertTrue(c.floatsForTesting.isOpen, "the float the user actually opened is the one up")
+    }
+
+    /// A plain float: no `git:` gate and not `persist:directory`, so `toggle` needs no repo-root
+    /// probe and the card is up in the same turn as the chord.
+    private var floatConfig: GeneralConfig {
+        var config = GeneralConfig.builtIn
+        config.floats = [
+            ToolFloat(
+                id: "yazi", order: 0, title: "yazi", icon: ToolFloatParser.defaultIcon, command: "yazi",
+                dir: nil, widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+                persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "y"))
+        ]
+        return config
     }
 }

@@ -164,6 +164,26 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
         XCTAssertNil(emptyHint(in: detail))
     }
 
+    /// The rows land after the mount, and rebuilding tears the focused view out of the window, which
+    /// makes AppKit reset first responder to the window itself: the focus ring vanishes and arrows,
+    /// Tab and Return are dead until the user clicks. Reachable whenever the read is slow, which is
+    /// the premise of loading it off the main thread at all.
+    func test_focusSurvivesTheRowsLanding() throws {
+        try seed(twoWorkspaces)
+        let detail = mount(SettingsWorkspacesSection(), waitingForLoad: false)
+        let window = try XCTUnwrap(self.window)
+        let section = try XCTUnwrap(self.section)
+        // Before the load the add button is the only stop, so that's what entering the detail lands on.
+        XCTAssertTrue(window.makeFirstResponder(section.detailStops().first))
+
+        waitForLoad(in: detail)
+
+        let focused = window.firstResponder as? NSView
+        XCTAssertTrue(
+            section.detailStops().contains { $0 === focused },
+            "focus must land on a stop once the rows arrive, not fall back to the window")
+    }
+
     func test_rowActivate_invokesOnEditWorkspaceWithThatWorkspace() throws {
         try seed(twoWorkspaces)
         let section = SettingsWorkspacesSection()

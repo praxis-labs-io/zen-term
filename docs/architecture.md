@@ -369,9 +369,10 @@ the chrome never hardcodes a color.
   main thread.
 - **The `workspaces` file is read off the main thread, so its readers render
   twice.** `ConfigLoader.loadWorkspaces` has a completion-handler form that every
-  UI caller uses (the synchronous one is for `WorkspacesWriter` and for a caller
-  already off main). The load queue is serial, so the warn-once-per-path set
-  behind it is only touched from one thread.
+  caller uses; the synchronous form behind it is the parse step, and calling it
+  from the main thread is the stall this removed. Path validation runs on its own
+  queue *after* the list has been handed over, so the card never waits on a `stat`
+  and a hung mount can't hold up the next load.
 
   **A card that renders from it is built after the load, not filled after
   presenting.** The list height sizes the card, so entries landing a frame late

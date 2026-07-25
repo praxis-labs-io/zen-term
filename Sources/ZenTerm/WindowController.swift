@@ -1217,6 +1217,9 @@ final class WindowController: NSObject {
             active?.toggleZoom()
         case .fillScreen: toggleFillScreen()
         case .toggleToolFloat(let id):
+            // A float is modal too, so it calls off a card that's still loading — otherwise the card
+            // lands on top of it a beat later. `presentModal` is the mirror of this.
+            pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
@@ -1581,6 +1584,10 @@ final class WindowController: NSObject {
     private func tearDown() {
         guard !didTearDown else { return }
         didTearDown = true
+        // Nothing may be built for this window after it goes: a card still loading would otherwise
+        // arrive to a nil `activeController`, but only after constructing its overlay and kicking
+        // off a git probe per workspace. `floats.shutdown()` below does the same for a float.
+        pendingModal = nil
         // Closing the window with a confirm still up must resolve its owner's pending state —
         // e.g. a quit confirm's `.terminateLater` reply — or the app hangs mid-quit.
         cancelConfirm()
