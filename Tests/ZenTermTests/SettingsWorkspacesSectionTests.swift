@@ -122,13 +122,12 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
         }
         XCTAssertEqual(badge(inRowTitled: "Repo")?.isHidden, true, "nothing has probed the folder yet")
 
-        let probed = expectation(description: "the background git probe landed")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { probed.fulfill() }
-        wait(for: [probed], timeout: 2)
+        waitUntil(badge(inRowTitled: "Repo")?.isHidden == false, "the repo's git badge to land")
 
-        let repoBadge = badge(inRowTitled: "Repo")
-        XCTAssertNotNil(repoBadge?.image, "the badge renders the bundled git logo, not an empty view")
-        XCTAssertEqual(repoBadge?.isHidden, false, "a git-repo workspace shows the git badge")
+        // Both paths are answered in one batch and applied together, so once the repo's badge is up
+        // the plain folder's row has had its answer too.
+        XCTAssertNotNil(
+            badge(inRowTitled: "Repo")?.image, "the badge renders the bundled git logo, not an empty view")
         XCTAssertEqual(badge(inRowTitled: "Plain")?.isHidden, true, "a plain folder keeps its badge hidden")
     }
 

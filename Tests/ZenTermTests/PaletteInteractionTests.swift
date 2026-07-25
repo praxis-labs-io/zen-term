@@ -376,11 +376,8 @@ final class PaletteInteractionTests: XCTestCase {
         let badge = descendants(of: rows(in: overlay)[1]).compactMap { $0 as? NSImageView }.first
         XCTAssertEqual(badge?.isHidden, true, "nothing has probed the folder yet")
 
-        let probed = expectation(description: "the background git probe landed")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { probed.fulfill() }
-        wait(for: [probed], timeout: 2)
+        waitUntil(badge?.isHidden == false, "the git badge to turn on when the probe lands")
 
-        XCTAssertEqual(badge?.isHidden, false, "the badge turns on when the probe lands")
         XCTAssertNotNil(badge?.image, "and renders the bundled git logo")
     }
 
