@@ -45,7 +45,7 @@ enum AppConfig {
             do {
                 try write()
             } catch {
-                afterPendingResolves {
+                afterPendingApplies {
                     endResolve()
                     completion(error)
                 }
@@ -108,6 +108,7 @@ enum AppConfig {
     private static func resolveAndApply(then done: @escaping () -> Void) {
         let configText = ConfigLoader.readGeneralConfigText()
         DispatchQueue.main.async {
+            pendingApplies += 1
             resolveGeneration += 1
             let generation = resolveGeneration
             let general = ConfigLoader.parseGeneralConfig(configText)
@@ -115,6 +116,7 @@ enum AppConfig {
                 let themeText = ConfigLoader.readThemeText(general: general)
                 DispatchQueue.main.async {
                     defer {
+                        pendingApplies -= 1
                         endResolve()
                         done()
                     }
@@ -132,9 +134,16 @@ enum AppConfig {
     /// statics it guards.
     private static var resolveGeneration = 0
 
-    /// Resolves started and not yet applied. Main-thread only, and the reason `drainForTesting`
-    /// doesn't have to know how many queue hops a resolve takes.
+    /// Any persist or reload that hasn't delivered yet, failures included. Main-thread only, and the
+    /// reason `drainForTesting` doesn't have to know how many queue hops a resolve takes.
     private static var inFlight = 0
+
+    /// Resolves that will actually adopt: a successful write's, or a reload's. **Counted separately
+    /// from `inFlight` on purpose.** The failure gate below waits on this, and waiting on `inFlight`
+    /// instead deadlocked two writes that failed at once — each was itself outstanding, so each
+    /// waited for the other to finish while neither could, and both completions were dropped for the
+    /// life of the process. A failure adds nothing here, so failures never gate each other.
+    private static var pendingApplies = 0
 
     /// Called on main by `persist` / `reload` before the queue work starts, so a drain enqueued
     /// straight after the call already sees the resolve as outstanding.
@@ -145,17 +154,20 @@ enum AppConfig {
 
     private static func endResolve() { inFlight -= 1 }
 
-    /// Deliver on main once every resolve that was already in flight has applied.
+    /// Deliver on main once every resolve that will adopt has adopted.
     ///
     /// A failed write resolves nothing, so its completion would otherwise take a single hop home and
     /// overtake an earlier write's apply, handing the caller statics that still predate it. The
     /// keybinds card rebases `desired` on `GeneralConfig.current` there, so overtaking would roll an
-    /// already-saved rebind back out and the next write would persist the loss. Yields through the
-    /// queue between checks rather than re-arming on main, so a slow read can't be spun on.
-    private static func afterPendingResolves(_ body: @escaping () -> Void) {
+    /// already-saved rebind back out and the next write would persist the loss.
+    ///
+    /// Gates on `pendingApplies`, never on `inFlight`: a failure is itself in flight, so gating on
+    /// that made two simultaneous failures wait on each other forever. Yields through the queue
+    /// between checks rather than re-arming on main, so a slow read can't be spun on.
+    private static func afterPendingApplies(_ body: @escaping () -> Void) {
         queue.async {
             DispatchQueue.main.async {
-                guard inFlight <= 1 else { return afterPendingResolves(body) }  // 1 is our own
+                guard pendingApplies == 0 else { return afterPendingApplies(body) }
                 body()
             }
         }

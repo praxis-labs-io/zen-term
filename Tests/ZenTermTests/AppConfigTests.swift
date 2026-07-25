@@ -151,6 +151,43 @@ final class AppConfigTests: XCTestCase {
         wait(for: [done], timeout: 2)
     }
 
+    /// Two writes failing at once must both report. The failure path waits for earlier writes to
+    /// apply, and an earlier version of that wait counted *all* outstanding work including the other
+    /// failure — so each waited for the other to finish, neither ever did, and both completions were
+    /// dropped for the life of the process. It also wedged every later drain, so a regression here
+    /// hangs the suite rather than failing it.
+    func test_twoWritesFailingAtOnce_bothReport() {
+        struct WriteFailure: Error {}
+        let first = expectation(description: "first failure reported")
+        let second = expectation(description: "second failure reported")
+        AppConfig.persist({ throw WriteFailure() }) { error in
+            XCTAssertNotNil(error)
+            first.fulfill()
+        }
+        AppConfig.persist({ throw WriteFailure() }) { error in
+            XCTAssertNotNil(error)
+            second.fulfill()
+        }
+        wait(for: [first, second], timeout: 2)
+    }
+
+    /// A failure must still not overtake an earlier successful write's apply: the keybinds card
+    /// rebases its staged map on `GeneralConfig.current` in that branch, so seeing pre-write statics
+    /// there rolls an already-saved edit back out.
+    func test_aFailureAfterASuccess_seesTheSuccessApplied() {
+        struct WriteFailure: Error {}
+        let landed = expectation(description: "failure reported")
+        AppConfig.persist({ try ConfigWriter.apply(scalars: ["font-size": "19"]) }) { _ in }
+        AppConfig.persist({ throw WriteFailure() }) { error in
+            XCTAssertNotNil(error)
+            XCTAssertEqual(
+                GeneralConfig.current.fontSize, 19,
+                "the earlier write had already applied before this failure was delivered")
+            landed.fulfill()
+        }
+        wait(for: [landed], timeout: 2)
+    }
+
     /// A minimal box for a value written on the config queue and read on the main thread once the
     /// expectation has landed. The handoff is ordered by the wait, but the compiler can't see that.
     private final class Locked<Value>: @unchecked Sendable {
