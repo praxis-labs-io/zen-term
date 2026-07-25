@@ -26,6 +26,22 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// The active tab takes its unified focus back when the card goes away.
     private let restoreFocus: () -> Void
     private let makeSurface: () -> TerminalSurface
+    /// The enclosing repo root for a cwd, answered asynchronously. The walk is filesystem I/O and
+    /// never runs on the main thread (ZEN-90); tests inject a synchronous probe so a toggle stays
+    /// one step.
+    private let resolveRepoRoot: (URL?, @escaping (URL?) -> Void) -> Void
+    /// Bumped whenever an in-flight repo-root probe is superseded or cancelled, so its completion
+    /// knows to return instead of showing a card nobody is waiting for any more.
+    private var toggleGeneration = 0
+
+    /// The float whose open is waiting on its repo-root probe. The open crosses a queue hop now
+    /// (ZEN-90), and everything that can call an open off — a second press, a tab change, a config
+    /// prune, a modal card going up, the window closing — has to be able to reach it during that
+    /// window, so the pending open lives here rather than only inside the probe's closure.
+    ///
+    /// Mutually exclusive with `activeFloat` by construction: `toggle` closes whatever is shown
+    /// before it starts a probe, and the completion clears this before it shows anything.
+    private var pendingOpen: ToolFloat?
 
     /// The tool float currently SHOWN. Floats are modal and mutually exclusive, so one slot
     /// suffices. Whether its surface dies on dismiss depends on `spec.persist`.
@@ -60,13 +76,15 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         focusedCWD: @escaping () -> URL?,
         yieldFocus: @escaping () -> Void,
         restoreFocus: @escaping () -> Void,
-        makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make
+        makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
+        resolveRepoRoot: @escaping (URL?, @escaping (URL?) -> Void) -> Void = GitRepoStatus.repoRoot
     ) {
         self.presentOverlay = presentOverlay
         self.focusedCWD = focusedCWD
         self.yieldFocus = yieldFocus
         self.restoreFocus = restoreFocus
         self.makeSurface = makeSurface
+        self.resolveRepoRoot = resolveRepoRoot
         super.init()
     }
 
@@ -108,20 +126,55 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     private func floatCWD(_ spec: ToolFloat) -> URL? { spec.dir ?? focusedCWD() }
 
     /// Toggle a tool float: same id open → close; otherwise run the git guard and open.
+    ///
+    /// The repo root feeds exactly two things — the `git:` guard and a `.directory` float's anchor —
+    /// so a float that needs neither opens without touching the filesystem at all, synchronously.
+    /// When it IS needed the ancestor walk goes off the main thread (ZEN-90), so the open lands a
+    /// hop later and is cancellable for that whole window through `pendingOpen`.
     func toggle(_ spec: ToolFloat) {
+        // A press while this float's own probe is out is still a press on this float: it calls the
+        // open off, the way a press on a shown card closes it, rather than queueing a second one.
+        if pendingOpen?.id == spec.id { cancelPendingOpen(); return }
         if activeFloat?.spec.id == spec.id { close(); return }
+        cancelPendingOpen()  // a different float supersedes one still probing
         if activeFloat != nil { close() }  // switch floats
-        // One ancestor walk per press: the git guard and the `.directory` anchor share the same
-        // repo-root lookup, and each `isGitRepo` probe is main-thread filesystem I/O.
-        let repoRoot = GitRepo.repoRoot(for: floatCWD(spec))
-        if spec.requiresGitRepo, repoRoot == nil {
-            onRequestToast?(gitGuardToast(for: spec))
+
+        // Read the cwd once and carry it through the open: `spawn` used to re-read it, which was
+        // the same reading when this was synchronous but straddles the hop now, so the anchor a
+        // persistent float is registered under could disagree with where its shell actually started.
+        let cwd = floatCWD(spec)
+        guard spec.requiresGitRepo || spec.persist == .directory else {
+            show(spec, cwd: cwd, anchor: nil)
             return
         }
-        // Only `.directory` takes an anchor. `.window` deliberately gets nil: a nil anchor makes
-        // the reuse check unconditional, which IS "one instance per window that never re-anchors".
-        let anchor = spec.persist == .directory ? (repoRoot ?? floatCWD(spec)?.standardizedFileURL) : nil
-        show(spec, anchor: anchor)
+        toggleGeneration += 1
+        let generation = toggleGeneration
+        pendingOpen = spec
+        // One ancestor walk per press: the guard and the anchor share the same lookup.
+        resolveRepoRoot(cwd) { [weak self] repoRoot in
+            guard let self, generation == self.toggleGeneration else { return }
+            self.pendingOpen = nil
+            if spec.requiresGitRepo, repoRoot == nil {
+                self.onRequestToast?(self.gitGuardToast(for: spec))
+                return
+            }
+            // Only `.directory` takes an anchor. `.window` deliberately gets nil: a nil anchor makes
+            // the reuse check unconditional, which IS "one instance per window that never re-anchors".
+            let anchor = spec.persist == .directory ? (repoRoot ?? cwd?.standardizedFileURL) : nil
+            self.show(spec, cwd: cwd, anchor: anchor)
+        }
+    }
+
+    /// Call off an open that is still waiting on its repo-root probe. Bumping the generation is what
+    /// invalidates the probe already on its way back: its completion compares against this and
+    /// returns, so the card never appears over a window the user has since moved on from.
+    ///
+    /// The window calls this when a modal card goes up, so the two can't stack; `close()`,
+    /// `shutdown()` and `prune()` reach it for the tab-change, teardown and config-reload paths.
+    func cancelPendingOpen() {
+        guard pendingOpen != nil else { return }
+        pendingOpen = nil
+        toggleGeneration += 1
     }
 
     /// The `git:true` block toast. A pinned `dir:` float is gated on the PINNED directory, so the
@@ -141,8 +194,8 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     /// Present `spec` in a float card: resolve its surface (retained or fresh), host it, and take
     /// the active tab's unified focus. When the tool exits, `surfaceDidExit` tears the float down.
-    private func show(_ spec: ToolFloat, anchor: URL?) {
-        let surface = surfaceForFloat(spec, anchor: anchor)
+    private func show(_ spec: ToolFloat, cwd: URL?, anchor: URL?) {
+        let surface = surfaceForFloat(spec, cwd: cwd, anchor: anchor)
         // Snap away a still-springing-out card ONLY when it holds constraints on the view we're
         // about to re-host — otherwise let it finish its own exit. A card that isn't sharing this
         // surface's view (a different float, or a fresh spawn) springs out normally while the new
@@ -173,14 +226,14 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// and then terminate a surface the registry still holds), the focused dir moving, and a
     /// Settings edit to the command or pinned dir (reusing would silently keep the OLD command's
     /// process running, making the edit look like a no-op).
-    private func surfaceForFloat(_ spec: ToolFloat, anchor: URL?) -> TerminalSurface {
+    private func surfaceForFloat(_ spec: ToolFloat, cwd: URL?, anchor: URL?) -> TerminalSurface {
         if let live = liveFloats[spec.id] {
             let anchorHolds = spec.persist != .directory || live.anchor?.path == anchor?.path
             let spawnHolds = live.spec.command == spec.command && live.spec.dir == spec.dir
             if spec.persist != .ephemeral, anchorHolds, spawnHolds { return live.surface }
             discard(spec.id)
         }
-        let surface = spawn(spec)
+        let surface = spawn(spec, cwd: cwd)
         if spec.persist != .ephemeral {
             liveFloats[spec.id] = (surface, anchor, spec)
         }
@@ -195,20 +248,23 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// If the float currently SHOWN was deleted, close its card too — it has no toggle left.
     func prune(against catalog: [ToolFloat]) {
         let ids = Set(catalog.map(\.id))
+        if let pending = pendingOpen, !ids.contains(pending.id) { cancelPendingOpen() }
         if let active = activeFloat, !ids.contains(active.spec.id) { close() }
         // Snapshot the keys — the discard mutates the dictionary mid-loop (same rule as `shutdown()`).
         for id in Array(liveFloats.keys) where !ids.contains(id) { discard(id) }
     }
 
-    /// Spawn `spec.command` in a fresh login+interactive shell at the float's cwd, so the user's
-    /// PATH and pager match a pane's.
-    private func spawn(_ spec: ToolFloat) -> TerminalSurface {
+    /// Spawn `spec.command` in a fresh login+interactive shell at `cwd`, so the user's PATH and
+    /// pager match a pane's. The cwd is passed in rather than re-read: the open crosses a queue hop
+    /// when a repo-root probe is needed, and the anchor this surface is registered under was
+    /// derived from the reading taken at the press.
+    private func spawn(_ spec: ToolFloat, cwd: URL?) -> TerminalSurface {
         let surface = makeSurface()
         surface.delegate = self
         surface.start(
             TerminalSurfaceConfig(
                 command: ShellLaunch.userShell, args: ["-l", "-i", "-c", spec.command],
-                workingDirectory: floatCWD(spec), theme: Theme.current.terminal,
+                workingDirectory: cwd, theme: Theme.current.terminal,
                 behavior: GeneralConfig.current.terminalBehavior))
         return surface
     }
@@ -225,6 +281,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// running and only loses its card. Clears the slot before terminate so a synchronous
     /// `surfaceDidExit` re-entry no-ops.
     func close() {
+        cancelPendingOpen()  // a float on its way in is closed by being called off
         guard let active = activeFloat else { return }
         activeFloat = nil
         let overlay = active.overlay
@@ -249,6 +306,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     /// Terminate every float this window owns — the window is closing.
     func shutdown() {
+        cancelPendingOpen()  // else a probe landing after teardown spawns into a window that is gone
         activeFloat?.overlay.removeFromSuperview()
         // An ephemeral float lives only in the slot, so terminate the shown surface directly; a
         // persistent one is also in the registry, and `discard` no-ops on an already-dead surface.

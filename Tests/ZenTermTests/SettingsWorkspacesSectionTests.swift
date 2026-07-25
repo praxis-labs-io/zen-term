@@ -14,6 +14,10 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
 
     private var tempRoot: URL!
     private var window: NSWindow?
+    /// The mounted section, retained the way the Settings card retains it while it's on screen —
+    /// its rows update in place when the background git probe lands, and a released section would
+    /// simply drop that.
+    private var section: SettingsWorkspacesSection?
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -25,6 +29,7 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
 
     override func tearDownWithError() throws {
         window = nil
+        section = nil
         ConfigLoader.defaultRootOverrideForTesting = nil
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
@@ -42,6 +47,7 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
 
     @discardableResult
     private func mount(_ section: SettingsWorkspacesSection) -> NSView {
+        self.section = section
         let detail = section.makeDetailView()
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 500),
@@ -95,7 +101,12 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
         XCTAssertNil(sink.calls.first ?? nil, "the add button adds a new workspace (nil)")
     }
 
+    /// The git probe runs off the main thread (ZEN-90), so a row mounts with its badge hidden and
+    /// turns it on when the answer lands. That fill is exactly the kind of thing that can go
+    /// silently dead — the probe returns and nothing updates — so the test observes the transition
+    /// rather than priming the cache first.
     func test_gitRepoWorkspace_showsGitBadge_plainDoesNot() throws {
+        GitRepoStatus.resetForTesting()
         // A real repo dir (has `.git`) and a plain dir, so `GitRepo.isGitRepo` is genuinely exercised.
         let repo = tempRoot.appendingPathComponent("repo", isDirectory: true)
         let plain = tempRoot.appendingPathComponent("plain", isDirectory: true)
@@ -109,10 +120,15 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
             let row = rows(in: detail).first { $0.workspace.title == title }!
             return descendants(of: row).compactMap { $0 as? NSImageView }.first
         }
-        let repoBadge = badge(inRowTitled: "Repo")
-        XCTAssertNotNil(repoBadge, "a git-repo workspace shows the git badge")
-        XCTAssertNotNil(repoBadge?.image, "the badge renders the bundled git logo, not an empty view")
-        XCTAssertNil(badge(inRowTitled: "Plain"), "a plain folder shows no git badge")
+        XCTAssertEqual(badge(inRowTitled: "Repo")?.isHidden, true, "nothing has probed the folder yet")
+
+        waitUntil(badge(inRowTitled: "Repo")?.isHidden == false, "the repo's git badge to land")
+
+        // Both paths are answered in one batch and applied together, so once the repo's badge is up
+        // the plain folder's row has had its answer too.
+        XCTAssertNotNil(
+            badge(inRowTitled: "Repo")?.image, "the badge renders the bundled git logo, not an empty view")
+        XCTAssertEqual(badge(inRowTitled: "Plain")?.isHidden, true, "a plain folder keeps its badge hidden")
     }
 
     func test_rowActivate_invokesOnEditWorkspaceWithThatWorkspace() throws {

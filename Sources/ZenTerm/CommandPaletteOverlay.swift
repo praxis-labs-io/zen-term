@@ -50,7 +50,19 @@ final class CommandPaletteOverlay: PaletteOverlay {
         case .header(let title):
             return HeaderRowView(title: title)
         case .command(let command):
-            return RowView(command: command) { [weak self] in self?.activateRow(at: index) }
+            return RowView(command: command)
+        }
+    }
+
+    /// A row is the same row across a re-filter when it names the same section, or the same command
+    /// with the same shortcut. The identity has to cover everything the row renders, and a command
+    /// row renders both: a tool float's title comes from user config and nothing stops it colliding
+    /// with a built-in command's, so keying on the title alone would let one row inherit the other's
+    /// keycap and show a chord that doesn't run it.
+    override func rowIdentity(at index: Int) -> AnyHashable? {
+        switch rows[index] {
+        case .header(let title): return ["header", title]
+        case .command(let command): return ["command", command.title, command.shortcut]
         }
     }
 
@@ -115,6 +127,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
     /// A muted, small-caps section header. Non-selectable — the base skips it.
     private final class HeaderRowView: NSView, PaletteRowView {
         var isSelected = false  // headers never highlight
+        var onActivate: (() -> Void)?  // headers aren't selectable, so this is never run
 
         init(title: String) {
             super.init(frame: .zero)
@@ -141,8 +154,8 @@ final class CommandPaletteOverlay: PaletteOverlay {
 
     /// One command row: the action name (left) and its shortcut keycap (right).
     private final class RowView: SelectableRowView {
-        init(command: PaletteCommand, onClick: @escaping () -> Void) {
-            super.init(onClick: onClick)
+        init(command: PaletteCommand) {
+            super.init()
 
             let title = NSTextField(labelWithString: command.title)
             title.font = .systemFont(ofSize: 13)

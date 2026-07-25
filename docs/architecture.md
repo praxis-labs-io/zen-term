@@ -367,6 +367,29 @@ the chrome never hardcodes a color.
   `parent == dir`. `deletingLastPathComponent()` is not monotonic on a
   FileManager-vended URL: it walks past `/` forever, and an equality check spins the
   main thread.
+- **Interactive git probes go through `GitRepoStatus`, never `GitRepo` directly.**
+  Both are filesystem I/O, which the main queue never blocks on: the ⌘⇧P picker and
+  Settings → Workspaces render their badges from `GitRepoStatus.known` (nil until
+  something has probed) and turn them on when a `refresh` lands, and a tool float
+  resolves its repo root through an injected async probe, and only when its `git:`
+  guard or `.directory` anchor actually needs one. Refreshing per open, rather than
+  answering once per process, is what shows a freshly `git init`ed folder's badge
+  without a relaunch.
+- **A tool float's open is cancellable while its repo-root probe is out.** The
+  walk is off-main, so a `git:`-gated or `.directory` float opens a queue hop
+  after the press, and for that window `pendingOpen` is the float's only trace:
+  `activeFloat` is still nil, so a close, a tab change, a config prune, a modal
+  card going up, or a second press of the same chord all have to reach it through
+  `cancelPendingOpen()`, which bumps the generation the probe's completion checks.
+  A float needing neither the guard nor an anchor skips the probe and opens
+  synchronously. The cwd is read once at the press and carried into `spawn`, so a
+  persistent float's anchor and its shell's directory can't disagree.
+- **A palette row is reused, so it never carries an index.** `PaletteOverlay`
+  re-renders per keystroke and keeps the view of every row whose `rowIdentity`
+  survived the filter, so the base rebinds each row's `onActivate` on every load and
+  a live theme change discards the rows outright (a row bakes its colors in at
+  construction). The list's order is its stack's ARRANGED subviews; a reused row keeps
+  its old place in `subviews`.
 - **Swift's sort is not stable**, so floats sort by `(order, lineIndex)`.
 - **Never block the main thread.** See CLAUDE.md.
 

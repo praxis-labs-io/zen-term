@@ -3,6 +3,9 @@ import AppKit
 /// A row inside a palette list. The overlay drives selection highlighting through this.
 protocol PaletteRowView: NSView {
     var isSelected: Bool { get set }
+    /// Run when the row is clicked. The overlay re-binds this on every (re)load, so a row REUSED at
+    /// a new index after a filter activates *that* index rather than the one it was built at.
+    var onActivate: (() -> Void)? { get set }
 }
 
 /// One footer hint: a key glyph string (rendered as a keycap, same as a row's shortcut)
@@ -16,11 +19,10 @@ struct PaletteHint {
 /// highlight when selected, and a single click that runs the row (Raycast / Spotlight, not a
 /// select-then-double-click). Subclasses add their own content in `init` after calling `super.init`.
 class SelectableRowView: NSView, PaletteRowView {
-    private let onClick: () -> Void
+    var onActivate: (() -> Void)?
     var isSelected = false { didSet { updateBackground() } }
 
-    init(onClick: @escaping () -> Void) {
-        self.onClick = onClick
+    init() {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
@@ -32,7 +34,7 @@ class SelectableRowView: NSView, PaletteRowView {
     // if it lands back inside the row, so a press-and-drag-off cancels like any button.
     override func mouseDown(with event: NSEvent) {}
     override func mouseUp(with event: NSEvent) {
-        if bounds.contains(convert(event.locationInWindow, from: nil)) { onClick() }
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { onActivate?() }
     }
 
     private func updateBackground() {
@@ -71,7 +73,14 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// selected row never touches the search field's bottom border.
     private let listVerticalInset: CGFloat = 8
     private var listHeight: NSLayoutConstraint!
-    private var rowViews: [PaletteRowView] = []
+    /// One laid-out row: its reuse identity (nil = never reuse), the view, and the height constraint
+    /// the base owns — a reload retunes the constant instead of rebuilding the constraint.
+    private struct LaidOutRow {
+        let id: AnyHashable?
+        let view: PaletteRowView
+        let height: NSLayoutConstraint
+    }
+    private var laidOutRows: [LaidOutRow] = []
     private var selected = 0
 
     /// The selection highlight shared by every palette row (accent @ 18%).
@@ -270,6 +279,10 @@ class PaletteOverlay: NSView, ModalOverlay {
         emptyLabel.textColor = chrome.ink(alpha: 0.4)
         footerHintLabels.forEach { $0.textColor = chrome.ink(alpha: 0.5) }
         footerKeycaps.forEach { $0.reapplyTheme() }
+        // Drop every built row first: the reload reuses a row whose identity survives, and a row
+        // bakes its colors in at construction, so reusing one here would leave it in the old theme.
+        laidOutRows.forEach { $0.view.removeFromSuperview() }
+        laidOutRows = []
         applyFilter(query: searchField.stringValue)
         reloadRows()
     }
@@ -293,8 +306,16 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// Number of rows for the current (filtered) model.
     func numberOfRows() -> Int { fatalError("subclass must override numberOfRows()") }
 
-    /// Build the row view at `index`. Wire its click via `selectRow(at:clickCount:)`.
+    /// Build the row view at `index`. The base wires the click itself (`onActivate`), so a row
+    /// carries no index of its own.
     func makeRow(at index: Int) -> PaletteRowView { fatalError("subclass must override makeRow(at:)") }
+
+    /// What makes the row at `index` the same row across a re-filter, so its view can be reused
+    /// rather than rebuilt on every keystroke. Two rows sharing an identity must render identically
+    /// — a row bakes its content in at construction, so the identity has to cover everything shown.
+    /// nil means "never reuse this row", the safe default: identity by position would hand one
+    /// row's baked-in content to a different model entry.
+    func rowIdentity(at index: Int) -> AnyHashable? { nil }
 
     /// Height of the row at `index`. Defaults to the uniform row height; override to give
     /// some rows (e.g. section headers) a different height.
@@ -326,18 +347,55 @@ class PaletteOverlay: NSView, ModalOverlay {
         activate(index: index, modifiers: [])
     }
 
+    /// Re-render the list for the current filtered model, reusing the view of every row whose
+    /// identity survived the filter. Typing runs this per keystroke, and rebuilding meant a fresh
+    /// view tree (and, for a command row, a fresh `KeycapView` resolving SF Symbols) for every row
+    /// on every character (ZEN-15).
+    ///
+    /// A reused row stays in the view hierarchy throughout — `insertArrangedSubview` moves an
+    /// already-arranged view, so the ordering falls out of the same loop. Detaching it instead
+    /// would drop the width constraint (it crosses to the stack) while LEAVING the height
+    /// constraint active (it's anchored to the row itself), so re-adding would stack up a second
+    /// height constraint per reload.
     private func reloadRows() {
-        rowViews.forEach { $0.removeFromSuperview() }
-        let count = numberOfRows()
-        var total: CGFloat = 0
-        rowViews = (0..<count).map { i in
-            let row = makeRow(at: i)
-            rowsStack.addArrangedSubview(row)
-            row.widthAnchor.constraint(equalTo: rowsStack.widthAnchor).isActive = true
-            row.heightAnchor.constraint(equalToConstant: rowHeight(at: i)).isActive = true
-            total += rowHeight(at: i)
-            return row
+        var reusable: [AnyHashable: LaidOutRow] = [:]
+        for row in laidOutRows {
+            if let id = row.id { reusable[id] = row }
         }
+
+        let count = numberOfRows()
+        var next: [LaidOutRow] = []
+        var total: CGFloat = 0
+        for index in 0..<count {
+            let height = rowHeight(at: index)
+            let id = rowIdentity(at: index)
+            // Positions 0..<index already hold `next`, so any row still waiting to be dropped sits
+            // at or after `index` — inserting there lands each row at its final position.
+            let row: LaidOutRow
+            if let id, let reused = reusable.removeValue(forKey: id) {
+                reused.height.constant = height
+                rowsStack.insertArrangedSubview(reused.view, at: index)
+                row = reused
+            } else {
+                let view = makeRow(at: index)
+                rowsStack.insertArrangedSubview(view, at: index)  // width pins to the stack, so insert first
+                let heightConstraint = view.heightAnchor.constraint(equalToConstant: height)
+                NSLayoutConstraint.activate([
+                    view.widthAnchor.constraint(equalTo: rowsStack.widthAnchor), heightConstraint,
+                ])
+                row = LaidOutRow(id: id, view: view, height: heightConstraint)
+            }
+            row.view.onActivate = { [weak self] in self?.activateRow(at: index) }
+            next.append(row)
+            total += height
+        }
+
+        let kept = Set(next.map { ObjectIdentifier($0.view) })
+        for row in laidOutRows where !kept.contains(ObjectIdentifier(row.view)) {
+            row.view.removeFromSuperview()
+        }
+        laidOutRows = next
+
         emptyLabel.isHidden = count != 0
         // Empty → keep a small fixed height so the "no results" label isn't clipped by a
         // zero-height scroll view.
@@ -346,6 +404,10 @@ class PaletteOverlay: NSView, ModalOverlay {
         updateHighlight()
         scrollSelectedToVisible()
     }
+
+    /// The laid-out row views, in list order — for a subclass that updates its rows in place (the
+    /// repo picker's git badges, which land after a background probe) instead of re-rendering.
+    var rowViews: [PaletteRowView] { laidOutRows.map(\.view) }
 
     /// The row highlighted after a (re)load — the first selectable row by default. A subclass
     /// overrides to prefer a different default (e.g. the repo picker highlights the first
@@ -356,7 +418,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         let step = delta < 0 ? -1 : 1
         var i = selected + step
         // Skip over non-selectable rows (headers) in the direction of travel.
-        while rowViews.indices.contains(i) {
+        while laidOutRows.indices.contains(i) {
             if isSelectable(at: i) {
                 selected = i
                 updateHighlight()
@@ -369,15 +431,15 @@ class PaletteOverlay: NSView, ModalOverlay {
 
     /// The first selectable row, or 0 when there is none (empty list).
     private func firstSelectableIndex() -> Int {
-        (0..<rowViews.count).first { isSelectable(at: $0) } ?? 0
+        (0..<laidOutRows.count).first { isSelectable(at: $0) } ?? 0
     }
 
     private func updateHighlight() {
-        for (i, row) in rowViews.enumerated() { row.isSelected = (i == selected) }
+        for (i, row) in laidOutRows.enumerated() { row.view.isSelected = (i == selected) }
     }
 
     private func scrollSelectedToVisible() {
-        guard rowViews.indices.contains(selected) else { return }
+        guard laidOutRows.indices.contains(selected) else { return }
         let y = (0..<selected).reduce(listVerticalInset) { $0 + rowHeight(at: $1) }
         (scrollView.documentView as? FlippedView)?
             .scrollToVisible(CGRect(x: 0, y: y, width: 1, height: rowHeight(at: selected)))
@@ -427,7 +489,7 @@ extension PaletteOverlay: NSTextFieldDelegate {
         case #selector(NSResponder.moveDown(_:)):
             moveSelection(1); return true
         case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)):
-            guard rowViews.indices.contains(selected), isSelectable(at: selected) else { return true }
+            guard laidOutRows.indices.contains(selected), isSelectable(at: selected) else { return true }
             activate(index: selected, modifiers: NSApp.currentEvent?.modifierFlags ?? [])
             return true
         default:

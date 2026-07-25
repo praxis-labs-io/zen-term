@@ -637,6 +637,10 @@ final class WindowController: NSObject {
     /// input, and spring it in. One path for all three cards. No-op if there's no active tab.
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
         guard let active = activeController else { return }
+        // A float whose open is still resolving its repo root would otherwise land on top of this
+        // card a moment from now, leaving two modal surfaces stacked and the keyboard aimed at the
+        // wrong one. A float already SHOWN is a different case, handled by the chord gate.
+        floats.cancelPendingOpen()
         active.presentTileOverlay(overlay)
         modal = (overlay, kind)
         overlay.focusInitialResponder()

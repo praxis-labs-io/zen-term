@@ -88,12 +88,26 @@ final class KeycapView: NSView {
 
     private static func modifierIcon(_ symbol: String) -> NSView {
         let view = NSImageView()
-        let config = NSImage.SymbolConfiguration(pointSize: 10, weight: .medium)
-        view.image = NSImage(systemSymbolName: symbol, accessibilityDescription: symbol)?
-            .withSymbolConfiguration(config)
+        view.image = glyphImage(symbol)
         view.contentTintColor = ink
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
+    }
+
+    /// The glyph images, resolved once per symbol and shared by every keycap on screen. The tint
+    /// lives on the image VIEW (`contentTintColor`), never on the image, so sharing one instance is
+    /// safe and `reapplyTheme()` still recolors. Every keycap draws at the same fixed size, so
+    /// there's one configuration to cache; the palette rebuilds rows per keystroke, which made this
+    /// a symbol lookup per token per row (ZEN-15). Main-thread only, like the views it feeds.
+    private static var glyphImages: [String: NSImage?] = [:]
+
+    private static func glyphImage(_ symbol: String) -> NSImage? {
+        if let cached = glyphImages[symbol] { return cached }
+        let config = NSImage.SymbolConfiguration(pointSize: 10, weight: .medium)
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: symbol)?
+            .withSymbolConfiguration(config)
+        glyphImages[symbol] = image
+        return image
     }
 
     private static func keyLabel(_ text: String) -> NSTextField {

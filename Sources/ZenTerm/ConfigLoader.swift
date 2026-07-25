@@ -127,11 +127,28 @@ enum ConfigLoader {
                 category: .workspace)
             return []
         }
-        for workspace in workspaces where !PathDisplay.isDirectory(workspace.path) {
-            Log.warning(
-                "ConfigLoader: workspace `\(workspace.title)` path \(workspace.path.path) isn't a directory",
-                category: .workspace)
-        }
+        warnAboutMissingDirectories(workspaces)
         return workspaces
+    }
+
+    /// Warn about a workspace whose `path` doesn't resolve to a directory, once per path per run.
+    ///
+    /// Diagnostic only, and one `stat` per workspace: unbounded on a network share, so it never runs
+    /// on the main queue (ZEN-90), and the callers all present UI off `loadWorkspaces`' return value
+    /// rather than waiting on this. Every ⌘⇧P open reloads the file, so warning on each pass would
+    /// reprint the same line for the life of the process; the seen set keeps the first one, which is
+    /// the one that tells the user about the typo.
+    private static var warnedPaths: Set<String> = []
+
+    private static func warnAboutMissingDirectories(_ workspaces: [Workspace]) {
+        let unwarned = workspaces.filter { warnedPaths.insert($0.path.path).inserted }
+        guard !unwarned.isEmpty else { return }
+        DispatchQueue.global(qos: .utility).async {
+            for workspace in unwarned where !PathDisplay.isDirectory(workspace.path) {
+                Log.warning(
+                    "ConfigLoader: workspace `\(workspace.title)` path \(workspace.path.path) isn't a directory",
+                    category: .workspace)
+            }
+        }
     }
 }

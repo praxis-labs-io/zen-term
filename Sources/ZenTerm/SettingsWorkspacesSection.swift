@@ -88,6 +88,11 @@ final class SettingsWorkspacesSection: SettingsSection {
                 stack.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
             }
+            // The rows are up with whatever git status was already known; fill in the rest when the
+            // background probe lands, the same way the ⌘⇧P picker does.
+            GitRepoStatus.refresh(workspaces.map(\.path)) { [weak self] in
+                self?.rows.forEach { $0.applyGitStatus() }
+            }
         }
         stack.setCustomSpacing(10, after: caption)
 
@@ -133,15 +138,16 @@ final class WorkspaceRow: NSView {
 
     private let titleLabel: NSTextField
     private let subtitleLabel: NSTextField
-    /// A muted Git logo, trailing, when the folder is a repo — mirrors the ⌘⇧P picker's badge.
-    private let gitBadge: NSImageView?
+    /// A muted Git logo, trailing, when the folder is a repo — mirrors the ⌘⇧P picker's badge, and
+    /// like the picker's it starts hidden and turns on from `GitRepoStatus` once a background probe
+    /// lands (the check is filesystem I/O, which never runs on the main thread — ZEN-90).
+    private let gitBadge = NSImageView()
     private var isFocused = false { didSet { restyle() } }
 
     init(workspace: Workspace) {
         self.workspace = workspace
         titleLabel = NSTextField(labelWithString: workspace.title)
         subtitleLabel = NSTextField(labelWithString: PathDisplay.abbreviatingHome(workspace.path.path))
-        gitBadge = GitRepo.isGitRepo(workspace.path) ? NSImageView() : nil
 
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -161,15 +167,12 @@ final class WorkspaceRow: NSView {
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        var arranged: [NSView] = [labels, spacer]
-        if let gitBadge {
-            gitBadge.image = IconCatalog.gitBadge()
-            gitBadge.setAccessibilityLabel("Git repository")
-            gitBadge.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
-            gitBadge.setContentHuggingPriority(.required, for: .horizontal)
-            arranged.append(gitBadge)
-        }
-        let controls = NSStackView(views: arranged)
+        gitBadge.image = IconCatalog.gitBadge()
+        gitBadge.setAccessibilityLabel("Git repository")
+        gitBadge.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
+        gitBadge.setContentHuggingPriority(.required, for: .horizontal)
+        applyGitStatus()
+        let controls = NSStackView(views: [labels, spacer, gitBadge])
         controls.orientation = .horizontal
         controls.alignment = .centerY
         controls.spacing = 10
@@ -189,8 +192,14 @@ final class WorkspaceRow: NSView {
     func reapplyTheme() {
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         subtitleLabel.textColor = Theme.current.chrome.ink(alpha: 0.5)
-        gitBadge?.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
+        gitBadge.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
         restyle()
+    }
+
+    /// Show the badge when this workspace's folder is a known repo. Run at build time and again
+    /// whenever a `GitRepoStatus.refresh` lands.
+    func applyGitStatus() {
+        gitBadge.isHidden = GitRepoStatus.known(workspace.path) != true
     }
 
     // MARK: focus + keyboard
