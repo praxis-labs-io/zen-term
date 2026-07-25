@@ -139,8 +139,9 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
         self.controller = controller
 
-        guard let tabBar = descendants(of: controller.window.contentView!)
-            .compactMap({ $0 as? TabBarView }).first
+        guard
+            let tabBar = descendants(of: controller.window.contentView!)
+                .compactMap({ $0 as? TabBarView }).first
         else {
             return XCTFail("expected the tab bar mounted in the window")
         }
@@ -162,8 +163,9 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
         self.controller = controller
 
-        guard let tabBar = descendants(of: controller.window.contentView!)
-            .compactMap({ $0 as? TabBarView }).first
+        guard
+            let tabBar = descendants(of: controller.window.contentView!)
+                .compactMap({ $0 as? TabBarView }).first
         else {
             return XCTFail("expected the tab bar mounted in the window")
         }
@@ -192,8 +194,9 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
         OperationQueue.main.addOperation { opened.fulfill() }
         wait(for: [opened], timeout: 5)
 
-        guard let header = descendants(of: controller.window.contentView!)
-            .compactMap({ ($0 as? PanelHostView)?.builtHeaderKeycapForTesting }).first
+        guard
+            let header = descendants(of: controller.window.contentView!)
+                .compactMap({ ($0 as? PanelHostView)?.builtHeaderKeycapForTesting }).first
         else {
             return XCTFail("expected a drawer panel header mounted in the window")
         }
