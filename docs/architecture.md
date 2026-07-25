@@ -333,6 +333,26 @@ load-bearing: general config first, then theme (which reads the general font), t
 post `.configDidChange`. `GeneralConfig` reads nothing from `Theme`, so the one-way
 dependency `Theme.current -> GeneralConfig.current` holds and they cannot deadlock.
 
+**The broadcast names what moved.** `reload()` snapshots the config and theme
+before re-resolving, diffs them, and carries a `ConfigChange` option set on the
+notification, so each observer runs only the blocks whose config actually changed.
+Settings live-apply is debounced at 180 ms, so a slider drag posts about five times
+a second, and the ungated fan-out relaid out every tab, recolored every surface,
+and rebuilt the dock each time (~3.4 ms a post). Gated, a keybind rebind costs
+0.8 ms and a gutter drag 0.4 ms.
+
+**A notification with no change set reads as `.all`.** That fail-safe is the point:
+too much re-apply is a wasted frame, too little is stale chrome, so a caller that
+doesn't diff keeps the old do-everything behavior.
+
+**Gate on what a call chain resolves, not what it is named after.** The
+dependencies are not all obvious: `reapplyChromeColors()` reaches
+`PanelHostView.reapplyTheme()`, which rebuilds the panel header's keycap from the
+live keymap, so a rebind has to reach it as well as a theme swap. An open command
+palette re-renders its rows the same way. Conversely the drawer fractions have no
+live consumer at all (a built tab never re-reads them), so changing one does no
+work. Before adding a kind or a call site, trace what it actually reads.
+
 **External hand-edits are picked up on demand only, via ⌘⌥R. There is no file
 watcher.**
 
