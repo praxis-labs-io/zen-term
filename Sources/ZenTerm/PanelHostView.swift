@@ -123,6 +123,10 @@ final class PanelHostView: NSView {
     /// the zoom content swap. Nil when there's no header.
     var headerContentForTesting: (title: String, shortcut: String)? { headerView?.contentForTesting }
 
+    /// Test hook: the shortcut the mounted header keycap was built with — stale unless the
+    /// header actually rebuilt (ZEN-48).
+    var builtHeaderKeycapForTesting: String? { headerView?.builtKeycapShortcutForTesting }
+
     /// When true the panel is transparent to the pointer — set while it dissolves out on close, so a
     /// click in the vacated region reaches the surviving pane beneath instead of this dead overlay.
     var isHitTransparent = false
@@ -199,6 +203,12 @@ final class PanelHostView: NSView {
         var contentForTesting: (title: String, shortcut: String) {
             (titleField.stringValue, CommandCatalog.spec(for: action).shortcut)
         }
+
+        /// Test hook: the shortcut the MOUNTED keycap was built with. Unlike `contentForTesting`,
+        /// which re-resolves against the live keymap on every read, this is the value actually on
+        /// screen — so it goes stale if the rebuild is skipped, which is what makes it usable for
+        /// asserting that a rebind reached this header (ZEN-48).
+        var builtKeycapShortcutForTesting: String { keycap.shortcut }
 
         init(_ meta: PanelMeta) {
             title = meta.title

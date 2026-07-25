@@ -91,12 +91,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // rebuild the interceptor's keymap so the rebind takes effect with no relaunch.
         NotificationCenter.default.addObserver(
             forName: .configDidChange, object: nil, queue: .main
-        ) { [weak self] _ in
-            self?.keys.setKeymap(GeneralConfig.current.keymap)
-            MotionConfig.apply(GeneralConfig.current.reduceMotion)  // re-install the reduce-motion override
-            self?.surfaceConfigDiagnostics()
-            self?.updateController?.reapplyTheme()  // recolor a live update card — it's outside any window's toast list
-            self?.updateController?.applyAutoCheckSetting()  // pick up a flipped auto-update toggle with no relaunch
+        ) { [weak self] note in
+            let change = ConfigChange.from(note)  // skip what this write didn't touch (ZEN-48)
+            if change.contains(.keymap) { self?.keys.setKeymap(GeneralConfig.current.keymap) }
+            // Re-install the reduce-motion override.
+            if change.contains(.motion) { MotionConfig.apply(GeneralConfig.current.reduceMotion) }
+            if change.contains(.diagnostics) { self?.surfaceConfigDiagnostics() }
+            // Recolor a live update card — it's outside any window's toast list.
+            if change.contains(.theme) { self?.updateController?.reapplyTheme() }
+            // Pick up a flipped auto-update toggle with no relaunch.
+            if change.contains(.updates) { self?.updateController?.applyAutoCheckSetting() }
         }
 
         // Auto-updates (ZEN-118). Inert in an unpackaged dev build (no SUFeedURL). The card is

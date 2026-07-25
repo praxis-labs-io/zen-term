@@ -257,38 +257,64 @@ final class WindowController: NSObject {
         // Settings-card edit re-tints the backdrop and re-lays-out every built tab, no relaunch.
         configObserver = NotificationCenter.default.addObserver(
             forName: .configDidChange, object: nil, queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] note in
             guard let self else { return }
-            self.tint.layer?.backgroundColor =
-                Theme.current.chrome.background.nsColor.withAlphaComponent(Self.backdropTintAlpha).cgColor
-            // Show/hide the traffic lights live; `reapplyChromeLayout()` below re-applies the
-            // matching top inset so the header space appears/reclaims without a relaunch.
-            self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
-            for controller in self.controllers.values {
-                controller.reapplyChromeLayout()
-                controller.reapplyChromeColors()
+            // Each block below runs only when the config it actually reads moved (ZEN-48). The
+            // dependencies are what the call chain *resolves*, not what it's named after: recoloring
+            // a pane rebuilds its header keycap from the live keymap, so a rebind lands there too.
+            let change = ConfigChange.from(note)
+
+            if change.contains(.theme) || change.contains(.chromeLayout) {
+                self.tint.layer?.backgroundColor =
+                    Theme.current.chrome.background.nsColor.withAlphaComponent(Self.backdropTintAlpha)
+                    .cgColor
             }
-            self.floats.reapplyTheme()
-            self.reapplyFloatLayout()  // a gutter change must re-inset an OPEN card too
-            for surface in self.controllers.values.flatMap({ $0.allSurfaces }) + self.floats.allSurfaces {
-                surface.applyAppearance(
-                    theme: Theme.current.terminal, behavior: GeneralConfig.current.terminalBehavior)
+            if change.contains(.chromeLayout) {
+                // Show/hide the traffic lights live; `reapplyChromeLayout()` below re-applies the
+                // matching top inset so the header space appears/reclaims without a relaunch.
+                self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
+                for controller in self.controllers.values { controller.reapplyChromeLayout() }
+                self.reapplyFloatLayout()  // a gutter change must re-inset an OPEN card too
             }
-            self.tabBar.reapplyTheme()
-            // A float add / edit / remove changes the catalog — rebuild the dock's per-float buttons
-            // (not just recolor) so the toolbar reflects it live, then restore active states. Prune
-            // the float registry against the same catalog: a deleted float's hidden process would
-            // otherwise keep running with no control able to ever reach it.
-            self.floats.prune(against: ToolFloatCatalog.all)
-            self.dock.setToolFloats(ToolFloatCatalog.all)
-            self.dock.reapplyTheme()
-            self.renderDock()
-            self.modal?.overlay.reapplyTheme()
-            self.confirmToast?.reapplyTheme()
-            // Waiting toasts are sticky with no auto-dismiss, so one left up across a theme edit
-            // would otherwise keep its old card fill, ink, and ⌘N keycap — washed out over the new
-            // chrome until the user dismisses it.
-            self.waitingToasts.values.forEach { $0.reapplyTheme() }
+            // `reapplyChromeColors` reaches `PanelHostView.reapplyTheme()`, which rebuilds the
+            // panel header's keycap against the live keymap — so a rebind needs it too, not just
+            // a theme swap.
+            if change.contains(.theme) || change.contains(.keymap) {
+                for controller in self.controllers.values { controller.reapplyChromeColors() }
+            }
+            if change.contains(.theme) {
+                self.floats.reapplyTheme()
+                self.tabBar.reapplyTheme()
+                self.dock.reapplyTheme()
+                self.confirmToast?.reapplyTheme()
+                // Waiting toasts are sticky with no auto-dismiss, so one left up across a theme edit
+                // would otherwise keep its old card fill, ink, and ⌘N keycap — washed out over the new
+                // chrome until the user dismisses it.
+                self.waitingToasts.values.forEach { $0.reapplyTheme() }
+            }
+            if change.contains(.theme) || change.contains(.terminalBehavior) {
+                for surface in self.controllers.values.flatMap({ $0.allSurfaces })
+                    + self.floats.allSurfaces
+                {
+                    surface.applyAppearance(
+                        theme: Theme.current.terminal, behavior: GeneralConfig.current.terminalBehavior)
+                }
+            }
+            if change.contains(.floats) {
+                // A float add / edit / remove changes the catalog — rebuild the dock's per-float
+                // buttons (not just recolor) so the toolbar reflects it live, then restore active
+                // states. Prune the float registry against the same catalog: a deleted float's
+                // hidden process would otherwise keep running with no control able to ever reach it.
+                self.floats.prune(against: ToolFloatCatalog.all)
+                self.dock.setToolFloats(ToolFloatCatalog.all)
+                self.dock.reapplyTheme()  // the rebuilt buttons bake their colors in at build time
+                self.renderDock()
+            }
+            // An open palette re-renders its rows here, and a row's shortcut column resolves from
+            // the live keymap — so this tracks a rebind as well as a recolor.
+            if change.contains(.theme) || change.contains(.keymap) {
+                self.modal?.overlay.reapplyTheme()
+            }
         }
     }
 

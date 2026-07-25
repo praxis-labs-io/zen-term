@@ -119,4 +119,95 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
         // that the setter works in isolation.
         XCTAssertEqual(controller.window.standardWindowButton(.closeButton)?.isHidden, true)
     }
+
+    // MARK: change-kind gating (ZEN-48)
+
+    private func post(_ change: ConfigChange) {
+        NotificationCenter.default.post(
+            name: .configDidChange, object: nil, userInfo: [ConfigChange.userInfoKey: change])
+        let drained = expectation(description: "main queue drained")
+        OperationQueue.main.addOperation { drained.fulfill() }
+        wait(for: [drained], timeout: 5)
+    }
+
+    /// The ticket's motivating case: a keybind rebind must not drag the chrome recolor along with
+    /// it. The theme is moved underneath to make a skipped re-apply *observable* — a working gate
+    /// leaves the tracer on its old accent, because a `.keymap`-only change means the theme didn't
+    /// actually move.
+    func test_keymapOnlyChange_skipsTheChromeRecolor() throws {
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
+        self.controller = controller
+
+        guard let tabBar = descendants(of: controller.window.contentView!)
+            .compactMap({ $0 as? TabBarView }).first
+        else {
+            return XCTFail("expected the tab bar mounted in the window")
+        }
+        let accentBefore = tabBar.tracerColorForTesting
+        XCTAssertNotNil(accentBefore)
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.keymap)
+
+        XCTAssertEqual(
+            accentBefore, tabBar.tracerColorForTesting,
+            "a keymap-only change re-themed the tab bar — the gate isn't holding")
+    }
+
+    /// The other half: `.theme` must still reach the tab bar, or the gate has traded a wasted
+    /// frame for stale chrome.
+    func test_themeChange_stillRecolorsThroughTheGate() throws {
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
+        self.controller = controller
+
+        guard let tabBar = descendants(of: controller.window.contentView!)
+            .compactMap({ $0 as? TabBarView }).first
+        else {
+            return XCTFail("expected the tab bar mounted in the window")
+        }
+        let accentBefore = tabBar.tracerColorForTesting
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.theme)
+
+        XCTAssertNotEqual(accentBefore, tabBar.tracerColorForTesting)
+    }
+
+    /// The audit's non-obvious dependency: recoloring a pane rebuilds its panel header keycap
+    /// against the live keymap, so `.keymap` has to reach `reapplyChromeColors()` even though
+    /// nothing about it sounds like a color. Gate that on `.theme` alone and a rebind leaves the
+    /// drawer header showing the old chord.
+    func test_keymapChange_rebuildsThePanelHeaderKeycap() throws {
+        var config = GeneralConfig.builtIn
+        GeneralConfig.setCurrentForTesting(config)
+
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
+        self.controller = controller
+        controller.showAndStart()
+        controller.handle(.toggleBottomDrawer)
+        let opened = expectation(description: "drawer opened")
+        OperationQueue.main.addOperation { opened.fulfill() }
+        wait(for: [opened], timeout: 5)
+
+        guard let header = descendants(of: controller.window.contentView!)
+            .compactMap({ ($0 as? PanelHostView)?.builtHeaderKeycapForTesting }).first
+        else {
+            return XCTFail("expected a drawer panel header mounted in the window")
+        }
+
+        // Rebind Focus Mode (the drawer header's action) to a chord nothing else holds.
+        let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
+        config.keymap = config.keymap.filter { $0.value != .toggleZoom }
+        config.keymap[rebound] = .toggleZoom
+        GeneralConfig.setCurrentForTesting(config)
+        post(.keymap)
+
+        let after = descendants(of: controller.window.contentView!)
+            .compactMap { ($0 as? PanelHostView)?.builtHeaderKeycapForTesting }.first
+        XCTAssertNotEqual(header, after, "the rebind never reached the drawer header keycap")
+        XCTAssertEqual(after, rebound.displayGlyph)
+    }
 }
