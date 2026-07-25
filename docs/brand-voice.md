@@ -11,13 +11,14 @@ This file is mirrored into `zen-term`, `zen-term-website`, and
 
 ## What ZenTerm is
 
-**A terminal for the modern era.**
+**A dev-first terminal.**
 
 The longer version, when a sentence isn't enough:
 
-> ZenTerm is a modern shell for a great terminal. Ghostty renders the text and
-> runs the shell. ZenTerm is the app around it: floating panes, drawers, projects
-> one keystroke away, and a keyboard-first way through all of it.
+> ZenTerm is a dev-first terminal on a libghostty core. libghostty renders the
+> text and runs the shell; ZenTerm adds the rest: pixel-perfect panes, drawers,
+> and tool floats, orchestrated into workspaces a keystroke away, and a
+> keyboard-first way through all of it.
 
 The purpose is polish, delight, and functionality for terminal devs of all kinds.
 
@@ -37,9 +38,10 @@ Agents are one thing people run. They get their share of the copy, not the frame
 
 ## What we don't claim
 
-Ghostty is named. ZenTerm is a shell around it, and saying so is the positioning,
-not a disclosure. Describe the relationship plainly and don't overclaim what
-ZenTerm renders itself.
+ZenTerm runs on a libghostty core, and it credits libghostty plainly. But the
+core is the engine, not the identity: it belongs in a spec line, a comparison, or
+the docs, never the headline, and never framed so ZenTerm reads as an accessory.
+Don't overclaim what ZenTerm renders itself.
 
 ---
 
@@ -187,16 +189,16 @@ person downloading, not for the person who wrote the patch.
 
 One word per concept. The audit found four concepts with two or three words each.
 
-| Concept | Use | Not |
-|---|---|---|
-| The product | **ZenTerm** | zen-term (that's the repo, the binary, and the config dir) |
-| A tiled terminal region | **pane** | split (only ever a verb: "Split Horizontally") |
-| A saved folder + layout | **workspace** | project, repo |
-| A key combination | **shortcut** in UI, **chord** when precision matters | keybind (that's the config key name) |
-| A floating tool | **tool float** first, **float** after | tool |
-| One pane or drawer filling the window | **Focus Mode** | zoom, full screen |
-| The whole window filling the desktop | **Fill Screen** | full screen, fullscreen, maximize |
-| Version control | **Git repository**, or **Git repo** | repo, git repository (lowercase) |
+| Concept                               | Use                                                  | Not                                                        |
+| ------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------- |
+| The product                           | **ZenTerm**                                          | zen-term (that's the repo, the binary, and the config dir) |
+| A tiled terminal region               | **pane**                                             | split (only ever a verb: "Split Horizontally")             |
+| A saved folder + layout               | **workspace**                                        | project, repo                                              |
+| A key combination                     | **shortcut** in UI, **chord** when precision matters | keybind (that's the config key name)                       |
+| A floating tool                       | **tool float** first, **float** after                | tool                                                       |
+| One pane or drawer filling the window | **Focus Mode**                                       | zoom, full screen                                          |
+| The whole window filling the desktop  | **Fill Screen**                                      | full screen, fullscreen, maximize                          |
+| Version control                       | **Git repository**, or **Git repo**                  | repo, git repository (lowercase)                           |
 
 Apostrophes: straight (`'`), matching the bulk of the codebase. Two form overlays
 use curly (`’`) and should be reconciled.
