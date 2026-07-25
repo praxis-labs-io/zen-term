@@ -178,7 +178,9 @@ final class SettingsToolsSection: SettingsSection {
     /// reference to it. (The edit path gets away with a synchronous callback only because modal
     /// teardown is animated.)
     private func move(_ row: ToolFloatRow?, delta: Int) {
-        guard let row else { return }
+        // No host means no write and no rebuild, so bail before touching anything rather than
+        // reordering a local array nobody will persist or redraw from.
+        guard let row, let onReorder else { return }
         var floats = GeneralConfig.current.floats
         guard let from = floats.firstIndex(where: { $0.id == row.float.id }) else { return }
         let to = from + delta
@@ -186,7 +188,7 @@ final class SettingsToolsSection: SettingsSection {
         floats.swapAt(from, to)
 
         let movedID = row.float.id
-        onReorder?(floats) { [weak self] in
+        onReorder(floats) { [weak self] in
             guard let self else { return }
             // Unconditional: on a failed write the config is unchanged, so the rebuild simply puts the
             // row back where it was rather than leaving the list lying about the file.

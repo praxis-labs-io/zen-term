@@ -814,7 +814,12 @@ final class WindowController: NSObject {
         if modal?.kind == .settings { closeModal(); return }
         let toolsSection = SettingsToolsSection()
         toolsSection.onEditFloat = { [weak self] float in self?.openToolFloatForm(editing: float) }
-        toolsSection.onReorder = { [weak self] floats, done in self?.reorderToolFloats(floats, then: done) }
+        // `done` is always called, even on a torn-down window: the section waits on it to rebuild,
+        // so dropping it would strand the list mid-reorder.
+        toolsSection.onReorder = { [weak self] floats, done in
+            guard let self else { return done() }
+            self.reorderToolFloats(floats, then: done)
+        }
         let workspacesSection = SettingsWorkspacesSection()
         workspacesSection.onEditWorkspace = { [weak self] ws in self?.openWorkspaceForm(editing: ws) }
         // Sorted by nav title so the nav reads alphabetically and stays ordered as sections are
