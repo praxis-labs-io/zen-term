@@ -96,7 +96,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if change.contains(.keymap) { self?.keys.setKeymap(GeneralConfig.current.keymap) }
             // Re-install the reduce-motion override.
             if change.contains(.motion) { MotionConfig.apply(GeneralConfig.current.reduceMotion) }
-            if change.contains(.diagnostics) { self?.surfaceConfigDiagnostics() }
+            // Deliberately ungated. This one already has a finer gate than the change set: it
+            // tracks what was *delivered*, and leaves `lastConfigDiagnostics` untouched when no
+            // window was there to show the notice, so the next reload retries it. Gating on
+            // `.diagnostics` would strand an undelivered notice forever — the diagnostics haven't
+            // changed, so the retry would never come. The cost is a set comparison that returns nil.
+            self?.surfaceConfigDiagnostics()
             // Recolor a live update card — it's outside any window's toast list.
             if change.contains(.theme) { self?.updateController?.reapplyTheme() }
             // Pick up a flipped auto-update toggle with no relaunch.
@@ -127,7 +132,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         if case .reloadConfig = chord {
-            AppConfig.reload()
+            // Forced: ⌘⌥R is the "make the app match my config" escape hatch, so it re-applies
+            // everything rather than only what the diff says moved.
+            AppConfig.reload(force: true)
             return
         }
         if case .checkForUpdates = chord {
