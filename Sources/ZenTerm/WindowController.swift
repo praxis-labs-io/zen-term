@@ -146,6 +146,12 @@ final class WindowController: NSObject {
     }
     private var modal: (overlay: ModalOverlay, kind: ModalKind)?
 
+    /// A card that has been asked for but can't be built yet, because its content is still being
+    /// read off the main thread (the `workspaces` file — ZEN-275). Nothing is on screen for it, so
+    /// this is its only trace: a second press must not start a second load and present twice, and a
+    /// load landing after an Esc or after another card went up must not present at all.
+    private var pendingModal: ModalKind?
+
     /// The app's key interceptor, injected so the Settings Keybinds section can capture chords.
     weak var keybindCapturer: KeybindCapturing?
 
@@ -637,10 +643,12 @@ final class WindowController: NSObject {
     /// input, and spring it in. One path for all three cards. No-op if there's no active tab.
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
         guard let active = activeController else { return }
-        // A float whose open is still resolving its repo root would otherwise land on top of this
-        // card a moment from now, leaving two modal surfaces stacked and the keyboard aimed at the
-        // wrong one. A float already SHOWN is a different case, handled by the chord gate.
+        // Anything else still on its way in would otherwise land on top of this card a moment from
+        // now, leaving two modal surfaces stacked and the keyboard aimed at the wrong one: a float
+        // still resolving its repo root, or a card still reading the config it renders from. A
+        // surface already SHOWN is a different case, handled by the chord gate.
         floats.cancelPendingOpen()
+        pendingModal = nil
         active.presentTileOverlay(overlay)
         modal = (overlay, kind)
         overlay.focusInitialResponder()
@@ -653,6 +661,7 @@ final class WindowController: NSObject {
     /// tab. No-op when nothing is open. Also called before any tab-bar mouse op (select/new/
     /// close), which would otherwise unmount the card's host tab and leave the gate stuck on.
     private func closeModal() {
+        pendingModal = nil  // a card still loading is closed by never being presented
         guard let overlay = modal?.overlay else { return }
         modal = nil
         overlay.animateOut { overlay.removeFromSuperview() }
@@ -662,16 +671,27 @@ final class WindowController: NSObject {
 
     /// Toggle the workspace picker (⌘⇧P). Reads the `workspaces` file fresh on each open (so
     /// hand-edits appear without a relaunch). Pressing ⌘⇧P while it's up closes it.
+    ///
+    /// The read is off the main thread (ZEN-275), so the card is built once the workspaces are in
+    /// hand rather than presented empty and filled: a card that springs in at one size and resizes a
+    /// frame later reads as a flash. Nothing blocks meanwhile, and the wait is a file read from the
+    /// config directory, so what a slow disk costs is the card appearing late rather than the app
+    /// going unresponsive.
     private func toggleRepoPicker() {
-        if modal?.kind == .repoPicker { closeModal(); return }
-        let picker = RepoPickerOverlay(
-            entries: ConfigLoader.loadWorkspaces(),
-            background: Theme.current.chrome.background.nsColor,
-            onChoose: { [weak self] ws, replace in self?.openWorkspace(ws, replaceCurrentTab: replace) },
-            onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
-            onDismiss: { [weak self] in self?.closeModal() }
-        )
-        presentModal(picker, kind: .repoPicker)
+        if modal?.kind == .repoPicker || pendingModal == .repoPicker { closeModal(); return }
+        pendingModal = .repoPicker
+        ConfigLoader.loadWorkspaces { [weak self] workspaces in
+            guard let self, self.pendingModal == .repoPicker else { return }
+            self.pendingModal = nil
+            let picker = RepoPickerOverlay(
+                entries: workspaces,
+                background: Theme.current.chrome.background.nsColor,
+                onChoose: { [weak self] ws, replace in self?.openWorkspace(ws, replaceCurrentTab: replace) },
+                onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
+                onDismiss: { [weak self] in self?.closeModal() }
+            )
+            self.presentModal(picker, kind: .repoPicker)
+        }
     }
 
     /// Toggle the command palette (⌘P). Builds the catalog fresh (its tab-select entries track
@@ -691,15 +711,24 @@ final class WindowController: NSObject {
     /// inline collision checks; submitting writes the section and opens it. The picker is still up
     /// when the ＋ fires, so close it first. (Editing / deleting a workspace goes through Settings →
     /// Workspaces instead, via `openWorkspaceForm`.)
+    ///
+    /// The form waits for the load rather than presenting without it: its title-collision check has
+    /// to be right from the first keystroke, and a form seeded with half the titles would accept a
+    /// duplicate.
     private func openAddWorkspaceForm() {
         closeModal()
-        let form = AddWorkspaceOverlay(
-            existingTitles: Set(ConfigLoader.loadWorkspaces().map(\.title)),
-            background: Theme.current.chrome.background.nsColor,
-            onSubmit: { [weak self] ws in self?.submitNewWorkspace(ws) },
-            onCancel: { [weak self] in self?.closeModal() }
-        )
-        presentModal(form, kind: .workspaceForm)
+        pendingModal = .workspaceForm
+        ConfigLoader.loadWorkspaces { [weak self] workspaces in
+            guard let self, self.pendingModal == .workspaceForm else { return }
+            self.pendingModal = nil
+            let form = AddWorkspaceOverlay(
+                existingTitles: Set(workspaces.map(\.title)),
+                background: Theme.current.chrome.background.nsColor,
+                onSubmit: { [weak self] ws in self?.submitNewWorkspace(ws) },
+                onCancel: { [weak self] in self?.closeModal() }
+            )
+            self.presentModal(form, kind: .workspaceForm)
+        }
     }
 
     /// Open the "Report an Issue" composer (Help menu + Settings). Non-private: `AppDelegate` routes
@@ -933,18 +962,25 @@ final class WindowController: NSObject {
     /// delete it hands back to Settings → Workspaces.
     private func openWorkspaceForm(editing workspace: Workspace?) {
         closeModal()
-        let existingTitles = Set(ConfigLoader.loadWorkspaces().map(\.title))
-            .subtracting(workspace.map { [$0.title] } ?? [])
-        let originalTitle = workspace?.title
-        let form = AddWorkspaceOverlay(
-            editing: workspace,
-            existingTitles: existingTitles,
-            background: Theme.current.chrome.background.nsColor,
-            onSubmit: { [weak self] built in self?.submitWorkspace(built, replacing: originalTitle) },
-            onCancel: { [weak self] in self?.reopenSettingsOnWorkspaces() },
-            onDelete: workspace.map { existing in { [weak self] in self?.deleteWorkspace(existing) } }
-        )
-        presentModal(form, kind: .workspaceForm)
+        // Same as the add form: the collision check needs the whole title set before the first
+        // keystroke, so the card waits on the load rather than presenting half-seeded.
+        pendingModal = .workspaceForm
+        ConfigLoader.loadWorkspaces { [weak self] workspaces in
+            guard let self, self.pendingModal == .workspaceForm else { return }
+            self.pendingModal = nil
+            let existingTitles = Set(workspaces.map(\.title))
+                .subtracting(workspace.map { [$0.title] } ?? [])
+            let originalTitle = workspace?.title
+            let form = AddWorkspaceOverlay(
+                editing: workspace,
+                existingTitles: existingTitles,
+                background: Theme.current.chrome.background.nsColor,
+                onSubmit: { [weak self] built in self?.submitWorkspace(built, replacing: originalTitle) },
+                onCancel: { [weak self] in self?.reopenSettingsOnWorkspaces() },
+                onDelete: workspace.map { existing in { [weak self] in self?.deleteWorkspace(existing) } }
+            )
+            self.presentModal(form, kind: .workspaceForm)
+        }
     }
 
     /// Persist a workspace edited / added from Settings, then hand back to Settings → Workspaces (the
@@ -1181,6 +1217,9 @@ final class WindowController: NSObject {
             active?.toggleZoom()
         case .fillScreen: toggleFillScreen()
         case .toggleToolFloat(let id):
+            // A float is modal too, so it calls off a card that's still loading — otherwise the card
+            // lands on top of it a beat later. `presentModal` is the mirror of this.
+            pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
@@ -1545,6 +1584,10 @@ final class WindowController: NSObject {
     private func tearDown() {
         guard !didTearDown else { return }
         didTearDown = true
+        // Nothing may be built for this window after it goes: a card still loading would otherwise
+        // arrive to a nil `activeController`, but only after constructing its overlay and kicking
+        // off a git probe per workspace. `floats.shutdown()` below does the same for a float.
+        pendingModal = nil
         // Closing the window with a confirm still up must resolve its owner's pending state —
         // e.g. a quit confirm's `.terminateLater` reply — or the app hangs mid-quit.
         cancelConfirm()

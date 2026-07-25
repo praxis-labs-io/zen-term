@@ -42,7 +42,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             rowHeight: 32,
             onDismiss: onDismiss)
 
-        // One background pass per open: the card is up immediately with whatever was already known,
+        // One background pass per open: the rows are up with whatever git status was already known,
         // and the badges fill in when the probes land. Per open rather than once per process, so a
         // folder that just became a repo gets its badge without a relaunch.
         GitRepoStatus.refresh(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }

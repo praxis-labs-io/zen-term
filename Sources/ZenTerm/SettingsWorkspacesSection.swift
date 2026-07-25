@@ -55,7 +55,37 @@ final class SettingsWorkspacesSection: SettingsSection {
     /// delete because the form hands back to a freshly-built Settings → Workspaces (no in-place
     /// mutation here).
     private func populateRows() {
+        // The file is read off the main thread (ZEN-275), so the section mounts with its caption and
+        // add button and the rows land a moment later. It must not render the "no workspaces yet"
+        // hint in the meantime: that hint is the answer for an empty FILE, and flashing it while the
+        // file is still being read tells the user their workspaces are gone.
+        populate(with: nil)
+        // The card rebuilds a section's detail on every switch, so a load from a previous mount can
+        // still land here. Its answer belongs to a view that's gone; repopulating from it would
+        // rebuild the current rows a second time under the user.
+        mountGeneration += 1
+        let generation = mountGeneration
+        ConfigLoader.loadWorkspaces { [weak self] workspaces in
+            guard let self, generation == self.mountGeneration else { return }
+            self.populate(with: workspaces)
+        }
+    }
+
+    /// Render the section. `workspaces` is nil while the load is still out: caption and add button
+    /// only, no rows and no empty-state hint.
+    private func populate(with workspaces: [Workspace]?) {
         guard let stack = rowsStack else { return }
+        // Rebuilding tears the current first responder out of the window, which resets focus to the
+        // window itself and leaves the card's keyboard dead until a click. The user can already be
+        // in here when the load lands (the add button is a stop from the first frame), so remember
+        // whether focus was ours and put it back on the equivalent stop afterwards.
+        let focusedStop = stack.window?.firstResponder as? NSView
+        let hadFocus = focusedStop.map { stop in detailStops().contains { $0 === stop } } ?? false
+        // The add button is the only stop that survives the rebuild, so it's the only one that can
+        // be restored by identity. Restoring it matters: it's the stop the user lands on when they
+        // enter the detail before the rows arrive, and moving them to a row would put Return on a
+        // workspace they never selected.
+        let wasAddButton = focusedStop === addButton
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rows = []
 
@@ -64,8 +94,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         stack.addArrangedSubview(caption)
         caption.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
-        let workspaces = ConfigLoader.loadWorkspaces()
-        if workspaces.isEmpty {
+        if let workspaces, workspaces.isEmpty {
             let hint = NSTextField(
                 labelWithString: "No workspaces yet. Add one to launch a folder with its own layout from ⌘⇧P.")
             hint.font = .systemFont(ofSize: 12)
@@ -75,7 +104,7 @@ final class SettingsWorkspacesSection: SettingsSection {
             emptyHint = hint
             stack.addArrangedSubview(hint)
             hint.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        } else {
+        } else if let workspaces {
             for workspace in workspaces {
                 let row = WorkspaceRow(workspace: workspace)
                 row.onActivate = { [weak self, weak row] in row.map { self?.onEditWorkspace?($0.workspace) } }
@@ -100,7 +129,14 @@ final class SettingsWorkspacesSection: SettingsSection {
         stack.addArrangedSubview(addRow)
         addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
+
+        // Focus was in this section before the rebuild, so put it back: on the add button if that's
+        // where it was, else the first stop, so arrows and Return keep working without a click.
+        if hadFocus { stack.window?.makeFirstResponder(wasAddButton ? addButton : detailStops().first) }
     }
+
+    /// Bumped per mount, so a load belonging to an earlier one is dropped rather than rendered.
+    private var mountGeneration = 0
 
     private func moveFocus(from view: NSView?, delta: Int) {
         guard let view else { return }

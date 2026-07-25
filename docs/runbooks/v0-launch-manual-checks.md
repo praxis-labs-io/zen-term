@@ -197,6 +197,18 @@ few entries, at least one of them a git repo and one not.
       later opens it's there immediately.
 - [ ] **A new repo shows up without a relaunch.** `git init` one of the plain workspace
       folders, reopen ⌘⇧P, and it now carries a badge. Settings → Workspaces agrees.
+- [ ] **⌘⇧P opens in one move.** The `workspaces` file is read off the main thread, so the
+      card is built a turn after the press. It must still spring in the way it does on main:
+      at full size, with its rows already there. A card that appears small and then grows
+      means it went back to presenting before the load landed. Press it repeatedly and
+      watch for any size change after the spring starts.
+- [ ] **A second press before it appears closes it.** Press ⌘⇧P twice quickly. You get no
+      card, not two, and not one you have to dismiss twice.
+- [ ] **Settings → Workspaces never flashes its empty state** on the way to showing rows.
+- [ ] **Add and edit still catch duplicate names.** From ⌘⇧P's ＋ row, and from
+      Settings → Workspaces on an existing row, type the name of a workspace that already
+      exists. The form still refuses it. Those cards wait for the file before appearing,
+      so a slow disk shows a beat of nothing rather than a form that accepts a duplicate.
 - [ ] **Tool floats still gate on git.** Toggle a `git:true` float from a folder outside
       any repo (toast blocks it) and from inside one (it opens). Toggle a plain float:
       it opens with no perceptible delay. Double-press a git-gated float's chord fast:
