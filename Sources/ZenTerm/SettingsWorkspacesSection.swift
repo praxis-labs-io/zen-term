@@ -55,6 +55,17 @@ final class SettingsWorkspacesSection: SettingsSection {
     /// delete because the form hands back to a freshly-built Settings → Workspaces (no in-place
     /// mutation here).
     private func populateRows() {
+        // The file is read off the main thread (ZEN-275), so the section mounts with its caption and
+        // add button and the rows land a moment later. It must not render the "no workspaces yet"
+        // hint in the meantime: that hint is the answer for an empty FILE, and flashing it while the
+        // file is still being read tells the user their workspaces are gone.
+        populate(with: nil)
+        ConfigLoader.loadWorkspaces { [weak self] workspaces in self?.populate(with: workspaces) }
+    }
+
+    /// Render the section. `workspaces` is nil while the load is still out: caption and add button
+    /// only, no rows and no empty-state hint.
+    private func populate(with workspaces: [Workspace]?) {
         guard let stack = rowsStack else { return }
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rows = []
@@ -64,8 +75,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         stack.addArrangedSubview(caption)
         caption.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
-        let workspaces = ConfigLoader.loadWorkspaces()
-        if workspaces.isEmpty {
+        if let workspaces, workspaces.isEmpty {
             let hint = NSTextField(
                 labelWithString: "No workspaces yet. Add one to launch a folder with its own layout from ⌘⇧P.")
             hint.font = .systemFont(ofSize: 12)
@@ -75,7 +85,7 @@ final class SettingsWorkspacesSection: SettingsSection {
             emptyHint = hint
             stack.addArrangedSubview(hint)
             hint.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        } else {
+        } else if let workspaces {
             for workspace in workspaces {
                 let row = WorkspaceRow(workspace: workspace)
                 row.onActivate = { [weak self, weak row] in row.map { self?.onEditWorkspace?($0.workspace) } }

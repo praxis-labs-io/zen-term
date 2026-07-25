@@ -46,7 +46,7 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
     }
 
     @discardableResult
-    private func mount(_ section: SettingsWorkspacesSection) -> NSView {
+    private func mount(_ section: SettingsWorkspacesSection, waitingForLoad: Bool = true) -> NSView {
         self.section = section
         let detail = section.makeDetailView()
         let win = NSWindow(
@@ -55,7 +55,22 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
         win.contentView?.addSubview(detail)
         detail.frame = win.contentView!.bounds
         window = win
+        if waitingForLoad { waitForLoad(in: detail) }
         return detail
+    }
+
+    /// The section reads the `workspaces` file off the main thread (ZEN-275), so a freshly mounted
+    /// detail has neither rows nor the empty-state hint until the load lands. Either one appearing
+    /// means it settled; waiting on rows alone would hang on an empty file.
+    private func waitForLoad(in detail: NSView) {
+        waitUntil(
+            !rows(in: detail).isEmpty || emptyHint(in: detail) != nil,
+            "the workspaces section to finish loading")
+    }
+
+    private func emptyHint(in view: NSView) -> NSTextField? {
+        descendants(of: view).compactMap { $0 as? NSTextField }
+            .first { $0.stringValue.hasPrefix("No workspaces yet") }
     }
 
     private func rows(in view: NSView) -> [WorkspaceRow] {
@@ -122,13 +137,31 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
         }
         XCTAssertEqual(badge(inRowTitled: "Repo")?.isHidden, true, "nothing has probed the folder yet")
 
+        // Each path is probed on its own, so wait for BOTH answers: a still-hidden badge on the plain
+        // row would otherwise pass whether it had been answered or simply not reached yet.
         waitUntil(badge(inRowTitled: "Repo")?.isHidden == false, "the repo's git badge to land")
+        waitUntil(GitRepoStatus.known(plain) != nil, "the plain folder to be answered too")
 
-        // Both paths are answered in one batch and applied together, so once the repo's badge is up
-        // the plain folder's row has had its answer too.
         XCTAssertNotNil(
             badge(inRowTitled: "Repo")?.image, "the badge renders the bundled git logo, not an empty view")
         XCTAssertEqual(badge(inRowTitled: "Plain")?.isHidden, true, "a plain folder keeps its badge hidden")
+    }
+
+    /// The rows arrive after the mount, and the empty-state hint is the answer for an empty FILE.
+    /// Showing it while the read is still out tells the user their workspaces are gone, so the
+    /// section renders neither until it knows.
+    func test_whileLoading_showsNeitherRowsNorTheEmptyStateHint() throws {
+        try seed(twoWorkspaces)
+
+        let detail = mount(SettingsWorkspacesSection(), waitingForLoad: false)
+
+        // Nothing has turned the run loop since the mount, so the load cannot have landed yet.
+        XCTAssertTrue(rows(in: detail).isEmpty, "no rows before the file has been read")
+        XCTAssertNil(emptyHint(in: detail), "and no 'no workspaces yet' hint for a file that has two")
+
+        waitForLoad(in: detail)
+        XCTAssertEqual(rows(in: detail).count, 2)
+        XCTAssertNil(emptyHint(in: detail))
     }
 
     func test_rowActivate_invokesOnEditWorkspaceWithThatWorkspace() throws {

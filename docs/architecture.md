@@ -367,6 +367,17 @@ the chrome never hardcodes a color.
   `parent == dir`. `deletingLastPathComponent()` is not monotonic on a
   FileManager-vended URL: it walks past `/` forever, and an equality check spins the
   main thread.
+- **The `workspaces` file is read off the main thread, so its readers render
+  twice.** `ConfigLoader.loadWorkspaces` has a completion-handler form that every
+  UI caller uses (the synchronous one is for `WorkspacesWriter` and for a caller
+  already off main). ⌘⇧P puts its card up first and takes entries through
+  `setEntries`, which re-filters against whatever has been typed meanwhile;
+  Settings → Workspaces renders neither rows nor its empty-state hint until the
+  load lands, because that hint is the answer for an empty *file* and flashing it
+  mid-read reads as "your workspaces are gone". The add/edit forms are the
+  exception and wait for the load: a title-collision check seeded with half the
+  titles would accept a duplicate. The load queue is serial, so the
+  warn-once-per-path set behind it is only touched from one thread.
 - **Interactive git probes go through `GitRepoStatus`, never `GitRepo` directly.**
   Both are filesystem I/O, which the main queue never blocks on: the ⌘⇧P picker and
   Settings → Workspaces render their badges from `GitRepoStatus.known` (nil until

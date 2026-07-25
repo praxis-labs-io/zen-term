@@ -662,16 +662,25 @@ final class WindowController: NSObject {
 
     /// Toggle the workspace picker (⌘⇧P). Reads the `workspaces` file fresh on each open (so
     /// hand-edits appear without a relaunch). Pressing ⌘⇧P while it's up closes it.
+    ///
+    /// The card goes up before the file has been read: the read is off the main thread (ZEN-275), so
+    /// the chord always lands instantly and the workspaces fill in. Anything typed in between is
+    /// kept — `setEntries` re-filters against it.
     private func toggleRepoPicker() {
         if modal?.kind == .repoPicker { closeModal(); return }
         let picker = RepoPickerOverlay(
-            entries: ConfigLoader.loadWorkspaces(),
             background: Theme.current.chrome.background.nsColor,
             onChoose: { [weak self] ws, replace in self?.openWorkspace(ws, replaceCurrentTab: replace) },
             onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
             onDismiss: { [weak self] in self?.closeModal() }
         )
         presentModal(picker, kind: .repoPicker)
+        ConfigLoader.loadWorkspaces { [weak self, weak picker] workspaces in
+            // Only if this picker is still the card that's up: the load can land after an Esc, or
+            // after the user opened something else.
+            guard let picker, self?.modal?.overlay === picker else { return }
+            picker.setEntries(workspaces)
+        }
     }
 
     /// Toggle the command palette (⌘P). Builds the catalog fresh (its tab-select entries track
@@ -691,15 +700,22 @@ final class WindowController: NSObject {
     /// inline collision checks; submitting writes the section and opens it. The picker is still up
     /// when the ＋ fires, so close it first. (Editing / deleting a workspace goes through Settings →
     /// Workspaces instead, via `openWorkspaceForm`.)
+    ///
+    /// The form waits for the load rather than presenting without it: its title-collision check has
+    /// to be right from the first keystroke, and a form seeded with half the titles would accept a
+    /// duplicate.
     private func openAddWorkspaceForm() {
         closeModal()
-        let form = AddWorkspaceOverlay(
-            existingTitles: Set(ConfigLoader.loadWorkspaces().map(\.title)),
-            background: Theme.current.chrome.background.nsColor,
-            onSubmit: { [weak self] ws in self?.submitNewWorkspace(ws) },
-            onCancel: { [weak self] in self?.closeModal() }
-        )
-        presentModal(form, kind: .workspaceForm)
+        ConfigLoader.loadWorkspaces { [weak self] workspaces in
+            guard let self else { return }
+            let form = AddWorkspaceOverlay(
+                existingTitles: Set(workspaces.map(\.title)),
+                background: Theme.current.chrome.background.nsColor,
+                onSubmit: { [weak self] ws in self?.submitNewWorkspace(ws) },
+                onCancel: { [weak self] in self?.closeModal() }
+            )
+            self.presentModal(form, kind: .workspaceForm)
+        }
     }
 
     /// Open the "Report an Issue" composer (Help menu + Settings). Non-private: `AppDelegate` routes
@@ -933,18 +949,23 @@ final class WindowController: NSObject {
     /// delete it hands back to Settings → Workspaces.
     private func openWorkspaceForm(editing workspace: Workspace?) {
         closeModal()
-        let existingTitles = Set(ConfigLoader.loadWorkspaces().map(\.title))
-            .subtracting(workspace.map { [$0.title] } ?? [])
-        let originalTitle = workspace?.title
-        let form = AddWorkspaceOverlay(
-            editing: workspace,
-            existingTitles: existingTitles,
-            background: Theme.current.chrome.background.nsColor,
-            onSubmit: { [weak self] built in self?.submitWorkspace(built, replacing: originalTitle) },
-            onCancel: { [weak self] in self?.reopenSettingsOnWorkspaces() },
-            onDelete: workspace.map { existing in { [weak self] in self?.deleteWorkspace(existing) } }
-        )
-        presentModal(form, kind: .workspaceForm)
+        // Same as the add form: the collision check needs the whole title set before the first
+        // keystroke, so the card waits on the load rather than presenting half-seeded.
+        ConfigLoader.loadWorkspaces { [weak self] workspaces in
+            guard let self else { return }
+            let existingTitles = Set(workspaces.map(\.title))
+                .subtracting(workspace.map { [$0.title] } ?? [])
+            let originalTitle = workspace?.title
+            let form = AddWorkspaceOverlay(
+                editing: workspace,
+                existingTitles: existingTitles,
+                background: Theme.current.chrome.background.nsColor,
+                onSubmit: { [weak self] built in self?.submitWorkspace(built, replacing: originalTitle) },
+                onCancel: { [weak self] in self?.reopenSettingsOnWorkspaces() },
+                onDelete: workspace.map { existing in { [weak self] in self?.deleteWorkspace(existing) } }
+            )
+            self.presentModal(form, kind: .workspaceForm)
+        }
     }
 
     /// Persist a workspace edited / added from Settings, then hand back to Settings → Workspaces (the
