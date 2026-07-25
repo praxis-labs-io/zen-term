@@ -4,8 +4,8 @@ How ZenTerm describes itself, and how its copy sounds. This governs every word a
 person outside the project reads: the marketing site, the release repo, these
 docs, release notes, and the copy inside the app.
 
-This file is mirrored into `zen-term`, `zen-term-website`, and
-`zen-term-releases`. Edit it here and copy it out. Anything else drifts.
+This file is mirrored into `zen-term` and `zen-term-website`. Edit it here and
+copy it out. Anything else drifts.
 
 ---
 
