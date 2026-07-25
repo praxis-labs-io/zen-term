@@ -26,8 +26,9 @@ final class SettingsToolsSectionTests: XCTestCase {
 
     override func tearDownWithError() throws {
         window = nil
+        drainConfigWrites()  // a write still in flight would land in the real config root
         ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
@@ -36,7 +37,7 @@ final class SettingsToolsSectionTests: XCTestCase {
 
     private func seed(_ text: String) throws {
         try text.write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
     }
 
     private func descendants(of view: NSView) -> [NSView] {
@@ -81,20 +82,11 @@ final class SettingsToolsSectionTests: XCTestCase {
     private var optionDown: NSEvent { arrow(125, .option) }
     private var optionUp: NSEvent { arrow(126, .option) }
 
-    /// The section defers its write to the next runloop turn (it rebuilds the very row whose `keyDown`
-    /// is still on the stack), so a test has to let that turn happen before asserting.
-    private func settleReorder() {
-        let done = expectation(description: "reorder applied")
-        DispatchQueue.main.async { done.fulfill() }
-        wait(for: [done], timeout: 2)
-    }
-
     /// Wire the section to the same write the host uses, so these tests cover the real path rather
-    /// than a test-local imitation of it.
+    /// than a test-local imitation of it — including the off-main hop the rebuild now waits on.
     private func wireReorder(_ section: SettingsToolsSection) {
-        section.onReorder = { floats in
-            try? ConfigWriter.applyFloatOrder(floats)
-            AppConfig.reload()
+        section.onReorder = { floats, done in
+            AppConfig.persist({ try ConfigWriter.applyFloatOrder(floats) }) { _ in done() }
         }
     }
 
@@ -156,7 +148,7 @@ final class SettingsToolsSectionTests: XCTestCase {
         let detail = mount(section)
 
         rows(in: detail).first { $0.float.id == "dev" }?.keyDown(with: optionDown)
-        settleReorder()
+        drainConfigWrites()
 
         XCTAssertEqual(configuredFloatIDs(), ["top", "dev"])
         XCTAssertEqual(rows(in: detail).map(\.float.id), ["top", "dev"], "the rebuilt rows show the new order")
@@ -169,7 +161,7 @@ final class SettingsToolsSectionTests: XCTestCase {
         let detail = mount(section)
 
         rows(in: detail).first { $0.float.id == "top" }?.keyDown(with: optionUp)
-        settleReorder()
+        drainConfigWrites()
 
         XCTAssertEqual(configuredFloatIDs(), ["top", "dev"])
     }
@@ -185,7 +177,7 @@ final class SettingsToolsSectionTests: XCTestCase {
         window?.makeFirstResponder(dev)
 
         dev.keyDown(with: optionDown)
-        settleReorder()
+        drainConfigWrites()
 
         let focused = window?.firstResponder as? ToolFloatRow
         XCTAssertEqual(focused?.float.id, "dev", "focus follows the float that moved, not the slot")
@@ -200,7 +192,7 @@ final class SettingsToolsSectionTests: XCTestCase {
         let detail = mount(section)
 
         rows(in: detail).first { $0.float.id == "dev" }?.keyDown(with: optionUp)
-        settleReorder()
+        drainConfigWrites()
 
         XCTAssertEqual(configuredFloatIDs(), ["dev", "top"])
     }
@@ -216,7 +208,7 @@ final class SettingsToolsSectionTests: XCTestCase {
         window?.makeFirstResponder(dev)
 
         dev.keyDown(with: arrow(125))  // bare Down — still carries .function/.numericPad
-        settleReorder()
+        drainConfigWrites()
 
         XCTAssertEqual(configuredFloatIDs(), ["dev", "top"], "a bare Down must not reorder")
         XCTAssertEqual((window?.firstResponder as? ToolFloatRow)?.float.id, "top", "it moves focus instead")
@@ -231,7 +223,7 @@ final class SettingsToolsSectionTests: XCTestCase {
         let detail = mount(section)
 
         rows(in: detail).first { $0.float.id == "dev" }?.keyDown(with: arrow(125, [.option, .command]))
-        settleReorder()
+        drainConfigWrites()
 
         XCTAssertEqual(configuredFloatIDs(), ["dev", "top"])
     }

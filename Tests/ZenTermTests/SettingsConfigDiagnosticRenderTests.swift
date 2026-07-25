@@ -27,7 +27,7 @@ final class SettingsConfigDiagnosticRenderTests: XCTestCase {
         section = nil
         hostWindow = nil
         ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()  // restore the process's real config state
+        AppConfig.reloadBlocking()  // restore the process's real config state
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
@@ -35,7 +35,7 @@ final class SettingsConfigDiagnosticRenderTests: XCTestCase {
     /// Write the sandboxed config and reload so `GeneralConfig.current.configDiagnostics` reflects it.
     private func loadConfig(_ text: String) {
         try? text.write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
     }
 
     /// Mount a section in a host window (both retained) and return every view in its live tree.

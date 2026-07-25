@@ -25,14 +25,15 @@ final class SettingsTerminalShaderPickerTests: XCTestCase {
             .appendingPathComponent("zenterm-shader-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
-        AppConfig.reload()  // empty temp root = builtIn: no shader
+        AppConfig.reloadBlocking()  // empty temp root = builtIn: no shader
     }
 
     override func tearDownWithError() throws {
         section = nil
         hostWindow = nil
+        drainConfigWrites()  // a write still in flight would land in the real config root
         ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
@@ -57,9 +58,12 @@ final class SettingsTerminalShaderPickerTests: XCTestCase {
         return dropdowns.first { $0.buttonTitleForTesting == "Off" }!
     }
 
+    /// Wait for the pending write, then read the sandboxed config file. Picking a shader writes off
+    /// the main thread (ZEN-17), so reading without waiting reports the file from before the pick.
     private func configText() -> String {
-        (try? String(
-            contentsOf: ConfigLoader.defaultRoot.appendingPathComponent("config"), encoding: .utf8)) ?? ""
+        drainConfigWrites()
+        let url = ConfigLoader.defaultRoot.appendingPathComponent("config")
+        return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }
 
     private func key(_ keyCode: UInt16, arrow: Bool) -> NSEvent {

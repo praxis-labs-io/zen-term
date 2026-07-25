@@ -814,7 +814,7 @@ final class WindowController: NSObject {
         if modal?.kind == .settings { closeModal(); return }
         let toolsSection = SettingsToolsSection()
         toolsSection.onEditFloat = { [weak self] float in self?.openToolFloatForm(editing: float) }
-        toolsSection.onReorder = { [weak self] floats in self?.reorderToolFloats(floats) }
+        toolsSection.onReorder = { [weak self] floats, done in self?.reorderToolFloats(floats, then: done) }
         let workspacesSection = SettingsWorkspacesSection()
         workspacesSection.onEditWorkspace = { [weak self] ws in self?.openWorkspaceForm(editing: ws) }
         // Sorted by nav title so the nav reads alphabetically and stays ordered as sections are
@@ -899,17 +899,17 @@ final class WindowController: NSObject {
     /// Delete the float being edited, reload the live config (dropping its dock button / ⌘P entry /
     /// keybind), then hand back to Settings → Tools. A write failure keeps the form up with a toast.
     private func deleteToolFloat(_ float: ToolFloat) {
-        do {
-            try ConfigWriter.apply(floatRemovals: [float.id])
-        } catch {
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Delete Tool Float",
-                    message: "Failed to update the config file: \(error.localizedDescription)"))
-            return
+        AppConfig.persist({ try ConfigWriter.apply(floatRemovals: [float.id]) }) { [weak self] error in
+            guard let self else { return }
+            if let error {
+                self.toasts.show(
+                    ToastContent(
+                        variant: .warning, title: "Couldn't Delete Tool Float",
+                        message: "Failed to update the config file: \(error.localizedDescription)"))
+                return
+            }
+            self.reopenSettingsOnTools()
         }
-        AppConfig.reload()
-        reopenSettingsOnTools()
     }
 
     /// Persist a built tool float (upsert by id), reload the live config so the dock button, ⌘P
@@ -918,35 +918,37 @@ final class WindowController: NSObject {
     /// it, the old line is removed in the same write so the float moves rather than duplicating.
     private func submitToolFloat(_ float: ToolFloat, replacing originalID: String?) {
         let removals: Set<String> = (originalID.map { $0 != float.id ? [$0] : [] }) ?? []
-        do {
-            try ConfigWriter.apply(floatUpserts: [float], floatRemovals: removals)
-        } catch {
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Save Tool Float",
-                    message: "Failed to write \(float.id) to the config file: \(error.localizedDescription)"))
-            return
+        AppConfig.persist({ try ConfigWriter.apply(floatUpserts: [float], floatRemovals: removals) }) {
+            [weak self] error in
+            guard let self else { return }
+            if let error {
+                self.toasts.show(
+                    ToastContent(
+                        variant: .warning, title: "Couldn't Save Tool Float",
+                        message:
+                            "Failed to write \(float.id) to the config file: \(error.localizedDescription)"))
+                return
+            }
+            self.reopenSettingsOnTools()
         }
-        AppConfig.reload()
-        reopenSettingsOnTools()
     }
 
     /// Persist a new float order (`floats` arrives in the user's intended order), then reload so the
-    /// dock reorders live behind the open Settings card.
+    /// dock reorders live behind the open Settings card. `done` runs once the reloaded config is in
+    /// place, which is what the section's rebuild reads.
     ///
     /// Unlike add / edit / delete this doesn't `reopenSettingsOnTools()` — the card is already open and
     /// rebuilding it would throw away the user's place in the list mid-⌥↓.
-    private func reorderToolFloats(_ floats: [ToolFloat]) {
-        do {
-            try ConfigWriter.applyFloatOrder(floats)
-        } catch {
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Reorder Tool Floats",
-                    message: "Failed to update the config file: \(error.localizedDescription)"))
-            return
+    private func reorderToolFloats(_ floats: [ToolFloat], then done: @escaping () -> Void) {
+        AppConfig.persist({ try ConfigWriter.applyFloatOrder(floats) }) { [weak self] error in
+            if let error {
+                self?.toasts.show(
+                    ToastContent(
+                        variant: .warning, title: "Couldn't Reorder Tool Floats",
+                        message: "Failed to update the config file: \(error.localizedDescription)"))
+            }
+            done()  // rebuilds the list either way — see `SettingsToolsSection.move`
         }
-        AppConfig.reload()
     }
 
     /// Close the tool-float form and reopen the Settings card on its Tools section — the "back" for

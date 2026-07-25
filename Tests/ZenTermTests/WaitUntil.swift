@@ -1,6 +1,24 @@
 import XCTest
 
+@testable import ZenTerm
+
 extension XCTestCase {
+    /// Wait until every config write already enqueued has been written, re-resolved, and applied.
+    ///
+    /// `AppConfig` does its file I/O on one serial queue and delivers back on main in order
+    /// (ZEN-17), so a barrier enqueued *behind* the work under test can only run after it. That
+    /// ordering is what lets a test assert a keystroke wrote nothing: a fixed delay passes just as
+    /// happily when nothing had time to happen yet, which is the opposite of what's being asserted.
+    ///
+    /// Call it in `tearDown` too, in any test that points `ConfigLoader.defaultRootOverrideForTesting`
+    /// at a temp root — a write still in flight when the override is cleared lands in the real
+    /// `~/.config/zen-term`.
+    func drainConfigWrites(timeout: TimeInterval = 2) {
+        let drained = expectation(description: "config writes drained")
+        AppConfig.drainForTesting { drained.fulfill() }
+        wait(for: [drained], timeout: timeout)
+    }
+
     /// Pump the main run loop until `condition` holds, then return. For observing work that lands
     /// back on the main queue from a background probe (`GitRepoStatus.refresh`, ZEN-15).
     ///

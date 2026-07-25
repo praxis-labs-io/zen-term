@@ -14,8 +14,9 @@ final class SettingsToolsSection: SettingsSection {
     var onEditFloat: ((ToolFloat?) -> Void)?
     /// Set by the host: persist a new float order. The array order *is* the intent — the host stamps
     /// `order:` from it and reloads, and this section then rebuilds from the reloaded config, so a
-    /// reorder follows the same write → reload → rebuild path as an add / edit / delete.
-    var onReorder: (([ToolFloat]) -> Void)?
+    /// reorder follows the same write → reload → rebuild path as an add / edit / delete. The write is
+    /// off-main, so the host calls back once it has landed and the rebuild reads a current config.
+    var onReorder: (([ToolFloat], _ done: @escaping () -> Void) -> Void)?
 
     private var rows: [ToolFloatRow] = []
     private let addButton = AppButton(title: "＋ Add tool float", variant: .muted)
@@ -169,9 +170,13 @@ final class SettingsToolsSection: SettingsSection {
     /// Move a float one slot and persist the whole list in its new order, then rebuild and keep focus
     /// on the row that moved so ⌥↓⌥↓ walks a float down without re-finding it.
     ///
-    /// Deferred to the next runloop turn because the rebuild *frees this row*: `populateRows` drops
-    /// the last reference to it while its own `keyDown` is still on the stack. (The edit path gets away
-    /// with a synchronous callback only because modal teardown is animated.)
+    /// **The rebuild waits for the write to land.** `populateRows` renders
+    /// `GeneralConfig.current.floats`, which doesn't carry the new order until the file has been
+    /// written and re-resolved — off the main thread since ZEN-17 — so rebuilding straight after the
+    /// call would redraw the list exactly as it was and the float would not move. Waiting also keeps
+    /// the rebuild off `keyDown`'s stack, where it *frees this row*: `populateRows` drops the last
+    /// reference to it. (The edit path gets away with a synchronous callback only because modal
+    /// teardown is animated.)
     private func move(_ row: ToolFloatRow?, delta: Int) {
         guard let row else { return }
         var floats = GeneralConfig.current.floats
@@ -181,9 +186,8 @@ final class SettingsToolsSection: SettingsSection {
         floats.swapAt(from, to)
 
         let movedID = row.float.id
-        DispatchQueue.main.async { [weak self] in
+        onReorder?(floats) { [weak self] in
             guard let self else { return }
-            self.onReorder?(floats)
             // Unconditional: on a failed write the config is unchanged, so the rebuild simply puts the
             // row back where it was rather than leaving the list lying about the file.
             self.populateRows()

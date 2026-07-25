@@ -16,8 +16,8 @@ extension SegmentedControl: ThemeReapplying {}
 extension AppButton: ThemeReapplying {}
 
 /// Base for settings sections built from live-editing form rows: number-field / segmented / text /
-/// custom editors over the chrome config. Each edit applies live via a `ConfigWriter` scalar write +
-/// `AppConfig.reload()`, debounced so rapid typing coalesces into one write. A blank numeric field
+/// custom editors over the chrome config. Each edit applies live via a `ConfigWriter` scalar write
+/// through `AppConfig.persist`, debounced so rapid typing coalesces into one write. A blank numeric field
 /// removes the key so the value falls back to `builtIn` — the placeholder shows that default, and a
 /// field renders blank while it's at the default. Subclasses only override `navTitle` and `populate()`
 /// (declaring their groups/rows); the base owns the row builders, live-apply debounce, focus stops,
@@ -43,6 +43,9 @@ class SettingsFormSection: SettingsSection {
     private var pendingApply: (() -> Void)?
     private var applyTimer: DispatchWorkItem?
     private let applyDelay: TimeInterval = 0.18
+    /// Bumped per write, so a completion can tell whether it's still the newest — see `persist`.
+    /// Monotonic and never reset: an in-flight write outlives a `makeDetailView` rebuild.
+    private var writeGeneration = 0
 
     // Build-time cursors, valid only while `makeDetailView` -> `populate` is running.
     private var rowsStack: NSStackView?
@@ -309,24 +312,38 @@ class SettingsFormSection: SettingsSection {
         }
     }
     private func resetAll() {
-        guard persist({ try ConfigWriter.apply(removals: Set(self.scalarKeys)) }, reportKey: nil) else { return }
-        resetAllMessage.flash("Defaults restored.")
+        persist({ try ConfigWriter.apply(removals: Set(self.scalarKeys)) }, reportKey: nil) { [weak self] landed in
+            guard landed else { return }  // persist showed the write error
+            self?.resetAllMessage.flash("Defaults restored.")
+        }
     }
 
-    /// Run a write, reload, and refresh every row from the new config; returns whether it succeeded.
-    /// On failure, report on the edited row — there's no staged state here (unlike keybinds).
-    @discardableResult
-    private func persist(_ write: () throws -> Void, reportKey: String?) -> Bool {
-        do {
-            try write()
-        } catch {
-            (reportKey.flatMap(rowFor) ?? rows.first)?.showMessage(
-                "Couldn't write config: \(error.localizedDescription)")
-            return false
+    /// Run a write off the main thread, then reload and refresh every row from the new config.
+    /// `onLanded` reports on main whether it succeeded. On failure, report on the edited row —
+    /// there's no staged state here (unlike keybinds).
+    ///
+    /// **Only the newest write refreshes the rows.** Writes are serialized, so while a control is
+    /// still being worked an earlier completion lands with the file at a value the user has already
+    /// moved past, and refreshing there walks the control back through it. A field being edited is
+    /// already skipped by its own refresher (`currentEditor()`), but a segmented control or a
+    /// dropdown has no such state, so clicking through three segments would flick back through the
+    /// first two. An error still reports whichever write it belongs to.
+    private func persist(
+        _ write: @escaping () throws -> Void, reportKey: String?, onLanded: ((Bool) -> Void)? = nil
+    ) {
+        writeGeneration += 1
+        let generation = writeGeneration
+        AppConfig.persist(write) { [weak self] error in
+            guard let self else { return }
+            if let error {
+                (reportKey.flatMap(self.rowFor) ?? self.rows.first)?.showMessage(
+                    "Couldn't write config: \(error.localizedDescription)")
+                onLanded?(false)
+                return
+            }
+            if generation == self.writeGeneration { self.refreshRows() }
+            onLanded?(true)
         }
-        AppConfig.reload()
-        refreshRows()
-        return true
     }
 
     /// Sync every control to the reloaded config (each row registered its own refresh closure), then

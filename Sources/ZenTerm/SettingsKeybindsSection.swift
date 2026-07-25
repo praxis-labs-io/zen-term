@@ -35,6 +35,8 @@ final class SettingsKeybindsSection: SettingsSection {
     private var configObserver: NSObjectProtocol?
     /// A `.configDidChange` that arrived while a capture was armed, replayed once it ends.
     private var hasMissedConfigReload = false
+    /// Bumped per write, so a completion can tell whether it's still the newest — see `persist`.
+    private var writeGeneration = 0
 
     init(capturer: KeybindCapturing?) {
         self.capturer = capturer
@@ -240,19 +242,22 @@ final class SettingsKeybindsSection: SettingsSection {
         rebaseIfReloadDeferred()  // layer this edit on the reloaded set, never a pre-reload one
         desired = desired.filter { $0.value != row.action }
         desired[chord] = row.action
-        guard persist(reportingRow: row) else {  // write failed — persist showed the error; don't claim success
-            endCapture(row)
-            return
+        persist(reportingRow: row) { [weak self, weak row] landed in
+            guard let self, let row else { return }
+            guard landed else {  // write failed — persist showed the error; don't claim success
+                self.endCapture(row)
+                return
+            }
+            self.hintBubble?.setPreview(chord.displayGlyph)
+            self.hintBubble?.showSuccess("Shortcut saved.")
+            self.positionBubble(for: row)
+            let close = DispatchWorkItem { [weak self, weak row] in
+                self?.hideHint()
+                row?.setCapturing(false)
+            }
+            self.captureCloseTimer = close
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: close)
         }
-        hintBubble?.setPreview(chord.displayGlyph)
-        hintBubble?.showSuccess("Shortcut saved.")
-        positionBubble(for: row)
-        let close = DispatchWorkItem { [weak self, weak row] in
-            self?.hideHint()
-            row?.setCapturing(false)
-        }
-        captureCloseTimer = close
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: close)
     }
 
     /// End an armed capture immediately (Esc / Delete) — the caller then restores or resets the row.
@@ -275,9 +280,13 @@ final class SettingsKeybindsSection: SettingsSection {
         let displaced = defaultChordConflict(for: row.action)
         desired = desired.filter { $0.value != row.action }
         for (chord, action) in KeymapDefaults.map where action == row.action { desired[chord] = action }
-        guard persist(reportingRow: row) else { return }  // persist reported the write error
-        if let (chord, owner) = displaced { reportDisplacement(of: owner, losing: chord, to: row.action) }
-        row.focusChip()  // keep focus on the row after the reload
+        persist(reportingRow: row) { [weak self, weak row] landed in
+            guard landed, let self, let row else { return }  // persist reported the write error
+            if let (chord, owner) = displaced {
+                self.reportDisplacement(of: owner, losing: chord, to: row.action)
+            }
+            row.focusChip()  // keep focus on the row after the reload
+        }
     }
 
     /// Tell the displaced action's row it lost its chord, and where it landed — after `persist`, so
@@ -316,34 +325,54 @@ final class SettingsKeybindsSection: SettingsSection {
 
     private func resetAll() {
         desired = reservedEntries(of: KeymapDefaults.map)
-        guard persist(reportingRow: rows.last) else { return }  // report a write error near the button
-        resetAllMessage.flash("Defaults restored.")
+        persist(reportingRow: rows.last) { [weak self] landed in  // a write error reports near the button
+            guard landed else { return }
+            self?.resetAllMessage.flash("Defaults restored.")
+        }
     }
 
-    /// Write the override set, reload the live config, then refresh every row from the new keymap.
-    /// Returns whether the write succeeded. A failure reports on `reportingRow` (the row the user was
-    /// editing, kept in view by the focus scroll) so the message isn't stranded off-screen.
-    @discardableResult
-    private func persist(reportingRow: KeybindRow?) -> Bool {
-        do {
-            try ConfigWriter.apply(keybinds: desired)
-        } catch {
-            // Roll the failed edit out of the in-memory map, back to what's on disk — otherwise it
-            // rides along on the next successful write, silently applying an edit the user was told
-            // failed.
-            desired = reservedEntries(of: GeneralConfig.current.keymap)
-            refreshRows()
-            (reportingRow ?? rows.first)?.showMessage(
-                "Couldn't write config: \(error.localizedDescription)", kind: .failure)
-            return false
+    /// Write the override set off the main thread, reload the live config, then refresh every row
+    /// from the new keymap. `onLanded` reports on main whether the write succeeded. A failure
+    /// reports on `reportingRow` (the row the user was editing, kept in view by the focus scroll)
+    /// so the message isn't stranded off-screen.
+    ///
+    /// The write takes a snapshot of `desired` rather than reading it on the queue: `desired` is
+    /// chrome state, and an edit made while the write is out would otherwise be read from another
+    /// thread and land on disk without the user having committed it.
+    ///
+    /// **Only the newest write resyncs `desired`.** Both branches rebase it on what's on disk, and
+    /// an older completion's disk state is missing every edit made since. On success that would
+    /// drop a staged edit the next write is already carrying; on failure it would roll back an edit
+    /// the user made *after* the one that failed, which is their current intent.
+    private func persist(reportingRow: KeybindRow?, onLanded: ((Bool) -> Void)? = nil) {
+        let snapshot = desired
+        writeGeneration += 1
+        let generation = writeGeneration
+        AppConfig.persist({ try ConfigWriter.apply(keybinds: snapshot) }) { [weak self, weak reportingRow] error in
+            guard let self else { return }
+            let isNewest = generation == self.writeGeneration
+            if let error {
+                // Roll the failed edit out of the in-memory map, back to what's on disk — otherwise
+                // it rides along on the next successful write, silently applying an edit the user
+                // was told failed.
+                if isNewest {
+                    self.desired = self.reservedEntries(of: GeneralConfig.current.keymap)
+                    self.refreshRows()
+                }
+                (reportingRow ?? self.rows.first)?.showMessage(
+                    "Couldn't write config: \(error.localizedDescription)", kind: .failure)
+                onLanded?(false)
+                return
+            }
+            // This write landed, so any earlier write failure is resolved — `refreshRows` won't clear
+            // it (a failure outlives a refresh by design), so retract it here where we know it's stale.
+            self.rows.filter { $0.messageKind == .failure }.forEach { $0.showMessage(nil) }
+            if isNewest {
+                self.desired = self.reservedEntries(of: GeneralConfig.current.keymap)
+                self.refreshRows()
+            }
+            onLanded?(true)
         }
-        AppConfig.reload()
-        // This write landed, so any earlier write failure is resolved — `refreshRows` won't clear it
-        // (a failure outlives a refresh by design), so retract it here where we know it's stale.
-        rows.filter { $0.messageKind == .failure }.forEach { $0.showMessage(nil) }
-        desired = reservedEntries(of: GeneralConfig.current.keymap)
-        refreshRows()
-        return true
     }
 
     /// Re-render every row from the live keymap. Owns each row's `.diagnostic` message: a chip is

@@ -217,3 +217,34 @@ few entries, at least one of them a git repo and one not.
       beat after the press. Press its chord and immediately switch tabs, and separately
       press it and immediately hit ⌘⇧P. In both cases no float card appears afterwards:
       you get the tab you asked for, or the picker alone with the keyboard in it.
+
+## Settings writes off the main thread (ZEN-17)
+
+Every in-app config write now writes and re-resolves off the main thread and applies on
+it. Each of these used to happen inside the keystroke; they now happen a queue hop later,
+and a control that repaints from the reloaded config is where that shows. The unit tests
+cover where the work runs and that it stays ordered; what they can't check is whether the
+result still reads as one movement.
+
+- [ ] **A slider or numeric field still applies live.** Settings (`⌘,`) → Appearance, hold
+      an arrow on a numeric field, or retype a value. The window keeps up with the value as
+      it settles, and the field holds what you typed. Text snapping back to an older value
+      mid-edit means a stale write's refresh landed on the field.
+- [ ] **Segmented and dropdown rows don't flick backwards.** Settings → General, click
+      Notifications Off then On then Off as fast as you can; same with Appearance → Theme
+      through three themes. The control lands on your last pick and never steps back
+      through the earlier ones on the way. Only the newest write repaints the rows, and
+      this is what that's for.
+- [ ] **⌥↑ / ⌥↓ still reorders tool floats.** Settings → Tools, focus a row, ⌥↓ then ⌥↓
+      again. The float moves each press and focus rides along with it. The list rebuilds
+      after the write lands now, so a float that doesn't move means the rebuild stopped
+      waiting for it.
+- [ ] **A rebind still says so.** Settings → Keybinds, record a new shortcut. "Shortcut
+      saved." appears and the popover closes a beat later. Reset one with Backspace onto a
+      chord another action holds: the displaced row still says what it lost and where it
+      went.
+- [ ] **Saving a tool float still returns to Settings → Tools.** Add, edit, and delete a
+      float. Each lands back on the Tools list with the change already in it, and the dock
+      button appears or disappears with no relaunch.
+- [ ] **⌘⌥R still reloads.** Hand-edit `~/.config/zen-term/config` (change `font-size`),
+      press ⌘⌥R, and every window picks it up.

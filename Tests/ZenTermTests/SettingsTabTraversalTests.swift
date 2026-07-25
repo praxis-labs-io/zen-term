@@ -29,7 +29,7 @@ final class SettingsTabTraversalTests: XCTestCase {
         window = nil
         section = nil
         ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
@@ -38,7 +38,7 @@ final class SettingsTabTraversalTests: XCTestCase {
 
     private func seed(_ text: String) throws {
         try text.write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
     }
 
     private func descendants(of view: NSView) -> [NSView] {
@@ -236,6 +236,6 @@ final class SettingsTabTraversalTests: XCTestCase {
     private func seedWorkspaces(_ text: String) throws {
         try text.write(
             to: tempRoot.appendingPathComponent("workspaces"), atomically: true, encoding: .utf8)
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
     }
 }

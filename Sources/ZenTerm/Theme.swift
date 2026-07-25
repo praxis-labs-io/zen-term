@@ -21,12 +21,13 @@ enum Theme {
         ]
     )
 
-    /// The resolved appearance for this launch, re-resolvable via `reloadCurrent()`. Reads the
-    /// general config for the font, so `GeneralConfig.reloadCurrent()` must run first.
+    /// The resolved appearance for this launch, re-resolved by `AppConfig`. Takes the font from the
+    /// general config, so the two are resolved as a pair and adopted together.
     static private(set) var current: AppTheme = ConfigLoader.loadAppTheme()
 
-    /// Re-read the theme (and font from the general config) and swap `current`.
-    static func reloadCurrent() { current = ConfigLoader.loadAppTheme() }
+    /// Swap in a theme resolved elsewhere. Like `GeneralConfig.adopt`, the read happens off the main
+    /// thread in `AppConfig` and only this assignment runs on it.
+    static func adopt(_ theme: AppTheme) { current = theme }
 
     #if DEBUG
         /// Test hook: swap `current` directly so a test can assert theme-reactive views actually

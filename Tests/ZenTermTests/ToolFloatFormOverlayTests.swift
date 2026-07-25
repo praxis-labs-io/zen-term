@@ -211,12 +211,12 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
         defer {
             ConfigLoader.defaultRootOverrideForTesting = nil
-            AppConfig.reload()
+            AppConfig.reloadBlocking()
             try? FileManager.default.removeItem(at: tempRoot)
         }
         try "float = title:existing command:htop key:cmd+shift+g\n"
             .write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
 
         let (overlay, capturer, sink) = mount()  // a new float
         field(in: overlay, placeholder: "Open GitDash").setText("new")
@@ -285,12 +285,12 @@ final class ToolFloatFormOverlayTests: XCTestCase {
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
         defer {
             ConfigLoader.defaultRootOverrideForTesting = nil
-            AppConfig.reload()
+            AppConfig.reloadBlocking()
             try? FileManager.default.removeItem(at: tempRoot)
         }
         try "float = order:4 title:existing command:htop key:cmd+shift+h\n"
             .write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
 
         let (overlay, capturer, sink) = mount()
         field(in: overlay, placeholder: "Open GitDash").setText("new")

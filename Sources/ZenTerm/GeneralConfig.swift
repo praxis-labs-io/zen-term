@@ -111,13 +111,14 @@ struct GeneralConfig: Equatable {
         floats: [],
         keymap: KeymapDefaults.map)
 
-    /// The resolved config for this launch, re-resolvable via `reloadCurrent()` when the Settings
-    /// card writes the file (see `AppConfig.reload()`). External hand-edits are picked up on
-    /// demand via the Reload Config command (⌘⌥R).
+    /// The resolved config for this launch, re-resolved when the Settings card writes the file (see
+    /// `AppConfig`). External hand-edits are picked up on demand via the Reload Config command (⌘⌥R).
     static private(set) var current: GeneralConfig = ConfigLoader.loadGeneralConfig()
 
-    /// Re-read `config` from disk and swap `current`. Called by `AppConfig.reload()` after a write.
-    static func reloadCurrent() { current = ConfigLoader.loadGeneralConfig() }
+    /// Swap in a config resolved elsewhere. `AppConfig` reads the file off the main thread and calls
+    /// this on it, which is why the read isn't in here: `current` is chrome state, so it's written
+    /// only from the main thread while the file I/O behind it isn't.
+    static func adopt(_ config: GeneralConfig) { current = config }
 
     #if DEBUG
         /// Test hook: swap `current` directly so a test can drive config-reactive code (e.g.

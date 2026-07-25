@@ -123,7 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         if case .reloadConfig = chord {
-            AppConfig.reload()
+            AppConfig.reload()  // reads config + theme off the main thread, applies on it
             return
         }
         if case .checkForUpdates = chord {

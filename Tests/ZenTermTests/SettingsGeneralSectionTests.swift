@@ -24,14 +24,15 @@ final class SettingsGeneralSectionTests: XCTestCase {
             .appendingPathComponent("zenterm-general-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
-        AppConfig.reload()  // GeneralConfig.current now reflects the empty temp root (= builtIn: on)
+        AppConfig.reloadBlocking()  // GeneralConfig.current now reflects the empty temp root (= builtIn: on)
     }
 
     override func tearDownWithError() throws {
         section = nil
         hostWindow = nil
+        drainConfigWrites()  // a write still in flight would land in the real config root
         ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
@@ -55,9 +56,12 @@ final class SettingsGeneralSectionTests: XCTestCase {
         return descendants(of: detail).compactMap { $0 as? SegmentedControl }
     }
 
+    /// Wait for the pending write, then read the sandboxed config file. Picking a segment writes off
+    /// the main thread (ZEN-17), so reading without waiting reports the file from before the click.
     private func configText() -> String {
-        (try? String(
-            contentsOf: ConfigLoader.defaultRoot.appendingPathComponent("config"), encoding: .utf8)) ?? ""
+        drainConfigWrites()
+        let url = ConfigLoader.defaultRoot.appendingPathComponent("config")
+        return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }
 
     func test_bothToggles_arePresent_andDefaultOn() {

@@ -15,12 +15,12 @@ final class ConfigDiagnosticToastTests: XCTestCase {
             .appendingPathComponent("zenterm-diagnostic-toast-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
-        AppConfig.reload()  // pin to defaults, never the real user config
+        AppConfig.reloadBlocking()  // pin to defaults, never the real user config
     }
 
     override func tearDownWithError() throws {
         ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
@@ -232,7 +232,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         // them — the toast is the only thing that can tell a user their float toggle went dead.
         try "float = title:btop command:btop key:cmd+y title:BTop\nkeybind = new_tab=cmd+y\n"
             .write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
 
         XCTAssertEqual(GeneralConfig.current.configDiagnostics.map(\.scope), [.keybind(.toggleToolFloat("btop"))])
         let content = try XCTUnwrap(ConfigDiagnostic.toast(for: GeneralConfig.current.configDiagnostics))
@@ -249,7 +249,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     func test_aConfigThatStealsAChord_producesAToast() throws {
         try "keybind = toggle_focus_mode=cmd+shift+\\\n"
             .write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
 
         let content = try XCTUnwrap(ConfigDiagnostic.toast(for: GeneralConfig.current.configDiagnostics))
         XCTAssertTrue(content.title.contains("Split Vertically"), content.title)

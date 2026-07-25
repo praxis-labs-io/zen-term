@@ -33,14 +33,15 @@ final class KeybindCaptureFlowTests: XCTestCase {
             .appendingPathComponent("zenterm-keybinds-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
-        AppConfig.reload()  // keymap == defaults (empty temp config)
+        AppConfig.reloadBlocking()  // keymap == defaults (empty temp config)
     }
 
     override func tearDownWithError() throws {
         section = nil
         hostWindow = nil
+        drainConfigWrites()  // a write still in flight would land in the real config root
         ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
@@ -87,7 +88,7 @@ final class KeybindCaptureFlowTests: XCTestCase {
     /// the user hand-wrote, rather than from the defaults.
     private func seed(_ text: String) throws {
         try text.write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
-        AppConfig.reload()
+        AppConfig.reloadBlocking()
     }
 
     private func descendants(of view: NSView) -> [NSView] {
@@ -101,6 +102,16 @@ final class KeybindCaptureFlowTests: XCTestCase {
 
     private var liveKeymap: [Chord: KeyInterceptor.ReservedChord] { GeneralConfig.current.keymap }
 
+    /// Feed a captured event and wait out any write it triggered. A commit writes the config off the
+    /// main thread (ZEN-17), so asserting straight after the feed reads the keymap from before the
+    /// write landed. Draining on *every* feed is what keeps the negative cases honest too: "a
+    /// conflicting chord rebound nothing" has to mean the write didn't happen, not that it hadn't
+    /// happened yet.
+    private func feed(_ capturer: FakeCapturer, _ event: NSEvent) {
+        capturer.feed(event)
+        drainConfigWrites()
+    }
+
     // MARK: tests
 
     func test_validChord_commitsRebindAndEndsCapture() {
@@ -110,7 +121,7 @@ final class KeybindCaptureFlowTests: XCTestCase {
         row(for: .newTab).chip.onActivate?()
         XCTAssertTrue(capturer.isArmed)
 
-        capturer.feed(event(for: novelChord))
+        feed(capturer, event(for: novelChord))
 
         XCTAssertEqual(liveKeymap[novelChord], .newTab, "the novel chord should now open a new tab")
         // A rebind is a MOVE, not an add: the old chord must be freed, else both would fire new-tab.
@@ -125,7 +136,7 @@ final class KeybindCaptureFlowTests: XCTestCase {
         let before = liveKeymap
         row(for: .newTab).chip.onActivate?()
 
-        capturer.feed(keyDown("\u{1b}", code: 53))  // Esc
+        feed(capturer, keyDown("\u{1b}", code: 53))  // Esc
 
         XCTAssertEqual(capturer.endCount, 1, "Esc ends the capture")
         XCTAssertFalse(capturer.isArmed)
@@ -139,13 +150,13 @@ final class KeybindCaptureFlowTests: XCTestCase {
 
         // First rebind new-tab to the novel chord…
         row(for: .newTab).chip.onActivate?()
-        capturer.feed(event(for: novelChord))
+        feed(capturer, event(for: novelChord))
         XCTAssertEqual(liveKeymap[novelChord], .newTab)
 
         // …then capture again and press Delete → back to the built-in default(s).
         row(for: .newTab).chip.onActivate?()
         let endCountBeforeDelete = capturer.endCount
-        capturer.feed(keyDown("\u{7f}", code: 51))  // Delete
+        feed(capturer, keyDown("\u{7f}", code: 51))  // Delete
 
         // Delete must END the capture, not just reset the mapping — leaving it armed is the
         // input-bricking scenario these tests guard against.
@@ -164,7 +175,7 @@ final class KeybindCaptureFlowTests: XCTestCase {
         let before = liveKeymap
 
         row(for: .closePane).chip.onActivate?()
-        capturer.feed(event(for: newTabChord))
+        feed(capturer, event(for: newTabChord))
 
         XCTAssertTrue(capturer.isArmed, "a conflict keeps the capture armed for another try")
         XCTAssertEqual(capturer.endCount, 0)
@@ -177,7 +188,7 @@ final class KeybindCaptureFlowTests: XCTestCase {
         let before = liveKeymap
 
         row(for: .newTab).chip.onActivate?()
-        capturer.feed(keyDown("k", code: 40))  // bare 'k', no modifiers
+        feed(capturer, keyDown("k", code: 40))  // bare 'k', no modifiers
 
         XCTAssertTrue(capturer.isArmed, "a modifier-less chord is rejected but keeps waiting")
         XCTAssertEqual(capturer.endCount, 0)
@@ -212,7 +223,7 @@ final class KeybindCaptureFlowTests: XCTestCase {
         XCTAssertEqual(liveKeymap[occupied], .newTab)
 
         row(for: .closePane).chip.onActivate?()
-        capturer.feed(event(for: occupied))
+        feed(capturer, event(for: occupied))
 
         XCTAssertEqual(liveKeymap[occupied], .newTab, "the original action must keep its chord")
         XCTAssertNotEqual(liveKeymap[occupied], .closePane, "the occupied chord must not be taken")
@@ -227,14 +238,14 @@ final class KeybindCaptureFlowTests: XCTestCase {
         _ = mountSection(capturer)
 
         row(for: .newTab).chip.onActivate?()  // move New Tab off ⌘T, freeing it
-        capturer.feed(event(for: novelChord))
+        feed(capturer, event(for: novelChord))
         let cmdT = Chord(command: true, key: "t")
         row(for: .closePane).chip.onActivate?()  // hand ⌘T to Close Pane
-        capturer.feed(event(for: cmdT))
+        feed(capturer, event(for: cmdT))
         XCTAssertEqual(liveKeymap[cmdT], .closePane)
 
         row(for: .newTab).chip.onActivate?()  // Backspace New Tab → its default ⌘T is taken
-        capturer.feed(keyDown("\u{7f}", code: 51))
+        feed(capturer, keyDown("\u{7f}", code: 51))
 
         XCTAssertEqual(liveKeymap[cmdT], .newTab, "the default is restored")
         XCTAssertEqual(liveKeymap[Chord(command: true, key: "w")], .closePane, "the displaced action falls back")
@@ -256,16 +267,16 @@ final class KeybindCaptureFlowTests: XCTestCase {
         // Build the swap the only way the UI allows — capture blocks on an occupied chord, so
         // Nav Right has to vacate ⌘L before Nav Left can take it.
         row(for: .navRight).chip.onActivate?()
-        capturer.feed(event(for: novelChord))  // Nav Right parks elsewhere, freeing ⌘L
+        feed(capturer, event(for: novelChord))  // Nav Right parks elsewhere, freeing ⌘L
         row(for: .navLeft).chip.onActivate?()
-        capturer.feed(event(for: cmdL))  // Nav Left → ⌘L, freeing ⌘H
+        feed(capturer, event(for: cmdL))  // Nav Left → ⌘L, freeing ⌘H
         row(for: .navRight).chip.onActivate?()
-        capturer.feed(event(for: cmdH))  // Nav Right → ⌘H. Swapped.
+        feed(capturer, event(for: cmdH))  // Nav Right → ⌘H. Swapped.
         XCTAssertEqual(liveKeymap[cmdH], .navRight)
         XCTAssertEqual(liveKeymap[cmdL], .navLeft)
 
         row(for: .navLeft).chip.onActivate?()  // Backspace Nav Left → wants ⌘H, held by Nav Right
-        capturer.feed(keyDown("\u{7f}", code: 51))
+        feed(capturer, keyDown("\u{7f}", code: 51))
 
         XCTAssertEqual(liveKeymap[cmdH], .navLeft, "Nav Left is back on its default")
         // Nav Right falls back to its own default — which the reset just freed, so the swap unwinds.
@@ -278,7 +289,7 @@ final class KeybindCaptureFlowTests: XCTestCase {
         _ = mountSection(capturer)
         row(for: .closePane).chip.onActivate?()
 
-        capturer.feed(keyDown("_", code: 0, flags: [.command, .shift]))
+        feed(capturer, keyDown("_", code: 0, flags: [.command, .shift]))
 
         XCTAssertEqual(liveKeymap[Chord(command: true, shift: true, key: "-")], .splitHorizontal)
         XCTAssertTrue(capturer.isArmed, "an occupied shifted-symbol chord must block too")
@@ -334,13 +345,13 @@ final class KeybindCaptureFlowTests: XCTestCase {
         OperationQueue.main.addOperation { drained.fulfill() }
         wait(for: [drained], timeout: 5)
 
-        capturer.feed(keyDown("\u{1b}", code: 53))  // Esc → capture ends, the deferred reload replays
+        feed(capturer, keyDown("\u{1b}", code: 53))  // Esc → capture ends, the deferred reload replays
 
         // Now edit an unrelated row. `ConfigWriter` regenerates the WHOLE keybind block from
         // `desired`, so if the reload was dropped rather than deferred, `desired` never learned about
         // nav_left and this write silently deletes the user's hand-written line.
         row(for: .newTab).chip.onActivate?()
-        capturer.feed(event(for: novelChord))
+        feed(capturer, event(for: novelChord))
 
         let text = try String(contentsOf: tempRoot.appendingPathComponent("config"), encoding: .utf8)
         XCTAssertTrue(text.contains("nav_left=cmd+opt+h"), "an unrelated rebind must not delete it:\n\(text)")
@@ -360,7 +371,7 @@ final class KeybindCaptureFlowTests: XCTestCase {
         OperationQueue.main.addOperation { drained.fulfill() }
         wait(for: [drained], timeout: 5)
 
-        capturer.feed(event(for: novelChord))  // commit, rather than cancel
+        feed(capturer, event(for: novelChord))  // commit, rather than cancel
 
         let text = try String(contentsOf: tempRoot.appendingPathComponent("config"), encoding: .utf8)
         XCTAssertTrue(text.contains("nav_left=cmd+opt+h"), "a committed rebind must not delete it:\n\(text)")

@@ -25,14 +25,15 @@ final class SettingsFormCommitTests: XCTestCase {
             .appendingPathComponent("zenterm-settings-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
-        AppConfig.reload()  // GeneralConfig.current now reflects the empty temp root (= builtIn)
+        AppConfig.reloadBlocking()  // GeneralConfig.current now reflects the empty temp root (= builtIn)
     }
 
     override func tearDownWithError() throws {
         section = nil
         hostWindow = nil
+        drainConfigWrites()  // a write still in flight would land in the real config root
         ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()  // restore the process's real config state
+        AppConfig.reloadBlocking()  // restore the process's real config state
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
@@ -63,6 +64,15 @@ final class SettingsFormCommitTests: XCTestCase {
         editableFields(in: mountDetail(section)).first!
     }
 
+    /// Blur the field, flushing its debounce, and wait for the write that lands. The write runs off
+    /// the main thread (ZEN-17), so reading the file straight after the blur reports it from before
+    /// the commit — and a "never written" assertion would pass because the write hadn't happened
+    /// yet rather than because it never will.
+    private func blur(_ box: FieldBox) {
+        box.onEndEditing?()
+        drainConfigWrites()
+    }
+
     /// Read the sandboxed config file straight from the root the writer used, so the read path
     /// can't drift from the write path.
     private func configText() -> String {
@@ -87,7 +97,7 @@ final class SettingsFormCommitTests: XCTestCase {
         let box = mountField(FontSizeSection())
         box.setText("50")
         box.onChange?()
-        box.onEndEditing?()  // blur flushes the debounce immediately
+        blur(box)  // blur flushes the debounce immediately
         XCTAssertTrue(configText().contains("font-size = 50"), "got: \(configText())")
     }
 
@@ -95,7 +105,7 @@ final class SettingsFormCommitTests: XCTestCase {
         let box = mountField(FontSizeSection())
         box.setText("100")  // above the 6…72 range
         box.onChange?()
-        box.onEndEditing?()
+        blur(box)
         XCTAssertFalse(configText().contains("font-size"), "out-of-range value must not be written")
     }
 
@@ -103,7 +113,7 @@ final class SettingsFormCommitTests: XCTestCase {
         let box = mountField(FontSizeSection())
         box.setText("abc")
         box.onChange?()
-        box.onEndEditing?()
+        blur(box)
         XCTAssertFalse(configText().contains("font-size"), "non-numeric text must not be written")
     }
 
@@ -111,12 +121,12 @@ final class SettingsFormCommitTests: XCTestCase {
         let box = mountField(FontSizeSection())
         box.setText("50")
         box.onChange?()
-        box.onEndEditing?()
+        blur(box)
         XCTAssertTrue(configText().contains("font-size = 50"))
 
         box.setText("")
         box.onChange?()  // stages the removal without live-applying mid-edit
-        box.onEndEditing?()  // blur commits the blank → key removed
+        blur(box)  // blur commits the blank → key removed
         XCTAssertFalse(configText().contains("font-size"), "blank field must remove the key (→ default)")
     }
 
@@ -150,7 +160,7 @@ final class SettingsFormCommitTests: XCTestCase {
         let box = mountField(ThicknessSection())
         box.setText("5.7")  // valid (in 1…12), but an integer key must round it
         box.onChange?()
-        box.onEndEditing?()
+        blur(box)
         XCTAssertTrue(configText().contains("cursor-thickness = 6"), "got: \(configText())")
         XCTAssertFalse(configText().contains("5.7"))
     }
@@ -180,7 +190,7 @@ final class SettingsFormCommitTests: XCTestCase {
         fields[0].onChange?()
         fields[1].setText("5")  // valid → commits, which reloads + refreshes every row
         fields[1].onChange?()
-        fields[1].onEndEditing?()
+        blur(fields[1])
         let messages = layoutRows(in: detail).compactMap { $0.renderedMessageForTesting }
         XCTAssertEqual(messages.count, 1, "only the font-size row still shows a message; got: \(messages)")
         XCTAssertTrue(messages.first?.contains("Enter a number") == true, "range error was wiped: \(messages)")

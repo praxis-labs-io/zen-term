@@ -328,10 +328,12 @@ The exceptions are already-built constraints and already-started shells, which i
 exactly what `reapplyChromeLayout` and `applyAppearance` exist to fix up. **A
 surface's shell is fixed for its life.**
 
-`AppConfig.reload()` is the entire save-reload-apply seam, and its order is
-load-bearing: general config first, then theme (which reads the general font), then
-post `.configDidChange`. `GeneralConfig` reads nothing from `Theme`, so the one-way
-dependency `Theme.current -> GeneralConfig.current` holds and they cannot deadlock.
+`AppConfig` is the entire save-reload-apply seam: `persist` for a write, `reload`
+for ⌘⌥R. Its order is load-bearing: general config first, then theme (which reads
+the general font), then post `.configDidChange`. `GeneralConfig` reads nothing from
+`Theme`, so the one-way dependency `Theme.current -> GeneralConfig.current` holds and
+they cannot deadlock. The file I/O runs off the main thread and only the adopt and the
+broadcast run on it (see the off-main note under "Sharp edges").
 
 **External hand-edits are picked up on demand only, via ⌘⌥R. There is no file
 watcher.**
@@ -385,6 +387,30 @@ the chrome never hardcodes a color.
   neither rows nor its empty-state hint until the load lands, because that hint
   is the answer for an empty *file* and flashing it mid-read reads as "your
   workspaces are gone".
+- **Config writes go through `AppConfig.persist`, which writes and re-resolves off the
+  main thread.** A write is a whole-file read-modify-rewrite plus two reads to
+  re-resolve, and Settings live-apply fires one every ~180ms while a control
+  settles, so on a network-backed or cloud-synced home it is the ZEN-90 stall
+  (ZEN-17). One serial queue carries writes *and* reloads: it replaces the
+  ordering the main thread used to provide, without which two overlapping writes
+  would both read the pre-edit file and the second would erase the first.
+  `reloadBlocking` is the synchronous form, and it exists for tests pinning the
+  statics in `setUp` — calling it from the main thread is the stall this removed.
+
+  **The statics stay main-thread-only.** `GeneralConfig.current` and
+  `Theme.current` are read by every view, so the pair is resolved on the queue and
+  adopted on main: that's why `adopt(_:)` takes a value rather than reading the
+  file, and why `ConfigLoader.loadAppTheme` takes its `general:` rather than
+  reading the static it would otherwise race.
+
+  **A caller that repaints from the reloaded config has to wait for it.** The
+  ⌥↑/⌥↓ float reorder rebuilds from `GeneralConfig.current.floats`, so it rebuilds
+  from the write's completion — rebuilding straight after the call redraws the list
+  it already had and the float doesn't move (the ZEN-145 shape). The two Settings
+  sections instead refresh from the completion and take **only the newest write**:
+  writes are serialized, so an older completion carries a value the user has moved
+  past, and a segmented control or dropdown (unlike a field, which skips itself
+  while it has an editor) would flick back through it.
 - **Interactive git probes go through `GitRepoStatus`, never `GitRepo` directly.**
   Both are filesystem I/O, which the main queue never blocks on: the ⌘⇧P picker and
   Settings → Workspaces render their badges from `GitRepoStatus.known` (nil until
