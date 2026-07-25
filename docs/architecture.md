@@ -370,14 +370,20 @@ the chrome never hardcodes a color.
 - **The `workspaces` file is read off the main thread, so its readers render
   twice.** `ConfigLoader.loadWorkspaces` has a completion-handler form that every
   UI caller uses (the synchronous one is for `WorkspacesWriter` and for a caller
-  already off main). ⌘⇧P puts its card up first and takes entries through
-  `setEntries`, which re-filters against whatever has been typed meanwhile;
-  Settings → Workspaces renders neither rows nor its empty-state hint until the
-  load lands, because that hint is the answer for an empty *file* and flashing it
-  mid-read reads as "your workspaces are gone". The add/edit forms are the
-  exception and wait for the load: a title-collision check seeded with half the
-  titles would accept a duplicate. The load queue is serial, so the
-  warn-once-per-path set behind it is only touched from one thread.
+  already off main). The load queue is serial, so the warn-once-per-path set
+  behind it is only touched from one thread.
+
+  **A card that renders from it is built after the load, not filled after
+  presenting.** The list height sizes the card, so entries landing a frame late
+  resize it mid-spring and the open reads as a flash; and a form's
+  title-collision check seeded with half the titles would accept a duplicate. So
+  the press and the card are two turns of the main queue, and `pendingModal` is
+  the card's only trace in between: a second press toggles it off, and
+  `presentModal` clears it so a card going up can't be landed on by one still
+  loading. Settings → Workspaces is the one that does render twice, and it shows
+  neither rows nor its empty-state hint until the load lands, because that hint
+  is the answer for an empty *file* and flashing it mid-read reads as "your
+  workspaces are gone".
 - **Interactive git probes go through `GitRepoStatus`, never `GitRepo` directly.**
   Both are filesystem I/O, which the main queue never blocks on: the ⌘⇧P picker and
   Settings → Workspaces render their badges from `GitRepoStatus.known` (nil until

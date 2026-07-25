@@ -283,7 +283,8 @@ class PaletteOverlay: NSView, ModalOverlay {
         // bakes its colors in at construction, so reusing one here would leave it in the old theme.
         laidOutRows.forEach { $0.view.removeFromSuperview() }
         laidOutRows = []
-        refreshRows()
+        applyFilter(query: searchField.stringValue)
+        reloadRows()
     }
 
     /// The system `placeholderString` draws in AppKit's `placeholderTextColor`, which follows the
@@ -407,15 +408,6 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// The laid-out row views, in list order — for a subclass that updates its rows in place (the
     /// repo picker's git badges, which land after a background probe) instead of re-rendering.
     var rowViews: [PaletteRowView] { laidOutRows.map(\.view) }
-
-    /// Re-render the list against the query already typed, for a subclass whose model arrived after
-    /// the card did (the repo picker's workspaces, which load off the main thread). Row reuse makes
-    /// this a diff, and re-filtering rather than reloading blind is what keeps a query typed during
-    /// the load from being thrown away by the rows landing.
-    func refreshRows() {
-        applyFilter(query: searchField.stringValue)
-        reloadRows()
-    }
 
     /// The row highlighted after a (re)load — the first selectable row by default. A subclass
     /// overrides to prefer a different default (e.g. the repo picker highlights the first

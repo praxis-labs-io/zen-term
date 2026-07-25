@@ -17,11 +17,11 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// Open the Add-Workspace form (the ＋ row, and the empty state when there are no workspaces).
     private let onAddWorkspace: () -> Void
 
-    private var entries: [Workspace]
+    private let entries: [Workspace]
     private var rows: [Row]
 
     init(
-        entries: [Workspace] = [], background: NSColor,
+        entries: [Workspace], background: NSColor,
         onChoose: @escaping (Workspace, Bool) -> Void, onAddWorkspace: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -46,16 +46,6 @@ final class RepoPickerOverlay: PaletteOverlay {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    /// Take the workspace list once it has loaded. The card is presented before the `workspaces`
-    /// file has been read — that read is off the main thread (ZEN-90/ZEN-275), so ⌘⇧P puts a card up
-    /// immediately and the entries arrive here a moment later. Re-filtering against the query the
-    /// user has typed in the meantime is what keeps those keystrokes from being thrown away.
-    func setEntries(_ workspaces: [Workspace]) {
-        entries = workspaces
-        refreshRows()
-        refreshGitStatus()
-    }
 
     /// One background pass per list: the rows are up with whatever git status was already known, and
     /// the badges fill in when the probes land. Per open rather than once per process, so a folder

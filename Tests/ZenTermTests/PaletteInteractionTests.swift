@@ -412,23 +412,6 @@ final class PaletteInteractionTests: XCTestCase {
         XCTAssertNotNil(badge?.image, "and renders the bundled git logo")
     }
 
-    /// ⌘⇧P puts its card up before the `workspaces` file has been read (ZEN-275), so the entries
-    /// arrive into a card the user may already be typing into. Re-filtering against that query is
-    /// what keeps those keystrokes: reloading blind would show the whole list and preselect the
-    /// wrong row, so Enter would open a workspace they didn't ask for.
-    func test_repoPicker_entriesArrivingAfterTheCard_honourTheQueryAlreadyTyped() {
-        var chosen: (Workspace, Bool)?
-        let overlay = makeRepoPicker(entries: [], onChoose: { chosen = ($0, $1) })
-        mount(overlay)
-
-        type("bet", into: overlay)  // typed while the file was still loading
-        overlay.setEntries([workspace("alpha"), workspace("beta")])
-
-        XCTAssertEqual(overlay.numberOfRows(), 2, "the ＋ row and the one match for what was typed")
-        send(Self.insertNewline, to: overlay)
-        XCTAssertEqual(chosen?.0.title, "beta")
-    }
-
     func test_repoPicker_filterNarrowsWorkspacesKeepingAddRowPinned() {
         var chosen: (Workspace, Bool)?
         let overlay = makeRepoPicker(

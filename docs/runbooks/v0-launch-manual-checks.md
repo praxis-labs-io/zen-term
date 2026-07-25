@@ -197,11 +197,14 @@ few entries, at least one of them a git repo and one not.
       later opens it's there immediately.
 - [ ] **A new repo shows up without a relaunch.** `git init` one of the plain workspace
       folders, reopen ⌘⇧P, and it now carries a badge. Settings → Workspaces agrees.
-- [ ] **The workspace list fills in without losing keystrokes.** The `workspaces` file is
-      read off the main thread, so the card is up before the list is. Press ⌘⇧P and type
-      immediately, as fast as you can: the rows that appear are already filtered by what
-      you typed, and ⏎ opens the workspace you were aiming at. Settings → Workspaces
-      never flashes "No workspaces yet" on the way to showing your rows.
+- [ ] **⌘⇧P opens in one move.** The `workspaces` file is read off the main thread, so the
+      card is built a turn after the press. It must still spring in the way it does on main:
+      at full size, with its rows already there. A card that appears small and then grows
+      means it went back to presenting before the load landed. Press it repeatedly and
+      watch for any size change after the spring starts.
+- [ ] **A second press before it appears closes it.** Press ⌘⇧P twice quickly. You get no
+      card, not two, and not one you have to dismiss twice.
+- [ ] **Settings → Workspaces never flashes its empty state** on the way to showing rows.
 - [ ] **Add and edit still catch duplicate names.** From ⌘⇧P's ＋ row, and from
       Settings → Workspaces on an existing row, type the name of a workspace that already
       exists. The form still refuses it. Those cards wait for the file before appearing,
