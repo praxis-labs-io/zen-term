@@ -45,7 +45,7 @@ enum AppConfig {
             do {
                 try write()
             } catch {
-                DispatchQueue.main.async {
+                afterPendingResolves {
                     endResolve()
                     completion(error)
                 }
@@ -144,6 +144,22 @@ enum AppConfig {
     }
 
     private static func endResolve() { inFlight -= 1 }
+
+    /// Deliver on main once every resolve that was already in flight has applied.
+    ///
+    /// A failed write resolves nothing, so its completion would otherwise take a single hop home and
+    /// overtake an earlier write's apply, handing the caller statics that still predate it. The
+    /// keybinds card rebases `desired` on `GeneralConfig.current` there, so overtaking would roll an
+    /// already-saved rebind back out and the next write would persist the loss. Yields through the
+    /// queue between checks rather than re-arming on main, so a slow read can't be spun on.
+    private static func afterPendingResolves(_ body: @escaping () -> Void) {
+        queue.async {
+            DispatchQueue.main.async {
+                guard inFlight <= 1 else { return afterPendingResolves(body) }  // 1 is our own
+                body()
+            }
+        }
+    }
 
     /// Swap both statics and broadcast. General first, then theme, matching the order they resolve
     /// in — a consumer reading both from the notification sees a matched pair either way, but

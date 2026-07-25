@@ -31,8 +31,8 @@ enum Theme {
 
     #if DEBUG
         /// Test hook: swap `current` directly so a test can assert theme-reactive views actually
-        /// recolor. `current`'s setter is otherwise `private`, and `reloadCurrent()` only re-reads
-        /// real config off disk, which leaves recolor behavior unassertable. Pair with a teardown
+        /// recolor. `current`'s setter is otherwise `private`, and `adopt(_:)` only takes a theme
+        /// already resolved from disk, which leaves recolor behavior unassertable. Pair with a teardown
         /// that restores the original value so the swap can't leak into other tests.
         static func setCurrentForTesting(_ theme: AppTheme) { current = theme }
     #endif

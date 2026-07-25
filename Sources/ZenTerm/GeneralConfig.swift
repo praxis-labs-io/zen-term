@@ -3,7 +3,7 @@ import TerminalKit
 
 /// The resolved general configuration — everything the user can override in
 /// `~/.config/zen-term/config`, or the built-in defaults. `current` resolves at launch and is
-/// re-resolved by `AppConfig.reload()` after an in-app config write (mirrors `Theme.current`).
+/// re-resolved by `AppConfig` after an in-app config write (mirrors `Theme.current`).
 /// Reads nothing from `Theme`, so the one-way dependency (`Theme.current → GeneralConfig.current`)
 /// holds and the two never deadlock.
 struct GeneralConfig: Equatable {
@@ -123,7 +123,7 @@ struct GeneralConfig: Equatable {
     #if DEBUG
         /// Test hook: swap `current` directly so a test can drive config-reactive code (e.g.
         /// `ShellLaunch`'s custom-shell branch) without a file write. `current`'s setter is otherwise
-        /// `private`, and `reloadCurrent()` only re-reads real config off disk. Mirrors
+        /// `private`, and `adopt(_:)` only takes a config already resolved from disk. Mirrors
         /// `Theme.setCurrentForTesting`; pair with a teardown that restores the original.
         static func setCurrentForTesting(_ config: GeneralConfig) { current = config }
     #endif

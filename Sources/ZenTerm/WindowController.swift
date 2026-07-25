@@ -908,6 +908,11 @@ final class WindowController: NSObject {
                         message: "Failed to update the config file: \(error.localizedDescription)"))
                 return
             }
+            // The user can leave the form while the write is out (Cancel, or Esc twice back to the
+            // terminal). Handing them back to Settings then would close and reopen the card they
+            // just restored, or put Settings up over the terminal unasked. ZEN-275's rule: a
+            // deferred presentation checks the surface it was launched from is still the one up.
+            guard self.modal?.kind == .toolFloatForm else { return }
             self.reopenSettingsOnTools()
         }
     }
@@ -929,6 +934,11 @@ final class WindowController: NSObject {
                             "Failed to write \(float.id) to the config file: \(error.localizedDescription)"))
                 return
             }
+            // The user can leave the form while the write is out (Cancel, or Esc twice back to the
+            // terminal). Handing them back to Settings then would close and reopen the card they
+            // just restored, or put Settings up over the terminal unasked. ZEN-275's rule: a
+            // deferred presentation checks the surface it was launched from is still the one up.
+            guard self.modal?.kind == .toolFloatForm else { return }
             self.reopenSettingsOnTools()
         }
     }

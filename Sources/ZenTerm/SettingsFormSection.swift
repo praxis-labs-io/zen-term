@@ -339,6 +339,11 @@ class SettingsFormSection: SettingsSection {
         AppConfig.persist(write) { [weak self] error in
             guard let self else { return }
             if let error {
+                // Refresh first, then report: an earlier write may have landed and been skipped as
+                // superseded by this one, and nothing else re-syncs this section (it observes no
+                // notification). `refreshRows` leaves a `.failure` row alone, and this row's error
+                // is set after it anyway.
+                if generation == self.writeGeneration { self.refreshRows() }
                 (reportKey.flatMap(self.rowFor) ?? self.rows.first)?.showMessage(
                     "Couldn't write config: \(error.localizedDescription)")
                 onLanded?(false)
