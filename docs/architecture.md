@@ -360,6 +360,37 @@ palette re-renders its rows the same way. Conversely the drawer fractions have n
 live consumer at all (a built tab never re-reads them), so changing one does no
 work. Before adding a kind or a call site, trace what it actually reads.
 
+**Default to the union gate.** `.theme || .keymap` costs a fraction of a
+millisecond, so a narrower gate needs a measured reason. Every bug the gating work
+produced came from gating too tightly for no measurable gain: the win is skipping
+the dock rebuild and the tab relayout, not shaving a keycap rebuild.
+
+**Two entries deliberately do not gate on the kind sharing their name, and both
+were regressions before they were comments.** `ConfigApplier` leaves
+`surfaceConfigDiagnostics()` ungated, because it already has a finer,
+delivery-aware gate: it records a notice as announced only once a window has shown
+it, so gating on `.diagnostics` strands an undelivered notice forever. The update
+card gates on `.theme || .keymap`, because `UpdateCardView.reapplyTheme()`
+re-resolves its chord. Neither is untidy.
+
+**The app-global half lives in `ConfigApplier`, not in `AppDelegate`.**
+`AppDelegate` is the `NSApplicationDelegate` singleton: it binds the nav socket and
+builds windows at launch, and an observer registered inside
+`applicationDidFinishLaunching` closes over private stored properties, so nothing
+could drive it in a test. Both regressions above lived there. `ConfigApplier` takes
+its collaborators as closures and `AppDelegate` wires the real ones.
+
+**The gate is checked differentially, because review is not a safety net for it.**
+The invariant is that for any config change the gated fan-out leaves the chrome
+identical to the ungated one, and it is asserted by running both against the same
+change and comparing a fingerprint of what is on screen
+(`ConfigFanOutDifferentialTests`, `ConfigApplierDifferentialTests`). That catches
+a too-narrow gate without anyone having to enumerate a four-deep call chain
+correctly, which is what failed twice in one sitting. Two limits are real: the
+comparison only covers what the fingerprint samples, and it cannot see a bug that
+breaks the gated and ungated paths equally, which is why the named per-probe tests
+in `WindowControllerConfigFanOutTests` stay alongside it.
+
 **External hand-edits are picked up on demand only, via ⌘⌥R. There is no file
 watcher.**
 

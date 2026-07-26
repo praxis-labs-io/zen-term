@@ -18,6 +18,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// In-app auto-updates (ZEN-118). Nil in an unpackaged dev build, where the updater is inert.
     private var updateController: UpdateController?
 
+    /// The app-global `.configDidChange` re-apply, held in its own type so it's testable (ZEN-281).
+    /// Lazy because the sinks reach back through `self`; every one resolves its collaborator at
+    /// call time, so building this before `updateController` exists is fine.
+    private lazy var configApplier = ConfigApplier(
+        sinks: ConfigApplier.Sinks(
+            setKeymap: { [weak self] map in self?.keys.setKeymap(map) },
+            applyMotion: { MotionConfig.apply($0) },
+            announceDiagnostics: { [weak self] content, scope in
+                guard let controller = self?.keyController() else { return false }
+                controller.showConfigDiagnosticsToast(content, landingScope: scope)
+                return true
+            },
+            reapplyUpdateCardTheme: { [weak self] in self?.updateController?.reapplyTheme() },
+            applyAutoCheckSetting: { [weak self] in self?.updateController?.applyAutoCheckSetting() }))
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Install the on-disk log sink now that this is a real app run, before the first config
         // load logs anything. Left nil under `swift test` (the app never launches there), so a test
@@ -46,7 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // hand-edited their config and quit has no reason to open Settings — they're exactly who this
         // is for. It also seeds the change-gate, so a pre-existing problem can't ambush them later,
         // attached to an unrelated edit that didn't cause it.
-        surfaceConfigDiagnostics()
+        configApplier.surfaceConfigDiagnostics()
 
         keys.onReservedChord = { [weak self] chord in self?.route(chord) }
         // Seamless-nav opt-in: let a `Ctrl`-nav chord fall through to a pane running nvim so
@@ -87,30 +102,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.windows.forEach { $0.clearActiveTabNotification() }
         }
 
-        // The one live consumer in PR1: when config changes (a keybind edit in the Settings card),
-        // rebuild the interceptor's keymap so the rebind takes effect with no relaunch.
+        // Re-apply the app-global half of a config change: the interceptor's keymap, reduce-motion,
+        // the config-problems notice, and the update card. Which blocks run is `ConfigApplier`'s
+        // call, where it can be tested against the ungated fan-out (ZEN-281).
         NotificationCenter.default.addObserver(
             forName: .configDidChange, object: nil, queue: .main
         ) { [weak self] note in
-            let change = ConfigChange.from(note)  // skip what this write didn't touch (ZEN-48)
-            if change.contains(.keymap) { self?.keys.setKeymap(GeneralConfig.current.keymap) }
-            // Re-install the reduce-motion override.
-            if change.contains(.motion) { MotionConfig.apply(GeneralConfig.current.reduceMotion) }
-            // Deliberately ungated. This one already has a finer gate than the change set: it
-            // tracks what was *delivered*, and leaves `lastConfigDiagnostics` untouched when no
-            // window was there to show the notice, so the next reload retries it. Gating on
-            // `.diagnostics` would strand an undelivered notice forever — the diagnostics haven't
-            // changed, so the retry would never come. The cost is a set comparison that returns nil.
-            self?.surfaceConfigDiagnostics()
-            // Recolor a live update card — it's outside any window's toast list. Also on `.keymap`:
-            // `UpdateCardView.reapplyTheme()` calls `refreshKeycap()`, which re-resolves the
-            // "Check for Updates" chord, so a rebind while the card is up has to reach it. Same
-            // trap as `reapplyChromeColors` — the name says theme, the call chain reads the keymap.
-            if change.contains(.theme) || change.contains(.keymap) {
-                self?.updateController?.reapplyTheme()
-            }
-            // Pick up a flipped auto-update toggle with no relaunch.
-            if change.contains(.updates) { self?.updateController?.applyAutoCheckSetting() }
+            self?.configApplier.apply(ConfigChange.from(note))
         }
 
         // Auto-updates (ZEN-118). Inert in an unpackaged dev build (no SUFeedURL). The card is
@@ -157,33 +155,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         wc.window.makeKeyAndOrderFront(nil)
         wc.selectTab(tabID)
-    }
-
-    /// The config problems announced on the last reload — so an unchanged set stays quiet.
-    private var lastConfigDiagnostics: [ConfigDiagnostic] = []
-
-    /// Toast the config's problems when they change (a stolen keybind, an invalid scalar, a dropped
-    /// float). Lives here, not in `WindowController`: that observer runs once per open window, so
-    /// three windows would mean three toasts for one reload — and the config these describe is
-    /// app-global anyway. Routed to the key window only. The toast is actionable: its "Open Settings"
-    /// button lands on the first problem's section. The announce decision itself is
-    /// `ConfigDiagnostic.announcement`, where it's testable.
-    private func surfaceConfigDiagnostics() {
-        let diagnostics = GeneralConfig.current.configDiagnostics
-        guard
-            let content = ConfigDiagnostic.announcement(
-                for: diagnostics, alreadyAnnounced: lastConfigDiagnostics)
-        else {
-            lastConfigDiagnostics = diagnostics
-            return
-        }
-        // Record it as announced only once a window has actually shown it. `keyController()` is nil
-        // when the key window isn't one of ours (an open panel), and marking an undelivered notice
-        // as announced would let the change-gate swallow it forever. `content` is non-nil only when
-        // there's at least one diagnostic, so `first` is the section the button lands on.
-        guard let controller = keyController(), let first = diagnostics.first else { return }
-        controller.showConfigDiagnosticsToast(content, landingScope: first.scope)
-        lastConfigDiagnostics = diagnostics
     }
 
     /// The `WindowController` owning the current key window, falling back to the

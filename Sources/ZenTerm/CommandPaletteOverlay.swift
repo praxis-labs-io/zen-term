@@ -18,15 +18,21 @@ final class CommandPaletteOverlay: PaletteOverlay {
 
     private let onRun: (KeyInterceptor.ReservedChord) -> Void
 
-    private let commands: [PaletteCommand]
+    /// Re-resolved rather than snapshotted: a `PaletteCommand` bakes its shortcut glyph in when the
+    /// catalog builds it, so an open palette held a stale chord after a rebind — `reapplyTheme()`
+    /// rebuilt the row views but replayed the shortcut captured at construction (ZEN-281).
+    private let resolveCommands: () -> [PaletteCommand]
+    private var commands: [PaletteCommand]
     private var rows: [Row]
 
     init(
-        commands: [PaletteCommand], background: NSColor,
+        commands: @escaping () -> [PaletteCommand], background: NSColor,
         onRun: @escaping (KeyInterceptor.ReservedChord) -> Void, onDismiss: @escaping () -> Void
     ) {
-        self.commands = commands
-        self.rows = Self.grouped(commands)
+        self.resolveCommands = commands
+        let resolved = commands()
+        self.commands = resolved
+        self.rows = Self.grouped(resolved)
         self.onRun = onRun
         super.init(
             background: background,
@@ -42,6 +48,26 @@ final class CommandPaletteOverlay: PaletteOverlay {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Re-resolve the catalog before the base class rebuilds the rows, so a rebind while the
+    /// palette is open reaches the shortcut column. `WindowController` drives this from
+    /// `.configDidChange` on `.theme` or `.keymap`; the base's `reapplyTheme` re-filters and
+    /// reloads, and a row's identity includes its shortcut, so a moved chord rebuilds its row.
+    override func reapplyTheme() {
+        commands = resolveCommands()
+        super.reapplyTheme()
+    }
+
+    /// Test hook: the glyph each mounted row's keycap was **built** with, so a test can tell a
+    /// palette row's shortcut from the drawer header's. The two resolve through different paths,
+    /// and only one of them was ever stale after a rebind.
+    var builtRowShortcutsForTesting: [String] {
+        func descendants(of view: NSView) -> [NSView] {
+            view.subviews.flatMap { [$0] + descendants(of: $0) }
+        }
+        return descendants(of: self).compactMap { $0 as? RowView }
+            .flatMap { descendants(of: $0).compactMap { ($0 as? KeycapView)?.shortcut } }
+    }
 
     override func numberOfRows() -> Int { rows.count }
 

@@ -142,7 +142,7 @@ final class PaletteInteractionTests: XCTestCase {
             PaletteCommand(title: "New Tab", shortcut: "⌘T", category: "Tabs", chord: .newTab),
         ]
         return CommandPaletteOverlay(
-            commands: commands, background: Theme.current.chrome.background.nsColor,
+            commands: { commands }, background: Theme.current.chrome.background.nsColor,
             onRun: onRun, onDismiss: onDismiss)
     }
 
@@ -212,7 +212,7 @@ final class PaletteInteractionTests: XCTestCase {
             PaletteCommand(title: "Close Pane", shortcut: "⌘W", category: "Panes", chord: .closePane),
         ]
         let overlay = CommandPaletteOverlay(
-            commands: commands, background: Theme.current.chrome.background.nsColor,
+            commands: { commands }, background: Theme.current.chrome.background.nsColor,
             onRun: { ran = $0 }, onDismiss: {})
         mount(overlay)
         // "con" fuzzy-matches the "Config" category (surfacing Open Settings, whose title has no
@@ -341,11 +341,14 @@ final class PaletteInteractionTests: XCTestCase {
         var ran: KeyInterceptor.ReservedChord?
         let shortcuts: [KeyInterceptor.ReservedChord: String] = [.newTab: "⌘T", .toggleToolFloat("nt"): "⌘⇧J"]
         let overlay = CommandPaletteOverlay(
-            commands: [
-                PaletteCommand(title: "New Tab", shortcut: "⌘T", category: "Tabs", chord: .newTab),
-                PaletteCommand(
-                    title: "New Tab", shortcut: "⌘⇧J", category: "Tools", chord: .toggleToolFloat("nt")),
-            ],
+            commands: {
+                [
+                    PaletteCommand(title: "New Tab", shortcut: "⌘T", category: "Tabs", chord: .newTab),
+                    PaletteCommand(
+                        title: "New Tab", shortcut: "⌘⇧J", category: "Tools",
+                        chord: .toggleToolFloat("nt")),
+                ]
+            },
             background: Theme.current.chrome.background.nsColor, onRun: { ran = $0 }, onDismiss: {})
         let window = mount(overlay)
         window.layoutIfNeeded()

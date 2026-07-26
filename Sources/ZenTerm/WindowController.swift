@@ -744,7 +744,9 @@ final class WindowController: NSObject {
     private func toggleCommandPalette() {
         if modal?.kind == .commandPalette { closeModal(); return }
         let palette = CommandPaletteOverlay(
-            commands: CommandCatalog.commands(tabCount: tabs.order.count),
+            commands: { [weak self] in
+                CommandCatalog.commands(tabCount: self?.tabs.order.count ?? 0)
+            },
             background: Theme.current.chrome.background.nsColor,
             onRun: { [weak self] chord in self?.runCommand(chord) },
             onDismiss: { [weak self] in self?.closeModal() }
@@ -1574,6 +1576,13 @@ final class WindowController: NSObject {
     /// to re-point its insets WITHOUT constructing it — building it early would mount a toast stack
     /// in a window that has never shown one, which is the z-order the build-on-first-use protects.
     var hasBuiltToastsForTesting: Bool { builtToasts != nil }
+
+    /// Test hook: the backdrop tint as it's actually painted. Its color comes from the theme and
+    /// its alpha from `backdrop-alpha`, so it's the one probe covering both halves of that gate —
+    /// and the tint view is private, with nothing in the tree to identify it by.
+    var backdropTintColorForTesting: NSColor? {
+        tint.layer?.backgroundColor.flatMap { NSColor(cgColor: $0) }
+    }
 
     /// Clear a tab's waiting state: dismiss its toast — which also drops the rose flag, since
     /// the flag is derived from the toast's presence (`waitingToasts[id] != nil`). Called when

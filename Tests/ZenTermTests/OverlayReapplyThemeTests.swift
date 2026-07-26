@@ -91,7 +91,7 @@ final class OverlayReapplyThemeTests: XCTestCase {
 
     func test_reapplyTheme_recolorsPaletteOverlayCardShell() throws {
         let overlay = CommandPaletteOverlay(
-            commands: [], background: Theme.current.chrome.background.nsColor,
+            commands: { [] }, background: Theme.current.chrome.background.nsColor,
             onRun: { _ in }, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()

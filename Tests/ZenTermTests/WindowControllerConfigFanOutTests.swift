@@ -213,4 +213,40 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
         XCTAssertNotEqual(header, after, "the rebind never reached the drawer header keycap")
         XCTAssertEqual(after, rebound.displayGlyph)
     }
+
+    /// The same trap one layer out, and it was live until ZEN-281: an open command palette rebuilt
+    /// its row *views* on `reapplyTheme()` but replayed the shortcut glyph each `PaletteCommand`
+    /// baked in when the catalog built it, so a rebind left the palette showing the old chord. The
+    /// gate was already right; the work behind it wasn't. A differential test can't see this on its
+    /// own — both the gated and the ungated fan-out were equally stale.
+    func test_keymapChange_reresolvesAnOpenPalettesShortcutColumn() throws {
+        var config = GeneralConfig.builtIn
+        GeneralConfig.setCurrentForTesting(config)
+
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
+        self.controller = controller
+        controller.showAndStart()
+        controller.handle(.toggleCommandPalette)
+
+        /// The palette's own rows, excluding the drawer headers that resolve through a different path.
+        func paletteKeycaps() throws -> [String] {
+            let palette = descendants(of: controller.window.contentView!)
+                .compactMap { $0 as? CommandPaletteOverlay }.first
+            return try XCTUnwrap(palette, "expected the palette mounted").builtRowShortcutsForTesting
+        }
+        XCTAssertTrue(try paletteKeycaps().contains("⌘F"), "expected Focus Mode's default chord on a row")
+
+        let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
+        config.keymap = config.keymap.filter { $0.value != .toggleZoom }
+        config.keymap[rebound] = .toggleZoom
+        GeneralConfig.setCurrentForTesting(config)
+        post(.keymap)
+
+        let after = try paletteKeycaps()
+        XCTAssertFalse(after.contains("⌘F"), "the palette is still offering the chord that moved")
+        XCTAssertTrue(
+            after.contains(rebound.displayGlyph),
+            "the rebind never reached the open palette's shortcut column")
+    }
 }
