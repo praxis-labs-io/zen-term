@@ -89,3 +89,33 @@ final class ShellSessionTests: XCTestCase {
             "leaderChildren claimed a plain helper subprocess")
     }
 }
+
+extension ShellSessionTests {
+    func test_reapKillsTheWholeSession() throws {
+        let leader = try startSessionFixture()
+        Thread.sleep(forTimeInterval: 1.0)
+        XCTAssertGreaterThanOrEqual(ShellSession.members(of: leader).count, 2)
+
+        let swept = expectation(description: "sweep finished")
+        ShellSessionReaper.shared.reap(session: leader)
+        ShellSessionReaper.shared.drain(timeout: 3.0) { swept.fulfill() }
+        wait(for: [swept], timeout: 5.0)
+
+        XCTAssertTrue(
+            ShellSession.members(of: leader).isEmpty,
+            "session survived the sweep: \(ShellSession.members(of: leader))")
+    }
+
+    func test_drainRunsItsCompletionExactlyOnceWhenNothingIsPending() {
+        var calls = 0
+        let done = expectation(description: "drained")
+        ShellSessionReaper.shared.drain(timeout: 0.2) {
+            calls += 1
+            if calls == 1 { done.fulfill() }
+        }
+        wait(for: [done], timeout: 2.0)
+        // Past the timeout deadline, so a second fire would have landed by now.
+        Thread.sleep(forTimeInterval: 0.5)
+        XCTAssertEqual(calls, 1, "drain must reply exactly once")
+    }
+}
