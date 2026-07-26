@@ -77,7 +77,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// as not busy and a running command as busy. A shell ghostty can't integrate
     /// (Apple's /bin/bash) has no prompt marks, so this conservatively reads busy —
     /// erring toward an extra close confirmation, never toward losing live work.
-    /// True process-group parity is tracked as a follow-up (ZEN-69).
+    /// A backgrounded job leaves the shell sitting at a prompt, so prompt marks alone read as
+    /// not busy while real work is still running.
     public var isBusy: Bool {
         guard let surfacePtr else { return false }
         return ghostty_surface_needs_confirm_quit(surfacePtr)
@@ -137,6 +138,9 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             }
             return
         }
+
+        // Below the nil guard: a failed surface forks no shell, so there is nothing to record.
+        Self.recordShellSessions()
 
         lastTheme = config.theme
         lastBehavior = config.behavior ?? .default
@@ -234,6 +238,21 @@ public final class GhosttySurface: NSObject, TerminalSurface {
                 }
             }
         }
+    }
+
+    /// Note the shell sessions this app is running, so teardown has something to sweep.
+    ///
+    /// It samples rather than taking one snapshot because libghostty forks the shell well past
+    /// `ghostty_surface_new`'s return, and `setsid()` then runs in the child, concurrently with
+    /// us — a snapshot taken anywhere inside `start()` reliably finds nothing. It records every
+    /// session it sees, not "this surface's", which is not a thing anything here can identify
+    /// (see `ShellSessionLedger`).
+    /// One sampler serves every surface. What it records is surface-independent, so a workspace
+    /// opening eight panes would otherwise run eight identical samplers: 160 process-table walks
+    /// and eight dispatch threads parked in `Thread.sleep`. A start landing while one is already
+    /// running extends its deadline instead of starting another.
+    private static func recordShellSessions() {
+        ShellSessionLedger.shared.sample(for: 0.5, every: 0.025)
     }
 
     /// Re-apply appearance/behavior in place. libghostty config is app-global, so this
@@ -428,9 +447,20 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         cancelShaderSettle()
         removeAppActiveObservers()
         guard let surfacePtr else { return }
+        // Last chance to see this shell alive. The sampler in `start()` is a fast path with an
+        // unenforced bound: libghostty forks on its io thread, so a pane opening on a loaded
+        // machine can fork after the sampler stops, and a session never recorded is one no
+        // teardown can ever sweep — the ZEN-269 leak back, silently. Here the shell provably
+        // still exists, and a sibling caught by the same snapshot is alive and so unsweepable.
+        ShellSessionLedger.shared.record(ShellSession.leaderChildren())
         ghostty_surface_free(surfacePtr)
         self.surfacePtr = nil
         hostView.surfacePtr = nil
+        // After the free, which is what closes the pty: libghostty's own SIGHUP to the shell's
+        // process group goes first, and the sweep then takes what that group never covered — the
+        // background jobs, the children parked in their own groups (ZEN-269). The free is also
+        // what takes this session's leader down, which is how the sweep knows what to reach for.
+        ShellSessionReaper.shared.reapOrphans()
     }
 
     deinit {
@@ -443,8 +473,13 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         SecureInput.shared.removeScoped(secureInputID)
         removeAppActiveObservers()
         if let surfacePtr {
+            // Same last-chance record as `terminate()`: a surface released without ever being
+            // terminated still has to leave a sweepable session behind if the start sampler
+            // missed its fork.
+            ShellSessionLedger.shared.record(ShellSession.leaderChildren())
             ghostty_surface_free(surfacePtr)
             hostView.surfacePtr = nil
+            ShellSessionReaper.shared.reapOrphans()
         }
     }
 

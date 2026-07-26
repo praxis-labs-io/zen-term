@@ -1740,4 +1740,10 @@ final class WindowController: NSObject {
 
 extension WindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) { tearDown() }
+
+    /// Quit terminates the process without closing windows, so `windowWillClose` never fires
+    /// and every shell is orphaned instead of swept (ZEN-269). The app delegate drives this on
+    /// the way out. `tearDown()` is idempotent, so a window that closes normally afterwards is
+    /// unaffected.
+    func tearDownForQuit() { tearDown() }
 }
