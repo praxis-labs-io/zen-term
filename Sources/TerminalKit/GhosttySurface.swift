@@ -179,26 +179,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             }
         }
 
-        // libghostty just made hostView layer-hosting (its Metal layer is now
-        // hostView.layer). The host window is transparent for the vibrancy backdrop, so
-        // by default the compositor blends this layer against that backdrop every frame —
-        // which tears under heavy TUI redraws and flashes the (light) backdrop through any
-        // redraw gap. Mark the layer opaque over the terminal background so it composites
-        // as a solid surface and gaps show the terminal bg, not the window behind it.
-        //
-        // This holds with a cursor shader active too. ZEN-188 carved out an exception — drop the
-        // layer out of opaque whenever a shader is on, so the alpha ghostty's shader pass writes
-        // reaches Core Animation instead of being ignored — against an alt-screen white flash.
-        // That flash was root-caused by reading the code, never reproduced with the shaders that
-        // shipped, and the guard went in preemptively alongside them, so its own "no flash across
-        // vim/less/fzf" verification only ever ran with the guard already in place. Re-tested with
-        // it removed (backdrop-alpha 0.5, cursor_warp, 5K) across vim, nvim, less, fzf and
-        // lazygit: no flash. It also bought nothing — the window is translucent below
-        // backdrop-alpha 1 regardless, so the compositor blends it either way (ZEN-271).
-        if let layer = hostView.layer {
-            layer.isOpaque = true
-            layer.backgroundColor = (config.theme?.background.nsColor ?? .black).cgColor
-        }
+        applyLayerBacking(theme: config.theme, behavior: config.behavior ?? .default)
 
         // The host view may already be mounted, in which case its own `viewDidMoveToWindow`
         // ran before `surfacePtr` existed and couldn't push the display id.
@@ -257,7 +238,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
     /// Re-apply appearance/behavior in place. libghostty config is app-global, so this
     /// re-themes every surface via `GhosttyApp.updateConfig` (deduped there); the pieces
-    /// scoped to this surface (opaque-layer bg, scroll multiplier, redraw) are applied here.
+    /// scoped to this surface (layer backing, scroll multiplier, redraw) are applied here.
     public func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {
         lastTheme = theme
         lastBehavior = behavior
@@ -280,15 +261,47 @@ public final class GhosttySurface: NSObject, TerminalSurface {
                 applyShaderConfig(stoodDownBehavior, animation: .whileFocused)  // already stood down
             }
         }
-        if let layer = hostView.layer {
-            // Reset the opaque-layer background (the same trick start(_:) uses) so redraw gaps
-            // show the new terminal bg, not the old one. Opacity doesn't move with the cursor
-            // shader any more — see start(_:).
-            layer.isOpaque = true
-            layer.backgroundColor = theme.background.nsColor.cgColor
-        }
+        applyLayerBacking(theme: theme, behavior: behavior)
         hostView.scrollMultiplier = behavior.scrollMultiplier
         if let surfacePtr { ghostty_surface_refresh(surfacePtr) }
+    }
+
+    /// How the surface's layer composites against the window behind it. Both entry points run
+    /// this: `start(_:)` once libghostty has made `hostView` layer-hosting, and `applyAppearance`
+    /// on every live config change.
+    ///
+    /// At full opacity the layer is marked opaque over the terminal background. The host window
+    /// is transparent for the vibrancy backdrop, so otherwise the compositor blends this layer
+    /// against that backdrop every frame — which tears under heavy TUI redraws and flashes the
+    /// (light) backdrop through any redraw gap. Opaque makes it composite as a solid surface, and
+    /// gaps show the terminal bg rather than the window behind it.
+    ///
+    /// Below 1 that has to invert, and it is the whole of `background-alpha` (ZEN-282): `isOpaque`
+    /// tells Core Animation it need not blend, so the alpha ghostty renders is discarded and
+    /// dialling the ghostty key alone changes nothing on screen. The background fill has to go
+    /// too — it sits behind the drawable and would repaint the terminal background at full
+    /// strength under ghostty's own alpha-blended one.
+    ///
+    /// A cursor shader doesn't move this either way. ZEN-188 carved out an exception — drop the
+    /// layer out of opaque whenever a shader is on, so the alpha ghostty's shader pass writes
+    /// reaches Core Animation instead of being ignored — against an alt-screen white flash. That
+    /// flash was root-caused by reading the code, never reproduced with the shaders that shipped,
+    /// and the guard went in preemptively alongside them, so its own "no flash across
+    /// vim/less/fzf" verification only ever ran with the guard already in place. Re-tested with it
+    /// removed (backdrop-alpha 0.5, cursor_warp, 5K) across vim, nvim, less, fzf and lazygit: no
+    /// flash. It also bought nothing — the window is translucent below backdrop-alpha 1
+    /// regardless, so the compositor blends it either way (ZEN-271).
+    private func applyLayerBacking(theme: TerminalTheme?, behavior: TerminalBehavior) {
+        guard let layer = hostView.layer else { return }
+        let isSolid = behavior.isBackgroundSolid
+        layer.isOpaque = isSolid
+        layer.backgroundColor = isSolid ? (theme?.background.nsColor ?? .black).cgColor : nil
+        // libghostty pins its contents top-left rather than stretching them, so whenever its
+        // drawable is smaller than this layer — every resize, and the stretch between a
+        // surface's first layout and its final one — the rest of the layer is uncovered. That is
+        // invisible behind the opaque background above, and a see-through block without it, so a
+        // translucent surface stretches the last frame instead until the next one lands (ZEN-282).
+        layer.contentsGravity = isSolid ? .topLeft : .resize
     }
 
     public func focus() { hostView.window?.makeFirstResponder(hostView) }

@@ -64,6 +64,12 @@ enum GhosttyConfigWriter {
             lines.append("custom-shader = \(shader)")
             lines.append("custom-shader-animation = \(shaderAnimation.rawValue)")
         }
+        // The chrome's `background-alpha` maps to ghostty's own `background-opacity`, the same
+        // rename `cursor-shader` → `custom-shader` above uses. Only emitted below 1, so the
+        // default config text stays exactly what it has always been.
+        if let opacity = behavior.ghosttyBackgroundOpacity {
+            lines.append("background-opacity = \(opacity)")
+        }
         return lines.joined(separator: "\n") + "\n"
     }
 

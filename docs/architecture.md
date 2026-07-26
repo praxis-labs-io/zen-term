@@ -355,8 +355,10 @@ doesn't diff keeps the old do-everything behavior.
 **Gate on what a call chain resolves, not what it is named after.** The
 dependencies are not all obvious: `reapplyChromeColors()` reaches
 `PanelHostView.reapplyTheme()`, which rebuilds the panel header's keycap from the
-live keymap, so a rebind has to reach it as well as a theme swap. An open command
-palette re-renders its rows the same way. Conversely the drawer fractions have no
+live keymap, so a rebind has to reach it as well as a theme swap, and re-reads
+`background-alpha` to pick which of two arrangements paints the panel, so a
+terminal-behavior change has to reach it too. An open command palette re-renders
+its rows the same way. Conversely the drawer fractions have no
 live consumer at all (a built tab never re-reads them), so changing one does no
 work. Before adding a kind or a call site, trace what it actually reads.
 

@@ -60,6 +60,13 @@
 # window is covered, so a shader costs nothing in the background.
 # cursor-shader = cursor_warp         # cursor_warp | cursor_tail
 
+# Translucency of the terminal background. 1 = solid, 0 = your text over the
+# window blur with the desktop behind it. The pane's inner padding follows the
+# same value, so the panel reads as one surface. Cards stay solid: toasts,
+# Settings, the palette. Set `backdrop-alpha` below to dial the window shell.
+# In-app Settings edit: applies live.
+# background-alpha = 1                # clamped to 0…1
+
 # ─── Chrome ──────────────────────────────────────────────────────────────────
 
 # Show the standard macOS window buttons (close, minimize, zoom) and reserve the

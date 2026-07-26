@@ -23,6 +23,12 @@ final class SettingsTerminalSection: SettingsFormSection {
                 key: "font-size", caption: "Font size", blurb: "Point size",
                 range: 6...72, read: { $0.fontSize }, width: 64)
         }
+        addGroup("Background") {
+            self.addNumericRow(
+                key: "background-alpha", caption: "Background alpha",
+                blurb: "Terminal background translucency", range: 0...1,
+                read: { CGFloat($0.backgroundAlpha) }, width: 64)
+        }
         addGroup("Cursor") {
             self.addSegmentedRow(
                 key: "cursor-style", caption: "Style", blurb: "Cursor shape",
