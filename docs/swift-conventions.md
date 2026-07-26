@@ -183,8 +183,17 @@ glow ramp **up** as it travels out instead of fading, and the inflation moves th
 it. The result is a large dense cloud, at any inflation. The silhouette has to stay the card, and
 the cut has to happen at draw time: clip to everything outside the card (`ctx.clip(using: .evenOdd)`
 over the bounds plus the card path), set the shadow, then fill the card path. The fill is clipped
-away and only the outward half of its shadow survives, with the falloff unchanged. `PanelHostView`'s
-`HaloView` is the worked example (ZEN-282).
+away and only the outward half of its shadow survives, with the falloff unchanged. `OutsideShadowView`
+is the shared implementation, used for the pane focus glow (ZEN-282) and the float's elevation
+shadow (ZEN-287).
+
+**`CGContext` blur and `CALayer.shadowRadius` are not the same scale**, so a layer shadow's radius
+cannot be carried across when it becomes a drawn one. Measured by rendering both and sampling the
+alpha profile out from the card edge: a context blur of **28** tracks a layer radius of **14** point
+for point, at the same colour alpha. A literal 14 lands at roughly half the reach and reads as a
+shadow that lost its lift. Measure rather than eyeball it: the two-line calibration is a `CALayer`
+with a `shadowPath` rendered via `layer.render(in:)` (which does render the shadow, at the context
+origin, ignoring the layer's frame) against the view's own `draw`, then compare the profiles.
 
 **`layout()` cannot read a descendant's frame.** AppKit lays a tree out top-down, so when a view's
 `layout()` runs, its own subviews have been positioned but anything deeper has not: it still holds

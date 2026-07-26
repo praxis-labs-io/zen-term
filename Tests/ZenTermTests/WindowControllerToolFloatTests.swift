@@ -241,4 +241,36 @@ final class WindowControllerToolFloatTests: XCTestCase {
 
         XCTAssertTrue(surface.terminated, "a hidden float must not outlive its window")
     }
+
+    private func drainMainQueue() {
+        let drained = expectation(description: "main queue drained")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
+    }
+
+    /// An open float re-reads `background-alpha` (ZEN-287), so the fan-out has to reach it on a
+    /// `.terminalBehavior` change and not only a theme swap. This is the silent half: the card
+    /// keeps rendering at its old fill, nothing errors, and the setting looks like it did nothing
+    /// until the float is closed and reopened. `ConfigChangeTests` owns the alpha → kind mapping;
+    /// this is about which fan-out branch the float hangs off.
+    func test_alphaChangeReachesAnOpenFloat_withoutAThemeSwap() throws {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat("btop"))
+        let overlay = try XCTUnwrap(cards(c).first, "the float should be up")
+        let card = try XCTUnwrap(
+            descendants(of: overlay).first(where: { $0 is ShadowCardView }), "expected the card")
+        XCTAssertNotNil(card.layer?.backgroundColor, "at alpha 1 the card carries its own fill")
+
+        var config = GeneralConfig.current
+        config.backgroundAlpha = 0.5
+        GeneralConfig.setCurrentForTesting(config)
+        NotificationCenter.default.post(
+            name: .configDidChange, object: nil,
+            userInfo: [ConfigChange.userInfoKey: ConfigChange.terminalBehavior])
+        drainMainQueue()
+
+        XCTAssertNil(
+            card.layer?.backgroundColor,
+            "the card must drop its fill so the ring and the terminal paint the interior")
+    }
 }

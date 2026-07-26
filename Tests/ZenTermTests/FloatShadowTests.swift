@@ -10,9 +10,17 @@ import XCTest
 /// a live, displayed window and assert the shadow actually survives insertion.
 final class FloatShadowTests: XCTestCase {
     private var window: NSWindow!
+    /// `SurfaceFloatOverlay` reads `GeneralConfig.current` at construction to pick which
+    /// arrangement paints its card (ZEN-287), so without this the float below is built against the
+    /// developer's own `~/.config/zen-term` — and at `background-alpha = 0` it mounts a live
+    /// `NSVisualEffectView` into a displayed window, which this suite then drops. That reads as an
+    /// unrelated intermittent failure in a later suite, on one machine.
+    private var originalConfig: GeneralConfig!
 
     override func setUp() {
         super.setUp()
+        originalConfig = GeneralConfig.current
+        GeneralConfig.setCurrentForTesting(.builtIn)
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
             styleMask: [.borderless], backing: .buffered, defer: false)
@@ -22,6 +30,7 @@ final class FloatShadowTests: XCTestCase {
 
     override func tearDown() {
         window = nil
+        GeneralConfig.setCurrentForTesting(originalConfig)
         super.tearDown()
     }
 
@@ -47,10 +56,15 @@ final class FloatShadowTests: XCTestCase {
             "the card chrome's elevation shadow must survive subtree insertion")
     }
 
-    func test_surfaceFloatCard_castsShadow_withShadowPath() {
+    /// The float card is the one card that does NOT take a layer shadow. It hosts a terminal, so
+    /// `background-alpha` can make it see-through, and a layer shadow fills `shadowPath` — which
+    /// washed the interior black the moment it did (ZEN-287). It draws an outside-only shadow
+    /// instead, so what has to survive presentation here is that view, not `shadowOpacity`.
+    /// `SurfaceFloatOverlayTests` covers what that view paints.
+    func test_surfaceFloatCard_drawsItsShadow_ratherThanCastingALayerOne() {
         let overlay = SurfaceFloatOverlay(
-            content: NSView(), background: .black, widthFraction: 0.85,
-            heightFraction: 0.78, contentInset: 10, cornerRadius: 14, onDismiss: {})
+            content: NSView(), widthFraction: 0.85, heightFraction: 0.78, contentInset: 10,
+            cornerRadius: 14, onDismiss: {})
         let host = window.contentView!
         host.addSubview(overlay)
         NSLayoutConstraint.activate([
@@ -66,9 +80,18 @@ final class FloatShadowTests: XCTestCase {
         guard let card = overlay.subviews.first(where: { $0 is ShadowCardView }) else {
             return XCTFail("the float overlay must host its card in a ShadowCardView")
         }
-        XCTAssertGreaterThan(
-            effectiveShadowAlpha(card), 0.4, "the float card's shadow must survive presentation")
-        XCTAssertNotNil(card.layer?.shadowPath, "the explicit shadowPath must stay installed")
+        XCTAssertEqual(
+            effectiveShadowAlpha(card), 0,
+            "a layer shadow on the float card would fill its interior once it goes translucent")
+        guard let shadow = card.subviews.first(where: { $0 is OutsideShadowView }) else {
+            return XCTFail("the float card must host an OutsideShadowView")
+        }
+        // Inside the card, not beside it — `Motion.springScaleFade` animates the card's layer
+        // alone, so a sibling would pop in flat while a sublayer springs with it.
+        XCTAssertTrue(
+            shadow.isDescendant(of: card), "the shadow must spring with the card, not beside it")
+        XCTAssertFalse(
+            card.layer?.masksToBounds ?? true, "masking the card would clip the shadow away")
     }
 
     func test_chromeTooltip_castsShadow_afterPresentation() {
