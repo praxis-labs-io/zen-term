@@ -950,6 +950,9 @@ final class TabController: NSObject {
             default: constraint.constant = gutter
             }
         }
+        // The canvas↔drawer seams get their gap from the constraints `relayoutPanels()` rebuilds
+        // below, but a split bakes its gutter in at construction — so the pane canvas needs telling.
+        paneCanvas.reapplyChromeLayout()
         relayoutPanels()
         view.layoutSubtreeIfNeeded()
     }

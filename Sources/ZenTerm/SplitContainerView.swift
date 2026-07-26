@@ -34,6 +34,23 @@ final class SplitContainerView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// Re-point this split at a new `pane-gap` without rebuilding any views, so a Settings edit
+    /// lands on a live split. The gutter is otherwise fixed at construction (it defaults to
+    /// `ChromeMetrics.panelGap` and is stored), which is why the split gap used to need a relaunch
+    /// while the canvas↔drawer seam next to it re-applied live: that seam's constraints are rebuilt
+    /// by `relayoutPanels()`, these are not.
+    ///
+    /// Both constraints carrying it are mutated in place. `self.gutter` is updated first so a later
+    /// `setRatio` builds its replacement against the new value.
+    func setGutter(_ next: CGFloat) {
+        guard gutter != next else { return }
+        gutter = next
+        secondFollowsFirst?.constant = next
+        // `first` is sized to its ratio of the space minus half the gutter (see
+        // `makeRatioConstraint`), so the ratio constraint carries it too.
+        ratioConstraint?.constant = -next / 2
+    }
+
     /// Re-point this split at a new ratio without rebuilding any views — the ⌥-arrow resize
     /// path, hot under key repeat. Only the one constraint is swapped; layout flows on the
     /// next pass.
