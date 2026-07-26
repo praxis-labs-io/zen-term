@@ -252,8 +252,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// each teardown removes its own controller from it through `onClosed`.
     private func tearDownAllWindows(then completion: @escaping () -> Void) {
         for wc in windows { wc.tearDownForQuit() }
-        // Capped: a process that ignores both signals must never hang the quit.
-        ShellSessionReaper.shared.drain(timeout: 0.6, completion: completion)
+        drainSessionSweeps(then: completion)
+    }
+
+    /// Hold the quit open until the session sweeps finish. The cap comes from the reaper's own
+    /// worst case rather than a literal: a smaller number silently truncates the sweep and
+    /// leaves running exactly what ZEN-269 is about, and since every session is signalled in
+    /// one pass it does not grow with pane count. Still a cap, so a process that ignores both
+    /// signals can never hang the quit.
+    private func drainSessionSweeps(then completion: @escaping () -> Void) {
+        ShellSessionReaper.shared.drain(
+            timeout: ShellSessionReaper.worstCaseSweep, completion: completion)
     }
 
     /// ⌘Q always confirms: tally tabs across every window and gate on the key window's
@@ -261,7 +270,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `reply(toApplicationShouldTerminate:)` — Quit replies `true`, Cancel replies
     /// `false` (via `presentQuitConfirm`'s `onCancel`), so the pending request never leaks.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let key = keyController() else { return .terminateNow }
+        // No window left to confirm against, which is the path closing the LAST window takes:
+        // `onClosed` has already emptied `windows`, so there is nothing to tear down and
+        // nothing to ask. Its sweep is already in flight from `windowWillClose` though, and
+        // exiting now would cut it off before a single signal went out — the original bug, on
+        // the most ordinary way to close the app (ZEN-269). Wait for it, then go.
+        guard let key = keyController() else {
+            drainSessionSweeps { NSApp.reply(toApplicationShouldTerminate: true) }
+            return .terminateLater
+        }
         if quitConfirmPending { return .terminateCancel }  // a quit dialog is already up
         quitConfirmPending = true
         let tabCount = windows.reduce(0) { $0 + $1.tabCount }
@@ -281,4 +298,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             })
         return .terminateLater
     }
+
+    #if DEBUG
+        /// Test seam: build a window the way launch does, without the rest of
+        /// `applicationDidFinishLaunching` (which binds the nav socket and starts the global
+        /// key interceptor). Compiled out of release builds.
+        func addWindowForTesting() { newWindow(initialCWD: nil, centered: false) }
+
+        /// Test seam: the quit path's teardown, the half that was missing entirely.
+        func quitTeardownForTesting(then completion: @escaping () -> Void) {
+            tearDownAllWindows(then: completion)
+        }
+    #endif
 }

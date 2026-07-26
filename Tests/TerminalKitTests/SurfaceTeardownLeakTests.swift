@@ -114,10 +114,14 @@ final class SurfaceTeardownLeakTests: XCTestCase {
             marker: "^/bin/sleep 942$")
     }
 
-    /// Closing one pane must not reach into another pane's processes. Every surface's shell is
-    /// a session leader parented to this app, so a capture that identifies "this surface's
-    /// shell" by anything weaker than an exclusive claim can adopt a sibling's session and
-    /// SIGKILL a live pane's dev server on close.
+    /// Closing one pane must not reach into another pane's processes, and must still leave the
+    /// other pane sweepable when its own turn comes.
+    ///
+    /// Read the second half as the point. Both surfaces here start successfully, so this cannot
+    /// reproduce the adoption bug it was originally written for: that needed a surface whose
+    /// start FAILED to sit polling and adopt the next one's session. What it does guard is the
+    /// general property that one teardown neither kills nor strands a sibling's session, which
+    /// is the invariant the ledger exists to hold. Don't read it as coverage of attribution.
     func test_teardownLeavesASiblingSurfaceAlone() throws {
         try skipOnCI()
         _ = NSApplication.shared

@@ -20,6 +20,10 @@ final class ShellSessionLedger {
     private let lock = NSLock()
     private var known: Set<pid_t> = []
 
+    /// Guards the sampler. Separate from `lock` so a running sample never holds up a sweep.
+    private let sampleLock = NSLock()
+    private var sampleDeadline: Date?
+
     private init() {}
 
     func record(_ sessions: Set<pid_t>) {
@@ -28,8 +32,45 @@ final class ShellSessionLedger {
         known.formUnion(sessions)
     }
 
+    /// Watch for new shell sessions for `duration`, checking every `interval`.
+    ///
+    /// libghostty forks the shell well past `ghostty_surface_new`'s return and `setsid()` then
+    /// runs in the child, so a single snapshot taken at start time reliably finds nothing. What
+    /// this records is surface-independent, so one sampler serves every surface starting at
+    /// once: a later start extends the deadline rather than launching a second walk of the
+    /// process table.
+    func sample(for duration: TimeInterval, every interval: TimeInterval) {
+        let deadline = Date().addingTimeInterval(duration)
+        sampleLock.lock()
+        if let existing = sampleDeadline {
+            sampleDeadline = max(existing, deadline)
+            sampleLock.unlock()
+            return
+        }
+        sampleDeadline = deadline
+        sampleLock.unlock()
+
+        DispatchQueue.global(qos: .utility).async {
+            while true {
+                self.record(ShellSession.leaderChildren())
+                Thread.sleep(forTimeInterval: interval)
+                self.sampleLock.lock()
+                guard let until = self.sampleDeadline, Date() < until else {
+                    self.sampleDeadline = nil
+                    self.sampleLock.unlock()
+                    return
+                }
+                self.sampleLock.unlock()
+            }
+        }
+    }
+
     /// The recorded sessions whose leader has exited, dropped from the ledger as they are
     /// handed out so two teardowns racing each other can't both sweep the same one.
+    ///
+    /// The process-table walk deliberately runs inside the lock: reading and subtracting have
+    /// to be one atomic step, or two teardowns both see the same orphan and one sweeps a
+    /// session the other already took. No caller is on the main thread. Don't narrow this.
     func takeOrphans() -> [pid_t] {
         lock.lock()
         defer { lock.unlock() }

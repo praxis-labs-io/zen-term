@@ -266,14 +266,12 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// us — a snapshot taken anywhere inside `start()` reliably finds nothing. It records every
     /// session it sees, not "this surface's", which is not a thing anything here can identify
     /// (see `ShellSessionLedger`).
+    /// One sampler serves every surface. What it records is surface-independent, so a workspace
+    /// opening eight panes would otherwise run eight identical samplers: 160 process-table walks
+    /// and eight dispatch threads parked in `Thread.sleep`. A start landing while one is already
+    /// running extends its deadline instead of starting another.
     private static func recordShellSessions() {
-        DispatchQueue.global(qos: .utility).async {
-            let deadline = Date().addingTimeInterval(0.5)
-            repeat {
-                ShellSessionLedger.shared.record(ShellSession.leaderChildren())
-                Thread.sleep(forTimeInterval: 0.025)
-            } while Date() < deadline
-        }
+        ShellSessionLedger.shared.sample(for: 0.5, every: 0.025)
     }
 
     /// Re-apply appearance/behavior in place. libghostty config is app-global, so this
@@ -436,6 +434,12 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         cancelShaderSettle()
         removeAppActiveObservers()
         guard let surfacePtr else { return }
+        // Last chance to see this shell alive. The sampler in `start()` is a fast path with an
+        // unenforced bound: libghostty forks on its io thread, so a pane opening on a loaded
+        // machine can fork after the sampler stops, and a session never recorded is one no
+        // teardown can ever sweep — the ZEN-269 leak back, silently. Here the shell provably
+        // still exists, and a sibling caught by the same snapshot is alive and so unsweepable.
+        ShellSessionLedger.shared.record(ShellSession.leaderChildren())
         ghostty_surface_free(surfacePtr)
         self.surfacePtr = nil
         hostView.surfacePtr = nil

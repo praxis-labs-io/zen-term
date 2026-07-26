@@ -21,25 +21,49 @@ public final class ShellSessionReaper {
     /// How often that window is checked.
     private static let orphanPoll: TimeInterval = 0.02
 
+    /// The longest a full sweep can take: wait out the leader, then one graced pass over
+    /// however many sessions it found. Every session is signalled in the same pass, so this
+    /// does not grow with pane count. `drain` callers size their cap from this rather than
+    /// picking a literal that silently truncates the sweep.
+    public static var worstCaseSweep: TimeInterval { orphanWindow + grace }
+
     private let queue = DispatchQueue(
         label: "com.drucial.zenterm.shell-session-reaper", qos: .userInitiated)
     private let pending = DispatchGroup()
+
+    /// Guards `isWatching`. The watcher is process-wide, so several surfaces tearing down at
+    /// once must not each start one.
+    private let watchLock = NSLock()
+    private var isWatching = false
 
     private init() {}
 
     /// Sweep `session` off the main thread. Safe to call for a session that is already gone.
     public func reap(session: pid_t) {
-        guard session > 1 else { return }
+        reap(sessions: [session])
+    }
+
+    /// Sweep every session in `sessions` in ONE graced pass: one `SIGTERM` sweep over all of
+    /// them, one grace period, one `SIGKILL` sweep.
+    ///
+    /// Load-bearing that this is a batch and not a loop of single reaps. The grace has to be
+    /// waited out somewhere, and per-session waits serialize: at 0.15s each, twenty sessions
+    /// took 3.07s measured, and a quit capped well below that exited having swept three of
+    /// them, leaving the other seventeen panes' dev servers running — the exact bug this is
+    /// here to fix (ZEN-269). Batched, twenty sessions cost the same 0.15s as one.
+    public func reap(sessions: Set<pid_t>) {
+        let live = sessions.filter { $0 > 1 }
+        guard !live.isEmpty else { return }
         pending.enter()
         queue.async { [pending] in
             defer { pending.leave() }
-            let first = ShellSession.members(of: session)
-            guard !first.isEmpty else { return }
-            for pid in first { kill(pid, SIGTERM) }
+            let doomed = live.flatMap { ShellSession.members(of: $0) }
+            guard !doomed.isEmpty else { return }
+            for pid in doomed { kill(pid, SIGTERM) }
             // Off-main by construction (see `queue`), so sleeping here blocks nothing the
             // user can see.
             Thread.sleep(forTimeInterval: Self.grace)
-            for pid in ShellSession.members(of: session) { kill(pid, SIGKILL) }
+            for pid in live.flatMap({ ShellSession.members(of: $0) }) { kill(pid, SIGKILL) }
         }
     }
 
@@ -50,17 +74,34 @@ public final class ShellSessionReaper {
     /// It sweeps whatever is orphaned, not "this surface's" session, because nothing can say
     /// which session a surface owned (see `ShellSessionLedger`). That is the point: a live pane's
     /// leader is alive, so a live pane is never in reach.
+    ///
+    /// One watcher serves every caller. `takeOrphans` empties the ledger, so the first watcher
+    /// claims everything and any others would spin their whole window finding nothing while
+    /// parking a dispatch thread each: closing a twenty-pane workspace held twenty of them.
     public func reapOrphans() {
+        watchLock.lock()
+        if isWatching {
+            watchLock.unlock()
+            return
+        }
+        isWatching = true
+        watchLock.unlock()
+
         pending.enter()
-        // Its own queue, not the serial sweep queue: several panes closing at once would
-        // otherwise queue their waits end to end behind each other's grace period.
+        // Its own queue, not the serial sweep queue: the wait below must not queue up behind
+        // a grace period already running there.
         DispatchQueue.global(qos: .userInitiated).async { [pending] in
-            defer { pending.leave() }
+            defer {
+                self.watchLock.lock()
+                self.isWatching = false
+                self.watchLock.unlock()
+                pending.leave()
+            }
             let deadline = Date().addingTimeInterval(Self.orphanWindow)
             while Date() < deadline {
                 let orphans = ShellSessionLedger.shared.takeOrphans()
                 guard orphans.isEmpty else {
-                    orphans.forEach { self.reap(session: $0) }
+                    self.reap(sessions: Set(orphans))
                     return
                 }
                 // Off-main by construction, so sleeping here blocks nothing the user can see.
