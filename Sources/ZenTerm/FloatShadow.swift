@@ -1,7 +1,8 @@
 import AppKit
 
-/// Shared styling for floating cards (the ⌘P repo picker and the tool floats): a dark
-/// elevation shadow and a subtle neutral edge, in place of a colored ring.
+/// Shared styling for floating cards: a dark elevation shadow, and a subtle neutral edge for the
+/// cards that don't claim focus. A card that takes focus from the pane behind it wears the accent
+/// ring instead — see `CardChrome.apply(halo:)`.
 enum FloatShadow {
     /// Subtle neutral hairline on the card edge (no color), for crispness over the shadow.
     static var edge: NSColor { Theme.current.chrome.ink(alpha: 0.08) }
