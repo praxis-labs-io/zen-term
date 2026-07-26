@@ -918,7 +918,23 @@ final class WindowController: NSObject {
                 self?.openSettings(for: landingScope)
             },
         ]
-        toast = toasts.showSticky(content, actions: actions)
+        let shown = toasts.showSticky(content, actions: actions)
+        toast = shown
+        configDiagnosticsToast = shown
+    }
+
+    /// The config-problems notice this window is showing, if any. Weak: the presenter's stack owns
+    /// it, and a user dismissal must leave nothing to retract.
+    private weak var configDiagnosticsToast: ToastView?
+
+    /// Retract the config-problems notice. It's sticky and states what is wrong *now*, so a reload
+    /// that resolves the problems has to take it down: nothing else does, and a warning that
+    /// outlives the fix that made it false is worse than no warning. Reads `builtToasts` rather
+    /// than `toasts` so retracting can never construct the presenter (see `hasBuiltToastsForTesting`).
+    func dismissConfigDiagnosticsToast() {
+        guard let toast = configDiagnosticsToast else { return }
+        configDiagnosticsToast = nil
+        builtToasts?.dismiss(toast)
     }
 
     /// Open the tool-float add / edit form from the Tools section (`nil` adds, a value edits). Closes

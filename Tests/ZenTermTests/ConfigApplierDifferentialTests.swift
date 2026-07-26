@@ -53,6 +53,9 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         var motion: GeneralConfig.ReduceMotion
         var autoChecks: Bool
         var announced: [ToastContent] = []
+        /// The notice **currently on screen**, as opposed to the log of every one ever raised. The
+        /// config notice is sticky, so this is the thing a user is actually looking at.
+        var showing: ToastContent?
         /// Whether a window is there to take a notice. The real sink returns false when the key
         /// window isn't one of ours (an open panel).
         var canDeliver = true
@@ -75,9 +78,11 @@ final class ConfigApplierDifferentialTests: XCTestCase {
                 applyMotion: { [unowned self] in self.motion = $0 },
                 announceDiagnostics: { [unowned self] content, _ in
                     guard self.canDeliver else { return false }
+                    self.showing = content
                     self.announced.append(content)
                     return true
                 },
+                retractDiagnostics: { [unowned self] in self.showing = nil },
                 reapplyUpdateCardTheme: { [unowned self] in self.card.reapplyTheme() },
                 // The real sink re-reads the live config rather than taking a value.
                 applyAutoCheckSetting: { [unowned self] in
@@ -100,6 +105,9 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         /// Every label the card rendered, so a re-render that drops content shows up too.
         var cardText: [String]
         var announced: [ToastContent]
+        /// The notice left on screen. Distinct from `announced`: a gate that raised the right
+        /// warning but failed to retract it lands here, not there.
+        var showing: ToastContent?
 
         /// Which fields moved, for the failure message. Equality above is what makes the assertion
         /// correct; this only makes it readable, so a field missing here degrades to a vaguer
@@ -125,6 +133,10 @@ final class ConfigApplierDifferentialTests: XCTestCase {
                 diffs.append(
                     "announced (\(announced.map(\.title)) vs \(other.announced.map(\.title)))")
             }
+            if showing != other.showing {
+                diffs.append(
+                    "notice on screen (\(showing?.title ?? "none") vs \(other.showing?.title ?? "none"))")
+            }
             return diffs
         }
     }
@@ -140,7 +152,7 @@ final class ConfigApplierDifferentialTests: XCTestCase {
             motion: doubles.motion, autoChecks: doubles.autoChecks,
             cardKeycap: views.compactMap { ($0 as? KeycapView)?.shortcut }.joined(separator: "+"),
             cardText: views.compactMap { ($0 as? NSTextField)?.stringValue },
-            announced: doubles.announced)
+            announced: doubles.announced, showing: doubles.showing)
     }
 
     // MARK: - harness
@@ -282,6 +294,63 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         XCTAssertEqual(
             doubles.announced.count, 1,
             "an undelivered config notice was never retried — it's stranded for the session")
+    }
+
+    /// The notice is sticky and describes what's wrong *now*, so fixing the config has to take it
+    /// down. Nothing else does: `ConfigDiagnostic.announcement` returns nil for an empty set, which
+    /// is indistinguishable from "nothing changed", so the warning outlived the fix that made it
+    /// false and sat there contradicting a config that was already clean.
+    func test_fixingTheConfig_retractsTheNoticeAlreadyOnScreen() {
+        var broken = GeneralConfig.builtIn
+        broken.configDiagnostics = [
+            ConfigDiagnostic(scope: .keybindLine, problem: .unparseableLine("keybind = nonsense"))
+        ]
+        GeneralConfig.setCurrentForTesting(broken)
+
+        let doubles = SinkDoubles(old: broken)
+        let applier = ConfigApplier(sinks: doubles.sinks)
+        applier.apply(.diagnostics)
+        XCTAssertNotNil(doubles.showing, "expected the problem notice up")
+
+        GeneralConfig.setCurrentForTesting(.builtIn)  // the user fixed the file
+        applier.apply(.diagnostics)
+        XCTAssertNil(
+            doubles.showing,
+            "the config is clean but its problem notice is still on screen saying otherwise")
+        XCTAssertEqual(doubles.announced.count, 1, "retracting must not itself announce anything")
+    }
+
+    /// A changed set replaces the notice rather than stacking a second card beside one that
+    /// describes a different set of problems.
+    func test_aChangedProblemSet_replacesTheNoticeRatherThanStacking() {
+        var broken = GeneralConfig.builtIn
+        broken.configDiagnostics = [
+            ConfigDiagnostic(scope: .keybindLine, problem: .unparseableLine("keybind = nonsense"))
+        ]
+        GeneralConfig.setCurrentForTesting(broken)
+
+        let doubles = SinkDoubles(old: broken)
+        var retractions = 0
+        var sinks = doubles.sinks
+        let retract = sinks.retractDiagnostics
+        // Count only retractions that took something down. A retract precedes every announce, so
+        // the raw call count includes a no-op on the first one and says nothing about stacking.
+        sinks.retractDiagnostics = {
+            if doubles.showing != nil { retractions += 1 }
+            retract()
+        }
+        let applier = ConfigApplier(sinks: sinks)
+        applier.apply(.diagnostics)
+
+        var worse = broken
+        worse.configDiagnostics.append(
+            ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .invalidValue(got: "x", expected: "a number")))
+        GeneralConfig.setCurrentForTesting(worse)
+        applier.apply(.diagnostics)
+
+        XCTAssertEqual(doubles.announced.count, 2, "the new set should have been announced")
+        XCTAssertEqual(retractions, 1, "the superseded notice was left stacked under the new one")
+        XCTAssertEqual(doubles.showing, doubles.announced.last, "the notice on screen is the stale one")
     }
 
     /// The other half of that gate: once delivered, an unchanged set stays quiet. Every in-app

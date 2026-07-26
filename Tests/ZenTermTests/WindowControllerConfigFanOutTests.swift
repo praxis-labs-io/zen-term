@@ -214,6 +214,38 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
         XCTAssertEqual(after, rebound.displayGlyph)
     }
 
+    /// The retraction has to reach the real toast stack, not just the applier's bookkeeping. The
+    /// notice is sticky, so nothing takes it down on its own: if `dismissConfigDiagnosticsToast`
+    /// missed, a warning about problems the user has already fixed stays on screen for the session.
+    func test_dismissConfigDiagnosticsToast_takesTheNoticeOffScreen() throws {
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
+        self.controller = controller
+        controller.showAndStart()
+
+        controller.showConfigDiagnosticsToast(
+            ToastContent(variant: .warning, title: "1 problem in your config", message: "a line"),
+            landingScope: .keybindLine)
+        func mountedToasts() -> [ToastView] {
+            descendants(of: controller.window.contentView!).compactMap { $0 as? ToastView }
+        }
+        XCTAssertEqual(mountedToasts().count, 1, "expected the problem notice mounted")
+
+        // Removal rides `animateOut`'s completion, so pin reduce-motion and let it land rather
+        // than measuring mid-spring.
+        let motion = Motion.isReduceMotionEnabled
+        defer { Motion.isReduceMotionEnabled = motion }
+        Motion.isReduceMotionEnabled = { true }
+        controller.dismissConfigDiagnosticsToast()
+        let settled = expectation(description: "dismissal settled")
+        OperationQueue.main.addOperation { settled.fulfill() }
+        wait(for: [settled], timeout: 5)
+        XCTAssertTrue(mountedToasts().isEmpty, "the notice is still on screen after being retracted")
+
+        // Idempotent: a second retract (or one after the user already dismissed it) must not trap.
+        controller.dismissConfigDiagnosticsToast()
+    }
+
     /// The same trap one layer out, and it was live until ZEN-281: an open command palette rebuilt
     /// its row *views* on `reapplyTheme()` but replayed the shortcut glyph each `PaletteCommand`
     /// baked in when the catalog built it, so a rebind left the palette showing the old chord. The

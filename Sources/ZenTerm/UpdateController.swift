@@ -80,10 +80,29 @@ final class UpdateController {
         updater.automaticallyChecksForUpdates = GeneralConfig.current.automaticUpdateChecks
     }
 
+    /// What a manual check says when there's no updater to run it: a build run from source carries
+    /// no feed URL, so `AppDelegate` never even constructs an `UpdateController`. The command used
+    /// to do nothing at all, which reads as broken rather than as deliberately off. `AppDelegate`
+    /// shows this for the nil-controller case; `checkForUpdates` covers a packaged build whose
+    /// updater failed to start.
+    /// Two lines because each has to clear `ToastView.messageMaxWidth` on its own; the one-line
+    /// version of this ran 386pt into a 236pt column and would have wrapped mid-phrase.
+    static let inertNotice = ToastContent(
+        variant: .info, title: "Updates are off in this build",
+        message: "Run from source, so there's no feed.\nThe installed app updates itself.")
+
     /// Run a user-initiated check now (the "Check for Updates" command, ZEN-20). Unlike a scheduled
-    /// check, the driver reports its result even when nothing's found. A no-op in an unpackaged build.
+    /// check, the driver reports its result even when nothing's found.
     func checkForUpdates() {
-        guard started else { return }
+        guard started else {
+            // `isSupported` only means a feed URL exists, so reaching here means `start()` threw on
+            // a packaged build. That's a fault, not a dev build, and it gets said differently.
+            announce(
+                ToastContent(
+                    variant: .warning, title: "Couldn't check for updates",
+                    message: "The updater didn't start. See the log for details."))
+            return
+        }
         updater.checkForUpdates()
     }
 

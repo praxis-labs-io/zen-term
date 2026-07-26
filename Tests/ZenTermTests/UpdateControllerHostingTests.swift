@@ -65,4 +65,19 @@ final class UpdateControllerHostingTests: XCTestCase {
         XCTAssertTrue(titles.contains { $0.contains("Ready to install") }, "\(titles)")
         XCTAssertFalse(titles.contains { $0.contains("is available") }, "stale card not replaced: \(titles)")
     }
+
+    /// A build run from source has no feed URL, so `AppDelegate` never constructs an
+    /// `UpdateController` and Check for Updates used to do nothing at all: no card, no toast, no
+    /// on-screen trace. Inert is fine; silent is not, because a dead-looking command reads as
+    /// broken. The copy is measured rather than eyeballed for the same reason every toast message
+    /// is: it wraps at a fixed column, so a mid-phrase break is invisible until you see it.
+    func test_inertNotice_fitsTheToastWrapColumn() {
+        for line in UpdateController.inertNotice.message.split(separator: "\n") {
+            let width = (String(line) as NSString)
+                .size(withAttributes: [.font: ToastView.messageFont]).width
+            XCTAssertLessThanOrEqual(
+                width, ToastView.messageMaxWidth,
+                "wraps at \(Int(width))pt > \(Int(ToastView.messageMaxWidth))pt: \(line)")
+        }
+    }
 }

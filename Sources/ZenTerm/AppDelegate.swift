@@ -30,6 +30,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 controller.showConfigDiagnosticsToast(content, landingScope: scope)
                 return true
             },
+            // Every window, not just the key one: the notice was delivered to whichever window was
+            // key at the time, which need not be the one in front now.
+            retractDiagnostics: { [weak self] in
+                self?.windows.forEach { $0.dismissConfigDiagnosticsToast() }
+            },
             reapplyUpdateCardTheme: { [weak self] in self?.updateController?.reapplyTheme() },
             applyAutoCheckSetting: { [weak self] in self?.updateController?.applyAutoCheckSetting() }))
 
@@ -141,7 +146,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         if case .checkForUpdates = chord {
-            updateController?.checkForUpdates()  // app-global: the updater is app-owned, not window-scoped
+            // App-global: the updater is app-owned, not window-scoped. Nil means an unpackaged
+            // build, where there's no updater at all — say so rather than swallowing the command.
+            guard let updateController else {
+                keyController()?.showToast(UpdateController.inertNotice)
+                return
+            }
+            updateController.checkForUpdates()
             return
         }
         keyController()?.handle(chord)

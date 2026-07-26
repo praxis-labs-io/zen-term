@@ -23,6 +23,8 @@ final class ConfigApplier {
         /// Show the config-problems notice, returning whether a window actually took it. `false`
         /// leaves the set un-announced so the next reload retries — see `surfaceConfigDiagnostics`.
         var announceDiagnostics: (ToastContent, ConfigDiagnostic.Scope) -> Bool
+        /// Take down an outstanding config-problems notice. A no-op when none is showing.
+        var retractDiagnostics: () -> Void
         /// Recolor a live update card. Also re-resolves its "Check for Updates" keycap.
         var reapplyUpdateCardTheme: () -> Void
         /// Re-point Sparkle's background check schedule at the config.
@@ -67,22 +69,30 @@ final class ConfigApplier {
     /// via `apply(_:)`, and once at launch so a config that's already broken announces itself.
     ///
     /// The announce decision itself is `ConfigDiagnostic.announcement`, where it's pure.
+    ///
+    /// The notice is sticky, and it states what is wrong **now** rather than logging what happened
+    /// at some past reload. So it is retracted as well as raised: fixing the config and reloading
+    /// takes it down, and a changed set replaces it rather than stacking a second card beside one
+    /// that describes different problems.
     func surfaceConfigDiagnostics() {
         let diagnostics = GeneralConfig.current.configDiagnostics
+        guard !diagnostics.isEmpty else {
+            // Nothing is wrong any more. `announcement` returns nil for an empty set, so before
+            // this the stale warning simply outlived the fix that made it false.
+            if !lastAnnouncedDiagnostics.isEmpty { sinks.retractDiagnostics() }
+            lastAnnouncedDiagnostics = []
+            return
+        }
         guard
             let content = ConfigDiagnostic.announcement(
-                for: diagnostics, alreadyAnnounced: lastAnnouncedDiagnostics)
-        else {
-            lastAnnouncedDiagnostics = diagnostics
-            return
-        }
+                for: diagnostics, alreadyAnnounced: lastAnnouncedDiagnostics),
+            let first = diagnostics.first
+        else { return }  // unchanged set: the notice already up is still accurate, so stay quiet
+        sinks.retractDiagnostics()
         // Record it as announced only once a window has actually shown it. Delivery fails when the
         // key window isn't one of ours (an open panel), and marking an undelivered notice as
-        // announced would let the change-gate swallow it forever. `content` is non-nil only when
-        // there's at least one diagnostic, so `first` is the section the toast's button lands on.
-        guard let first = diagnostics.first, sinks.announceDiagnostics(content, first.scope) else {
-            return
-        }
+        // announced would let the change-gate swallow it forever.
+        guard sinks.announceDiagnostics(content, first.scope) else { return }
         lastAnnouncedDiagnostics = diagnostics
     }
 }

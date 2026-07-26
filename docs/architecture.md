@@ -373,6 +373,14 @@ it, so gating on `.diagnostics` strands an undelivered notice forever. The updat
 card gates on `.theme || .keymap`, because `UpdateCardView.reapplyTheme()`
 re-resolves its chord. Neither is untidy.
 
+**The config-problems notice is retracted as well as raised.** It is sticky and
+states what is wrong *now* rather than logging what happened at some past reload,
+so fixing the config and reloading takes it down, and a changed problem set
+replaces it instead of stacking a second card describing different problems.
+Nothing else would: `ConfigDiagnostic.announcement` returns nil for an empty set,
+which is indistinguishable from "nothing changed", so the warning used to outlive
+the fix that made it false.
+
 **The app-global half lives in `ConfigApplier`, not in `AppDelegate`.**
 `AppDelegate` is the `NSApplicationDelegate` singleton: it binds the nav socket and
 builds windows at launch, and an observer registered inside
