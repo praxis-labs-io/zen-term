@@ -330,16 +330,7 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         GeneralConfig.setCurrentForTesting(broken)
 
         let doubles = SinkDoubles(old: broken)
-        var retractions = 0
-        var sinks = doubles.sinks
-        let retract = sinks.retractDiagnostics
-        // Count only retractions that took something down. A retract precedes every announce, so
-        // the raw call count includes a no-op on the first one and says nothing about stacking.
-        sinks.retractDiagnostics = {
-            if doubles.showing != nil { retractions += 1 }
-            retract()
-        }
-        let applier = ConfigApplier(sinks: sinks)
+        let applier = ConfigApplier(sinks: doubles.sinks)
         applier.apply(.diagnostics)
 
         var worse = broken
@@ -349,8 +340,38 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         applier.apply(.diagnostics)
 
         XCTAssertEqual(doubles.announced.count, 2, "the new set should have been announced")
-        XCTAssertEqual(retractions, 1, "the superseded notice was left stacked under the new one")
         XCTAssertEqual(doubles.showing, doubles.announced.last, "the notice on screen is the stale one")
+    }
+
+    /// Replacing the notice is "all or nothing": if no window can take the new one, keep the
+    /// existing notice up and retry the replacement on the next reload.
+    func test_aReplacementThatCannotBeDelivered_keepsTheCurrentNoticeUntilRetrySucceeds() {
+        var broken = GeneralConfig.builtIn
+        broken.configDiagnostics = [
+            ConfigDiagnostic(scope: .keybindLine, problem: .unparseableLine("keybind = nonsense"))
+        ]
+        GeneralConfig.setCurrentForTesting(broken)
+
+        let doubles = SinkDoubles(old: broken)
+        let applier = ConfigApplier(sinks: doubles.sinks)
+        applier.apply(.diagnostics)
+        let firstNotice = doubles.showing
+        XCTAssertNotNil(firstNotice, "expected the first problem notice up")
+
+        var worse = broken
+        worse.configDiagnostics.append(
+            ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .invalidValue(got: "x", expected: "a number")))
+        GeneralConfig.setCurrentForTesting(worse)
+        doubles.canDeliver = false
+        applier.apply(.diagnostics)
+
+        XCTAssertEqual(doubles.showing, firstNotice, "failed replacement wrongly retracted the current notice")
+        XCTAssertEqual(doubles.announced.count, 1, "failed replacement should not log a second announcement")
+
+        doubles.canDeliver = true
+        applier.apply([])
+        XCTAssertEqual(doubles.announced.count, 2, "replacement was not retried once delivery became possible")
+        XCTAssertEqual(doubles.showing, doubles.announced.last, "retry did not replace the notice on screen")
     }
 
     /// The other half of that gate: once delivered, an unchanged set stays quiet. Every in-app

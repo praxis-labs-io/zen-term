@@ -26,7 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             setKeymap: { [weak self] map in self?.keys.setKeymap(map) },
             applyMotion: { MotionConfig.apply($0) },
             announceDiagnostics: { [weak self] content, scope in
-                guard let controller = self?.keyController() else { return false }
+                guard let self, let controller = self.keyController() else { return false }
+                // Replace any earlier config notice only once we're sure a window can take the new one.
+                self.windows.forEach { $0.dismissConfigDiagnosticsToast() }
                 controller.showConfigDiagnosticsToast(content, landingScope: scope)
                 return true
             },

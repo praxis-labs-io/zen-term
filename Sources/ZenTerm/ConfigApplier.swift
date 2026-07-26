@@ -88,7 +88,6 @@ final class ConfigApplier {
                 for: diagnostics, alreadyAnnounced: lastAnnouncedDiagnostics),
             let first = diagnostics.first
         else { return }  // unchanged set: the notice already up is still accurate, so stay quiet
-        sinks.retractDiagnostics()
         // Record it as announced only once a window has actually shown it. Delivery fails when the
         // key window isn't one of ours (an open panel), and marking an undelivered notice as
         // announced would let the change-gate swallow it forever.
