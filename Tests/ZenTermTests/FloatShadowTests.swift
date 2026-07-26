@@ -63,8 +63,8 @@ final class FloatShadowTests: XCTestCase {
     /// `SurfaceFloatOverlayTests` covers what that view paints.
     func test_surfaceFloatCard_drawsItsShadow_ratherThanCastingALayerOne() {
         let overlay = SurfaceFloatOverlay(
-            content: NSView(), background: .black, widthFraction: 0.85,
-            heightFraction: 0.78, contentInset: 10, cornerRadius: 14, onDismiss: {})
+            content: NSView(), widthFraction: 0.85, heightFraction: 0.78, contentInset: 10,
+            cornerRadius: 14, onDismiss: {})
         let host = window.contentView!
         host.addSubview(overlay)
         NSLayoutConstraint.activate([

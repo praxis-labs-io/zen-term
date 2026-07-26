@@ -26,8 +26,12 @@ final class RingFillView: NSView {
     weak var contentView: NSView?
 
     override func draw(_ dirtyRect: NSRect) {
-        guard let contentView, let superview else { return }
-        let hole = convert(contentView.frame, from: superview)
+        guard let contentView else { return }
+        // Converted from the content's OWN space, not `frame` out of a shared superview: both
+        // hosts happen to make the two siblings today, and reading it that way would punch a
+        // silently wrong hole the first time the terminal is wrapped or reparented — a defect
+        // that looks like a ring bug rather than a hierarchy one.
+        let hole = convert(contentView.bounds, from: contentView)
         let path = NSBezierPath(
             roundedRect: bounds, xRadius: cornerRadius, yRadius: cornerRadius)
         path.append(NSBezierPath(rect: hole))
