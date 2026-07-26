@@ -166,9 +166,11 @@ The parts that get violated most:
 - **No hype words, no adverbs.** The app's user-facing copy currently contains
   zero instances of "seamless", "powerful", "beautiful", or "just works". That's
   a property worth keeping, not an accident.
-- **Positioning:** ZenTerm is "a terminal for the modern era", a modern shell for
-  a great terminal (ghostty), for terminal devs of all kinds. The agentic bent is
-  a lean, never the frame. Do not write "the terminal for the agentic era".
+- **Positioning:** ZenTerm is "a dev-first terminal", on a libghostty core, for
+  terminal devs of all kinds. The core is the engine, not the identity: credit it
+  plainly in a spec line or the docs, never the headline, and never framed so
+  ZenTerm reads as an accessory. The agentic bent is a lean, never the frame. Do
+  not write "the terminal for the agentic era".
 - **One word per concept** (pane not split, workspace not project/repo, shortcut
   not keybind). The vocabulary table is in the doc.
 - Confirmations state the consequence and never ask "Are you sure?".
