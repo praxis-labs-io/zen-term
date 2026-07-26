@@ -119,14 +119,20 @@ enum WorkspacesWriter {
     ///
     /// Exchanges the two *named* blocks rather than moving one past whatever block is adjacent: a
     /// duplicate title is shadowed under last-wins, so the two rows a user sees side by side can have
-    /// a section between them that has no row at all. A no-op when either title is absent (a stale
-    /// row), which leaves the file for the reload to correct.
-    static func swap(_ title: String, with other: String, configRoot: URL = ConfigLoader.defaultRoot) throws {
+    /// a section between them that has no row at all.
+    ///
+    /// Returns whether the file was rewritten. A title that isn't in the file is a stale row (the
+    /// file changed under the list), and the caller must be able to tell that apart from a completed
+    /// swap: reporting success there would re-render the list into an order the file doesn't have,
+    /// which lasts until the next load. Not `@discardableResult` for the same reason.
+    static func swap(
+        _ title: String, with other: String, configRoot: URL = ConfigLoader.defaultRoot
+    ) throws -> Bool {
         let url = configRoot.appendingPathComponent("workspaces")
         var lines = try ConfigFileIO.readExistingOrEmpty(url).components(separatedBy: "\n")
         guard let a = locateBlock(titled: title, in: lines),
             let b = locateBlock(titled: other, in: lines)
-        else { return }
+        else { return false }
         // Splice the later block first: replacing the earlier one with a block of a different length
         // shifts every index after it, and the second range would then land mid-section.
         let (earlier, later) = a.start < b.start ? (a, b) : (b, a)
@@ -135,6 +141,7 @@ enum WorkspacesWriter {
         lines.replaceSubrange(later.start..<later.end, with: earlierBlock)
         lines.replaceSubrange(earlier.start..<earlier.end, with: laterBlock)
         try ConfigFileIO.writePreservingSymlink(lines.joined(separator: "\n"), to: url)
+        return true
     }
 
     /// The movable block for `title`: its section body, plus any contiguous comment run sitting

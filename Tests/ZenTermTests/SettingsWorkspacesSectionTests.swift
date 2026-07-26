@@ -227,12 +227,7 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
     /// than a test-local imitation of it.
     private func wireReorder(_ section: SettingsWorkspacesSection) {
         section.onReorder = { moved, neighbour in
-            do {
-                try WorkspacesWriter.swap(moved.title, with: neighbour.title)
-                return true
-            } catch {
-                return false
-            }
+            (try? WorkspacesWriter.swap(moved.title, with: neighbour.title)) ?? false
         }
     }
 
@@ -328,6 +323,24 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
         settleReorder()
 
         XCTAssertEqual(configuredTitles(), ["Alpha", "Beta"])
+    }
+
+    /// The file can change under an open card (a hand-edit, another window), leaving a row naming a
+    /// section that no longer exists. The swap can't happen, so the list must not slide either — a
+    /// re-render here shows an order the file never had, and it survives until the next load.
+    func test_staleRow_whoseSectionIsGoneFromTheFile_leavesTheListAlone() throws {
+        try seed(twoWorkspaces)
+        let section = SettingsWorkspacesSection()
+        wireReorder(section)
+        let detail = mount(section)
+        // The card is up on Alpha + Beta; now the file loses Beta behind its back.
+        try seed("[Alpha]\npath = ~/Dev/alpha\n")
+
+        rows(in: detail).first?.keyDown(with: optionDown)
+        settleReorder()
+
+        XCTAssertEqual(rows(in: detail).map(\.workspace.title), ["Alpha", "Beta"], "the list holds still")
+        XCTAssertEqual(configuredTitles(), ["Alpha"], "and the file is untouched")
     }
 
     /// A failed write must leave the list alone: a row that slides while the file refuses shows an

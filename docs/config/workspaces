@@ -17,7 +17,7 @@
 # so it's independent of the folder name (`[ZenTerm]` can point at ~/Dev/zen-term).
 #
 # Order: the picker lists workspaces in the order their sections appear here, so to put
-# one first, move its whole `[Title]` block up. ⌥↑ / ⌥↓ on a row in Settings → Workspaces
+# one first, move its whole `[Title]` block up. ⌥↑/⌥↓ on a row in Settings → Workspaces
 # does the same edit for you. A comment sitting directly on a header moves with it; a
 # comment with a blank line under it stays where it is, so a banner at the top of the
 # file keeps its place.

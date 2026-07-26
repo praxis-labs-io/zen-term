@@ -1121,7 +1121,10 @@ final class WindowController: NSObject {
     /// every time it opens.
     private func reorderWorkspaces(_ moved: Workspace, with neighbour: Workspace) -> Bool {
         do {
-            try WorkspacesWriter.swap(moved.title, with: neighbour.title)
+            // False means a title wasn't in the file: the list is stale, so re-rendering it would
+            // show an order the file never had. Silent rather than a toast — the file changed under
+            // the card (a hand-edit, another window), which isn't a failure to report.
+            return try WorkspacesWriter.swap(moved.title, with: neighbour.title)
         } catch {
             toasts.show(
                 ToastContent(

@@ -331,7 +331,7 @@ final class WorkspacesWriterTests: XCTestCase {
         let root = try makeTempDir()
         try seed(threeSections, in: root)
 
-        try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root)
+        XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
 
         XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Beta", "Alpha", "Gamma"])
     }
@@ -343,7 +343,7 @@ final class WorkspacesWriterTests: XCTestCase {
         let root = try makeTempDir()
         try seed(threeSections, in: root)
 
-        try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root)
+        XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
 
         let parsed = ConfigLoader.loadWorkspaces(configRoot: root)
         XCTAssertEqual(parsed.first { $0.title == "Beta" }?.path, expandTilde("~/Dev/beta"))
@@ -369,7 +369,7 @@ final class WorkspacesWriterTests: XCTestCase {
             focus = right
             """, in: root)
 
-        try WorkspacesWriter.swap("Long", with: "Short", configRoot: root)
+        XCTAssertTrue(try WorkspacesWriter.swap("Long", with: "Short", configRoot: root))
 
         let parsed = ConfigLoader.loadWorkspaces(configRoot: root)
         XCTAssertEqual(parsed.map(\.title), ["Long", "Short"])
@@ -385,7 +385,7 @@ final class WorkspacesWriterTests: XCTestCase {
         let root = try makeTempDir()
         try seed(threeSections, in: root)
 
-        try WorkspacesWriter.swap("Gamma", with: "Alpha", configRoot: root)
+        XCTAssertTrue(try WorkspacesWriter.swap("Gamma", with: "Alpha", configRoot: root))
 
         XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Gamma", "Beta", "Alpha"])
     }
@@ -405,7 +405,7 @@ final class WorkspacesWriterTests: XCTestCase {
             path = ~/Dev/beta
             """, in: root)
 
-        try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root)
+        XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
 
         let lines = try read(root).components(separatedBy: "\n")
         let betaHeader = try XCTUnwrap(lines.firstIndex(of: "[Beta]"))
@@ -431,7 +431,7 @@ final class WorkspacesWriterTests: XCTestCase {
             path = ~/Dev/beta
             """, in: root)
 
-        try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root)
+        XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
 
         let lines = try read(root).components(separatedBy: "\n")
         XCTAssertEqual(lines.first, "# zen-term workspaces — the ⌘⇧P project list.")
@@ -446,7 +446,7 @@ final class WorkspacesWriterTests: XCTestCase {
         try seed(threeSections, in: root)
         let before = try read(root)
 
-        try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root)
+        XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
 
         let after = try read(root)
         XCTAssertFalse(after.contains("\n\n\n"), "no doubled blank line")
@@ -461,17 +461,19 @@ final class WorkspacesWriterTests: XCTestCase {
         let root = try makeTempDir()
         try seed("[Alpha]\r\npath = ~/Dev/alpha\r\n\r\n[Beta]\r\npath = ~/Dev/beta\r\n", in: root)
 
-        try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root)
+        XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
 
         XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Beta", "Alpha"])
     }
 
-    func test_swap_unknownTitle_isANoOp() throws {
+    /// A title that isn't in the file has to be reported, not just skipped: the caller re-renders its
+    /// list on a `true`, so a silent no-op would leave the list showing an order the file never had.
+    func test_swap_unknownTitle_isANoOp_andReportsIt() throws {
         let root = try makeTempDir()
         try seed(threeSections, in: root)
         let before = try read(root)
 
-        try WorkspacesWriter.swap("Alpha", with: "Ghost", configRoot: root)
+        XCTAssertFalse(try WorkspacesWriter.swap("Alpha", with: "Ghost", configRoot: root))
 
         XCTAssertEqual(try read(root), before, "a stale row must not rearrange the file")
     }
