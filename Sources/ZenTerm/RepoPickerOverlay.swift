@@ -41,9 +41,19 @@ final class RepoPickerOverlay: PaletteOverlay {
             ],
             rowHeight: 32,
             onDismiss: onDismiss)
+
+        // One background pass per open: the rows are up with whatever git status was already known,
+        // and the badges fill in when the probes land. Per open rather than once per process, so a
+        // folder that just became a repo gets its badge without a relaunch.
+        GitRepoStatus.refresh(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Re-read every workspace row's badge from `GitRepoStatus`.
+    private func applyGitStatus() {
+        for row in rowViews { (row as? RowView)?.applyGitStatus() }
+    }
 
     /// The ＋ row first, then a workspace row per entry.
     private static func rows(for workspaces: [Workspace]) -> [Row] {
@@ -61,9 +71,19 @@ final class RepoPickerOverlay: PaletteOverlay {
     override func makeRow(at index: Int) -> PaletteRowView {
         switch rows[index] {
         case .add:
-            return AddRowView { [weak self] in self?.activateRow(at: index) }
+            return AddRowView()
         case .workspace(let workspace):
-            return RowView(workspace: workspace) { [weak self] in self?.activateRow(at: index) }
+            return RowView(workspace: workspace)
+        }
+    }
+
+    /// A row is the same row across a re-filter when it's the ＋ row or names the same workspace.
+    /// Workspace titles are the `[Title]` section headers, unique by construction, and a row renders
+    /// nothing but the title and a git badge (which updates in place rather than by rebuilding).
+    override func rowIdentity(at index: Int) -> AnyHashable? {
+        switch rows[index] {
+        case .add: return ["add"]
+        case .workspace(let workspace): return ["workspace", workspace.title]
         }
     }
 
@@ -97,8 +117,8 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// The persistent "＋ New Workspace…" action row, tinted with the accent so it reads as an
     /// affordance distinct from the workspace list below it.
     private final class AddRowView: SelectableRowView {
-        override init(onClick: @escaping () -> Void) {
-            super.init(onClick: onClick)
+        override init() {
+            super.init()
 
             let icon = NSImageView()
             let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
@@ -125,33 +145,45 @@ final class RepoPickerOverlay: PaletteOverlay {
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
     }
 
-    /// One workspace row: title (left) and a muted git icon (right) when its dir is a repo.
-    private final class RowView: SelectableRowView {
-        init(workspace: Workspace, onClick: @escaping () -> Void) {
-            super.init(onClick: onClick)
+    /// One workspace row: title (left) and a muted git icon (right) when its dir is a repo. The
+    /// badge is always built and starts hidden — whether the folder is a repo is filesystem I/O,
+    /// which can't run on the main thread (ZEN-90), so the row shows the last-known answer now and
+    /// `applyGitStatus()` turns the badge on when a fresh probe lands.
+    final class RowView: SelectableRowView {
+        let workspace: Workspace
+        private let gitBadge = NSImageView()
+
+        init(workspace: Workspace) {
+            self.workspace = workspace
+            super.init()
 
             let name = NSTextField(labelWithString: workspace.title)
             name.font = .systemFont(ofSize: 13)
             name.textColor = Theme.current.chrome.foreground.nsColor
             name.translatesAutoresizingMaskIntoConstraints = false
             addSubview(name)
+
+            gitBadge.image = IconCatalog.gitBadge()
+            gitBadge.setAccessibilityLabel("git repository")
+            gitBadge.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
+            gitBadge.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(gitBadge)
+
             NSLayoutConstraint.activate([
                 name.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
                 name.centerYAnchor.constraint(equalTo: centerYAnchor),
+                gitBadge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+                gitBadge.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
-
-            if GitRepo.isGitRepo(workspace.path) {
-                let git = NSImageView()
-                git.image = IconCatalog.gitBadge()
-                git.setAccessibilityLabel("git repository")
-                git.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
-                git.translatesAutoresizingMaskIntoConstraints = false
-                addSubview(git)
-                git.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14).isActive = true
-                git.centerYAnchor.constraint(equalTo: centerYAnchor).isActive = true
-            }
+            applyGitStatus()
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        /// Show the badge when this workspace's folder is a known repo. Run at build time and again
+        /// whenever a `GitRepoStatus.refresh` lands.
+        func applyGitStatus() {
+            gitBadge.isHidden = GitRepoStatus.known(workspace.path) != true
+        }
     }
 }

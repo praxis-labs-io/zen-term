@@ -49,7 +49,18 @@ final class ToolFloatControllerTests: XCTestCase {
     /// `surface.view.superview`, and `animateIn` lays out against a live window), and reaches the
     /// "focused pane's cwd" through the same closure seam `WindowController` wires up — so
     /// `setCWD` here stands in for a pane's shell `cd`-ing, which is exactly what the engine sees.
-    private func makeFloats(cwd: URL) -> (
+    ///
+    /// The repo-root probe is injected synchronously: in the app it runs off the main thread
+    /// (ZEN-90/ZEN-15), so a toggle that needs one takes a hop, and every assertion here would have
+    /// to become an expectation. `onProbe` fires on each probe, for the tests that care whether one
+    /// happened at all. What the async delivery itself does to the open path is a runbook step.
+    /// Pass `resolveRepoRoot` to hold the probe instead, which is the window the real walk leaves
+    /// open while it hits the filesystem: the tests that assert an open can be called off deliver
+    /// the answer by hand, after the cancelling event.
+    private func makeFloats(
+        cwd: URL, onProbe: (() -> Void)? = nil,
+        resolveRepoRoot: ((URL?, @escaping (URL?) -> Void) -> Void)? = nil
+    ) -> (
         floats: ToolFloatController, spawned: () -> [RecordingSurface], setCWD: (URL) -> Void
     ) {
         var spawned: [RecordingSurface] = []
@@ -77,10 +88,11 @@ final class ToolFloatControllerTests: XCTestCase {
                 let surface = RecordingSurface()
                 spawned.append(surface)
                 return surface
+            },
+            resolveRepoRoot: resolveRepoRoot ?? { cwd, deliver in
+                onProbe?()
+                deliver(GitRepo.repoRoot(for: cwd))
             })
-        // Resolve the repo root synchronously so these tests keep their open-then-assert-immediately
-        // shape; the off-main default is exercised by `test_toggle_resolvesRepoRootOffMain`.
-        floats.resolveRepoRoot = { $1(GitRepo.repoRoot(for: $0)) }
         host.layoutSubtreeIfNeeded()
         windows.append(window)
         floatControllers.append(floats)
@@ -368,6 +380,146 @@ final class ToolFloatControllerTests: XCTestCase {
             "a float pinned to a non-repo dir: must be blocked even though the pane sits in a real repo")
     }
 
+    /// The repo root feeds exactly two things — the `git:` guard and a `.directory` float's anchor —
+    /// so a float wanting neither must open without walking the filesystem at all (ZEN-15). The walk
+    /// is a run of stats per ancestor, unbounded on a network mount.
+    func test_plainEphemeralFloat_opensWithoutProbingTheFilesystem() throws {
+        let dir = try makeDir("plain", git: false)
+        var probes = 0
+        let (floats, spawned, _) = makeFloats(cwd: dir, onProbe: { probes += 1 })
+
+        floats.toggle(spec("yazi", persist: .ephemeral))
+
+        XCTAssertEqual(floatSurfaces(spawned(), command: "yazi").count, 1, "the float still opens")
+        XCTAssertEqual(probes, 0, "nothing needs the repo root, so nothing may walk for it")
+    }
+
+    func test_gitGatedFloat_probesForItsGuard() throws {
+        let repo = try makeDir("repo", git: true)
+        var probes = 0
+        let (floats, spawned, _) = makeFloats(cwd: repo, onProbe: { probes += 1 })
+
+        floats.toggle(spec("gitdash", persist: .ephemeral, git: true))
+
+        XCTAssertEqual(floatSurfaces(spawned(), command: "gitdash").count, 1)
+        XCTAssertEqual(probes, 1, "one walk per press, shared by the guard and the anchor")
+    }
+
+    // MARK: calling off an open that is still resolving its repo root (ZEN-15)
+
+    /// A held probe plus the float engine driving it. `deliver` runs the walk's answer back, so a
+    /// test can put the cancelling event between the press and the landing.
+    private func makeHeldProbeFloats(cwd: URL) -> (
+        floats: ToolFloatController, spawned: () -> [RecordingSurface], setCWD: (URL) -> Void,
+        deliver: () -> Void
+    ) {
+        var held: [(cwd: URL?, deliver: (URL?) -> Void)] = []
+        let (floats, spawned, setCWD) = makeFloats(
+            cwd: cwd, resolveRepoRoot: { cwd, deliver in held.append((cwd, deliver)) })
+        return (
+            floats, spawned, setCWD,
+            {
+                let pending = held
+                held = []
+                for probe in pending { probe.deliver(GitRepo.repoRoot(for: probe.cwd)) }
+            }
+        )
+    }
+
+    /// The open crosses a queue hop now, so a close landing inside that window has to call it off.
+    /// Otherwise the card arrives after the user has already moved on — `closeFloatForTabChange`
+    /// no-ops on a float that isn't shown yet, and the float lands on the tab they switched to.
+    func test_closeDuringTheProbe_callsTheOpenOff() throws {
+        let repo = try makeDir("repo", git: true)
+        let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
+
+        floats.toggle(spec("lazygit", persist: .directory))
+        floats.close()  // what a tab change does
+        deliver()  // the walk finishes afterwards
+
+        XCTAssertTrue(
+            floatSurfaces(spawned(), command: "lazygit").isEmpty,
+            "a float closed while it was still probing must not open when the probe lands")
+        XCTAssertFalse(floats.isOpen)
+    }
+
+    /// Same window, at teardown: a probe landing after `shutdown()` would spawn a fresh shell into
+    /// the registry of a window that is gone, leaving a process nothing can reach.
+    func test_shutdownDuringTheProbe_callsTheOpenOff() throws {
+        let repo = try makeDir("repo", git: true)
+        let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
+
+        floats.toggle(spec("lazygit", persist: .directory))
+        floats.shutdown()
+        deliver()
+
+        XCTAssertTrue(
+            floatSurfaces(spawned(), command: "lazygit").isEmpty,
+            "the window is gone; nothing may spawn into it")
+    }
+
+    /// The window calls this when a modal card goes up, so the two can't end up stacked.
+    func test_cancelPendingOpen_stopsTheCardFromLanding() throws {
+        let repo = try makeDir("repo", git: true)
+        let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
+
+        floats.toggle(spec("lazygit", persist: .directory))
+        floats.cancelPendingOpen()
+        deliver()
+
+        XCTAssertTrue(floatSurfaces(spawned(), command: "lazygit").isEmpty)
+        XCTAssertFalse(floats.isOpen)
+    }
+
+    /// Two presses of a toggle must not leave it open. The second press can't see a card yet, so it
+    /// has to recognise the float already on its way in and call it off.
+    func test_secondPressDuringTheProbe_cancelsInsteadOfOpening() throws {
+        let repo = try makeDir("repo", git: true)
+        let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
+        let float = spec("lazygit", persist: .directory)
+
+        floats.toggle(float)
+        floats.toggle(float)  // impatient second press, nothing on screen yet
+        deliver()
+
+        XCTAssertTrue(
+            floatSurfaces(spawned(), command: "lazygit").isEmpty,
+            "press-press is open-then-close, not open-then-open")
+        XCTAssertFalse(floats.isOpen)
+    }
+
+    func test_pendingOpenForAFloatDeletedByAConfigReload_isCancelled() throws {
+        let repo = try makeDir("repo", git: true)
+        let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
+
+        floats.toggle(spec("lazygit", persist: .directory))
+        floats.prune(against: [])  // the float was removed from the config
+        deliver()
+
+        XCTAssertTrue(
+            floatSurfaces(spawned(), command: "lazygit").isEmpty,
+            "a float with no config entry left has no card to open")
+    }
+
+    /// The anchor a persistent float is registered under and the directory its shell actually runs
+    /// in have to come from one reading. They were the same call before the walk went async; now the
+    /// cwd is captured at the press, and `spawn` must use that rather than re-reading after the hop.
+    func test_directoryFloat_spawnsAtThePressTimeCWD_whenThePaneMovesDuringTheProbe() throws {
+        let repoA = try makeDir("a", git: true)
+        let repoB = try makeDir("b", git: true)
+        let (floats, spawned, setCWD, deliver) = makeHeldProbeFloats(cwd: repoA)
+
+        floats.toggle(spec("lazygit", persist: .directory))
+        setCWD(repoB)  // the focused pane cd'd while the walk was out
+        deliver()
+
+        let opened = floatSurfaces(spawned(), command: "lazygit")
+        XCTAssertEqual(opened.count, 1)
+        XCTAssertEqual(
+            opened[0].lastConfig?.workingDirectory, repoA,
+            "the shell must start where the anchor was resolved, not wherever the pane ended up")
+    }
+
     // MARK: config-reload reconciliation (review findings on the shipped registry)
 
     func test_pruneToolFloats_terminatesADeletedHiddenFloat_andKeepsSurvivors() throws {
@@ -545,10 +697,11 @@ final class ToolFloatControllerTests: XCTestCase {
         XCTAssertEqual(stateChanges, 1)
     }
 
-    /// The repo-root walk resolves off-main (ZEN-234), so `toggle` doesn't open within its own turn,
-    /// and a second press before the resolve lands must not queue a second open. Drives a resolver
-    /// held open by hand — the default resolver in `makeFloats` is synchronous.
-    func test_toggle_resolvesRepoRootOffMain_andGuardsDoublePress() throws {
+    /// The repo-root walk resolves off-main (ZEN-234), so `toggle` doesn't open within its own turn:
+    /// the card lands a hop later, when the probe delivers. Drives a resolver held open by hand, the
+    /// default resolver in `makeFloats` being synchronous. What a SECOND press inside that gap does
+    /// belongs to `test_secondPressDuringTheProbe_cancelsInsteadOfOpening`.
+    func test_toggle_resolvesRepoRootOffMain() throws {
         let repo = try makeDir("repo", git: true)
         let (floats, spawned, _) = makeFloats(cwd: repo)
         var pending: [(URL?) -> Void] = []
@@ -558,9 +711,6 @@ final class ToolFloatControllerTests: XCTestCase {
         floats.toggle(float)
         XCTAssertFalse(floats.isOpen, "toggle must not open synchronously — the resolve is off-main")
         XCTAssertEqual(pending.count, 1)
-
-        floats.toggle(float)  // a second press in the resolve gap
-        XCTAssertEqual(pending.count, 1, "the second press must be dropped, not queued")
 
         pending[0](repo)  // the off-main resolve lands
         XCTAssertTrue(floats.isOpen, "the float opens once the root resolves")

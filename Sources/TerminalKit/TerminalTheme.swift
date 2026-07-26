@@ -2,7 +2,7 @@ import CoreGraphics
 
 /// A terminal's appearance: the monospaced font and the color palette a backend
 /// applies to its view. The chrome supplies one; the backend maps it to its own API.
-public struct TerminalTheme: Sendable {
+public struct TerminalTheme: Sendable, Equatable {
     public var fontName: String
     public var fontSize: CGFloat
     public var background: TerminalColor

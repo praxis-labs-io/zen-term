@@ -13,6 +13,9 @@ import XCTest
 final class SettingsTabTraversalTests: XCTestCase {
     private var tempRoot: URL!
     private var window: NSWindow?
+    /// The mounted section, retained the way the Settings card retains it: the Workspaces section
+    /// fills its rows in when the config load lands, and a released section drops that.
+    private var section: (any SettingsSection)?
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -24,6 +27,7 @@ final class SettingsTabTraversalTests: XCTestCase {
 
     override func tearDownWithError() throws {
         window = nil
+        section = nil
         ConfigLoader.defaultRootOverrideForTesting = nil
         AppConfig.reload()
         try? FileManager.default.removeItem(at: tempRoot)
@@ -138,9 +142,13 @@ final class SettingsTabTraversalTests: XCTestCase {
             path = \(dirB.path)
             """)
         let section = SettingsWorkspacesSection()
+        self.section = section
         let detail = mount(section.makeDetailView())
+        // The `workspaces` file is read off the main thread, so the rows land after the mount.
+        waitUntil(
+            descendants(of: detail).compactMap { $0 as? WorkspaceRow }.count == 2,
+            "a row per seeded workspace")
         let rows = descendants(of: detail).compactMap { $0 as? WorkspaceRow }
-        XCTAssertEqual(rows.count, 2, "expected a row per seeded workspace")
 
         XCTAssertIdentical(tab(from: rows[0]), rows[1], "Tab advances to the next row")
     }

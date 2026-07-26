@@ -311,6 +311,14 @@ final class PaneCanvasController: NSObject {
         for host in hostByLeaf.values { host.reapplyTheme() }
     }
 
+    /// Re-apply the live `pane-gap` to every built split after a config change — no relaunch, no
+    /// restructure. Sibling to `reapplyChromeColors()` (layout only). A split bakes its gutter in
+    /// at construction, so without this the gap between panes needed a relaunch while every other
+    /// Layout knob applied live.
+    func reapplyChromeLayout() {
+        for split in splitViewByID.values { split.setGutter(ChromeMetrics.panelGap) }
+    }
+
     /// Render the focused leaf full-canvas, retaining its surface — no restart. `resizesCanvas` is
     /// passed by `TabController` when a drawer is open (so zooming even a lone pane really grows it,
     /// dock → full) — the canvas doesn't know drawer state itself.

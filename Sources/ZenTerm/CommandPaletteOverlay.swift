@@ -18,15 +18,21 @@ final class CommandPaletteOverlay: PaletteOverlay {
 
     private let onRun: (KeyInterceptor.ReservedChord) -> Void
 
-    private let commands: [PaletteCommand]
+    /// Re-resolved rather than snapshotted: a `PaletteCommand` bakes its shortcut glyph in when the
+    /// catalog builds it, so an open palette held a stale chord after a rebind — `reapplyTheme()`
+    /// rebuilt the row views but replayed the shortcut captured at construction (ZEN-281).
+    private let resolveCommands: () -> [PaletteCommand]
+    private var commands: [PaletteCommand]
     private var rows: [Row]
 
     init(
-        commands: [PaletteCommand], background: NSColor,
+        commands: @escaping () -> [PaletteCommand], background: NSColor,
         onRun: @escaping (KeyInterceptor.ReservedChord) -> Void, onDismiss: @escaping () -> Void
     ) {
-        self.commands = commands
-        self.rows = Self.grouped(commands)
+        self.resolveCommands = commands
+        let resolved = commands()
+        self.commands = resolved
+        self.rows = Self.grouped(resolved)
         self.onRun = onRun
         super.init(
             background: background,
@@ -43,6 +49,26 @@ final class CommandPaletteOverlay: PaletteOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// Re-resolve the catalog before the base class rebuilds the rows, so a rebind while the
+    /// palette is open reaches the shortcut column. `WindowController` drives this from
+    /// `.configDidChange` on `.theme` or `.keymap`; the base's `reapplyTheme` re-filters and
+    /// reloads, and a row's identity includes its shortcut, so a moved chord rebuilds its row.
+    override func reapplyTheme() {
+        commands = resolveCommands()
+        super.reapplyTheme()
+    }
+
+    /// Test hook: the glyph each mounted row's keycap was **built** with, so a test can tell a
+    /// palette row's shortcut from the drawer header's. The two resolve through different paths,
+    /// and only one of them was ever stale after a rebind.
+    var builtRowShortcutsForTesting: [String] {
+        func descendants(of view: NSView) -> [NSView] {
+            view.subviews.flatMap { [$0] + descendants(of: $0) }
+        }
+        return descendants(of: self).compactMap { $0 as? RowView }
+            .flatMap { descendants(of: $0).compactMap { ($0 as? KeycapView)?.shortcut } }
+    }
+
     override func numberOfRows() -> Int { rows.count }
 
     override func makeRow(at index: Int) -> PaletteRowView {
@@ -50,7 +76,19 @@ final class CommandPaletteOverlay: PaletteOverlay {
         case .header(let title):
             return HeaderRowView(title: title)
         case .command(let command):
-            return RowView(command: command) { [weak self] in self?.activateRow(at: index) }
+            return RowView(command: command)
+        }
+    }
+
+    /// A row is the same row across a re-filter when it names the same section, or the same command
+    /// with the same shortcut. The identity has to cover everything the row renders, and a command
+    /// row renders both: a tool float's title comes from user config and nothing stops it colliding
+    /// with a built-in command's, so keying on the title alone would let one row inherit the other's
+    /// keycap and show a chord that doesn't run it.
+    override func rowIdentity(at index: Int) -> AnyHashable? {
+        switch rows[index] {
+        case .header(let title): return ["header", title]
+        case .command(let command): return ["command", command.title, command.shortcut]
         }
     }
 
@@ -115,6 +153,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
     /// A muted, small-caps section header. Non-selectable — the base skips it.
     private final class HeaderRowView: NSView, PaletteRowView {
         var isSelected = false  // headers never highlight
+        var onActivate: (() -> Void)?  // headers aren't selectable, so this is never run
 
         init(title: String) {
             super.init(frame: .zero)
@@ -141,8 +180,8 @@ final class CommandPaletteOverlay: PaletteOverlay {
 
     /// One command row: the action name (left) and its shortcut keycap (right).
     private final class RowView: SelectableRowView {
-        init(command: PaletteCommand, onClick: @escaping () -> Void) {
-            super.init(onClick: onClick)
+        init(command: PaletteCommand) {
+            super.init()
 
             let title = NSTextField(labelWithString: command.title)
             title.font = .systemFont(ofSize: 13)

@@ -37,10 +37,26 @@ final class WindowController: NSObject {
     /// The base-color tint over the behind-window blur; stored so a `backdrop-alpha` change can
     /// re-tint the running window (see the `configDidChange` observer).
     private let tint = NSView()
-    /// Top-right transient notices (e.g. "not a git repository"). Lazy so its stack mounts
-    /// above the canvas on first use; window-level so it's shared by every tab.
-    private lazy var toasts = ToastPresenter(
-        host: container, topInset: ChromeMetrics.topInset + 12, trailingInset: ChromeMetrics.windowGutter + 12)
+    /// Top-right transient notices (e.g. "not a git repository"). Built on first use so its stack
+    /// mounts above the canvas; window-level so it's shared by every tab.
+    ///
+    /// Held as an explicit optional rather than `lazy` so the config observer can re-point its
+    /// insets *only when it already exists* — touching a `lazy var` would construct it, mounting a
+    /// toast stack in every window on the first gutter edit and giving up the z-order the
+    /// build-on-first-use exists for.
+    private var builtToasts: ToastPresenter?
+    private var toasts: ToastPresenter {
+        if let builtToasts { return builtToasts }
+        let presenter = ToastPresenter(
+            host: container, topInset: Self.toastTopInset, trailingInset: Self.toastTrailingInset)
+        builtToasts = presenter
+        return presenter
+    }
+
+    /// The toast stack's offsets from the tile region, single-sourced so construction and the
+    /// live re-apply can't drift apart.
+    private static var toastTopInset: CGFloat { ChromeMetrics.topInset + 12 }
+    private static var toastTrailingInset: CGFloat { ChromeMetrics.windowGutter + 12 }
 
     /// Surface a notice in this window. The seam for app-global notices (`AppDelegate` routes
     /// config problems to one window this way) — the presenter itself stays private so nothing
@@ -152,6 +168,12 @@ final class WindowController: NSObject {
     }
     private var modal: (overlay: ModalOverlay, kind: ModalKind)?
 
+    /// A card that has been asked for but can't be built yet, because its content is still being
+    /// read off the main thread (the `workspaces` file — ZEN-275). Nothing is on screen for it, so
+    /// this is its only trace: a second press must not start a second load and present twice, and a
+    /// load landing after an Esc or after another card went up must not present at all.
+    private var pendingModal: ModalKind?
+
     /// The app's key interceptor, injected so the Settings Keybinds section can capture chords.
     weak var keybindCapturer: KeybindCapturing?
 
@@ -165,9 +187,7 @@ final class WindowController: NSObject {
     /// filesystem walk. Contract: the completion must be delivered on the **main thread** — the
     /// continuation presents the viewer and touches AppKit; the default resolver hops back to main,
     /// and any injected resolver must too.
-    var resolveRepoRoot: (URL?, @escaping (URL?) -> Void) -> Void = {
-        GitRepo.resolveRepoRoot(for: $0, completion: $1)
-    }
+    var resolveRepoRoot: (URL?, @escaping (URL?) -> Void) -> Void = GitRepoStatus.repoRoot
     /// True while a diff-viewer open is waiting on its off-main repo-root resolve, so a second
     /// ⌘D landing in that gap doesn't queue a second viewer (the top-of-`openDiffViewer` toggle
     /// check can't catch it — nothing is presented yet).
@@ -273,38 +293,75 @@ final class WindowController: NSObject {
         // Settings-card edit re-tints the backdrop and re-lays-out every built tab, no relaunch.
         configObserver = NotificationCenter.default.addObserver(
             forName: .configDidChange, object: nil, queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] note in
             guard let self else { return }
-            self.tint.layer?.backgroundColor =
-                Theme.current.chrome.background.nsColor.withAlphaComponent(Self.backdropTintAlpha).cgColor
-            // Show/hide the traffic lights live; `reapplyChromeLayout()` below re-applies the
-            // matching top inset so the header space appears/reclaims without a relaunch.
-            self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
-            for controller in self.controllers.values {
-                controller.reapplyChromeLayout()
-                controller.reapplyChromeColors()
+            // Each block below runs only when the config it actually reads moved (ZEN-48). The
+            // dependencies are what the call chain *resolves*, not what it's named after: recoloring
+            // a pane rebuilds its header keycap from the live keymap, so a rebind lands there too.
+            let change = ConfigChange.from(note)
+
+            if change.contains(.theme) || change.contains(.chromeLayout) {
+                self.tint.layer?.backgroundColor =
+                    Theme.current.chrome.background.nsColor.withAlphaComponent(Self.backdropTintAlpha)
+                    .cgColor
             }
-            self.floats.reapplyTheme()
-            self.reapplyFloatLayout()  // a gutter change must re-inset an OPEN card too
-            for surface in self.controllers.values.flatMap({ $0.allSurfaces }) + self.floats.allSurfaces {
-                surface.applyAppearance(
-                    theme: Theme.current.terminal, behavior: GeneralConfig.current.terminalBehavior)
+            if change.contains(.chromeLayout) {
+                // Show/hide the traffic lights live; `reapplyChromeLayout()` below re-applies the
+                // matching top inset so the header space appears/reclaims without a relaunch.
+                self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
+                for controller in self.controllers.values { controller.reapplyChromeLayout() }
+                self.reapplyFloatLayout()  // a gutter change must re-inset an OPEN card too
+                // Only if a toast has already been shown — see `builtToasts`.
+                self.builtToasts?.reapplyInsets(
+                    topInset: Self.toastTopInset, trailingInset: Self.toastTrailingInset)
             }
-            self.tabBar.reapplyTheme()
-            // A float add / edit / remove changes the catalog — rebuild the dock's per-float buttons
-            // (not just recolor) so the toolbar reflects it live, then restore active states. Prune
-            // the float registry against the same catalog: a deleted float's hidden process would
-            // otherwise keep running with no control able to ever reach it.
-            self.floats.prune(against: ToolFloatCatalog.all)
-            self.dock.setToolFloats(ToolFloatCatalog.all)
-            self.dock.reapplyTheme()
-            self.renderDock()
-            self.modal?.overlay.reapplyTheme()
-            self.confirmToast?.reapplyTheme()
-            // Waiting toasts are sticky with no auto-dismiss, so one left up across a theme edit
-            // would otherwise keep its old card fill, ink, and ⌘N keycap — washed out over the new
-            // chrome until the user dismisses it.
-            self.waitingToasts.values.forEach { $0.reapplyTheme() }
+            // `reapplyChromeColors` reaches `PanelHostView.reapplyTheme()`, which rebuilds the
+            // panel header's keycap against the live keymap — so a rebind needs it too, not just
+            // a theme swap.
+            if change.contains(.theme) || change.contains(.keymap) {
+                for controller in self.controllers.values { controller.reapplyChromeColors() }
+            }
+            if change.contains(.theme) {
+                self.floats.reapplyTheme()
+                self.tabBar.reapplyTheme()
+                self.dock.reapplyTheme()
+                self.confirmToast?.reapplyTheme()
+                // Waiting toasts are sticky with no auto-dismiss, so one left up across a theme edit
+                // would otherwise keep its old card fill, ink, and ⌘N keycap — washed out over the new
+                // chrome until the user dismisses it.
+                self.waitingToasts.values.forEach { $0.reapplyTheme() }
+            }
+            if change.contains(.theme) || change.contains(.terminalBehavior) {
+                for surface in self.controllers.values.flatMap({ $0.allSurfaces })
+                    + self.floats.allSurfaces
+                {
+                    surface.applyAppearance(
+                        theme: Theme.current.terminal, behavior: GeneralConfig.current.terminalBehavior)
+                }
+            }
+            if change.contains(.floats) {
+                // A float add / edit / remove changes the catalog — rebuild the dock's per-float
+                // buttons (not just recolor) so the toolbar reflects it live, then restore active
+                // states. Prune the float registry against the same catalog: a deleted float's
+                // hidden process would otherwise keep running with no control able to ever reach it.
+                self.floats.prune(against: ToolFloatCatalog.all)
+                self.dock.setToolFloats(ToolFloatCatalog.all)
+                self.dock.reapplyTheme()  // the rebuilt buttons bake their colors in at build time
+                self.renderDock()
+            }
+            // An open palette re-renders its rows here, and it re-resolves the whole catalog to do
+            // it — so this tracks far more than a recolor. `.keymap` because a row's shortcut
+            // column resolves from the live keymap; `.floats` because every tool float is also a
+            // palette command.
+            //
+            // `.floats` only bites across two windows, and that's worth knowing before anyone
+            // "simplifies" it away: `modal` is a single slot, so opening Settings in *this* window
+            // has already closed this palette. The live path is a palette open in window A while
+            // window B saves a float, since the reload is unforced and broadcasts `.floats` alone.
+            // (⌘⌥R can't show it either: it forces `.all`, which carries `.theme`.)
+            if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {
+                self.modal?.overlay.reapplyTheme()
+            }
         }
     }
 
@@ -659,6 +716,12 @@ final class WindowController: NSObject {
     /// input, and spring it in. One path for all three cards. No-op if there's no active tab.
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
         guard let active = activeController else { return }
+        // Anything else still on its way in would otherwise land on top of this card a moment from
+        // now, leaving two modal surfaces stacked and the keyboard aimed at the wrong one: a float
+        // still resolving its repo root, or a card still reading the config it renders from. A
+        // surface already SHOWN is a different case, handled by the chord gate.
+        floats.cancelPendingOpen()
+        pendingModal = nil
         active.presentTileOverlay(overlay)
         if kind.stealsHalo { active.yieldFocusToFloat() }  // pane drops its glow; the card wears it
         modal = (overlay, kind)
@@ -672,6 +735,7 @@ final class WindowController: NSObject {
     /// tab. No-op when nothing is open. Also called before any tab-bar mouse op (select/new/
     /// close), which would otherwise unmount the card's host tab and leave the gate stuck on.
     private func closeModal() {
+        pendingModal = nil  // a card still loading is closed by never being presented
         guard let overlay = modal?.overlay else { return }
         modal = nil
         overlay.animateOut { overlay.removeFromSuperview() }
@@ -681,16 +745,27 @@ final class WindowController: NSObject {
 
     /// Toggle the workspace picker (⌘⇧P). Reads the `workspaces` file fresh on each open (so
     /// hand-edits appear without a relaunch). Pressing ⌘⇧P while it's up closes it.
+    ///
+    /// The read is off the main thread (ZEN-275), so the card is built once the workspaces are in
+    /// hand rather than presented empty and filled: a card that springs in at one size and resizes a
+    /// frame later reads as a flash. Nothing blocks meanwhile, and the wait is a file read from the
+    /// config directory, so what a slow disk costs is the card appearing late rather than the app
+    /// going unresponsive.
     private func toggleRepoPicker() {
-        if modal?.kind == .repoPicker { closeModal(); return }
-        let picker = RepoPickerOverlay(
-            entries: ConfigLoader.loadWorkspaces(),
-            background: Theme.current.chrome.background.nsColor,
-            onChoose: { [weak self] ws, replace in self?.openWorkspace(ws, replaceCurrentTab: replace) },
-            onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
-            onDismiss: { [weak self] in self?.closeModal() }
-        )
-        presentModal(picker, kind: .repoPicker)
+        if modal?.kind == .repoPicker || pendingModal == .repoPicker { closeModal(); return }
+        pendingModal = .repoPicker
+        ConfigLoader.loadWorkspaces { [weak self] workspaces in
+            guard let self, self.pendingModal == .repoPicker else { return }
+            self.pendingModal = nil
+            let picker = RepoPickerOverlay(
+                entries: workspaces,
+                background: Theme.current.chrome.background.nsColor,
+                onChoose: { [weak self] ws, replace in self?.openWorkspace(ws, replaceCurrentTab: replace) },
+                onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
+                onDismiss: { [weak self] in self?.closeModal() }
+            )
+            self.presentModal(picker, kind: .repoPicker)
+        }
     }
 
     /// Toggle the command palette (⌘P). Builds the catalog fresh (its tab-select entries track
@@ -698,7 +773,9 @@ final class WindowController: NSObject {
     private func toggleCommandPalette() {
         if modal?.kind == .commandPalette { closeModal(); return }
         let palette = CommandPaletteOverlay(
-            commands: CommandCatalog.commands(tabCount: tabs.order.count),
+            commands: { [weak self] in
+                CommandCatalog.commands(tabCount: self?.tabs.order.count ?? 0)
+            },
             background: Theme.current.chrome.background.nsColor,
             onRun: { [weak self] chord in self?.runCommand(chord) },
             onDismiss: { [weak self] in self?.closeModal() }
@@ -710,15 +787,24 @@ final class WindowController: NSObject {
     /// inline collision checks; submitting writes the section and opens it. The picker is still up
     /// when the ＋ fires, so close it first. (Editing / deleting a workspace goes through Settings →
     /// Workspaces instead, via `openWorkspaceForm`.)
+    ///
+    /// The form waits for the load rather than presenting without it: its title-collision check has
+    /// to be right from the first keystroke, and a form seeded with half the titles would accept a
+    /// duplicate.
     private func openAddWorkspaceForm() {
         closeModal()
-        let form = AddWorkspaceOverlay(
-            existingTitles: Set(ConfigLoader.loadWorkspaces().map(\.title)),
-            background: Theme.current.chrome.background.nsColor,
-            onSubmit: { [weak self] ws in self?.submitNewWorkspace(ws) },
-            onCancel: { [weak self] in self?.closeModal() }
-        )
-        presentModal(form, kind: .workspaceForm)
+        pendingModal = .workspaceForm
+        ConfigLoader.loadWorkspaces { [weak self] workspaces in
+            guard let self, self.pendingModal == .workspaceForm else { return }
+            self.pendingModal = nil
+            let form = AddWorkspaceOverlay(
+                existingTitles: Set(workspaces.map(\.title)),
+                background: Theme.current.chrome.background.nsColor,
+                onSubmit: { [weak self] ws in self?.submitNewWorkspace(ws) },
+                onCancel: { [weak self] in self?.closeModal() }
+            )
+            self.presentModal(form, kind: .workspaceForm)
+        }
     }
 
     /// Open the "Report an Issue" composer (Help menu + Settings). Non-private: `AppDelegate` routes
@@ -928,7 +1014,44 @@ final class WindowController: NSObject {
                 self?.openSettings(for: landingScope)
             },
         ]
-        toast = toasts.showSticky(content, actions: actions)
+        let shown = toasts.showSticky(content, actions: actions)
+        toast = shown
+        configDiagnosticsToast = shown
+    }
+
+    /// The config-problems notice this window is showing, if any. Weak: the presenter's stack owns
+    /// it, and a user dismissal must leave nothing to retract.
+    private weak var configDiagnosticsToast: ToastView?
+
+    /// Deliver the config-problems notice to `keyWindow`, replacing any predecessor across every
+    /// window. Returns whether a window took it; `false` leaves the notice already up untouched, so
+    /// `ConfigApplier` can retry on the next reload.
+    ///
+    /// Static, and taking both the target and the full window list, purely so it is reachable from
+    /// a test. Inline in `AppDelegate`'s sink this was the last of the closure body that nothing
+    /// could drive, and the ordering is the whole point: sweeping before the key window resolves
+    /// would take an accurate notice down and put nothing back.
+    ///
+    /// Sweeping *every* window rather than just the target matters because the outstanding notice
+    /// went to whichever window was key at the time, which need not be the one taking this one.
+    static func deliverConfigDiagnosticsNotice(
+        _ content: ToastContent, landingScope: ConfigDiagnostic.Scope,
+        to keyWindow: WindowController?, replacingAcross windows: [WindowController]
+    ) -> Bool {
+        guard let keyWindow else { return false }
+        windows.forEach { $0.dismissConfigDiagnosticsToast() }
+        keyWindow.showConfigDiagnosticsToast(content, landingScope: landingScope)
+        return true
+    }
+
+    /// Retract the config-problems notice. It's sticky and states what is wrong *now*, so a reload
+    /// that resolves the problems has to take it down: nothing else does, and a warning that
+    /// outlives the fix that made it false is worse than no warning. Reads `builtToasts` rather
+    /// than `toasts` so retracting can never construct the presenter (see `hasBuiltToastsForTesting`).
+    func dismissConfigDiagnosticsToast() {
+        guard let toast = configDiagnosticsToast else { return }
+        configDiagnosticsToast = nil
+        builtToasts?.dismiss(toast)
     }
 
     /// Open the tool-float add / edit form from the Tools section (`nil` adds, a value edits). Closes
@@ -1019,18 +1142,25 @@ final class WindowController: NSObject {
     /// delete it hands back to Settings → Workspaces.
     private func openWorkspaceForm(editing workspace: Workspace?) {
         closeModal()
-        let existingTitles = Set(ConfigLoader.loadWorkspaces().map(\.title))
-            .subtracting(workspace.map { [$0.title] } ?? [])
-        let originalTitle = workspace?.title
-        let form = AddWorkspaceOverlay(
-            editing: workspace,
-            existingTitles: existingTitles,
-            background: Theme.current.chrome.background.nsColor,
-            onSubmit: { [weak self] built in self?.submitWorkspace(built, replacing: originalTitle) },
-            onCancel: { [weak self] in self?.reopenSettingsOnWorkspaces() },
-            onDelete: workspace.map { existing in { [weak self] in self?.deleteWorkspace(existing) } }
-        )
-        presentModal(form, kind: .workspaceForm)
+        // Same as the add form: the collision check needs the whole title set before the first
+        // keystroke, so the card waits on the load rather than presenting half-seeded.
+        pendingModal = .workspaceForm
+        ConfigLoader.loadWorkspaces { [weak self] workspaces in
+            guard let self, self.pendingModal == .workspaceForm else { return }
+            self.pendingModal = nil
+            let existingTitles = Set(workspaces.map(\.title))
+                .subtracting(workspace.map { [$0.title] } ?? [])
+            let originalTitle = workspace?.title
+            let form = AddWorkspaceOverlay(
+                editing: workspace,
+                existingTitles: existingTitles,
+                background: Theme.current.chrome.background.nsColor,
+                onSubmit: { [weak self] built in self?.submitWorkspace(built, replacing: originalTitle) },
+                onCancel: { [weak self] in self?.reopenSettingsOnWorkspaces() },
+                onDelete: workspace.map { existing in { [weak self] in self?.deleteWorkspace(existing) } }
+            )
+            self.presentModal(form, kind: .workspaceForm)
+        }
     }
 
     /// Persist a workspace edited / added from Settings, then hand back to Settings → Workspaces (the
@@ -1275,6 +1405,9 @@ final class WindowController: NSObject {
             active?.toggleZoom()
         case .fillScreen: toggleFillScreen()
         case .toggleToolFloat(let id):
+            // A float is modal too, so it calls off a card that's still loading — otherwise the card
+            // lands on top of it a beat later. `presentModal` is the mirror of this.
+            pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .toggleCommandPalette: toggleCommandPalette()
@@ -1581,6 +1714,18 @@ final class WindowController: NSObject {
     /// Test hook: the window's float engine, for asserting the relays wired onto it.
     var floatsForTesting: ToolFloatController { floats }
 
+    /// Test hook: whether the toast presenter has been built yet. The config observer must be able
+    /// to re-point its insets WITHOUT constructing it — building it early would mount a toast stack
+    /// in a window that has never shown one, which is the z-order the build-on-first-use protects.
+    var hasBuiltToastsForTesting: Bool { builtToasts != nil }
+
+    /// Test hook: the backdrop tint as it's actually painted. Its color comes from the theme and
+    /// its alpha from `backdrop-alpha`, so it's the one probe covering both halves of that gate —
+    /// and the tint view is private, with nothing in the tree to identify it by.
+    var backdropTintColorForTesting: NSColor? {
+        tint.layer?.backgroundColor.flatMap { NSColor(cgColor: $0) }
+    }
+
     /// Clear a tab's waiting state: dismiss its toast — which also drops the rose flag, since
     /// the flag is derived from the toast's presence (`waitingToasts[id] != nil`). Called when
     /// the tab is shown or closed. Re-render is left to the caller (all callers already do).
@@ -1641,6 +1786,10 @@ final class WindowController: NSObject {
     private func tearDown() {
         guard !didTearDown else { return }
         didTearDown = true
+        // Nothing may be built for this window after it goes: a card still loading would otherwise
+        // arrive to a nil `activeController`, but only after constructing its overlay and kicking
+        // off a git probe per workspace. `floats.shutdown()` below does the same for a float.
+        pendingModal = nil
         // Closing the window with a confirm still up must resolve its owner's pending state —
         // e.g. a quit confirm's `.terminateLater` reply — or the app hangs mid-quit.
         cancelConfirm()

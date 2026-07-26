@@ -47,7 +47,11 @@ final class SettingsKeybindsSection: SettingsSection {
         // conflict this section just told them about.
         configObserver = NotificationCenter.default.addObserver(
             forName: .configDidChange, object: nil, queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] note in
+            // The rows render from the keymap and their conflict messages from the diagnostics,
+            // so anything else (a slider drag on another section, with this card open) is skippable.
+            let change = ConfigChange.from(note)
+            guard change.contains(.keymap) || change.contains(.diagnostics) else { return }
             self?.refreshFromConfig()
         }
     }

@@ -87,6 +87,39 @@ final class ConfigLoaderTests: XCTestCase {
         XCTAssertEqual(workspaces.first?.main, "nvim")
     }
 
+    /// The form every UI caller uses: the read is off the main thread (ZEN-275), and the result has
+    /// to arrive back ON it, because what it feeds is view building.
+    func test_loadWorkspaces_async_deliversTheParsedListOnTheMainThread() throws {
+        let root = try makeTempDir()
+        try "[ZenTerm]\npath = ~/Dev/zen-term\n\n[Notes]\npath = ~/notes\n"
+            .write(to: root.appendingPathComponent("workspaces"), atomically: true, encoding: .utf8)
+
+        var delivered: [Workspace]?
+        var onMain = false
+        ConfigLoader.loadWorkspaces(configRoot: root) {
+            delivered = $0
+            onMain = Thread.isMainThread
+        }
+
+        waitUntil(delivered != nil, "the load to land")
+        XCTAssertEqual(delivered?.map(\.title), ["ZenTerm", "Notes"])
+        XCTAssertTrue(onMain, "a caller building views off this must be handed it on the main thread")
+    }
+
+    /// Nothing may run before the caller returns: the whole point is that the chord that triggered
+    /// the load has already put its card up.
+    func test_loadWorkspaces_async_doesNotCallBackBeforeReturning() throws {
+        let root = try makeTempDir()
+        try "[ZenTerm]\npath = ~/Dev/zen-term\n"
+            .write(to: root.appendingPathComponent("workspaces"), atomically: true, encoding: .utf8)
+
+        var landed = false
+        ConfigLoader.loadWorkspaces(configRoot: root) { _ in landed = true }
+
+        XCTAssertFalse(landed, "the load must not block the caller")
+        waitUntil(landed, "the load to land")
+    }
+
     func test_loadWorkspaces_unreadableFallsBackWithoutCrashing() throws {
         let root = try makeTempDir()
         // Make `workspaces` a directory so reading it as a file throws.

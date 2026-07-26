@@ -14,6 +14,10 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
 
     private var tempRoot: URL!
     private var window: NSWindow?
+    /// The mounted section, retained the way the Settings card retains it while it's on screen —
+    /// its rows update in place when the background git probe lands, and a released section would
+    /// simply drop that.
+    private var section: SettingsWorkspacesSection?
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -25,6 +29,7 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
 
     override func tearDownWithError() throws {
         window = nil
+        section = nil
         ConfigLoader.defaultRootOverrideForTesting = nil
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
@@ -41,7 +46,8 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
     }
 
     @discardableResult
-    private func mount(_ section: SettingsWorkspacesSection) -> NSView {
+    private func mount(_ section: SettingsWorkspacesSection, waitingForLoad: Bool = true) -> NSView {
+        self.section = section
         let detail = section.makeDetailView()
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 500),
@@ -49,7 +55,22 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
         win.contentView?.addSubview(detail)
         detail.frame = win.contentView!.bounds
         window = win
+        if waitingForLoad { waitForLoad(in: detail) }
         return detail
+    }
+
+    /// The section reads the `workspaces` file off the main thread (ZEN-275), so a freshly mounted
+    /// detail has neither rows nor the empty-state hint until the load lands. Either one appearing
+    /// means it settled; waiting on rows alone would hang on an empty file.
+    private func waitForLoad(in detail: NSView) {
+        waitUntil(
+            !rows(in: detail).isEmpty || emptyHint(in: detail) != nil,
+            "the workspaces section to finish loading")
+    }
+
+    private func emptyHint(in view: NSView) -> NSTextField? {
+        descendants(of: view).compactMap { $0 as? NSTextField }
+            .first { $0.stringValue.hasPrefix("No workspaces yet") }
     }
 
     private func rows(in view: NSView) -> [WorkspaceRow] {
@@ -95,7 +116,12 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
         XCTAssertNil(sink.calls.first ?? nil, "the add button adds a new workspace (nil)")
     }
 
+    /// The git probe runs off the main thread (ZEN-90), so a row mounts with its badge hidden and
+    /// turns it on when the answer lands. That fill is exactly the kind of thing that can go
+    /// silently dead — the probe returns and nothing updates — so the test observes the transition
+    /// rather than priming the cache first.
     func test_gitRepoWorkspace_showsGitBadge_plainDoesNot() throws {
+        GitRepoStatus.resetForTesting()
         // A real repo dir (has `.git`) and a plain dir, so `GitRepo.isGitRepo` is genuinely exercised.
         let repo = tempRoot.appendingPathComponent("repo", isDirectory: true)
         let plain = tempRoot.appendingPathComponent("plain", isDirectory: true)
@@ -109,10 +135,54 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
             let row = rows(in: detail).first { $0.workspace.title == title }!
             return descendants(of: row).compactMap { $0 as? NSImageView }.first
         }
-        let repoBadge = badge(inRowTitled: "Repo")
-        XCTAssertNotNil(repoBadge, "a git-repo workspace shows the git badge")
-        XCTAssertNotNil(repoBadge?.image, "the badge renders the bundled git logo, not an empty view")
-        XCTAssertNil(badge(inRowTitled: "Plain"), "a plain folder shows no git badge")
+        XCTAssertEqual(badge(inRowTitled: "Repo")?.isHidden, true, "nothing has probed the folder yet")
+
+        // Each path is probed on its own, so wait for BOTH answers: a still-hidden badge on the plain
+        // row would otherwise pass whether it had been answered or simply not reached yet.
+        waitUntil(badge(inRowTitled: "Repo")?.isHidden == false, "the repo's git badge to land")
+        waitUntil(GitRepoStatus.known(plain) != nil, "the plain folder to be answered too")
+
+        XCTAssertNotNil(
+            badge(inRowTitled: "Repo")?.image, "the badge renders the bundled git logo, not an empty view")
+        XCTAssertEqual(badge(inRowTitled: "Plain")?.isHidden, true, "a plain folder keeps its badge hidden")
+    }
+
+    /// The rows arrive after the mount, and the empty-state hint is the answer for an empty FILE.
+    /// Showing it while the read is still out tells the user their workspaces are gone, so the
+    /// section renders neither until it knows.
+    func test_whileLoading_showsNeitherRowsNorTheEmptyStateHint() throws {
+        try seed(twoWorkspaces)
+
+        let detail = mount(SettingsWorkspacesSection(), waitingForLoad: false)
+
+        // Nothing has turned the run loop since the mount, so the load cannot have landed yet.
+        XCTAssertTrue(rows(in: detail).isEmpty, "no rows before the file has been read")
+        XCTAssertNil(emptyHint(in: detail), "and no 'no workspaces yet' hint for a file that has two")
+
+        waitForLoad(in: detail)
+        XCTAssertEqual(rows(in: detail).count, 2)
+        XCTAssertNil(emptyHint(in: detail))
+    }
+
+    /// The rows land after the mount, and rebuilding tears the focused view out of the window, which
+    /// makes AppKit reset first responder to the window itself: the focus ring vanishes and arrows,
+    /// Tab and Return are dead until the user clicks. Reachable whenever the read is slow, which is
+    /// the premise of loading it off the main thread at all.
+    func test_focusSurvivesTheRowsLanding() throws {
+        try seed(twoWorkspaces)
+        let detail = mount(SettingsWorkspacesSection(), waitingForLoad: false)
+        let window = try XCTUnwrap(self.window)
+        let section = try XCTUnwrap(self.section)
+        // Before the load the add button is the only stop, so that's what entering the detail lands on.
+        let addButton = try XCTUnwrap(section.detailStops().first)
+        XCTAssertTrue(window.makeFirstResponder(addButton))
+
+        waitForLoad(in: detail)
+
+        XCTAssertTrue(
+            window.firstResponder === addButton,
+            "the rows arriving must not move focus off the button the user was on: Return there adds "
+                + "a workspace, and on a row it opens one")
     }
 
     func test_rowActivate_invokesOnEditWorkspaceWithThatWorkspace() throws {

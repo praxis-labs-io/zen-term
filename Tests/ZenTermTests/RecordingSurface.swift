@@ -26,6 +26,9 @@ final class RecordingSurface: NSObject, TerminalSurface {
     func start(_ config: TerminalSurfaceConfig) {
         startCount += 1
         lastConfig = config
+        if let theme = config.theme, let behavior = config.behavior {
+            lastAppearance = (theme, behavior)
+        }
         // Mirror the real backend's async delivery (see `TerminalSurfaceDelegate`) so tests
         // exercise the same timing: the failure arrives after the caller has wired us up.
         if failOnStart {
@@ -34,6 +37,18 @@ final class RecordingSurface: NSObject, TerminalSurface {
                 self.delegate?.surfaceDidFailToStart(self)
             }
         }
+    }
+    /// The appearance this surface is currently wearing: what it was **started** with, then
+    /// whatever `applyAppearance` last pushed. The protocol's default `applyAppearance` is a no-op,
+    /// so without this a stub records nothing and the `.configDidChange` fan-out's reach into live
+    /// surfaces is invisible to a test (ZEN-281).
+    ///
+    /// Seeded from `start` deliberately. A real surface is already wearing its launch appearance,
+    /// so a stub that starts blank would report a difference between a reload that re-pushed the
+    /// same values and one that skipped the push — which is a difference the user cannot see.
+    private(set) var lastAppearance: (theme: TerminalTheme, behavior: TerminalBehavior)?
+    func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {
+        lastAppearance = (theme, behavior)
     }
     /// Counts `focus()` calls so a test can tell "was focused now" from the sticky `isFocused` (which,
     /// like the real protocol, is never cleared through the seam) — the discriminator for whether a

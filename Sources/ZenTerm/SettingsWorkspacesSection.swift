@@ -55,7 +55,37 @@ final class SettingsWorkspacesSection: SettingsSection {
     /// delete because the form hands back to a freshly-built Settings → Workspaces (no in-place
     /// mutation here).
     private func populateRows() {
+        // The file is read off the main thread (ZEN-275), so the section mounts with its caption and
+        // add button and the rows land a moment later. It must not render the "no workspaces yet"
+        // hint in the meantime: that hint is the answer for an empty FILE, and flashing it while the
+        // file is still being read tells the user their workspaces are gone.
+        populate(with: nil)
+        // The card rebuilds a section's detail on every switch, so a load from a previous mount can
+        // still land here. Its answer belongs to a view that's gone; repopulating from it would
+        // rebuild the current rows a second time under the user.
+        mountGeneration += 1
+        let generation = mountGeneration
+        ConfigLoader.loadWorkspaces { [weak self] workspaces in
+            guard let self, generation == self.mountGeneration else { return }
+            self.populate(with: workspaces)
+        }
+    }
+
+    /// Render the section. `workspaces` is nil while the load is still out: caption and add button
+    /// only, no rows and no empty-state hint.
+    private func populate(with workspaces: [Workspace]?) {
         guard let stack = rowsStack else { return }
+        // Rebuilding tears the current first responder out of the window, which resets focus to the
+        // window itself and leaves the card's keyboard dead until a click. The user can already be
+        // in here when the load lands (the add button is a stop from the first frame), so remember
+        // whether focus was ours and put it back on the equivalent stop afterwards.
+        let focusedStop = stack.window?.firstResponder as? NSView
+        let hadFocus = focusedStop.map { stop in detailStops().contains { $0 === stop } } ?? false
+        // The add button is the only stop that survives the rebuild, so it's the only one that can
+        // be restored by identity. Restoring it matters: it's the stop the user lands on when they
+        // enter the detail before the rows arrive, and moving them to a row would put Return on a
+        // workspace they never selected.
+        let wasAddButton = focusedStop === addButton
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rows = []
 
@@ -64,8 +94,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         stack.addArrangedSubview(caption)
         caption.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
-        let workspaces = ConfigLoader.loadWorkspaces()
-        if workspaces.isEmpty {
+        if let workspaces, workspaces.isEmpty {
             let hint = NSTextField(
                 labelWithString: "No workspaces yet. Add one to launch a folder with its own layout from ⌘⇧P.")
             hint.font = .systemFont(ofSize: 12)
@@ -75,7 +104,7 @@ final class SettingsWorkspacesSection: SettingsSection {
             emptyHint = hint
             stack.addArrangedSubview(hint)
             hint.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        } else {
+        } else if let workspaces {
             for workspace in workspaces {
                 let row = WorkspaceRow(workspace: workspace)
                 row.onActivate = { [weak self, weak row] in row.map { self?.onEditWorkspace?($0.workspace) } }
@@ -88,6 +117,11 @@ final class SettingsWorkspacesSection: SettingsSection {
                 stack.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
             }
+            // The rows are up with whatever git status was already known; fill in the rest when the
+            // background probe lands, the same way the ⌘⇧P picker does.
+            GitRepoStatus.refresh(workspaces.map(\.path)) { [weak self] in
+                self?.rows.forEach { $0.applyGitStatus() }
+            }
         }
         stack.setCustomSpacing(10, after: caption)
 
@@ -95,7 +129,14 @@ final class SettingsWorkspacesSection: SettingsSection {
         stack.addArrangedSubview(addRow)
         addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
+
+        // Focus was in this section before the rebuild, so put it back: on the add button if that's
+        // where it was, else the first stop, so arrows and Return keep working without a click.
+        if hadFocus { stack.window?.makeFirstResponder(wasAddButton ? addButton : detailStops().first) }
     }
+
+    /// Bumped per mount, so a load belonging to an earlier one is dropped rather than rendered.
+    private var mountGeneration = 0
 
     private func moveFocus(from view: NSView?, delta: Int) {
         guard let view else { return }
@@ -133,15 +174,16 @@ final class WorkspaceRow: NSView {
 
     private let titleLabel: NSTextField
     private let subtitleLabel: NSTextField
-    /// A muted Git logo, trailing, when the folder is a repo — mirrors the ⌘⇧P picker's badge.
-    private let gitBadge: NSImageView?
+    /// A muted Git logo, trailing, when the folder is a repo — mirrors the ⌘⇧P picker's badge, and
+    /// like the picker's it starts hidden and turns on from `GitRepoStatus` once a background probe
+    /// lands (the check is filesystem I/O, which never runs on the main thread — ZEN-90).
+    private let gitBadge = NSImageView()
     private var isFocused = false { didSet { restyle() } }
 
     init(workspace: Workspace) {
         self.workspace = workspace
         titleLabel = NSTextField(labelWithString: workspace.title)
         subtitleLabel = NSTextField(labelWithString: PathDisplay.abbreviatingHome(workspace.path.path))
-        gitBadge = GitRepo.isGitRepo(workspace.path) ? NSImageView() : nil
 
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -161,15 +203,12 @@ final class WorkspaceRow: NSView {
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        var arranged: [NSView] = [labels, spacer]
-        if let gitBadge {
-            gitBadge.image = IconCatalog.gitBadge()
-            gitBadge.setAccessibilityLabel("Git repository")
-            gitBadge.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
-            gitBadge.setContentHuggingPriority(.required, for: .horizontal)
-            arranged.append(gitBadge)
-        }
-        let controls = NSStackView(views: arranged)
+        gitBadge.image = IconCatalog.gitBadge()
+        gitBadge.setAccessibilityLabel("Git repository")
+        gitBadge.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
+        gitBadge.setContentHuggingPriority(.required, for: .horizontal)
+        applyGitStatus()
+        let controls = NSStackView(views: [labels, spacer, gitBadge])
         controls.orientation = .horizontal
         controls.alignment = .centerY
         controls.spacing = 10
@@ -189,8 +228,14 @@ final class WorkspaceRow: NSView {
     func reapplyTheme() {
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         subtitleLabel.textColor = Theme.current.chrome.ink(alpha: 0.5)
-        gitBadge?.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
+        gitBadge.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
         restyle()
+    }
+
+    /// Show the badge when this workspace's folder is a known repo. Run at build time and again
+    /// whenever a `GitRepoStatus.refresh` lands.
+    func applyGitStatus() {
+        gitBadge.isHidden = GitRepoStatus.known(workspace.path) != true
     }
 
     // MARK: focus + keyboard

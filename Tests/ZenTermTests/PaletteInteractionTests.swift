@@ -86,6 +86,22 @@ final class PaletteInteractionTests: XCTestCase {
         descendants(of: overlay).compactMap { $0 as? SelectableRowView }
     }
 
+    /// The list stack — the one whose arranged subviews are the rows. What the list SHOWS is its
+    /// arranged order, and a reused row keeps its old place in `subviews`, so walking the view tree
+    /// stops telling you the display order the moment rows are reused (ZEN-15).
+    private func rowsStack(
+        in overlay: PaletteOverlay, file: StaticString = #filePath, line: UInt = #line
+    ) -> NSStackView {
+        guard
+            let stack = descendants(of: overlay).compactMap({ $0 as? NSStackView })
+                .first(where: { $0.arrangedSubviews.contains { $0 is PaletteRowView } })
+        else {
+            XCTFail("no row stack found", file: file, line: line)
+            return NSStackView()
+        }
+        return stack
+    }
+
     /// Drive the row's real mouseDown/mouseUp with real `NSEvent`s (not its backing state), which is
     /// where the single-click activation logic lives. `landingInside` places the release inside the
     /// row or well outside it, to drive a normal click vs a drag-off.
@@ -126,7 +142,7 @@ final class PaletteInteractionTests: XCTestCase {
             PaletteCommand(title: "New Tab", shortcut: "⌘T", category: "Tabs", chord: .newTab),
         ]
         return CommandPaletteOverlay(
-            commands: commands, background: Theme.current.chrome.background.nsColor,
+            commands: { commands }, background: Theme.current.chrome.background.nsColor,
             onRun: onRun, onDismiss: onDismiss)
     }
 
@@ -196,7 +212,7 @@ final class PaletteInteractionTests: XCTestCase {
             PaletteCommand(title: "Close Pane", shortcut: "⌘W", category: "Panes", chord: .closePane),
         ]
         let overlay = CommandPaletteOverlay(
-            commands: commands, background: Theme.current.chrome.background.nsColor,
+            commands: { commands }, background: Theme.current.chrome.background.nsColor,
             onRun: { ran = $0 }, onDismiss: {})
         mount(overlay)
         // "con" fuzzy-matches the "Config" category (surfacing Open Settings, whose title has no
@@ -224,9 +240,9 @@ final class PaletteInteractionTests: XCTestCase {
 
     // MARK: repo picker
 
-    private func workspace(_ title: String) -> Workspace {
+    private func workspace(_ title: String, path: URL = FileManager.default.temporaryDirectory) -> Workspace {
         Workspace(
-            title: title, path: FileManager.default.temporaryDirectory, main: nil, right: nil,
+            title: title, path: path, main: nil, right: nil,
             bottom: nil, focus: .main, env: [:])
     }
 
@@ -278,6 +294,125 @@ final class PaletteInteractionTests: XCTestCase {
         send(Self.insertNewline, to: overlay)
         XCTAssertTrue(addOpened)
         XCTAssertNil(chosen)
+    }
+
+    // MARK: row reuse (ZEN-15)
+
+    /// Typing re-renders the list, and a row whose identity survives the filter keeps its view
+    /// instead of being rebuilt. The list is then ordered by the ARRANGED subviews, not the view
+    /// tree: a reused row stays where it was in `subviews` and only moves in the arrangement.
+    func test_repoPicker_reusedRows_keepTheirViewsAndFollowTheFilterOrder() {
+        // Config order [zeta, alpha]; typing "a" matches both (zeta ends in one) and ranks the
+        // prefix match first, so both rows are reused AND swap places.
+        let overlay = makeRepoPicker(entries: [workspace("zeta"), workspace("alpha")])
+        mount(overlay)
+        let (addRow, zetaRow, alphaRow) = (rows(in: overlay)[0], rows(in: overlay)[1], rows(in: overlay)[2])
+
+        type("a", into: overlay)
+
+        XCTAssertEqual(
+            rowsStack(in: overlay).arrangedSubviews, [addRow, alphaRow, zetaRow],
+            "every row is reused, re-ordered by the filter rather than rebuilt")
+    }
+
+    /// The sharp edge of reuse: a row's click closure is bound to an index, and a reused row sits at
+    /// a NEW index after a filter. Rebinding on every load is what keeps a click running the row the
+    /// user is pointing at rather than whatever now occupies the index it was built at.
+    func test_repoPicker_clickingAReusedRow_runsWhereItNowSits() {
+        var chosen: (Workspace, Bool)?
+        let overlay = makeRepoPicker(
+            entries: [workspace("alpha"), workspace("beta")], onChoose: { chosen = ($0, $1) })
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+        let betaRow = rows(in: overlay)[2]  // [＋(0), alpha(1), beta(2)]
+
+        type("bet", into: overlay)  // → [＋(0), beta(1)]: beta's view moves down one
+        window.layoutIfNeeded()
+
+        XCTAssertTrue(rows(in: overlay).contains { $0 === betaRow }, "beta's row must be the reused one")
+        click(betaRow)
+        XCTAssertEqual(chosen?.0.title, "beta", "a reused row runs its current index, not the one it was built at")
+    }
+
+    /// A tool float's title comes from the user's config and nothing stops it matching a built-in
+    /// command's, so two rows can share a title while rendering different chords. The keycap beside
+    /// a command has to be the chord that runs it, whichever row the filter reuses.
+    func test_commandPalette_commandsSharingATitle_keepTheirOwnShortcut() {
+        var ran: KeyInterceptor.ReservedChord?
+        let shortcuts: [KeyInterceptor.ReservedChord: String] = [.newTab: "⌘T", .toggleToolFloat("nt"): "⌘⇧J"]
+        let overlay = CommandPaletteOverlay(
+            commands: {
+                [
+                    PaletteCommand(title: "New Tab", shortcut: "⌘T", category: "Tabs", chord: .newTab),
+                    PaletteCommand(
+                        title: "New Tab", shortcut: "⌘⇧J", category: "Tools",
+                        chord: .toggleToolFloat("nt")),
+                ]
+            },
+            background: Theme.current.chrome.background.nsColor, onRun: { ran = $0 }, onDismiss: {})
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+
+        type("new", into: overlay)  // both match, and both rows carry the same title
+        window.layoutIfNeeded()
+
+        // Assert per row rather than by list position: which of the two sorts first is not the
+        // claim, and Swift's sort isn't stable on equal keys.
+        XCTAssertEqual(rows(in: overlay).count, 2)
+        for row in rows(in: overlay) {
+            let rendered = descendants(of: row).compactMap { ($0 as? KeycapView)?.shortcut }
+            click(row)
+            XCTAssertEqual(
+                rendered, [ran.flatMap { shortcuts[$0] }].compactMap { $0 },
+                "the keycap on a row must be the chord that row runs")
+        }
+    }
+
+    func test_commandPalette_reusesTheRowOfACommandThatSurvivesTheFilter() {
+        let overlay = makeCommandPalette()
+        mount(overlay)
+        let closeRow = rows(in: overlay)[1]  // [Split(0), Close(1), New Tab(2)] — headers aren't selectable
+
+        type("close", into: overlay)
+
+        XCTAssertEqual(rows(in: overlay).count, 1)
+        XCTAssertTrue(rows(in: overlay)[0] === closeRow, "the surviving command keeps its row view")
+    }
+
+    /// Rows bake their colors in at construction, so the reuse index has to be dropped on a theme
+    /// swap — reusing a row there would leave the whole list in the old palette.
+    func test_reapplyTheme_rebuildsRowsRatherThanReusingStaleColors() {
+        let overlay = makeCommandPalette()
+        mount(overlay)
+        let before = rows(in: overlay)
+
+        overlay.reapplyTheme()
+
+        let after = rows(in: overlay)
+        XCTAssertEqual(after.count, before.count)
+        XCTAssertTrue(
+            zip(before, after).allSatisfy { $0 !== $1 },
+            "a theme swap must rebuild every row, not reuse one carrying the old palette")
+    }
+
+    /// The badge asks a filesystem question that can't be answered on the main thread, so the row
+    /// renders first and the badge lands when the probe does.
+    func test_repoPicker_gitBadgeAppearsWhenTheBackgroundProbeLands() throws {
+        GitRepoStatus.resetForTesting()
+        let repo = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-picker-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        try Data().write(to: repo.appendingPathComponent(".git"))  // a worktree-style `.git` file
+        defer { try? FileManager.default.removeItem(at: repo) }
+
+        let overlay = makeRepoPicker(entries: [workspace("repo", path: repo)])
+        mount(overlay)
+        let badge = descendants(of: rows(in: overlay)[1]).compactMap { $0 as? NSImageView }.first
+        XCTAssertEqual(badge?.isHidden, true, "nothing has probed the folder yet")
+
+        waitUntil(badge?.isHidden == false, "the git badge to turn on when the probe lands")
+
+        XCTAssertNotNil(badge?.image, "and renders the bundled git logo")
     }
 
     func test_repoPicker_filterNarrowsWorkspacesKeepingAddRowPinned() {

@@ -114,12 +114,34 @@ final class KeycapView: NSView {
 
     private static func modifierIcon(_ symbol: String, size: Size) -> NSView {
         let view = NSImageView()
-        let config = NSImage.SymbolConfiguration(pointSize: size.symbolPointSize, weight: .medium)
-        view.image = NSImage(systemSymbolName: symbol, accessibilityDescription: symbol)?
-            .withSymbolConfiguration(config)
+        view.image = glyphImage(symbol, pointSize: size.symbolPointSize)
         view.contentTintColor = ink
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
+    }
+
+    /// Identifies a cached glyph. The point size is part of the key because a keycap draws at more
+    /// than one footprint (`Size.compact` renders 9pt against `.regular`'s 10pt), so a symbol-only
+    /// key would hand whichever size rendered first to every later keycap.
+    private struct GlyphKey: Hashable {
+        let symbol: String
+        let pointSize: CGFloat
+    }
+
+    /// The glyph images, resolved once per symbol/size and shared by every keycap on screen. The tint
+    /// lives on the image VIEW (`contentTintColor`), never on the image, so sharing one instance is
+    /// safe and `reapplyTheme()` still recolors. The palette rebuilds rows per keystroke, which made
+    /// this a symbol lookup per token per row (ZEN-15). Main-thread only, like the views it feeds.
+    private static var glyphImages: [GlyphKey: NSImage?] = [:]
+
+    private static func glyphImage(_ symbol: String, pointSize: CGFloat) -> NSImage? {
+        let key = GlyphKey(symbol: symbol, pointSize: pointSize)
+        if let cached = glyphImages[key] { return cached }
+        let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .medium)
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: symbol)?
+            .withSymbolConfiguration(config)
+        glyphImages[key] = image
+        return image
     }
 
     private static func keyLabel(_ text: String, size: Size) -> NSTextField {

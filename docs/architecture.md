@@ -432,6 +432,86 @@ load-bearing: general config first, then theme (which reads the general font), t
 post `.configDidChange`. `GeneralConfig` reads nothing from `Theme`, so the one-way
 dependency `Theme.current -> GeneralConfig.current` holds and they cannot deadlock.
 
+**The broadcast names what moved.** `reload()` snapshots the config and theme
+before re-resolving, diffs them, and carries a `ConfigChange` option set on the
+notification, so each observer runs only the blocks whose config actually changed.
+Settings live-apply is debounced at 180 ms, so a slider drag posts about five times
+a second, and the ungated fan-out relaid out every tab, recolored every surface,
+and rebuilt the dock each time (~3.4 ms a post). Gated, a keybind rebind costs
+0.8 ms and a gutter drag 0.4 ms.
+
+Those figures are **relative shape, not release timings**: they come from a debug
+build driving a mounted `WindowController` (4 tabs, both drawers open) with stub
+surfaces, so the per-surface `GhosttyConfigWriter.configText` cost sits outside
+them. Treat them as which writes are expensive, not as what the shipped app
+spends. The test target doesn't build under `-c release`, so a release number
+needs Instruments against the real app.
+
+**A notification with no change set reads as `.all`.** That fail-safe is the point:
+too much re-apply is a wasted frame, too little is stale chrome, so a caller that
+doesn't diff keeps the old do-everything behavior.
+
+**Gate on what a call chain resolves, not what it is named after.** The
+dependencies are not all obvious: `reapplyChromeColors()` reaches
+`PanelHostView.reapplyTheme()`, which rebuilds the panel header's keycap from the
+live keymap, so a rebind has to reach it as well as a theme swap. An open command
+palette re-renders its rows the same way. Conversely the drawer fractions have no
+live consumer at all (a built tab never re-reads them), so changing one does no
+work. Before adding a kind or a call site, trace what it actually reads.
+
+**Default to the union gate.** `.theme || .keymap` costs a fraction of a
+millisecond, so a narrower gate needs a measured reason. Every bug the gating work
+produced came from gating too tightly for no measurable gain: the win is skipping
+the dock rebuild and the tab relayout, not shaving a keycap rebuild.
+
+**Two entries deliberately do not gate on the kind sharing their name, and both
+were regressions before they were comments.** `ConfigApplier` leaves
+`surfaceConfigDiagnostics()` ungated, because it already has a finer,
+delivery-aware gate: it records a notice as announced only once a window has shown
+it, so gating on `.diagnostics` strands an undelivered notice forever. The update
+card gates on `.theme || .keymap`, because `UpdateCardView.reapplyTheme()`
+re-resolves its chord. Neither is untidy.
+
+**The config-problems notice is retracted as well as raised.** It is sticky and
+states what is wrong *now* rather than logging what happened at some past reload,
+so fixing the config and reloading takes it down, and a changed problem set
+replaces it instead of stacking a second card describing different problems.
+Nothing else would: `ConfigDiagnostic.announcement` returns nil for an empty set,
+which is indistinguishable from "nothing changed", so the warning used to outlive
+the fix that made it false.
+
+**Replacing a notice is all-or-nothing, and that is load-bearing.** Delivery can
+fail, because the key window is not always one of ours (an open panel), so the
+swap lives in `WindowController.deliverConfigDiagnosticsNotice`: it drops the
+outstanding notice, across every window, only once one has been resolved to take
+the new one. Retracting in `ConfigApplier` and announcing separately would take an
+accurate notice down and then put nothing back, leaving a broken config with an
+empty screen. `ConfigApplier` therefore retracts only when the problems clear,
+which is the one case with nothing to put back.
+
+That it is a static taking the window list, rather than a few lines inside
+`AppDelegate`'s sink, is what makes it testable, and the ordering it encodes is
+worth a test: reversing the sweep and the resolve passed the whole suite while it
+was still inline.
+
+**The app-global half lives in `ConfigApplier`, not in `AppDelegate`.**
+`AppDelegate` is the `NSApplicationDelegate` singleton: it binds the nav socket and
+builds windows at launch, and an observer registered inside
+`applicationDidFinishLaunching` closes over private stored properties, so nothing
+could drive it in a test. Both regressions above lived there. `ConfigApplier` takes
+its collaborators as closures and `AppDelegate` wires the real ones.
+
+**The gate is checked differentially, because review is not a safety net for it.**
+The invariant is that for any config change the gated fan-out leaves the chrome
+identical to the ungated one, and it is asserted by running both against the same
+change and comparing a fingerprint of what is on screen
+(`ConfigFanOutDifferentialTests`, `ConfigApplierDifferentialTests`). That catches
+a too-narrow gate without anyone having to enumerate a four-deep call chain
+correctly, which is what failed twice in one sitting. Two limits are real: the
+comparison only covers what the fingerprint samples, and it cannot see a bug that
+breaks the gated and ungated paths equally, which is why the named per-probe tests
+in `WindowControllerConfigFanOutTests` stay alongside it.
+
 **External hand-edits are picked up on demand only, via ⌘⌥R. There is no file
 watcher.**
 
@@ -466,6 +546,47 @@ the chrome never hardcodes a color.
   `parent == dir`. `deletingLastPathComponent()` is not monotonic on a
   FileManager-vended URL: it walks past `/` forever, and an equality check spins the
   main thread.
+- **The `workspaces` file is read off the main thread, so its readers render
+  twice.** `ConfigLoader.loadWorkspaces` has a completion-handler form that every
+  caller uses; the synchronous form behind it is the parse step, and calling it
+  from the main thread is the stall this removed. Path validation runs on its own
+  queue *after* the list has been handed over, so the card never waits on a `stat`
+  and a hung mount can't hold up the next load.
+
+  **A card that renders from it is built after the load, not filled after
+  presenting.** The list height sizes the card, so entries landing a frame late
+  resize it mid-spring and the open reads as a flash; and a form's
+  title-collision check seeded with half the titles would accept a duplicate. So
+  the press and the card are two turns of the main queue, and `pendingModal` is
+  the card's only trace in between: a second press toggles it off, and
+  `presentModal` clears it so a card going up can't be landed on by one still
+  loading. Settings → Workspaces is the one that does render twice, and it shows
+  neither rows nor its empty-state hint until the load lands, because that hint
+  is the answer for an empty *file* and flashing it mid-read reads as "your
+  workspaces are gone".
+- **Interactive git probes go through `GitRepoStatus`, never `GitRepo` directly.**
+  Both are filesystem I/O, which the main queue never blocks on: the ⌘⇧P picker and
+  Settings → Workspaces render their badges from `GitRepoStatus.known` (nil until
+  something has probed) and turn them on when a `refresh` lands, and a tool float
+  resolves its repo root through an injected async probe, and only when its `git:`
+  guard or `.directory` anchor actually needs one. Refreshing per open, rather than
+  answering once per process, is what shows a freshly `git init`ed folder's badge
+  without a relaunch.
+- **A tool float's open is cancellable while its repo-root probe is out.** The
+  walk is off-main, so a `git:`-gated or `.directory` float opens a queue hop
+  after the press, and for that window `pendingOpen` is the float's only trace:
+  `activeFloat` is still nil, so a close, a tab change, a config prune, a modal
+  card going up, or a second press of the same chord all have to reach it through
+  `cancelPendingOpen()`, which bumps the generation the probe's completion checks.
+  A float needing neither the guard nor an anchor skips the probe and opens
+  synchronously. The cwd is read once at the press and carried into `spawn`, so a
+  persistent float's anchor and its shell's directory can't disagree.
+- **A palette row is reused, so it never carries an index.** `PaletteOverlay`
+  re-renders per keystroke and keeps the view of every row whose `rowIdentity`
+  survived the filter, so the base rebinds each row's `onActivate` on every load and
+  a live theme change discards the rows outright (a row bakes its colors in at
+  construction). The list's order is its stack's ARRANGED subviews; a reused row keeps
+  its old place in `subviews`.
 - **Swift's sort is not stable**, so floats sort by `(order, lineIndex)`.
 - **Never block the main thread.** See CLAUDE.md.
 

@@ -111,27 +111,70 @@ enum ConfigLoader {
         return url.path
     }
 
-    /// Load the hand-curated `workspaces` file (the `⌘⇧P` picker) from the config root. Absent
-    /// or unreadable → an empty list; the parser drops any malformed section rather than throw. A
-    /// workspace whose `path` doesn't resolve to a directory is kept (the dir may appear later)
-    /// but logged, so a typo surfaces instead of silently opening a shell at a bad cwd.
+    /// Load the hand-curated `workspaces` file (the `⌘⇧P` picker) from the config root, off the
+    /// main thread, and deliver the result on it.
+    ///
+    /// This is what every caller uses. The read is one small file, but `~/.config` can sit on a
+    /// network-backed or cloud-synced home directory, and the chrome never blocks the main queue on
+    /// a filesystem answer (ZEN-90), so the card that renders from this is built when the list
+    /// lands rather than presented empty and filled (ZEN-275).
+    static func loadWorkspaces(configRoot: URL = defaultRoot, completion: @escaping ([Workspace]) -> Void) {
+        loadQueue.async {
+            let workspaces = loadWorkspaces(configRoot: configRoot)
+            DispatchQueue.main.async { completion(workspaces) }
+            // Hand the list over BEFORE validating it, and on another queue: the caller is a card
+            // waiting to be built, and the validation is one `stat` per workspace, unbounded on a
+            // network share. Running it here would gate the card on it, and running it on the load
+            // queue would leave a hung mount blocking the next load behind it.
+            validationQueue.async { warnAboutMissingDirectories(workspaces) }
+        }
+    }
+
+    /// Serial: two windows opening their pickers at once read the same file, so there's nothing to
+    /// gain from overlapping them, and serializing keeps the reads predictable.
+    private static let loadQueue = DispatchQueue(label: "com.zenterm.config-load", qos: .userInitiated)
+
+    /// Serial too, and separate from the load queue: it's the only thread that touches
+    /// `warnedPaths`, so the set needs no lock, and an unbounded `stat` here can't hold up a load.
+    private static let validationQueue = DispatchQueue(
+        label: "com.zenterm.config-validate", qos: .utility)
+
+    /// Read and parse the `workspaces` file. Absent or unreadable → an empty list; the parser drops
+    /// any malformed section rather than throw.
+    ///
+    /// This is the parse step behind the completion-handler form above, which is what every caller
+    /// uses; it is separate only so the read can be driven from the load queue and from tests. It
+    /// blocks and it does not validate paths, so calling it directly from the main thread is the
+    /// ZEN-90 stall this whole path exists to remove.
     static func loadWorkspaces(configRoot: URL = defaultRoot) -> [Workspace] {
         let url = configRoot.appendingPathComponent("workspaces")
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
-        let workspaces: [Workspace]
         do {
-            workspaces = WorkspacesParser.parse(try String(contentsOf: url, encoding: .utf8))
+            return WorkspacesParser.parse(try String(contentsOf: url, encoding: .utf8))
         } catch {
             Log.warning(
                 "ConfigLoader: could not read \(url.path): \(error) — no workspaces loaded",
                 category: .workspace)
             return []
         }
-        for workspace in workspaces where !PathDisplay.isDirectory(workspace.path) {
+    }
+
+    /// Warn about a workspace whose `path` doesn't resolve to a directory, once per path per run, so
+    /// a typo surfaces instead of silently opening a shell at a bad cwd. The workspace is still kept
+    /// — the directory may appear later.
+    ///
+    /// Diagnostic only, and one `stat` per workspace, so it runs on its own queue after the list has
+    /// already been handed over: nothing waits on it. Every ⌘⇧P open reloads the file, so warning on each pass would
+    /// reprint the same line for the life of the process; the seen set keeps the first one, which is
+    /// the one that tells the user about the typo.
+    private static var warnedPaths: Set<String> = []
+
+    private static func warnAboutMissingDirectories(_ workspaces: [Workspace]) {
+        for workspace in workspaces
+        where warnedPaths.insert(workspace.path.path).inserted && !PathDisplay.isDirectory(workspace.path) {
             Log.warning(
                 "ConfigLoader: workspace `\(workspace.title)` path \(workspace.path.path) isn't a directory",
                 category: .workspace)
         }
-        return workspaces
     }
 }
