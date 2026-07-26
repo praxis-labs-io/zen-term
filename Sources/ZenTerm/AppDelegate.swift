@@ -1,6 +1,7 @@
 import AppKit
 import AppLog
 import TabKit
+import TerminalKit
 
 /// Owns every window and routes chords/Copy/Paste to whichever is key. `⌘n` opens a
 /// new window (inheriting the key window's focused-pane cwd); every other chord goes
@@ -244,6 +245,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         navSocket?.stop()
     }
 
+    /// Tear every window down, then wait for the session sweeps before letting the process go
+    /// (ZEN-269). Without this, quit frees no surface at all: `windowWillClose` does not fire on
+    /// termination, so the shells are orphaned and the kernel only hangs up each tty's foreground
+    /// process group. `windows` is an Array, a value type, so iterating it is safe even though
+    /// each teardown removes its own controller from it through `onClosed`.
+    private func tearDownAllWindows(then completion: @escaping () -> Void) {
+        for wc in windows { wc.tearDownForQuit() }
+        // Capped: a process that ignores both signals must never hang the quit.
+        ShellSessionReaper.shared.drain(timeout: 0.6, completion: completion)
+    }
+
     /// ⌘Q always confirms: tally tabs across every window and gate on the key window's
     /// confirm toast. `.terminateLater` requires exactly one matching
     /// `reply(toApplicationShouldTerminate:)` — Quit replies `true`, Cancel replies
@@ -256,8 +268,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         key.presentQuitConfirm(
             tabCount: tabCount, windowCount: windows.count,
             onQuit: { [weak self] in
-                self?.quitConfirmPending = false
-                NSApp.reply(toApplicationShouldTerminate: true)
+                guard let self else {
+                    NSApp.reply(toApplicationShouldTerminate: true)
+                    return
+                }
+                self.quitConfirmPending = false
+                self.tearDownAllWindows { NSApp.reply(toApplicationShouldTerminate: true) }
             },
             onCancel: { [weak self] in
                 self?.quitConfirmPending = false
