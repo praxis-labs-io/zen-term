@@ -27,6 +27,17 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     private var lastTheme: TerminalTheme?
     private var lastBehavior: TerminalBehavior = .default
 
+    /// The session id of this surface's shell, which is also its pid: the shell calls
+    /// `setsid()`, so it leads its own session. Captured at `start()` because libghostty
+    /// exposes no pid and the surface pointer is gone by the time we want to sweep.
+    private var shellSession: pid_t?
+
+    /// Set by `terminate()` before it does anything else. The shell-session capture in
+    /// `start()` lands asynchronously (see `captureShellSession`), so a surface that is torn
+    /// down before that capture completes needs a way to tell the late arrival "sweep it
+    /// yourself" instead of stashing it in `shellSession`, where nothing would ever reap it.
+    private var isTerminated = false
+
     /// Focus as libghostty last heard it, which is what tells a real focus change from a repeat.
     /// `start` sets it to what it actually told libghostty; until then it matches libghostty's
     /// own default (`flags.focused = true`, "up to the apprt to set the correct value").
@@ -77,7 +88,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// as not busy and a running command as busy. A shell ghostty can't integrate
     /// (Apple's /bin/bash) has no prompt marks, so this conservatively reads busy —
     /// erring toward an extra close confirmation, never toward losing live work.
-    /// True process-group parity is tracked as a follow-up (ZEN-69).
+    /// A backgrounded job leaves the shell sitting at a prompt, so prompt marks alone read as
+    /// not busy while real work is still running.
     public var isBusy: Bool {
         guard let surfacePtr else { return false }
         return ghostty_surface_needs_confirm_quit(surfacePtr)
@@ -112,12 +124,25 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             ([cmd] + config.args).map(Self.shellWordQuote).joined(separator: " ")
         }
 
+        let leadersBefore = ShellSession.leaderChildren()
         surfacePtr = Self.withConfigStrings(
             &cfg,
             workingDirectory: config.workingDirectory?.path,
             command: command,
             environment: config.environment
         ) { ghostty_surface_new(GhosttyApp.shared(theme: config.theme, behavior: config.behavior).app, &$0) }
+        // Only session leaders are considered, so a git probe or any other helper subprocess
+        // that happened to spawn alongside us can never be mistaken for this surface's shell.
+        Self.captureShellSession(leadersBefore: leadersBefore) { [weak self] session in
+            guard let session else { return }
+            if let self, !self.isTerminated {
+                self.shellSession = session
+            } else {
+                // Torn down (or deallocated) before the capture landed: nothing else will ever
+                // see this session, so sweep it right here instead of dropping it on the floor.
+                ShellSessionReaper.shared.reap(session: session)
+            }
+        }
 
         hostView.surfacePtr = surfacePtr
 
@@ -252,6 +277,25 @@ public final class GhosttySurface: NSObject, TerminalSurface {
                     }
                 }
             }
+        }
+    }
+
+    /// Diffs `leaderChildren()` against `leadersBefore` until the new session leader shows up,
+    /// or gives up past `deadline`. `ghostty_surface_new` forks the shell synchronously, but the
+    /// child's `setsid()` call runs in the child, concurrently with us — a single snapshot taken
+    /// right after the call can (and reliably does) run before that lands, so this polls off-main
+    /// instead of racing it. `completion` always lands on the main queue.
+    private static func captureShellSession(
+        leadersBefore: Set<pid_t>, completion: @escaping (pid_t?) -> Void
+    ) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let deadline = Date().addingTimeInterval(0.5)
+            var found: pid_t?
+            while found == nil, Date() < deadline {
+                found = ShellSession.leaderChildren().subtracting(leadersBefore).first
+                if found == nil { Thread.sleep(forTimeInterval: 0.005) }
+            }
+            DispatchQueue.main.async { completion(found) }
         }
     }
 
@@ -409,11 +453,22 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     }
 
     public func terminate() {
+        // Set first: a shell-session capture from `start()` still in flight must reap what it
+        // finds itself rather than stashing it here, where nothing would ever come back for it.
+        isTerminated = true
         SecureInput.shared.removeScoped(secureInputID)
         // Before the surface is freed: the pending drop-back and a late app-active change would
         // otherwise fire against a dangling pointer.
         cancelShaderSettle()
         removeAppActiveObservers()
+        defer {
+            // Runs after the free below, so libghostty's own SIGHUP to the shell's process
+            // group goes first and this only sweeps what that group never covered (ZEN-269).
+            if let shellSession {
+                ShellSessionReaper.shared.reap(session: shellSession)
+                self.shellSession = nil
+            }
+        }
         guard let surfacePtr else { return }
         ghostty_surface_free(surfacePtr)
         self.surfacePtr = nil
@@ -433,6 +488,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             ghostty_surface_free(surfacePtr)
             hostView.surfacePtr = nil
         }
+        if let shellSession { ShellSessionReaper.shared.reap(session: shellSession) }
     }
 
     /// Track focus for secure-input scoping. The host view calls this from its first-responder
