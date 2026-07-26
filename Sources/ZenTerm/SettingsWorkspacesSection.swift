@@ -103,9 +103,11 @@ final class SettingsWorkspacesSection: SettingsSection {
 
         let caption = SettingsDetail.groupCaption("Workspaces")
         self.caption = caption
-        let hint = (workspaces?.count ?? 0) > 1 ? SettingsDetail.reorderHint() : nil
-        reorderHint = hint
-        let header = SettingsDetail.headerRow(caption: caption, hint: hint)
+        // Nil while the load is still out, and for a one-workspace list: neither has anything to
+        // reorder, so the hint would name a keystroke that does nothing.
+        let reorderHintLabel = (workspaces?.count ?? 0) > 1 ? SettingsDetail.reorderHint() : nil
+        reorderHint = reorderHintLabel
+        let header = SettingsDetail.headerRow(caption: caption, hint: reorderHintLabel)
         stack.addArrangedSubview(header)
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
