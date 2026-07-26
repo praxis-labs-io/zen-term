@@ -356,10 +356,10 @@ dependency `Theme.current -> GeneralConfig.current` holds and they cannot deadlo
 **The broadcast names what moved.** `reload()` snapshots the config and theme
 before re-resolving, diffs them, and carries a `ConfigChange` option set on the
 notification, so each observer runs only the blocks whose config actually changed.
-Settings live-apply is debounced at 180 ms, so a slider drag posts about five times
-a second, and the ungated fan-out relaid out every tab, recolored every surface,
-and rebuilt the dock each time (~3.4 ms a post). Gated, a keybind rebind costs
-0.8 ms and a gutter drag 0.4 ms.
+Settings live-apply is debounced at 180 ms, so typing in a numeric field posts about
+five times a second, and the ungated fan-out relaid out every tab, recolored every
+surface, and rebuilt the dock each time (~3.4 ms a post). Gated, a keybind rebind
+costs 0.8 ms and a gutter edit 0.4 ms.
 
 Those figures are **relative shape, not release timings**: they come from a debug
 build driving a mounted `WindowController` (4 tabs, both drawers open) with stub

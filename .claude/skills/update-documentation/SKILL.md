@@ -26,7 +26,7 @@ value that does nothing. Read the parser/default, not the ticket.
 |---|---|---|
 | `docs/config/config` | every config key + default | `bin/release` → releases repo → website `reference/config` (`sync-docs`, drift-checked) |
 | `docs/config/workspaces` | workspace file fields | same path → website `reference/workspaces` |
-| `docs/config/themes/` | example theme file | `bin/release` → releases repo only. **Not synced to the website** |
+| `docs/config/themes/` | example theme file | `bin/release` → releases repo → website `reference/themes` (`sync-docs`) |
 | `docs/onboarding.md` | first-run / install narrative | `bin/release` → releases repo. Website has its own install Guide |
 | `docs/architecture.md` | the one architecture doc | internal, not shipped |
 | `docs/runbooks/*` | manual-check runbooks | internal, not shipped |
@@ -45,8 +45,8 @@ not carry it:
 
 | The change | Why it doesn't flow | Flag |
 |---|---|---|
-| A theme concept or `docs/config/themes/` | themes aren't in `sync-docs` FILES; the website theming page is authored MDX | edit the website `theming` Guide; consider adding themes to `sync-docs.mjs` |
-| A **new** `docs/config/<file>` | `sync-docs` FILES is `["config","workspaces"]`, so a new file is never fetched and no reference page exists | add it to `sync-docs.mjs` FILES + a website reference page |
+| A theme concept | the example theme file syncs on its own, but the website `theming` Guide is authored MDX | edit the website `theming` Guide |
+| A **new** `docs/config/<file>` | `sync-docs` FILES is `config`, `workspaces`, `themes/rose-pine-moon`, so a new file is never fetched and no reference page exists | add it to `sync-docs.mjs` FILES + a website reference page |
 | Behavior a Guide narrates (install, panes, shortcuts, workspaces, tool-floats, neovim) | those are authored MDX (`app/docs/*/page.mdx`), not parsed from facts | edit that website Guide |
 | Install steps, download link, or positioning copy | releases + website READMEs are hand-kept | ZEN-123 |
 
@@ -58,7 +58,8 @@ change from this branch, so name it and move on.
 
 - **Treating "docs" as this repo only.** The strong instinct is to edit
   `docs/config/config` and stop. That file feeds a public mirror and a website;
-  a themes or new-file change needs a flag or it silently never reaches users.
+  a new-file change, or behavior a Guide narrates, needs a flag or it silently
+  never reaches users.
 - **Hand-editing the releases mirror or `content/reference/`.** Both are
   regenerated; your edit is lost and the drift check reddens CI.
 - **Fabricating a doc for a key that already exists** (or under a wrong
