@@ -61,9 +61,11 @@
 # cursor-shader = cursor_warp         # cursor_warp | cursor_tail
 
 # Translucency of the terminal background. 1 = solid, 0 = your text over the
-# window blur with the desktop behind it. The pane's inner padding follows the
-# same value, so the panel reads as one surface. Cards stay solid: toasts,
-# Settings, the palette. Set `backdrop-alpha` below to dial the window shell.
+# window blur with the desktop behind it. The inner padding around a terminal
+# follows the same value, in a pane and in a tool float, so each reads as one
+# surface. A float frosts the panes it covers, the way a pane frosts the desktop.
+# Cards stay solid: toasts, Settings, the palette.
+# Set `backdrop-alpha` below to dial the window shell.
 # In-app Settings edit: applies live.
 # background-alpha = 1                # clamped to 0…1
 

@@ -305,8 +305,14 @@ final class WindowController: NSObject {
             {
                 for controller in self.controllers.values { controller.reapplyChromeColors() }
             }
-            if change.contains(.theme) {
+            // An open tool float re-reads `background-alpha` to decide whether its card fills its
+            // own interior or its ring does (ZEN-287), exactly as `PanelHostView` does above — so
+            // `.terminalBehavior` has to reach it, or dialling the slider leaves the card up at its
+            // old fill until it is closed and reopened.
+            if change.contains(.theme) || change.contains(.terminalBehavior) {
                 self.floats.reapplyTheme()
+            }
+            if change.contains(.theme) {
                 self.tabBar.reapplyTheme()
                 self.dock.reapplyTheme()
                 self.confirmToast?.reapplyTheme()
