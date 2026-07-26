@@ -10,9 +10,17 @@ import XCTest
 /// a live, displayed window and assert the shadow actually survives insertion.
 final class FloatShadowTests: XCTestCase {
     private var window: NSWindow!
+    /// `SurfaceFloatOverlay` reads `GeneralConfig.current` at construction to pick which
+    /// arrangement paints its card (ZEN-287), so without this the float below is built against the
+    /// developer's own `~/.config/zen-term` — and at `background-alpha = 0` it mounts a live
+    /// `NSVisualEffectView` into a displayed window, which this suite then drops. That reads as an
+    /// unrelated intermittent failure in a later suite, on one machine.
+    private var originalConfig: GeneralConfig!
 
     override func setUp() {
         super.setUp()
+        originalConfig = GeneralConfig.current
+        GeneralConfig.setCurrentForTesting(.builtIn)
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
             styleMask: [.borderless], backing: .buffered, defer: false)
@@ -22,6 +30,7 @@ final class FloatShadowTests: XCTestCase {
 
     override func tearDown() {
         window = nil
+        GeneralConfig.setCurrentForTesting(originalConfig)
         super.tearDown()
     }
 
