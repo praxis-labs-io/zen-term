@@ -360,6 +360,59 @@ palette re-renders its rows the same way. Conversely the drawer fractions have n
 live consumer at all (a built tab never re-reads them), so changing one does no
 work. Before adding a kind or a call site, trace what it actually reads.
 
+**Default to the union gate.** `.theme || .keymap` costs a fraction of a
+millisecond, so a narrower gate needs a measured reason. Every bug the gating work
+produced came from gating too tightly for no measurable gain: the win is skipping
+the dock rebuild and the tab relayout, not shaving a keycap rebuild.
+
+**Two entries deliberately do not gate on the kind sharing their name, and both
+were regressions before they were comments.** `ConfigApplier` leaves
+`surfaceConfigDiagnostics()` ungated, because it already has a finer,
+delivery-aware gate: it records a notice as announced only once a window has shown
+it, so gating on `.diagnostics` strands an undelivered notice forever. The update
+card gates on `.theme || .keymap`, because `UpdateCardView.reapplyTheme()`
+re-resolves its chord. Neither is untidy.
+
+**The config-problems notice is retracted as well as raised.** It is sticky and
+states what is wrong *now* rather than logging what happened at some past reload,
+so fixing the config and reloading takes it down, and a changed problem set
+replaces it instead of stacking a second card describing different problems.
+Nothing else would: `ConfigDiagnostic.announcement` returns nil for an empty set,
+which is indistinguishable from "nothing changed", so the warning used to outlive
+the fix that made it false.
+
+**Replacing a notice is all-or-nothing, and that is load-bearing.** Delivery can
+fail, because the key window is not always one of ours (an open panel), so the
+swap lives in `WindowController.deliverConfigDiagnosticsNotice`: it drops the
+outstanding notice, across every window, only once one has been resolved to take
+the new one. Retracting in `ConfigApplier` and announcing separately would take an
+accurate notice down and then put nothing back, leaving a broken config with an
+empty screen. `ConfigApplier` therefore retracts only when the problems clear,
+which is the one case with nothing to put back.
+
+That it is a static taking the window list, rather than a few lines inside
+`AppDelegate`'s sink, is what makes it testable, and the ordering it encodes is
+worth a test: reversing the sweep and the resolve passed the whole suite while it
+was still inline.
+
+**The app-global half lives in `ConfigApplier`, not in `AppDelegate`.**
+`AppDelegate` is the `NSApplicationDelegate` singleton: it binds the nav socket and
+builds windows at launch, and an observer registered inside
+`applicationDidFinishLaunching` closes over private stored properties, so nothing
+could drive it in a test. Both regressions above lived there. `ConfigApplier` takes
+its collaborators as closures and `AppDelegate` wires the real ones.
+
+**The gate is checked differentially, because review is not a safety net for it.**
+The invariant is that for any config change the gated fan-out leaves the chrome
+identical to the ungated one, and it is asserted by running both against the same
+change and comparing a fingerprint of what is on screen
+(`ConfigFanOutDifferentialTests`, `ConfigApplierDifferentialTests`). That catches
+a too-narrow gate without anyone having to enumerate a four-deep call chain
+correctly, which is what failed twice in one sitting. Two limits are real: the
+comparison only covers what the fingerprint samples, and it cannot see a bug that
+breaks the gated and ungated paths equally, which is why the named per-probe tests
+in `WindowControllerConfigFanOutTests` stay alongside it.
+
 **External hand-edits are picked up on demand only, via ⌘⌥R. There is no file
 watcher.**
 

@@ -329,9 +329,17 @@ final class WindowController: NSObject {
                 self.dock.reapplyTheme()  // the rebuilt buttons bake their colors in at build time
                 self.renderDock()
             }
-            // An open palette re-renders its rows here, and a row's shortcut column resolves from
-            // the live keymap — so this tracks a rebind as well as a recolor.
-            if change.contains(.theme) || change.contains(.keymap) {
+            // An open palette re-renders its rows here, and it re-resolves the whole catalog to do
+            // it — so this tracks far more than a recolor. `.keymap` because a row's shortcut
+            // column resolves from the live keymap; `.floats` because every tool float is also a
+            // palette command.
+            //
+            // `.floats` only bites across two windows, and that's worth knowing before anyone
+            // "simplifies" it away: `modal` is a single slot, so opening Settings in *this* window
+            // has already closed this palette. The live path is a palette open in window A while
+            // window B saves a float, since the reload is unforced and broadcasts `.floats` alone.
+            // (⌘⌥R can't show it either: it forces `.all`, which carries `.theme`.)
+            if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {
                 self.modal?.overlay.reapplyTheme()
             }
         }
@@ -744,7 +752,9 @@ final class WindowController: NSObject {
     private func toggleCommandPalette() {
         if modal?.kind == .commandPalette { closeModal(); return }
         let palette = CommandPaletteOverlay(
-            commands: CommandCatalog.commands(tabCount: tabs.order.count),
+            commands: { [weak self] in
+                CommandCatalog.commands(tabCount: self?.tabs.order.count ?? 0)
+            },
             background: Theme.current.chrome.background.nsColor,
             onRun: { [weak self] chord in self?.runCommand(chord) },
             onDismiss: { [weak self] in self?.closeModal() }
@@ -916,7 +926,44 @@ final class WindowController: NSObject {
                 self?.openSettings(for: landingScope)
             },
         ]
-        toast = toasts.showSticky(content, actions: actions)
+        let shown = toasts.showSticky(content, actions: actions)
+        toast = shown
+        configDiagnosticsToast = shown
+    }
+
+    /// The config-problems notice this window is showing, if any. Weak: the presenter's stack owns
+    /// it, and a user dismissal must leave nothing to retract.
+    private weak var configDiagnosticsToast: ToastView?
+
+    /// Deliver the config-problems notice to `keyWindow`, replacing any predecessor across every
+    /// window. Returns whether a window took it; `false` leaves the notice already up untouched, so
+    /// `ConfigApplier` can retry on the next reload.
+    ///
+    /// Static, and taking both the target and the full window list, purely so it is reachable from
+    /// a test. Inline in `AppDelegate`'s sink this was the last of the closure body that nothing
+    /// could drive, and the ordering is the whole point: sweeping before the key window resolves
+    /// would take an accurate notice down and put nothing back.
+    ///
+    /// Sweeping *every* window rather than just the target matters because the outstanding notice
+    /// went to whichever window was key at the time, which need not be the one taking this one.
+    static func deliverConfigDiagnosticsNotice(
+        _ content: ToastContent, landingScope: ConfigDiagnostic.Scope,
+        to keyWindow: WindowController?, replacingAcross windows: [WindowController]
+    ) -> Bool {
+        guard let keyWindow else { return false }
+        windows.forEach { $0.dismissConfigDiagnosticsToast() }
+        keyWindow.showConfigDiagnosticsToast(content, landingScope: landingScope)
+        return true
+    }
+
+    /// Retract the config-problems notice. It's sticky and states what is wrong *now*, so a reload
+    /// that resolves the problems has to take it down: nothing else does, and a warning that
+    /// outlives the fix that made it false is worse than no warning. Reads `builtToasts` rather
+    /// than `toasts` so retracting can never construct the presenter (see `hasBuiltToastsForTesting`).
+    func dismissConfigDiagnosticsToast() {
+        guard let toast = configDiagnosticsToast else { return }
+        configDiagnosticsToast = nil
+        builtToasts?.dismiss(toast)
     }
 
     /// Open the tool-float add / edit form from the Tools section (`nil` adds, a value edits). Closes
@@ -1574,6 +1621,13 @@ final class WindowController: NSObject {
     /// to re-point its insets WITHOUT constructing it — building it early would mount a toast stack
     /// in a window that has never shown one, which is the z-order the build-on-first-use protects.
     var hasBuiltToastsForTesting: Bool { builtToasts != nil }
+
+    /// Test hook: the backdrop tint as it's actually painted. Its color comes from the theme and
+    /// its alpha from `backdrop-alpha`, so it's the one probe covering both halves of that gate —
+    /// and the tint view is private, with nothing in the tree to identify it by.
+    var backdropTintColorForTesting: NSColor? {
+        tint.layer?.backgroundColor.flatMap { NSColor(cgColor: $0) }
+    }
 
     /// Clear a tab's waiting state: dismiss its toast — which also drops the rose flag, since
     /// the flag is derived from the toast's presence (`waitingToasts[id] != nil`). Called when

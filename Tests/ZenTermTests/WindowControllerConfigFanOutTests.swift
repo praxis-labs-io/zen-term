@@ -35,6 +35,9 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
         // config observer) runs through its NSWindowDelegate entry point.
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
+        secondController?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
+        secondController = nil
+        MotionConfig.apply(.system)
         TerminalSurfaceFactory.makeOverride = originalOverride
         Theme.setCurrentForTesting(originalTheme)
         GeneralConfig.setCurrentForTesting(originalConfig)
@@ -212,5 +215,196 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
             .compactMap { ($0 as? PanelHostView)?.builtHeaderKeycapForTesting }.first
         XCTAssertNotEqual(header, after, "the rebind never reached the drawer header keycap")
         XCTAssertEqual(after, rebound.displayGlyph)
+    }
+
+    /// The retraction has to reach the real toast stack, not just the applier's bookkeeping. The
+    /// notice is sticky, so nothing takes it down on its own: if `dismissConfigDiagnosticsToast`
+    /// missed, a warning about problems the user has already fixed stays on screen for the session.
+    func test_dismissConfigDiagnosticsToast_takesTheNoticeOffScreen() throws {
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
+        self.controller = controller
+        controller.showAndStart()
+
+        controller.showConfigDiagnosticsToast(
+            ToastContent(variant: .warning, title: "1 problem in your config", message: "a line"),
+            landingScope: .keybindLine)
+        func mountedToasts() -> [ToastView] {
+            descendants(of: controller.window.contentView!).compactMap { $0 as? ToastView }
+        }
+        XCTAssertEqual(mountedToasts().count, 1, "expected the problem notice mounted")
+
+        // Removal rides `animateOut`'s completion, so pin reduce-motion and let it land rather
+        // than measuring mid-spring.
+        let motion = Motion.isReduceMotionEnabled
+        defer { Motion.isReduceMotionEnabled = motion }
+        Motion.isReduceMotionEnabled = { true }
+        controller.dismissConfigDiagnosticsToast()
+        let settled = expectation(description: "dismissal settled")
+        OperationQueue.main.addOperation { settled.fulfill() }
+        wait(for: [settled], timeout: 5)
+        XCTAssertTrue(mountedToasts().isEmpty, "the notice is still on screen after being retracted")
+
+        // Idempotent: a second retract (or one after the user already dismissed it) must not trap.
+        controller.dismissConfigDiagnosticsToast()
+    }
+
+    // MARK: delivering the config-problems notice across windows
+
+    /// Two windows, so the notice can be outstanding in one while the next lands in the other.
+    private var secondController: WindowController?
+
+    private func makeWindow() -> WindowController {
+        WindowController(contentRect: NSRect(x: 0, y: 0, width: 800, height: 500), initialCWD: nil)
+    }
+
+    private func noticeTitles(in controller: WindowController) -> [String] {
+        descendants(of: controller.window.contentView!)
+            .compactMap { $0 as? ToastView }
+            .flatMap { descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } }
+    }
+
+    private func settle() {
+        let settled = expectation(description: "settled")
+        OperationQueue.main.addOperation { settled.fulfill() }
+        wait(for: [settled], timeout: 5)
+    }
+
+    /// The notice is app-global but lives in whichever window was key when it was raised, so a
+    /// later one landing in a *different* window has to sweep the first. Nothing covered this: the
+    /// applier's doubles model delivery as a single atomic step, so cross-window replacement was
+    /// invisible to them, and this logic used to sit inline in an `AppDelegate` closure.
+    func test_deliveringToAnotherWindow_sweepsTheNoticeOutOfTheFirst() throws {
+        let first = makeWindow()
+        controller = first
+        let second = makeWindow()
+        secondController = second
+        first.showAndStart()
+        second.showAndStart()
+        Motion.isReduceMotionEnabled = { true }
+
+        let windows = [first, second]
+        XCTAssertTrue(
+            WindowController.deliverConfigDiagnosticsNotice(
+                ToastContent(variant: .warning, title: "1 problem in your config", message: "a"),
+                landingScope: .keybindLine, to: first, replacingAcross: windows))
+        settle()
+        XCTAssertTrue(noticeTitles(in: first).contains("1 problem in your config"))
+
+        // The key window is now the second one, and the replacement goes there.
+        XCTAssertTrue(
+            WindowController.deliverConfigDiagnosticsNotice(
+                ToastContent(variant: .warning, title: "2 problems in your config", message: "b"),
+                landingScope: .keybindLine, to: second, replacingAcross: windows))
+        settle()
+
+        XCTAssertTrue(noticeTitles(in: second).contains("2 problems in your config"))
+        XCTAssertFalse(
+            noticeTitles(in: first).contains("1 problem in your config"),
+            "the superseded notice is still up in the other window: \(noticeTitles(in: first))")
+    }
+
+    /// The ordering that a reversed sweep would break, and that no test reached until this became a
+    /// static: with no window to take the replacement, nothing may be swept. Sweeping first would
+    /// leave a broken config with an empty screen.
+    func test_deliveringWithNoKeyWindow_leavesTheExistingNoticeUp() throws {
+        let first = makeWindow()
+        controller = first
+        first.showAndStart()
+        Motion.isReduceMotionEnabled = { true }
+
+        XCTAssertTrue(
+            WindowController.deliverConfigDiagnosticsNotice(
+                ToastContent(variant: .warning, title: "1 problem in your config", message: "a"),
+                landingScope: .keybindLine, to: first, replacingAcross: [first]))
+        settle()
+
+        // An open panel is key, so nothing of ours can host the replacement.
+        XCTAssertFalse(
+            WindowController.deliverConfigDiagnosticsNotice(
+                ToastContent(variant: .warning, title: "2 problems in your config", message: "b"),
+                landingScope: .keybindLine, to: nil, replacingAcross: [first]))
+        settle()
+
+        XCTAssertTrue(
+            noticeTitles(in: first).contains("1 problem in your config"),
+            "an undeliverable replacement swept the notice: the config is broken and nothing says so")
+    }
+
+    /// Every tool float is also a palette command, so adding one has to reach an open ⌘P: the
+    /// `.floats` block rebuilt the dock's buttons and stopped there. Found by widening the
+    /// differential fingerprint to sample every mounted view rather than a few named probes.
+    ///
+    /// The reachable path is **two windows**, which is what posting `.floats` at a window with its
+    /// palette up models here. In one window `modal` is a single slot, so opening Settings has
+    /// already closed the palette; and ⌘⌥R forces `.all`, which carries `.theme` and re-rendered
+    /// the palette anyway. It takes window A holding a palette while window B saves a float, where
+    /// the reload is unforced and broadcasts `.floats` on its own.
+    func test_floatAdded_reachesAnOpenPaletteInAnotherWindow() throws {
+        var config = GeneralConfig.builtIn
+        GeneralConfig.setCurrentForTesting(config)
+
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
+        self.controller = controller
+        controller.showAndStart()
+        controller.handle(.toggleCommandPalette)
+
+        func paletteTitles() -> [String] {
+            descendants(of: controller.window.contentView!)
+                .compactMap { $0 as? CommandPaletteOverlay }
+                .flatMap { descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } }
+        }
+        XCTAssertFalse(paletteTitles().contains("Notes"), "the float doesn't exist yet")
+
+        config.floats = [
+            ToolFloat(
+                id: "notes", order: 0, title: "Notes", icon: ToolFloatParser.defaultIcon,
+                command: "ls", dir: nil, widthFraction: 0.85, heightFraction: 0.85,
+                requiresGitRepo: false, persist: .ephemeral,
+                toggle: Chord(command: true, shift: true, key: "n"))
+        ]
+        GeneralConfig.setCurrentForTesting(config)
+        post(.floats)
+
+        XCTAssertTrue(
+            paletteTitles().contains("Notes"),
+            "a float added while the palette is open never reached it: \(paletteTitles())")
+    }
+
+    /// The same trap one layer out, and it was live until ZEN-281: an open command palette rebuilt
+    /// its row *views* on `reapplyTheme()` but replayed the shortcut glyph each `PaletteCommand`
+    /// baked in when the catalog built it, so a rebind left the palette showing the old chord. The
+    /// gate was already right; the work behind it wasn't. A differential test can't see this on its
+    /// own — both the gated and the ungated fan-out were equally stale.
+    func test_keymapChange_reresolvesAnOpenPalettesShortcutColumn() throws {
+        var config = GeneralConfig.builtIn
+        GeneralConfig.setCurrentForTesting(config)
+
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
+        self.controller = controller
+        controller.showAndStart()
+        controller.handle(.toggleCommandPalette)
+
+        /// The palette's own rows, excluding the drawer headers that resolve through a different path.
+        func paletteKeycaps() throws -> [String] {
+            let palette = descendants(of: controller.window.contentView!)
+                .compactMap { $0 as? CommandPaletteOverlay }.first
+            return try XCTUnwrap(palette, "expected the palette mounted").builtRowShortcutsForTesting
+        }
+        XCTAssertTrue(try paletteKeycaps().contains("⌘F"), "expected Focus Mode's default chord on a row")
+
+        let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
+        config.keymap = config.keymap.filter { $0.value != .toggleZoom }
+        config.keymap[rebound] = .toggleZoom
+        GeneralConfig.setCurrentForTesting(config)
+        post(.keymap)
+
+        let after = try paletteKeycaps()
+        XCTAssertFalse(after.contains("⌘F"), "the palette is still offering the chord that moved")
+        XCTAssertTrue(
+            after.contains(rebound.displayGlyph),
+            "the rebind never reached the open palette's shortcut column")
     }
 }
