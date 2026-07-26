@@ -872,6 +872,9 @@ final class WindowController: NSObject {
         toolsSection.onReorder = { [weak self] floats in self?.reorderToolFloats(floats) }
         let workspacesSection = SettingsWorkspacesSection()
         workspacesSection.onEditWorkspace = { [weak self] ws in self?.openWorkspaceForm(editing: ws) }
+        workspacesSection.onReorder = { [weak self] moved, neighbour in
+            self?.reorderWorkspaces(moved, with: neighbour) ?? false
+        }
         // Sorted by nav title so the nav reads alphabetically and stays ordered as sections are
         // added — the array order is the on-screen order.
         let sections: [SettingsSection] = [
@@ -1109,6 +1112,24 @@ final class WindowController: NSObject {
             return
         }
         reopenSettingsOnWorkspaces()
+    }
+
+    /// Exchange two workspaces' positions in the `workspaces` file, reporting whether the write
+    /// landed so the list only re-renders on a file that really changed. Unlike add / edit / delete
+    /// this doesn't reopen Settings — the card is already open and rebuilding it would throw away the
+    /// user's place in the list mid-⌥↓. Nothing to reload either: the ⌘⇧P picker re-reads the file
+    /// every time it opens.
+    private func reorderWorkspaces(_ moved: Workspace, with neighbour: Workspace) -> Bool {
+        do {
+            try WorkspacesWriter.swap(moved.title, with: neighbour.title)
+        } catch {
+            toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Couldn't Reorder Workspaces",
+                    message: "Failed to update the workspaces file: \(error.localizedDescription)"))
+            return false
+        }
+        return true
     }
 
     /// Close the workspace form and reopen the Settings card on its Workspaces section — the "back"

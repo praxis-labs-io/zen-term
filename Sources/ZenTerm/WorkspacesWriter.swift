@@ -112,6 +112,50 @@ enum WorkspacesWriter {
         try ConfigFileIO.writePreservingSymlink(lines.joined(separator: "\n"), to: url)
     }
 
+    /// Exchange the file positions of the `[title]` and `[other]` sections — the write behind ⌥↑/⌥↓
+    /// in Settings → Workspaces. Section order *is* picker order (`WorkspacesParser` returns sections
+    /// in the order it meets them), so moving the block is the same edit a hand-edit makes, and no
+    /// `order` key has to exist alongside a position that already means something.
+    ///
+    /// Exchanges the two *named* blocks rather than moving one past whatever block is adjacent: a
+    /// duplicate title is shadowed under last-wins, so the two rows a user sees side by side can have
+    /// a section between them that has no row at all. A no-op when either title is absent (a stale
+    /// row), which leaves the file for the reload to correct.
+    static func swap(_ title: String, with other: String, configRoot: URL = ConfigLoader.defaultRoot) throws {
+        let url = configRoot.appendingPathComponent("workspaces")
+        var lines = try ConfigFileIO.readExistingOrEmpty(url).components(separatedBy: "\n")
+        guard let a = locateBlock(titled: title, in: lines),
+            let b = locateBlock(titled: other, in: lines)
+        else { return }
+        // Splice the later block first: replacing the earlier one with a block of a different length
+        // shifts every index after it, and the second range would then land mid-section.
+        let (earlier, later) = a.start < b.start ? (a, b) : (b, a)
+        let earlierBlock = Array(lines[earlier.start..<earlier.end])
+        let laterBlock = Array(lines[later.start..<later.end])
+        lines.replaceSubrange(later.start..<later.end, with: earlierBlock)
+        lines.replaceSubrange(earlier.start..<earlier.end, with: laterBlock)
+        try ConfigFileIO.writePreservingSymlink(lines.joined(separator: "\n"), to: url)
+    }
+
+    /// The movable block for `title`: its section body, plus any contiguous comment run sitting
+    /// directly on the header. A comment touching a header documents that workspace and travels with
+    /// it; a blank line below a comment detaches it, which is what keeps the file's top banner at the
+    /// top. Blank separators sit outside every block, so they stay where they are and a swap can
+    /// neither double nor eat one.
+    ///
+    /// Two distinct titles always yield disjoint blocks: `locateSection` ends a body before any
+    /// trailing comment, so walking up from the next header stops at the previous section's last
+    /// `key = value` line rather than reaching into it.
+    private static func locateBlock(titled title: String, in lines: [String]) -> (start: Int, end: Int)? {
+        guard let span = locateSection(titled: title, in: lines) else { return nil }
+        var start = span.start
+        // Trim newlines as well as spaces, so a `\r` from a CRLF-edited file doesn't hide a comment.
+        while start > 0, lines[start - 1].trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("#") {
+            start -= 1
+        }
+        return (start, span.bodyEnd)
+    }
+
     /// Locate the `[title]` section within `lines`: the header index (`start`), the index just past
     /// its last `key = value` line (`bodyEnd`, excluding trailing blank/comment lines that belong to
     /// the separator or the next section), and the next header index or end-of-file (`nextHeader`).

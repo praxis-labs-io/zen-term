@@ -1,9 +1,10 @@
 import AppKit
 
-/// The Workspaces settings section: the configured workspaces, with add / edit. Each workspace is a
-/// focusable `WorkspaceRow` — Return / click opens the edit form (delete lives there), Up/Down move
-/// between rows, Left exits to the nav, Esc closes the card. A trailing "Add workspace" button opens
-/// a blank form. Add / edit route out through `onEditWorkspace`; the host presents
+/// The Workspaces settings section: the configured workspaces, with add / edit / reorder. Each
+/// workspace is a focusable `WorkspaceRow` — Return / click opens the edit form (delete lives there),
+/// Up/Down move between rows, ⌥Up/⌥Down move the workspace itself (the order the ⌘⇧P picker and this
+/// list both read), Left exits to the nav, Esc closes the card. A trailing "Add workspace" button
+/// opens a blank form. Add / edit route out through `onEditWorkspace`; the host presents
 /// `AddWorkspaceOverlay`, which writes on submit / delete and hands back here, so the ⌘⇧P picker
 /// reflects the change with no restart. Mirrors `SettingsToolsSection`.
 final class SettingsWorkspacesSection: SettingsSection {
@@ -11,6 +12,14 @@ final class SettingsWorkspacesSection: SettingsSection {
     var onExitToNav: (() -> Void)?
     /// Set by the host: open the add / edit form. `nil` adds a new workspace; a value edits that one.
     var onEditWorkspace: ((Workspace?) -> Void)?
+    /// Set by the host: exchange these two workspaces' positions in the `workspaces` file. Returns
+    /// whether the write landed — on false the list is left exactly as it was, so it can never show
+    /// an order the file doesn't have.
+    ///
+    /// Two workspaces rather than a whole list (as Tools passes) because order here *is* file
+    /// position: the write exchanges two `[Title]` blocks, and naming both is what lets it do that
+    /// without assuming the rows are adjacent in the file.
+    var onReorder: ((_ moved: Workspace, _ with: Workspace) -> Bool)?
 
     private var rows: [WorkspaceRow] = []
     private let addButton = AppButton(title: "＋ Add workspace", variant: .muted)
@@ -19,6 +28,7 @@ final class SettingsWorkspacesSection: SettingsSection {
     /// just let `reapplyTheme` recolor whichever pair is currently mounted.
     private weak var caption: NSTextField?
     private weak var emptyHint: NSTextField?
+    private weak var reorderHint: NSTextField?
     private var rowsStack: NSStackView?
 
     func makeDetailView() -> NSView {
@@ -45,6 +55,7 @@ final class SettingsWorkspacesSection: SettingsSection {
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(alpha: 0.4)
         emptyHint?.textColor = Theme.current.chrome.ink(alpha: 0.5)
+        reorderHint?.textColor = Theme.current.chrome.ink(alpha: 0.35)
         rows.forEach { $0.reapplyTheme() }
         addButton.reapplyTheme()
     }
@@ -72,8 +83,9 @@ final class SettingsWorkspacesSection: SettingsSection {
     }
 
     /// Render the section. `workspaces` is nil while the load is still out: caption and add button
-    /// only, no rows and no empty-state hint.
-    private func populate(with workspaces: [Workspace]?) {
+    /// only, no rows and no empty-state hint. `focusing` is a workspace title to land focus on once
+    /// the rows are up — how a reorder keeps the user on the row that just moved.
+    private func populate(with workspaces: [Workspace]?, focusing title: String? = nil) {
         guard let stack = rowsStack else { return }
         // Rebuilding tears the current first responder out of the window, which resets focus to the
         // window itself and leaves the card's keyboard dead until a click. The user can already be
@@ -91,8 +103,11 @@ final class SettingsWorkspacesSection: SettingsSection {
 
         let caption = SettingsDetail.groupCaption("Workspaces")
         self.caption = caption
-        stack.addArrangedSubview(caption)
-        caption.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        let hint = (workspaces?.count ?? 0) > 1 ? SettingsDetail.reorderHint() : nil
+        reorderHint = hint
+        let header = SettingsDetail.headerRow(caption: caption, hint: hint)
+        stack.addArrangedSubview(header)
+        header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
         if let workspaces, workspaces.isEmpty {
             let hint = NSTextField(
@@ -110,6 +125,8 @@ final class SettingsWorkspacesSection: SettingsSection {
                 row.onActivate = { [weak self, weak row] in row.map { self?.onEditWorkspace?($0.workspace) } }
                 row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
                 row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
+                row.onMoveUp = { [weak self, weak row] in self?.move(row, delta: -1) }
+                row.onMoveDown = { [weak self, weak row] in self?.move(row, delta: 1) }
                 row.onTab = { [weak self, weak row] in self?.moveTab(from: row, delta: 1) }
                 row.onBacktab = { [weak self, weak row] in self?.moveTab(from: row, delta: -1) }
                 row.onExitToNav = { [weak self] in self?.onExitToNav?() }
@@ -123,16 +140,49 @@ final class SettingsWorkspacesSection: SettingsSection {
                 self?.rows.forEach { $0.applyGitStatus() }
             }
         }
-        stack.setCustomSpacing(10, after: caption)
+        stack.setCustomSpacing(10, after: header)
 
         let addRow = SettingsDetail.trailingRow(addButton)
         stack.addArrangedSubview(addRow)
         addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
 
+        // A reorder names the row it moved, so focus follows the workspace rather than the slot and
+        // ⌥↓⌥↓ walks one down without re-finding it.
+        if let title, let moved = rows.first(where: { $0.workspace.title == title }) {
+            stack.window?.makeFirstResponder(moved)
+            moved.scrollToVisible(moved.bounds)
+            return
+        }
         // Focus was in this section before the rebuild, so put it back: on the add button if that's
         // where it was, else the first stop, so arrows and Return keep working without a click.
         if hadFocus { stack.window?.makeFirstResponder(wasAddButton ? addButton : detailStops().first) }
+    }
+
+    /// Move a workspace one slot: exchange it with its neighbour in the file, then re-render in the
+    /// new order with focus still on the row that moved.
+    ///
+    /// Renders from the array it just wrote rather than re-running `populateRows`, which would blank
+    /// the list and wait on an off-main read — that flashes the rows away mid-⌥↓, and a second ⌥↓
+    /// arriving before the read landed would pick its neighbour out of a stale list. A failed write
+    /// returns false and nothing re-renders, so the list can't claim an order the file doesn't have.
+    ///
+    /// Deferred to the next runloop turn because the re-render *frees this row*: `populate` drops the
+    /// last reference to it while its own `keyDown` is still on the stack.
+    private func move(_ row: WorkspaceRow?, delta: Int) {
+        guard let row else { return }
+        var list = rows.map(\.workspace)
+        guard let from = list.firstIndex(where: { $0.title == row.workspace.title }) else { return }
+        let to = from + delta
+        guard list.indices.contains(to) else { return }  // already at an end
+        let moved = list[from]
+        let neighbour = list[to]
+        list.swapAt(from, to)
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.onReorder?(moved, neighbour) == true else { return }
+            self.populate(with: list, focusing: moved.title)
+        }
     }
 
     /// Bumped per mount, so a load belonging to an earlier one is dropped rather than rendered.
@@ -162,12 +212,15 @@ final class SettingsWorkspacesSection: SettingsSection {
 
 /// One Workspaces row: a workspace's title and its folder path subtitle. The whole row is one focus
 /// stop — Return / click opens the edit form (where delete lives), Up/Down (and Tab/Shift-Tab) move
-/// rows, Left exits to nav. Mirrors `ToolFloatRow` (workspaces have no shortcut, so no keycap).
+/// rows, ⌥Up/⌥Down reorder the workspace itself, Left exits to nav. Mirrors `ToolFloatRow`
+/// (workspaces have no shortcut, so no keycap).
 final class WorkspaceRow: NSView {
     let workspace: Workspace
     var onActivate: (() -> Void)?
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
+    var onMoveUp: (() -> Void)?
+    var onMoveDown: (() -> Void)?
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
     var onExitToNav: (() -> Void)?
@@ -246,7 +299,18 @@ final class WorkspaceRow: NSView {
     override func drawFocusRingMask() {}
 
     override func keyDown(with event: NSEvent) {
-        switch KeyboardFocus.key(for: event) {
+        let key = KeyboardFocus.key(for: event)
+        // ⌥Up/⌥Down reorder the workspace instead of moving focus. `KeyboardFocus.key(for:)` decodes
+        // the keyCode alone, so ⌥↑ arrives indistinguishable from a plain `.up` — the modifier check
+        // has to happen here.
+        if KeyboardFocus.isOptionOnly(event) {
+            switch key {
+            case .up: onMoveUp?(); return
+            case .down: onMoveDown?(); return
+            default: break
+            }
+        }
+        switch key {
         case .activate: onActivate?()
         case .up: onArrowUp?()
         case .down: onArrowDown?()

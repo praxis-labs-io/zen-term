@@ -196,4 +196,166 @@ final class SettingsWorkspacesSectionTests: XCTestCase {
 
         XCTAssertEqual(sink.calls.first??.title, "Beta")
     }
+
+    // MARK: reorder (ZEN-283)
+
+    /// An arrow keyDown, built the way AppKit really delivers one.
+    ///
+    /// `.function` and `.numericPad` are NOT decoration: macOS sets both on every arrow event, and
+    /// omitting them is how a reorder that was dead in the app once passed four green tests —
+    /// masking with `deviceIndependentFlagsMask` keeps those bits, so the comparison with `.option`
+    /// never matched a real keystroke (ZEN-145).
+    private func arrow(_ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags = []) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: modifiers.union([.function, .numericPad]),
+            timestamp: 0, windowNumber: 0, context: nil, characters: "",
+            charactersIgnoringModifiers: "", isARepeat: false, keyCode: keyCode)!
+    }
+
+    private var optionDown: NSEvent { arrow(125, .option) }
+    private var optionUp: NSEvent { arrow(126, .option) }
+
+    /// The section defers its write to the next runloop turn (it re-renders the very row whose
+    /// `keyDown` is still on the stack), so a test has to let that turn happen before asserting.
+    private func settleReorder() {
+        let done = expectation(description: "reorder applied")
+        DispatchQueue.main.async { done.fulfill() }
+        wait(for: [done], timeout: 2)
+    }
+
+    /// Wire the section to the same write the host uses, so these tests cover the real path rather
+    /// than a test-local imitation of it.
+    private func wireReorder(_ section: SettingsWorkspacesSection) {
+        section.onReorder = { moved, neighbour in
+            do {
+                try WorkspacesWriter.swap(moved.title, with: neighbour.title)
+                return true
+            } catch {
+                return false
+            }
+        }
+    }
+
+    private func configuredTitles() -> [String] {
+        ConfigLoader.loadWorkspaces(configRoot: tempRoot).map(\.title)
+    }
+
+    /// ⌥↓ moves the workspace itself and persists it. Asserted through the file, because that's the
+    /// thing the ⌘⇧P picker reads — a reordered list of views that never reached disk is the failure.
+    func test_optionDown_movesWorkspaceDown_andPersists() throws {
+        try seed(twoWorkspaces)
+        let section = SettingsWorkspacesSection()
+        wireReorder(section)
+        let detail = mount(section)
+
+        rows(in: detail).first?.keyDown(with: optionDown)
+        settleReorder()
+
+        XCTAssertEqual(configuredTitles(), ["Beta", "Alpha"], "the file carries the new order")
+        XCTAssertEqual(rows(in: detail).map(\.workspace.title), ["Beta", "Alpha"], "and so does the list")
+    }
+
+    func test_optionUp_movesWorkspaceUp_andPersists() throws {
+        try seed(twoWorkspaces)
+        let section = SettingsWorkspacesSection()
+        wireReorder(section)
+        let detail = mount(section)
+
+        rows(in: detail).last?.keyDown(with: optionUp)
+        settleReorder()
+
+        XCTAssertEqual(configuredTitles(), ["Beta", "Alpha"])
+    }
+
+    /// Focus follows the workspace, not the slot — otherwise ⌥↓⌥↓ walks a different row down each
+    /// time and the user has to re-find the one they were moving.
+    func test_reorder_keepsFocusOnTheMovedRow() throws {
+        try seed(twoWorkspaces)
+        let section = SettingsWorkspacesSection()
+        wireReorder(section)
+        let detail = mount(section)
+        let window = try XCTUnwrap(self.window)
+        let first = try XCTUnwrap(rows(in: detail).first)
+        XCTAssertTrue(window.makeFirstResponder(first))
+
+        first.keyDown(with: optionDown)
+        settleReorder()
+
+        let focused = window.firstResponder as? WorkspaceRow
+        XCTAssertEqual(focused?.workspace.title, "Alpha", "focus follows the workspace that moved")
+    }
+
+    /// Holding ⌥↓ on a row that's already last must not wrap it to the top or rewrite the file.
+    func test_optionDown_atTheEnd_doesNothing() throws {
+        try seed(twoWorkspaces)
+        let section = SettingsWorkspacesSection()
+        wireReorder(section)
+        let detail = mount(section)
+
+        rows(in: detail).last?.keyDown(with: optionDown)
+        settleReorder()
+
+        XCTAssertEqual(configuredTitles(), ["Alpha", "Beta"])
+    }
+
+    /// Plain Up/Down must still move focus rather than reorder — the modifier is the whole
+    /// difference between navigating the list and rearranging it.
+    func test_plainArrow_movesFocus_withoutReordering() throws {
+        try seed(twoWorkspaces)
+        let section = SettingsWorkspacesSection()
+        wireReorder(section)
+        let detail = mount(section)
+        let window = try XCTUnwrap(self.window)
+        let first = try XCTUnwrap(rows(in: detail).first)
+        XCTAssertTrue(window.makeFirstResponder(first))
+
+        first.keyDown(with: arrow(125))
+        settleReorder()
+
+        XCTAssertEqual(configuredTitles(), ["Alpha", "Beta"], "nothing was reordered")
+        XCTAssertEqual(
+            (window.firstResponder as? WorkspaceRow)?.workspace.title, "Beta", "it moves focus instead")
+    }
+
+    /// ⌥⌘↓ is a different chord and must not reorder — the check is "Option and nothing else".
+    func test_optionCommandArrow_doesNotReorder() throws {
+        try seed(twoWorkspaces)
+        let section = SettingsWorkspacesSection()
+        wireReorder(section)
+        let detail = mount(section)
+
+        rows(in: detail).first?.keyDown(with: arrow(125, [.option, .command]))
+        settleReorder()
+
+        XCTAssertEqual(configuredTitles(), ["Alpha", "Beta"])
+    }
+
+    /// A failed write must leave the list alone: a row that slides while the file refuses shows an
+    /// order that vanishes the next time the section loads.
+    func test_failedWrite_leavesTheListAlone() throws {
+        try seed(twoWorkspaces)
+        let section = SettingsWorkspacesSection()
+        section.onReorder = { _, _ in false }
+        let detail = mount(section)
+
+        rows(in: detail).first?.keyDown(with: optionDown)
+        settleReorder()
+
+        XCTAssertEqual(rows(in: detail).map(\.workspace.title), ["Alpha", "Beta"])
+    }
+
+    /// ⌥↑/⌥↓ is otherwise undiscoverable — nothing on a row suggests a workspace can move — but a
+    /// one-row list has nothing to reorder, so the hint would name a keystroke that does nothing.
+    func test_reorderHint_shownOnlyWhenThereIsSomethingToReorder() throws {
+        func hint(in view: NSView) -> NSTextField? {
+            descendants(of: view).compactMap { $0 as? NSTextField }
+                .first { $0.stringValue.contains("to reorder") }
+        }
+
+        try seed(twoWorkspaces)
+        XCTAssertNotNil(hint(in: mount(SettingsWorkspacesSection())), "two workspaces can be reordered")
+
+        try seed("[Solo]\npath = ~/Dev/solo\n")
+        XCTAssertNil(hint(in: mount(SettingsWorkspacesSection())), "one workspace cannot")
+    }
 }
