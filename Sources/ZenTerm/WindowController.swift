@@ -332,8 +332,13 @@ final class WindowController: NSObject {
             // An open palette re-renders its rows here, and it re-resolves the whole catalog to do
             // it — so this tracks far more than a recolor. `.keymap` because a row's shortcut
             // column resolves from the live keymap; `.floats` because every tool float is also a
-            // palette command, and adding one used to leave it missing from an open ⌘P until the
-            // card was closed and reopened.
+            // palette command.
+            //
+            // `.floats` only bites across two windows, and that's worth knowing before anyone
+            // "simplifies" it away: `modal` is a single slot, so opening Settings in *this* window
+            // has already closed this palette. The live path is a palette open in window A while
+            // window B saves a float, since the reload is unforced and broadcasts `.floats` alone.
+            // (⌘⌥R can't show it either: it forces `.all`, which carries `.theme`.)
             if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {
                 self.modal?.overlay.reapplyTheme()
             }

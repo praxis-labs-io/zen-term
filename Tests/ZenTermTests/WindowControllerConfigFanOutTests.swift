@@ -331,11 +331,16 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
             "an undeliverable replacement swept the notice: the config is broken and nothing says so")
     }
 
-    /// Every tool float is also a palette command, so adding one has to reach an open ⌘P. It
-    /// didn't: the `.floats` block rebuilt the dock's buttons and stopped there, leaving the new
-    /// float missing from the palette until the card was closed and reopened. Found by widening the
+    /// Every tool float is also a palette command, so adding one has to reach an open ⌘P: the
+    /// `.floats` block rebuilt the dock's buttons and stopped there. Found by widening the
     /// differential fingerprint to sample every mounted view rather than a few named probes.
-    func test_floatAdded_reachesAnOpenPalette() throws {
+    ///
+    /// The reachable path is **two windows**, which is what posting `.floats` at a window with its
+    /// palette up models here. In one window `modal` is a single slot, so opening Settings has
+    /// already closed the palette; and ⌘⌥R forces `.all`, which carries `.theme` and re-rendered
+    /// the palette anyway. It takes window A holding a palette while window B saves a float, where
+    /// the reload is unforced and broadcasts `.floats` on its own.
+    func test_floatAdded_reachesAnOpenPaletteInAnotherWindow() throws {
         var config = GeneralConfig.builtIn
         GeneralConfig.setCurrentForTesting(config)
 
