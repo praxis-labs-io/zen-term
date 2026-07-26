@@ -36,20 +36,33 @@ enum CardChrome {
     /// terminal pane wears. Reserved for the surfaces that steal focus from the pane behind them
     /// (the configured tool floats and the diff viewer), so the ring reads as "focus is here now";
     /// transient pickers and forms keep the neutral edge.
+    ///
+    /// `hostsTerminal: true` hands the fill and the elevation shadow back to the host, because
+    /// `background-alpha` governs both once a terminal is inside the card and neither can be done
+    /// from a layer. An opaque fill cancels the surface's alpha out (the chrome background IS the
+    /// colour the terminal blends toward), and a layer shadow washes the interior, since Core
+    /// Animation *fills* `shadowPath`. `SurfaceFloatOverlay` paints them instead, with a
+    /// `RingFillView` and an `OutsideShadowView` (ZEN-287). Corners and border are still ours.
     static func apply(
         to card: NSView, background: NSColor, cornerRadius: CGFloat = CardChrome.cornerRadius,
-        halo: Bool = false
+        halo: Bool = false, hostsTerminal: Bool = false
     ) {
         card.wantsLayer = true
         card.layer?.cornerRadius = cornerRadius
-        card.layer?.backgroundColor = background.cgColor
         card.layer?.borderWidth = halo ? 1.5 : 1
         card.layer?.borderColor = borderColor(halo: halo)
+        guard !hostsTerminal else {
+            card.layer?.masksToBounds = false  // the host's shadow view reaches past the card
+            return
+        }
+        card.layer?.backgroundColor = background.cgColor
         FloatShadow.applyShadow(to: card)  // masksToBounds stays off so the shadow isn't clipped
     }
 
-    static func reapplyTheme(to card: NSView, halo: Bool = false) {
-        card.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
+    static func reapplyTheme(to card: NSView, halo: Bool = false, hostsTerminal: Bool = false) {
+        if !hostsTerminal {
+            card.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
+        }
         card.layer?.borderColor = borderColor(halo: halo)
     }
 
