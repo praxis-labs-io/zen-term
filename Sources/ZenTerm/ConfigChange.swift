@@ -24,7 +24,8 @@ struct ConfigChange: OptionSet {
     static let chromeLayout = ConfigChange(rawValue: 1 << 1)
 
     /// The `TerminalBehavior` handed across the seam: cursor style/blink/thickness, option-as-alt,
-    /// scroll multiplier, cursor shader.
+    /// scroll multiplier, cursor shader, background alpha. The last one also reaches chrome —
+    /// `PanelHostView` fills its padding ring to match — so it drives a recolor too (ZEN-282).
     static let terminalBehavior = ConfigChange(rawValue: 1 << 2)
 
     /// The tool-float catalog: a float added, edited, or removed.

@@ -297,8 +297,12 @@ final class WindowController: NSObject {
             }
             // `reapplyChromeColors` reaches `PanelHostView.reapplyTheme()`, which rebuilds the
             // panel header's keycap against the live keymap — so a rebind needs it too, not just
-            // a theme swap.
-            if change.contains(.theme) || change.contains(.keymap) {
+            // a theme swap. `.terminalBehavior` for the same reason one step further out: that
+            // call also re-reads `background-alpha` to decide whether the clip fills the panel or
+            // the ring does (ZEN-282).
+            if change.contains(.theme) || change.contains(.keymap)
+                || change.contains(.terminalBehavior)
+            {
                 for controller in self.controllers.values { controller.reapplyChromeColors() }
             }
             if change.contains(.theme) {
@@ -827,8 +831,8 @@ final class WindowController: NSObject {
     private static func landing(forSettingKey key: String) -> SettingsLanding {
         switch key {
         case "font-family", "font-size", "cursor-style", "cursor-style-blink", "cursor-thickness",
-            "cursor-shader", "macos-option-as-alt", "scroll-multiplier", "shell", "shell-args",
-            "editor", "ai":
+            "cursor-shader", "background-alpha", "macos-option-as-alt", "scroll-multiplier", "shell",
+            "shell-args", "editor", "ai":
             return .terminal
         case "theme", "window-chrome", "backdrop-alpha", "window-gutter", "pane-gap",
             "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",

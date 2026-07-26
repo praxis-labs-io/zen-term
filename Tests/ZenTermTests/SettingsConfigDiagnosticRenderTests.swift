@@ -128,6 +128,7 @@ final class SettingsConfigDiagnosticRenderTests: XCTestCase {
         }
         XCTAssertEqual(landing(.setting(key: "font-size")), "Terminal")
         XCTAssertEqual(landing(.setting(key: "cursor-style")), "Terminal")
+        XCTAssertEqual(landing(.setting(key: "background-alpha")), "Terminal")
         XCTAssertEqual(landing(.setting(key: "reduce-motion")), "Appearance")
         XCTAssertEqual(landing(.setting(key: "backdrop-alpha")), "Appearance")
         XCTAssertEqual(landing(.setting(key: "agent-notifications")), "General")
