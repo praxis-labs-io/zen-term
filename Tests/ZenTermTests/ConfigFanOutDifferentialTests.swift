@@ -76,13 +76,15 @@ final class ConfigFanOutDifferentialTests: XCTestCase {
         var trafficLightsHidden: Bool?
         /// Theme color plus `backdrop-alpha`, the one probe covering both halves of that gate.
         var backdropTint: String?
-        /// **Every** mounted view's resolved fill and text ink, in tree order. The broad colour
-        /// probe: `.theme` recolors the dock, both drawers, the confirm and waiting toasts, float
-        /// chrome, and every pane border, and sampling only the two named colours above left all of
-        /// that invisible to a theme gate that was too narrow. Positional, so an added or removed
-        /// view shows up as well as a recolored one.
+        /// Every mounted view's resolved fill and text ink, in tree order, **except the tab bar's
+        /// subtree** (see `fingerprint` for why: it is the one part of the chrome the real mouse
+        /// position changes). The broad colour probe: `.theme` recolors the dock, both drawers, the
+        /// confirm and waiting toasts, float chrome, and every pane border, and sampling only the
+        /// two named colours above left all of that invisible to a theme gate that was too narrow.
+        /// Positional, so an added or removed view shows up as well as a recolored one.
         var colors: [String]
         /// Text the chrome rendered, so a re-render that drops or restates content is caught too.
+        /// Same tab-bar exclusion, so a tooltip appearing under the cursor can't shift it.
         var text: [String]
         var dockFloatIDs: [String]
         /// What each live surface was last handed. Nil means it was never told anything.
@@ -153,6 +155,23 @@ final class ConfigFanOutDifferentialTests: XCTestCase {
         let root = controller.window.contentView!
         root.layoutSubtreeIfNeeded()
         let views = descendants(of: root)
+        // The tab bar's own subtree is excluded from the broad colour and text sweep below, because
+        // it is the one part of the chrome whose appearance is driven by the **real** mouse:
+        // `TabBarView.refreshHover()` recomputes hover from `mouseLocationOutsideOfEventStream` on
+        // every relayout while the window is key, and hover tints a chip. Worse than a wrong value,
+        // it changes whether a chip is sampled *at all* — an un-hovered chip has no layer colour
+        // until `updateBackground()` first assigns one, so a chip that has ever been hovered adds an
+        // entry and shifts every index after it. Sampling it would make the suite pass in CI and on
+        // any machine whose pointer is elsewhere, then read as a gate regression on the one whose
+        // pointer happens to rest over the test window.
+        //
+        // Nothing is lost: `tracer` above is a deterministic probe of the same view's re-theme, and
+        // `reapplyTheme()` rebuilds the chips from it.
+        let hoverDriven = Set(
+            views.compactMap { $0 as? TabBarView }
+                .flatMap { [$0] + descendants(of: $0) }
+                .map(ObjectIdentifier.init))
+        let stable = views.filter { !hoverDriven.contains(ObjectIdentifier($0)) }
         let hosts = views.compactMap { $0 as? PanelHostView }
         return ChromeFingerprint(
             tracer: views.compactMap { ($0 as? TabBarView)?.tracerColorForTesting }.first?.description,
@@ -163,13 +182,13 @@ final class ConfigFanOutDifferentialTests: XCTestCase {
                 .map { describe($0.convert($0.bounds, to: root)) }.sorted(),
             trafficLightsHidden: controller.window.standardWindowButton(.closeButton)?.isHidden,
             backdropTint: controller.backdropTintColorForTesting?.description,
-            colors: views.enumerated().compactMap { index, view in
+            colors: stable.enumerated().compactMap { index, view in
                 let fill = view.layer?.backgroundColor.flatMap { NSColor(cgColor: $0)?.description }
                 let ink = (view as? NSTextField)?.textColor?.description
                 guard fill != nil || ink != nil else { return nil }
                 return "\(index) \(type(of: view)) \(fill ?? "-")/\(ink ?? "-")"
             },
-            text: views.compactMap { ($0 as? NSTextField)?.stringValue },
+            text: stable.compactMap { ($0 as? NSTextField)?.stringValue },
             dockFloatIDs: views.compactMap { ($0 as? ToggleDock)?.toolFloatButtonIDsForTesting }
                 .flatMap { $0 },
             surfaces: surfaces.map { surface in
