@@ -329,9 +329,12 @@ final class WindowController: NSObject {
                 self.dock.reapplyTheme()  // the rebuilt buttons bake their colors in at build time
                 self.renderDock()
             }
-            // An open palette re-renders its rows here, and a row's shortcut column resolves from
-            // the live keymap — so this tracks a rebind as well as a recolor.
-            if change.contains(.theme) || change.contains(.keymap) {
+            // An open palette re-renders its rows here, and it re-resolves the whole catalog to do
+            // it — so this tracks far more than a recolor. `.keymap` because a row's shortcut
+            // column resolves from the live keymap; `.floats` because every tool float is also a
+            // palette command, and adding one used to leave it missing from an open ⌘P until the
+            // card was closed and reopened.
+            if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {
                 self.modal?.overlay.reapplyTheme()
             }
         }

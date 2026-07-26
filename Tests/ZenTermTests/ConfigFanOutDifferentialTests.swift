@@ -76,6 +76,14 @@ final class ConfigFanOutDifferentialTests: XCTestCase {
         var trafficLightsHidden: Bool?
         /// Theme color plus `backdrop-alpha`, the one probe covering both halves of that gate.
         var backdropTint: String?
+        /// **Every** mounted view's resolved fill and text ink, in tree order. The broad colour
+        /// probe: `.theme` recolors the dock, both drawers, the confirm and waiting toasts, float
+        /// chrome, and every pane border, and sampling only the two named colours above left all of
+        /// that invisible to a theme gate that was too narrow. Positional, so an added or removed
+        /// view shows up as well as a recolored one.
+        var colors: [String]
+        /// Text the chrome rendered, so a re-render that drops or restates content is caught too.
+        var text: [String]
         var dockFloatIDs: [String]
         /// What each live surface was last handed. Nil means it was never told anything.
         var surfaces: [SurfaceAppearance?]
@@ -97,12 +105,34 @@ final class ConfigFanOutDifferentialTests: XCTestCase {
             note("traffic lights hidden", trafficLightsHidden, other.trafficLightsHidden)
             note("backdrop tint", backdropTint, other.backdropTint)
             note("dock float buttons", dockFloatIDs, other.dockFloatIDs)
+            // Listed rather than dumped: these run to hundreds of entries, and printing both whole
+            // arrays produces a wall that hides the handful of views that actually moved.
+            if colors != other.colors {
+                diffs.append("colors at \(Self.firstFew(differing: colors, from: other.colors))")
+            }
+            if text != other.text {
+                diffs.append("text at \(Self.firstFew(differing: text, from: other.text))")
+            }
             if surfaces != other.surfaces {
                 let moved = zip(surfaces, other.surfaces).enumerated()
                     .filter { $0.element.0 != $0.element.1 }.map(\.offset)
                 diffs.append("surface appearance at \(moved) of \(surfaces.count)")
             }
             return diffs
+        }
+
+        /// The first few positions where two lists disagree, with both values. A length change
+        /// shifts every later index, so this reports the leading edge rather than the whole tail.
+        private static func firstFew(differing lhs: [String], from rhs: [String]) -> String {
+            func at(_ list: [String], _ index: Int) -> String {
+                list.indices.contains(index) ? list[index] : "absent"
+            }
+            let shown = (0..<max(lhs.count, rhs.count))
+                .filter { at(lhs, $0) != at(rhs, $0) }
+                .prefix(4)
+                .map { "[\($0)] \(at(lhs, $0)) vs \(at(rhs, $0))" }
+            let total = lhs.count == rhs.count ? "" : " (\(lhs.count) vs \(rhs.count) views)"
+            return shown.joined(separator: ", ") + total
         }
     }
 
@@ -133,6 +163,13 @@ final class ConfigFanOutDifferentialTests: XCTestCase {
                 .map { describe($0.convert($0.bounds, to: root)) }.sorted(),
             trafficLightsHidden: controller.window.standardWindowButton(.closeButton)?.isHidden,
             backdropTint: controller.backdropTintColorForTesting?.description,
+            colors: views.enumerated().compactMap { index, view in
+                let fill = view.layer?.backgroundColor.flatMap { NSColor(cgColor: $0)?.description }
+                let ink = (view as? NSTextField)?.textColor?.description
+                guard fill != nil || ink != nil else { return nil }
+                return "\(index) \(type(of: view)) \(fill ?? "-")/\(ink ?? "-")"
+            },
+            text: views.compactMap { ($0 as? NSTextField)?.stringValue },
             dockFloatIDs: views.compactMap { ($0 as? ToggleDock)?.toolFloatButtonIDsForTesting }
                 .flatMap { $0 },
             surfaces: surfaces.map { surface in

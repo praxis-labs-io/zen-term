@@ -246,6 +246,42 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
         controller.dismissConfigDiagnosticsToast()
     }
 
+    /// Every tool float is also a palette command, so adding one has to reach an open ⌘P. It
+    /// didn't: the `.floats` block rebuilt the dock's buttons and stopped there, leaving the new
+    /// float missing from the palette until the card was closed and reopened. Found by widening the
+    /// differential fingerprint to sample every mounted view rather than a few named probes.
+    func test_floatAdded_reachesAnOpenPalette() throws {
+        var config = GeneralConfig.builtIn
+        GeneralConfig.setCurrentForTesting(config)
+
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
+        self.controller = controller
+        controller.showAndStart()
+        controller.handle(.toggleCommandPalette)
+
+        func paletteTitles() -> [String] {
+            descendants(of: controller.window.contentView!)
+                .compactMap { $0 as? CommandPaletteOverlay }
+                .flatMap { descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } }
+        }
+        XCTAssertFalse(paletteTitles().contains("Notes"), "the float doesn't exist yet")
+
+        config.floats = [
+            ToolFloat(
+                id: "notes", order: 0, title: "Notes", icon: ToolFloatParser.defaultIcon,
+                command: "ls", dir: nil, widthFraction: 0.85, heightFraction: 0.85,
+                requiresGitRepo: false, persist: .ephemeral,
+                toggle: Chord(command: true, shift: true, key: "n"))
+        ]
+        GeneralConfig.setCurrentForTesting(config)
+        post(.floats)
+
+        XCTAssertTrue(
+            paletteTitles().contains("Notes"),
+            "a float added while the palette is open never reached it: \(paletteTitles())")
+    }
+
     /// The same trap one layer out, and it was live until ZEN-281: an open command palette rebuilt
     /// its row *views* on `reapplyTheme()` but replayed the shortcut glyph each `PaletteCommand`
     /// baked in when the catalog built it, so a rebind left the palette showing the old chord. The
