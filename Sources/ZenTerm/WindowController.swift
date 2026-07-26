@@ -930,6 +930,27 @@ final class WindowController: NSObject {
     /// it, and a user dismissal must leave nothing to retract.
     private weak var configDiagnosticsToast: ToastView?
 
+    /// Deliver the config-problems notice to `keyWindow`, replacing any predecessor across every
+    /// window. Returns whether a window took it; `false` leaves the notice already up untouched, so
+    /// `ConfigApplier` can retry on the next reload.
+    ///
+    /// Static, and taking both the target and the full window list, purely so it is reachable from
+    /// a test. Inline in `AppDelegate`'s sink this was the last of the closure body that nothing
+    /// could drive, and the ordering is the whole point: sweeping before the key window resolves
+    /// would take an accurate notice down and put nothing back.
+    ///
+    /// Sweeping *every* window rather than just the target matters because the outstanding notice
+    /// went to whichever window was key at the time, which need not be the one taking this one.
+    static func deliverConfigDiagnosticsNotice(
+        _ content: ToastContent, landingScope: ConfigDiagnostic.Scope,
+        to keyWindow: WindowController?, replacingAcross windows: [WindowController]
+    ) -> Bool {
+        guard let keyWindow else { return false }
+        windows.forEach { $0.dismissConfigDiagnosticsToast() }
+        keyWindow.showConfigDiagnosticsToast(content, landingScope: landingScope)
+        return true
+    }
+
     /// Retract the config-problems notice. It's sticky and states what is wrong *now*, so a reload
     /// that resolves the problems has to take it down: nothing else does, and a warning that
     /// outlives the fix that made it false is worse than no warning. Reads `builtToasts` rather

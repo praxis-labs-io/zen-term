@@ -383,12 +383,17 @@ the fix that made it false.
 
 **Replacing a notice is all-or-nothing, and that is load-bearing.** Delivery can
 fail, because the key window is not always one of ours (an open panel), so the
-swap happens inside the announce sink: it drops the outstanding notice only once a
-window has been resolved to take the new one. Retracting in `ConfigApplier` and
-announcing separately would take an accurate notice down and then put nothing
-back, leaving a broken config with an empty screen. `ConfigApplier` therefore
-retracts only when the problems clear, which is the one case with nothing to put
-back.
+swap lives in `WindowController.deliverConfigDiagnosticsNotice`: it drops the
+outstanding notice, across every window, only once one has been resolved to take
+the new one. Retracting in `ConfigApplier` and announcing separately would take an
+accurate notice down and then put nothing back, leaving a broken config with an
+empty screen. `ConfigApplier` therefore retracts only when the problems clear,
+which is the one case with nothing to put back.
+
+That it is a static taking the window list, rather than a few lines inside
+`AppDelegate`'s sink, is what makes it testable, and the ordering it encodes is
+worth a test: reversing the sweep and the resolve passed the whole suite while it
+was still inline.
 
 **The app-global half lives in `ConfigApplier`, not in `AppDelegate`.**
 `AppDelegate` is the `NSApplicationDelegate` singleton: it binds the nav socket and

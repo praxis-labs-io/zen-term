@@ -35,6 +35,9 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
         // config observer) runs through its NSWindowDelegate entry point.
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
+        secondController?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
+        secondController = nil
+        MotionConfig.apply(.system)
         TerminalSurfaceFactory.makeOverride = originalOverride
         Theme.setCurrentForTesting(originalTheme)
         GeneralConfig.setCurrentForTesting(originalConfig)
@@ -244,6 +247,88 @@ final class WindowControllerConfigFanOutTests: XCTestCase {
 
         // Idempotent: a second retract (or one after the user already dismissed it) must not trap.
         controller.dismissConfigDiagnosticsToast()
+    }
+
+    // MARK: delivering the config-problems notice across windows
+
+    /// Two windows, so the notice can be outstanding in one while the next lands in the other.
+    private var secondController: WindowController?
+
+    private func makeWindow() -> WindowController {
+        WindowController(contentRect: NSRect(x: 0, y: 0, width: 800, height: 500), initialCWD: nil)
+    }
+
+    private func noticeTitles(in controller: WindowController) -> [String] {
+        descendants(of: controller.window.contentView!)
+            .compactMap { $0 as? ToastView }
+            .flatMap { descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } }
+    }
+
+    private func settle() {
+        let settled = expectation(description: "settled")
+        OperationQueue.main.addOperation { settled.fulfill() }
+        wait(for: [settled], timeout: 5)
+    }
+
+    /// The notice is app-global but lives in whichever window was key when it was raised, so a
+    /// later one landing in a *different* window has to sweep the first. Nothing covered this: the
+    /// applier's doubles model delivery as a single atomic step, so cross-window replacement was
+    /// invisible to them, and this logic used to sit inline in an `AppDelegate` closure.
+    func test_deliveringToAnotherWindow_sweepsTheNoticeOutOfTheFirst() throws {
+        let first = makeWindow()
+        controller = first
+        let second = makeWindow()
+        secondController = second
+        first.showAndStart()
+        second.showAndStart()
+        Motion.isReduceMotionEnabled = { true }
+
+        let windows = [first, second]
+        XCTAssertTrue(
+            WindowController.deliverConfigDiagnosticsNotice(
+                ToastContent(variant: .warning, title: "1 problem in your config", message: "a"),
+                landingScope: .keybindLine, to: first, replacingAcross: windows))
+        settle()
+        XCTAssertTrue(noticeTitles(in: first).contains("1 problem in your config"))
+
+        // The key window is now the second one, and the replacement goes there.
+        XCTAssertTrue(
+            WindowController.deliverConfigDiagnosticsNotice(
+                ToastContent(variant: .warning, title: "2 problems in your config", message: "b"),
+                landingScope: .keybindLine, to: second, replacingAcross: windows))
+        settle()
+
+        XCTAssertTrue(noticeTitles(in: second).contains("2 problems in your config"))
+        XCTAssertFalse(
+            noticeTitles(in: first).contains("1 problem in your config"),
+            "the superseded notice is still up in the other window: \(noticeTitles(in: first))")
+    }
+
+    /// The ordering that a reversed sweep would break, and that no test reached until this became a
+    /// static: with no window to take the replacement, nothing may be swept. Sweeping first would
+    /// leave a broken config with an empty screen.
+    func test_deliveringWithNoKeyWindow_leavesTheExistingNoticeUp() throws {
+        let first = makeWindow()
+        controller = first
+        first.showAndStart()
+        Motion.isReduceMotionEnabled = { true }
+
+        XCTAssertTrue(
+            WindowController.deliverConfigDiagnosticsNotice(
+                ToastContent(variant: .warning, title: "1 problem in your config", message: "a"),
+                landingScope: .keybindLine, to: first, replacingAcross: [first]))
+        settle()
+
+        // An open panel is key, so nothing of ours can host the replacement.
+        XCTAssertFalse(
+            WindowController.deliverConfigDiagnosticsNotice(
+                ToastContent(variant: .warning, title: "2 problems in your config", message: "b"),
+                landingScope: .keybindLine, to: nil, replacingAcross: [first]))
+        settle()
+
+        XCTAssertTrue(
+            noticeTitles(in: first).contains("1 problem in your config"),
+            "an undeliverable replacement swept the notice: the config is broken and nothing says so")
     }
 
     /// Every tool float is also a palette command, so adding one has to reach an open ⌘P. It

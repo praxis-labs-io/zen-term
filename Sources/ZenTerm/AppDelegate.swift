@@ -26,11 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             setKeymap: { [weak self] map in self?.keys.setKeymap(map) },
             applyMotion: { MotionConfig.apply($0) },
             announceDiagnostics: { [weak self] content, scope in
-                guard let self, let controller = self.keyController() else { return false }
-                // Replace any earlier config notice only once we're sure a window can take the new one.
-                self.windows.forEach { $0.dismissConfigDiagnosticsToast() }
-                controller.showConfigDiagnosticsToast(content, landingScope: scope)
-                return true
+                guard let self else { return false }
+                return WindowController.deliverConfigDiagnosticsNotice(
+                    content, landingScope: scope, to: self.keyController(),
+                    replacingAcross: self.windows)
             },
             // Every window, not just the key one: the notice was delivered to whichever window was
             // key at the time, which need not be the one in front now.
