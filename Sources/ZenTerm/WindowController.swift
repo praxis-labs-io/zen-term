@@ -1132,7 +1132,6 @@ final class WindowController: NSObject {
                     message: "Failed to update the workspaces file: \(error.localizedDescription)"))
             return false
         }
-        return true
     }
 
     /// Close the workspace form and reopen the Settings card on its Workspaces section — the "back"
