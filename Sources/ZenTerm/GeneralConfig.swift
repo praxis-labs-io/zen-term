@@ -119,9 +119,16 @@ struct GeneralConfig: Equatable {
     /// The resolved config for this launch, re-resolvable via `reloadCurrent()` when the Settings
     /// card writes the file (see `AppConfig.reload()`). External hand-edits are picked up on
     /// demand via the Reload Config command (⌘⌥R).
-    static private(set) var current: GeneralConfig = ConfigLoader.loadGeneralConfig()
+    ///
+    /// Starts at the built-in default and is resolved from disk by `AppConfig.loadAtLaunch()`
+    /// before any window builds. Deliberately not a lazy `= ConfigLoader.loadGeneralConfig()`: the
+    /// load is main-thread-only (see `ConfigLoader.loadGeneralConfig`), and a lazy static runs its
+    /// initializer wherever the first touch lands, which puts the constraint at the mercy of every
+    /// future reader rather than at one named place (ZEN-31).
+    static private(set) var current: GeneralConfig = .builtIn
 
     /// Re-read `config` from disk and swap `current`. Called by `AppConfig.reload()` after a write.
+    @MainActor
     static func reloadCurrent() { current = ConfigLoader.loadGeneralConfig() }
 
     #if DEBUG

@@ -5,6 +5,7 @@ import AppKit
 /// through the interceptor, so an already-bound chord isn't pre-empted), Backspace reverts to the
 /// default. Rebinds are ≥1-modifier, block-on-conflict, written via `ConfigWriter` and reloaded via
 /// `AppConfig` so they're live — no restart. A section reset returns everything to the defaults.
+@MainActor
 final class SettingsKeybindsSection: SettingsSection {
     var navTitle: String { "Shortcuts" }
     var onExitToNav: (() -> Void)?
@@ -49,7 +50,8 @@ final class SettingsKeybindsSection: SettingsSection {
             // so anything else (a numeric edit on another section, with this card open) is skippable.
             let change = ConfigChange.from(note)
             guard change.contains(.keymap) || change.contains(.diagnostics) else { return }
-            self?.refreshFromConfig()
+            // `queue: .main`, so this is already the main thread — assert it rather than hop.
+            MainActor.assumeIsolated { self?.refreshFromConfig() }
         }
     }
 

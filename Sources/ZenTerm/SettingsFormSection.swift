@@ -22,6 +22,7 @@ extension AppButton: ThemeReapplying {}
 /// field renders blank while it's at the default. Subclasses only override `navTitle` and `populate()`
 /// (declaring their groups/rows); the base owns the row builders, live-apply debounce, focus stops,
 /// and Reset-all.
+@MainActor
 class SettingsFormSection: SettingsSection {
     var navTitle: String { "" }
     var onExitToNav: (() -> Void)?

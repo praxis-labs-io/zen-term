@@ -353,6 +353,14 @@ load-bearing: general config first, then theme (which reads the general font), t
 post `.configDidChange`. `GeneralConfig` reads nothing from `Theme`, so the one-way
 dependency `Theme.current -> GeneralConfig.current` holds and they cannot deadlock.
 
+Both statics start at the built-in default and are first resolved from disk by
+`AppConfig.loadAtLaunch()`, in `applicationDidFinishLaunching` before any window
+builds. That is a separate entry point from `reload()` because at launch there is
+nothing to diff and no observer to broadcast to. Neither is lazily initialized, and
+that is deliberate: the load is main-thread-only, and a lazy static would run it
+wherever the first reader happened to touch it. See "Carbon and the main thread" in
+`docs/swift-conventions.md`, which is now compiler-enforced.
+
 **The broadcast names what moved.** `reload()` snapshots the config and theme
 before re-resolving, diffs them, and carries a `ConfigChange` option set on the
 notification, so each observer runs only the blocks whose config actually changed.

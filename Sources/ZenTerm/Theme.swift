@@ -23,9 +23,17 @@ enum Theme {
 
     /// The resolved appearance for this launch, re-resolvable via `reloadCurrent()`. Reads the
     /// general config for the font, so `GeneralConfig.reloadCurrent()` must run first.
-    static private(set) var current: AppTheme = ConfigLoader.loadAppTheme()
+    ///
+    /// Starts at the built-in appearance and is resolved from disk by `AppConfig.loadAtLaunch()`,
+    /// for the same reason `GeneralConfig.current` is (ZEN-31).
+    static private(set) var current: AppTheme = builtIn
+
+    /// The built-in appearance, and the value `current` holds until launch resolves the config.
+    static let builtIn = AppTheme(
+        terminal: rosePineMoon, chrome: ChromeThemeDeriver.derive(from: rosePineMoon))
 
     /// Re-read the theme (and font from the general config) and swap `current`.
+    @MainActor
     static func reloadCurrent() { current = ConfigLoader.loadAppTheme() }
 
     #if DEBUG

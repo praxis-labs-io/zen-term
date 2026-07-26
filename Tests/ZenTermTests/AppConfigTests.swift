@@ -3,6 +3,38 @@ import XCTest
 @testable import ZenTerm
 
 final class AppConfigTests: XCTestCase {
+    /// `loadAtLaunch()` is the only thing that resolves the config statics off disk — neither is
+    /// lazy any more (ZEN-31), so dropping the call, or running it after the first window builds,
+    /// leaves the whole app on built-in defaults while still compiling and running. Nothing else
+    /// would notice. Asserting the font specifically also pins the *order*: `Theme` reads the
+    /// general config's font, so resolving the theme first would leave it on the built-in one.
+    func test_loadAtLaunch_resolvesBothStaticsFromDisk_generalFirst() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-launch-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try "font-family = Menlo\n"
+            .write(to: root.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+
+        let originalConfig = GeneralConfig.current
+        let originalTheme = Theme.current
+        ConfigLoader.defaultRootOverrideForTesting = root
+        addTeardownBlock {
+            ConfigLoader.defaultRootOverrideForTesting = nil
+            GeneralConfig.setCurrentForTesting(originalConfig)
+            Theme.setCurrentForTesting(originalTheme)
+            try? FileManager.default.removeItem(at: root)
+        }
+        GeneralConfig.setCurrentForTesting(.builtIn)
+        Theme.setCurrentForTesting(Theme.builtIn)
+
+        AppConfig.loadAtLaunch()
+
+        XCTAssertEqual(GeneralConfig.current.fontName, "Menlo", "the general config never resolved")
+        XCTAssertEqual(
+            Theme.current.terminal.fontName, "Menlo",
+            "the theme resolved before the general config, so it took the built-in font")
+    }
+
     /// `AppConfig.reload()` is the seam `.reloadConfig` routes through (`AppDelegate.route`
     /// calls it directly, app-level, alongside `.newWindow`): it re-resolves the config statics
     /// and broadcasts `.configDidChange` so every live observer (keymap, motion, backdrop tint,

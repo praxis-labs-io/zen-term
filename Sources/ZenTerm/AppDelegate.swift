@@ -7,6 +7,7 @@ import TerminalKit
 /// new window (inheriting the key window's focused-pane cwd); every other chord goes
 /// to the key window's `WindowController`. Native macOS tabbing is disallowed on
 /// `HostWindow`, so each window is an ordinary independently-tileable window.
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windows: [WindowController] = []
     private let keys = KeyInterceptor()
@@ -52,9 +53,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // so a held key auto-repeats. Must be registered before the first surface exists.
         UserDefaults.standard.register(defaults: ["ApplePressAndHoldEnabled": false])
 
-        // Resolve the general config before any window builds — installing the reduce-motion
-        // override and deterministically forcing GeneralConfig.current to load (so the first
-        // window's Theme font, drawer sizes, and dock floats are already settled).
+        // Resolve the config and theme before any window builds, so the first window's font,
+        // drawer sizes, and dock floats are already settled rather than built-in defaults. This is
+        // the one place the load happens: both statics hold the built-in default until now
+        // (ZEN-31), because the load is main-thread-only and a lazy one would run wherever the
+        // first reader happened to touch it.
+        AppConfig.loadAtLaunch()
         MotionConfig.apply(GeneralConfig.current.reduceMotion)
 
         // Verbose diagnostics gate (ZEN-11): config `debug = true` turns on the same file tee as
@@ -106,7 +110,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            self?.windows.forEach { $0.clearActiveTabNotification() }
+            // `queue: .main` guarantees this lands on the main thread; assert that rather than hop,
+            // so the clear happens in the same turn as the activation.
+            MainActor.assumeIsolated { self?.windows.forEach { $0.clearActiveTabNotification() } }
         }
 
         // Re-apply the app-global half of a config change: the interceptor's keymap, reduce-motion,
@@ -115,7 +121,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(
             forName: .configDidChange, object: nil, queue: .main
         ) { [weak self] note in
-            self?.configApplier.apply(ConfigChange.from(note))
+            // `queue: .main`, so this is already the main thread — assert it rather than hop.
+            MainActor.assumeIsolated { self?.configApplier.apply(ConfigChange.from(note)) }
         }
 
         // Auto-updates (ZEN-118). Inert in an unpackaged dev build (no SUFeedURL). The card is
