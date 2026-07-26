@@ -12,7 +12,7 @@ enum ShellSession {
     /// The table can grow between the sizing call and the fetch, which fails the fetch with
     /// ENOMEM against a buffer sized to the stale count. A silent empty result here reads
     /// downstream as "nothing to kill," so retry with headroom instead of trusting one size.
-    private static func snapshot() -> [(pid: pid_t, ppid: pid_t)] {
+    private static func snapshot() -> [(pid: pid_t, ppid: pid_t, isExited: Bool)] {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
         for _ in 0..<3 {
             var size = 0
@@ -23,18 +23,35 @@ enum ShellSession {
             var fetched = size
             if sysctl(&mib, 4, &procs, &fetched, nil, 0) == 0 {
                 let actual = fetched / MemoryLayout<kinfo_proc>.stride
-                return procs.prefix(actual).map { (pid: $0.kp_proc.p_pid, ppid: $0.kp_eproc.e_ppid) }
+                return procs.prefix(actual).map {
+                    (
+                        pid: $0.kp_proc.p_pid, ppid: $0.kp_eproc.e_ppid,
+                        isExited: $0.kp_proc.p_stat == SZOMB
+                    )
+                }
             }
             guard errno == ENOMEM else { return [] }
         }
         return []
     }
 
-    /// Direct children of this process that lead their own session, i.e. terminal shells.
-    /// An ordinary helper subprocess (a git probe) stays in our session, so it never matches.
+    /// Direct children of this process that lead their own session — on macOS libghostty starts
+    /// every shell under `/usr/bin/login`, which is the process that calls `setsid()` and so
+    /// leads the session the shell and everything it spawns run in. An ordinary helper
+    /// subprocess (a git probe) stays in our session, so it never matches.
     static func leaderChildren() -> Set<pid_t> {
         let me = getpid()
-        return Set(snapshot().filter { $0.ppid == me && getsid($0.pid) == $0.pid }.map(\.pid))
+        return Set(
+            snapshot()
+                .filter { $0.ppid == me && !$0.isExited && getsid($0.pid) == $0.pid }
+                .map(\.pid))
+    }
+
+    /// The sessions from `candidates` whose leader has exited: nobody is running a shell in
+    /// them any more, whatever is still alive inside.
+    static func orphaned(among candidates: Set<pid_t>) -> [pid_t] {
+        let live = Set(snapshot().filter { !$0.isExited }.map(\.pid))
+        return candidates.filter { !live.contains($0) }
     }
 
     /// Every live pid in `session`, never including this process or pid 1.

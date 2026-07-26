@@ -13,6 +13,14 @@ public final class ShellSessionReaper {
     /// How long a process gets to exit on its own after `SIGTERM`.
     private static let grace: TimeInterval = 0.15
 
+    /// How long a freed surface's session leader gets to notice its pty closed and exit. It
+    /// took 45ms when measured; the window is wide enough to cover a loaded machine and is a
+    /// ceiling, not a wait — the sweep runs the moment the leader goes.
+    private static let orphanWindow: TimeInterval = 1.0
+
+    /// How often that window is checked.
+    private static let orphanPoll: TimeInterval = 0.02
+
     private let queue = DispatchQueue(
         label: "com.drucial.zenterm.shell-session-reaper", qos: .userInitiated)
     private let pending = DispatchGroup()
@@ -32,6 +40,32 @@ public final class ShellSessionReaper {
             // user can see.
             Thread.sleep(forTimeInterval: Self.grace)
             for pid in ShellSession.members(of: session) { kill(pid, SIGKILL) }
+        }
+    }
+
+    /// Sweep the sessions a torn-down surface left behind: the ones whose leader exited when its
+    /// pty closed. Waits for that exit rather than assuming it has already happened, and stops at
+    /// the first sweep, so a surface closed on its own costs one round trip.
+    ///
+    /// It sweeps whatever is orphaned, not "this surface's" session, because nothing can say
+    /// which session a surface owned (see `ShellSessionLedger`). That is the point: a live pane's
+    /// leader is alive, so a live pane is never in reach.
+    public func reapOrphans() {
+        pending.enter()
+        // Its own queue, not the serial sweep queue: several panes closing at once would
+        // otherwise queue their waits end to end behind each other's grace period.
+        DispatchQueue.global(qos: .userInitiated).async { [pending] in
+            defer { pending.leave() }
+            let deadline = Date().addingTimeInterval(Self.orphanWindow)
+            while Date() < deadline {
+                let orphans = ShellSessionLedger.shared.takeOrphans()
+                guard orphans.isEmpty else {
+                    orphans.forEach { self.reap(session: $0) }
+                    return
+                }
+                // Off-main by construction, so sleeping here blocks nothing the user can see.
+                Thread.sleep(forTimeInterval: Self.orphanPoll)
+            }
         }
     }
 
