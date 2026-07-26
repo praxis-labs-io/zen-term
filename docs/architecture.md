@@ -381,6 +381,15 @@ Nothing else would: `ConfigDiagnostic.announcement` returns nil for an empty set
 which is indistinguishable from "nothing changed", so the warning used to outlive
 the fix that made it false.
 
+**Replacing a notice is all-or-nothing, and that is load-bearing.** Delivery can
+fail, because the key window is not always one of ours (an open panel), so the
+swap happens inside the announce sink: it drops the outstanding notice only once a
+window has been resolved to take the new one. Retracting in `ConfigApplier` and
+announcing separately would take an accurate notice down and then put nothing
+back, leaving a broken config with an empty screen. `ConfigApplier` therefore
+retracts only when the problems clear, which is the one case with nothing to put
+back.
+
 **The app-global half lives in `ConfigApplier`, not in `AppDelegate`.**
 `AppDelegate` is the `NSApplicationDelegate` singleton: it binds the nav socket and
 builds windows at launch, and an observer registered inside

@@ -88,6 +88,11 @@ final class ConfigApplier {
                 for: diagnostics, alreadyAnnounced: lastAnnouncedDiagnostics),
             let first = diagnostics.first
         else { return }  // unchanged set: the notice already up is still accurate, so stay quiet
+        // No retraction here, deliberately. `announceDiagnostics` replaces any notice already up as
+        // part of delivering the new one, so the swap is all-or-nothing. Retracting first and
+        // announcing second would take an accurate notice down and then fail to put its replacement
+        // back whenever delivery fails, leaving a broken config with an empty screen.
+        //
         // Record it as announced only once a window has actually shown it. Delivery fails when the
         // key window isn't one of ours (an open panel), and marking an undelivered notice as
         // announced would let the change-gate swallow it forever.

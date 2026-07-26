@@ -333,10 +333,7 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         let applier = ConfigApplier(sinks: doubles.sinks)
         applier.apply(.diagnostics)
 
-        var worse = broken
-        worse.configDiagnostics.append(
-            ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .invalidValue(got: "x", expected: "a number")))
-        GeneralConfig.setCurrentForTesting(worse)
+        GeneralConfig.setCurrentForTesting(Self.worsened(broken))
         applier.apply(.diagnostics)
 
         XCTAssertEqual(doubles.announced.count, 2, "the new set should have been announced")
@@ -358,10 +355,7 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         let firstNotice = doubles.showing
         XCTAssertNotNil(firstNotice, "expected the first problem notice up")
 
-        var worse = broken
-        worse.configDiagnostics.append(
-            ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .invalidValue(got: "x", expected: "a number")))
-        GeneralConfig.setCurrentForTesting(worse)
+        GeneralConfig.setCurrentForTesting(Self.worsened(broken))
         doubles.canDeliver = false
         applier.apply(.diagnostics)
 
@@ -372,6 +366,16 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         applier.apply([])
         XCTAssertEqual(doubles.announced.count, 2, "replacement was not retried once delivery became possible")
         XCTAssertEqual(doubles.showing, doubles.announced.last, "retry did not replace the notice on screen")
+    }
+
+    /// The same problems plus one more, so the set is genuinely different.
+    private static func worsened(_ config: GeneralConfig) -> GeneralConfig {
+        var worse = config
+        worse.configDiagnostics.append(
+            ConfigDiagnostic(
+                scope: .setting(key: "font-size"),
+                problem: .invalidValue(got: "x", expected: "a number")))
+        return worse
     }
 
     /// The other half of that gate: once delivered, an unchanged set stays quiet. Every in-app
