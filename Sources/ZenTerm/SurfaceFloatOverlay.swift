@@ -34,7 +34,6 @@ class SurfaceFloatOverlay: NSView {
 
     /// - Parameters:
     ///   - content: the view hosted in the card (e.g. a terminal surface's view).
-    ///   - background: the card fill.
     ///   - widthFraction / heightFraction: card size as a fraction of the tile. Relaxable
     ///     (`.defaultHigh`) with no fixed min/max, so the card tracks the window and never
     ///     drives the window (or terminal) to grow.
@@ -43,7 +42,6 @@ class SurfaceFloatOverlay: NSView {
     ///   - cornerRadius: the card's corner radius.
     init(
         content: NSView,
-        background: NSColor,
         widthFraction: CGFloat,
         heightFraction: CGFloat,
         contentInset: CGFloat,
@@ -62,9 +60,7 @@ class SurfaceFloatOverlay: NSView {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        CardChrome.apply(
-            to: card, background: background, cornerRadius: cornerRadius, halo: true,
-            hostsTerminal: true)
+        CardChrome.applyTerminalHost(to: card, cornerRadius: cornerRadius, halo: true)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 
@@ -72,7 +68,7 @@ class SurfaceFloatOverlay: NSView {
         // present/dismiss carries them: `Motion.springScaleFade` animates the card's layer alone,
         // and a sublayer inherits its transform and opacity where a sibling would pop in flat.
         // The shadow reaches past the card's bounds, which is legal only while `masksToBounds`
-        // stays off (`CardChrome.apply` keeps it off). The card's layer border draws above both.
+        // stays off (`CardChrome.applyTerminalHost` keeps it off). The card's layer border draws above both.
         elevation.color = NSColor.black.withAlphaComponent(0.5)  // theme-independent, like FloatShadow's
         elevation.outset = Self.shadowOutset
         elevation.cornerRadius = cornerRadius
@@ -188,7 +184,7 @@ class SurfaceFloatOverlay: NSView {
     /// `background-alpha` — so this has to be reached by a terminal-behavior change too, not only
     /// a theme swap. The elevation shadow is theme-independent and untouched.
     func reapplyTheme() {
-        CardChrome.reapplyTheme(to: card, halo: true, hostsTerminal: true)
+        CardChrome.reapplyEdge(to: card, halo: true)
         applyBackground()
     }
 

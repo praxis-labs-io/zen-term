@@ -181,9 +181,8 @@ final class ReapplyThemeTests: XCTestCase {
 
     func test_reapplyTheme_recolorsSurfaceFloatOverlay() throws {
         let overlay = SurfaceFloatOverlay(
-            content: NSView(), background: Theme.current.chrome.background.nsColor,
-            widthFraction: 0.6, heightFraction: 0.6, contentInset: 12, cornerRadius: 12,
-            onDismiss: {})
+            content: NSView(), widthFraction: 0.6, heightFraction: 0.6, contentInset: 12,
+            cornerRadius: 12, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)
@@ -210,9 +209,8 @@ final class ReapplyThemeTests: XCTestCase {
     /// way. This pins WHICH role the border lands on after the swap.
     func test_reapplyTheme_keepsTheAccentHaloOnSurfaceFloatOverlay() throws {
         let overlay = SurfaceFloatOverlay(
-            content: NSView(), background: Theme.current.chrome.background.nsColor,
-            widthFraction: 0.6, heightFraction: 0.6, contentInset: 12, cornerRadius: 12,
-            onDismiss: {})
+            content: NSView(), widthFraction: 0.6, heightFraction: 0.6, contentInset: 12,
+            cornerRadius: 12, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)

@@ -206,7 +206,6 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         }
         let overlay = SurfaceFloatOverlay(
             content: surface.view,
-            background: Theme.current.chrome.background.nsColor,
             widthFraction: spec.widthFraction,
             heightFraction: spec.heightFraction,
             contentInset: 10,

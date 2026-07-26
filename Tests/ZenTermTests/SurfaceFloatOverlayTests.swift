@@ -35,9 +35,8 @@ final class SurfaceFloatOverlayTests: XCTestCase {
     @discardableResult
     private func mount(content: NSView = NSView()) -> SurfaceFloatOverlay {
         let overlay = SurfaceFloatOverlay(
-            content: content, background: Theme.current.chrome.background.nsColor,
-            widthFraction: 0.85, heightFraction: 0.78, contentInset: contentInset,
-            cornerRadius: cornerRadius, onDismiss: {})
+            content: content, widthFraction: 0.85, heightFraction: 0.78,
+            contentInset: contentInset, cornerRadius: cornerRadius, onDismiss: {})
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
             styleMask: [.borderless], backing: .buffered, defer: false)
