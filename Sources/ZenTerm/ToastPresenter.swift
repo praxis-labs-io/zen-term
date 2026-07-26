@@ -6,6 +6,11 @@ import AppKit
 final class ToastPresenter {
     private let stack = NSStackView()
     private let dismissAfter: TimeInterval
+    /// The two insets, held so a `window-gutter` / `window-chrome` change can re-point them. The
+    /// presenter is built lazily on the first toast, so without this the stack keeps whatever the
+    /// metrics were at that moment for the life of the window.
+    private let topConstraint: NSLayoutConstraint
+    private let trailingConstraint: NSLayoutConstraint
 
     init(host: NSView, topInset: CGFloat, trailingInset: CGFloat, dismissAfter: TimeInterval = 4) {
         self.dismissAfter = dismissAfter
@@ -14,10 +19,18 @@ final class ToastPresenter {
         stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(stack)  // added last → above the mounted canvas
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: host.topAnchor, constant: topInset),
-            stack.trailingAnchor.constraint(equalTo: host.trailingAnchor, constant: -trailingInset),
-        ])
+        topConstraint = stack.topAnchor.constraint(equalTo: host.topAnchor, constant: topInset)
+        trailingConstraint = stack.trailingAnchor.constraint(
+            equalTo: host.trailingAnchor, constant: -trailingInset)
+        NSLayoutConstraint.activate([topConstraint, trailingConstraint])
+    }
+
+    /// Re-point the stack's insets after a chrome-layout change — no relaunch. Takes the resolved
+    /// values rather than reading `ChromeMetrics` itself, so the presenter stays content-agnostic
+    /// and the caller keeps owning the `+ 12` it offsets them by.
+    func reapplyInsets(topInset: CGFloat, trailingInset: CGFloat) {
+        topConstraint.constant = topInset
+        trailingConstraint.constant = -trailingInset
     }
 
     /// Show a passive toast (the variant colors the icon/badge). Mutates the view hierarchy,

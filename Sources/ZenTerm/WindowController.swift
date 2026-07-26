@@ -37,10 +37,26 @@ final class WindowController: NSObject {
     /// The base-color tint over the behind-window blur; stored so a `backdrop-alpha` change can
     /// re-tint the running window (see the `configDidChange` observer).
     private let tint = NSView()
-    /// Top-right transient notices (e.g. "not a git repository"). Lazy so its stack mounts
-    /// above the canvas on first use; window-level so it's shared by every tab.
-    private lazy var toasts = ToastPresenter(
-        host: container, topInset: ChromeMetrics.topInset + 12, trailingInset: ChromeMetrics.windowGutter + 12)
+    /// Top-right transient notices (e.g. "not a git repository"). Built on first use so its stack
+    /// mounts above the canvas; window-level so it's shared by every tab.
+    ///
+    /// Held as an explicit optional rather than `lazy` so the config observer can re-point its
+    /// insets *only when it already exists* — touching a `lazy var` would construct it, mounting a
+    /// toast stack in every window on the first gutter edit and giving up the z-order the
+    /// build-on-first-use exists for.
+    private var builtToasts: ToastPresenter?
+    private var toasts: ToastPresenter {
+        if let builtToasts { return builtToasts }
+        let presenter = ToastPresenter(
+            host: container, topInset: Self.toastTopInset, trailingInset: Self.toastTrailingInset)
+        builtToasts = presenter
+        return presenter
+    }
+
+    /// The toast stack's offsets from the tile region, single-sourced so construction and the
+    /// live re-apply can't drift apart.
+    private static var toastTopInset: CGFloat { ChromeMetrics.topInset + 12 }
+    private static var toastTrailingInset: CGFloat { ChromeMetrics.windowGutter + 12 }
 
     /// Surface a notice in this window. The seam for app-global notices (`AppDelegate` routes
     /// config problems to one window this way) — the presenter itself stays private so nothing
@@ -275,6 +291,9 @@ final class WindowController: NSObject {
                 self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
                 for controller in self.controllers.values { controller.reapplyChromeLayout() }
                 self.reapplyFloatLayout()  // a gutter change must re-inset an OPEN card too
+                // Only if a toast has already been shown — see `builtToasts`.
+                self.builtToasts?.reapplyInsets(
+                    topInset: Self.toastTopInset, trailingInset: Self.toastTrailingInset)
             }
             // `reapplyChromeColors` reaches `PanelHostView.reapplyTheme()`, which rebuilds the
             // panel header's keycap against the live keymap — so a rebind needs it too, not just
@@ -1550,6 +1569,11 @@ final class WindowController: NSObject {
 
     /// Test hook: the window's float engine, for asserting the relays wired onto it.
     var floatsForTesting: ToolFloatController { floats }
+
+    /// Test hook: whether the toast presenter has been built yet. The config observer must be able
+    /// to re-point its insets WITHOUT constructing it — building it early would mount a toast stack
+    /// in a window that has never shown one, which is the z-order the build-on-first-use protects.
+    var hasBuiltToastsForTesting: Bool { builtToasts != nil }
 
     /// Clear a tab's waiting state: dismiss its toast — which also drops the rose flag, since
     /// the flag is derived from the toast's presence (`waitingToasts[id] != nil`). Called when
