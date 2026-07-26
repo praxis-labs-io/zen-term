@@ -356,9 +356,11 @@ dependency `Theme.current -> GeneralConfig.current` holds and they cannot deadlo
 Both statics start at the built-in default and are first resolved from disk by
 `AppConfig.loadAtLaunch()`, in `applicationDidFinishLaunching` before any window
 builds. That is a separate entry point from `reload()` because at launch there is
-nothing to diff and no observer to broadcast to. Neither is lazily initialized, and
-that is deliberate: the load is main-thread-only, and a lazy static would run it
-wherever the first reader happened to touch it. See "Carbon and the main thread" in
+nothing to diff and no observer to broadcast to. Their initializers deliberately
+no longer do the load. A Swift static is always lazy, so a
+`= ConfigLoader.load…()` default ran a main-thread-only call on whichever thread
+touched it first; initializing to a constant makes first touch harmless and moves
+the load to one named place. See "Carbon and the main thread" in
 `docs/swift-conventions.md`, which is now compiler-enforced.
 
 **The broadcast names what moved.** `reload()` snapshots the config and theme

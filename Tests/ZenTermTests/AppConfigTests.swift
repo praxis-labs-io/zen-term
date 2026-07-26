@@ -3,29 +3,49 @@ import XCTest
 @testable import ZenTerm
 
 final class AppConfigTests: XCTestCase {
-    /// `loadAtLaunch()` is the only thing that resolves the config statics off disk — neither is
-    /// lazy any more (ZEN-31), so dropping the call, or running it after the first window builds,
-    /// leaves the whole app on built-in defaults while still compiling and running. Nothing else
-    /// would notice. Asserting the font specifically also pins the *order*: `Theme` reads the
-    /// general config's font, so resolving the theme first would leave it on the built-in one.
-    func test_loadAtLaunch_resolvesBothStaticsFromDisk_generalFirst() throws {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("zenterm-launch-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        try "font-family = Menlo\n"
-            .write(to: root.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+    /// Every test here calls a `ConfigLoader` path, which resolves `ConfigLoader.defaultRoot` — the
+    /// real `~/.config/zen-term` unless it's overridden. Sandbox it for the whole class and restore
+    /// both statics afterwards: since ZEN-31 they start at `.builtIn`, so a test that left the
+    /// developer's own config in `GeneralConfig.current` would hand every class that runs later a
+    /// different baseline than CI's (where there is no user config), and the difference only shows
+    /// up as a test that passes under `--filter` and fails in the full suite, or the reverse.
+    private var root: URL!
 
-        let originalConfig = GeneralConfig.current
-        let originalTheme = Theme.current
+    override func setUp() {
+        super.setUp()
+        root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-appconfig-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        originalConfig = GeneralConfig.current
+        originalTheme = Theme.current
         ConfigLoader.defaultRootOverrideForTesting = root
-        addTeardownBlock {
-            ConfigLoader.defaultRootOverrideForTesting = nil
-            GeneralConfig.setCurrentForTesting(originalConfig)
-            Theme.setCurrentForTesting(originalTheme)
-            try? FileManager.default.removeItem(at: root)
-        }
         GeneralConfig.setCurrentForTesting(.builtIn)
         Theme.setCurrentForTesting(Theme.builtIn)
+    }
+
+    override func tearDown() {
+        ConfigLoader.defaultRootOverrideForTesting = nil
+        GeneralConfig.setCurrentForTesting(originalConfig)
+        Theme.setCurrentForTesting(originalTheme)
+        try? FileManager.default.removeItem(at: root)
+        root = nil
+        super.tearDown()
+    }
+
+    private var originalConfig = GeneralConfig.builtIn
+    private var originalTheme = Theme.builtIn
+
+    /// `loadAtLaunch()` is the only thing that resolves the config statics off disk (ZEN-31), so if
+    /// it stops running the app is silently on built-in defaults: built-in theme and font, default
+    /// chords, no dock tool floats. Asserting the font specifically also pins the *order*, which is
+    /// the half a reader is most likely to "tidy": `Theme` reads the general config's font, so
+    /// resolving the theme first leaves it on the built-in one.
+    ///
+    /// This covers the function, not the single call site in `applicationDidFinishLaunching` —
+    /// see ZEN-294.
+    func test_loadAtLaunch_resolvesBothStaticsFromDisk_generalFirst() throws {
+        try "font-family = Menlo\n"
+            .write(to: root.appendingPathComponent("config"), atomically: true, encoding: .utf8)
 
         AppConfig.loadAtLaunch()
 

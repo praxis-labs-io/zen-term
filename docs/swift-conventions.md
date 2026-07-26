@@ -144,8 +144,16 @@ main-thread-only**, and so is anything that reaches it, which includes every con
 mode an isolation violation is a hard error in a synchronous function body but **a warning inside a
 closure**, and a closure (`DispatchQueue.async { … }`) is exactly the shape that killed the app. The
 other half is `.treatWarning("ActorIsolatedCall", as: .error)` on the ZenTerm target in
-`Package.swift`, which is what makes both shapes fail the build. Delete that line and the hole
-re-opens with everything still green. The 6.2 tools-version exists to carry it, and every target
+`Package.swift`, which is what makes both of those shapes fail the build. Delete that line and the
+hole re-opens with everything still green.
+
+**One shape stays invisible to the compiler, so it is guarded at runtime instead.** A closure formed
+in a main-actor context and handed to `DispatchQueue.async(execute:)` as a `DispatchWorkItem` is
+type-erased at construction: the compiler sees nothing crossing, and the whole isolated chain runs
+off-main. That is not hypothetical, it is the debounce idiom the Settings sections already use. So
+`KeyboardLayout.producibleGlyphs` calls `MainActor.preconditionIsolated()` immediately before the
+TIS call. It converts the untrappable failure (exit 6, no crash report, empty stderr) into a crash
+report that names the line. The 6.2 tools-version exists to carry it, and every target
 pins `.swiftLanguageMode(.v5)` so the bump doesn't turn into an unplanned Swift 6 migration.
 
 **`GeneralConfig.current` and `Theme.current` are deliberately not lazy** for the same reason. A

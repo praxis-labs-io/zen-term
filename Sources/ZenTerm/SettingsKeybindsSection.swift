@@ -5,7 +5,6 @@ import AppKit
 /// through the interceptor, so an already-bound chord isn't pre-empted), Backspace reverts to the
 /// default. Rebinds are ≥1-modifier, block-on-conflict, written via `ConfigWriter` and reloaded via
 /// `AppConfig` so they're live — no restart. A section reset returns everything to the defaults.
-@MainActor
 final class SettingsKeybindsSection: SettingsSection {
     var navTitle: String { "Shortcuts" }
     var onExitToNav: (() -> Void)?
