@@ -99,6 +99,55 @@ final class SurfaceTeardownLeakTests: XCTestCase {
             leaked.isEmpty, "\(marker) survived teardown: \(leaked)", file: file, line: line)
     }
 
+    /// Two panes closed a moment apart, which is what closing a window or quitting does.
+    ///
+    /// Honest about its reach: this covers staggered teardowns end to end, but it does NOT
+    /// isolate the watcher race it was written alongside. That race needs the second surface's
+    /// leader to exit more than one poll interval later than the first, so the coalesced
+    /// teardown is dropped AND orphans only after the first has been swept. Both leaders exit
+    /// in about 45ms, so the window opens on timing variance, not on demand: reinstating the
+    /// early-return watcher leaves this test green. It earns its keep as a real two-pane
+    /// teardown, not as a regression guard for that race.
+    func test_staggeredTeardownsBothGetSwept() throws {
+        try skipOnCI()
+        _ = NSApplication.shared
+        let window = makeWindow()
+        defer { window.orderOut(nil) }
+
+        let first = startSurface(script: "/bin/sleep 945 & /bin/sleep 999", in: window)
+        let second = startSurface(script: "/bin/sleep 946 & /bin/sleep 999", in: window)
+        XCTAssertNotNil(first.surfacePtr, "first surface failed to start")
+        XCTAssertNotNil(second.surfacePtr, "second surface failed to start")
+
+        let firstWorker = waitForPids(matching: "^/bin/sleep 945$")
+        let secondWorker = waitForPids(matching: "^/bin/sleep 946$")
+        XCTAssertFalse(firstWorker.isEmpty, "first marker never spawned")
+        XCTAssertFalse(secondWorker.isEmpty, "second marker never spawned")
+        defer { (firstWorker + secondWorker).forEach { kill($0, SIGKILL) } }
+
+        // The gap is the point. Terminated together, both leaders orphan together and a single
+        // sweep gets them whatever the watcher does. Staggered, the second lands inside the
+        // first's watch window (so it is coalesced rather than starting its own watcher) but
+        // orphans after the first has been swept, which is the only moment a watcher that
+        // stopped at its first find would leave nothing looking.
+        first.view.removeFromSuperview()
+        first.terminate()
+        Thread.sleep(forTimeInterval: 0.06)
+        second.view.removeFromSuperview()
+        second.terminate()
+
+        let swept = expectation(description: "sweep finished")
+        ShellSessionReaper.shared.drain(timeout: 3.0) { swept.fulfill() }
+        wait(for: [swept], timeout: 5.0)
+
+        XCTAssertTrue(
+            survivors(of: firstWorker).isEmpty,
+            "sleep 945 survived: \(survivors(of: firstWorker))")
+        XCTAssertTrue(
+            survivors(of: secondWorker).isEmpty,
+            "the second teardown was dropped, sleep 946 survived: \(survivors(of: secondWorker))")
+    }
+
     func test_backgroundJobDoesNotSurviveTeardown() throws {
         try skipOnCI()
         _ = NSApplication.shared

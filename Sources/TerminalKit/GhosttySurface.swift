@@ -460,6 +460,10 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         SecureInput.shared.removeScoped(secureInputID)
         removeAppActiveObservers()
         if let surfacePtr {
+            // Same last-chance record as `terminate()`: a surface released without ever being
+            // terminated still has to leave a sweepable session behind if the start sampler
+            // missed its fork.
+            ShellSessionLedger.shared.record(ShellSession.leaderChildren())
             ghostty_surface_free(surfacePtr)
             hostView.surfacePtr = nil
             ShellSessionReaper.shared.reapOrphans()

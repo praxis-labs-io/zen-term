@@ -36,6 +36,10 @@ public final class ShellSessionReaper {
     private let watchLock = NSLock()
     private var isWatching = false
 
+    /// When the running watcher stops. A teardown landing mid-watch pushes this out instead of
+    /// starting a second watcher, so the window always covers the most recent close.
+    private var watchDeadline: Date?
+
     private init() {}
 
     /// Sweep `session` off the main thread. Safe to call for a session that is already gone.
@@ -75,16 +79,27 @@ public final class ShellSessionReaper {
     /// which session a surface owned (see `ShellSessionLedger`). That is the point: a live pane's
     /// leader is alive, so a live pane is never in reach.
     ///
-    /// One watcher serves every caller. `takeOrphans` empties the ledger, so the first watcher
-    /// claims everything and any others would spin their whole window finding nothing while
-    /// parking a dispatch thread each: closing a twenty-pane workspace held twenty of them.
+    /// One watcher serves every caller. `takeOrphans` empties the ledger, so a second watcher
+    /// would spin its whole window finding nothing while parking a dispatch thread: closing a
+    /// twenty-pane workspace held twenty of them.
+    ///
+    /// A caller arriving while one is already running **extends its deadline** rather than being
+    /// dropped, and the watcher keeps sweeping until that deadline instead of stopping at its
+    /// first find. Both halves are load-bearing. Dropping the caller and returning early leaves
+    /// the case where surface A's leader exits first: the watcher sweeps A, exits, and B's
+    /// leader then exits with nothing left watching, so B's session sits in the ledger forever
+    /// and its dev server outlives the close. That is the ZEN-269 leak, so the watcher runs to
+    /// the last caller's deadline and sweeps everything that orphans along the way.
     public func reapOrphans() {
+        let deadline = Date().addingTimeInterval(Self.orphanWindow)
         watchLock.lock()
         if isWatching {
+            watchDeadline = max(watchDeadline ?? deadline, deadline)
             watchLock.unlock()
             return
         }
         isWatching = true
+        watchDeadline = deadline
         watchLock.unlock()
 
         pending.enter()
@@ -94,16 +109,18 @@ public final class ShellSessionReaper {
             defer {
                 self.watchLock.lock()
                 self.isWatching = false
+                self.watchDeadline = nil
                 self.watchLock.unlock()
                 pending.leave()
             }
-            let deadline = Date().addingTimeInterval(Self.orphanWindow)
-            while Date() < deadline {
+            while true {
+                self.watchLock.lock()
+                let until = self.watchDeadline ?? Date()
+                self.watchLock.unlock()
+                guard Date() < until else { return }
+
                 let orphans = ShellSessionLedger.shared.takeOrphans()
-                guard orphans.isEmpty else {
-                    self.reap(sessions: Set(orphans))
-                    return
-                }
+                if !orphans.isEmpty { self.reap(sessions: Set(orphans)) }
                 // Off-main by construction, so sleeping here blocks nothing the user can see.
                 Thread.sleep(forTimeInterval: Self.orphanPoll)
             }
