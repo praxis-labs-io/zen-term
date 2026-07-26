@@ -36,20 +36,43 @@ enum CardChrome {
     /// terminal pane wears. Reserved for the surfaces that steal focus from the pane behind them
     /// (the configured tool floats and the diff viewer), so the ring reads as "focus is here now";
     /// transient pickers and forms keep the neutral edge.
+    ///
     static func apply(
         to card: NSView, background: NSColor, cornerRadius: CGFloat = CardChrome.cornerRadius,
         halo: Bool = false
     ) {
-        card.wantsLayer = true
-        card.layer?.cornerRadius = cornerRadius
+        applyEdge(to: card, cornerRadius: cornerRadius, halo: halo)
         card.layer?.backgroundColor = background.cgColor
-        card.layer?.borderWidth = halo ? 1.5 : 1
-        card.layer?.borderColor = borderColor(halo: halo)
         FloatShadow.applyShadow(to: card)  // masksToBounds stays off so the shadow isn't clipped
+    }
+
+    /// Corners and border for a card that hosts a **terminal**, whose fill and elevation shadow
+    /// belong to the host instead: `background-alpha` governs both, and neither survives being done
+    /// from a layer. An opaque fill cancels the surface's alpha out exactly (the chrome background
+    /// IS the colour the terminal blends toward), and a layer shadow washes the interior, because
+    /// Core Animation *fills* `shadowPath`. `SurfaceFloatOverlay` paints them with a `RingFillView`
+    /// and an `OutsideShadowView` (ZEN-287), and takes no `background` here because it re-derives
+    /// its own from the live theme and alpha rather than freezing one at construction.
+    static func applyTerminalHost(to card: NSView, cornerRadius: CGFloat, halo: Bool) {
+        applyEdge(to: card, cornerRadius: cornerRadius, halo: halo)
+        card.layer?.masksToBounds = false  // the host's shadow view reaches past the card
     }
 
     static func reapplyTheme(to card: NSView, halo: Bool = false) {
         card.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
+        card.layer?.borderColor = borderColor(halo: halo)
+    }
+
+    /// The border alone, for a terminal host. Its fill is re-derived by the host from the live
+    /// `background-alpha`, so writing one here would stamp over it.
+    static func reapplyEdge(to card: NSView, halo: Bool) {
+        card.layer?.borderColor = borderColor(halo: halo)
+    }
+
+    private static func applyEdge(to card: NSView, cornerRadius: CGFloat, halo: Bool) {
+        card.wantsLayer = true
+        card.layer?.cornerRadius = cornerRadius
+        card.layer?.borderWidth = halo ? 1.5 : 1
         card.layer?.borderColor = borderColor(halo: halo)
     }
 

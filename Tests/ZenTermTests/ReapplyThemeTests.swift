@@ -11,14 +11,21 @@ import XCTest
 final class ReapplyThemeTests: XCTestCase {
     private var originalTheme: AppTheme!
     private var tempRoots: [URL] = []
+    /// The float below reads `GeneralConfig.current` at construction to pick which arrangement
+    /// paints its card (ZEN-287), so without this it is built against the developer's own
+    /// `~/.config/zen-term` rather than a known one.
+    private var originalConfig: GeneralConfig!
 
     override func setUp() {
         super.setUp()
         originalTheme = Theme.current
+        originalConfig = GeneralConfig.current
+        GeneralConfig.setCurrentForTesting(.builtIn)
     }
 
     override func tearDownWithError() throws {
         Theme.setCurrentForTesting(originalTheme)
+        GeneralConfig.setCurrentForTesting(originalConfig)
         for dir in tempRoots { try? FileManager.default.removeItem(at: dir) }
         tempRoots = []
         try super.tearDownWithError()
@@ -174,9 +181,8 @@ final class ReapplyThemeTests: XCTestCase {
 
     func test_reapplyTheme_recolorsSurfaceFloatOverlay() throws {
         let overlay = SurfaceFloatOverlay(
-            content: NSView(), background: Theme.current.chrome.background.nsColor,
-            widthFraction: 0.6, heightFraction: 0.6, contentInset: 12, cornerRadius: 12,
-            onDismiss: {})
+            content: NSView(), widthFraction: 0.6, heightFraction: 0.6, contentInset: 12,
+            cornerRadius: 12, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)
@@ -203,9 +209,8 @@ final class ReapplyThemeTests: XCTestCase {
     /// way. This pins WHICH role the border lands on after the swap.
     func test_reapplyTheme_keepsTheAccentHaloOnSurfaceFloatOverlay() throws {
         let overlay = SurfaceFloatOverlay(
-            content: NSView(), background: Theme.current.chrome.background.nsColor,
-            widthFraction: 0.6, heightFraction: 0.6, contentInset: 12, cornerRadius: 12,
-            onDismiss: {})
+            content: NSView(), widthFraction: 0.6, heightFraction: 0.6, contentInset: 12,
+            cornerRadius: 12, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)
