@@ -54,6 +54,10 @@ enum GeneralConfigParser {
                 // Single-select: store the raw bundled-shader name (last line wins). ConfigLoader
                 // resolves it to a bundled path (the parser stays text-pure and off the filesystem).
                 if !value.isEmpty { config.cursorShader = value }
+            case "background-alpha":
+                if let n = parseDouble(value, key, &diagnostics) {
+                    config.backgroundAlpha = clamp(n, 0, 1, key, &diagnostics)
+                }
             case "window-chrome":
                 if let b = parseBool(value, key, &diagnostics) { config.windowChrome = b }
             case "backdrop-alpha":

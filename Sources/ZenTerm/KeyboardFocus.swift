@@ -37,6 +37,22 @@ enum KeyboardFocus {
         }
     }
 
+    /// The modifiers a shortcut can be built from. The rest of `modifierFlags` is incidental to the
+    /// physical key, so a comparison has to mask down to these before asking which modifier was held.
+    private static let reservableModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
+
+    /// Whether Option, and only Option, was held — the reorder modifier on a list row, where ⌥↑
+    /// has to mean "move this" while a bare ↑ still means "move focus".
+    ///
+    /// Masking with `reservableModifiers` rather than `deviceIndependentFlagsMask` is the whole
+    /// point: AppKit tags every arrow event with `.function` and `.numericPad`, which
+    /// `deviceIndependentFlagsMask` keeps, so that comparison never equals a bare `.option` and the
+    /// reorder is dead in the app while a synthesized test event passes (ZEN-145). Requiring Option
+    /// to be the only reservable modifier still keeps ⌥⌘↑ out.
+    static func isOptionOnly(_ event: NSEvent) -> Bool {
+        event.modifierFlags.intersection(reservableModifiers) == .option
+    }
+
     /// Whether `view` currently holds first responder, resolving a text field's field editor
     /// (the actual responder while editing) back to the field itself.
     static func isFocused(_ view: NSView, in window: NSWindow?) -> Bool {

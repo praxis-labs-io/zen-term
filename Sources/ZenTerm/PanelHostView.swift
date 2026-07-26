@@ -19,8 +19,10 @@ struct PanelMeta {
 /// requests focus.
 final class PanelHostView: NSView {
     private let onFocusRequest: () -> Void
-    private let pane = ShadowCardView()  // focus glow gets an explicit shadowPath
+    private let pane = NSView()  // the bordered card; the glow is cast by `halo`, not by a shadow
     private let clip = NSView()  // inner clip so terminal content stays inside the radius
+    private let ring = RingFillView()  // paints the padding ring once the clip stops filling it
+    private let halo = HaloView()  // the focus glow, cast around the card from beneath it
     private let headerView: PanelHeader?
     /// The header content for the resting vs zoomed state. A pane has only `zoomMeta` (header hidden
     /// until zoomed); a drawer has both (its base header ⇄ the zoom variant). `updateHeader` picks
@@ -48,8 +50,22 @@ final class PanelHostView: NSView {
     /// all sides so content (e.g. nvim) doesn't sit against the pane border.
     private let padding: CGFloat = 10
 
+    /// The panel's rounded corner. Three layers have to agree on it — the bordered card, the
+    /// clip that keeps content inside it, and the ring that fills the padding — so they read it
+    /// from here rather than each carrying its own copy to drift out of step.
+    static let cornerRadius: CGFloat = 12
+
+    /// How far the focus glow reaches past the panel's edge. The halo view is outset by this much
+    /// because an `NSView` can't paint outside its own bounds, and the glow has to.
+    private static let haloOutset: CGFloat = 16
+
+    /// The focus glow's strength, as the halo view's own opacity. Not the 0.3 the card's
+    /// `shadowOpacity` used: a CGContext shadow renders far weaker than a CALayer one, so most of
+    /// the dimming is already in the draw and 0.3 on top of it made the glow vanish.
+    private static let haloOpacity: Float = 0.45
+
     init(
-        content: NSView, background: NSColor, meta: PanelMeta?, zoomMeta: PanelMeta? = nil,
+        content: NSView, meta: PanelMeta?, zoomMeta: PanelMeta? = nil,
         onFocusRequest: @escaping () -> Void
     ) {
         self.onFocusRequest = onFocusRequest
@@ -61,24 +77,30 @@ final class PanelHostView: NSView {
 
         wantsLayer = true
         pane.wantsLayer = true
-        pane.layer?.cornerRadius = 12
-        pane.layer?.masksToBounds = false  // glow must escape bounds; content clip is on a mask below
+        pane.layer?.cornerRadius = Self.cornerRadius
+        pane.layer?.masksToBounds = false  // content is clipped by `clip` below, not by the card
         pane.layer?.borderWidth = 1
-        // The focus glow is a fixed iris shadow whose opacity toggles (animated in
-        // updateHalo); its color/radius/offset never change, so set them once here.
-        pane.layer?.shadowColor = Theme.current.chrome.accent.nsColor.cgColor
-        pane.layer?.shadowRadius = 6
-        pane.layer?.shadowOffset = .zero
+        // The focus glow is its own view beneath the card, not a shadow on the card — see
+        // HaloView. Its color is fixed; only its opacity toggles (animated in updateHalo).
+        halo.wantsLayer = true
+        halo.layer?.opacity = 0
+        halo.color = Theme.current.chrome.accent.nsColor
+        halo.outset = Self.haloOutset
+        halo.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(halo)  // below the card, so the glow reads as cast by it
         addSubview(pane)
 
         content.translatesAutoresizingMaskIntoConstraints = false
         clip.wantsLayer = true
-        clip.layer?.cornerRadius = 12
+        clip.layer?.cornerRadius = Self.cornerRadius
         clip.layer?.masksToBounds = true
-        clip.layer?.backgroundColor = background.cgColor  // fills the padding ring with the terminal bg
         clip.translatesAutoresizingMaskIntoConstraints = false
         pane.addSubview(clip)
+        ring.translatesAutoresizingMaskIntoConstraints = false
+        ring.contentView = content
+        clip.addSubview(ring)  // bottom of the clip: content and header draw over it
         clip.addSubview(content)
+        applyBackground()
 
         pane.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -86,10 +108,18 @@ final class PanelHostView: NSView {
             pane.trailingAnchor.constraint(equalTo: trailingAnchor),
             pane.topAnchor.constraint(equalTo: topAnchor),
             pane.bottomAnchor.constraint(equalTo: bottomAnchor),
+            halo.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: -Self.haloOutset),
+            halo.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: Self.haloOutset),
+            halo.topAnchor.constraint(equalTo: pane.topAnchor, constant: -Self.haloOutset),
+            halo.bottomAnchor.constraint(equalTo: pane.bottomAnchor, constant: Self.haloOutset),
             clip.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
             clip.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
             clip.topAnchor.constraint(equalTo: pane.topAnchor),
             clip.bottomAnchor.constraint(equalTo: pane.bottomAnchor),
+            ring.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
+            ring.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
+            ring.topAnchor.constraint(equalTo: clip.topAnchor),
+            ring.bottomAnchor.constraint(equalTo: clip.bottomAnchor),
             content.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
             content.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
             content.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -padding),
@@ -115,6 +145,29 @@ final class PanelHostView: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Mark the ring for redisplay; it reads the terminal's frame itself, at draw time. Setting
+    /// the hole from here instead would read a frame that is still stale: AppKit lays a tree out
+    /// top-down, so `content` — a descendant, inside `clip` — has not been positioned yet when
+    /// this runs. That shipped a panel whose padding went unpainted until any later layout pass
+    /// happened to correct it (ZEN-282).
+    override func layout() {
+        super.layout()
+        ring.needsDisplay = true
+    }
+
+    /// Test hook: the focus glow's current strength (ZEN-282), 0 while unfocused.
+    var haloOpacityForTesting: Float { halo.layer?.opacity ?? -1 }
+
+    /// Test hook: the glow's frame and where it sits in the stack (ZEN-282). It is a sibling
+    /// *beneath* the card that has to reach past the panel's own bounds — get either wrong and
+    /// the glow is drawn over the terminal, or clipped to nothing, with focus state still correct.
+    var haloGeometryForTesting: (frame: NSRect, isBelowCard: Bool) {
+        let haloIndex = subviews.firstIndex(of: halo)
+        let paneIndex = subviews.firstIndex(of: pane)
+        guard let haloIndex, let paneIndex else { return (halo.frame, false) }
+        return (halo.frame, haloIndex < paneIndex)
+    }
 
     /// Test hook: whether the header is present and currently shown (ZEN-65).
     var isHeaderVisibleForTesting: Bool { headerView.map { !$0.isHidden } ?? false }
@@ -165,27 +218,115 @@ final class PanelHostView: NSView {
 
     private static var idleBorder: NSColor { Theme.current.chrome.ink(alpha: 0.08) }
 
-    /// Re-apply the live pane border / focus-halo colors after a config change — no relaunch.
-    /// The glow's `shadowColor` is set once at init (only its opacity is toggled elsewhere), so
-    /// it's reset explicitly; the border color is picked up by re-running `updateHalo()`, which
-    /// reads `idleBorder`/`accent` fresh. The clip's padding-ring fill is likewise set once at
-    /// init, and the header rebuilds its title/keybind against the live theme and keymap.
+    /// Re-apply the live pane border / focus-halo colors after a config change, no relaunch. The
+    /// glow's color is set once at init (only its opacity is toggled elsewhere), so it's reset
+    /// explicitly; the border color is picked up by re-running `updateHalo()`, which reads
+    /// `idleBorder`/`accent` fresh. `applyBackground()` re-reads the live alpha as well as the
+    /// live color, and the header rebuilds its title/keybind against the theme and keymap.
     func reapplyTheme() {
-        pane.layer?.shadowColor = Theme.current.chrome.accent.nsColor.cgColor
-        clip.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
+        halo.color = Theme.current.chrome.accent.nsColor
+        applyBackground()
         headerView?.reapplyTheme()
         updateHalo()
     }
 
+    /// Who paints the panel's interior, which `background-alpha` swaps between two arrangements.
+    ///
+    /// Solid (the default): the clip fills edge to edge, so the padding ring and the area under
+    /// the terminal are one flat color and a redraw gap shows the terminal background.
+    ///
+    /// Translucent: the clip has to stop filling, or it repaints the terminal background behind a
+    /// surface that is now see-through, and nothing shows through. The ring takes over the border
+    /// region alone at the same alpha the terminal blends at, so the two read as one surface
+    /// instead of the ring sitting a shade lighter (ZEN-282). Both values are re-read here rather
+    /// than captured at init, so a Settings edit applies live.
+    private func applyBackground() {
+        let background = Theme.current.chrome.background.nsColor
+        let alpha = CGFloat(GeneralConfig.current.backgroundAlpha)
+        let isSolid = GeneralConfig.current.terminalBehavior.isBackgroundSolid
+        clip.layer?.backgroundColor = isSolid ? background.cgColor : nil
+        ring.isHidden = isSolid
+        ring.color = background.withAlphaComponent(alpha)
+    }
+
     private func updateHalo() {
-        guard let layer = pane.layer else { return }
+        guard let layer = pane.layer, let haloLayer = halo.layer else { return }
         // Ease from the live (presentation) value so a focus-nav crossfade falls out — the
         // losing host's glow eases down as the gaining host's eases up. Fast (haloDuration)
         // so it never trails rapid ⌘hjkl nav.
         Motion.ease(
             layer, keyPath: "borderColor",
             to: (isFocused ? Theme.current.chrome.accent.nsColor : Self.idleBorder).cgColor)
-        Motion.ease(layer, keyPath: "shadowOpacity", to: isFocused ? Float(0.3) : Float(0))
+        Motion.ease(haloLayer, keyPath: "opacity", to: isFocused ? Self.haloOpacity : 0)
+    }
+
+    /// The focus glow, drawn around the card rather than cast by it.
+    ///
+    /// It used to be a `shadowOpacity` on the card's own layer, which Core Animation renders by
+    /// *filling* `shadowPath` — so the accent covered the card's whole interior as well as
+    /// haloing it. That was free while the panel was opaque and painted over it, and became a
+    /// wash across the pane the moment `background-alpha` made it see-through (ZEN-282).
+    ///
+    /// Reshaping the path into a ring doesn't work: a drop shadow decays outward *from* a filled
+    /// silhouette, so a ring makes the glow ramp up as it travels out instead of fading, landing
+    /// as a huge dense cloud. The silhouette has to stay the card, and the cut has to happen at
+    /// draw time — hence the clip below, which keeps the falloff exactly as it was and removes
+    /// only the half that fell inside.
+    private final class HaloView: NSView {
+        /// Measured falloff from the card edge, before `haloOpacity`: 6 peaks at 0.118 alpha and
+        /// dies by 6pt, 12 peaks at 0.133 and carries to 10pt. 8 sits between them, reaching far
+        /// enough to read as a glow without the purple wash the wider end spreads around a pane.
+        private static let blur: CGFloat = 8
+
+        var color: NSColor = .clear { didSet { needsDisplay = true } }
+        /// How far this view is outset past the card it glows around, i.e. the inset from its own
+        /// bounds back to the card's edge.
+        var outset: CGFloat = 0 { didSet { needsDisplay = true } }
+
+        /// Decoration only — never take a click off the panel beneath it.
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func draw(_ dirtyRect: NSRect) {
+            guard let context = NSGraphicsContext.current?.cgContext else { return }
+            let card = bounds.insetBy(dx: outset, dy: outset)
+            guard card.width > 0, card.height > 0 else { return }
+            let radius = min(PanelHostView.cornerRadius, card.width / 2, card.height / 2)
+            let path = CGPath(
+                roundedRect: card, cornerWidth: radius, cornerHeight: radius, transform: nil)
+
+            context.saveGState()
+            context.addRect(bounds)
+            context.addPath(path)
+            context.clip(using: .evenOdd)  // everything except the card itself
+            context.setShadow(offset: .zero, blur: Self.blur, color: color.cgColor)
+            context.setFillColor(color.cgColor)
+            context.addPath(path)
+            context.fillPath()  // clipped away; only the shadow it throws survives
+            context.restoreGState()
+        }
+    }
+
+    /// The panel's inner padding, painted as a rounded rect with the terminal content punched out
+    /// of it. A view rather than a `CAShapeLayer` hand-inserted under the clip's own sublayers,
+    /// where AppKit owns the ordering and a later subview insertion can reshuffle it.
+    private final class RingFillView: NSView {
+        var color: NSColor = .clear { didSet { needsDisplay = true } }
+        /// The terminal, whose frame is the part left unpainted. Read at draw time rather than
+        /// stored, because layout runs top-down and this view's owner is laid out first — see
+        /// `PanelHostView.layout()`.
+        weak var contentView: NSView?
+
+        override func draw(_ dirtyRect: NSRect) {
+            guard let contentView, let superview else { return }
+            let hole = convert(contentView.frame, from: superview)
+            let path = NSBezierPath(
+                roundedRect: bounds, xRadius: PanelHostView.cornerRadius,
+                yRadius: PanelHostView.cornerRadius)
+            path.append(NSBezierPath(rect: hole))
+            path.windingRule = .evenOdd
+            color.setFill()
+            path.fill()
+        }
     }
 
     /// A muted small-caps title (left) and its live keybind chip (right), e.g. `BOTTOM DRAWER ⌘B`,

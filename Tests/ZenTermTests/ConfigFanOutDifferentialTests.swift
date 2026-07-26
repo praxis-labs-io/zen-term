@@ -342,6 +342,12 @@ final class ConfigFanOutDifferentialTests: XCTestCase {
         try assertGateSkipsNothing(Scenario(name: "backdrop-alpha") { $0.backdropAlpha = 0.3 })
     }
 
+    /// Reaches further than the other `TerminalBehavior` keys: it also has to recolor the panel,
+    /// which fills its padding ring to match the surface (ZEN-282).
+    func test_backgroundAlpha() throws {
+        try assertGateSkipsNothing(Scenario(name: "background-alpha") { $0.backgroundAlpha = 0.6 })
+    }
+
     func test_cursorStyle() throws {
         try assertGateSkipsNothing(Scenario(name: "cursor-style") { $0.cursorStyle = .bar })
     }

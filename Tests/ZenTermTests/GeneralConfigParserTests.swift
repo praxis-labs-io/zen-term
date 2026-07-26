@@ -32,6 +32,7 @@ final class GeneralConfigParserTests: XCTestCase {
             cursor-style-blink = false
             macos-option-as-alt = false
             scroll-multiplier = 4
+            background-alpha = 0.7
             window-chrome = false
             backdrop-alpha = 0.5
             window-gutter = 16
@@ -53,6 +54,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertFalse(config.cursorBlink)
         XCTAssertFalse(config.optionAsAlt)
         XCTAssertEqual(config.scrollMultiplier, 4)
+        XCTAssertEqual(config.backgroundAlpha, 0.7)
         XCTAssertFalse(config.windowChrome)
         XCTAssertEqual(config.backdropAlpha, 0.5)
         XCTAssertEqual(config.windowGutter, 16)
@@ -99,6 +101,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.fontSize, 20)
         XCTAssertEqual(config.cursorStyle, GeneralConfig.builtIn.cursorStyle)  // untouched
         XCTAssertEqual(config.backdropAlpha, GeneralConfig.builtIn.backdropAlpha)
+        XCTAssertEqual(config.backgroundAlpha, GeneralConfig.builtIn.backgroundAlpha)  // 1 = solid
     }
 
     func test_malformedValues_fallBack() {
@@ -118,8 +121,10 @@ final class GeneralConfigParserTests: XCTestCase {
     }
 
     func test_outOfRange_clamps() {
-        let config = parse("backdrop-alpha = 2.5\nfont-size = 2\nmax-drawer-fraction = 0.99\n")
+        let config = parse(
+            "backdrop-alpha = 2.5\nbackground-alpha = -0.5\nfont-size = 2\nmax-drawer-fraction = 0.99\n")
         XCTAssertEqual(config.backdropAlpha, 1.0)  // clamped to [0, 1]
+        XCTAssertEqual(config.backgroundAlpha, 0)  // clamped to [0, 1]
         XCTAssertEqual(config.fontSize, 6)  // clamped to [6, 72]
         XCTAssertEqual(config.maxDrawerFraction, 0.95)  // clamped to [0.3, 0.95]
     }

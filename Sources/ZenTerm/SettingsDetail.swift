@@ -42,6 +42,31 @@ enum SettingsDetail {
         return caption
     }
 
+    /// The trailing hint that tells a reorderable list its rows can move. ⌥↑/⌥↓ is otherwise
+    /// undiscoverable: nothing on a row suggests it. The caller retains the label so `reapplyTheme`
+    /// can recolor it, and only builds one when there is more than one row, so the hint never
+    /// advertises a keystroke that would do nothing.
+    static func reorderHint() -> NSTextField {
+        let hint = NSTextField(labelWithString: "⌥↑ ⌥↓ to reorder")
+        hint.font = .systemFont(ofSize: 10, weight: .medium)
+        hint.textColor = Theme.current.chrome.ink(alpha: 0.35)
+        hint.setContentHuggingPriority(.required, for: .horizontal)
+        return hint
+    }
+
+    /// A group caption with an optional hint pinned to its trailing edge. The caller pins the row's
+    /// width to the list stack.
+    static func headerRow(caption: NSTextField, hint: NSTextField?) -> NSView {
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let row = NSStackView(views: [caption, spacer] + (hint.map { [$0] } ?? []))
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 8
+        row.translatesAutoresizingMaskIntoConstraints = false
+        return row
+    }
+
     /// Move keyboard focus to the `delta`-neighbor of `stops` and scroll it into view — the shared
     /// core of every section's arrow-nav. `anchor` is the current stop's index (nil = none focused).
     /// `wrap` is off for arrows (a no-op at the ends) and on for Tab, which loops within the card.

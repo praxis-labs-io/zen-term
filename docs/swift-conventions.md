@@ -173,6 +173,37 @@ half-configured). Use `NSView.shadow = NSShadow(...)` for static shadows (surviv
 combines fine with an explicit `layer.shadowPath`). Direct `layer.shadow*` writes are only safe
 *after* insertion, which is why animated focus glows driven post-mount work (ZEN-54).
 
+**A drop shadow can't be made outside-only by reshaping `shadowPath`.** Core Animation *fills*
+`shadowPath` and blurs the result, so the shadow covers the card's interior as well as haloing it.
+That is free while the card is opaque and paints over it, and becomes a wash across the interior the
+moment anything behind it turns translucent. The tempting fix, an even-odd path of an inflated
+outer rect minus the card, does not work, and fails in a way that looks like a tuning problem
+rather than a design one: a shadow decays outward *from* a filled silhouette, so a ring makes the
+glow ramp **up** as it travels out instead of fading, and the inflation moves the outer edge with
+it. The result is a large dense cloud, at any inflation. The silhouette has to stay the card, and
+the cut has to happen at draw time: clip to everything outside the card (`ctx.clip(using: .evenOdd)`
+over the bounds plus the card path), set the shadow, then fill the card path. The fill is clipped
+away and only the outward half of its shadow survives, with the falloff unchanged. `PanelHostView`'s
+`HaloView` is the worked example (ZEN-282).
+
+**`layout()` cannot read a descendant's frame.** AppKit lays a tree out top-down, so when a view's
+`layout()` runs, its own subviews have been positioned but anything deeper has not: it still holds
+the frame from the *previous* pass. `PanelHostView` derived its padding-ring cutout from the
+terminal's frame two levels down and got stale geometry on every fresh panel, self-correcting at
+whatever later layout happened to come along (a resize, a tab switch), which is what made it look
+like a rendering bug rather than a layout one. Read a descendant's frame at **draw** time, which
+runs after the whole tree is laid out, and have `layout()` do nothing but `needsDisplay = true`
+(ZEN-282). The same ordering trap applies to anything else deriving geometry from below itself.
+
+**A translucent layer can't rely on libghostty's top-left content pinning.** `IOSurfaceLayer` sets
+`contentsGravity = kCAGravityTopLeft` deliberately, so a frame is never stretched while a resize is
+in flight. That works because the layer is opaque over the terminal background: wherever the
+drawable is smaller than the layer, the background fills in. Drop the layer out of opaque for
+`background-alpha` and that uncovered region becomes a see-through block with a hard edge at the
+drawable's bounds, most visible between a surface's first layout and its final size, and on every
+resize after. Set `contentsGravity = .resize` whenever the surface is translucent so the last frame
+stretches until the next one lands (ZEN-282).
+
 **A layer-*hosting* view owns its own `contentsScale`, and screen moves need their own
 notification.** AppKit syncs `layer.contentsScale` to the window's backing scale factor only for
 layer-*backed* views. `GhosttyHostView` is layer-hosting (libghostty attaches its Metal layer, so the

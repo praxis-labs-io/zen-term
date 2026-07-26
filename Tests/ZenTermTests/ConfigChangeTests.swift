@@ -72,6 +72,7 @@ final class ConfigChangeTests: XCTestCase {
         XCTAssertEqual(change(from: { $0.optionAsAlt.toggle() }), .terminalBehavior)
         XCTAssertEqual(change(from: { $0.scrollMultiplier += 0.5 }), .terminalBehavior)
         XCTAssertEqual(change(from: { $0.cursorShader = "cursor_blaze" }), .terminalBehavior)
+        XCTAssertEqual(change(from: { $0.backgroundAlpha = 0.6 }), .terminalBehavior)
     }
 
     func test_remainingKinds_eachYieldTheirOwn() {

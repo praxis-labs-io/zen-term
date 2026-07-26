@@ -22,6 +22,10 @@ struct GeneralConfig: Equatable {
     /// the seam; an unknown name resolves to nil. Bundled-only, single-select by design.
     var cursorShader: String?
 
+    /// Translucency of the terminal background, 0…1. 1 is a solid surface; below that the pane's
+    /// inner padding follows the same value, so the panel reads as one surface (`PanelHostView`).
+    var backgroundAlpha: Double
+
     // Theme — selects a named file from `~/.config/zen-term/themes/`. Nil → the legacy
     // single `theme` file if present, else the built-in default.
     var themeName: String?
@@ -94,6 +98,7 @@ struct GeneralConfig: Equatable {
         optionAsAlt: true,
         scrollMultiplier: 1.5,
         cursorShader: nil,
+        backgroundAlpha: 1,
         themeName: nil,
         fontName: "JetBrainsMono Nerd Font Mono",
         fontSize: 14,
@@ -137,6 +142,7 @@ struct GeneralConfig: Equatable {
     var terminalBehavior: TerminalBehavior {
         TerminalBehavior(
             cursorStyle: cursorStyle, cursorBlink: cursorBlink, cursorThickness: cursorThickness,
-            optionAsAlt: optionAsAlt, scrollMultiplier: scrollMultiplier, cursorShader: cursorShader)
+            optionAsAlt: optionAsAlt, scrollMultiplier: scrollMultiplier, cursorShader: cursorShader,
+            backgroundAlpha: backgroundAlpha)
     }
 }

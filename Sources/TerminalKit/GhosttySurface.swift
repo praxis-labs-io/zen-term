@@ -77,7 +77,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// as not busy and a running command as busy. A shell ghostty can't integrate
     /// (Apple's /bin/bash) has no prompt marks, so this conservatively reads busy —
     /// erring toward an extra close confirmation, never toward losing live work.
-    /// True process-group parity is tracked as a follow-up (ZEN-69).
+    /// A backgrounded job leaves the shell sitting at a prompt, so prompt marks alone read as
+    /// not busy while real work is still running.
     public var isBusy: Bool {
         guard let surfacePtr else { return false }
         return ghostty_surface_needs_confirm_quit(surfacePtr)
@@ -138,6 +139,9 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             return
         }
 
+        // Below the nil guard: a failed surface forks no shell, so there is nothing to record.
+        Self.recordShellSessions()
+
         lastTheme = config.theme
         lastBehavior = config.behavior ?? .default
         hostView.scrollMultiplier = (config.behavior ?? .default).scrollMultiplier
@@ -179,26 +183,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             }
         }
 
-        // libghostty just made hostView layer-hosting (its Metal layer is now
-        // hostView.layer). The host window is transparent for the vibrancy backdrop, so
-        // by default the compositor blends this layer against that backdrop every frame —
-        // which tears under heavy TUI redraws and flashes the (light) backdrop through any
-        // redraw gap. Mark the layer opaque over the terminal background so it composites
-        // as a solid surface and gaps show the terminal bg, not the window behind it.
-        //
-        // This holds with a cursor shader active too. ZEN-188 carved out an exception — drop the
-        // layer out of opaque whenever a shader is on, so the alpha ghostty's shader pass writes
-        // reaches Core Animation instead of being ignored — against an alt-screen white flash.
-        // That flash was root-caused by reading the code, never reproduced with the shaders that
-        // shipped, and the guard went in preemptively alongside them, so its own "no flash across
-        // vim/less/fzf" verification only ever ran with the guard already in place. Re-tested with
-        // it removed (backdrop-alpha 0.5, cursor_warp, 5K) across vim, nvim, less, fzf and
-        // lazygit: no flash. It also bought nothing — the window is translucent below
-        // backdrop-alpha 1 regardless, so the compositor blends it either way (ZEN-271).
-        if let layer = hostView.layer {
-            layer.isOpaque = true
-            layer.backgroundColor = (config.theme?.background.nsColor ?? .black).cgColor
-        }
+        applyLayerBacking(theme: config.theme, behavior: config.behavior ?? .default)
 
         // The host view may already be mounted, in which case its own `viewDidMoveToWindow`
         // ran before `surfacePtr` existed and couldn't push the display id.
@@ -255,9 +240,24 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         }
     }
 
+    /// Note the shell sessions this app is running, so teardown has something to sweep.
+    ///
+    /// It samples rather than taking one snapshot because libghostty forks the shell well past
+    /// `ghostty_surface_new`'s return, and `setsid()` then runs in the child, concurrently with
+    /// us — a snapshot taken anywhere inside `start()` reliably finds nothing. It records every
+    /// session it sees, not "this surface's", which is not a thing anything here can identify
+    /// (see `ShellSessionLedger`).
+    /// One sampler serves every surface. What it records is surface-independent, so a workspace
+    /// opening eight panes would otherwise run eight identical samplers: 160 process-table walks
+    /// and eight dispatch threads parked in `Thread.sleep`. A start landing while one is already
+    /// running extends its deadline instead of starting another.
+    private static func recordShellSessions() {
+        ShellSessionLedger.shared.sample(for: 0.5, every: 0.025)
+    }
+
     /// Re-apply appearance/behavior in place. libghostty config is app-global, so this
     /// re-themes every surface via `GhosttyApp.updateConfig` (deduped there); the pieces
-    /// scoped to this surface (opaque-layer bg, scroll multiplier, redraw) are applied here.
+    /// scoped to this surface (layer backing, scroll multiplier, redraw) are applied here.
     public func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {
         lastTheme = theme
         lastBehavior = behavior
@@ -280,15 +280,47 @@ public final class GhosttySurface: NSObject, TerminalSurface {
                 applyShaderConfig(stoodDownBehavior, animation: .whileFocused)  // already stood down
             }
         }
-        if let layer = hostView.layer {
-            // Reset the opaque-layer background (the same trick start(_:) uses) so redraw gaps
-            // show the new terminal bg, not the old one. Opacity doesn't move with the cursor
-            // shader any more — see start(_:).
-            layer.isOpaque = true
-            layer.backgroundColor = theme.background.nsColor.cgColor
-        }
+        applyLayerBacking(theme: theme, behavior: behavior)
         hostView.scrollMultiplier = behavior.scrollMultiplier
         if let surfacePtr { ghostty_surface_refresh(surfacePtr) }
+    }
+
+    /// How the surface's layer composites against the window behind it. Both entry points run
+    /// this: `start(_:)` once libghostty has made `hostView` layer-hosting, and `applyAppearance`
+    /// on every live config change.
+    ///
+    /// At full opacity the layer is marked opaque over the terminal background. The host window
+    /// is transparent for the vibrancy backdrop, so otherwise the compositor blends this layer
+    /// against that backdrop every frame — which tears under heavy TUI redraws and flashes the
+    /// (light) backdrop through any redraw gap. Opaque makes it composite as a solid surface, and
+    /// gaps show the terminal bg rather than the window behind it.
+    ///
+    /// Below 1 that has to invert, and it is the whole of `background-alpha` (ZEN-282): `isOpaque`
+    /// tells Core Animation it need not blend, so the alpha ghostty renders is discarded and
+    /// dialling the ghostty key alone changes nothing on screen. The background fill has to go
+    /// too — it sits behind the drawable and would repaint the terminal background at full
+    /// strength under ghostty's own alpha-blended one.
+    ///
+    /// A cursor shader doesn't move this either way. ZEN-188 carved out an exception — drop the
+    /// layer out of opaque whenever a shader is on, so the alpha ghostty's shader pass writes
+    /// reaches Core Animation instead of being ignored — against an alt-screen white flash. That
+    /// flash was root-caused by reading the code, never reproduced with the shaders that shipped,
+    /// and the guard went in preemptively alongside them, so its own "no flash across
+    /// vim/less/fzf" verification only ever ran with the guard already in place. Re-tested with it
+    /// removed (backdrop-alpha 0.5, cursor_warp, 5K) across vim, nvim, less, fzf and lazygit: no
+    /// flash. It also bought nothing — the window is translucent below backdrop-alpha 1
+    /// regardless, so the compositor blends it either way (ZEN-271).
+    private func applyLayerBacking(theme: TerminalTheme?, behavior: TerminalBehavior) {
+        guard let layer = hostView.layer else { return }
+        let isSolid = behavior.isBackgroundSolid
+        layer.isOpaque = isSolid
+        layer.backgroundColor = isSolid ? (theme?.background.nsColor ?? .black).cgColor : nil
+        // libghostty pins its contents top-left rather than stretching them, so whenever its
+        // drawable is smaller than this layer — every resize, and the stretch between a
+        // surface's first layout and its final one — the rest of the layer is uncovered. That is
+        // invisible behind the opaque background above, and a see-through block without it, so a
+        // translucent surface stretches the last frame instead until the next one lands (ZEN-282).
+        layer.contentsGravity = isSolid ? .topLeft : .resize
     }
 
     public func focus() { hostView.window?.makeFirstResponder(hostView) }
@@ -415,9 +447,20 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         cancelShaderSettle()
         removeAppActiveObservers()
         guard let surfacePtr else { return }
+        // Last chance to see this shell alive. The sampler in `start()` is a fast path with an
+        // unenforced bound: libghostty forks on its io thread, so a pane opening on a loaded
+        // machine can fork after the sampler stops, and a session never recorded is one no
+        // teardown can ever sweep — the ZEN-269 leak back, silently. Here the shell provably
+        // still exists, and a sibling caught by the same snapshot is alive and so unsweepable.
+        ShellSessionLedger.shared.record(ShellSession.leaderChildren())
         ghostty_surface_free(surfacePtr)
         self.surfacePtr = nil
         hostView.surfacePtr = nil
+        // After the free, which is what closes the pty: libghostty's own SIGHUP to the shell's
+        // process group goes first, and the sweep then takes what that group never covered — the
+        // background jobs, the children parked in their own groups (ZEN-269). The free is also
+        // what takes this session's leader down, which is how the sweep knows what to reach for.
+        ShellSessionReaper.shared.reapOrphans()
     }
 
     deinit {
@@ -430,8 +473,13 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         SecureInput.shared.removeScoped(secureInputID)
         removeAppActiveObservers()
         if let surfacePtr {
+            // Same last-chance record as `terminate()`: a surface released without ever being
+            // terminated still has to leave a sweepable session behind if the start sampler
+            // missed its fork.
+            ShellSessionLedger.shared.record(ShellSession.leaderChildren())
             ghostty_surface_free(surfacePtr)
             hostView.surfacePtr = nil
+            ShellSessionReaper.shared.reapOrphans()
         }
     }
 

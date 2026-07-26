@@ -112,6 +112,26 @@ fails.
   is `paneFocused && isAppActive`, and `GhosttyHostView` reports its window's
   occlusion, so a backgrounded, covered or minimized window runs no shader draw
   timer at all (ZEN-271).
+- **Teardown sweeps process sessions, not process groups.** libghostty sends
+  `SIGHUP` to the shell's own process group, which misses every job the shell
+  parked elsewhere: background jobs, children in their own process group (what
+  `npm`, `turbo` and watchers do), `nohup`, `disown`. Those survived a closed tab
+  and a quit (ZEN-269). `ShellSessionLedger` records every shell session the app
+  starts; teardown sweeps the ones whose *leader has exited*, via
+  `ShellSessionReaper` (`SIGTERM`, 150ms grace, `SIGKILL`, off-main).
+  **A surface cannot name its own session.** libghostty forks the shell
+  asynchronously under a setuid `/usr/bin/login` whose command line and
+  environment the kernel hides, so neither fork order nor a planted env tag
+  separates one surface's session from the next. A surface that guesses can adopt
+  a sibling's and kill a live pane's work, so nothing attributes: freeing a
+  surface closes its pty and takes that session's leader with it, and a leaderless
+  session is by definition nobody's live pane.
+  A consequence: `isBusy` still reads only OSC 133 prompt marks, because
+  identifying *this* surface's background work would need the attribution above.
+- **Quit drives window teardown by hand.** `windowWillClose` does not fire on app
+  termination, so `applicationShouldTerminate` calls `tearDownForQuit()` on every
+  window and waits on `ShellSessionReaper.drain` (capped) before replying. Without
+  it, quit frees no surface at all (ZEN-269).
 - **`GHOSTTY_RESOURCES_DIR` is force-overridden.** Launching ZenTerm from inside
   Ghostty.app would otherwise inherit a mismatched version's shell integration and
   terminfo.
@@ -454,8 +474,10 @@ doesn't diff keeps the old do-everything behavior.
 **Gate on what a call chain resolves, not what it is named after.** The
 dependencies are not all obvious: `reapplyChromeColors()` reaches
 `PanelHostView.reapplyTheme()`, which rebuilds the panel header's keycap from the
-live keymap, so a rebind has to reach it as well as a theme swap. An open command
-palette re-renders its rows the same way. Conversely the drawer fractions have no
+live keymap, so a rebind has to reach it as well as a theme swap, and re-reads
+`background-alpha` to pick which of two arrangements paints the panel, so a
+terminal-behavior change has to reach it too. An open command palette re-renders
+its rows the same way. Conversely the drawer fractions have no
 live consumer at all (a built tab never re-reads them), so changing one does no
 work. Before adding a kind or a call site, trace what it actually reads.
 

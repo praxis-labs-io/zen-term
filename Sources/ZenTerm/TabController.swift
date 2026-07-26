@@ -586,7 +586,6 @@ final class TabController: NSObject {
             : PanelMeta(title: "Right drawer: Focus Mode", action: .toggleZoom)
         let panel = PanelHostView(
             content: surface.view,
-            background: Theme.current.chrome.background.nsColor,
             meta: meta, zoomMeta: zoomMeta,
             onFocusRequest: { [weak self] in self?.focusDrawer(edge) })
         panel.translatesAutoresizingMaskIntoConstraints = false

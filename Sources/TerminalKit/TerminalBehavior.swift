@@ -20,6 +20,11 @@ public struct TerminalBehavior: Equatable, Sendable {
     /// emits it to ghostty config. Single by design — the chrome ships one selectable effect,
     /// not a stack.
     public var cursorShader: String?
+    /// Translucency of the terminal background, 0…1. 1 (the default) is a solid surface; below
+    /// that the backend renders its background with alpha and the chrome shows through. The
+    /// backend also has to stop asserting opacity to the compositor at that point — see
+    /// `GhosttySurface`, where an opaque layer would discard the alpha outright.
+    public var backgroundAlpha: Double
 
     public init(
         cursorStyle: CursorStyle = .block,
@@ -27,7 +32,8 @@ public struct TerminalBehavior: Equatable, Sendable {
         cursorThickness: Int = 2,
         optionAsAlt: Bool = true,
         scrollMultiplier: Double = 1.5,
-        cursorShader: String? = nil
+        cursorShader: String? = nil,
+        backgroundAlpha: Double = 1
     ) {
         self.cursorStyle = cursorStyle
         self.cursorBlink = cursorBlink
@@ -35,7 +41,12 @@ public struct TerminalBehavior: Equatable, Sendable {
         self.optionAsAlt = optionAsAlt
         self.scrollMultiplier = scrollMultiplier
         self.cursorShader = cursorShader
+        self.backgroundAlpha = backgroundAlpha
     }
+
+    /// Whether the surface composites as a solid one — the fast path, and what every layer
+    /// standing between the terminal and the window backdrop keys off.
+    public var isBackgroundSolid: Bool { backgroundAlpha >= 1 }
 
     /// The shipped baseline used when no config is present.
     public static let `default` = TerminalBehavior()
@@ -53,5 +64,11 @@ public struct TerminalBehavior: Equatable, Sendable {
     /// adjustment is needed so the generated config stays clean.
     public var ghosttyCursorThicknessDelta: Int? {
         cursorThickness > 1 ? cursorThickness - 1 : nil
+    }
+
+    /// ghostty's `background-opacity`, or nil at full opacity so the generated config stays
+    /// clean and the shipped baseline is unchanged.
+    public var ghosttyBackgroundOpacity: Double? {
+        isBackgroundSolid ? nil : backgroundAlpha
     }
 }

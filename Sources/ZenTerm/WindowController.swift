@@ -317,8 +317,12 @@ final class WindowController: NSObject {
             }
             // `reapplyChromeColors` reaches `PanelHostView.reapplyTheme()`, which rebuilds the
             // panel header's keycap against the live keymap — so a rebind needs it too, not just
-            // a theme swap.
-            if change.contains(.theme) || change.contains(.keymap) {
+            // a theme swap. `.terminalBehavior` for the same reason one step further out: that
+            // call also re-reads `background-alpha` to decide whether the clip fills the panel or
+            // the ring does (ZEN-282).
+            if change.contains(.theme) || change.contains(.keymap)
+                || change.contains(.terminalBehavior)
+            {
                 for controller in self.controllers.values { controller.reapplyChromeColors() }
             }
             if change.contains(.theme) {
@@ -915,8 +919,8 @@ final class WindowController: NSObject {
     private static func landing(forSettingKey key: String) -> SettingsLanding {
         switch key {
         case "font-family", "font-size", "cursor-style", "cursor-style-blink", "cursor-thickness",
-            "cursor-shader", "macos-option-as-alt", "scroll-multiplier", "shell", "shell-args",
-            "editor", "ai":
+            "cursor-shader", "background-alpha", "macos-option-as-alt", "scroll-multiplier", "shell",
+            "shell-args", "editor", "ai":
             return .terminal
         case "theme", "window-chrome", "backdrop-alpha", "window-gutter", "pane-gap",
             "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",
@@ -960,6 +964,9 @@ final class WindowController: NSObject {
         toolsSection.onReorder = { [weak self] floats in self?.reorderToolFloats(floats) }
         let workspacesSection = SettingsWorkspacesSection()
         workspacesSection.onEditWorkspace = { [weak self] ws in self?.openWorkspaceForm(editing: ws) }
+        workspacesSection.onReorder = { [weak self] moved, neighbour in
+            self?.reorderWorkspaces(moved, with: neighbour) ?? false
+        }
         // Sorted by nav title so the nav reads alphabetically and stays ordered as sections are
         // added — the array order is the on-screen order.
         let sections: [SettingsSection] = [
@@ -1197,6 +1204,26 @@ final class WindowController: NSObject {
             return
         }
         reopenSettingsOnWorkspaces()
+    }
+
+    /// Exchange two workspaces' positions in the `workspaces` file, reporting whether the write
+    /// landed so the list only re-renders on a file that really changed. Unlike add / edit / delete
+    /// this doesn't reopen Settings — the card is already open and rebuilding it would throw away the
+    /// user's place in the list mid-⌥↓. Nothing to reload either: the ⌘⇧P picker re-reads the file
+    /// every time it opens.
+    private func reorderWorkspaces(_ moved: Workspace, with neighbour: Workspace) -> Bool {
+        do {
+            // False means a title wasn't in the file: the list is stale, so re-rendering it would
+            // show an order the file never had. Silent rather than a toast — the file changed under
+            // the card (a hand-edit, another window), which isn't a failure to report.
+            return try WorkspacesWriter.swap(moved.title, with: neighbour.title)
+        } catch {
+            toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Couldn't Reorder Workspaces",
+                    message: "Failed to update the workspaces file: \(error.localizedDescription)"))
+            return false
+        }
     }
 
     /// Close the workspace form and reopen the Settings card on its Workspaces section — the "back"
@@ -1810,4 +1837,10 @@ final class WindowController: NSObject {
 
 extension WindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) { tearDown() }
+
+    /// Quit terminates the process without closing windows, so `windowWillClose` never fires
+    /// and every shell is orphaned instead of swept (ZEN-269). The app delegate drives this on
+    /// the way out. `tearDown()` is idempotent, so a window that closes normally afterwards is
+    /// unaffected.
+    func tearDownForQuit() { tearDown() }
 }

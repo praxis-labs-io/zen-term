@@ -118,6 +118,20 @@ final class GhosttyConfigWriterTests: XCTestCase {
         XCTAssertFalse(text.contains("custom-shader"))
     }
 
+    /// The chrome's `background-alpha` maps to ghostty's own `background-opacity` (ZEN-282).
+    func test_backgroundAlphaEmitsGhosttyOpacityKey() {
+        let behavior = TerminalBehavior(backgroundAlpha: 0.7)
+        let text = GhosttyConfigWriter.configText(for: theme, behavior: behavior)
+        XCTAssertTrue(text.contains("background-opacity = 0.7\n"))
+    }
+
+    /// Nothing is emitted at full opacity, so an unset key leaves the generated config exactly
+    /// what it has always been — and ghostty keeps its own default rather than being pinned.
+    func test_solidBackground_emitsNoOpacityKey() {
+        let text = GhosttyConfigWriter.configText(for: theme, behavior: TerminalBehavior())
+        XCTAssertFalse(text.contains("background-opacity"))
+    }
+
     func test_defaultBehavior() {
         let behavior = TerminalBehavior()
         XCTAssertEqual(behavior.cursorStyle, .block)
@@ -125,6 +139,9 @@ final class GhosttyConfigWriterTests: XCTestCase {
         XCTAssertEqual(behavior.cursorThickness, 2)
         XCTAssertTrue(behavior.optionAsAlt)
         XCTAssertEqual(behavior.scrollMultiplier, 1.5)
+        XCTAssertEqual(behavior.backgroundAlpha, 1)
+        XCTAssertTrue(behavior.isBackgroundSolid)
+        XCTAssertNil(behavior.ghosttyBackgroundOpacity)
         XCTAssertEqual(behavior.ghosttyCursorStyle, "block")
         XCTAssertEqual(behavior.ghosttyCursorThicknessDelta, 1)  // 2px = base 1 + delta 1
         XCTAssertEqual(TerminalBehavior(cursorStyle: .bar).ghosttyCursorStyle, "bar")
