@@ -312,4 +312,169 @@ final class WorkspacesWriterTests: XCTestCase {
 
         XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Alpha"])
     }
+
+    // MARK: swap (ZEN-283)
+
+    private let threeSections = """
+        [Alpha]
+        path = ~/Dev/alpha
+
+        [Beta]
+        path = ~/Dev/beta
+        main = nvim
+
+        [Gamma]
+        path = ~/Dev/gamma
+        """
+
+    func test_swap_exchangesTwoSectionPositions() throws {
+        let root = try makeTempDir()
+        try seed(threeSections, in: root)
+
+        XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
+
+        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Beta", "Alpha", "Gamma"])
+    }
+
+    /// Order is the only thing a swap may change. A section's fields riding along with its header is
+    /// the whole point — a swap that moved headers alone would silently repoint every workspace at
+    /// its neighbour's folder.
+    func test_swap_movesEachSectionsFieldsWithIt() throws {
+        let root = try makeTempDir()
+        try seed(threeSections, in: root)
+
+        XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
+
+        let parsed = ConfigLoader.loadWorkspaces(configRoot: root)
+        XCTAssertEqual(parsed.first { $0.title == "Beta" }?.path, expandTilde("~/Dev/beta"))
+        XCTAssertEqual(parsed.first { $0.title == "Beta" }?.main, "nvim")
+        XCTAssertEqual(parsed.first { $0.title == "Alpha" }?.path, expandTilde("~/Dev/alpha"))
+        XCTAssertNil(parsed.first { $0.title == "Alpha" }?.main)
+    }
+
+    /// Sections of unequal length: splicing the shorter block into the longer one's slot first would
+    /// shift the indices under the second splice and shred both sections.
+    func test_swap_handlesSectionsOfUnequalLength() throws {
+        let root = try makeTempDir()
+        try seed(
+            """
+            [Short]
+            path = ~/Dev/short
+
+            [Long]
+            path = ~/Dev/long
+            main = nvim
+            right = claude
+            bottom = shell
+            focus = right
+            """, in: root)
+
+        XCTAssertTrue(try WorkspacesWriter.swap("Long", with: "Short", configRoot: root))
+
+        let parsed = ConfigLoader.loadWorkspaces(configRoot: root)
+        XCTAssertEqual(parsed.map(\.title), ["Long", "Short"])
+        XCTAssertEqual(parsed.first { $0.title == "Long" }?.right, "claude")
+        XCTAssertEqual(parsed.first { $0.title == "Long" }?.focus, .right)
+        XCTAssertEqual(parsed.first { $0.title == "Short" }?.path, expandTilde("~/Dev/short"))
+    }
+
+    /// The two rows a user swaps need not be neighbours in the file — a shadowed duplicate section
+    /// can sit between them — so the writer exchanges the two *named* blocks rather than moving one
+    /// past whatever line happens to be adjacent.
+    func test_swap_exchangesNonAdjacentSections() throws {
+        let root = try makeTempDir()
+        try seed(threeSections, in: root)
+
+        XCTAssertTrue(try WorkspacesWriter.swap("Gamma", with: "Alpha", configRoot: root))
+
+        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Gamma", "Beta", "Alpha"])
+    }
+
+    /// A comment sitting directly on a header documents that workspace, so it travels with it —
+    /// the convention `remove` already states when it refuses to swallow comments as separators.
+    func test_swap_carriesACommentAttachedToItsHeader() throws {
+        let root = try makeTempDir()
+        try seed(
+            """
+            # the one I actually work in
+            [Alpha]
+            path = ~/Dev/alpha
+
+            # scratch space
+            [Beta]
+            path = ~/Dev/beta
+            """, in: root)
+
+        XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
+
+        let lines = try read(root).components(separatedBy: "\n")
+        let betaHeader = try XCTUnwrap(lines.firstIndex(of: "[Beta]"))
+        let alphaHeader = try XCTUnwrap(lines.firstIndex(of: "[Alpha]"))
+        XCTAssertEqual(lines[betaHeader - 1], "# scratch space", "each comment follows its own section")
+        XCTAssertEqual(lines[alphaHeader - 1], "# the one I actually work in")
+        XCTAssertLessThan(betaHeader, alphaHeader, "and Beta really did move above Alpha")
+    }
+
+    /// A blank line below a comment block detaches it: the file's top banner documents the file, not
+    /// the first section, and must not be dragged into the middle by the first reorder.
+    func test_swap_leavesABlankSeparatedBannerAtTheTop() throws {
+        let root = try makeTempDir()
+        try seed(
+            """
+            # zen-term workspaces — the ⌘⇧P project list.
+            # See docs/config/workspaces for the field reference.
+
+            [Alpha]
+            path = ~/Dev/alpha
+
+            [Beta]
+            path = ~/Dev/beta
+            """, in: root)
+
+        XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
+
+        let lines = try read(root).components(separatedBy: "\n")
+        XCTAssertEqual(lines.first, "# zen-term workspaces — the ⌘⇧P project list.")
+        XCTAssertEqual(lines[1], "# See docs/config/workspaces for the field reference.")
+        XCTAssertEqual(lines[3], "[Beta]", "the banner stays; only the sections below it move")
+    }
+
+    /// The blank separators belong to the file's shape, not to either block, so a swap must leave
+    /// exactly as many as it found — no run-together sections, no growing gap per reorder.
+    func test_swap_preservesTheBlankSeparators() throws {
+        let root = try makeTempDir()
+        try seed(threeSections, in: root)
+        let before = try read(root)
+
+        XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
+
+        let after = try read(root)
+        XCTAssertFalse(after.contains("\n\n\n"), "no doubled blank line")
+        XCTAssertEqual(
+            after.components(separatedBy: "\n").count, before.components(separatedBy: "\n").count,
+            "a swap rearranges lines, it does not add or drop any")
+    }
+
+    /// A `\r` left by a CRLF-editing tool defeats a naive `hasSuffix("]")` header check, which would
+    /// leave the swap finding nothing and silently doing nothing.
+    func test_swap_handlesCRLFLineEndings() throws {
+        let root = try makeTempDir()
+        try seed("[Alpha]\r\npath = ~/Dev/alpha\r\n\r\n[Beta]\r\npath = ~/Dev/beta\r\n", in: root)
+
+        XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
+
+        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Beta", "Alpha"])
+    }
+
+    /// A title that isn't in the file has to be reported, not just skipped: the caller re-renders its
+    /// list on a `true`, so a silent no-op would leave the list showing an order the file never had.
+    func test_swap_unknownTitle_isANoOp_andReportsIt() throws {
+        let root = try makeTempDir()
+        try seed(threeSections, in: root)
+        let before = try read(root)
+
+        XCTAssertFalse(try WorkspacesWriter.swap("Alpha", with: "Ghost", configRoot: root))
+
+        XCTAssertEqual(try read(root), before, "a stale row must not rearrange the file")
+    }
 }

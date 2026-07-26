@@ -9,11 +9,18 @@
 # lines are ignored; unknown keys are ignored. A section with no `path` is skipped, a
 # malformed `env` line is dropped, and nothing here can crash the app (bad lines are
 # logged and skipped). Manage workspaces from inside the app too, in Settings → Workspaces
-# (add / edit / delete), or the ＋ row in the ⌘⇧P picker to add-and-open one. Hand-edits
-# to this file are picked up the next time you open the ⌘⇧P picker (or on restart).
+# (add / edit / delete / reorder), or the ＋ row in the ⌘⇧P picker to add-and-open one.
+# Hand-edits to this file are picked up the next time you open the ⌘⇧P picker (or on
+# restart).
 #
 # The section header is the title: it's shown in the picker and pinned as the tab name,
 # so it's independent of the folder name (`[ZenTerm]` can point at ~/Dev/zen-term).
+#
+# Order: the picker lists workspaces in the order their sections appear here, so to put
+# one first, move its whole `[Title]` block up. ⌥↑/⌥↓ on a row in Settings → Workspaces
+# does the same edit for you. A comment sitting directly on a header moves with it; a
+# comment with a blank line under it stays where it is, so a banner at the top of the
+# file keeps its place.
 #
 # Opening a workspace applies its "recipe": the first pane runs `main`, the drawers named
 # by `right`/`bottom` open running their commands, focus lands on `focus`, and `env` is
