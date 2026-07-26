@@ -102,8 +102,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // `.diagnostics` would strand an undelivered notice forever — the diagnostics haven't
             // changed, so the retry would never come. The cost is a set comparison that returns nil.
             self?.surfaceConfigDiagnostics()
-            // Recolor a live update card — it's outside any window's toast list.
-            if change.contains(.theme) { self?.updateController?.reapplyTheme() }
+            // Recolor a live update card — it's outside any window's toast list. Also on `.keymap`:
+            // `UpdateCardView.reapplyTheme()` calls `refreshKeycap()`, which re-resolves the
+            // "Check for Updates" chord, so a rebind while the card is up has to reach it. Same
+            // trap as `reapplyChromeColors` — the name says theme, the call chain reads the keymap.
+            if change.contains(.theme) || change.contains(.keymap) {
+                self?.updateController?.reapplyTheme()
+            }
             // Pick up a flipped auto-update toggle with no relaunch.
             if change.contains(.updates) { self?.updateController?.applyAutoCheckSetting() }
         }
