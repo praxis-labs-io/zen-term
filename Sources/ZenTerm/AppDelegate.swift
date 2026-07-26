@@ -91,12 +91,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // rebuild the interceptor's keymap so the rebind takes effect with no relaunch.
         NotificationCenter.default.addObserver(
             forName: .configDidChange, object: nil, queue: .main
-        ) { [weak self] _ in
-            self?.keys.setKeymap(GeneralConfig.current.keymap)
-            MotionConfig.apply(GeneralConfig.current.reduceMotion)  // re-install the reduce-motion override
+        ) { [weak self] note in
+            let change = ConfigChange.from(note)  // skip what this write didn't touch (ZEN-48)
+            if change.contains(.keymap) { self?.keys.setKeymap(GeneralConfig.current.keymap) }
+            // Re-install the reduce-motion override.
+            if change.contains(.motion) { MotionConfig.apply(GeneralConfig.current.reduceMotion) }
+            // Deliberately ungated. This one already has a finer gate than the change set: it
+            // tracks what was *delivered*, and leaves `lastConfigDiagnostics` untouched when no
+            // window was there to show the notice, so the next reload retries it. Gating on
+            // `.diagnostics` would strand an undelivered notice forever — the diagnostics haven't
+            // changed, so the retry would never come. The cost is a set comparison that returns nil.
             self?.surfaceConfigDiagnostics()
-            self?.updateController?.reapplyTheme()  // recolor a live update card — it's outside any window's toast list
-            self?.updateController?.applyAutoCheckSetting()  // pick up a flipped auto-update toggle with no relaunch
+            // Recolor a live update card — it's outside any window's toast list. Also on `.keymap`:
+            // `UpdateCardView.reapplyTheme()` calls `refreshKeycap()`, which re-resolves the
+            // "Check for Updates" chord, so a rebind while the card is up has to reach it. Same
+            // trap as `reapplyChromeColors` — the name says theme, the call chain reads the keymap.
+            if change.contains(.theme) || change.contains(.keymap) {
+                self?.updateController?.reapplyTheme()
+            }
+            // Pick up a flipped auto-update toggle with no relaunch.
+            if change.contains(.updates) { self?.updateController?.applyAutoCheckSetting() }
         }
 
         // Auto-updates (ZEN-118). Inert in an unpackaged dev build (no SUFeedURL). The card is
@@ -123,7 +137,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         if case .reloadConfig = chord {
-            AppConfig.reload()
+            // Forced: ⌘⌥R is the "make the app match my config" escape hatch, so it re-applies
+            // everything rather than only what the diff says moved.
+            AppConfig.reload(force: true)
             return
         }
         if case .checkForUpdates = chord {
