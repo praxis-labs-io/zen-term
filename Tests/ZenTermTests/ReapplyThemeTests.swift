@@ -196,6 +196,37 @@ final class ReapplyThemeTests: XCTestCase {
         XCTAssertNotEqual(colorBefore, card.layer?.borderColor)
     }
 
+    /// A surface float wears the accent focus halo, not the neutral hairline every other card
+    /// gets — and `CardChrome.reapplyTheme` defaults `halo` to `false`, so an omitted argument
+    /// there silently drops the float back to the neutral edge on the next theme swap. The
+    /// recolor test above can't see that: both colors are theme-derived, so it changes either
+    /// way. This pins WHICH role the border lands on after the swap.
+    func test_reapplyTheme_keepsTheAccentHaloOnSurfaceFloatOverlay() throws {
+        let overlay = SurfaceFloatOverlay(
+            content: NSView(), background: Theme.current.chrome.background.nsColor,
+            widthFraction: 0.6, heightFraction: 0.6, contentInset: 12, cornerRadius: 12,
+            onDismiss: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+
+        guard overlay.subviews.count == 2 else {
+            return XCTFail("expected backdrop + card subviews")
+        }
+        let card = overlay.subviews[1]
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        overlay.reapplyTheme()
+
+        XCTAssertEqual(
+            card.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor,
+            "the float's focus halo must survive a theme swap as the accent role")
+        XCTAssertNotEqual(
+            card.layer?.borderColor, FloatShadow.edge.cgColor,
+            "a float that reverts to the neutral hairline no longer signals it holds focus")
+    }
+
     /// A `SettingsSection` fake that mirrors the real sections' persistent-reset-control shape:
     /// the Reset-all button is constructed ONCE (like `SettingsFormSection.resetAllButton` /
     /// `SettingsKeybindsSection.resetAllButton`) and `makeDetailView()` only re-parents it — it
