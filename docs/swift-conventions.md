@@ -129,8 +129,7 @@ keyboard input system-wide in other apps. Scope such state to the *focused* surf
 
 ## Carbon and the main thread
 
-**`TISCopyCurrentKeyboardLayoutInputSource` is main-thread-only in a GUI app, and violating it
-does not look like a crash.** Called from a background queue in a running app it takes the whole
+**Every TIS call is main-thread-only in a GUI app, and violating it does not look like a crash.** Called from a background queue in a running app it takes the whole
 process down: exit code 6, no crash report, nothing on stderr, the Dock icon simply goes. There is
 no exception to catch and no stack to read, so it presents as "the app closed" with no evidence.
 
@@ -151,8 +150,9 @@ hole re-opens with everything still green.
 in a main-actor context and handed to `DispatchQueue.async(execute:)` as a `DispatchWorkItem` is
 type-erased at construction: the compiler sees nothing crossing, and the whole isolated chain runs
 off-main. That is not hypothetical, it is the debounce idiom the Settings sections already use. So
-`KeyboardLayout.producibleGlyphs` calls `MainActor.preconditionIsolated()` immediately before the
-TIS call. It converts the untrappable failure (exit 6, no crash report, empty stderr) into a crash
+the two TIS call sites — `KeyboardLayout.producibleGlyphs` in the chrome and
+`TerminalKit.KeyboardLayout.id`, which `GhosttyHostView.keyDown` uses to spot an input method
+claiming a key — each call `MainActor.preconditionIsolated()` immediately before the Carbon call. It converts the untrappable failure (exit 6, no crash report, empty stderr) into a crash
 report that names the line. The 6.2 tools-version exists to carry it, and every target
 pins `.swiftLanguageMode(.v5)` so the bump doesn't turn into an unplanned Swift 6 migration.
 
