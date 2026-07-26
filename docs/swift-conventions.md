@@ -139,6 +139,30 @@ keymap, and `KeymapAssembler` asks `KeyboardLayout.canType` whether each bound c
 on the current layout, which is the TIS call. So **`ConfigLoader.loadGeneralConfig` is
 main-thread-only**, and so is anything that reaches it, which includes every config reload.
 
+**The compiler enforces this now, and two pieces are load-bearing (ZEN-31).** `@MainActor` on
+`loadGeneralConfig` / `loadAppTheme` / `AppConfig.reload` is only half of it: in Swift 5 language
+mode an isolation violation is a hard error in a synchronous function body but **a warning inside a
+closure**, and a closure (`DispatchQueue.async { … }`) is exactly the shape that killed the app. The
+other half is `.treatWarning("ActorIsolatedCall", as: .error)` on the ZenTerm target in
+`Package.swift`, which is what makes both of those shapes fail the build. Delete that line and the
+hole re-opens with everything still green.
+
+**One shape stays invisible to the compiler, so it is guarded at runtime instead.** A closure formed
+in a main-actor context and handed to `DispatchQueue.async(execute:)` as a `DispatchWorkItem` is
+type-erased at construction: the compiler sees nothing crossing, and the whole isolated chain runs
+off-main. That is not hypothetical, it is the debounce idiom the Settings sections already use. So
+`KeyboardLayout.producibleGlyphs` calls `MainActor.preconditionIsolated()` immediately before the
+TIS call. It converts the untrappable failure (exit 6, no crash report, empty stderr) into a crash
+report that names the line. The 6.2 tools-version exists to carry it, and every target
+pins `.swiftLanguageMode(.v5)` so the bump doesn't turn into an unplanned Swift 6 migration.
+
+**`GeneralConfig.current` and `Theme.current` are deliberately not lazy** for the same reason. A
+lazy static runs its initializer wherever the first touch lands, so a `= ConfigLoader.load…()`
+default puts a main-thread-only call at the mercy of whichever reader gets there first. Both hold
+the built-in default until `AppConfig.loadAtLaunch()` resolves them in
+`applicationDidFinishLaunching`, before any window builds. Anything that needs real config earlier
+than that has to move the load, not read around it.
+
 **`swift test` will not catch this.** TIS is available in the xctest process and answers happily
 off the main thread, so an off-main parse passes every test while killing the real app. This cost a
 day of bisecting on ZEN-17, through four green repro attempts, one of them using the real config

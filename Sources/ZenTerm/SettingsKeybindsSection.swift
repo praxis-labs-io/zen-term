@@ -49,7 +49,8 @@ final class SettingsKeybindsSection: SettingsSection {
             // so anything else (a numeric edit on another section, with this card open) is skippable.
             let change = ConfigChange.from(note)
             guard change.contains(.keymap) || change.contains(.diagnostics) else { return }
-            self?.refreshFromConfig()
+            // `queue: .main`, so this is already the main thread — assert it rather than hop.
+            MainActor.assumeIsolated { self?.refreshFromConfig() }
         }
     }
 

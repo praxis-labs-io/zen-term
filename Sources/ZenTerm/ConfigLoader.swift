@@ -32,6 +32,9 @@ enum ConfigLoader {
         return base.appendingPathComponent("zen-term", isDirectory: true)
     }
 
+    /// Main-thread-only because it resolves the font from the general config, which is
+    /// `loadGeneralConfig`'s problem — see there.
+    @MainActor
     static func loadAppTheme(configRoot: URL = defaultRoot, general: GeneralConfig = .current) -> AppTheme {
         let builtIn = Theme.rosePineMoon
 
@@ -79,6 +82,12 @@ enum ConfigLoader {
         return FileManager.default.fileExists(atPath: legacy.path) ? legacy : nil
     }
 
+    /// Main-thread-only, and the annotation is load-bearing rather than documentary: parsing the
+    /// config assembles the keymap, which asks Carbon whether each chord is typable on the current
+    /// layout, and `TISCopyCurrentKeyboardLayoutInputSource` off-main takes the whole process down
+    /// with no crash report. `swift test` cannot catch it — TIS answers happily in the xctest
+    /// process — so the compiler is the only thing that can (ZEN-17, ZEN-31).
+    @MainActor
     static func loadGeneralConfig(configRoot: URL = defaultRoot) -> GeneralConfig {
         let configURL = configRoot.appendingPathComponent("config")
         guard FileManager.default.fileExists(atPath: configURL.path) else {

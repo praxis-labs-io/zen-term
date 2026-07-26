@@ -5,8 +5,10 @@ and keyboard-first navigation over a swappable terminal core. Swift + SwiftPM +
 AppKit, no Xcode project. This repo is private; public builds ship through
 [zen-term-releases](https://github.com/zen-term/zen-term-releases).
 
-**Requires:** macOS 14+, Apple Silicon, full Xcode (the release toolchain needs
-`notarytool`/`stapler` and the Metal compiler, not just the CLT).
+**Requires:** macOS 14+, Apple Silicon, Swift 6.2+ / Xcode 26+ (the package manifest
+declares `swift-tools-version: 6.2`, so an older toolchain refuses to resolve it), full
+Xcode (the release toolchain needs `notarytool`/`stapler` and the Metal compiler, not just
+the CLT).
 
 ## Architecture in one paragraph
 

@@ -119,9 +119,16 @@ struct GeneralConfig: Equatable {
     /// The resolved config for this launch, re-resolvable via `reloadCurrent()` when the Settings
     /// card writes the file (see `AppConfig.reload()`). External hand-edits are picked up on
     /// demand via the Reload Config command (⌘⌥R).
-    static private(set) var current: GeneralConfig = ConfigLoader.loadGeneralConfig()
+    ///
+    /// Initialized to the built-in default and resolved from disk by `AppConfig.loadAtLaunch()`
+    /// before any window builds. Deliberately *not* `= ConfigLoader.loadGeneralConfig()`: a Swift
+    /// static is always lazy, so that default ran a main-thread-only call (see
+    /// `ConfigLoader.loadGeneralConfig`) on whichever thread touched it first. Initializing to a
+    /// constant makes first touch harmless and puts the load in one named place (ZEN-31).
+    static private(set) var current: GeneralConfig = .builtIn
 
     /// Re-read `config` from disk and swap `current`. Called by `AppConfig.reload()` after a write.
+    @MainActor
     static func reloadCurrent() { current = ConfigLoader.loadGeneralConfig() }
 
     #if DEBUG

@@ -17,8 +17,14 @@ enum KeyboardLayout {
 
     /// Whether some keypress on the current layout can produce `chord`.
     ///
+    /// **Main-thread-only, and this is where that constraint actually comes from:**
+    /// `producibleGlyphs` calls `TISCopyCurrentKeyboardLayoutInputSource`, which off-main takes the
+    /// whole process down with no crash report (ZEN-17). Everything above this — `KeymapAssembler`,
+    /// `GeneralConfigParser`, `ConfigLoader` — is main-thread-only because it reaches here.
+    ///
     /// Only Shift matters: `charactersIgnoringModifiers` — the reading `Chord(event:)` is built on —
     /// applies Shift and ignores ⌘/⌥/⌃, so those never change which glyph arrives.
+    @MainActor
     static func canType(_ chord: Chord) -> Bool {
         guard !Chord.isSpecialKeyGlyph(chord.key) else { return true }  // arrows/return come from the keyCode
         // Canonicalize each producible glyph the same way a live event would be, then look for this
@@ -28,10 +34,18 @@ enum KeyboardLayout {
     }
 
     /// Every single-character glyph the current layout produces, at the given Shift state.
+    @MainActor
     private static func producibleGlyphs(shift: Bool) -> Set<String> {
         #if DEBUG
             if let override = producibleGlyphsOverrideForTesting { return override(shift) }
         #endif
+        // The compile-time guard has one hole it structurally cannot close: a closure formed in a
+        // main-actor context and handed to `DispatchQueue.async(execute:)` as a `DispatchWorkItem`
+        // is type-erased at construction, so the compiler sees nothing crossing and the whole
+        // isolated chain runs off-main anyway (measured, ZEN-31). Everything below this line is the
+        // Carbon call that cannot survive that, and its native failure mode is exit 6 with no crash
+        // report and nothing on stderr. Trap instead, so the violation names itself.
+        MainActor.preconditionIsolated("KeyboardLayout: TIS is main-thread-only in a GUI app")
         guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
             let raw = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
         else {
