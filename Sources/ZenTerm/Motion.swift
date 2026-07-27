@@ -38,7 +38,7 @@ enum Motion {
     /// Hard-decelerating ease-out — a slide lands/locks in rather than drifting. Shared by the tab
     /// page-slide and the drawer / split push slides so they read as one motion.
     static let landingTiming = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
-    /// New-tab canvas fade-in.
+    /// Opacity ramp for a surface that appears in place rather than travelling — the popover.
     static let fadeDuration: CFTimeInterval = 0.18
     /// The opacity ramp of a scale-fade entrance. Kept short and decoupled from the
     /// spring settle so the card *reads* as present fast — the dominant snappiness cue —
