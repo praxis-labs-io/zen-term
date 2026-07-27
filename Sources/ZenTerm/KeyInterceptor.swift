@@ -37,11 +37,12 @@ final class KeyInterceptor {
 
     var onReservedChord: ((ReservedChord) -> Void)?
 
-    /// Opt-in escape hatch for the nvim navigator: when this returns `true` for a chord that
-    /// *did* hit the keymap, the real `NSEvent` is passed through to the terminal instead of
-    /// being consumed — so an nvim pane receives a genuine `Ctrl-h` rather than the chord
-    /// firing pane nav. `AppDelegate` only returns `true` for `Ctrl`-nav over an nvim pane,
-    /// so default `⌘`-nav is never affected.
+    /// Escape hatch for a terminal that owns a chord more than the chrome does: when this returns
+    /// `true` for a chord that *did* hit the keymap, the real `NSEvent` is passed through to the
+    /// terminal instead of being consumed — so the program inside receives a genuine `Ctrl-h`
+    /// rather than the chord firing pane nav. `AppDelegate` returns `true` only for `Ctrl`-nav,
+    /// and only over an nvim pane or an open tool float (`NavGuard` holds the truth table), so
+    /// default `⌘`-nav is never affected.
     var passThroughGuard: ((Chord, ReservedChord) -> Bool)?
     private var monitor: Any?
 
@@ -88,8 +89,8 @@ final class KeyInterceptor {
     /// What to do with a resolved keyDown, factored out of the live monitor so it's
     /// unit-testable. A miss — a nil chord or an un-reserved chord like an unbound Ctrl+hjkl —
     /// passes through to the terminal. A hit is consumed, unless the pass-through guard vetoes
-    /// it (Ctrl-nav over an nvim pane), in which case it passes through too so nvim receives
-    /// the real key. The ⌘⇧\ → "|" shifted-symbol quirk is absorbed by `Chord`'s canonicalizing
+    /// it (Ctrl-nav over an nvim pane or an open tool float), in which case it passes through too
+    /// so the program receives the real key. The ⌘⇧\ → "|" shifted-symbol quirk is absorbed by `Chord`'s canonicalizing
     /// `init` — the event and the bind fold onto the same key — so this stays a pure lookup.
     func resolve(_ chord: Chord?) -> Route {
         guard let chord, let action = keymap[chord] else { return .passThrough }

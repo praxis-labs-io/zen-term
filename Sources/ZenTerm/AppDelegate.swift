@@ -75,13 +75,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configApplier.surfaceConfigDiagnostics()
 
         keys.onReservedChord = { [weak self] chord in self?.route(chord) }
-        // Seamless-nav opt-in: let a `Ctrl`-nav chord fall through to a pane running nvim so
-        // nvim moves its own splits. `⌘`-nav (the default) is never passed through, so default
-        // pane nav is untouched whether or not the pane is nvim.
+        // Let a `Ctrl`-nav chord fall through to the terminal that owns it: a pane running nvim
+        // (the seamless-nav opt-in, so nvim moves its own splits), or an open tool float, which is
+        // modal and would only swallow the chord (ZEN-270). `⌘`-nav (the default) is never passed
+        // through, so default pane nav is untouched in every case.
+        //
+        // One `keyController()` lookup per keystroke, not one per input: this runs on the hot path
+        // and the two readings must come from the same window regardless.
         keys.passThroughGuard = { [weak self] chord, action in
-            NavGuard.shouldPassThrough(
+            let controller = self?.keyController()
+            return NavGuard.shouldPassThrough(
                 chord: chord, action: action,
-                focusedPaneIsVim: self?.keyController()?.focusedPaneIsVim == true)
+                focusedPaneIsVim: controller?.focusedPaneIsVim == true,
+                toolFloatIsOpen: controller?.isToolFloatOpen == true)
         }
         keys.setKeymap(GeneralConfig.current.keymap)
         keys.start()
