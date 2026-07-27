@@ -118,6 +118,34 @@ out on light themes: `NSTextField.placeholderString` (renders in the system `pla
 `NSColor(white:)`. Use theme-derived values: for placeholders, a `placeholderAttributedString`
 colored from a `ChromeTheme` role. See the Colors section in `CLAUDE.md` (ZEN-27, ZEN-89).
 
+## Config read once, then frozen
+
+A recurring bug shape: a config value read **once at construction** and baked into a constraint
+constant or a stored property, so it never re-applies on `.configDidChange` and silently needs a
+relaunch. Half-live behavior reads as "the setting is broken" and is invisible to any test that
+only checks the value parsed.
+
+Three shipped instances, all the same shape wearing different clothes. `SplitContainerView` took
+`gutter: CGFloat = ChromeMetrics.panelGap` as a **default argument** and stored it, so `pane-gap`
+moved the canvas/drawer seam while the gap *between* panes stayed frozen. `ToastPresenter` pinned
+its stack at `init`, and the presenter is built on the first toast, so a later `window-gutter`
+change left an already-used window's toasts at the old offset. And `CommandPaletteOverlay` stored
+the `[PaletteCommand]` array handed to `init`, where each command bakes its shortcut *glyph* in at
+catalog-build time: `reapplyTheme()` genuinely tore down and rebuilt every row, so it looked live,
+but the rebuilt rows replayed the snapshotted glyph and an open palette kept the old chord after a
+rebind. **A rebuild is not a re-read** — check what the rebuild reads *from*. Fixed by storing
+`() -> [PaletteCommand]` and re-resolving.
+
+**When one turns up, sweep the class rather than fixing the instance.** Grep every
+`ChromeMetrics.*` / `GeneralConfig.current.*` read and classify each: rebuilt, index-updated,
+retained-and-re-applied, computed live, or deliberately seed-only. Anything else is frozen. A
+**default argument** is the easiest to miss, because the read isn't at the call site.
+
+Two structural traps met while fixing these: a `lazy var` cannot be touched from a config observer
+without constructing it (it was lazy for z-order), so hold it as an explicit optional and re-point
+only when non-nil; and `animateSplitIn` detaches the constraints under test, so measure layout only
+with reduce-motion pinned.
+
 ## Process-global state
 
 **Release process-global macOS state on focus / app-active changes, not on surface teardown.** The
@@ -155,6 +183,32 @@ the two TIS call sites — `KeyboardLayout.producibleGlyphs` in the chrome and
 claiming a key — each call `MainActor.preconditionIsolated()` immediately before the Carbon call. It converts the untrappable failure (exit 6, no crash report, empty stderr) into a crash
 report that names the line. The 6.2 tools-version exists to carry it, and every target
 pins `.swiftLanguageMode(.v5)` so the bump doesn't turn into an unplanned Swift 6 migration.
+(Manifest argument order is `dependencies` → `swiftSettings` → `linkerSettings`.)
+
+**Isolation is also erased across a function value.** `KeymapAssembler.assemble(...,
+canType: (Chord) -> Bool = KeyboardLayout.canType)` takes the isolated method as a plain
+`(Chord) -> Bool`, so annotating the leaf builds clean and lets the bug build clean too.
+Annotate the **entry point** that must be main-thread, not the leaf.
+
+**A property *read* is a different diagnostic from a *call*, and it cannot be escalated at
+all.** `treatWarning` only reaches grouped diagnostics. Calling a `@MainActor` method from a
+closure is `[#ActorIsolatedCall]`, which is escalatable. *Reading* a `@MainActor` property
+from one is `main actor-isolated ... can not be referenced from a Sendable closure`, which
+carries **no group** (confirm with `swiftc -print-diagnostic-groups`), so it can never be made
+fatal. For a main-thread-only *value*, annotate the function that must be main-thread, not the
+value it returns.
+
+**At a callback boundary, `MainActor.assumeIsolated` beats a hop.**
+`NotificationCenter.addObserver(queue: .main)` blocks and main-runloop `Timer` blocks are typed
+nonisolated but always land on main; wrapping asserts that, where a `DispatchQueue.main.async`
+hop would move the work to a later runloop turn and change behavior. Top-level code in
+`main.swift` needs the same wrap.
+
+**The test target is a cascade of its own with a one-line fix.** An XCTest method is a
+synchronous nonisolated function body, so it *hard-errors* with no `treatWarning` needed:
+annotating the chrome cost ~180 errors across 22 test files. `.defaultIsolation(MainActor.self)`
+in the test target's `swiftSettings` fixes all of them with no source churn, and it is honest —
+XCTest runs these on the main thread and they drive AppKit in real windows.
 
 **`GeneralConfig.current` and `Theme.current` are deliberately not lazy** for the same reason. A
 lazy static runs its initializer wherever the first touch lands, so a `= ConfigLoader.load…()`
@@ -200,5 +254,26 @@ the control through the view tree" to a runbook step. Corollary to ZEN-145 (ZEN-
 **Tests must not mutate real OS state.** They run on the developer's machine. Do not clobber
 `NSPasteboard.general` (snapshot it in `setUp`, restore in `tearDown`), and do not present a real
 `NSOpenPanel` (inject a present-panel seam so the test asserts the wiring without a sheet). Both leak
-into the machine on every `swift test` otherwise (ZEN-235). Same spirit as the "tests must not read
-real user config" rule.
+into the machine on every `swift test` otherwise (ZEN-235).
+
+**Tests must not read the real user config either.** `GeneralConfig.current` reads
+`~/.config/zen-term/config`, so a suite that doesn't pin it asserts against whatever the developer
+happens to run. Pin `GeneralConfig.setCurrentForTesting(.builtIn)` in `setUp` and restore in
+`tearDown`; create any path fixture the test needs rather than naming a directory that "exists"
+(`~/notes` passes locally and fails on CI).
+
+The nasty part is that the damage lands in a *different* suite. `SurfaceFloatOverlay` started
+reading `background-alpha` at construction while `FloatShadowTests` / `ReapplyThemeTests` pinned
+nothing; a real config running `background-alpha = 0` made those suites mount a live
+`NSVisualEffectView` into a displayed window and drop it, which surfaced as two unrelated *toast*
+suites failing a dismiss assertion roughly 2 runs in 5, while CI stayed green (ZEN-287). **Widen the
+search whenever a change makes a type newly read `GeneralConfig.current`** — grep every suite that
+constructs it, not just the one you edited. Suspect this class immediately when a test passes
+locally and fails on CI, or fails only on Drew's machine. When an intermittent failure appears in a
+suite you did not touch, run it on the base branch a few times first to establish whether it is
+pre-existing.
+
+**When the suite hangs, `sample <pid>` names the spinning function in one shot.** It normally
+finishes in about 5s, so minutes means hung, not slow. Two shell traps around that: swift test
+processes are named `swift-test` with a hyphen, so `pkill -f "swift test"` matches nothing, and
+concurrent `swift test` runs deadlock on the SwiftPM lock.

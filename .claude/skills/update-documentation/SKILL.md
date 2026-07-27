@@ -29,7 +29,7 @@ value that does nothing. Read the parser/default, not the ticket.
 | `docs/config/themes/` | example theme file | `bin/release` → releases repo → website `reference/themes` (`sync-docs`) |
 | `docs/onboarding.md` | first-run / install narrative | `bin/release` → releases repo. Website has its own install Guide |
 | `docs/architecture.md` | the one architecture doc | internal, not shipped |
-| `docs/runbooks/*` | manual-check runbooks | internal, not shipped |
+| `docs/gui-runbook.md` | how to hand over a manual check list | internal, not shipped |
 | `docs/release-notes/vX.Y.Z.md` | per-version notes | curated at release. One file per version; never edit a shipped one |
 | `README.md` | this repo's readme | not mirrored; releases + website READMEs are separate, hand-kept (ZEN-123) |
 

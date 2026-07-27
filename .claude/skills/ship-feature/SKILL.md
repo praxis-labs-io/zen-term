@@ -1,6 +1,6 @@
 ---
 name: ship-feature
-description: Run zen-term's feature-complete process. Full local Swift check, gather /code-review (and Copilot if there's a remote) findings, triage them (fix / mitigate / ignore, no tech debt), then mark the PR ready for review. Invoke when an epic task/feature is built and ready to ship.
+description: Run zen-term's feature-complete process. Full local Swift check, gather /code-review (and Copilot if there's a remote) findings, triage them (fix / mitigate / ignore, no tech debt), then mark the PR ready for review. Manual invocation only, never auto-run: use it when Drew asks to ship, not because a feature looks finished.
 ---
 
 # Ship Feature (zen-term)
@@ -20,7 +20,7 @@ same regardless of remote.
 - For work with GUI behavior no unit test covers, run `swift run ZenTerm` and
   confirm it yourself as far as the tool shell allows. What you can't verify
   (anything needing eyes on screen) becomes the handover runbook in step 8 —
-  written in chat, never appended to `docs/runbooks/`.
+  written in chat, never written to disk. See `docs/gui-runbook.md`.
 
 Do not proceed until build + tests are green.
 
@@ -89,5 +89,7 @@ Present the triage table to the user, apply the agreed fixes, then re-run
   Each item names where to go, what to do, and what right looks like, so it can be
   worked down without re-reading the diff. Lead with the check most likely to
   catch a regression, and say plainly which behavior has no test behind it.
-  **Never write these to `docs/runbooks/`** — those are the standing runbooks that
-  outlive a branch, and a per-ticket section there goes stale the moment it ships.
+  **Never write these to disk.** `docs/gui-runbook.md` is the one standing runbook
+  and it holds the instructions for building a handover list, not the lists
+  themselves. A per-ticket section written into `docs/` goes stale the moment it
+  ships.

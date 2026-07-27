@@ -79,6 +79,13 @@ Mechanical and checkable. A reviewer should be able to fail copy on these.
    character should keep returning nothing. **No dot spacers either** (a middle
    dot `·` between a title and a qualifier): use a colon, e.g. a zoomed panel
    header reads "Terminal pane: Focus Mode".
+
+   **Scope: prose a user reads.** Code comments and `NSLog` strings are out of it
+   ("I do not care about comments"), so don't sweep `Sources/` for the character.
+   `docs/config/*` stays **in** scope, because users open those files. Everything
+   governed takes the grep as its test, not a judgment call about whether the dash
+   "joins two label halves": a doc title with an em-dash has already been ruled a
+   violation and fixed to a colon.
 2. **No hype words.** seamless, powerful, beautiful, blazing, effortless,
    delightful, magical, just works, game-changer, unleash, supercharge. The
    product demonstrates these or it doesn't have them.
