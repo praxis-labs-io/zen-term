@@ -86,6 +86,13 @@ final class WindowControllerToolFloatTests: XCTestCase {
         return descendants(of: content).compactMap { $0 as? SurfaceFloatOverlay }
     }
 
+    /// The toasts currently on screen, read from the real view tree the way
+    /// `WindowControllerToastSeamTests` does — no production test hook needed.
+    private func toastViews(_ c: WindowController) -> [ToastView] {
+        guard let content = c.window.contentView else { return [] }
+        return descendants(of: content).compactMap { $0 as? ToastView }
+    }
+
     /// The surfaces spawned for one float — filtered by the command its spec launches, so the
     /// tabs' own pane surfaces never count.
     private func floatSurfaces(command: String) -> [RecordingSurface] {
@@ -269,5 +276,48 @@ final class WindowControllerToolFloatTests: XCTestCase {
         XCTAssertNil(
             card.layer?.backgroundColor,
             "the card must drop its fill so the ring and the terminal paint the interior")
+    }
+
+    /// A pane command pressed over a float used to do nothing at all: the float is modal, so
+    /// `handle` swallows nav/split/resize/drawer/zoom, and the keystroke vanished with no trace
+    /// (ZEN-270). It must say why instead.
+    ///
+    /// The card on screen is the runbook's; what's silently dead here is the ROUTING — a chord
+    /// dropped from the case list goes back to failing quietly, and nothing on screen says so.
+    func test_paneChordOverAFloat_saysWhyInsteadOfDoingNothing() throws {
+        let c = makeWindow()
+        // `btop`, not `lazygit`: a `persist: .directory` float opens behind an async repo-root
+        // probe, so the card wouldn't be up yet and these would assert against the tab's own
+        // "no neighbor" toast instead. `.window` opens synchronously.
+        c.handle(.toggleToolFloat("btop"))
+
+        c.handle(.navLeft)
+
+        let toast = try XCTUnwrap(toastViews(c).first, "a swallowed chord must speak")
+        // Assert the rendered text, not the content struct: what could still be broken is the card
+        // showing something other than what it was handed.
+        let labels = descendants(of: toast).compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(
+            labels.contains { $0.contains("btop") },
+            "the notice must name the float in the way: \(labels)")
+    }
+
+    /// Held chords auto-repeat, so an unthrottled notice stacks one card per keystroke. This is
+    /// the half no one can eyeball: a throttle that never resets looks identical on the first
+    /// press and silently swallows every notice thereafter.
+    func test_repeatedPaneChordsOverAFloat_coalesceIntoOneNotice() {
+        let c = makeWindow()
+        // `btop`, not `lazygit`: a `persist: .directory` float opens behind an async repo-root
+        // probe, so the card wouldn't be up yet and these would assert against the tab's own
+        // "no neighbor" toast instead. `.window` opens synchronously.
+        c.handle(.toggleToolFloat("btop"))
+
+        c.handle(.navLeft)
+        c.handle(.navRight)  // a different chord, same notice
+        c.handle(.toggleZoom)
+
+        XCTAssertEqual(
+            toastViews(c).count, 1,
+            "repeats inside the throttle window must coalesce into the one card already up")
     }
 }

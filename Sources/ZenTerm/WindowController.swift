@@ -208,6 +208,43 @@ final class WindowController: NSObject {
     var focusedCWD: URL? { activeController?.focusedCWD }
     var focusedPaneIsVim: Bool { activeController?.focusedPaneIsVim ?? false }
 
+    /// Whether a tool float card is up. Read by the key pass-through guard: a float is modal, so
+    /// the window swallows nav rather than acting on it, and a consumed `Ctrl`-nav chord would be
+    /// taken from the tool for nothing (ZEN-270).
+    var isToolFloatOpen: Bool { floats.isOpen }
+
+    /// The shown float's tool name for copy: its title with a leading "Open " stripped, so a
+    /// notice reads "Lazygit", not "Open Lazygit". Nil when nothing is shown, letting each call
+    /// site pick the fallback its sentence needs ("the tool" mid-sentence, "This tool" to open one).
+    private var activeFloatName: String? {
+        floats.activeID.flatMap(ToolFloatCatalog.byID)
+            .map { $0.title.replacingOccurrences(of: "Open ", with: "") }
+    }
+
+    /// How long the "a float is up" notice stays coalesced. Held chords auto-repeat, so without
+    /// this a leaned-on ⌘F stacks one card per keystroke. Matches the zoom-block throttle.
+    private static let floatBlockToastThrottle: TimeInterval = 3
+    private var lastFloatBlockToast: Date?
+
+    /// A pane command (nav, split, resize, drawer, Focus Mode) was pressed while a tool float is
+    /// up. The float is modal, so the window swallows every one of them; say why instead of doing
+    /// nothing at all (ZEN-270). Deliberately NOT keyed by chord, unlike the nav toast's
+    /// per-direction key: the notice reads the same whichever was pressed, so a second chord
+    /// inside the window would only repeat a card already on screen.
+    private func toastFloatBlocked() {
+        let now = Date()
+        if let last = lastFloatBlockToast,
+            now.timeIntervalSince(last) < Self.floatBlockToastThrottle
+        {
+            return
+        }
+        lastFloatBlockToast = now
+        toasts.show(
+            ToastContent(
+                variant: .info, title: "Tool Float",
+                message: "\(activeFloatName ?? "This tool") is open. Close it to get back to your panes."))
+    }
+
     /// The active tab's controller, or nil once the last tab has closed (the window
     /// is being torn down). Reading `tabs.activeID` on an empty list traps, so every
     /// active-tab access goes through here.
@@ -1293,13 +1330,16 @@ final class WindowController: NSObject {
         if floats.isOpen {
             switch chord {
             case .closePane:
-                let name =
-                    floats.activeID.flatMap(ToolFloatCatalog.byID)
-                    .map { $0.title.replacingOccurrences(of: "Open ", with: "") } ?? "the tool"
                 toasts.show(
                     ToastContent(
                         variant: .info, title: "Tool Float",
-                        message: "Close \(name) first, then ⌘W."))
+                        message: "Close \(activeFloatName ?? "the tool") first, then ⌘W."))
+                return
+            case .navLeft, .navRight, .navUp, .navDown,
+                .splitVertical, .splitHorizontal,
+                .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
+                .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom:
+                toastFloatBlocked()
                 return
             case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue:
                 floats.close()  // close it, then fall through to open the other

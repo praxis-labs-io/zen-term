@@ -434,6 +434,14 @@ dispatches through `handle`, which forwards those same app-global chords back to
 `handle` (that's how Reload Config from the palette used to do nothing). Copy and
 paste take a third path through the responder chain.
 
+**The float stage speaks rather than swallowing.** A pane command (nav, split,
+resize, drawer, Focus Mode) pressed over an open float has nowhere to go, so it
+raises a notice naming the float instead of doing nothing at all (ZEN-270). Held
+chords auto-repeat, so it coalesces on a 3-second throttle, the same shape as the
+zoom-block and no-neighbor toasts. It is not keyed by chord: the notice reads the
+same whichever was pressed, so a second chord inside the window would only repeat a
+card already on screen.
+
 **The nav socket** backs [zen-navigator.nvim](https://github.com/zen-term/zen-navigator.nvim).
 `NavSocketServer` listens on `~/Library/Application Support/ZenTerm/nav.<pid>.sock`
 and exports it as `$ZEN_SOCK`. **Per-pid, not a well-known path**: a shared path let
@@ -442,6 +450,14 @@ every nvim deaf until relaunch. Failure is silent and non-fatal, because ⌘-nav
 depends on it. The wire contract is `docs/nvim-navigator-protocol.md`.
 `NavGuard.shouldPassThrough` passes through only Ctrl-nav, never ⌘-nav, so default
 pane nav is untouched whether or not the pane runs nvim.
+
+Two things claim a Ctrl-nav chord ahead of pane nav: a pane running nvim, and **an
+open tool float**, whatever it is running. A float is modal, so `handle` swallows nav
+while one is up; consuming the chord took it from the tool and then dropped it, which
+is how Ctrl-hjkl died inside an nvim float (ZEN-270). The float path needs no vim
+check and no socket at all. A float mints no nav token and gets no `$ZEN_PANE`, so the
+plugin inside one degrades to plain `wincmd`, which is the right behavior for a modal
+surface with nowhere to hand off to.
 
 ## Config
 
