@@ -4,12 +4,12 @@ What ZenTerm is, as it exists today. If a change makes this wrong, the change
 fixes this file.
 
 ZenTerm is the chrome around a terminal. Ghostty renders text and runs shells;
-everything else here is ours. 116 Swift files, roughly 17.7k lines.
+everything else here is ours.
 
 ## The seam (load-bearing)
 
 `TerminalSurface` (`Sources/TerminalKit/TerminalSurface.swift`) is the whole
-contract, in 137 lines. A surface is anything that can *be* a terminal inside our
+contract, and it is deliberately small. A surface is anything that can *be* a terminal inside our
 chrome: it vends an `NSView`, a title, a cwd, and a busy flag, and it takes
 `start`, `focus`, `terminate`, `paste`, `copySelection`, `applyAppearance`.
 
@@ -84,9 +84,31 @@ the version in Settings, and the command palette (a `report_issue` action that
 ships unbound, like `check_for_updates`).
 
 **GhosttyKit and its resources are gitignored and built per machine**
-(`bin/build-ghosttykit`). A fresh worktree needs `Frameworks/GhosttyKit.xcframework`
-and `Sources/TerminalKit/Resources/ghostty-resources` symlinked in or the build
-fails.
+(`bin/build-ghosttykit`). A fresh worktree or clone needs
+`Frameworks/GhosttyKit.xcframework` and
+`Sources/TerminalKit/Resources/ghostty-resources` symlinked in from the main
+checkout, or the build fails with "local binary target 'GhosttyKit' … does not
+contain a binary artifact", then "'module' is inaccessible" (the missing Resources
+dir suppresses TerminalKit's `Bundle.module` accessor).
+
+**Those symlinks show up as untracked, unlike in the main checkout.** Both
+`.gitignore` patterns end in a trailing slash, which matches a directory, and a
+symlink is not a directory to git. So `git add -A` in a worktree commits them. Use
+`git add -u` and check `git diff --cached --name-only` before committing.
+
+**Never call `Bundle.module` in shippable code.** For a statically-linked
+executable target it resolves via the SwiftPM-generated "executable" accessor,
+which checks only `Bundle.main.bundleURL/<name>.bundle` (the `.app` *root*) and a
+build-machine-absolute `.build/.../release/<name>.bundle` path, then `fatalError`s.
+In a real `.app` the resource bundles must live in `Contents/Resources`, which that
+accessor never checks, so the app runs on the build machine (its hardcoded `.build`
+path exists) and SIGTRAPs on first access for every downloader. This shipped in
+v0.1.1. Use `Bundle.zenResourceBundle(named:fallback:)`
+(`Sources/TerminalKit/Bundle+ZenResource.swift`), which checks
+`Bundle.main.resourceURL`/`bundleURL` first and defers to `.module` only via
+`@autoclosure` for `swift test`. The general heuristic: "works when I build it,
+crashes for downloaders" means a dev-machine-absolute path baked into the binary is
+masking a resolution failure.
 
 ## The backend
 
@@ -142,6 +164,60 @@ fails.
   `DispatchQueue.main.async`. Doing it synchronously inside `ghostty_app_tick` is a
   re-entrant use-after-free.
 
+### What the backend will and won't do
+
+**`paste` is the real paste path, bracketed.** `GhosttySurface.paste` calls
+`ghostty_surface_text`, which reaches `completeClipboardPaste(text, allow_unsafe:
+true)`, the same path a real ⌘V takes. Two consequences for anything that types
+into a terminal from the chrome: multi-line text arrives at a TUI as **one pasted
+block**, not a run of Enter presses, so a multi-line message can be delivered
+without prematurely submitting it; and it skips the unsafe-paste confirmation, so it
+never stalls on a prompt the chrome doesn't render. To submit afterwards, send
+`"\r"` as a **separate** `paste` call so the bracketed block closes first. There is
+no dedicated bracketed-paste C API in `ghostty.h`; `ghostty_surface_text` is the
+whole mechanism. Wired at `PaneCanvasController.pasteToSurface` and
+`TabController.pasteToSurface`.
+
+**Hyperlinks open on ⌘-click only.** ghostty's built-in URL link uses `highlight =
+.hover_mods(ctrlOrSuper)`, so hover highlighting and click-to-open both require ⌘.
+The I-beam over link text and a plain click doing nothing are correct, not bugs:
+all terminal text is selectable, and plain click is reserved for cursor positioning
+and selection. This matches Terminal.app and iTerm2.
+
+**There is no per-pane user variable.** `OSC 1337 ; SetUserVar` cannot reach the
+chrome: `GhosttySurface.handle(_:)` dispatches libghostty *actions*
+(`GHOSTTY_ACTION_*`) and the xcframework header has no user-var action, and in
+vendored ghostty `SetUserVar` sits in the unimplemented branch of
+`osc/parsers/iterm2.zig`: it logs, marks the command invalid, and emits nothing.
+Any "terminal keys off a plugin-set user var" design is dead here. App-side signals
+from a pane process ride the **nav socket** instead (`$ZEN_SOCK` plus a per-pane
+`$ZEN_PANE` token), which is how nvim panes are detected.
+
+**Scrolling is whole-cell, and no shader can change that.** ghostty's renderer moves
+the viewport in whole cells only: `Surface.zig` accumulates a sub-cell
+`pending_scroll_y` remainder and truncates. There is no `smooth-scroll` config key,
+and custom shaders are a post-process on the final frame with no scroll-offset
+uniform and no frame history. The core also ignores the scroll momentum phase
+entirely, so forwarding `NSEvent.momentumPhase` is inert and the macOS coast comes
+from the OS's decaying deltas. The landing "stutter on rows" is that quantization
+and is unfixable below the seam.
+
+**Custom shaders get sRGB color, and gate opacity.** ghostty hands shaders the
+cursor and color uniforms as **sRGB** (raw `/255`), and the pipeline is not linear,
+so a shader that runs `sRGBToLinear(iCurrentCursorColor.rgb)` comes out nearly
+invisible over text, so use the color raw. **A shader does not affect layer
+opacity.** `layer.isOpaque` follows `behavior.isBackgroundSolid`, which is the
+whole of `background-alpha` (ZEN-282), and nothing else. ZEN-188 once carved out an
+exception dropping the layer out of opaque whenever a shader was on, against an
+alt-screen white flash; ZEN-271 removed it, because that flash was root-caused by
+reading the code and never reproduced, and the guard bought nothing (the window is
+translucent below `background-alpha` 1 regardless, so the compositor blends it
+either way). Only MIT-licensed shaders are bundleable:
+`sahaj-b/ghostty-cursor-shaders`, `KroneCorylus/ghostty-shader-playground`,
+`snedea/ghostty-themes`. The most-forked collection, `0xhckr/ghostty-shaders`, has
+**no license** and un-attributed Shadertoy ports; `lexrus` water shaders are
+personal-use only.
+
 ## The pane tree
 
 `PaneKit`, six files, no AppKit, no global mutable state. Ids come from callers,
@@ -173,7 +249,7 @@ diffs `registry.ids` against `tree.leafIDs` and applies.
 `closing(_:)` returns **nil to mean "closed the only leaf"**, which is how the
 caller knows to close the tab or window.
 
-`PaneCanvasController` (573 lines) owns the tree, the registry, per-leaf state,
+`PaneCanvasController` owns the tree, the registry, per-leaf state,
 and is the `TerminalSurfaceDelegate` for every pane. Notable:
 
 - **Zoom touches nothing.** `zoomedLeaf` only changes what `rebuildViews()` puts
@@ -192,9 +268,9 @@ moment it would empty the list, at which point the caller closes the window.
 `activeID` traps on an empty list, which is why every access in `WindowController`
 goes through the nil-guarded `activeController`.
 
-`WindowController` (1320 lines) owns one window: its `TabList`, its
+`WindowController` owns one window: its `TabList`, its
 `TabController`s, the toast presenter, the tool floats, the single modal slot, the
-tab bar, and the dock. `TabController` (1284 lines) owns one tab: a
+tab bar, and the dock. `TabController` owns one tab: a
 `PaneCanvasController` plus the two drawers.
 
 **Inactive tabs are detached but retained**, so their shells keep running. Only
@@ -267,6 +343,55 @@ closures. Liveness and visibility are independent: `activeFloat` is the one show
 **Every silent no-op is a toast.** Focus-Mode-blocked commands, dead nav directions,
 git-guarded floats, ⌘W over a float. Both toast paths throttle at 3s per verb
 because held chords auto-repeat.
+
+**A surface that states current state needs a retraction written with the raise.**
+A sticky toast, badge, or banner says what is wrong *now*, so fixing the cause has
+to take it down; a warning that outlives its cause costs the same trust as a dead
+control. When a command is gated off in some build configuration, make the off
+state say so. Inert is fine, silent is not.
+
+### The interaction language
+
+New modal surfaces **compose the existing primitives** rather than re-implementing
+the feel. Cohesion is the point: a bespoke button or divergent focus handling reads
+as a different app.
+
+- **Primitives:** `AppButton` is *the* labeled button (variants `primary` /
+  `secondary` / `muted` / `destructive` / `segment` / `link`), and the confirm toasts use it
+  too. `SegmentedControl` for pick-one, `FieldBox` + `LabeledField` for inputs.
+  `ModalCard.swift` holds the card chrome and the shared scroll machinery.
+- **Keyboard model, 2D.** ↑/↓ move between fields and sections; ←/→ move *within* a
+  horizontal row (an env `KEY·value·✕` row, a segmented control, an Add/Cancel
+  pair), boundary-aware inside text fields so mid-text arrows still move the cursor.
+  Return advances, ⌘Return submits, Esc cancels. Each multi-control row is **one**
+  vertical stop, anchored on its first element. Every card must be fully operable
+  with no mouse.
+- **Focus style.** Focused text inputs take the palette selection fill (accent at
+  0.18) *plus* an accent outline; focused buttons and segments take the outline
+  only. Drive input focus from the field's `becomeFirstResponder` and
+  `controlTextDidEndEditing`: its `resignFirstResponder` does **not** fire, because
+  the field editor is the real responder, so relying on it leaves every visited
+  field stuck lit.
+- **Validation** is per-field and inline beneath each field, never one shared error
+  label. Required fields carry an accent ✳. The live pass flags bad input; the
+  submit pass also flags empty-required fields and focuses the first offender.
+- **Scrollable lists mirror the command palette**, via `ModalCard.swift`: a
+  `FlippedView` document (`isFlipped = true`) plus `SlimScroller`, `scrollerStyle =
+  .overlay`, `autohidesScrollers`. **The flipped document is load-bearing**: a
+  plain `NSStackView` document view opens the list mid-scroll, with its origin at
+  the bottom. Pin the document top/leading/width to `scroll.contentView` and inset
+  the rows *within* the document. Do **not** use horizontal
+  `NSScrollView.contentInsets` with `automaticallyAdjustsContentInsets = false`:
+  nonzero left/right insets corrupt the clip view and the content spills out of the
+  card unclipped.
+
+**Motion constants are an approved baseline. Do not quietly re-tune them.**
+`Sources/ZenTerm/Motion.swift` is the source of truth for the structural spring, the
+entrance fade, and the halo and crossfade eases, and it documents each. The one
+shape worth knowing here: the **entrance opacity is decoupled from the spring
+settle**, because perceived snappiness comes from the card reading as present fast,
+not from the near-invisible scale overshoot. Tying the fade to the spring's
+`settlingDuration` makes the card linger.
 
 ## Key handling
 
@@ -538,6 +663,20 @@ Do not describe these as features, and do not assume them when reading:
 - **No web panes.** Every leaf is a `TerminalSurface` over a PTY.
 - **No session or layout restore.** Nothing persists the pane tree, tab list, or
   window frames. Every launch is one tab, one pane.
+- **No session persistence, and it is not coming.** Detaching the GUI and
+  reattaching running sessions (the tmux/screen affordance) is deliberately off the
+  roadmap. ZenTerm embeds libghostty exactly as Ghostty.app does: one process, one
+  shared `ghostty_app_t`, N surfaces each being one PTY, one shell, one grid. Panes
+  die with the process, same as kitty or ghostty. It is the one feature that would
+  argue for a fundamentally different substrate (a multiplexer underneath), so
+  don't propose it or design around it. **The bet is that the chrome is the moat**:
+  hideable per-tab drawers, floats, and the UI itself are things no mainstream
+  terminal ships, and they are only possible because the terminal core is a rented
+  drop-in behind the seam. The cost to watch is integration parity at that seam
+  (IME, input, rendering) and transparent-window GPU friction, not per-pane process
+  cost, which is a non-issue.
+- **No smooth scroll.** The viewport moves in whole cells and nothing below the
+  seam can change that. See "What the backend will and won't do".
 - **No tab drag-to-reorder**, no config file watcher, no scrollback search.
 - **Three seam events are emitted with zero consumers**: `surfaceDidRingBell`,
   `progressDidChange`, and `surfaceWantsClose`. The backend translates all three,
