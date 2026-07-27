@@ -13,10 +13,12 @@ import XCTest
 @MainActor
 final class WorkspaceRecipeStagingTests: XCTestCase {
     private var originalOverride: (() -> TerminalSurface)?
+    private var originalReduceMotion: (() -> Bool)!
     private var controller: WindowController?
 
     override func setUp() {
         super.setUp()
+        originalReduceMotion = Motion.isReduceMotionEnabled
         originalOverride = TerminalSurfaceFactory.makeOverride
         // Headless surfaces: no libghostty, and an idle tab, so a replace isn't gated by the
         // "Replace Tab" confirm a busy one raises (ZEN-213).
@@ -27,6 +29,7 @@ final class WorkspaceRecipeStagingTests: XCTestCase {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
+        Motion.isReduceMotionEnabled = originalReduceMotion
         super.tearDown()
     }
 
@@ -34,14 +37,15 @@ final class WorkspaceRecipeStagingTests: XCTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
+    private func panels(in controller: WindowController) -> [PanelHostView] {
+        guard let root = controller.window.contentView else { return [] }
+        return descendants(of: root).compactMap { $0 as? PanelHostView }
+    }
+
     /// Revealed drawers in the window. A drawer carries an always-on header; a resting pane's is
     /// hidden, which is what separates the two — every panel is a `PanelHostView`.
     private func revealedDrawerCount(in controller: WindowController) -> Int {
-        guard let root = controller.window.contentView else { return 0 }
-        return descendants(of: root)
-            .compactMap { $0 as? PanelHostView }
-            .filter(\.isHeaderVisibleForTesting)
-            .count
+        panels(in: controller).filter(\.isHeaderVisibleForTesting).count
     }
 
     private func makeController() -> WindowController {
@@ -59,6 +63,14 @@ final class WorkspaceRecipeStagingTests: XCTestCase {
             right: "shell", bottom: "shell", focus: .main, env: [:])
     }
 
+    /// The same recipe, but landing focus on a drawer — the only part of a recipe whose result
+    /// differs depending on whether it ran before or after the tab started.
+    private func focusedOnTheRightDrawer() -> Workspace {
+        Workspace(
+            title: "probe", path: URL(fileURLWithPath: NSTemporaryDirectory()), main: nil,
+            right: "shell", bottom: "shell", focus: .right, env: [:])
+    }
+
     func test_enterOpen_revealsTheDrawersOnceTheCanvasLands() {
         let controller = makeController()
         XCTAssertEqual(revealedDrawerCount(in: controller), 0, "the launch tab has no drawers open")
@@ -71,6 +83,29 @@ final class WorkspaceRecipeStagingTests: XCTestCase {
         waitUntil(
             revealedDrawerCount(in: controller) == 2,
             "both of the workspace's drawers to open once the canvas slide lands")
+    }
+
+    /// Reduce Motion collapses the slide, and `Motion.slideSwap` then runs its completion
+    /// synchronously, inside `mount` — before `installController` has reached `c.start()`. Staging
+    /// through that completion puts the recipe ahead of the tab's own start, breaking the order
+    /// `applyRecipe`'s contract depends on ("called once right after `start()`"): `start()` ends in
+    /// `focusFrontmost()`, so a recipe applied first has its `focus: right` immediately taken back
+    /// by the main pane. The drawers still open either way, so the ordering is only visible in
+    /// which region ends up wearing the focus halo.
+    func test_reduceMotion_appliesTheRecipeAfterStart_soItsFocusSticks() {
+        Motion.isReduceMotionEnabled = { true }
+        let controller = makeController()
+
+        controller.openWorkspaceForTesting(focusedOnTheRightDrawer(), replaceCurrentTab: false)
+
+        XCTAssertEqual(
+            revealedDrawerCount(in: controller), 2, "the recipe opens both drawers it names")
+        let focused = panels(in: controller).filter { $0.haloOpacityForTesting > 0 }
+        XCTAssertEqual(focused.count, 1, "exactly one region holds the tab's focus")
+        XCTAssertTrue(
+            focused.first?.isHeaderVisibleForTesting == true,
+            "the recipe's focus landed on a drawer and stayed there, rather than being taken back "
+                + "by the main pane because the recipe ran before the tab started")
     }
 
     func test_shiftEnterReplace_appliesTheRecipeInline() {

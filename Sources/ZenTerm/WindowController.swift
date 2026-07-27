@@ -518,14 +518,17 @@ final class WindowController: NSObject {
     /// previous canvas's removal to their completion, guarded so a rapid re-switch that
     /// re-mounts it doesn't delete the now-active terminal.
     ///
-    /// `onLanded` runs when an animated transition's motion finishes. `.instant` never calls it —
-    /// it has landed by the time `mount` returns, so its caller is still on the stack and acts
-    /// inline instead, keeping the work in its original order.
-    private func mount(_ transition: MountTransition, onLanded: (() -> Void)? = nil) {
+    /// `onLanded` runs when an animated transition's motion finishes. A transition that has already
+    /// landed by the time `mount` returns never calls it, and says so by **returning true** —
+    /// `.instant`, and any transition Reduce Motion collapses, which `Motion` runs its completion
+    /// through synchronously. A caller with work to sequence after the mount does that case itself,
+    /// rather than having the callback jump the queue in front of that work.
+    @discardableResult
+    private func mount(_ transition: MountTransition, onLanded: (() -> Void)? = nil) -> Bool {
         guard let c = activeController, mountedCanvas !== c.view else {
             restoreFocusToActive()  // same canvas: just refresh focus/dock
             renderDock()
-            return
+            return true  // nothing mounted, so nothing to wait for
         }
         let outgoing = mountedCanvas
         pinCanvas(c.view)
@@ -534,7 +537,7 @@ final class WindowController: NSObject {
         // arriving one, so anything it plays on the way in is invisible until the outgoing view is
         // detached. The pair is ordered here instead: incoming directly above outgoing, both still
         // below every piece of chrome.
-        if let outgoing, outgoing !== c.view {
+        if let outgoing {
             container.addSubview(c.view, positioned: .above, relativeTo: outgoing)
         }
         mountedCanvas = c.view
@@ -544,13 +547,21 @@ final class WindowController: NSObject {
         switch transition {
         case .instant:
             outgoing?.removeFromSuperview()
+            return true
         case .slide(let edge):
             container.layoutSubtreeIfNeeded()  // resolve the canvas width before offsetting it
             let dx = edge == .fromRight ? container.bounds.width : -container.bounds.width
+            // Reduce Motion collapses the slide, and `slideSwap` then runs its completion inline,
+            // before this call returns. `onLanded` must not fire from in there, so that case is
+            // reported back to the caller instead of announced early.
+            var isStillMounting = true
+            var landedInline = false
             Motion.slideSwap(incoming: c.view, outgoing: outgoing, dx: dx) { [weak self] in
                 self?.detachIfInactive(outgoing)
-                onLanded?()
+                if isStillMounting { landedInline = true } else { onLanded?() }
             }
+            isStillMounting = false
+            return landedInline
         }
     }
 
@@ -713,15 +724,20 @@ final class WindowController: NSObject {
         controllers[id] = c
         titles[id] = c.title
         wire(c, id: id)
-        mount(transition) { [weak self, weak c] in
+        let landed = mount(transition) { [weak self, weak c] in
             // Closing or replacing the tab inside the transition must not apply a recipe to the
-            // controller that moment tore down.
+            // controller that moment tore down (`closeTab` clears the entry, so this covers both).
             guard let self, let c, let workspace, self.controllers[id] === c else { return }
             c.applyRecipe(workspace)
+            // Switching tabs inside the slide leaves this one in the background. Its drawers are
+            // still its own layout and open regardless, but the recipe's focus belongs to the tab
+            // the user is looking at, not the one that finished arriving behind it.
+            if self.tabs.activeID != id { self.restoreFocusToActive() }
         }
         c.start()
-        // `.instant` has nothing to wait for, so it keeps the original order: start, then recipe.
-        if case .instant = transition, let workspace { c.applyRecipe(workspace) }
+        // A mount that had already landed by the time it returned has no completion to wait for,
+        // so the recipe runs here: after `start()`, the order it has always run in.
+        if landed, let workspace { c.applyRecipe(workspace) }
         renderTabBar()
     }
 
