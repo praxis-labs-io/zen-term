@@ -19,7 +19,7 @@ same regardless of remote.
   resolve findings. If none is configured, skip; do not add one here.
 - For work with GUI behavior no unit test covers, run `swift run ZenTerm` and
   confirm it yourself as far as the tool shell allows. What you can't verify
-  (anything needing eyes on screen) becomes the handover runbook in step 8 —
+  (anything needing eyes on screen) becomes the handover runbook in step 9 —
   written in chat, never written to disk. See `docs/gui-runbook.md`.
 
 Do not proceed until build + tests are green.
@@ -37,9 +37,10 @@ and Copilot see. Fold any downstream flags into your close-out summary.
 ## 3. Determine remote state
 
 - `git remote -v`. If there is **no remote**, this is a local-only ship: skip
-  steps 3–5's Copilot/PR actions, keep the branch committed, and go to step 6
-  running `/code-review` locally. Note in your summary that PR flow activates once
-  a remote exists.
+  this step's PR actions and step 4 entirely, keep the branch committed, and go
+  to step 5, running `/code-review` locally. Step 8 is skipped too — there is
+  nothing to push or mark ready. Note in your summary that PR flow activates
+  once a remote exists.
 - If there **is** a remote, push the branch and open the PR **as a draft**, with
   the Linear issue id in the title/body. Use Linear's generated branch name.
 
@@ -50,7 +51,7 @@ re-check later.
 
 **`gh pr edit --add-reviewer` cannot do this.** It lowercases the login and fails
 with "Could not resolve user with login 'copilot'", and
-`copilot-pull-request-reviewer[bot]` is the login Copilot *reviews as*, not a
+`copilot-pull-request-reviewer[bot]` is the login Copilot _reviews as_, not a
 requestable one. Both read like Copilot is unavailable; it isn't. Use the GraphQL
 `requestReviews` mutation with the Bot's node id:
 
@@ -87,10 +88,36 @@ For every finding, decide **fix / mitigate / ignore** with a one-line reason.
 Present the triage table to the user, apply the agreed fixes, then re-run
 `swift build` + `swift test` (step 1) until green again.
 
-## 8. Close out
+## 8. Push the fixes, then mark ready — as two separate actions
 
-- **If a PR exists:** mark it ready for review. Linear moves the ticket to **In
-  Review** itself from there (auto-linked via the issue id); don't set that
+Remote only; a local-only ship has neither, so skip to step 9.
+
+**Push, let the push register, and only then mark the PR ready. Never chain
+them** (`git push && gh pr ready`).
+
+Both emit a webhook — `synchronize` and `ready_for_review`. Fired in the same
+instant they land in the same CI concurrency group, so one cancels the other,
+and the survivor is often the `synchronize` run, whose payload still says
+`draft: true` and therefore skips every job. The PR then shows skipped checks,
+which look like passes at a glance, with no CI having run at all. It is a
+failure that reports success, and only reading the run list reveals it.
+
+Keying the workflow's concurrency group on `github.event.action` fixes it
+repo-side, but don't assume that's configured — separate the two actions
+regardless.
+
+After marking ready, **confirm CI actually started** (`gh pr checks` or the run
+list). "Skipping" is not "passing". If nothing ran, close and reopen the PR to
+fire a clean `reopened` event rather than pushing an empty commit.
+
+This one bites harder here than elsewhere: zen-term spent part of its life
+without a remote, so the PR path is the branch you exercise least and trust
+most.
+
+## 9. Close out
+
+- **If a PR exists:** it was marked ready in step 8. Linear moves the ticket to
+  **In Review** itself from there (auto-linked via the issue id); don't set that
   status by hand.
 - **Linear ticket:** update its description with any scope changes. On a
   local-only ship there's no PR to trigger the move, so set **In Review**

@@ -524,28 +524,42 @@ final class WindowController: NSObject {
 
     // MARK: mounting
 
-    /// The incoming tab's canvas slides in from this edge on a switch.
+    /// The incoming tab's canvas slides in from this edge.
     enum SlideEdge { case fromRight, fromLeft }
 
     /// How the active tab's canvas replaces the previous one.
     enum MountTransition {
-        case instant  // new tab's first mount, tab close
-        case slide(from: SlideEdge)  // switching between existing tabs
-        case fade  // a brand-new tab (no travel direction)
+        case instant  // the window's first mount, tab close, replace-in-place
+        case slide(from: SlideEdge)  // switching between tabs, and a new tab entering from the right
     }
 
     /// Mount the active tab's canvas above the tab bar, replacing the previous one with the
     /// given transition, and restore focus to the active tab. Animated transitions defer the
     /// previous canvas's removal to their completion, guarded so a rapid re-switch that
     /// re-mounts it doesn't delete the now-active terminal.
-    private func mount(_ transition: MountTransition) {
+    ///
+    /// `onLanded` runs when an animated transition's motion finishes. A transition that has already
+    /// landed by the time `mount` returns never calls it, and says so by **returning true** —
+    /// `.instant`, and any transition Reduce Motion collapses, which `Motion` runs its completion
+    /// through synchronously. A caller with work to sequence after the mount does that case itself,
+    /// rather than having the callback jump the queue in front of that work.
+    @discardableResult
+    private func mount(_ transition: MountTransition, onLanded: (() -> Void)? = nil) -> Bool {
         guard let c = activeController, mountedCanvas !== c.view else {
             restoreFocusToActive()  // same canvas: just refresh focus/dock
             renderDock()
-            return
+            return true  // nothing mounted, so nothing to wait for
         }
         let outgoing = mountedCanvas
         pinCanvas(c.view)
+        // `pinCanvas` mounts every canvas at the very back (ZEN-141), which puts the incoming one
+        // *under* the outgoing one for the length of a transition — an opaque canvas over the
+        // arriving one, so anything it plays on the way in is invisible until the outgoing view is
+        // detached. The pair is ordered here instead: incoming directly above outgoing, both still
+        // below every piece of chrome.
+        if let outgoing {
+            container.addSubview(c.view, positioned: .above, relativeTo: outgoing)
+        }
         mountedCanvas = c.view
         restoreFocusToActive()  // a shown float keeps focus; it rides the tab switch
         renderDock()  // dock mirrors the newly-active tab's overlay state
@@ -553,16 +567,21 @@ final class WindowController: NSObject {
         switch transition {
         case .instant:
             outgoing?.removeFromSuperview()
+            return true
         case .slide(let edge):
             container.layoutSubtreeIfNeeded()  // resolve the canvas width before offsetting it
             let dx = edge == .fromRight ? container.bounds.width : -container.bounds.width
+            // Reduce Motion collapses the slide, and `slideSwap` then runs its completion inline,
+            // before this call returns. `onLanded` must not fire from in there, so that case is
+            // reported back to the caller instead of announced early.
+            var isStillMounting = true
+            var landedInline = false
             Motion.slideSwap(incoming: c.view, outgoing: outgoing, dx: dx) { [weak self] in
                 self?.detachIfInactive(outgoing)
+                if isStillMounting { landedInline = true } else { onLanded?() }
             }
-        case .fade:
-            guard outgoing != nil else { break }  // first mount: appear instantly
-            c.view.layer?.opacity = 0
-            Motion.fade(c.view, to: 1) { [weak self] in self?.detachIfInactive(outgoing) }
+            isStillMounting = false
+            return landedInline
         }
     }
 
@@ -683,7 +702,11 @@ final class WindowController: NSObject {
         closeFloatForTabChange()
         let id = mintTabID()
         tabs.add(id)
-        installController(id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace)
+        // A new tab is appended at the right end, so it enters from the right — the same rule
+        // `select(_:)` follows for a later tab, so create and switch read as one motion.
+        installController(
+            id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace,
+            transition: .slide(from: .fromRight))
     }
 
     /// Replace the active tab's controller in place (same tab id/slot) with a fresh session in
@@ -697,20 +720,44 @@ final class WindowController: NSObject {
             mountedCanvas = nil
         }
         old?.shutdown()  // terminate the replaced tab's shells — never leak them
-        installController(id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace)
+        // The tab stays put — same id, same slot — and its outgoing canvas is already gone with
+        // the shells it was showing, so there is nothing to transition from: the replacement
+        // appears in place and the workspace's own drawer slides carry the motion.
+        installController(
+            id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace, transition: .instant)
     }
 
     /// Build, wire, mount, and start a controller for `id` (already in `tabs`), applying the
-    /// workspace's open recipe when one is given. Shared by new-tab and replace-tab.
-    private func installController(id: TabID, cwd: URL?, pinnedTitle: String?, workspace: Workspace?) {
+    /// workspace's open recipe when one is given. Shared by new-tab and replace-tab, which mount
+    /// with different transitions: a new tab slides in, a replacement lands in place.
+    ///
+    /// The recipe is **staged behind the canvas's motion**: a new tab arrives and then unfolds its
+    /// drawers, rather than pushing them open during the slide, where a drawer travelling the same
+    /// direction as the canvas it rides in on has no readable motion of its own. Focus is
+    /// unaffected — `mount` lands it on the tab as it always did, and the recipe only moves it to a
+    /// drawer the recipe names, which cannot hold focus before it exists either way.
+    private func installController(
+        id: TabID, cwd: URL?, pinnedTitle: String?, workspace: Workspace?, transition: MountTransition
+    ) {
         let c = makeController(cwd: cwd, workspace: workspace)
         c.pinnedTitle = pinnedTitle
         controllers[id] = c
         titles[id] = c.title
         wire(c, id: id)
-        mount(.fade)
+        let landed = mount(transition) { [weak self, weak c] in
+            // Closing or replacing the tab inside the transition must not apply a recipe to the
+            // controller that moment tore down (`closeTab` clears the entry, so this covers both).
+            guard let self, let c, let workspace, self.controllers[id] === c else { return }
+            c.applyRecipe(workspace)
+            // Switching tabs inside the slide leaves this one in the background. Its drawers are
+            // still its own layout and open regardless, but the recipe's focus belongs to the tab
+            // the user is looking at, not the one that finished arriving behind it.
+            if self.tabs.activeID != id { self.restoreFocusToActive() }
+        }
         c.start()
-        if let workspace { c.applyRecipe(workspace) }
+        // A mount that had already landed by the time it returned has no completion to wait for,
+        // so the recipe runs here: after `start()`, the order it has always run in.
+        if landed, let workspace { c.applyRecipe(workspace) }
         renderTabBar()
     }
 
@@ -1755,6 +1802,13 @@ final class WindowController: NSObject {
             },
         ]
         toast = toasts.showSticky(content, actions: actions)
+    }
+
+    /// Test hook: open a workspace the way the `⌘⇧P` picker does — `⏎` into a new tab, `⇧⏎`
+    /// replacing the current one — so a test drives the real staging of the recipe behind the
+    /// canvas transition rather than calling `applyRecipe` directly.
+    func openWorkspaceForTesting(_ ws: Workspace, replaceCurrentTab: Bool) {
+        openWorkspace(ws, replaceCurrentTab: replaceCurrentTab)
     }
 
     /// Test hook: drive the real surface-failure toast so a test can click its actual buttons.

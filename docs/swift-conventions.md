@@ -232,6 +232,27 @@ out on light themes: `NSTextField.placeholderString` (renders in the system `pla
 `NSColor(white:)`. Use theme-derived values: for placeholders, a `placeholderAttributedString`
 colored from a `ChromeTheme` role. See the Colors section in `CLAUDE.md` (ZEN-27, ZEN-89).
 
+## Motion and transitions
+
+**A transition that mounts two views has to order them, and being mounted says nothing about being
+visible.** `pinCanvas` mounts every tab canvas at the very back of the container so a canvas can
+never cover a float card dismissing above it (ZEN-141). Two canvases are mounted at once for the
+length of a transition, so that also put the arriving one *under* the outgoing one, which is opaque
+and exactly the same size. Everything ran: the fade was on the layer, the workspace's drawer slides
+were animating, and none of it was on screen. It read as a hard cut the moment the outgoing canvas
+was detached, which looks like an animation that was deleted rather than one that is playing
+somewhere invisible. Order the pair explicitly, and assert the subview index: `superview` membership
+is not paint order, and no other assertion catches this (ZEN-300).
+
+**Reduce Motion makes a `Motion` primitive run its completion synchronously, so a completion is not
+a "later".** That is the documented contract, and it is what lets callers sequence work the same way
+on both paths. The trap is a caller whose remaining work is *outside* that completion:
+`installController` calls `mount` and then `c.start()`, so handing the workspace recipe to `mount`'s
+completion put it ahead of the start it is specified to follow the moment Reduce Motion collapsed
+the slide. The failure is invisible in the obvious assertion, because the recipe's drawers open
+either way and only the region left holding focus differs. A call that may or may not animate should
+report which it did, and let the caller sequence the already-landed case itself (ZEN-300).
+
 ## Config read once, then frozen
 
 A recurring bug shape: a config value read **once at construction** and baked into a constraint
