@@ -68,10 +68,7 @@ final class ToastPresenterTests: XCTestCase {
         presenter.show(content())
         XCTAssertEqual(arrangedToasts(in: host).count, 1, "the toast mounts immediately")
 
-        let gone = expectation(description: "auto-dismissed")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { gone.fulfill() }
-        wait(for: [gone], timeout: 2)
-        XCTAssertEqual(arrangedToasts(in: host).count, 0, "the toast auto-dismisses and is removed")
+        waitUntil(arrangedToasts(in: host).isEmpty, "the toast to auto-dismiss and be removed")
     }
 
     func test_dismiss_isIdempotent_removesExactlyOnce() {
@@ -84,9 +81,6 @@ final class ToastPresenterTests: XCTestCase {
         presenter.dismiss(toast)
         presenter.dismiss(toast)
 
-        let settled = expectation(description: "dismiss animation settled")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { settled.fulfill() }
-        wait(for: [settled], timeout: 2)
-        XCTAssertEqual(arrangedToasts(in: host).count, 0, "exactly one removal, no crash on the second dismiss")
+        waitUntil(arrangedToasts(in: host).isEmpty, "exactly one removal, no crash on the second dismiss")
     }
 }
