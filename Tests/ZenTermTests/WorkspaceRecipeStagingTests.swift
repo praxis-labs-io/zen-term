@@ -18,7 +18,11 @@ final class WorkspaceRecipeStagingTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
+        // Staging is only observable while the slide is in flight, and Reduce Motion collapses it.
+        // Pin it off by default so the developer's own accessibility setting can't turn the
+        // staging tests into no-ops; the Reduce Motion test below opts back in explicitly.
         originalReduceMotion = Motion.isReduceMotionEnabled
+        Motion.isReduceMotionEnabled = { false }
         originalOverride = TerminalSurfaceFactory.makeOverride
         // Headless surfaces: no libghostty, and an idle tab, so a replace isn't gated by the
         // "Replace Tab" confirm a busy one raises (ZEN-213).

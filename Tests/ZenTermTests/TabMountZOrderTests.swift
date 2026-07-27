@@ -14,18 +14,26 @@ import XCTest
 @MainActor
 final class TabMountZOrderTests: XCTestCase {
     private var originalOverride: (() -> TerminalSurface)?
+    private var originalReduceMotion: (() -> Bool)!
     private var controller: WindowController?
 
     override func setUp() {
         super.setUp()
         originalOverride = TerminalSurfaceFactory.makeOverride
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }  // no libghostty in a unit test
+        // Two mounted canvases is what a transition in flight looks like, and Reduce Motion has
+        // none in flight: it collapses the slide and detaches the outgoing canvas before this
+        // returns. Pin it off so the developer's own accessibility setting can't decide whether
+        // the test has anything to look at.
+        originalReduceMotion = Motion.isReduceMotionEnabled
+        Motion.isReduceMotionEnabled = { false }
     }
 
     override func tearDown() {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
+        Motion.isReduceMotionEnabled = originalReduceMotion
         super.tearDown()
     }
 
@@ -70,7 +78,7 @@ final class TabMountZOrderTests: XCTestCase {
             let incomingIndex = container.subviews.firstIndex(of: incoming),
             let outgoingIndex = container.subviews.firstIndex(of: outgoing)
         else {
-            return XCTFail("both canvases must be in the container during the fade")
+            return XCTFail("both canvases must be in the container during the transition")
         }
         XCTAssertGreaterThan(
             incomingIndex, outgoingIndex,
