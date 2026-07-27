@@ -21,6 +21,7 @@ where a past failure explains why the code is shaped the way it is.
 | `docs/releasing.md` | `bin/release`, versioning guards, notarization |
 | `docs/third-party-notices.md` | re-probing the notices after a ghostty pin move |
 | `docs/sparkle-auto-updates.md` | how updates ship, and how to verify one |
+| `docs/nvim-navigator-protocol.md` | the nav socket wire contract |
 | `docs/config/*` | the reference config files users open |
 | `docs/onboarding.md` | the install and first-run narrative, published by `bin/release` |
 
@@ -168,7 +169,8 @@ key `ZEN`). Status ladder: Backlog, Todo, In Progress, In Review, Done.
 - **Create tickets as we go**, never a full backlog dumped up front.
 - **A ticket is PR-sized: 1 ticket = 1 branch = 1 PR.** Size to the pull request,
   not to plan tasks. A PR-sized ticket usually bundles several plan steps into one
-  independently reviewable, independently mergeable change. The exception is a
+  independently reviewable, independently mergeable change. Keep descriptions lean:
+  a title and a short goal or scope line. The exception is a
   tightly-coupled foundational stack where nothing is separately mergeable; when
   that happens, still create a ticket per task afterward so each keeps its history.
 

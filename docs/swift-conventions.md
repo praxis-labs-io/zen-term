@@ -133,7 +133,7 @@ change left an already-used window's toasts at the old offset. And `CommandPalet
 the `[PaletteCommand]` array handed to `init`, where each command bakes its shortcut *glyph* in at
 catalog-build time: `reapplyTheme()` genuinely tore down and rebuilt every row, so it looked live,
 but the rebuilt rows replayed the snapshotted glyph and an open palette kept the old chord after a
-rebind. **A rebuild is not a re-read** — check what the rebuild reads *from*. Fixed by storing
+rebind. **A rebuild is not a re-read**: check what the rebuild reads *from*. Fixed by storing
 `() -> [PaletteCommand]` and re-resolving.
 
 **When one turns up, sweep the class rather than fixing the instance.** Grep every
@@ -178,17 +178,19 @@ hole re-opens with everything still green.
 in a main-actor context and handed to `DispatchQueue.async(execute:)` as a `DispatchWorkItem` is
 type-erased at construction: the compiler sees nothing crossing, and the whole isolated chain runs
 off-main. That is not hypothetical, it is the debounce idiom the Settings sections already use. So
-the two TIS call sites — `KeyboardLayout.producibleGlyphs` in the chrome and
-`TerminalKit.KeyboardLayout.id`, which `GhosttyHostView.keyDown` uses to spot an input method
-claiming a key — each call `MainActor.preconditionIsolated()` immediately before the Carbon call. It converts the untrappable failure (exit 6, no crash report, empty stderr) into a crash
-report that names the line. The 6.2 tools-version exists to carry it, and every target
+the two TIS call sites each call `MainActor.preconditionIsolated()` immediately before the Carbon
+call: `KeyboardLayout.producibleGlyphs` in the chrome, and `TerminalKit.KeyboardLayout.id`, which
+`GhosttyHostView.keyDown` uses to spot an input method claiming a key. That converts the untrappable
+failure (exit 6, no crash report, empty stderr) into a crash report that names the line. The 6.2 tools-version exists to carry it, and every target
 pins `.swiftLanguageMode(.v5)` so the bump doesn't turn into an unplanned Swift 6 migration.
 (Manifest argument order is `dependencies` → `swiftSettings` → `linkerSettings`.)
 
-**Isolation is also erased across a function value.** `KeymapAssembler.assemble(...,
-canType: (Chord) -> Bool = KeyboardLayout.canType)` takes the isolated method as a plain
-`(Chord) -> Bool`, so annotating the leaf builds clean and lets the bug build clean too.
-Annotate the **entry point** that must be main-thread, not the leaf.
+**Isolation is also erased across a function value**, so a function *parameter* has to carry the
+annotation too. A plain `canType: (Chord) -> Bool` parameter erases the isolation of whatever is
+passed in, so annotating the leaf (`KeyboardLayout.canType`) builds clean and lets an off-main
+assembly build clean straight past it. `KeymapAssembler.assemble` therefore declares
+`canType: @MainActor (Chord) -> Bool` and is itself `@MainActor` (ZEN-31). Annotate the **entry
+point** that must be main-thread, not just the leaf.
 
 **A property *read* is a different diagnostic from a *call*, and it cannot be escalated at
 all.** `treatWarning` only reaches grouped diagnostics. Calling a `@MainActor` method from a
@@ -207,7 +209,7 @@ hop would move the work to a later runloop turn and change behavior. Top-level c
 **The test target is a cascade of its own with a one-line fix.** An XCTest method is a
 synchronous nonisolated function body, so it *hard-errors* with no `treatWarning` needed:
 annotating the chrome cost ~180 errors across 22 test files. `.defaultIsolation(MainActor.self)`
-in the test target's `swiftSettings` fixes all of them with no source churn, and it is honest —
+in the test target's `swiftSettings` fixes all of them with no source churn, and it is honest:
 XCTest runs these on the main thread and they drive AppKit in real windows.
 
 **`GeneralConfig.current` and `Theme.current` are deliberately not lazy** for the same reason. A
@@ -267,7 +269,7 @@ reading `background-alpha` at construction while `FloatShadowTests` / `ReapplyTh
 nothing; a real config running `background-alpha = 0` made those suites mount a live
 `NSVisualEffectView` into a displayed window and drop it, which surfaced as two unrelated *toast*
 suites failing a dismiss assertion roughly 2 runs in 5, while CI stayed green (ZEN-287). **Widen the
-search whenever a change makes a type newly read `GeneralConfig.current`** — grep every suite that
+search whenever a change makes a type newly read `GeneralConfig.current`**: grep every suite that
 constructs it, not just the one you edited. Suspect this class immediately when a test passes
 locally and fails on CI, or fails only on Drew's machine. When an intermittent failure appears in a
 suite you did not touch, run it on the base branch a few times first to establish whether it is

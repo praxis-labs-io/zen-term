@@ -22,14 +22,22 @@ test can pass while the key never reaches it in the running app.
 ## What goes in one, and what does not
 
 Put it in the runbook when a person at the machine could catch it by looking:
-layout, placement, spacing, motion, color, focus rings, z-order, whether a keycap
-landed in the right corner. A frame-measuring test costs more than it catches and
-goes green just as happily when the thing looks wrong.
+layout, placement, spacing, motion, color, focus rings, whether a keycap landed in
+the right corner. A frame-measuring test costs more than it catches and goes green
+just as happily when the thing looks wrong.
 
 Write a test instead when the thing can be silently dead while looking fine, or
-when the budget is one the eye cannot check: copy against a fixed wrap column
-(`ToastView.messageFont` / `messageMaxWidth`) wraps mid-phrase invisibly, so
-measure that. That exception is about text fitting a known width, nothing else.
+when the budget is one the eye cannot check. Two of those:
+
+- **Copy against a fixed wrap column.** `ToastView.messageFont` /
+  `messageMaxWidth` wraps mid-phrase invisibly, so measure it. This one is about
+  text fitting a known width, nothing else.
+- **Z-order on a layered view.** Assert the subview index relative to what the view
+  must cover. `superview` membership says nothing about paint order, so a card
+  buried behind a sibling passes "mounted, on screen, holding first responder"
+  while being invisible (ZEN-141). See `docs/swift-conventions.md`, "Testing
+  AppKit". Still show it in the runbook as well; the assertion is what stops it
+  regressing silently.
 
 ## Shape
 

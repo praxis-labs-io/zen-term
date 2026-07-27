@@ -50,7 +50,7 @@ fi
 #    behavior tradeoff (not zero): it also disables ghostty's macOS locale canonicalization,
 #    so a non-English macOS user's child shell gets a non-canonical LANGUAGE (LANG is
 #    unaffected). We ship no translations, so app-side copy is unchanged. See ZEN-170 and
-#    docs/runbooks/third-party-notices.md.
+#    docs/third-party-notices.md.
 echo "▸ building GhosttyKit.xcframework (this takes a few minutes)"
 ( cd "$GHOSTTY" && "$ZIG" build \
     -Dapp-runtime=none \

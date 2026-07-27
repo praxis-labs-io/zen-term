@@ -45,8 +45,25 @@ and Copilot see. Fold any downstream flags into your close-out summary.
 
 ## 4. Request a Copilot review (remote only)
 
-If a draft PR was opened, request a Copilot review via the GitHub MCP tools. It
-runs async, so continue and re-check later.
+If a draft PR was opened, request a Copilot review. It runs async, so continue and
+re-check later.
+
+**`gh pr edit --add-reviewer` cannot do this.** It lowercases the login and fails
+with "Could not resolve user with login 'copilot'", and
+`copilot-pull-request-reviewer[bot]` is the login Copilot *reviews as*, not a
+requestable one. Both read like Copilot is unavailable; it isn't. Use the GraphQL
+`requestReviews` mutation with the Bot's node id:
+
+```bash
+PR_ID=$(gh api graphql -f query='query { repository(owner:"zen-term",name:"zen-term"){ pullRequest(number:NNN){ id } } }' --jq '.data.repository.pullRequest.id')
+BOT_ID=$(gh api graphql -f query='query { repository(owner:"zen-term",name:"zen-term"){ suggestedActors(capabilities:[CAN_BE_ASSIGNED],first:20){ nodes{ ... on Bot { id login } } } } }' --jq '.data.repository.suggestedActors.nodes[] | select(.login=="copilot-swe-agent") | .id')
+gh api graphql -f query='mutation($pr:ID!,$bot:ID!){ requestReviews(input:{pullRequestId:$pr, botIds:[$bot], union:true}){ pullRequest{ reviewRequests(first:10){ nodes{ requestedReviewer{ ... on Bot { login } } } } } } }' -f pr="$PR_ID" -f bot="$BOT_ID"
+```
+
+The requestable actor is `copilot-swe-agent`; it comes back as
+`copilot-pull-request-reviewer` in the confirmation, which is expected. Resolve the
+id from `suggestedActors` rather than hardcoding it, and if that query returns no
+Bot, say the request failed rather than that Copilot is unavailable.
 
 ## 5. Run /code-review
 

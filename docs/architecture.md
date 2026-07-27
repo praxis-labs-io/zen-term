@@ -168,7 +168,7 @@ masking a resolution failure.
 
 **`paste` is the real paste path, bracketed.** `GhosttySurface.paste` calls
 `ghostty_surface_text`, which reaches `completeClipboardPaste(text, allow_unsafe:
-true)` — the same path a real ⌘V takes. Two consequences for anything that types
+true)`, the same path a real ⌘V takes. Two consequences for anything that types
 into a terminal from the chrome: multi-line text arrives at a TUI as **one pasted
 block**, not a run of Enter presses, so a multi-line message can be delivered
 without prematurely submitting it; and it skips the unsafe-paste confirmation, so it
@@ -188,7 +188,7 @@ and selection. This matches Terminal.app and iTerm2.
 chrome: `GhosttySurface.handle(_:)` dispatches libghostty *actions*
 (`GHOSTTY_ACTION_*`) and the xcframework header has no user-var action, and in
 vendored ghostty `SetUserVar` sits in the unimplemented branch of
-`osc/parsers/iterm2.zig` — it logs, marks the command invalid, and emits nothing.
+`osc/parsers/iterm2.zig`: it logs, marks the command invalid, and emits nothing.
 Any "terminal keys off a plugin-set user var" design is dead here. App-side signals
 from a pane process ride the **nav socket** instead (`$ZEN_SOCK` plus a per-pane
 `$ZEN_PANE` token), which is how nvim panes are detected.
@@ -205,11 +205,14 @@ and is unfixable below the seam.
 **Custom shaders get sRGB color, and gate opacity.** ghostty hands shaders the
 cursor and color uniforms as **sRGB** (raw `/255`), and the pipeline is not linear,
 so a shader that runs `sRGBToLinear(iCurrentCursorColor.rgb)` comes out nearly
-invisible over text — use the color raw. Separately, an active shader emits alpha ≠
-1 while `hostView.layer.isOpaque = true` (set to stop the backdrop flashing through
-redraw gaps) makes Core Animation ignore that alpha, giving a white flash on
-alt-screen redraw. So `isOpaque = cursorShader == nil`, keeping the opaque
-`backgroundColor` for plain gaps. Only MIT-licensed shaders are bundleable:
+invisible over text, so use the color raw. **A shader does not affect layer
+opacity.** `layer.isOpaque` follows `behavior.isBackgroundSolid`, which is the
+whole of `background-alpha` (ZEN-282), and nothing else. ZEN-188 once carved out an
+exception dropping the layer out of opaque whenever a shader was on, against an
+alt-screen white flash; ZEN-271 removed it, because that flash was root-caused by
+reading the code and never reproduced, and the guard bought nothing (the window is
+translucent below `background-alpha` 1 regardless, so the compositor blends it
+either way). Only MIT-licensed shaders are bundleable:
 `sahaj-b/ghostty-cursor-shaders`, `KroneCorylus/ghostty-shader-playground`,
 `snedea/ghostty-themes`. The most-forked collection, `0xhckr/ghostty-shaders`, has
 **no license** and un-attributed Shadertoy ports; `lexrus` water shaders are
@@ -354,7 +357,7 @@ the feel. Cohesion is the point: a bespoke button or divergent focus handling re
 as a different app.
 
 - **Primitives:** `AppButton` is *the* labeled button (variants `primary` /
-  `secondary` / `muted` / `destructive` / `segment`), and the confirm toasts use it
+  `secondary` / `muted` / `destructive` / `segment` / `link`), and the confirm toasts use it
   too. `SegmentedControl` for pick-one, `FieldBox` + `LabeledField` for inputs.
   `ModalCard.swift` holds the card chrome and the shared scroll machinery.
 - **Keyboard model, 2D.** ↑/↓ move between fields and sections; ←/→ move *within* a
@@ -374,7 +377,7 @@ as a different app.
   submit pass also flags empty-required fields and focuses the first offender.
 - **Scrollable lists mirror the command palette**, via `ModalCard.swift`: a
   `FlippedView` document (`isFlipped = true`) plus `SlimScroller`, `scrollerStyle =
-  .overlay`, `autohidesScrollers`. **The flipped document is load-bearing** — a
+  .overlay`, `autohidesScrollers`. **The flipped document is load-bearing**: a
   plain `NSStackView` document view opens the list mid-scroll, with its origin at
   the bottom. Pin the document top/leading/width to `scroll.contentView` and inset
   the rows *within* the document. Do **not** use horizontal

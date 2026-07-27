@@ -30,6 +30,9 @@ value that does nothing. Read the parser/default, not the ticket.
 | `docs/onboarding.md` | first-run / install narrative | `bin/release` → releases repo. Website has its own install Guide |
 | `docs/architecture.md` | the one architecture doc | internal, not shipped |
 | `docs/gui-runbook.md` | how to hand over a manual check list | internal, not shipped |
+| `docs/releasing.md` | `bin/release`, versioning guards, notarization | internal, not shipped |
+| `docs/third-party-notices.md` | re-probing the notices after a ghostty pin move | internal, not shipped |
+| `docs/sparkle-auto-updates.md` | how updates ship, and how to verify one | internal, not shipped |
 | `docs/release-notes/vX.Y.Z.md` | per-version notes | curated at release. One file per version; never edit a shipped one |
 | `README.md` | this repo's readme | not mirrored; releases + website READMEs are separate, hand-kept (ZEN-123) |
 
