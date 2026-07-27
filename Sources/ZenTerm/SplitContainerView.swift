@@ -162,6 +162,18 @@ final class SplitContainerView: NSView {
         }
     }
 
+    /// Settle an in-flight slide when this container is torn out of the view tree. A rebuild
+    /// (`PaneCanvasController.rebuildViews`) drops every split view from both the canvas and
+    /// `splitViewByID` in one pass, which releases the last reference to a container still
+    /// animating — so its `runAnimationGroup` completion, which captures `self` weakly, never runs.
+    /// The grid holds taken by `animateSplitIn` would then never be released and those panes would
+    /// stop reflowing for the life of the surface. Settling here releases them at teardown instead
+    /// of relying on a completion the rebuild can prevent.
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        if superview == nil { settleSplitIn() }
+    }
+
     /// The one ratio formula, shared by `build` and `setRatio` so the two paths can't drift:
     /// `first` sized to `ratio` of the container along the axis, minus its half of the gutter.
     private func makeRatioConstraint(_ ratio: Double, first: NSView, axis: SplitAxis) -> NSLayoutConstraint {

@@ -55,15 +55,29 @@ final class GhosttyHostView: NSView {
 
     // MARK: Size / scale
 
-    /// While true, frame changes stop reaching libghostty and the grid holds the size it had when
-    /// suspended. The chrome sets this around its layout animations — see
-    /// `TerminalSurface.setSizeSyncSuspended`. Clearing it re-syncs immediately, so the grid
-    /// always reconciles to whatever the frame actually landed on.
-    var isSizeSyncSuspended = false {
-        didSet {
-            guard oldValue, !isSizeSyncSuspended else { return }
-            syncSizeAndScale()
+    /// How many chrome animations are currently holding this surface's grid. A count rather than a
+    /// flag because the holders overlap: a drawer slide freezes every surface in the tab while a
+    /// split-in freezes every surface on the canvas, and the two sets intersect. With a flag,
+    /// whichever animation finished first unfroze panes the other was still animating, silently
+    /// restoring the per-frame reflow this exists to prevent.
+    private var sizeSyncHolds = 0
+
+    /// Whether frame changes are currently held back from libghostty, so the grid keeps the size it
+    /// had when the first holder took its hold. See `TerminalSurface.setSizeSyncSuspended`.
+    var isSizeSyncSuspended: Bool { sizeSyncHolds > 0 }
+
+    /// Take or release a hold on this surface's grid. The grid re-syncs when the last hold is
+    /// released, so it always reconciles to whatever the frame actually landed on. A release
+    /// without a matching hold is ignored rather than driving the count negative — a surface born
+    /// mid-animation never took the hold, and leaving it unfrozen is the safe direction.
+    func setSizeSyncSuspended(_ suspended: Bool) {
+        if suspended {
+            sizeSyncHolds += 1
+            return
         }
+        guard sizeSyncHolds > 0 else { return }
+        sizeSyncHolds -= 1
+        if sizeSyncHolds == 0 { syncSizeAndScale() }
     }
 
     /// Push the current backing size and content scale into libghostty. Called on every

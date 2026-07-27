@@ -514,7 +514,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     }
 
     public func setSizeSyncSuspended(_ suspended: Bool) {
-        hostView.isSizeSyncSuspended = suspended
+        hostView.setSizeSyncSuspended(suspended)
     }
 
     func reportFocusWanted() { delegate?.surfaceWantsFocus(self) }
