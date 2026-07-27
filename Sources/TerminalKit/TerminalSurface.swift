@@ -117,7 +117,17 @@ public protocol TerminalSurface: AnyObject {
     func terminate()
 
     /// Hold the terminal's grid at its current size while the chrome animates the view's frame,
-    /// then reconcile once on resume. The chrome animates real layout (a drawer slide compresses
+    /// then reconcile once on resume.
+    ///
+    /// **Calls nest.** More than one chrome animation can hold the same surface at once — a drawer
+    /// slide holds every surface in the tab while a split-in holds every surface on the canvas, and
+    /// those sets intersect. An implementation must count holds and reconcile only when the last
+    /// one is released, or whichever animation lands first will thaw a surface another is still
+    /// animating. A release without a matching hold is ignored rather than counted, so a surface
+    /// created mid-animation (which never took the hold, but still receives the release) ends up
+    /// unheld rather than owing one.
+    ///
+    /// The chrome animates real layout (a drawer slide compresses
     /// the pane canvas over `Motion.pageSlideDuration`), so without this every animation frame
     /// resizes the surface: one 0.28s slide pushes the grid through ~30 widths, and a column
     /// change is a reflow. Ordinary output survives being rewrapped 30 times; a full-frame TUI
