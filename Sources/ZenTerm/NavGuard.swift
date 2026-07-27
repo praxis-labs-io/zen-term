@@ -19,7 +19,7 @@ enum NavGuard {
         chord: Chord, action: KeyInterceptor.ReservedChord, focusedPaneIsVim: Bool,
         toolFloatIsOpen: Bool
     ) -> Bool {
-        guard focusedPaneIsVim || toolFloatIsOpen, chord.control, !chord.command else { return false }
+        guard (focusedPaneIsVim || toolFloatIsOpen), chord.control, !chord.command else { return false }
         switch action {
         case .navLeft, .navRight, .navUp, .navDown: return true
         default: return false

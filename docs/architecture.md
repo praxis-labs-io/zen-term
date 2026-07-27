@@ -434,6 +434,14 @@ dispatches through `handle`, which forwards those same app-global chords back to
 `handle` (that's how Reload Config from the palette used to do nothing). Copy and
 paste take a third path through the responder chain.
 
+**The float stage speaks rather than swallowing.** A pane command (nav, split,
+resize, drawer, Focus Mode) pressed over an open float has nowhere to go, so it
+raises a notice naming the float instead of doing nothing at all (ZEN-270). Held
+chords auto-repeat, so it coalesces on a 3-second throttle, the same shape as the
+zoom-block and no-neighbor toasts. It is not keyed by chord: the notice reads the
+same whichever was pressed, so a second chord inside the window would only repeat a
+card already on screen.
+
 **The nav socket** backs [zen-navigator.nvim](https://github.com/zen-term/zen-navigator.nvim).
 `NavSocketServer` listens on `~/Library/Application Support/ZenTerm/nav.<pid>.sock`
 and exports it as `$ZEN_SOCK`. **Per-pid, not a well-known path**: a shared path let

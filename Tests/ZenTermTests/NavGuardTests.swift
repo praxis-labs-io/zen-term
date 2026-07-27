@@ -67,7 +67,7 @@ final class NavGuardTests: XCTestCase {
     }
 
     func test_ctrlNonNavOverToolFloat_consumed() {
-        // ⌘W over a float raises its own note, so a non-nav chord is never diverted.
+        // Only nav is diverted over a float — a non-nav chord still fires its own action.
         XCTAssertFalse(
             NavGuard.shouldPassThrough(
                 chord: Chord(control: true, key: "w"), action: .closePane, focusedPaneIsVim: false,
