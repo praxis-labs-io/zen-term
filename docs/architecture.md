@@ -443,6 +443,14 @@ depends on it. The wire contract is `docs/nvim-navigator-protocol.md`.
 `NavGuard.shouldPassThrough` passes through only Ctrl-nav, never ⌘-nav, so default
 pane nav is untouched whether or not the pane runs nvim.
 
+Two things claim a Ctrl-nav chord ahead of pane nav: a pane running nvim, and **an
+open tool float**, whatever it is running. A float is modal, so `handle` swallows nav
+while one is up; consuming the chord took it from the tool and then dropped it, which
+is how Ctrl-hjkl died inside an nvim float (ZEN-270). The float path needs no vim
+check and no socket at all. A float mints no nav token and gets no `$ZEN_PANE`, so the
+plugin inside one degrades to plain `wincmd`, which is the right behavior for a modal
+surface with nowhere to hand off to.
+
 ## Config
 
 Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`, matching ghostty's

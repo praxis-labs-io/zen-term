@@ -208,6 +208,11 @@ final class WindowController: NSObject {
     var focusedCWD: URL? { activeController?.focusedCWD }
     var focusedPaneIsVim: Bool { activeController?.focusedPaneIsVim ?? false }
 
+    /// Whether a tool float card is up. Read by the key pass-through guard: a float is modal, so
+    /// the window swallows nav rather than acting on it, and a consumed `Ctrl`-nav chord would be
+    /// taken from the tool for nothing (ZEN-270).
+    var isToolFloatOpen: Bool { floats.isOpen }
+
     /// The active tab's controller, or nil once the last tab has closed (the window
     /// is being torn down). Reading `tabs.activeID` on an empty list traps, so every
     /// active-tab access goes through here.

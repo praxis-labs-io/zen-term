@@ -81,7 +81,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         keys.passThroughGuard = { [weak self] chord, action in
             NavGuard.shouldPassThrough(
                 chord: chord, action: action,
-                focusedPaneIsVim: self?.keyController()?.focusedPaneIsVim == true)
+                focusedPaneIsVim: self?.keyController()?.focusedPaneIsVim == true,
+                toolFloatIsOpen: self?.keyController()?.isToolFloatOpen == true)
         }
         keys.setKeymap(GeneralConfig.current.keymap)
         keys.start()
