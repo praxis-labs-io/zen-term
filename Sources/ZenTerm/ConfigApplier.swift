@@ -12,23 +12,29 @@ import Foundation
 /// *resulting state*, not calls made: the differential test compares where the app lands under the
 /// diffed change set against where it lands under `.all`, and "was it called" is the wrong question
 /// when re-applying an unchanged value is a no-op.
+@MainActor
 final class ConfigApplier {
     /// The app-global things a config reload touches. Each reads `GeneralConfig.current` at call
     /// time rather than taking the value, matching how the real observer worked.
+    ///
+    /// Every closure type is `@MainActor`, and that is load-bearing rather than decorative: a plain
+    /// `() -> Void` property erases the isolation of whatever it was built from, so a sink could do
+    /// off-main work — including reaching the config parse — and compile clean straight through
+    /// this seam (ZEN-31).
     struct Sinks {
         /// Rebuild the key interceptor's chord → action map.
-        var setKeymap: ([Chord: KeyInterceptor.ReservedChord]) -> Void
+        var setKeymap: @MainActor ([Chord: KeyInterceptor.ReservedChord]) -> Void
         /// Re-install the reduce-motion override.
-        var applyMotion: (GeneralConfig.ReduceMotion) -> Void
+        var applyMotion: @MainActor (GeneralConfig.ReduceMotion) -> Void
         /// Show the config-problems notice, returning whether a window actually took it. `false`
         /// leaves the set un-announced so the next reload retries — see `surfaceConfigDiagnostics`.
-        var announceDiagnostics: (ToastContent, ConfigDiagnostic.Scope) -> Bool
+        var announceDiagnostics: @MainActor (ToastContent, ConfigDiagnostic.Scope) -> Bool
         /// Take down an outstanding config-problems notice. A no-op when none is showing.
-        var retractDiagnostics: () -> Void
+        var retractDiagnostics: @MainActor () -> Void
         /// Recolor a live update card. Also re-resolves its "Check for Updates" keycap.
-        var reapplyUpdateCardTheme: () -> Void
+        var reapplyUpdateCardTheme: @MainActor () -> Void
         /// Re-point Sparkle's background check schedule at the config.
-        var applyAutoCheckSetting: () -> Void
+        var applyAutoCheckSetting: @MainActor () -> Void
     }
 
     private let sinks: Sinks

@@ -1,5 +1,28 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.2
 import PackageDescription
+
+// Swift 5 language mode, pinned per target. The 6.2 tools-version is here only for
+// `.treatWarning` below; left unpinned it would default every target to Swift 6 language
+// mode, which is a migration this package hasn't done — no target compiles under it today.
+// Pin stays until that migration is a ticket of its own.
+let swift5 = SwiftSetting.swiftLanguageMode(.v5)
+
+/// What every first-party target compiles with. The escalation is here rather than on one
+/// target because it is half of a safety invariant, and a per-target copy is a per-target
+/// chance to forget: a new chrome-side target, or config/keymap code moved into one, would
+/// silently start with the off-main shape back to a warning nobody reads.
+///
+/// `@MainActor` alone does not hold. Swift 5 language mode hard-errors an isolation violation
+/// in a synchronous function body but downgrades it to a warning inside a closure, which is
+/// exactly the shape (`DispatchQueue.async { … }`) that killed the app in ZEN-17. Escalating
+/// the diagnostic group is what makes both of those fail the build; removing it re-opens the
+/// hole with everything still green. A `DispatchWorkItem` is type-erased at construction and
+/// stays invisible even to this, which is why the TIS call carries a runtime precondition too
+/// (ZEN-31; see docs/swift-conventions.md, "Carbon and the main thread").
+let mainThreadEnforced: [SwiftSetting] = [
+    swift5,
+    .treatWarning("ActorIsolatedCall", as: .error),
+]
 
 let package = Package(
     name: "ZenTerm",
@@ -37,6 +60,7 @@ let package = Package(
                 // below the seam because it exists only to work around a libghostty behavior.
                 .copy("Resources/passthrough.glsl"),
             ],
+            swiftSettings: mainThreadEnforced,
             // A static-library xcframework carries no link metadata, so the frameworks
             // libghostty's objects reference must be linked by the consumer. This set is
             // what Ghostty's own macOS app links; over-linking is harmless.
@@ -59,14 +83,17 @@ let package = Package(
             ]
         ),
         .target(
-            name: "AppLog"                   // pure leaf — Foundation + os only, no backend, no chrome
+            name: "AppLog",                  // pure leaf — Foundation + os only, no backend, no chrome
+            swiftSettings: mainThreadEnforced
         ),
         .target(
             name: "PaneKit",
-            dependencies: ["TerminalKit"]   // seam types only — never the backend
+            dependencies: ["TerminalKit"],  // seam types only — never the backend
+            swiftSettings: mainThreadEnforced
         ),
         .target(
-            name: "TabKit"                   // pure — no AppKit, no backend
+            name: "TabKit",                  // pure — no AppKit, no backend
+            swiftSettings: mainThreadEnforced
         ),
         .executableTarget(
             name: "ZenTerm",
@@ -85,6 +112,7 @@ let package = Package(
                 // resolves wrong in terminal-native SwiftPM. Grammars still come from CodeEditLanguages.
                 .copy("SyntaxQueries"),
             ],
+            swiftSettings: mainThreadEnforced,
             // swift build links Sparkle.framework but doesn't embed it; the shipped bundle carries
             // it under Contents/Frameworks (bin/package-app), so the binary must resolve it there.
             // A `swift run`/`swift test` build has no ../Frameworks, but SwiftPM copies the framework
@@ -96,23 +124,32 @@ let package = Package(
         ),
         .testTarget(
             name: "TerminalKitTests",
-            dependencies: ["TerminalKit"]
+            dependencies: ["TerminalKit"],
+            swiftSettings: mainThreadEnforced
         ),
         .testTarget(
             name: "PaneKitTests",
-            dependencies: ["PaneKit", "TerminalKit"]
+            dependencies: ["PaneKit", "TerminalKit"],
+            swiftSettings: mainThreadEnforced
         ),
         .testTarget(
             name: "TabKitTests",
-            dependencies: ["TabKit"]
+            dependencies: ["TabKit"],
+            swiftSettings: mainThreadEnforced
         ),
         .testTarget(
             name: "AppLogTests",
-            dependencies: ["AppLog"]
+            dependencies: ["AppLog"],
+            swiftSettings: mainThreadEnforced
         ),
         .testTarget(
             name: "ZenTermTests",
-            dependencies: ["ZenTerm", "TabKit"]
+            dependencies: ["ZenTerm", "TabKit"],
+            // XCTest runs these on the main thread and they drive AppKit views in real windows, so
+            // main-actor is what this target already is. Declaring it here rather than annotating
+            // every test class keeps the isolation the chrome now carries from costing ~180
+            // `@MainActor`s across 22 files (ZEN-31).
+            swiftSettings: mainThreadEnforced + [.defaultIsolation(MainActor.self)]
         ),
     ]
 )

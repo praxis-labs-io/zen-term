@@ -9,7 +9,7 @@
 #   --build     CFBundleVersion override (default: commit count). Testing-only: bin/release never
 #               passes it. Build a release variant BELOW the feed's latest version to make the real
 #               signed release show up as an available update, so the whole flow can be exercised
-#               locally. See docs/runbooks/sparkle-auto-updates.md.
+#               locally. See docs/sparkle-auto-updates.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -144,7 +144,7 @@ done
 if nm "$BIN" 2>/dev/null | grep -qiE 'libintl|bindtextdomain|nl_msg_cat_cntr'; then
     echo "✗ $BIN statically links GNU libintl (LGPL-2.1), not shippable in a closed-source app" >&2
     echo "  rebuild GhosttyKit with bin/build-ghosttykit (it passes -Di18n=false), then re-probe" >&2
-    echo "  per docs/runbooks/third-party-notices.md" >&2
+    echo "  per docs/third-party-notices.md" >&2
     exit 1
 fi
 

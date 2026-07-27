@@ -12,7 +12,7 @@ selectively. Fonts are embedded data with no symbols, so they were found by
 parsing sfnt table directories out of the same executable.
 
 Ghostty pin at the time of this audit: `v1.3.1` (332b2ae). See
-`docs/runbooks/third-party-notices.md` for how to re-probe when the pin moves.
+`docs/third-party-notices.md` for how to re-probe when the pin moves.
 
 ## Libraries
 

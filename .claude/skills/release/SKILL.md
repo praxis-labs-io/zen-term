@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a public ZenTerm release end to end. Resolves the version, curates docs/release-notes/vX.Y.Z.md from the git log into copy for the person downloading, checks the docs that publish alongside it, runs the gate, hands over the bin/release command, then verifies what published and syncs the marketing site. Invoke when main is ready to ship.
+description: Cut a public ZenTerm release end to end. Resolves the version, curates docs/release-notes/vX.Y.Z.md from the git log into copy for the person downloading, checks the docs that publish alongside it, runs the gate, hands over the bin/release command, then verifies what published and syncs the marketing site. Manual invocation only, never auto-run: use it when Drew asks to cut a release, not because main looks ready.
 ---
 
 # Release (zen-term)

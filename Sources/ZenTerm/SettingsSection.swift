@@ -3,6 +3,7 @@ import AppKit
 /// One Settings card section: a nav title and a detail view. The card owns nav selection and
 /// focus routing; a section supplies its editor and the ordered vertical focus stops within it.
 /// PR1 registers only `SettingsKeybindsSection`; later PRs add Terminal, Theme, Layout & Motion.
+@MainActor
 protocol SettingsSection: AnyObject {
     var navTitle: String { get }
     /// Set by the card: the section calls this when focus should leave the detail pane's first

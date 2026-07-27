@@ -6,6 +6,7 @@ import Sparkle
 /// `AppDelegate` at launch. The card is app-global, not window-scoped: it presents into the key
 /// window's toast stack and re-homes to the next key window if that window closes mid-flow, so a
 /// download is never stranded by a closed window.
+@MainActor
 final class UpdateController {
     /// Only a packaged build carries `SUFeedURL`; a `swift run` dev build has none. Gate on it so
     /// the updater stays fully inert in dev — an installed app and a dev build run side by side
@@ -67,7 +68,9 @@ final class UpdateController {
         windowCloseObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: nil, queue: .main
         ) { [weak self] note in
-            self?.hostWindowMaybeClosing(note.object as? NSWindow)
+            // `queue: .main`, so this is already the main thread — assert it rather than hop, which
+            // would land the re-home after the window is gone.
+            MainActor.assumeIsolated { self?.hostWindowMaybeClosing(note.object as? NSWindow) }
         }
     }
 

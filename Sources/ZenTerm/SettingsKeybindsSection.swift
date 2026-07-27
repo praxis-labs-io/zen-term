@@ -49,10 +49,11 @@ final class SettingsKeybindsSection: SettingsSection {
             forName: .configDidChange, object: nil, queue: .main
         ) { [weak self] note in
             // The rows render from the keymap and their conflict messages from the diagnostics,
-            // so anything else (a slider drag on another section, with this card open) is skippable.
+            // so anything else (a numeric edit on another section, with this card open) is skippable.
             let change = ConfigChange.from(note)
             guard change.contains(.keymap) || change.contains(.diagnostics) else { return }
-            self?.refreshFromConfig()
+            // `queue: .main`, so this is already the main thread — assert it rather than hop.
+            MainActor.assumeIsolated { self?.refreshFromConfig() }
         }
     }
 

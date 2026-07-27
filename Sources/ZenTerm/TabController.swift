@@ -1026,17 +1026,23 @@ final class TabController: NSObject {
         rightDrawerPanel?.reapplyTheme()
     }
 
-    /// Begin clipping `content` for a drawer slide (a drawer parks just outside the content bounds
-    /// before sliding in). Ref-counted so overlapping slides share one clip.
-    private func beginDrawerSlideClip() {
+    /// Begin a drawer slide: clip `content` (a drawer parks just outside the content bounds before
+    /// sliding in) and freeze every grid for the duration, so the canvas reflows once at its final
+    /// size instead of once per animation frame. Ref-counted so overlapping slides share both.
+    private func beginDrawerSlide() {
         activeDrawerSlides += 1
+        if activeDrawerSlides == 1 { allSurfaces.forEach { $0.setSizeSyncSuspended(true) } }
         SlideClip.apply(to: content)
     }
 
-    /// Balance `beginDrawerSlideClip`; lift the clip once the last in-flight slide finishes.
-    private func endDrawerSlideClip() {
+    /// Balance `beginDrawerSlide`; lift the clip and let the grids reconcile to their landed frames
+    /// once the last in-flight slide finishes.
+    private func endDrawerSlide() {
         activeDrawerSlides = max(0, activeDrawerSlides - 1)
-        if activeDrawerSlides == 0 { SlideClip.remove(from: content) }
+        if activeDrawerSlides == 0 {
+            SlideClip.remove(from: content)
+            allSurfaces.forEach { $0.setSizeSyncSuspended(false) }
+        }
     }
 
     /// Shared drawer-slide machinery for both edges: clip `content`, park `panel` off-edge at its
@@ -1050,7 +1056,16 @@ final class TabController: NSObject {
         panel: PanelHostView, opening: Bool, parkOffset: CGVector,
         animate: [(constraint: NSLayoutConstraint, to: CGFloat)], isCurrent: @escaping () -> Bool
     ) {
-        beginDrawerSlideClip()
+        // The one reflow, now, at the geometry the slide lands on: run the animated constraints to
+        // their targets and lay out, then freeze the grids and rewind to the starting frame. For
+        // the length of the slide the canvas's terminals hold their final grid while their views
+        // animate around them, which the layer's `contentsGravity` already covers (ZEN-282).
+        let slideStarts = animate.map(\.constraint.constant)
+        for (constraint, target) in animate { constraint.constant = target }
+        content.layoutSubtreeIfNeeded()
+        beginDrawerSlide()
+        for (pair, start) in zip(animate, slideStarts) { pair.constraint.constant = start }
+        content.layoutSubtreeIfNeeded()
 
         let parked = CATransform3DMakeTranslation(parkOffset.dx, parkOffset.dy, 0)
         let restT = opening ? CATransform3DIdentity : parked  // a closed drawer ends parked off-screen
@@ -1079,7 +1094,7 @@ final class TabController: NSObject {
                 panel.layer?.transform = CATransform3DIdentity
                 if isLastSlide { self.relayoutPanels() }  // settle onto the canonical multiplier constraints
             }
-            self.endDrawerSlideClip()  // balance last, so the clip outlives the detach
+            self.endDrawerSlide()  // balance last, so the clip outlives the detach
         }
     }
 

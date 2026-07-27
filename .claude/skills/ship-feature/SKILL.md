@@ -1,6 +1,6 @@
 ---
 name: ship-feature
-description: Run zen-term's feature-complete process. Full local Swift check, gather /code-review (and Copilot if there's a remote) findings, triage them (fix / mitigate / ignore, no tech debt), then mark the PR ready for review. Invoke when an epic task/feature is built and ready to ship.
+description: Run zen-term's feature-complete process. Full local Swift check, gather /code-review (and Copilot if there's a remote) findings, triage them (fix / mitigate / ignore, no tech debt), then mark the PR ready for review. Manual invocation only, never auto-run: use it when Drew asks to ship, not because a feature looks finished.
 ---
 
 # Ship Feature (zen-term)
@@ -20,7 +20,7 @@ same regardless of remote.
 - For work with GUI behavior no unit test covers, run `swift run ZenTerm` and
   confirm it yourself as far as the tool shell allows. What you can't verify
   (anything needing eyes on screen) becomes the handover runbook in step 8 —
-  written in chat, never appended to `docs/runbooks/`.
+  written in chat, never written to disk. See `docs/gui-runbook.md`.
 
 Do not proceed until build + tests are green.
 
@@ -45,8 +45,25 @@ and Copilot see. Fold any downstream flags into your close-out summary.
 
 ## 4. Request a Copilot review (remote only)
 
-If a draft PR was opened, request a Copilot review via the GitHub MCP tools. It
-runs async, so continue and re-check later.
+If a draft PR was opened, request a Copilot review. It runs async, so continue and
+re-check later.
+
+**`gh pr edit --add-reviewer` cannot do this.** It lowercases the login and fails
+with "Could not resolve user with login 'copilot'", and
+`copilot-pull-request-reviewer[bot]` is the login Copilot *reviews as*, not a
+requestable one. Both read like Copilot is unavailable; it isn't. Use the GraphQL
+`requestReviews` mutation with the Bot's node id:
+
+```bash
+PR_ID=$(gh api graphql -f query='query { repository(owner:"zen-term",name:"zen-term"){ pullRequest(number:NNN){ id } } }' --jq '.data.repository.pullRequest.id')
+BOT_ID=$(gh api graphql -f query='query { repository(owner:"zen-term",name:"zen-term"){ suggestedActors(capabilities:[CAN_BE_ASSIGNED],first:20){ nodes{ ... on Bot { id login } } } } }' --jq '.data.repository.suggestedActors.nodes[] | select(.login=="copilot-swe-agent") | .id')
+gh api graphql -f query='mutation($pr:ID!,$bot:ID!){ requestReviews(input:{pullRequestId:$pr, botIds:[$bot], union:true}){ pullRequest{ reviewRequests(first:10){ nodes{ requestedReviewer{ ... on Bot { login } } } } } } }' -f pr="$PR_ID" -f bot="$BOT_ID"
+```
+
+The requestable actor is `copilot-swe-agent`; it comes back as
+`copilot-pull-request-reviewer` in the confirmation, which is expected. Resolve the
+id from `suggestedActors` rather than hardcoding it, and if that query returns no
+Bot, say the request failed rather than that Copilot is unavailable.
 
 ## 5. Run /code-review
 
@@ -89,5 +106,7 @@ Present the triage table to the user, apply the agreed fixes, then re-run
   Each item names where to go, what to do, and what right looks like, so it can be
   worked down without re-reading the diff. Lead with the check most likely to
   catch a regression, and say plainly which behavior has no test behind it.
-  **Never write these to `docs/runbooks/`** — those are the standing runbooks that
-  outlive a branch, and a per-ticket section there goes stale the moment it ships.
+  **Never write these to disk.** `docs/gui-runbook.md` is the one standing runbook
+  and it holds the instructions for building a handover list, not the lists
+  themselves. A per-ticket section written into `docs/` goes stale the moment it
+  ships.

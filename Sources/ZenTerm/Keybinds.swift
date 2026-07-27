@@ -155,9 +155,13 @@ enum KeybindParser {
 /// say why a row has no shortcut rather than rendering a bare empty chip (ZEN-142).
 enum KeymapAssembler {
     /// `canType` is injected so tests state the layout instead of inheriting the test machine's.
+    /// Its type is `@MainActor` deliberately: a plain `(Chord) -> Bool` parameter erases the leaf's
+    /// isolation, so annotating `KeyboardLayout.canType` alone would let an off-main assembly
+    /// compile clean straight past it (ZEN-31).
+    @MainActor
     static func assemble(
         floats: [ToolFloat], keybinds: [(Chord, KeyInterceptor.ReservedChord)],
-        canType: (Chord) -> Bool = KeyboardLayout.canType
+        canType: @MainActor (Chord) -> Bool = KeyboardLayout.canType
     ) -> (map: [Chord: KeyInterceptor.ReservedChord], diagnostics: [ConfigDiagnostic]) {
         var map = KeymapDefaults.map
         let floatIDs = Set(floats.map(\.id))

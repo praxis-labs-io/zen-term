@@ -10,6 +10,7 @@ import TerminalKit
 /// valid extreme — every adjustment logs one warning AND collects a `ConfigDiagnostic` so a
 /// Settings row can show it in place (ZEN-7), and nothing ever throws.
 enum GeneralConfigParser {
+    @MainActor
     static func parse(_ text: String, fallback: GeneralConfig) -> GeneralConfig {
         var config = fallback
         var floats: [ToolFloat] = []

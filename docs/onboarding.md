@@ -1,10 +1,10 @@
 # ZenTerm
 
-A terminal for the modern era.
+A dev-first terminal.
 
-Ghostty renders the text and runs the shell. ZenTerm is the app around it:
-floating panes, drawers, workspaces one keystroke away, and a keyboard-first way
-through all of it.
+Pixel-perfect panes, drawers, and tool floats, orchestrated into workspaces a
+keystroke away, with a keyboard-first way through all of it. It runs on a
+libghostty core, which renders the text and runs the shell.
 
 ## Install
 

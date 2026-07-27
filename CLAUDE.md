@@ -1,272 +1,195 @@
-# zen-term — Project Rules
+# zen-term: project rules
 
 Native macOS terminal. **The chrome is the product; the terminal is a drop-in
 dependency behind the `TerminalSurface` seam.** Swift + SwiftPM + AppKit over
 libghostty (the sole backend, embedded as `GhosttyKit`). Global workflow rules in
-`~/.claude/CLAUDE.md` apply; this file only adds what's specific to zen-term.
+`~/.claude/CLAUDE.md` apply; this file only adds what is specific to zen-term.
 
-**Everything in `docs/` describes what is true today.** `docs/architecture.md` is
-the one architecture doc. If a change makes it wrong, the change fixes it.
+## The docs
 
-A spec or plan belongs in `docs/` **while the work is in flight**. It exists to
-work out implementation details and to fill out the tickets, and it is spent once
-the tickets and the code exist. When the epic ships: fold anything architectural
-into `docs/architecture.md`, then delete the plan, or archive it if it still
-answers something the code and the tickets don't. A shipped epic's plan describes
-intent the code already superseded, so leaving it in place only leaves something
-that can be wrong.
+**Everything in `docs/` describes what is true today.** If a change makes a doc
+wrong, the change fixes it. The app's current state is the benchmark: docs do not
+describe cancelled features, speculative work, or how something used to be, except
+where a past failure explains why the code is shaped the way it is.
 
-That plan or spec is the exception: local working scratch, cleaned after
-implementation and never committed. Everything else in `docs/` is durable
-reference that stays true as the code changes: architecture, brand-voice, config,
-runbooks, onboarding, release notes. The epic's record, its projects, tickets, and
-PR links, is **Linear** and git, so `docs/` doesn't re-copy that history.
+| File | Holds |
+|---|---|
+| `docs/architecture.md` | what the app is and how it fits together |
+| `docs/swift-conventions.md` | AppKit and Swift traps past what a linter catches |
+| `docs/brand-voice.md` | every word a person outside the project reads |
+| `docs/gui-runbook.md` | how to hand over a manual check list |
+| `docs/releasing.md` | `bin/release`, versioning guards, notarization |
+| `docs/third-party-notices.md` | re-probing the notices after a ghostty pin move |
+| `docs/sparkle-auto-updates.md` | how updates ship, and how to verify one |
+| `docs/nvim-navigator-protocol.md` | the nav socket wire contract |
+| `docs/config/*` | the reference config files users open |
+| `docs/onboarding.md` | the install and first-run narrative, published by `bin/release` |
+
+A spec or plan is **scratch**, not a doc. It lives in `docs/` while an epic is in
+flight, to work out implementation details and to write the tickets from, and it is
+spent once the tickets and the code exist. When the epic ships: fold anything
+architectural into `docs/architecture.md`, then delete it. It is never committed.
+The epic's record is **Linear** and git, so `docs/` does not re-copy that history.
 
 ## Build / run / test
 
-Terminal-native — no Xcode required (`open Package.swift` only when you want a
+Terminal-native, no Xcode required (`open Package.swift` only for a
 debugger/Instruments session).
 
-- `swift build` — compile
-- `swift run ZenTerm` — launch the app
-- `swift test` — unit tests (TerminalKit)
-- `bin/check` — **the full local gate** (mirrors CI): build → test →
-  `swift format lint --strict` → `swiftlint --strict`. Run this before shipping.
-  `bin/check --fix` auto-applies swift-format + swiftlint fixes.
-  Requires `swiftlint` (`brew install swiftlint`).
+- `swift build` / `swift run ZenTerm` / `swift test`
+- `bin/check` is **the full local gate** (mirrors CI): build, test,
+  `swift format lint --strict`, `swiftlint --strict`. `bin/check --fix`
+  auto-applies formatter and linter fixes. Requires `swiftlint`.
 
-**Verify before claiming done:** `bin/check` fully green (not just build +
-test — format-lint and swiftlint are part of the gate and CI enforces them).
+**Verify before claiming done:** `bin/check` fully green. Not just build and test:
+format-lint and swiftlint are part of the gate and CI enforces them.
+
+### What to test, and what to show
 
 **Test what can be silently dead. Show the rest.** A test earns its keep where a
-thing can be broken while looking fine. Anything you'd catch by glancing at the
+thing can be broken while looking fine. Anything you would catch by glancing at the
 screen goes in the runbook: Drew is at the machine and would rather look than read
 an assertion.
 
-**A runbook is handed over in chat, one per PR. It is never written to `docs/`.**
-Print the checks in the response that hands the PR over, as a checklist Drew can
-work down at the machine. `docs/runbooks/` holds the standing ones that outlive a
-branch (release, updates, notices); a PR's own manual checks are for the person
-reviewing that PR, and appending them there leaves a doc that grows a stale
-section per ticket. Don't add to those files unless the ask is explicitly to
-change a standing runbook.
+- **AppKit controls get window-based interaction tests, not state-only tests.**
+  Drive the real control in a real window. A test that only checks the backing
+  view-model passes while the control is dead.
+- **The event has to be real too.** AppKit puts `.function` and `.numericPad` on
+  every arrow `keyDown`, so a synthesized `modifierFlags: .option` is a keystroke
+  macOS never sends. Match modifiers against the reservable set (`[.command,
+  .shift, .option, .control]`), never `.deviceIndependentFlagsMask`.
+- **Prove a new test can fail.** Reinstate the bug and watch it go red. A test
+  written against working code can assert the wrong thing and pass for the wrong
+  reason.
+- **Layout, placement, motion and color are the runbook's, not a test's.** The one
+  exception is a budget the eye cannot check: copy against a fixed wrap column
+  (`ToastView.messageFont` / `messageMaxWidth`) wraps mid-phrase invisibly, so
+  measure that.
 
-- **AppKit controls get window-based interaction tests, not state-only tests** —
-  drive the control in a real window, because a test that only checks the backing
-  view-model passes while the control is dead (that's exactly how a fully broken
-  dropdown shipped past two reviews).
-- **The event has to be real too:** AppKit puts `.function` **and** `.numericPad`
-  on every arrow `keyDown`, so a synthesized `modifierFlags: .option` is a
-  keystroke macOS never sends — that shipped a ⌥-arrow reorder that did *nothing*
-  in the app, past four green tests and a mutation check, because both only ever
-  exercised the fake event (ZEN-145). Build synthesized events the way AppKit
-  delivers them, and match modifiers against the reservable set (`[.command,
-  .shift, .option, .control]`) rather than `.deviceIndependentFlagsMask`, which
-  keeps those extra bits and so never compares equal to a bare modifier.
-- **A new chord goes in the handover runbook** even when it looks fully tested — a
-  keyboard path crosses `KeyInterceptor`'s event monitor *before* the responder
-  chain, and no view-level test covers that.
+The failures behind each of these are in `docs/swift-conventions.md`.
 
-**Layout, placement, motion and color are the runbook's, not a test's.** Where a
-view sits, how a card reads, whether a keycap landed in the right corner: show it,
-don't assert it. A frame-measuring test costs more than it catches, and goes green
-just as happily when the thing looks wrong. Build it, run `swift run ZenTerm`, and
-hand it over as checks in the PR handover.
+**A runbook is handed over in chat, never written to disk.** One per PR, as a
+checklist Drew can work down at the machine. `docs/gui-runbook.md` says how to
+build one and when it is required. A new chord always gets a line, because a
+keyboard path crosses `KeyInterceptor`'s event monitor *before* the responder
+chain and no view-level test covers that.
 
-**The one exception is a budget the eye can't check:** copy against a fixed wrap
-column (`ToastView.messageFont` / `messageMaxWidth`) wraps mid-phrase invisibly, so
-measure that. It's about text fitting a known width — not about where a view sits.
+## Architecture: the seam (load-bearing)
 
-## Releasing
-
-Public releases are cut locally with `bin/release` — preflight (clean
-main, cert, notary profile, releases repo) → `bin/check` → assemble + Developer
-ID sign (`bin/package-app`) → notarize + staple app and DMG → verify gates →
-curated notes → tag `vX.Y.Z` on this repo → publish the DMG to the **public**
-`zen-term/zen-term-releases` repo (this repo is private, so its own Releases
-aren't downloadable). arm64-only; version source of truth is the git tag.
-
-**Versioning is automatic**: bare `bin/release` patch-bumps the last tag (semver;
-see the README's "Version numbers" for which bump to pick), `bin/release
-major|minor|patch` picks a component, `bin/release X.Y.Z` names one outright.
-Three guards there are load-bearing, so don't "simplify" them away: a tag already
-at HEAD means **resume**, not bump (it's what stops a rerun from stranding a
-half-published tag); `git describe` is `--match`ed to `vX.Y.Z` and the resolved
-version is re-checked against the semver regex (an unfiltered describe hands a
-`checkpoint` tag to the bump arithmetic and publishes the garbage); and the
-version resolves **after** `git fetch --tags`, because a stale local tag set
-otherwise publishes below what's already released. A version is also refused if
-it doesn't ascend past the last tag, including one named by hand.
-
-**Notes live in `docs/release-notes/vX.Y.Z.md`**, one file per version, curated
-from the git log into copy for the person downloading (`docs/brand-voice.md`, the
-"Release notes" surface). Write the file, then cut the release pointed at it:
-`bin/release --notes-file docs/release-notes/vX.Y.Z.md`. Bare `bin/release` opens
-`$EDITOR` on a raw scaffold instead, which is a starting point, not the notes.
-
-`bin/package-app` alone still produces the ad-hoc-signed daily-driver build, and
-stamps `<last-tag>+<commits since>` (e.g. `0.1.0+7`) so a dogfood bug report names
-an exact build. It counts **commits, not PRs**: main carries direct-to-main
-commits alongside squash-merges. `CFBundleVersion` stays the total commit count:
-it must be globally monotonic for Sparkle, and `+N` resets at every tag.
-
-`bin/package-app` defaults to the `dev` **variant**: it builds "ZenTerm Dev"
-(`com.drucial.ZenTerm.dev`, its own icon, no Sparkle feed) to `~/Applications`, so
-the daily driver runs beside the installed release without either one hiding the
-other in Raycast or the Dock. `bin/release` passes `--variant release` for the
-shipping identity ("ZenTerm", `com.drucial.ZenTerm`, release icon, public
-appcast). Both variants read the same `~/.config/zen-term` config.
-
-One-time setup: a "Developer ID Application" cert in the keychain, and
-`xcrun notarytool store-credentials zenterm-notary --apple-id <id> --team-id
-<team>` with an app-specific password.
-
-## Architecture — the seam (load-bearing)
-
-- `Sources/TerminalKit/` owns the seam (`TerminalSurface` protocol + types) and
-  the libghostty backend. It is the **only** target that depends on `GhosttyKit`.
+- `Sources/TerminalKit/` owns the seam (`TerminalSurface` protocol + types) and the
+  libghostty backend. It is the **only** target that depends on `GhosttyKit`.
 - `Sources/ZenTerm/` is the chrome. It depends on `TerminalKit` **only** and must
   never `import GhosttyKit` (or any backend). This is enforced at the module level
-  in `Package.swift` — the app target has no backend dependency to import.
-- Anything only one backend can do stays **below** the seam; the protocol grows
-  only to hold what the chrome needs from *any* terminal.
+  in `Package.swift`: the app target has no backend dependency to import.
+- Anything only one backend can do stays **below** the seam. The protocol grows only
+  to hold what the chrome needs from *any* terminal.
 
 ## Swift conventions
 
 - PascalCase types; one primary type per file; filename matches the type.
-- Public API in `TerminalKit` is `public`. Prefer `struct` / `final class` /
-  `type`.
+- Public API in `TerminalKit` is `public`. Prefer `struct` / `final class` / `type`.
 - No force-unwrap except documented AppKit (`contentView!`).
 - **Never block the main thread.** No synchronous subprocess (`waitUntilExit`),
-  file-system walk, or blocking I/O on the main queue — the chrome *is* the
-  product, and a stalled main thread is a beachball (ZEN-90). Do the work
-  off-main and hop back to main for the UI update.
-- Per global rules: no `TODO`/`FIXME`/`HACK` markers — fix it now, or file a
-  Linear ticket for genuinely out-of-scope work.
-- **AppKit gotchas live in `docs/swift-conventions.md`** — the traps past what a
-  linter catches (windows resized by modals via missing `contentMinSize`,
-  menu-action routing through the window delegate, no sheets mid-`mouseDown`,
-  layer-shadow re-sync, synthetic-event limits in tests). Read it before touching
-  window sizing, event routing, layers, or interaction tests; add to it when a new
-  one bites.
+  filesystem walk, or blocking I/O on the main queue. The chrome *is* the product,
+  and a stalled main thread is a beachball (ZEN-90). Work off-main, hop back to main
+  for the UI update.
+- Per global rules: no `TODO`/`FIXME`/`HACK` markers. Fix it now, or file a Linear
+  ticket for genuinely out-of-scope work.
+- **Read `docs/swift-conventions.md` before touching window sizing, event routing,
+  layers, config live-apply, or interaction tests.** Add to it when a new trap bites.
 
 ## Copy: read `docs/brand-voice.md` first (load-bearing)
 
 **Any word a person outside the project reads is governed by
-`docs/brand-voice.md`.** That includes in-app copy (toasts, empty states, button
-labels, Settings captions, error messages), `docs/config/*` (users open those
-files), the README, release notes, and anything in `zen-term-website` or
-`zen-term-releases`. Read it before writing or editing user-facing copy, not
-after.
+`docs/brand-voice.md`.** In-app copy (toasts, empty states, button labels, Settings
+captions, errors), `docs/config/*`, the README, release notes, and anything in
+`zen-term-website` or `zen-term-releases`. Read it before writing, not after.
 
-The parts that get violated most:
+The rules that get violated most:
 
-- **No em-dashes. Anywhere**, including inside quotes. Plenty of good writing
-  uses them, which is why this is the rule that drifts back.
-- **No hype words, no adverbs.** The app's user-facing copy currently contains
-  zero instances of "seamless", "powerful", "beautiful", or "just works". That's
-  a property worth keeping, not an accident.
-- **Positioning:** ZenTerm is "a terminal for the modern era", a modern shell for
-  a great terminal (ghostty), for terminal devs of all kinds. The agentic bent is
-  a lean, never the frame. Do not write "the terminal for the agentic era".
-- **One word per concept** (pane not split, workspace not project/repo, shortcut
-  not keybind). The vocabulary table is in the doc.
+- **No em-dashes. Anywhere**, including inside quotes. The test is a grep, not a
+  judgment call. Titles take a colon.
+- **No hype words, no adverbs.** The app's copy currently contains zero instances
+  of "seamless", "powerful", "beautiful", or "just works". Keep it that way.
+- **Positioning:** ZenTerm is "a dev-first terminal", on a libghostty core, for
+  terminal devs of all kinds. The core is the engine, not the identity: credit it
+  plainly in a spec line or the docs, never the headline. The agentic bent is a
+  lean, never the frame. Never write "the terminal for the agentic era".
+- **One word per concept** (pane not split, workspace not project/repo, shortcut not
+  keybind). The vocabulary table is in the doc.
 - Confirmations state the consequence and never ask "Are you sure?".
 
-`docs/brand-voice.md` lives here (the source) and is mirrored into the website
-repo. Edit it here, then copy it out. **It does not go in `zen-term-releases`**:
-that repo is public, and how we talk about ZenTerm is guidance for whoever writes
-the copy, not something a user downloading the app should be handed.
+`docs/brand-voice.md` is the source here and is mirrored into the website repo. Edit
+it here, then copy it out. **It does not go in `zen-term-releases`**: that repo is
+public, and how we talk about ZenTerm is guidance for whoever writes the copy, not
+something a user downloading the app should be handed.
 
-## Colors — always theme-driven (ZEN-27)
+## Colors: always theme-driven (ZEN-27)
 
-The chrome must **never hardcode a color**. A hardcoded color won't follow a
-bring-your-own theme and washes out on light themes. Every color resolves from
-`Theme.current`:
+The chrome must **never hardcode a color**. A hardcoded color will not follow a
+bring-your-own theme and washes out on light themes. Everything resolves from
+`Theme.current`.
 
 - **Terminal surfaces:** build `TerminalSurfaceConfig(theme: Theme.current.terminal)`.
-- **Chrome UI (`Sources/ZenTerm/`):** use `Theme.current.chrome` roles —
-  `background`, `foreground`, `info`, `warning`, `destructive`, `accent`,
-  `attention`, `muted` — and `chrome.ink(alpha:)` for foreground-toned inks,
-  hairlines, and hover fills (it applies the readability boost; pass the site's
-  opacity, not a raw `NSColor`).
+- **Chrome UI:** use `Theme.current.chrome` roles (`background`, `foreground`,
+  `info`, `warning`, `destructive`, `accent`, `attention`, `muted`) and
+  `chrome.ink(alpha:)` for foreground-toned inks, hairlines, and hover fills.
 
-**Banned in the chrome:** `NSColor(white:…)`, `.white` / `.black`, raw hex,
-literal palette values (`0xc4a7e7`, `NSColor(srgbRed:…)`), and AppKit
-system/semantic colors (`.secondaryLabelColor`, `.placeholderTextColor`, a text
-field's default `placeholderString` tint, …) — those follow `effectiveAppearance`,
-not `Theme.current`, so they wash out on light themes. The only exception is a
-genuinely theme-independent value (e.g. the black drop shadow in `FloatShadow`),
-and it must be commented as such. If a chrome element needs a role `ChromeTheme`
-doesn't expose, add the role and derive it from the terminal palette in
-`ChromeThemeDeriver` — never reach for a literal.
+**Banned in the chrome:** `NSColor(white:…)`, `.white` / `.black`, raw hex, literal
+palette values, and AppKit system/semantic colors (`.secondaryLabelColor`,
+`.placeholderTextColor`, a text field's default `placeholderString` tint). Those
+follow `effectiveAppearance`, not `Theme.current`. The only exception is a genuinely
+theme-independent value (the black drop shadow in `FloatShadow`), and it must be
+commented as such. If the chrome needs a role `ChromeTheme` does not expose, add the
+role and derive it in `ChromeThemeDeriver`. Never reach for a literal.
 
-## Linear — ZenTerm workspace
+## Linear: ZenTerm workspace
 
-The Linear MCP (`linear-zenterm`) is connected to the **ZenTerm** workspace
-(https://linear.app/zenterm). Every issue lives on the single **ZenTerm** team.
+The Linear MCP (`linear-zenterm`) is connected to the **ZenTerm** workspace. Every
+issue lives on the single **ZenTerm** team (`121e9ab2-6c26-43c8-92f7-953be0396d82`,
+key `ZEN`). Status ladder: Backlog, Todo, In Progress, In Review, Done.
 
-- **Team:** ZenTerm — `121e9ab2-6c26-43c8-92f7-953be0396d82`, key `ZEN`.
-- **Status ladder:** Backlog → Todo → In Progress → In Review → Done.
 - **Address statuses and projects by name, never a UUID.** `save_issue` takes
   `state: "In Review"` and `project: "Polish & Bugs"` directly. Hardcoded ids are
-  banned here: the 2026-07-19 move to this workspace invalidated every one, and
-  names survive the next move too.
-- Use Linear's generated `gitBranchName` for branches (now `drew/zen-N-…`);
-  reference the issue id in commits/PRs so Linear auto-links.
+  banned: the 2026-07-19 workspace move invalidated every one, and names survive the
+  next move too.
+- **Branch names come from the ticket's `gitBranchName` field, verbatim.** Do not
+  abbreviate the slug, and do not add or drop a prefix. Reference the issue id in
+  commits and PRs so Linear auto-links.
+- Every ticket needs a project, a priority, a label, and a status. No orphans. The
+  four durable projects are by kind of work: **Polish & Bugs** (rough edge while
+  using it), **Feature Backlog** (want a new capability), **Performance and
+  Code-Quality** (no user sees a difference), **Release & Distribution** (shipping a
+  build). Labels slice across them.
 
-## Epics → Linear (just-in-time, not up front)
+### Epics
 
-- **Linear is the record.** The project, its tickets, and their PR links are the
-  durable history of an epic. Don't write a second copy into `docs/`.
-- **A spec or plan is scratch**, for working out implementation details and for
-  writing the tickets from. It lives in `docs/` while the epic is in flight, and
-  gets cleaned up when the epic ships: fold anything architectural into
-  `docs/architecture.md`, then delete or archive it.
-- **An epic IS a Linear Project — never an issue.** Task tickets belong directly
-  to the project. There is no "epic tracking issue"; the project + its child
-  tickets are the whole structure.
-- **When we pick up an epic:** create/choose its Linear **project**, then create
-  tickets under that project **as we go** — never a full backlog dumped up front,
-  and never a parent "epic issue" for them to nest under.
-- **A ticket is PR-sized: 1 ticket = 1 branch = 1 PR.** Size tickets to the pull
-  request, not to plan tasks — a plan's implementation "tasks" are steps, and a
-  PR-sized ticket usually bundles several of them into one independently
-  reviewable, independently mergeable change. Break an epic into as many PR-sized
-  tickets as it takes; don't force one ticket per plan task.
-  - Exception — a tightly-coupled foundational stack where each step depends on
-    the last and nothing is separately mergeable (e.g. the Epic 0 scaffold: ZEN-2)
-    is legitimately one ticket / one PR covering all its plan tasks. When that
-    happens, still create a ticket per plan task afterward (linked to the project
-    and the PR) so each task keeps its own history — the single PR is the delivery
-    unit, the per-task tickets are the record.
-- **Branch off the ticket's Linear `gitBranchName`** (from `save_issue`), and
-  reference the ticket id in commits/PRs so Linear auto-links. Keep ticket
-  descriptions lean: title + a short goal/scope line.
+- **An epic IS a Linear Project, never an issue.** Task tickets belong directly to
+  the project. There is no "epic tracking issue".
+- **Create tickets as we go**, never a full backlog dumped up front.
+- **A ticket is PR-sized: 1 ticket = 1 branch = 1 PR.** Size to the pull request,
+  not to plan tasks. A PR-sized ticket usually bundles several plan steps into one
+  independently reviewable, independently mergeable change. Keep descriptions lean:
+  a title and a short goal or scope line. The exception is a
+  tightly-coupled foundational stack where nothing is separately mergeable; when
+  that happens, still create a ticket per task afterward so each keeps its history.
 
-## Shipping a ticket — the `ship-feature` flow
+## Shipping
 
-When a task/feature is built, run the `ship-feature` skill
-(`.claude/skills/ship-feature/`). Swift/solo-adapted, so PR steps are conditional
-on a remote existing:
+The **`ship-feature` skill** owns the PR flow (local gate, draft PR, Copilot +
+`/code-review`, triage, ready for review). Cutting a public release is the
+**`release` skill**, over `docs/releasing.md`.
 
-1. **Local check** — `swift build` clean + `swift test` green (+ formatter/linter
-   if configured); confirm any GUI runbook expectations via `swift run ZenTerm`.
-   Run the `update-documentation` skill so any doc this change makes wrong is
-   fixed in `docs/` here and cross-repo work is flagged, not dropped.
-2. **Remote check** — no remote yet → local-only ship (skip Copilot/PR). Remote →
-   push branch, open a **draft** PR referencing the Linear id, request a Copilot
-   review.
-3. **Review** — always run `/code-review` on the branch diff; add Copilot findings
-   if a PR exists.
-4. **Triage** — fix / mitigate / ignore every finding, **no tech debt**. Residual
-   work becomes a Linear ticket (ZenTerm team), never an in-code `TODO`. Re-run
-   the local check after fixes.
-5. **Close out** — mark the PR ready for review. Linear moves the ticket to **In
-   Review** itself once it's ready (auto-linked via the issue id), so don't set
-   that status by hand. On a **local-only** ship there's no PR to trigger it, so
-   move it yourself (`save_issue` with `state: "In Review"`). Done is reached on
-   merge, or by hand on a local-only ship.
+**Neither runs on its own.** A feature looking finished is not the trigger; Drew
+asking to ship it is. Say the work is ready and stop there.
 
-Status flow the agent drives: **In Progress** on pickup. **In Review** and **Done**
-follow the PR on their own. Backlog → Todo → In Progress moves are yours.
+Two things that flow does not decide for you:
+
+- **Triage leaves no tech debt.** Fix, mitigate, or ignore every finding. Residual
+  work becomes a Linear ticket, never an in-code `TODO`.
+- **Status:** you drive Backlog to Todo to In Progress. The GitHub integration moves
+  In Review and Done on its own once a PR is ready or merged, so do not set those by
+  hand.
+
+For a genuinely trivial tweak (a one-line constant), skip the ceremony entirely and
+commit straight to main.
