@@ -161,6 +161,9 @@ public extension TerminalSurface {
     /// Default no-op: a backend that can't reconfigure live needs nothing here.
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {}
 
+    /// Default no-op: a backend with no key-injection path can't submit for the chrome.
+    func submitLine() {}
+
     /// Default no-op: a backend that doesn't reflow on every frame change needs nothing here.
     func setSizeSyncSuspended(_ suspended: Bool) {}
 }
