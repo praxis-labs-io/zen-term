@@ -55,6 +55,31 @@ final class GhosttyHostView: NSView {
 
     // MARK: Size / scale
 
+    /// How many chrome animations are currently holding this surface's grid. A count rather than a
+    /// flag because the holders overlap: a drawer slide freezes every surface in the tab while a
+    /// split-in freezes every surface on the canvas, and the two sets intersect. With a flag,
+    /// whichever animation finished first unfroze panes the other was still animating, silently
+    /// restoring the per-frame reflow this exists to prevent.
+    private var sizeSyncHolds = 0
+
+    /// Whether frame changes are currently held back from libghostty, so the grid keeps the size it
+    /// had when the first holder took its hold. See `TerminalSurface.setSizeSyncSuspended`.
+    var isSizeSyncSuspended: Bool { sizeSyncHolds > 0 }
+
+    /// Take or release a hold on this surface's grid. The grid re-syncs when the last hold is
+    /// released, so it always reconciles to whatever the frame actually landed on. A release
+    /// without a matching hold is ignored rather than driving the count negative — a surface born
+    /// mid-animation never took the hold, and leaving it unfrozen is the safe direction.
+    func setSizeSyncSuspended(_ suspended: Bool) {
+        if suspended {
+            sizeSyncHolds += 1
+            return
+        }
+        guard sizeSyncHolds > 0 else { return }
+        sizeSyncHolds -= 1
+        if sizeSyncHolds == 0 { syncSizeAndScale() }
+    }
+
     /// Push the current backing size and content scale into libghostty. Called on every
     /// geometry or backing-store change; libghostty tolerates a zero size until the first
     /// real layout.
@@ -62,6 +87,9 @@ final class GhosttyHostView: NSView {
         guard let surfacePtr else { return }
         let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
         ghostty_surface_set_content_scale(surfacePtr, scale, scale)
+        // The scale above still tracks (a display change mid-animation is not a reflow), but the
+        // grid is frozen for the length of the chrome's animation — see `isSizeSyncSuspended`.
+        guard !isSizeSyncSuspended else { return }
         // Skip zero sizes: the view has no bounds until the chrome lays it out, and
         // pushing 0×0 would collapse libghostty's sensible default grid to nothing.
         let backing = convertToBacking(bounds).size

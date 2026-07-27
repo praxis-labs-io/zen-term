@@ -19,6 +19,9 @@ final class SplitContainerView: NSView {
     /// resize finalizes it first so the fixed-extent and ratio constraints can't both be required.
     private var isAnimatingIn = false
     private var splitInExtents: [NSLayoutConstraint] = []
+    /// The in-flight `animateSplitIn`'s grid freeze, held so `settleSplitIn` can lift it. Non-nil
+    /// only while `isAnimatingIn`.
+    private var suspendGrids: ((Bool) -> Void)?
 
     /// Called for every split node as its container is built, with the split's id and its
     /// container view. Lets the pane controller clamp resizes to a pixel min instead of a
@@ -71,6 +74,12 @@ final class SplitContainerView: NSView {
     private func settleSplitIn() {
         guard isAnimatingIn else { return }
         isAnimatingIn = false
+        // Deferred, so the grids unfreeze on *every* exit below — including the reparented-children
+        // early-out, which would otherwise strand them frozen for the surface's life.
+        defer {
+            suspendGrids?(false)
+            suspendGrids = nil
+        }
         // Release the temp extents unconditionally — they're attached to the child views, so leaving
         // them active after a reparent would wrongly constrain the children in their new container.
         splitInExtents.forEach { $0.isActive = false }
@@ -86,14 +95,23 @@ final class SplitContainerView: NSView {
     }
 
     /// Animate this freshly-built split in like a drawer push: the pre-existing child (`first`)
-    /// compresses from filling the container to its ratio — a real resize, so its terminal reflows —
-    /// while the new child (`second`, always the just-added pane) slides in at its final size from the
-    /// trailing (vertical split) or bottom (horizontal split) edge. The two stay one gutter apart the
-    /// whole way, mirroring the drawer push. `content` is clipped for the duration so the parked new
-    /// pane doesn't spill into siblings; on completion the canonical ratio constraints are restored
-    /// (same size, no jump). The caller guards Reduce Motion. Must be called once the split is laid
-    /// out at its final ratio (so the final child sizes are known).
-    func animateSplitIn(duration: CFTimeInterval, timing: CAMediaTimingFunction) {
+    /// compresses from filling the container to its ratio while the new child (`second`, always the
+    /// just-added pane) slides in at its final size from the trailing (vertical split) or bottom
+    /// (horizontal split) edge. The two stay one gutter apart the whole way, mirroring the drawer
+    /// push. `content` is clipped for the duration so the parked new pane doesn't spill into
+    /// siblings; on completion the canonical ratio constraints are restored (same size, no jump).
+    /// The caller guards Reduce Motion. Must be called once the split is laid out at its final ratio
+    /// (so the final child sizes are known).
+    ///
+    /// `first` compresses as a real view resize, but its *grid* is held for the duration via
+    /// `suspendGrids` — the caller owns the surfaces, this view only knows children. Because the
+    /// caller has already laid the split out at its final ratio, that grid is correct on entry, so
+    /// freezing here means one reflow instead of one per animation frame. `suspendGrids(false)` runs
+    /// from `settleSplitIn` on every exit path. See `TerminalSurface.setSizeSyncSuspended`.
+    func animateSplitIn(
+        duration: CFTimeInterval, timing: CAMediaTimingFunction,
+        suspendGrids: @escaping (Bool) -> Void = { _ in }
+    ) {
         guard let first = firstChild, let second = secondChild, let axis = splitAxis,
             let ratioConstraint, let secondFollowsFirst
         else { return }
@@ -101,6 +119,8 @@ final class SplitContainerView: NSView {
         let extent = vertical ? bounds.width : bounds.height
         guard extent > 1 else { return }
         isAnimatingIn = true
+        suspendGrids(true)
+        self.suspendGrids = suspendGrids
 
         // Read the final child sizes from the canonical (ratio) layout before swapping it out.
         let finalFirst = vertical ? first.bounds.width : first.bounds.height
@@ -140,6 +160,18 @@ final class SplitContainerView: NSView {
         } completionHandler: { [weak self] in
             self?.settleSplitIn()
         }
+    }
+
+    /// Settle an in-flight slide when this container is torn out of the view tree. A rebuild
+    /// (`PaneCanvasController.rebuildViews`) drops every split view from both the canvas and
+    /// `splitViewByID` in one pass, which releases the last reference to a container still
+    /// animating — so its `runAnimationGroup` completion, which captures `self` weakly, never runs.
+    /// The grid holds taken by `animateSplitIn` would then never be released and those panes would
+    /// stop reflowing for the life of the surface. Settling here releases them at teardown instead
+    /// of relying on a completion the rebuild can prevent.
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        if superview == nil { settleSplitIn() }
     }
 
     /// The one ratio formula, shared by `build` and `setRatio` so the two paths can't drift:

@@ -416,8 +416,12 @@ final class PaneCanvasController: NSObject {
         // slides in at its final size. Lay out at the final ratio first so the split knows the child
         // sizes, then hand off. Reduce Motion keeps the instant appearance.
         if !Motion.isReduceMotionEnabled(), let split = splitViewByID[newSplit] {
-            canvasView.layoutSubtreeIfNeeded()
-            split.animateSplitIn(duration: Motion.pageSlideDuration, timing: Motion.landingTiming)
+            canvasView.layoutSubtreeIfNeeded()  // the compressing pane's one reflow, at its final ratio
+            split.animateSplitIn(
+                duration: Motion.pageSlideDuration, timing: Motion.landingTiming,
+                suspendGrids: { [weak self] suspended in
+                    self?.allSurfaces.forEach { $0.setSizeSyncSuspended(suspended) }
+                })
         }
     }
 
