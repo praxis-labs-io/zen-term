@@ -48,18 +48,20 @@ area. One line per check, each phrased as something to do and something to see.
 **Run:** `swift run ZenTerm`
 
 **Pane focus halo**
-- [ ] Split with ⌘⇧\. The focused pane carries the halo, the other does not.
-- [ ] ⌘H / ⌘L moves the halo with the focus.
+- [ ] Split with `⌘⇧\`. The focused pane carries the halo, the other does not.
+- [ ] `⌘H` / `⌘L` moves the halo with the focus.
 
 **Settings card**
-- [ ] ⌘, opens it centered, springing in with no flash.
-- [ ] Esc closes it and returns focus to the pane that had it.
+- [ ] `⌘,` opens it centered, springing in with no flash.
+- [ ] `Esc` closes it and returns focus to the pane that had it.
 ```
 
 Rules that keep them useful:
 
 - **Every check names the keystroke or click that drives it.** "Verify the halo
   works" is not a check.
+- **Wrap chords in backticks.** A bare `⌘⇧\` loses its backslash when the checklist
+  is rendered as Markdown, which turns it into a different chord.
 - **Every check names what correct looks like**, so a wrong result is reportable
   without a second round trip.
 - **A new chord always gets a line**, even when it looks fully tested, for the

@@ -104,7 +104,7 @@ In a real `.app` the resource bundles must live in `Contents/Resources`, which t
 accessor never checks, so the app runs on the build machine (its hardcoded `.build`
 path exists) and SIGTRAPs on first access for every downloader. This shipped in
 v0.1.1. Use `Bundle.zenResourceBundle(named:fallback:)`
-(`TerminalKit/Bundle+ZenResource.swift`), which checks
+(`Sources/TerminalKit/Bundle+ZenResource.swift`), which checks
 `Bundle.main.resourceURL`/`bundleURL` first and defers to `.module` only via
 `@autoclosure` for `swift test`. The general heuristic: "works when I build it,
 crashes for downloaders" means a dev-machine-absolute path baked into the binary is
