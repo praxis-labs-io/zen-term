@@ -116,6 +116,16 @@ public protocol TerminalSurface: AnyObject {
 
     func terminate()
 
+    /// Hold the terminal's grid at its current size while the chrome animates the view's frame,
+    /// then reconcile once on resume. The chrome animates real layout (a drawer slide compresses
+    /// the pane canvas over `Motion.pageSlideDuration`), so without this every animation frame
+    /// resizes the surface: one 0.28s slide pushes the grid through ~30 widths, and a column
+    /// change is a reflow. Ordinary output survives being rewrapped 30 times; a full-frame TUI
+    /// does not, because it positions its rows with cursor moves rather than wraps, so every step
+    /// narrower than the frame hard-wraps rows that were never wraps — damage that stays in the
+    /// scrollback after the pane widens back.
+    func setSizeSyncSuspended(_ suspended: Bool)
+
     func paste(_ text: String)
     func copySelection() -> String?
     func scrollToBottom()
@@ -134,4 +144,7 @@ public extension TerminalSurface {
 
     /// Default no-op: a backend that can't reconfigure live needs nothing here.
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {}
+
+    /// Default no-op: a backend that doesn't reflow on every frame change needs nothing here.
+    func setSizeSyncSuspended(_ suspended: Bool) {}
 }

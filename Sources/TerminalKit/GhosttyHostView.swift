@@ -55,6 +55,17 @@ final class GhosttyHostView: NSView {
 
     // MARK: Size / scale
 
+    /// While true, frame changes stop reaching libghostty and the grid holds the size it had when
+    /// suspended. The chrome sets this around its layout animations — see
+    /// `TerminalSurface.setSizeSyncSuspended`. Clearing it re-syncs immediately, so the grid
+    /// always reconciles to whatever the frame actually landed on.
+    var isSizeSyncSuspended = false {
+        didSet {
+            guard oldValue, !isSizeSyncSuspended else { return }
+            syncSizeAndScale()
+        }
+    }
+
     /// Push the current backing size and content scale into libghostty. Called on every
     /// geometry or backing-store change; libghostty tolerates a zero size until the first
     /// real layout.
@@ -62,6 +73,9 @@ final class GhosttyHostView: NSView {
         guard let surfacePtr else { return }
         let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
         ghostty_surface_set_content_scale(surfacePtr, scale, scale)
+        // The scale above still tracks (a display change mid-animation is not a reflow), but the
+        // grid is frozen for the length of the chrome's animation — see `isSizeSyncSuspended`.
+        guard !isSizeSyncSuspended else { return }
         // Skip zero sizes: the view has no bounds until the chrome lays it out, and
         // pushing 0×0 would collapse libghostty's sensible default grid to nothing.
         let backing = convertToBacking(bounds).size
