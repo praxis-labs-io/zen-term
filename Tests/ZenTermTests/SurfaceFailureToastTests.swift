@@ -47,12 +47,6 @@ final class SurfaceFailureToastTests: XCTestCase {
         return controller
     }
 
-    private func waitForDismissAnimation() {
-        let settled = expectation(description: "dismiss animation settled")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { settled.fulfill() }
-        wait(for: [settled], timeout: 2)
-    }
-
     func test_failureToast_mountsWithBothActions() {
         let controller = makeController()
         controller.presentSurfaceFailureToastForTesting(retry: {}, close: {})
@@ -78,8 +72,7 @@ final class SurfaceFailureToastTests: XCTestCase {
         XCTAssertEqual(retried, 1, "clicking Retry runs the retry action")
         XCTAssertEqual(closed, 0, "Retry must not run the close action")
 
-        waitForDismissAnimation()
-        XCTAssertTrue(toastViews(in: controller).isEmpty, "clicking Retry dismisses the toast")
+        waitUntil(toastViews(in: controller).isEmpty, "clicking Retry to dismiss the toast")
     }
 
     func test_closeButton_runsCloseAndDismisses() {
@@ -96,7 +89,6 @@ final class SurfaceFailureToastTests: XCTestCase {
         XCTAssertEqual(closed, 1, "clicking Close Pane runs the close action")
         XCTAssertEqual(retried, 0, "Close Pane must not run the retry action")
 
-        waitForDismissAnimation()
-        XCTAssertTrue(toastViews(in: controller).isEmpty, "clicking Close Pane dismisses the toast")
+        waitUntil(toastViews(in: controller).isEmpty, "clicking Close Pane to dismiss the toast")
     }
 }
