@@ -49,6 +49,21 @@ synthesized `modifierFlags: .option` event is a keystroke macOS never sends: it 
 ⌥-arrow reorder past four green tests and a mutation check, because both only ever exercised the fake
 event (ZEN-145).
 
+**A synthesized mouse event cannot carry a button number.** `NSEvent.mouseEvent` has no
+`buttonNumber` parameter and every event it builds reports 0, whatever the type, so a test cannot
+send a real middle click or side button. Split the coverage instead: drive an `.otherMouseDown`
+through the window to prove the override runs, and test the button mapping as a pure function of
+the number AppKit would have supplied. `NSEvent.ModifierFlags` has the opposite property: it
+preserves any raw bits handed to `init(rawValue:)`, so the device-specific `NX_DEVICE*` flags that
+say *which side* a modifier sits on do survive synthesis, and a `flagsChanged` built without them
+skips every side check in silence (ZEN-308).
+
+**To prove an `NSView` override exists at all, let the responder chain answer.** `NSResponder`'s
+default `flagsChanged` and `otherMouse*` implementations forward to `nextResponder`, so a recording
+superview counts exactly the events the view under test declined to handle. That catches a missing
+override, which is a whole class of bug no assertion about behavior can reach: with no override
+there is no behavior to assert on.
+
 ## Scroll views
 
 **A single-column `NSOutlineView` left at the default `.automatic` style is permanently wider than

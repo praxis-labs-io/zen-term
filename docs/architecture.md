@@ -160,7 +160,7 @@ masking a resolution failure.
   identifying *this* surface's background work would need the attribution above.
 - **Quit drives window teardown by hand.** `windowWillClose` does not fire on app
   termination, so `applicationShouldTerminate` calls `tearDownForQuit()` on every
-  window and waits on `ShellSessionReaper.drainAllSessions` (capped) before
+  window and waits on `ShellSessionReaper.drainForQuit` (capped) before
   replying. That waits for the shells to actually go, not merely for outstanding
   work to finish: at the moment the last surface is freed no leader has exited
   yet, so a drain watching only for idle sees none and lets the process go before
@@ -175,6 +175,42 @@ masking a resolution failure.
 - **Re-entrancy:** actions that make the chrome free a surface defer to
   `DispatchQueue.main.async`. Doing it synchronously inside `ghostty_app_tick` is a
   re-entrant use-after-free.
+- **Every input event libghostty sees is an explicit `NSView` override.** There is
+  no catch-all, so an event nothing overrides is dropped in silence rather than
+  failing loudly. Modifier press and release (`flagsChanged`) and every mouse button
+  past left and right were missing for exactly that reason (ZEN-308): the app looks
+  completely normal, and the only thing that notices is a program inside the pane,
+  running under the kitty keyboard protocol or with mouse reporting on. Modifier
+  events carry which *side* moved, because AppKit reports the modifier state that
+  resulted rather than the direction the key went: with both shifts held, the
+  device-specific flags are the only thing separating a release from a second press.
+  Ghostty's own app checks only the right-hand flags, so ZenTerm diverges here and
+  checks whichever side the keyCode names, keeping Ghostty's fallback that an event
+  with no side flag at all still reads as a press.
+- **The sided modifier bits go on the key event and nowhere else.** libghostty
+  stores its mouse mods as `Mods.binding()`, which strips the sides, then compares
+  that stored value against whatever it is handed (`Surface.modsChanged`). A sided
+  value can never equal a stripped one, so passing sides to the mouse callbacks
+  leaves that guard permanently false and every key event and mouse move while a
+  right-hand modifier is held marks the whole grid dirty and rebuilds every row.
+  `ghosttyMods` is unsided for that reason and `ghosttySidedMods` is used only to
+  build the key event. The same misfire already happens whenever caps lock is on,
+  in ZenTerm and in Ghostty, because `binding()` strips the lock bits too.
+- **Every modifier release is paired to a press the same surface reported.**
+  `GhosttyHostView` records what it has told libghostty is down and forwards a
+  release only for something in that record. Three ordinary paths emit an unpaired
+  event otherwise: a preedit swallows the press but not the release after it, caps
+  lock sets its flag both going down and coming back up, and a reserved chord that
+  moves pane focus lands the press on one surface and the release on another, since
+  `KeyInterceptor` consumes the chord's `keyDown` while `flagsChanged` passes
+  through to whichever pane is first responder at the time. A release is still
+  forwarded mid-composition, because libghostty is holding that press. Focus loss
+  clears the record, matching libghostty releasing every held modifier there.
+- **Only the focused pane is told a modifier moved.** `flagsChanged` is a
+  responder-chain event, so it reaches the first responder alone. Ghostty adds a
+  window-level monitor that fans it out to the other surfaces, which ZenTerm does
+  not have, so an unfocused pane holds stale mouse mods until the pointer moves
+  over it (ZEN-316).
 
 ### What the backend will and won't do
 
