@@ -696,4 +696,25 @@ final class ToolFloatControllerTests: XCTestCase {
         XCTAssertFalse(floats.isLiveInBackground("btop"))
         XCTAssertEqual(stateChanges, 1)
     }
+
+    /// The repo-root walk resolves off-main (ZEN-234), so `toggle` doesn't open within its own turn:
+    /// the card lands a hop later, when the probe delivers. Drives a resolver held open by hand, the
+    /// default resolver in `makeFloats` being synchronous. What a SECOND press inside that gap does
+    /// belongs to `test_secondPressDuringTheProbe_cancelsInsteadOfOpening`.
+    func test_toggle_resolvesRepoRootOffMain() throws {
+        let repo = try makeDir("repo", git: true)
+        let (floats, spawned, _) = makeFloats(cwd: repo)
+        var pending: [(URL?) -> Void] = []
+        floats.resolveRepoRoot = { _, completion in pending.append(completion) }
+        let float = spec("lazygit", persist: .directory)
+
+        floats.toggle(float)
+        XCTAssertFalse(floats.isOpen, "toggle must not open synchronously — the resolve is off-main")
+        XCTAssertEqual(pending.count, 1)
+
+        pending[0](repo)  // the off-main resolve lands
+        XCTAssertTrue(floats.isOpen, "the float opens once the root resolves")
+        XCTAssertEqual(
+            floatSurfaces(spawned(), command: "lazygit").count, 1, "exactly one float, not two")
+    }
 }

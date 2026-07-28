@@ -65,7 +65,7 @@ final class SegmentedControl: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Report the segment row's width so content hugging can keep the control at its content size
-    /// (and let a form's spacer push it to the trailing edge). Height stays constraint-driven.
+    /// (and let a form's spacer push it to the trailing edge).
     override var intrinsicContentSize: NSSize {
         guard let segmentsStack else { return super.intrinsicContentSize }
         return NSSize(width: segmentsStack.fittingSize.width, height: NSView.noIntrinsicMetric)

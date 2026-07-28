@@ -98,19 +98,41 @@ final class GitRepoStatusTests: XCTestCase {
         XCTAssertEqual(GitRepoStatus.known(plain), false)
     }
 
-    func test_repoRoot_walksUpFromASubdirectory() throws {
+    /// The walk-up, plus the delivery thread its callers depend on: `WindowController` and
+    /// `ToolFloatController` both continue straight into AppKit from this completion, so delivering
+    /// it off-main would touch the UI from a background queue rather than fail an assertion here.
+    func test_repoRoot_walksUpFromASubdirectory_andDeliversOnMain() throws {
         let repo = try makeDir("repo", git: true)
         let nested = repo.appendingPathComponent("a/b", isDirectory: true)
         try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
 
         var resolved: URL??
+        var onMain = false
         let landed = expectation(description: "walk landed")
         GitRepoStatus.repoRoot(for: nested) {
             resolved = $0
+            onMain = Thread.isMainThread
             landed.fulfill()
         }
         wait(for: [landed], timeout: 2)
 
         XCTAssertEqual(resolved??.standardizedFileURL, repo.standardizedFileURL)
+        XCTAssertTrue(onMain, "the completion must land on the main thread")
+    }
+
+    func test_repoRoot_nilOutsideARepo() throws {
+        let plain = try makeDir("plain", git: false)
+
+        var resolved: URL??
+        let landed = expectation(description: "walk landed")
+        GitRepoStatus.repoRoot(for: plain) {
+            resolved = $0
+            landed.fulfill()
+        }
+        wait(for: [landed], timeout: 2)
+
+        // Unwrap the OUTER optional first: it proves the completion actually delivered, so the
+        // "resolved to nil" assertion can't pass just because nothing ever ran.
+        XCTAssertNil(try XCTUnwrap(resolved), "a directory with no enclosing .git resolves to nil")
     }
 }

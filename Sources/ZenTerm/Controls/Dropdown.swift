@@ -138,9 +138,14 @@ final class Dropdown: NSView {
         renderTitle()
     }
 
+    /// An optional lead shown before the selected item in the button only (not the list rows), e.g.
+    /// `"Base: "` so the button reads `Base: main` while the rows stay bare branch names. Empty by
+    /// default, so existing dropdowns are unchanged.
+    var titlePrefix: String = "" { didSet { renderTitle() } }
+
     private func renderTitle() {
         let item = items.indices.contains(selectedIndex) ? items[selectedIndex] : nil
-        titleLabel.stringValue = item?.title ?? ""
+        titleLabel.stringValue = item.map { titlePrefix + $0.title } ?? ""
         // Swap which constraint holds the title rather than reflowing: the dot only exists for
         // color pickers, and every other dropdown must keep its exact leading inset.
         swatch.layer?.backgroundColor = item?.swatch?.cgColor

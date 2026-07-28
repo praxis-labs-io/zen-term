@@ -72,6 +72,9 @@ final class WindowControllerToolFloatTests: XCTestCase {
         let c = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: root)
         c.showAndStart()
+        // Resolve the repo root synchronously so a float opens within the same turn as the toggle
+        // chord these tests drive; the off-main default is the diff-viewer/ToolFloat async suites'.
+        c.floatsForTesting.resolveRepoRoot = { $1(GitRepo.repoRoot(for: $0)) }
         controller = c
         return c
     }

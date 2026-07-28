@@ -26,10 +26,16 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// The active tab takes its unified focus back when the card goes away.
     private let restoreFocus: () -> Void
     private let makeSurface: () -> TerminalSurface
-    /// The enclosing repo root for a cwd, answered asynchronously. The walk is filesystem I/O and
-    /// never runs on the main thread (ZEN-90); tests inject a synchronous probe so a toggle stays
-    /// one step.
-    private let resolveRepoRoot: (URL?, @escaping (URL?) -> Void) -> Void
+    /// The enclosing repo root for a cwd, answered asynchronously, for the git guard and the
+    /// `.directory` anchor. The walk is filesystem I/O and never runs on the main thread
+    /// (ZEN-90/ZEN-234). Injected so a test can drive a deterministic resolver: pass one at init for
+    /// a synchronous probe that keeps a toggle one step, or assign afterwards to hold the probe and
+    /// exercise the window a real walk leaves open.
+    ///
+    /// Contract: the completion must be delivered on the **main thread** — the continuation mutates
+    /// controller state and presents the overlay. The default resolver hops back to main, and any
+    /// injected resolver must too.
+    var resolveRepoRoot: (URL?, @escaping (URL?) -> Void) -> Void
     /// Bumped whenever an in-flight repo-root probe is superseded or cancelled, so its completion
     /// knows to return instead of showing a card nobody is waiting for any more.
     private var toggleGeneration = 0

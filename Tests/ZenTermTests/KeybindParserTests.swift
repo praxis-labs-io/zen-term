@@ -36,6 +36,13 @@ final class KeybindParserTests: XCTestCase {
         XCTAssertEqual(action(from: "fill_screen"), .fillScreen)
     }
 
+    func test_diffLayoutToggle_isNotAGlobalChord() {
+        // The layout toggle is viewer-local (bare `\`, handled in the overlay's keyDown) — it is not a
+        // reserved chord, so it round-trips to nothing and ⌘I is free (ZEN-254).
+        XCTAssertNil(action(from: "toggle_diff_layout"))
+        XCTAssertNil(KeymapDefaults.map[Chord(command: true, key: "i")], "⌘I is no longer reserved")
+    }
+
     func test_checkForUpdates_token_hasNoDefaultBinding() {
         // The action round-trips (so a hand-written keybind resolves), but it isn't in the built-in
         // keymap — it ships unbound (ZEN-20).

@@ -14,12 +14,42 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(chrome.destructive, TerminalColor(hex: "#eb6f92"))  // love / palette[1]
         XCTAssertEqual(chrome.accent, TerminalColor(hex: "#c4a7e7"))  // iris / palette[5]
         XCTAssertEqual(chrome.attention, TerminalColor(hex: "#ea9a97"))  // rose / palette[6]
+        XCTAssertEqual(chrome.positive, TerminalColor(hex: "#3e8fb0"))  // pine / palette[2] (ANSI green)
         // muted = foreground (#e0def4 = 224,222,244) blended over background (#191724 =
         // 25,23,36) at 0.55: round(fg*0.55 + bg*0.45) per channel.
         //   R: 224*0.55 + 25*0.45 = 123.2 + 11.25 = 134.45 -> 134
         //   G: 222*0.55 + 23*0.45 = 122.1 + 10.35 = 132.45 -> 132
         //   B: 244*0.55 + 36*0.45 = 134.2 + 16.2  = 150.4  -> 150
         XCTAssertEqual(chrome.muted, TerminalColor(red: 134, green: 132, blue: 150))
+    }
+
+    func test_derivesAllSevenSyntaxRolesFromPalette() {
+        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
+        XCTAssertEqual(chrome.synKeyword, TerminalColor(hex: "#c4a7e7"))  // iris / palette[5]
+        XCTAssertEqual(chrome.synString, TerminalColor(hex: "#3e8fb0"))  // pine / palette[2]
+        XCTAssertEqual(chrome.synNumber, TerminalColor(hex: "#f6c177"))  // gold / palette[3]
+        XCTAssertEqual(chrome.synType, TerminalColor(hex: "#ea9a97"))  // rose / palette[6]
+        XCTAssertEqual(chrome.synFunction, TerminalColor(hex: "#9ccfd8"))  // foam / palette[4]
+        XCTAssertEqual(chrome.synPunctuation, TerminalColor(hex: "#eb6f92"))  // love / palette[1]
+        // comment = foreground (#e0def4 = 224,222,244) blended over background (#191724 =
+        // 25,23,36) at 0.45 (fainter than muted's 0.55): round(fg*0.45 + bg*0.55) per channel.
+        //   R: 224*0.45 + 25*0.55 = 100.8 + 13.75 = 114.55 -> 115
+        //   G: 222*0.45 + 23*0.55 =  99.9 + 12.65 = 112.55 -> 113
+        //   B: 244*0.45 + 36*0.55 = 109.8 + 19.8  = 129.6  -> 130
+        XCTAssertEqual(chrome.synComment, TerminalColor(red: 115, green: 113, blue: 130))
+    }
+
+    func test_chromeThemeStaysEquatable_acrossAllFields() {
+        // A round-trip equality that touches every stored field, including the seven new syntax roles —
+        // guards the synthesized `Equatable` conformance the row model relies on.
+        XCTAssertEqual(
+            ChromeThemeDeriver.derive(from: Theme.rosePineMoon),
+            ChromeThemeDeriver.derive(from: Theme.rosePineMoon))
+        var recolored = Theme.rosePineMoon
+        recolored.ansi[5] = TerminalColor(red: 255, green: 255, blue: 255)  // shifts synKeyword (slot 5) alone
+        XCTAssertNotEqual(
+            ChromeThemeDeriver.derive(from: Theme.rosePineMoon),
+            ChromeThemeDeriver.derive(from: recolored))
     }
 
     /// `accent-color` repoints the accent role and nothing else (ZEN-255). The "nothing else" half
@@ -35,9 +65,29 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(overridden.warning, base.warning)
         XCTAssertEqual(overridden.destructive, base.destructive)
         XCTAssertEqual(overridden.attention, base.attention)
+        XCTAssertEqual(overridden.positive, base.positive)
         XCTAssertEqual(overridden.muted, base.muted)
         XCTAssertEqual(overridden.background, base.background)
         XCTAssertEqual(overridden.foreground, base.foreground)
+    }
+
+    /// The diff viewer's syntax roles do not follow the accent picker (ZEN-301). `synKeyword` is
+    /// `slot(5)`, the same slot accent defaults to, so today they are the same color by
+    /// coincidence and the coupling is invisible. Repointing the chrome's primary must not
+    /// recolor code: a keyword is a token role, not a taste. This is the assertion that makes the
+    /// coincidence deliberate, and it can only be written on a branch that has the syntax roles.
+    func test_accentOverride_leavesTheSyntaxRolesWhereTheyAre() {
+        let base = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
+        let overridden = ChromeThemeDeriver.derive(from: Theme.rosePineMoon, accent: .brightGreen)
+
+        XCTAssertEqual(overridden.synKeyword, base.synKeyword)
+        XCTAssertEqual(overridden.synKeyword, TerminalColor(hex: "#c4a7e7"))  // still iris / palette[5]
+        XCTAssertEqual(overridden.synString, base.synString)
+        XCTAssertEqual(overridden.synComment, base.synComment)
+        XCTAssertEqual(overridden.synNumber, base.synNumber)
+        XCTAssertEqual(overridden.synType, base.synType)
+        XCTAssertEqual(overridden.synFunction, base.synFunction)
+        XCTAssertEqual(overridden.synPunctuation, base.synPunctuation)
     }
 
     /// An unset key has to derive exactly what it always did, or the setting silently recolors the

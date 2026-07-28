@@ -115,6 +115,14 @@ final class PaneCanvasController: NSObject {
     /// Every live pane surface in this canvas, for a full config-change re-theme pass.
     var allSurfaces: [TerminalSurface] { registry.allSurfaces }
 
+    /// Every pane in the tree's own order, so a picker can number them the way they read on screen
+    /// (`allSurfaces` comes off a dictionary and has no order at all).
+    var orderedLeafIDs: [PaneID] { tree.leafIDs }
+
+    /// The surface behind a pane id, for a caller that already knows which pane it wants (the diff
+    /// viewer's send target). Nil for an id with no live surface.
+    func surface(for id: PaneID) -> TerminalSurface? { registry.surface(for: id) }
+
     /// Whether the focused pane's shell has live work (busy). False when the
     /// surface hasn't started or the backend can't tell.
     var focusedPaneIsBusy: Bool {

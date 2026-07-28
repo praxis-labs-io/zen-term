@@ -42,6 +42,7 @@ final class GeneralConfigParserTests: XCTestCase {
             drawer-resize-step = 60
             max-drawer-fraction = 0.8
             reduce-motion = on
+            diff-layout = inline
             shell = /bin/bash
             shell-args = -l -i
             editor = vim
@@ -63,6 +64,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.drawerResizeStep, 60)
         XCTAssertEqual(config.maxDrawerFraction, 0.8)
         XCTAssertEqual(config.reduceMotion, .on)
+        XCTAssertEqual(config.diffLayout, .inline)
         XCTAssertEqual(config.shell, "/bin/bash")
         XCTAssertEqual(config.shellArgs, ["-l", "-i"])
         XCTAssertEqual(config.editor, "vim")
@@ -250,6 +252,7 @@ final class GeneralConfigParserTests: XCTestCase {
             cursor-style = beam
             macos-option-as-alt = yep
             reduce-motion = maybe
+            diff-layout = sideways
             """
         ).configDiagnostics
         XCTAssertEqual(
@@ -264,6 +267,9 @@ final class GeneralConfigParserTests: XCTestCase {
                 ConfigDiagnostic(
                     scope: .setting(key: "reduce-motion"),
                     problem: .invalidValue(got: "maybe", expected: "system, on, or off")),
+                ConfigDiagnostic(
+                    scope: .setting(key: "diff-layout"),
+                    problem: .invalidValue(got: "sideways", expected: "side-by-side or inline")),
             ])
     }
 
@@ -285,7 +291,9 @@ final class GeneralConfigParserTests: XCTestCase {
     }
 
     func test_validConfig_collectsNoDiagnostics() {
-        XCTAssertTrue(parse("font-size = 16\ncursor-style = bar\nreduce-motion = on\n").configDiagnostics.isEmpty)
+        XCTAssertTrue(
+            parse("font-size = 16\ncursor-style = bar\nreduce-motion = on\ndiff-layout = inline\n")
+                .configDiagnostics.isEmpty)
     }
 
     func test_unparseableKeybindLine_collectsADiagnostic() {

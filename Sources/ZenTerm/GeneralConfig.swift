@@ -8,6 +8,7 @@ import TerminalKit
 /// holds and the two never deadlock.
 struct GeneralConfig: Equatable {
     enum ReduceMotion: Equatable { case system, on, off }
+    enum DiffLayout: Equatable { case sideBySide, inline }
 
     // Terminal behavior (crosses the seam into TerminalKit).
     var cursorStyle: TerminalBehavior.CursorStyle
@@ -53,6 +54,10 @@ struct GeneralConfig: Equatable {
 
     // Motion.
     var reduceMotion: ReduceMotion
+
+    // Diff viewer — the layout the native diff viewer opens with. An in-view footer toggle can override
+    // it for the session (never persisted); this is the default a fresh open honors.
+    var diffLayout: DiffLayout
 
     // Notifications — fire a macOS banner when an agent needs attention while the app is unfocused
     // (the macOS permission is the real gate; this is the in-app opt-out).
@@ -112,6 +117,7 @@ struct GeneralConfig: Equatable {
         drawerResizeStep: 40,
         maxDrawerFraction: 0.7,
         reduceMotion: .system,
+        diffLayout: .sideBySide,
         agentNotifications: true,
         automaticUpdateChecks: true,
         debug: false,

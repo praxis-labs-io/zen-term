@@ -8,6 +8,7 @@ import AppKit
 /// state.
 final class ToggleDock: NSView {
     private let paletteBtn: IconButton
+    private let diffBtn: IconButton
     private let bottomBtn: IconButton
     private let rightBtn: IconButton
     private let zoomBtn: IconButton
@@ -30,6 +31,7 @@ final class ToggleDock: NSView {
         onSplitH: @escaping () -> Void, onSplitV: @escaping () -> Void,
         onPalette: @escaping () -> Void, onBottom: @escaping () -> Void,
         onRight: @escaping () -> Void, onZoom: @escaping () -> Void,
+        onDiffViewer: @escaping () -> Void,
         toolFloats: [ToolFloat], onToolFloat: @escaping (ToolFloat) -> Void
     ) {
         self.onToolFloat = onToolFloat
@@ -46,12 +48,13 @@ final class ToggleDock: NSView {
         let splitH = button("rectangle.split.1x2", "Split horizontally", .splitHorizontal, onSplitH)
         let splitV = button("rectangle.split.2x1", "Split vertically", .splitVertical, onSplitV)
         paletteBtn = button("command", "Command palette", .toggleCommandPalette, onPalette)
+        diffBtn = button("plus.forwardslash.minus", "Diff viewer", .openDiffViewer, onDiffViewer)
         bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", .toggleBottomDrawer, onBottom)
         rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", .toggleRightDrawer, onRight)
         zoomBtn = button("arrow.up.left.and.arrow.down.right", "Focus mode", .toggleZoom, onZoom)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        allButtons = [newTab, splitH, splitV, bottomBtn, rightBtn, zoomBtn, paletteBtn]
+        allButtons = [newTab, splitH, splitV, bottomBtn, rightBtn, zoomBtn, paletteBtn, diffBtn]
         let dividerA = Self.divider()
         let dividerB = Self.divider()
         dividers = [dividerA, dividerB]
@@ -61,7 +64,7 @@ final class ToggleDock: NSView {
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
         // New-tab leads the "create" cluster (new tab + splits), sitting just past the tab strip.
-        for view in [newTab, splitH, splitV, dividerA, bottomBtn, rightBtn, zoomBtn, dividerB, paletteBtn] {
+        for view in [newTab, splitH, splitV, dividerA, bottomBtn, rightBtn, zoomBtn, dividerB, paletteBtn, diffBtn] {
             stack.addArrangedSubview(view)
         }
         addSubview(stack)
@@ -139,10 +142,11 @@ final class ToggleDock: NSView {
     /// the only trace a hidden persistent float has. Passed as a query rather than a set so the
     /// "live but not shown" rule keeps one definition, on the controller that owns the registry.
     func render(
-        overlay: OverlayState, floatID: String?, paletteOpen: Bool,
+        overlay: OverlayState, floatID: String?, paletteOpen: Bool, diffViewerOpen: Bool = false,
         isLiveInBackground: (String) -> Bool = { _ in false }
     ) {
         paletteBtn.isActive = paletteOpen
+        diffBtn.isActive = diffViewerOpen
         for (id, btn) in toolFloatBtns {
             btn.isActive = floatID == id
             btn.showsActivity = isLiveInBackground(id)

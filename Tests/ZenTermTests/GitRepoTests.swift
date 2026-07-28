@@ -43,4 +43,5 @@ final class GitRepoTests: XCTestCase {
     func test_isGitRepo_missingDirIsFalse() {
         XCTAssertFalse(GitRepo.isGitRepo(root.appendingPathComponent("does-not-exist", isDirectory: true)))
     }
+
 }

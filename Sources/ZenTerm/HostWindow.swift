@@ -14,6 +14,14 @@ final class HostWindow: NSWindow {
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         isMovableByWindowBackground = true
+        // Fix the resize floor ourselves. With no explicit minimum, AppKit derives the window's
+        // size range from the content view's constraint-based fitting size — and every modal overlay
+        // (palette, repo picker, diff viewer) pins edge-to-edge to the content and sizes its card
+        // *proportionally* to the container, so its constraints are satisfiable down to near-zero.
+        // Mounting one then lets that derived minimum collapse, and the window gets clamped small
+        // until the modal is removed. An explicit floor decouples the window from transient content
+        // constraints, so no present overlay (or future one) can shrink it (ZEN-226).
+        contentMinSize = NSSize(width: 480, height: 320)
         tabbingMode = .disallowed  // no native macOS tabs / window merging (multi-window + yabai)
         // The WindowController owns this window with a strong reference. Without this,
         // AppKit ALSO releases the window on close (default true), underflowing the

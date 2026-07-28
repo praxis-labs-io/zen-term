@@ -334,6 +334,105 @@ fullscreen (no space switch, the menu bar stays).
 for a different card closes the current one and falls through, so cards switch
 live.
 
+**The diff viewer is the first chrome subsystem to shell out.** ⌘D opens
+`DiffViewerOverlay`, a modal card over the focused tile: a single file tree on the
+left split into three status sections (Unstaged → Staged → Committed, empty ones
+hidden, each header carrying its slice's `+n −m` total), the diff of the selected file
+on the right, and a full-width footer carrying the repo name + checked-out branch on the
+left and the focus-scoped key hints (compact `KeycapView`s, the set narrowed to the pane
+that holds focus) on the right. The diff renders in one of two layouts (`SideBySideDiff`
+old │ new, or the inline `UnifiedDiff`), toggled by bare `\` and defaulted by the
+`diff-layout` config key; both transforms feed one `DiffPaneTable` behind the
+layout-agnostic `DiffRow` model. A narrow pane force-folds to inline (two columns stop
+reading as code), where the `\` toggle is disabled and its footer hint hidden; a `\` pin
+governs only the wide state. The committed slice forks from the repo's default branch
+(`origin/HEAD`, else main/master; git records no parent, so a stacked branch's parent
+isn't guessed). A static header above the tree carries a `Base: <branch>` `Dropdown`
+(the same control the theme picker uses; branches default-first then by recency, the
+checked-out branch excluded) that re-runs the committed slice against the chosen branch
+and is reachable from the tree by arrow key or bare `b`. Navigation is vim-native and
+local to the card (ZEN-262). ⌘h/⌘l move focus between the tree and the diff (the app's
+own pane chords, forwarded from `WindowController.handle` since `KeyInterceptor` consumes
+chords before the responder chain); everything else is a bare key the panes handle in
+`keyDown`. In the tree, j/k step files, h/l (and ←/→) fold a directory or open a file into
+the diff, Ctrl-j/k and Ctrl-↑/↓ jump the file selection half a page (centered), Ctrl-D/U
+scroll the diff without leaving the tree, and b focuses the base. In the diff, j/k move the
+cursor, {/} jump changes, 0/$ pan to the start/end of the line, Ctrl-D/U half-page, V
+selects, y/Y yank, ⏎ comments, and h returns to the tree. `\` toggles the layout and q/esc
+close from either pane. Because the bare keys aren't reserved, they pass through to the
+terminal when the viewer is closed, and the
+comment composer captures them as text while it's open, so no global chord is spent on a
+view-only command. The footer legend scopes to the focused pane and leaves pane-switching
+off (it's natural and discoverable, and it was the crowding the trim removed); bare `?` opens
+the full key reference, so the legend can stay lean. That reference is a `ChromePopover` (a
+composable primitive: caller supplies the trigger and the content, the popover owns the
+themed chrome, the fade, and a click-outside backdrop) holding `DiffKeymapSheet`'s three
+grouped columns, floated above the footer's trailing edge. The card wears the accent halo and the pane behind
+yields focus, the way a configured tool float does.
+
+**Selection is linewise, and vim-flavored.** Nothing typed inside the card reaches a
+terminal, so the plain letters are free: `j`/`k` move, `V` starts a visual selection
+anchored on the cursor, `gg`/`G` go to the ends, `{`/`}` reuse the change jump, and
+`y`/`Y` (or ⌘C/⌘⇧C) yank the selected code or an `@path:42-44` reference (the `@` is the
+file-mention token Claude Code resolves, so a pasted reference reads as an attachment). `DiffPaneTable`
+tracks the cursor and the visual anchor itself rather than reading `NSTableView`'s
+`selectedRow`, which reports the *last* index in the set: the anchor, not the cursor,
+whenever a selection was extended upward. Esc is two-stage: it collapses a selection
+before it closes the viewer. Character-level selection is deliberately absent: each line
+renders as its own `NSTextField` inside a panned clip view, so charwise would mean
+replacing that render path, and a diff reference is a line range regardless. Resolving a
+selection is pure. `DiffSelection` reads the rendered `[DiffRow]` (either layout) into
+the selected text plus a line range per side, and `DiffReference` renders the string. A
+yank pulses the yanked rows and fades, the way nvim's `on_yank` does: a copy leaves
+nothing on screen, so one that silently didn't take would look identical to one that did.
+A re-render of the *same* file (the `\` toggle, or a resize crossing the fold band) carries the cursor
+and selection over by their **line numbers**, never by row index: the two layouts index
+differently, since side-by-side pairs the +/− lines inline lists separately.
+Only the *new* side can be named, since that's the file on disk: a selection of pure
+deletions references the new-side line it follows, and a deleted file gets a bare path.
+The keys are view-local, not `ReservedChord`s, so they never enter the keymap and never
+compete with a terminal binding.
+
+**A selection becomes a comment, and the comment lands in a terminal.** ⏎ on the diff opens
+`DiffCommentComposer`, an inline box that drops *into* the diff under the last selected line
+(the anchor row grows by the box's height and the lines below shift down, a PR review comment)
+so the code stays readable above it. It's a child of the pane, not a second `WindowController`
+modal, which holds one slot. The box carries the `@`-reference implicitly, a `Dropdown` of the
+tab's terminals (panes plus open drawers, focused one first so index 0 is where you were
+working), and a note. ⏎ **submits** (paste the `@ref note` then a real Return, and the viewer
+closes), ⌘⏎ **queues** (paste plus a newline, no submit, no focus steal, viewer stays open) so
+several comments stack in one input before a final submit fires them together; ⇧⏎ is a literal
+newline and esc closes just the box. Submit is a real Return keypress through the new
+`TerminalSurface.submitLine()` seam, **not** a pasted `"\r"`: a pasted carriage return lands
+inside bracketed paste, where a TUI reads it as a newline and never sends. The chrome never
+reaches for a controller: the overlay takes the target list and the send as injected closures,
+`TabController` owns `sendTargets()`/`send(_:to:action:)`, and the box hands back a finished
+message and a chosen target. The note grows a line at a time past its default up to eight, then
+scrolls; Tab walks note → Submit → Queue → target (right to left, so the first Tab lands on the
+primary), while the footer claims no arrows so Left/Right keep panning the diff behind it.
+
+**The viewer keeps your place.** A background refresh and a base switch both rebuild the
+tree, and the `NSOutlineView` holds its rows by object identity, so the new objects can't
+inherit the old ones' folds or selection. `DiffOutlineItem` carries a value `identity`
+(section title + path) that survives the rebuild, and `apply` captures where the reader was
+(folded rows, open file, cursor line) before the rebuild and restores it after: folds
+re-close, the selection follows its file even when a `git add` moves it Unstaged → Staged,
+and the cursor lands back on its line by number (never index). A directory a load is the
+first to show comes up expanded, like any first-seen row. `DiffViewerSession` holds that
+place plus the status cache, the highlight cache, and the picked base for the repo the
+viewer last opened, so ⌘D reopens where you left off; it lives as long as the window and is
+never written to disk, and a different repo starts fresh. The overlay snapshots the place
+into the session on teardown (`viewDidMoveToWindow` with no window), not per keystroke.
+
+Its git work is `GitDiffRunner`, the app's first real subprocess: `git diff` runs off
+the main thread on a global queue, both pipes drained to EOF before `waitUntilExit`,
+then back to main with a parsed `[FileDiff]`. The model half (`DiffParser`, `DiffTree`,
+`SideBySideDiff`) is pure and renderer-agnostic; the overlay takes an injected loader,
+so the chrome never touches `Process` and the whole surface is drivable in a test
+without a repo. Opening is guarded upstream: a non-repo directory shows a toast and the
+overlay never mounts, so it always has a repo. Like the palette and floats it has no
+menu entry: chord + ⌘P + dock.
+
 **Tool floats are window-level, not app-level**, because a surface is one `NSView`
 and can live in one view hierarchy: an app-global instance would physically yank
 the float out of window A when opened in window B. `ToolFloatController` holds no
@@ -600,10 +699,18 @@ symlinked into a dotfiles repo must keep pointing there). `ConfigWriter` preserv
 comments, blank lines, and unknown keys verbatim.
 
 **Theming is derived, never hardcoded.** `ChromeThemeDeriver` maps ANSI slots onto
-eight chrome roles: info is ansi[4], warning ansi[3], destructive ansi[1], accent
-ansi[5], attention ansi[6], muted a blend of fg and bg. Fifteen themes ship bundled;
-a user file shadows a bundled one of the same name. See CLAUDE.md for the rule that
-the chrome never hardcodes a color.
+sixteen chrome roles. Nine carry chrome meaning: background and foreground come from
+the theme's own, info is ansi[4], warning ansi[3], destructive ansi[1], accent ansi[5],
+attention ansi[6], positive ansi[2], and muted a blend of fg and bg. The other seven
+are the diff viewer's syntax roles, resolved through `SyntaxRole`: synKeyword ansi[5],
+synString ansi[2], synNumber ansi[3], synType ansi[6], synFunction ansi[4],
+synPunctuation ansi[1], and synComment a fainter fg/bg blend than muted.
+
+Roles are named for meaning, not hue, so several share a slot: accent and synKeyword
+are both ansi[5], info and synFunction both ansi[4]. That is why the roles are
+separate fields rather than one alias, and why repointing one leaves the others alone.
+Fifteen themes ship bundled; a user file shadows a bundled one of the same name. See
+CLAUDE.md for the rule that the chrome never hardcodes a color.
 
 **A program can move one color, and only inside its own pane.** OSC 11 (and OSC 4/10/12) is
 applied by libghostty *below* the seam. It writes the color into `terminal.colors` and its
@@ -641,6 +748,12 @@ that carry meaning stay put: a warning is not a taste. What makes this work with
 call-site changes is that nothing caches the color: `ConfigChange.between` sets
 `.theme` from a whole-value `AppTheme` diff, and the existing `reapplyTheme()` fan-out
 repaints even the sites that bake their color at init, like the tab bar's tracer.
+
+The syntax roles do not follow it (ZEN-301). `synKeyword` derives from the same
+`slot(5)` the accent defaults to, so out of the box the chrome's primary and the diff
+viewer's keywords are the same color by coincidence. Repointing the accent leaves the
+code where it is: a keyword is a token role, not a taste. `ChromeThemeDeriverTests`
+asserts it, because the coupling is otherwise invisible.
 
 ## Invariants that will bite you
 

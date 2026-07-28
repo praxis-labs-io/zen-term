@@ -54,7 +54,14 @@ final class RecordingSurface: NSObject, TerminalSurface {
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {
         lastAppearance = (theme, behavior)
     }
-    func focus() { isFocused = true }
+    /// Counts `focus()` calls so a test can tell "was focused now" from the sticky `isFocused` (which,
+    /// like the real protocol, is never cleared through the seam) — the discriminator for whether a
+    /// send actually moved focus to its target.
+    private(set) var focusCount = 0
+    func focus() {
+        isFocused = true
+        focusCount += 1
+    }
     func terminate() { terminated = true }
     /// Records paste text so a test can assert a ⌘V was (or was not) routed into a surface — the
     /// discriminator for "did the modal card swallow paste, or did it fall through to the terminal".
@@ -62,4 +69,8 @@ final class RecordingSurface: NSObject, TerminalSurface {
     func paste(_ text: String) { pastes.append(text) }
     func copySelection() -> String? { nil }
     func scrollToBottom() {}
+    /// Records a real Return keypress separately from pastes, so a test can assert submit went through
+    /// the key path (a real Enter) rather than a bracketed `"\r"` paste that a TUI wouldn't act on.
+    private(set) var submitCount = 0
+    func submitLine() { submitCount += 1 }
 }

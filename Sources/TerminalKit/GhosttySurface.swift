@@ -517,6 +517,31 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         text.withCString { ghostty_surface_text(surfacePtr, $0, byteCount) }
     }
 
+    /// The macOS virtual keycode for Return — libghostty maps it to `GHOSTTY_KEY_ENTER` and encodes
+    /// the CR to the pty itself, the same path a real Enter keypress takes (unbracketed, so a TUI
+    /// submits on it). Below the seam, so knowing an AppKit keycode here is fine.
+    private static let returnKeyCode: UInt32 = 36
+
+    public func submitLine() {
+        guard let surfacePtr else { return }
+        // A press then a release, as a real keystroke delivers — some line editors act on the release.
+        // The field shapes mirror what a real Return keyDown builds in `GhosttyHostView.ghosttyKeyEvent`
+        // (text = "\r", unshifted_codepoint = the CR scalar), so libghostty encodes it to the pty the same
+        // way the live key path does rather than through a shape it's never handed in practice.
+        for action in [GHOSTTY_ACTION_PRESS, GHOSTTY_ACTION_RELEASE] {
+            var key = ghostty_input_key_s()
+            key.action = action
+            key.keycode = Self.returnKeyCode
+            key.mods = GHOSTTY_MODS_NONE
+            key.consumed_mods = GHOSTTY_MODS_NONE
+            key.unshifted_codepoint = UInt32(("\r" as Unicode.Scalar).value)
+            key.composing = false
+            "\r".withCString {
+                key.text = $0; _ = ghostty_surface_key(surfacePtr, key)
+            }
+        }
+    }
+
     public func copySelection() -> String? {
         guard let surfacePtr, ghostty_surface_has_selection(surfacePtr) else { return nil }
         var text = ghostty_text_s()
