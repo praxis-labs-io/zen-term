@@ -712,6 +712,12 @@ call-site changes is that nothing caches the color: `ConfigChange.between` sets
 `.theme` from a whole-value `AppTheme` diff, and the existing `reapplyTheme()` fan-out
 repaints even the sites that bake their color at init, like the tab bar's tracer.
 
+The syntax roles do not follow it (ZEN-301). `synKeyword` derives from the same
+`slot(5)` the accent defaults to, so out of the box the chrome's primary and the diff
+viewer's keywords are the same color by coincidence. Repointing the accent leaves the
+code where it is: a keyword is a token role, not a taste. `ChromeThemeDeriverTests`
+asserts it, because the coupling is otherwise invisible.
+
 ## Invariants that will bite you
 
 - **Closures capture by id, never by object.** A closure stored on a controller
