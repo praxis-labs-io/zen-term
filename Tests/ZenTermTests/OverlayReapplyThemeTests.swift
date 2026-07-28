@@ -14,7 +14,7 @@ import XCTest
 /// Every property under test here is `private` on its owning overlay, so tests reach it the
 /// same way `ReapplyThemeTests` reaches `SettingsOverlay`'s card/button: walk the live subview
 /// tree (a runtime, not compile-time, operation — Swift's `private` doesn't hide it).
-final class OverlayReapplyThemeTests: XCTestCase {
+final class OverlayReapplyThemeTests: WindowTestCase {
     private var originalTheme: AppTheme!
     private var tempRoots: [URL] = []
 

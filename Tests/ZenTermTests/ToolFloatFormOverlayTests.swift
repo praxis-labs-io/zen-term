@@ -7,7 +7,7 @@ import XCTest
 /// chip in a window and assert the built `ToolFloat` (or that an invalid form is blocked). A
 /// state-only test would pass while the form's controls were dead — exactly the failure mode the
 /// project's interaction-test rule guards against.
-final class ToolFloatFormOverlayTests: XCTestCase {
+final class ToolFloatFormOverlayTests: WindowTestCase {
     /// A `KeybindCapturing` double: stores the form's handler so a test can feed a chord event.
     private final class FakeCapturer: KeybindCapturing {
         private(set) var handler: ((NSEvent) -> Void)?

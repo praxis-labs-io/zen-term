@@ -11,7 +11,7 @@ import XCTest
 ///
 /// The config write→reload roundtrip is sandboxed via `ConfigLoader.defaultRootOverrideForTesting`
 /// so the tests never touch the real config. (Stacked on the ZEN-104 seam.)
-final class KeybindCaptureFlowTests: XCTestCase {
+final class KeybindCaptureFlowTests: WindowTestCase {
     /// A `KeybindCapturing` double: stores the section's handler so a test can feed events, and
     /// counts `endCapture` so "still armed vs restored" is observable.
     private final class FakeCapturer: KeybindCapturing {

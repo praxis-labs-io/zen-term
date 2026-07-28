@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-final class DropdownTests: XCTestCase {
+final class DropdownTests: WindowTestCase {
     func test_selectedIndex_reflectsInitAndSetItems() {
         let items = [
             DropdownItem(title: "A", group: nil, note: nil, isSelected: true),

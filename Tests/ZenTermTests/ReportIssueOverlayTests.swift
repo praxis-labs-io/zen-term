@@ -6,7 +6,7 @@ import XCTest
 /// Interaction tests for the Report-an-Issue composer, driven through the real controls in a window.
 /// A state-only test would pass while a control was dead, the failure mode the project's
 /// interaction-test rule guards against.
-final class ReportIssueOverlayTests: XCTestCase {
+final class ReportIssueOverlayTests: WindowTestCase {
     private final class Sink {
         var opened: [URL] = []
         var exported = 0

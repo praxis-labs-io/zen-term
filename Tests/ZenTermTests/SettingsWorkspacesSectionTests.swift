@@ -6,7 +6,7 @@ import XCTest
 /// Interaction tests for the Workspaces settings section (ZEN-112): mount the real section over a
 /// sandboxed `workspaces` file, assert it renders a row per configured workspace and that add / edit
 /// route out through `onEditWorkspace`. Mirrors `SettingsToolsSectionTests`.
-final class SettingsWorkspacesSectionTests: XCTestCase {
+final class SettingsWorkspacesSectionTests: WindowTestCase {
     /// Records the workspace `onEditWorkspace` was invoked with (`nil` = add).
     private final class EditSink {
         var calls: [Workspace?] = []

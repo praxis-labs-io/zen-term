@@ -8,7 +8,7 @@ import XCTest
 /// clip view — so installing the flipped clip view after clearing the flag silently resurrected
 /// the default opaque system background: an appearance-following wash over the whole column that
 /// ignores `Theme.current` (ZEN-27) and reads as a mismatched sidebar panel.
-final class SettingsOverlayNavTests: XCTestCase {
+final class SettingsOverlayNavTests: WindowTestCase {
     /// Retained so a mounted card's window outlives the mount call (Esc is dispatched through it).
     private var window: NSWindow?
 

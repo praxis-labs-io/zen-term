@@ -8,7 +8,7 @@ import XCTest
 /// revisited or reopened file would render nothing; if the cache stopped being cleared on a changed
 /// reload, stale spans would paint over new content — and the suite would stay green either way.
 /// Colors on screen remain the runbook's; this asserts only presence/staleness of spans.
-final class DiffViewerHighlightOrchestrationTests: XCTestCase {
+final class DiffViewerHighlightOrchestrationTests: WindowTestCase {
     private var window: NSWindow?
     private var originalConfig: GeneralConfig!
 

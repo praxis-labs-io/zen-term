@@ -8,7 +8,7 @@ import XCTest
 /// keys step aside (ZEN-257). Driven through real `keyDown` / `performKeyEquivalent` for the same
 /// reason as the rest of the diff-viewer suite: the wiring between the table, the viewer and the card
 /// is the part that can be silently dead.
-final class DiffViewerComposerTests: XCTestCase {
+final class DiffViewerComposerTests: WindowTestCase {
     private var window: NSWindow?
     private var originalConfig: GeneralConfig!
     private var board: NSPasteboard!

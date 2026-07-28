@@ -11,7 +11,7 @@ import XCTest
 /// So the modal-aware redirect has to live on `WindowController`, the responder that actually
 /// receives the action; a copy in `AppDelegate` is shadowed and never runs.
 @MainActor
-final class ModalPasteRoutingTests: XCTestCase {
+final class ModalPasteRoutingTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
     private var controller: WindowController?

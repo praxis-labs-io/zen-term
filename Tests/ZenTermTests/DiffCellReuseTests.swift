@@ -8,7 +8,7 @@ import XCTest
 /// the new line's tail (whole lines rendered blank when the previous row was very short) until some other
 /// pass ran — visible as "missing text" in the diff (ZEN-239). Window-based, because the bug is in the
 /// frame the label actually gets, which a view-model assertion can't see.
-final class DiffCellReuseTests: XCTestCase {
+final class DiffCellReuseTests: WindowTestCase {
     private let shortLine = "] as"
     private let longLine = "export type NoteableType = (typeof NOTEABLE_TYPES)[number];"
 

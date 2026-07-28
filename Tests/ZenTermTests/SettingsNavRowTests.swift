@@ -7,7 +7,7 @@ import XCTest
 /// (`PaletteOverlay.selectionBackground`), not a border. These drive a real window-mounted row
 /// through first-responder changes — per "GUI controls need interaction tests", state-only
 /// assertions wouldn't prove the fill actually appears and that focus wins over the selection fill.
-final class SettingsNavRowTests: XCTestCase {
+final class SettingsNavRowTests: WindowTestCase {
     func test_focus_showsPaletteFillNotBorder() {
         let (row, window) = mountedRow()
 

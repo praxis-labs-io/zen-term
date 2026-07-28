@@ -11,7 +11,7 @@ import XCTest
 /// The whole write→reload pipeline is rooted at `ConfigLoader.defaultRoot`; the tests point that
 /// at a temp dir through the `defaultRootOverrideForTesting` seam so they never touch the real
 /// config (an env-based redirect is unreliable — `ProcessInfo.environment` caches).
-final class SettingsFormCommitTests: XCTestCase {
+final class SettingsFormCommitTests: WindowTestCase {
     private var tempRoot: URL!
     /// The section + host window are retained for the test's lifetime: the row's `onChange`
     /// captures the section `[weak self]`, so if the section deallocated the write would silently

@@ -11,7 +11,7 @@ import XCTest
 /// 28pt traffic-light clearance) left an already-used window's toasts at the old offset until
 /// relaunch. Same frozen-at-construction shape as the pane gap; different surface.
 @MainActor
-final class ToastInsetLiveApplyTests: XCTestCase {
+final class ToastInsetLiveApplyTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
     private var controller: WindowController?

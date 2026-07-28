@@ -10,7 +10,7 @@ import XCTest
 /// a second viewer. Both are things a state-only check would miss (the modal slot only fills after
 /// the resolve), so they're driven through the real controller with an injected resolver.
 @MainActor
-final class WindowControllerDiffViewerTests: XCTestCase {
+final class WindowControllerDiffViewerTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
     private var controller: WindowController?

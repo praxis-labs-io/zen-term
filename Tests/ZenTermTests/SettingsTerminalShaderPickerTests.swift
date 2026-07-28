@@ -12,7 +12,7 @@ import XCTest
 /// The picker lives in Terminal (not Appearance) because a shader only affects the terminal surface.
 /// The write→reload pipeline is rooted at `ConfigLoader.defaultRoot`; the test points that at a temp
 /// dir so it never touches the real config.
-final class SettingsTerminalShaderPickerTests: XCTestCase {
+final class SettingsTerminalShaderPickerTests: WindowTestCase {
     private var tempRoot: URL!
     /// Retained: the dropdown's `onChange` captures the section `[weak self]`, so a deallocated
     /// section would silently no-op the write.

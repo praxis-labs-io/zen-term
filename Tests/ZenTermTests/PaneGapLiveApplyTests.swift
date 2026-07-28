@@ -16,7 +16,7 @@ import XCTest
 /// class. It measures the real gap between the two mounted pane hosts rather than a stored field,
 /// so it stays honest about what's on screen.
 @MainActor
-final class PaneGapLiveApplyTests: XCTestCase {
+final class PaneGapLiveApplyTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
     private var controller: WindowController?
