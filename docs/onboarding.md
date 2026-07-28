@@ -68,6 +68,7 @@ Pane movement is vim's arrow keys. **H** is left, **L** is right, **J** is down,
 | New window                       | `⌘N`                        |
 | Previous and next tab            | `⌘[` `⌘]`                   |
 | Tab 1 through 9                  | `⌘1` … `⌘9`                 |
+| Diff viewer                      | `⌘D`                        |
 | Command palette                  | `⌘P`                        |
 | Workspace picker                 | `⌘⇧P`                       |
 | Reload config                    | `⌘⌥R`                       |
@@ -102,6 +103,20 @@ A tool float is a command on a shortcut, floating over your work.
 
 ⌘G now floats lazygit over your work and closes it again. The float stays warm,
 so reopening it is instant. The same works for `btop`, a dev server, or `gh dash`.
+
+## Review a diff
+
+**⌘D** opens the diff viewer on the focused pane's repo. A file tree on the left,
+the diff on the right, side by side or inline.
+
+It has its own keys while it is open, and they are vim's. `j` and `k` move, `h`
+folds and `l` opens a file, `{` and `}` jump between changes, `V` selects lines,
+and `\` swaps between side by side and inline. `q` closes it. **Press `?` for the
+full sheet.** A narrow pane shows inline on its own, because two columns stop
+reading as code.
+
+`y` yanks the selected code. `Y` yanks a `path:42-44` reference instead, so you can
+hand an agent the exact lines you mean, and `⏎` opens a comment on them.
 
 ## Neovim: one motion across splits and panes
 
