@@ -599,7 +599,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             // Defer to the next main-loop turn: the chrome frees this surface in
             // response, and doing that synchronously here — while libghostty is still
             // dispatching this action inside ghostty_app_tick — is a re-entrant
-            // use-after-free. close_surface_cb defers for the same reason.
+            // use-after-free. This is the only path that closes a pane; close_surface_cb
+            // is a documented no-op (see GhosttyApp).
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.delegate?.surfaceDidExit(self, code: code)

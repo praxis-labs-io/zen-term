@@ -46,17 +46,27 @@ final class OrphanWatcherTests: XCTestCase {
     /// A session leader with one child parked in its own process group, so killing the leader
     /// orphans the session while leaving the child running. `childSleep` distinguishes the
     /// children of two concurrent fixtures.
-    private func startSession(childSleep: Int) throws -> Session {
+    ///
+    /// `childIgnoresTerm` makes the child survive the sweep's `SIGTERM` so that only the
+    /// `SIGKILL` pass, one `grace` later, can end it. That widens the sweep from microseconds to
+    /// 150ms, which is what makes "did the drain wait for the sweep" observable at all: a child
+    /// that dies on `SIGTERM` is already gone by the time any assertion looks, so the test passes
+    /// whether the drain waited or not.
+    private func startSession(childSleep: Int, childIgnoresTerm: Bool = false) throws -> Session {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("zen269-watch-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         scratch.append(dir)
         let script = dir.appendingPathComponent("session.pl")
         let pidFile = dir.appendingPathComponent("pids")
+        let childBody =
+            childIgnoresTerm
+            ? "$0 = 'zen306-stubborn-\(childSleep)'; $SIG{TERM} = 'IGNORE'; sleep \(childSleep); exit 0;"
+            : "exec('/bin/sleep', '\(childSleep)');"
         try """
         POSIX::setsid() or die "setsid failed: $!";
         my $kid = fork();
-        if ($kid == 0) { setpgrp(0, 0); exec('/bin/sleep', '\(childSleep)'); }
+        if ($kid == 0) { setpgrp(0, 0); \(childBody) }
         open(my $f, '>', $ARGV[0]) or die $!;
         print $f "$$ $kid";
         close $f;
@@ -112,6 +122,113 @@ final class OrphanWatcherTests: XCTestCase {
         XCTAssertTrue(
             waitForDeath(of: session.child),
             "the leader exited after the sweep gave up, so the session was never swept")
+    }
+
+    /// The quit drain must not report done while a recorded session's leader is still running,
+    /// and must not report done until that session has actually been swept.
+    ///
+    /// This is the path `AppDelegate` takes on ⌘Q, and nothing covered it: `QuitTeardownTests`
+    /// drives quit through fakes that never touch the ledger, so `drainAllSessions` ran on an
+    /// empty ledger and degenerated to the old group drain. Both halves below ship green with the
+    /// wait condition inverted or with the sweep's reserve removed, which is how ZEN-306 got as
+    /// far as review with the quit path broken.
+    func test_quitDrainWaitsForTheLedgerAndThenForTheSweep() throws {
+        let session = try startSession(childSleep: 954)
+        XCTAssertTrue(isAlive(session.child), "child never started")
+        ShellSessionLedger.shared.record([session.leader])
+
+        var completed = false
+        let drained = expectation(description: "quit drain finished")
+        ShellSessionReaper.shared.drainForQuit(timeout: 5.0) {
+            completed = true
+            drained.fulfill()
+        }
+
+        // Pump rather than sleep: the completion lands on main, so blocking main would make the
+        // assertion below vacuously true.
+        RunLoop.current.run(until: Date().addingTimeInterval(0.6))
+        XCTAssertFalse(
+            completed, "quit drain finished while a recorded session's leader was still alive")
+
+        kill(session.leader, SIGKILL)
+        wait(for: [drained], timeout: 10.0)
+        XCTAssertFalse(
+            isAlive(session.child), "quit drain finished before the session was swept")
+    }
+
+    /// A `drain` issued on the statement after `reapOrphans` must not report done before the
+    /// sweep has run.
+    ///
+    /// This is `SurfaceTeardownLeakTests.teardownAndDrain`'s exact shape (`terminate()` then
+    /// `drain` on the next line) with fixtures instead of real surfaces, so it is fast and does
+    /// not depend on a real shell.
+    ///
+    /// **What it guards:** that the graced pass is inside the pending group at all. Removing
+    /// `reap`'s `pending.enter()` makes the drain return in about 9ms and this test fails.
+    ///
+    /// **What it does not guard**, checked by mutation rather than assumed: moving
+    /// `reapOrphans`' own `pending.enter()` back inside the dispatched block leaves this test
+    /// green. That race is real (the group is briefly empty between the dispatch and the block
+    /// running, so a drain landing in the gap reports done before anything has begun) but the
+    /// window is a few instructions wide and does not reproduce on demand. The enter stays on
+    /// the caller's thread because it is correct by construction and free, not because anything
+    /// here would catch its absence.
+    func test_drainIssuedRightAfterReapOrphansWaitsForTheSweep() throws {
+        // Ignores SIGTERM, so only the SIGKILL pass one `grace` later ends it. Without that the
+        // child dies instantly and the test cannot see whether the drain waited.
+        let session = try startSession(childSleep: 956, childIgnoresTerm: true)
+        XCTAssertTrue(isAlive(session.child), "child never started")
+        ShellSessionLedger.shared.record([session.leader])
+
+        // Orphan it first, so there is real work for the sweep to find and the only question is
+        // whether the drain waits for it.
+        kill(session.leader, SIGKILL)
+        while isAlive(session.leader) { Thread.sleep(forTimeInterval: 0.01) }
+
+        let start = Date()
+        ShellSessionReaper.shared.reapOrphans()
+        let drained = expectation(description: "drain finished")
+        ShellSessionReaper.shared.drain(timeout: 5.0) { drained.fulfill() }
+        wait(for: [drained], timeout: 8.0)
+        let elapsed = Date().timeIntervalSince(start)
+
+        // Elapsed time is the signal, not liveness: `kill(pid, 0)` succeeds on a zombie, so
+        // looking at the child the instant the drain returns races the kernel reaping it. A drain
+        // that waited for the sweep cannot come back before the SIGTERM, the grace and the
+        // SIGKILL have all happened; one that reported an empty group comes back in about no time.
+        XCTAssertGreaterThan(
+            elapsed, 0.1,
+            "drain reported done in \(String(format: "%.3f", elapsed))s, before the graced sweep "
+                + "could have run")
+        XCTAssertTrue(waitForDeath(of: session.child), "the session was never swept")
+    }
+
+    /// A shell that never notices its pty must still be swept on quit, not merely waited on.
+    ///
+    /// The leader here stays alive for the whole drain, which is what a foreground child that
+    /// traps or ignores `SIGHUP` looks like (ssh, a build, a dev server with its own handler).
+    /// Waiting cannot help, because only a leader exiting empties the ledger: without the
+    /// outright sweep, quit pays its full budget as a hang and *then* leaves the session running,
+    /// which is both halves of the bargain lost.
+    ///
+    /// Safe only because quit tears every surface down first, so nothing left in the ledger can
+    /// belong to a live pane. `test_eachSessionIsSweptWhenItsOwnLeaderExits` covers the other
+    /// side: a sibling that is still alive is never in reach.
+    func test_quitSweepsAStragglerWhoseLeaderNeverExits() throws {
+        let session = try startSession(childSleep: 955)
+        XCTAssertTrue(isAlive(session.child), "child never started")
+        ShellSessionLedger.shared.record([session.leader])
+
+        let drained = expectation(description: "quit drain finished")
+        let start = Date()
+        ShellSessionReaper.shared.drainForQuit(timeout: 1.0) { drained.fulfill() }
+        wait(for: [drained], timeout: 10.0)
+
+        XCTAssertLessThan(
+            Date().timeIntervalSince(start), 5.0, "quit drain ran far past its budget")
+        XCTAssertTrue(
+            waitForDeath(of: session.child),
+            "the leader never exited, so quit waited and then left the session running")
     }
 
     /// A second session orphaning long after the first has already been swept, with no second

@@ -38,20 +38,20 @@ final class ShellSessionLedger {
 
     private init() {}
 
-    /// Whether every recorded session has been handed to a sweep. The quit drain waits on this:
-    /// `takeOrphans` empties the ledger as it hands sessions out, so empty means nothing is
-    /// still waiting for its leader to go.
-    var isEmpty: Bool {
+    /// How many recorded sessions are still waiting for their leader to go. The quit drain
+    /// watches this: `takeOrphans` removes sessions as it hands them out, so zero means nothing
+    /// is outstanding, and a count that stops falling means nothing more is going to happen.
+    var count: Int {
         lock.lock()
         defer { lock.unlock() }
-        return known.isEmpty
+        return known.count
     }
 
     func record(_ sessions: Set<pid_t>) {
         lock.lock()
         let fresh = sessions.subtracting(known)
         known.formUnion(sessions)
-        for pid in fresh where watches[pid] == nil {
+        for pid in fresh {
             watches[pid] = makeWatch(for: pid)
         }
         lock.unlock()
@@ -65,11 +65,16 @@ final class ShellSessionLedger {
     /// table as a zombie. A fire is only a prompt to look: the sweep re-checks the process
     /// table through `takeOrphans` and matches sessions with `getsid`, so a stale or recycled
     /// pid costs one wasted look and can never reach a live pane's session.
+    ///
+    /// Fires go through `scheduleSweep`, not straight to a sweep. A window's panes close
+    /// together and their leaders exit milliseconds apart, so one sweep per fire would put one
+    /// graced `reap` pass per pane on the reaper's serial queue and the tail would still be
+    /// waiting, unsignalled, when quit gave up.
     private func makeWatch(for pid: pid_t) -> DispatchSourceProcess {
         let source = DispatchSource.makeProcessSource(
             identifier: pid, eventMask: .exit,
             queue: DispatchQueue.global(qos: .userInitiated))
-        source.setEventHandler { ShellSessionReaper.shared.sweepOrphans() }
+        source.setEventHandler { ShellSessionReaper.shared.scheduleSweep() }
         source.resume()
         return source
     }
@@ -105,6 +110,23 @@ final class ShellSessionLedger {
                 self.sampleLock.unlock()
             }
         }
+    }
+
+    /// Every recorded session, emptied out, whether or not its leader has exited.
+    ///
+    /// **Only valid once every surface has been torn down**, which is true exactly on the quit
+    /// path. The leader-exited test that guards `takeOrphans` exists to keep a live pane out of
+    /// reach; when no pane is left alive there is nothing to protect, and a leader still running
+    /// at that point is a shell that has not noticed its pty yet, not somebody's work. Calling
+    /// this while a pane is open would SIGKILL that pane's session, which is the ZEN-269 bug.
+    func takeAll() -> [pid_t] {
+        lock.lock()
+        defer { lock.unlock() }
+        let all = Array(known)
+        known.removeAll()
+        watches.values.forEach { $0.cancel() }
+        watches.removeAll()
+        return all
     }
 
     /// The recorded sessions whose leader has exited, dropped from the ledger as they are

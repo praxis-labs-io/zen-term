@@ -299,12 +299,19 @@ final class GhosttyApp {
     /// so libghostty doesn't log "runtime embedder does not support closing a surface" on every
     /// close.
     ///
-    /// Nothing is lost by ignoring it. libghostty raises `show_child_exited` unconditionally
-    /// when a child exits (`Surface.zig:1238` is explicit that this happens even when the
-    /// surface is about to close immediately), and only then does `wait-after-command` being
-    /// false take it on to `close`. So every close that reaches here has already reached
-    /// `surfaceDidExit`, which is where the chrome tears the pane down. Routing both would
-    /// mean two events for one exit.
+    /// Nothing is lost by ignoring it **on the child-exit path**, which is the only one that
+    /// reaches us. libghostty raises `show_child_exited` unconditionally when a child exits
+    /// (`Surface.zig:1238` is explicit that this happens even when the surface is about to close
+    /// immediately), and only then does `wait-after-command` being false take it on to `close`.
+    /// So a child exit has already reached `surfaceDidExit`, which is where the chrome tears the
+    /// pane down, and routing both would mean two events for one exit.
+    ///
+    /// The other callers of `Surface.close` are not covered by that argument and are unreachable
+    /// for a different reason: the `close_surface` keybind action (`Surface.zig:5807`) and
+    /// `ghostty_surface_request_close` close with no child exit at all. Neither fires here
+    /// because the chrome owns close. ⌘W never reaches `ghostty_surface_key` (`KeyInterceptor`
+    /// takes it first), and nothing calls `ghostty_surface_request_close`. If either ever
+    /// changes, this has to grow a real implementation rather than stay a no-op.
     ///
     /// The `processAlive` argument is libghostty's `needsConfirmQuit()`, not "something is
     /// still running in this session". Confirmation is the chrome's own, and what survives a
