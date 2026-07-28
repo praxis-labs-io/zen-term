@@ -34,6 +34,11 @@ extension KeyInterceptor.ReservedChord {
         case .checkForUpdates: return "check_for_updates"
         case .reportIssue: return "report_issue"
         case .openDiffViewer: return "diff_viewer"
+        // ghostty's own spelling for these three, so a keybind line pasted from a ghostty config
+        // resolves rather than being dropped as unknown.
+        case .increaseFontSize: return "increase_font_size"
+        case .decreaseFontSize: return "decrease_font_size"
+        case .resetFontSize: return "reset_font_size"
         }
     }
 
@@ -74,6 +79,9 @@ extension KeyInterceptor.ReservedChord {
         case "check_for_updates": self = .checkForUpdates
         case "report_issue": self = .reportIssue
         case "diff_viewer": self = .openDiffViewer
+        case "increase_font_size": self = .increaseFontSize
+        case "decrease_font_size": self = .decreaseFontSize
+        case "reset_font_size": self = .resetFontSize
         default:
             if let rest = token.dropPrefixIfPresent("select_tab_"), let n = Int(rest), (1...9).contains(n) {
                 self = .selectTab(n)
@@ -97,7 +105,8 @@ enum KeymapDefaults {
         // ⌘⇧ family — the splits, pane/drawer resize on HJKL, repo picker. Both splits are spelled
         // with the *unshifted* key: `Chord` canonicalizes, so a live ⌘⇧\ event (which arrives as
         // "|") and a live ⌘⇧- event (which arrives as "_") already fold onto these entries. ⌘⇧-
-        // rather than bare ⌘- leaves ⌘- free for ghostty's text magnification (ZEN-142).
+        // rather than bare ⌘- dates from ZEN-142, which left bare ⌘- to libghostty's own text
+        // magnification; ZEN-224 took that chord over, and ⌘⇧- stays split on its own merits.
         map[Chord(command: true, shift: true, key: "\\")] = .splitVertical
         map[Chord(command: true, shift: true, key: "-")] = .splitHorizontal
         map[Chord(command: true, shift: true, key: "h")] = .resizeLeft
@@ -125,6 +134,19 @@ enum KeymapDefaults {
         map[Chord(command: true, key: "d")] = .openDiffViewer  // open the diff viewer
         map[Chord(command: true, option: true, key: "r")] = .reloadConfig
         for n in 1...9 { map[Chord(command: true, key: "\(n)")] = .selectTab(n) }
+
+        // Font size (ZEN-224), matching what libghostty bound before the chrome took these over.
+        //
+        // Increase needs BOTH entries, and the second is the one that matters: "⌘+" on a US layout
+        // is physically ⌘⇧=, and `Chord` folds the "+" it arrives as back onto "=" because Shift is
+        // set. Bind ⌘= alone and the keypress most people actually make falls through to libghostty,
+        // which still has it bound per surface — reproducing this exact ticket. Two defaults for one
+        // action is fine: `assemble` drops all of an action's defaults when the user rebinds it, and
+        // `Chord.displayed` sorts by config token, so a keycap renders the plainer ⌘=.
+        map[Chord(command: true, key: "=")] = .increaseFontSize
+        map[Chord(command: true, shift: true, key: "=")] = .increaseFontSize
+        map[Chord(command: true, key: "-")] = .decreaseFontSize
+        map[Chord(command: true, key: "0")] = .resetFontSize
 
         return map
     }()

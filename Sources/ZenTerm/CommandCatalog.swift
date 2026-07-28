@@ -55,6 +55,9 @@ enum CommandCatalog {
         case .checkForUpdates: return config("Check for Updates", glyph, chord)
         case .reportIssue: return help("Report an Issue…", glyph, chord)
         case .openDiffViewer: return tool("Diff Viewer", glyph, chord)
+        case .increaseFontSize: return window("Increase Font Size", glyph, chord)
+        case .decreaseFontSize: return window("Decrease Font Size", glyph, chord)
+        case .resetFontSize: return window("Reset Font Size", glyph, chord)
         // Present for exhaustiveness; all are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
@@ -89,7 +92,7 @@ enum CommandCatalog {
             .resizeLeft, .resizeDown, .resizeUp, .resizeRight,
             .toggleZoom, .closePane,
         ]
-        chords += [.fillScreen]
+        chords += [.fillScreen, .increaseFontSize, .decreaseFontSize, .resetFontSize]
         return chords.map(spec(for:))
     }
 

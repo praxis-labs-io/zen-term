@@ -5,6 +5,10 @@ import TerminalKit
 /// runs a command inside a login+interactive shell that `exec`s a fresh shell when the
 /// command exits — so quitting the program (`:q` in nvim, `Ctrl-D` in claude) drops back
 /// to a prompt in the same pane instead of closing it. Used by the `⌘P` workspace preset.
+///
+/// Both carry `SessionFontSize.points` rather than the theme's size, so a pane opened after ⌘+
+/// comes up matched to the ones already on screen. Half of ZEN-224 is this: fanning a step out to
+/// live surfaces alone still leaves the next split opening at the config size.
 enum ShellLaunch {
     static var userShell: String {
         GeneralConfig.current.shell ?? ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
@@ -25,11 +29,12 @@ enum ShellLaunch {
             let args = GeneralConfig.current.shellArgs.isEmpty ? ["-l", "-i"] : GeneralConfig.current.shellArgs
             return TerminalSurfaceConfig(
                 command: custom, args: args, workingDirectory: cwd ?? defaultCWD,
-                environment: env, theme: Theme.current.terminal, behavior: behavior)
+                environment: env, fontSize: SessionFontSize.points,
+                theme: Theme.current.terminal, behavior: behavior)
         }
         return TerminalSurfaceConfig(
             workingDirectory: cwd ?? defaultCWD, environment: env,
-            theme: Theme.current.terminal, behavior: behavior)
+            fontSize: SessionFontSize.points, theme: Theme.current.terminal, behavior: behavior)
     }
 
     /// Run `command` in a login+interactive shell, then `exec` a fresh one so the session
@@ -43,6 +48,7 @@ enum ShellLaunch {
             args: ["-l", "-i", "-c", "\(command); \(zshIntegrationRearm(for: sh))exec \(sh) -l -i"],
             workingDirectory: cwd ?? defaultCWD,
             environment: env,
+            fontSize: SessionFontSize.points,
             theme: Theme.current.terminal,
             behavior: GeneralConfig.current.terminalBehavior
         )

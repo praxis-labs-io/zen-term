@@ -25,11 +25,41 @@ final class KeymapAssemblyTests: XCTestCase {
         XCTAssertEqual(map[Chord(command: true, option: true, key: "r")], .reloadConfig)
     }
 
-    func test_splitHorizontal_isCmdShiftMinus_leavingBareCmdMinusFree() {
-        // ZEN-142: bare ⌘- belongs to ghostty's text magnification, so the split moved off it.
+    func test_splitHorizontal_isCmdShiftMinus_notBareCmdMinus() {
+        // ZEN-142 moved the split off bare ⌘- to leave it to libghostty's own text magnification.
+        // ZEN-224 took that chord over for app-wide font size, so ⌘- is bound again — but to
+        // decrease, never to split. Getting these two confused resizes the terminal on a split.
         let map = assemble()
         XCTAssertEqual(map[Chord(command: true, shift: true, key: "-")], .splitHorizontal)
-        XCTAssertNil(map[Chord(command: true, key: "-")])
+        XCTAssertEqual(map[Chord(command: true, key: "-")], .decreaseFontSize)
+    }
+
+    /// ⌘+ is physically ⌘⇧= on a US layout, and `Chord` folds the "+" onto "=" because Shift is set.
+    /// Both spellings have to reach increase: binding ⌘= alone leaves the keypress most people make
+    /// falling through to libghostty, which still binds it per surface — ZEN-224 all over again.
+    func test_bothIncreaseChords_areBound() {
+        let map = assemble()
+        XCTAssertEqual(map[Chord(command: true, key: "=")], .increaseFontSize)
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: "=")], .increaseFontSize)
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: "+")], .increaseFontSize)  // folds
+        XCTAssertEqual(map[Chord(command: true, key: "0")], .resetFontSize)
+    }
+
+    /// ⌘0 is font-size reset, and the tab-select family stops at ⌘1. A `for n in 0...9` slip would
+    /// silently shadow one of the two.
+    func test_selectTab_doesNotClaimCmdZero() {
+        let map = assemble()
+        XCTAssertEqual(map[Chord(command: true, key: "1")], .selectTab(1))
+        XCTAssertEqual(map[Chord(command: true, key: "0")], .resetFontSize)
+    }
+
+    /// Increase is the one action shipping two default chords. A rebind has to free *both*, or the
+    /// old ⌘+ keeps firing alongside the new chord.
+    func test_rebindingIncrease_freesBothDefaultChords() {
+        let map = assemble(keybinds: [(Chord(command: true, option: true, key: "="), .increaseFontSize)])
+        XCTAssertEqual(map[Chord(command: true, option: true, key: "=")], .increaseFontSize)
+        XCTAssertNil(map[Chord(command: true, key: "=")])
+        XCTAssertNil(map[Chord(command: true, shift: true, key: "=")])
     }
 
     func test_shiftedSymbolDefaults_holdExactlyOneEntryEach() {

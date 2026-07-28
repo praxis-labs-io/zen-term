@@ -128,6 +128,21 @@ public protocol TerminalSurface: AnyObject {
     /// for the surface's life. A backend that can't reconfigure live is a no-op (default ext).
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior)
 
+    /// Set this surface's font size, in points, overriding the size its theme carried.
+    ///
+    /// Separate from `applyAppearance` on purpose, and the separation is the whole point rather
+    /// than a convenience: `applyAppearance` re-themes through the app-global config, and a backend
+    /// configured from files pays a synchronous write/read/parse for each distinct value. That is
+    /// affordable for a theme swap and not for a font-size step, which the user drives from the
+    /// keyboard and auto-repeats (ZEN-224). This asks for the one value that moves, so a backend can
+    /// answer it without rebuilding its configuration.
+    ///
+    /// Takes an absolute size rather than a delta so the chrome stays the single owner of the
+    /// number. A stepping API would leave the running size inside each surface, where the chrome
+    /// could not read it back, and surfaces would drift apart at whatever bounds the backend
+    /// enforces — which is the shape of the bug this exists to fix.
+    func setFontSize(_ points: CGFloat)
+
     /// Explicitly set whether this surface renders as focused (active/blinking cursor) or
     /// unfocused (hollow). The chrome drives this from its own single-focus model instead of
     /// trusting the AppKit responder chain, which doesn't propagate reliably while many pane
@@ -184,6 +199,9 @@ public extension TerminalSurface {
 
     /// Default no-op: a backend that can't reconfigure live needs nothing here.
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {}
+
+    /// Default no-op: a backend with no live font-size path keeps the size it started with.
+    func setFontSize(_ points: CGFloat) {}
 
     /// Default no-op: a backend with no key-injection path can't submit for the chrome.
     func submitLine() {}

@@ -33,6 +33,7 @@ final class RecordingSurface: NSObject, TerminalSurface {
         if let theme = config.theme, let behavior = config.behavior {
             lastAppearance = (theme, behavior)
         }
+        if let fontSize = config.fontSize { fontSizes.append(fontSize) }
         // Mirror the real backend's async delivery (see `TerminalSurfaceDelegate`) so tests
         // exercise the same timing: the failure arrives after the caller has wired us up.
         if failOnStart {
@@ -54,6 +55,15 @@ final class RecordingSurface: NSObject, TerminalSurface {
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {
         lastAppearance = (theme, behavior)
     }
+    /// Every font size pushed through the seam, in order. A list rather than a latest-value: the
+    /// ZEN-224 bug was a size reaching one surface and not its siblings, so a test has to be able to
+    /// ask "did this surface get the push at all", which a nil-vs-value check on the focused pane
+    /// alone cannot answer. Seeded by `start` for the same reason `lastAppearance` is — a real
+    /// surface is already wearing the size it launched with.
+    private(set) var fontSizes: [CGFloat] = []
+    var lastFontSize: CGFloat? { fontSizes.last }
+    func setFontSize(_ points: CGFloat) { fontSizes.append(points) }
+
     /// Counts `focus()` calls so a test can tell "was focused now" from the sticky `isFocused` (which,
     /// like the real protocol, is never cleared through the seam) — the discriminator for whether a
     /// send actually moved focus to its target.

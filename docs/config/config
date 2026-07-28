@@ -45,7 +45,8 @@
 # Monospaced font for the terminal surfaces. (Colors live in a theme file, not
 # here. See the Theme section above.)
 # font-family = JetBrainsMono Nerd Font Mono
-# font-size = 14                      # points; clamped to 6…72
+# font-size = 14                      # points; clamped to 6…32. ⌘+ / ⌘- step this for the
+                                      # session (⌘0 returns here); the file is unchanged.
 
 # Cursor shape and blink.
 # cursor-style = block                # block | bar | underline
@@ -232,12 +233,13 @@
 #   toggle_bottom_drawer  toggle_right_drawer  toggle_focus_mode  fill_screen
 #   toggle_workspace_picker  toggle_command_palette  diff_viewer
 #   open_settings  reload_config
+#   increase_font_size  decrease_font_size  reset_font_size
 #   check_for_updates   (no default binding; bind a chord to reach it by keyboard)
 #   report_issue        (no default binding; also in the command palette and Help menu)
 #   toggle_float:<id>   (bind a second chord to one of your floats)
 #
 # Defaults (uncomment to change; these are what ships):
-# keybind = split_horizontal=cmd+shift+-        # bare ⌘- stays free for ghostty's text zoom
+# keybind = split_horizontal=cmd+shift+-
 # keybind = split_vertical=cmd+shift+\           # ⌘⇧| on a US layout
 # keybind = close_pane=cmd+w
 # keybind = nav_left=cmd+h
@@ -262,3 +264,6 @@
 # keybind = diff_viewer=cmd+d                    # diff of the focused repo
 # keybind = open_settings=cmd+,
 # keybind = reload_config=cmd+opt+r
+# keybind = increase_font_size=cmd+=             # ⌘+ (cmd+shift+=) does this too
+# keybind = decrease_font_size=cmd+-
+# keybind = reset_font_size=cmd+0                # back to font-size above

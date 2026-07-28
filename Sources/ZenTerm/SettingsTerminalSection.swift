@@ -21,7 +21,7 @@ final class SettingsTerminalSection: SettingsFormSection {
                 placeholder: GeneralConfig.builtIn.fontName, read: { $0.fontName }, width: 200)
             self.addNumericRow(
                 key: "font-size", caption: "Font size", blurb: "Point size",
-                range: 6...72, read: { $0.fontSize }, width: 64)
+                range: SessionFontSize.range, read: { $0.fontSize }, width: 64)
         }
         addGroup("Background") {
             self.addNumericRow(
