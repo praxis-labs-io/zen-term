@@ -10,11 +10,12 @@ everything else here is ours.
 
 `TerminalSurface` (`Sources/TerminalKit/TerminalSurface.swift`) is the whole
 contract, and it is deliberately small. A surface is anything that can *be* a terminal inside our
-chrome: it vends an `NSView`, a title, a cwd, and a busy flag, and it takes
+chrome: it vends an `NSView`, a title, a cwd, a busy flag, and the background its
+program last reported, and it takes
 `start`, `focus`, `terminate`, `paste`, `copySelection`, `applyAppearance`.
 
 Four types travel with it: `TerminalSurfaceConfig` (spawn params),
-`TerminalSurfaceDelegate` (nine events out, all defaulted to no-ops),
+`TerminalSurfaceDelegate` (ten events out, all defaulted to no-ops),
 `TerminalTheme`, and `TerminalBehavior`.
 
 **The rule:** if only one backend can do a thing, it stays below the seam. The
@@ -710,6 +711,34 @@ are both ansi[5], info and synFunction both ansi[4]. That is why the roles are
 separate fields rather than one alias, and why repointing one leaves the others alone.
 Fifteen themes ship bundled; a user file shadows a bundled one of the same name. See
 CLAUDE.md for the rule that the chrome never hardcodes a color.
+
+**A program can move one color, and only inside its own pane.** OSC 11 (and OSC 4/10/12) is
+applied by libghostty *below* the seam. It writes the color into `terminal.colors` and its
+renderer draws from there, so the grid follows a program whether the chrome reacts or not,
+and there is no config key to stop it. What the chrome decides is how far that reaches
+(ZEN-23). `GHOSTTY_ACTION_COLOR_CHANGE` is the notification that lands afterwards, and the
+background alone is carried up, as `surface(_:backgroundDidChange:)` plus the
+`backgroundOverride` pull for a host built after the fact. It repaints the fill that pane
+paints around and under its own terminal (`PanelHostView`, `SurfaceFloatOverlay`, and the
+layer behind the grid), so a repainted pane doesn't sit inside a ring of the old color.
+Every `ChromeTheme` role stays `Theme.current`: a program recolors its pane, never the frame
+around it. Foreground, cursor and palette changes are dropped, because the terminal draws
+those and no chrome surface repeats them.
+
+**The reported color is mirrored as-is, a reset included**, which is not the obvious choice.
+An OSC 111 reset arrives as an ordinary change carrying the theme's own background, so
+recognising it and dropping the override reads as the tidy move. It is wrong: libghostty's
+`DynamicRGB.reset` is `override = default` rather than `override = null`, and
+`Termio.changeConfig` then writes `default` alone, so once a program has touched OSC 11 the
+grid is pinned to a concrete value no later theme change can move. Dropping the override
+would walk the chrome off a grid that stayed put. Mirroring keeps the pane matched to its own
+terminal in every order.
+
+**Two gaps live below the seam and cannot be closed from here.** A theme change after any
+OSC 11 leaves that surface on the old background while the rest of the chrome moves, because
+libghostty never re-reads its `override`. And the kitty color protocol (OSC 21) writes
+`terminal.colors` with no `color_change` emitted at all, so an OSC 21 reset moves the grid
+with nothing the chrome can observe. Both need a backend fix, not a chrome one.
 
 **`accent` is the one role the user can repoint.** It is the chrome's primary and
 is read live at every focus, active, and confirm surface, so `accent-color` in the

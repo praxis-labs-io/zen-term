@@ -18,6 +18,10 @@ final class RecordingSurface: NSObject, TerminalSurface {
     /// Overrides the protocol extension's false default so a test can mark a surface as having
     /// live work — what the ⌘W confirm reads through `hasBusyToolFloat`/`hasBusyDrawer`.
     var isBusy = false
+    /// Overrides the protocol extension's nil default so a test can stand a surface up already
+    /// repainted by OSC 11 — the state the chrome pulls from when it builds a host for a surface
+    /// that was already running (ZEN-23).
+    var backgroundOverride: TerminalColor?
     var terminated = false
     /// When set, `start` reports a creation failure to the delegate instead of succeeding, which
     /// exercises the seam's dead-surface path (ZEN-100) without needing a real libghostty failure.

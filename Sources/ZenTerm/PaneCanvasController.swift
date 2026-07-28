@@ -555,6 +555,19 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
         onNotification?(n)
     }
+    /// A program repainted its pane's background (OSC 11). Carry it to that pane's own fill so the
+    /// padding around the terminal matches instead of ringing it in the theme color (ZEN-23).
+    /// Scoped to the one host: the canvas, the other panes and every chrome role are untouched.
+    ///
+    /// A pane needs no `backgroundOverride` pull to go with this. `reconcile` starts a leaf's
+    /// surface and builds its host in the same synchronous turn, and a host is dropped only when
+    /// its leaf is removed and the surface terminated with it, so no repaint can land in a window
+    /// where the host does not exist. A tool float, whose card is rebuilt on every open over a
+    /// surface that kept running, is the one place that pull is load-bearing.
+    func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {
+        guard let id = leafID(of: s) else { return }
+        hostByLeaf[id]?.backgroundOverride = color
+    }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }
         closePane(id)

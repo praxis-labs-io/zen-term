@@ -1,4 +1,5 @@
 import AppKit
+import TerminalKit
 
 /// A panel's top header: a muted small-caps title (left) and its live keybind (right),
 /// e.g. `("Bottom drawer", .toggleBottomDrawer)` → `BOTTOM DRAWER  ⌘B`. Replaces the old
@@ -164,8 +165,27 @@ final class PanelHostView: NSView {
         ring.needsDisplay = true
     }
 
+    /// The background a program set in this panel's own terminal with OSC 11, or nil while the
+    /// panel is on the theme's (ZEN-23). It reaches the interior fill alone, so the padding around
+    /// a repainted terminal matches it instead of ringing it in the theme color. The border, the
+    /// focus halo and the header stay on `Theme.current` — a program recolors its pane, not the
+    /// chrome around it.
+    var backgroundOverride: TerminalColor? {
+        didSet {
+            guard oldValue != backgroundOverride else { return }
+            applyBackground()
+        }
+    }
+
     /// Test hook: the focus glow's current strength (ZEN-282), 0 while unfocused.
     var haloOpacityForTesting: Float { halo.layer?.opacity ?? -1 }
+
+    /// Test hook: the colors actually painted into the panel's interior (ZEN-23) — read off the
+    /// layer and the ring view rather than off `backgroundOverride`, so a hook that never reaches
+    /// the paint fails. `fill` is nil below `background-alpha` 1, where the ring paints instead.
+    var paintedBackgroundForTesting: (fill: CGColor?, ring: NSColor) {
+        (clip.layer?.backgroundColor, ring.color)
+    }
 
     /// Test hook: the glow's frame and where it sits in the stack (ZEN-282). It is a sibling
     /// *beneath* the card that has to reach past the panel's own bounds — get either wrong and
@@ -229,8 +249,9 @@ final class PanelHostView: NSView {
     /// Re-apply the live pane border / focus-halo colors after a config change, no relaunch. The
     /// glow's color is set once at init (only its opacity is toggled elsewhere), so it's reset
     /// explicitly; the border color is picked up by re-running `updateHalo()`, which reads
-    /// `idleBorder`/`accent` fresh. `applyBackground()` re-reads the live alpha as well as the
-    /// live color, and the header rebuilds its title/keybind against the theme and keymap.
+    /// `idleBorder`/`accent` fresh. `applyBackground()` re-reads the live alpha, and the live theme
+    /// color unless a program has repainted this panel's terminal (see `backgroundOverride`), and
+    /// the header rebuilds its title/keybind against the theme and keymap.
     func reapplyTheme() {
         halo.color = Theme.current.chrome.accent.nsColor
         applyBackground()
@@ -248,8 +269,12 @@ final class PanelHostView: NSView {
     /// region alone at the same alpha the terminal blends at, so the two read as one surface
     /// instead of the ring sitting a shade lighter (ZEN-282). Both values are re-read here rather
     /// than captured at init, so a Settings edit applies live.
+    ///
+    /// The color is `backgroundOverride` ahead of the theme, so once a program has repainted this
+    /// panel's terminal a theme change moves the rest of the chrome and leaves this fill matched to
+    /// the grid (ZEN-23). Everything else here still follows the theme.
     private func applyBackground() {
-        let background = Theme.current.chrome.background.nsColor
+        let background = (backgroundOverride ?? Theme.current.chrome.background).nsColor
         let alpha = CGFloat(GeneralConfig.current.backgroundAlpha)
         let isSolid = GeneralConfig.current.terminalBehavior.isBackgroundSolid
         clip.layer?.backgroundColor = isSolid ? background.cgColor : nil
