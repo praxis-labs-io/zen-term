@@ -30,6 +30,11 @@ struct GeneralConfig: Equatable {
     // single `theme` file if present, else the built-in default.
     var themeName: String?
 
+    /// Which ANSI slot of the active theme the chrome's `accent` role points at (ZEN-255). Nil →
+    /// `AccentSlot.themeDefault`, the slot the chrome has always used. Stored as a slot, not a
+    /// color, so it re-resolves against whatever theme is loaded.
+    var accentColor: AccentSlot?
+
     // Font — drives the terminal theme's font (ghostty themes carry no font, so it lives here).
     var fontName: String
     var fontSize: CGFloat
@@ -100,6 +105,7 @@ struct GeneralConfig: Equatable {
         cursorShader: nil,
         backgroundAlpha: 1,
         themeName: nil,
+        accentColor: nil,
         fontName: "JetBrainsMono Nerd Font Mono",
         fontSize: 14,
         windowChrome: true,

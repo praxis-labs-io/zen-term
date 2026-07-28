@@ -2,11 +2,24 @@ import AppKit
 
 /// One row in a `Dropdown` menu: a title, an optional group header shown above it, an optional
 /// trailing note (e.g. "Light"/"Dark"), and whether it's the current selection (drawn with a check).
+///
+/// `swatch` fills a leading dot for rows whose subject *is* a color (the accent picker) — a name
+/// like "Magenta" is a conventional ANSI label, not a claim about the theme's actual hue, so the
+/// dot is what makes the row honest. Nil for every other picker, which renders exactly as before.
 struct DropdownItem: Equatable {
     let title: String
     let group: String?
     let note: String?
     let isSelected: Bool
+    let swatch: NSColor?
+
+    init(title: String, group: String?, note: String?, isSelected: Bool, swatch: NSColor? = nil) {
+        self.title = title
+        self.group = group
+        self.note = note
+        self.isSelected = isSelected
+        self.swatch = swatch
+    }
 }
 
 /// A keyboard-navigable themed dropdown: a compact button showing the current item; Return/Space/
@@ -28,6 +41,12 @@ final class Dropdown: NSView {
     private let titleLabel = NSTextField(labelWithString: "")
     /// Retained (not a throwaway init-local) so `reapplyTheme()` can re-tint it on a theme swap.
     private let chevron = NSImageView()
+    /// The selected item's color dot, hidden unless the item carries a swatch. Its fill comes from
+    /// the item, not from `Theme.current`, so `reapplyTheme()` leaves it alone — the owning section
+    /// re-supplies items on a theme change and `renderTitle()` repaints it from those.
+    private let swatch = NSView()
+    private var titleAfterSwatch = NSLayoutConstraint()
+    private var titleAtLeading = NSLayoutConstraint()
     private var listCard: NSView?
     private var rowViews: [DropdownRowView] = []
     private var highlighted = 0
@@ -35,12 +54,16 @@ final class Dropdown: NSView {
 
     private static var restFill: NSColor { Theme.current.chrome.ink(alpha: 0.06) }
     private static var focusFill: NSColor { PaletteOverlay.selectionBackground }
+    static let swatchSize: CGFloat = 10
     private static let rowHeight: CGFloat = 28
     private static let headerHeight: CGFloat = 20
     private static let maxListHeight: CGFloat = 260
 
     /// Test hook: the button's current title.
     var buttonTitleForTesting: String { titleLabel.stringValue }
+    /// Test hook: the rows as supplied by the owning section, so a picker can assert what it built
+    /// (swatches, notes, grouping) without opening the list.
+    var itemsForTesting: [DropdownItem] { items }
 
     /// Test hooks: open the floating list and inspect it (there is no other public list API). The
     /// list open-path has no GUI test seam otherwise, and shipped once rendering at zero size.
@@ -79,11 +102,26 @@ final class Dropdown: NSView {
         chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
         chevron.translatesAutoresizingMaskIntoConstraints = false
 
+        swatch.wantsLayer = true
+        swatch.layer?.cornerRadius = Self.swatchSize / 2
+        swatch.layer?.borderWidth = 1
+        swatch.layer?.borderColor = Theme.current.chrome.ink(alpha: 0.15).cgColor
+        swatch.isHidden = true
+        swatch.translatesAutoresizingMaskIntoConstraints = false
+
+        addSubview(swatch)
         addSubview(titleLabel)
         addSubview(chevron)
+        titleAfterSwatch = titleLabel.leadingAnchor.constraint(
+            equalTo: swatch.trailingAnchor, constant: 7)
+        titleAtLeading = titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9)
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: 30),
-            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+            swatch.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+            swatch.centerYAnchor.constraint(equalTo: centerYAnchor),
+            swatch.widthAnchor.constraint(equalToConstant: Self.swatchSize),
+            swatch.heightAnchor.constraint(equalToConstant: Self.swatchSize),
+            titleAtLeading,
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             chevron.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 6),
             chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
@@ -106,7 +144,15 @@ final class Dropdown: NSView {
     var titlePrefix: String = "" { didSet { renderTitle() } }
 
     private func renderTitle() {
-        titleLabel.stringValue = items.indices.contains(selectedIndex) ? titlePrefix + items[selectedIndex].title : ""
+        let item = items.indices.contains(selectedIndex) ? items[selectedIndex] : nil
+        titleLabel.stringValue = item.map { titlePrefix + $0.title } ?? ""
+        // Swap which constraint holds the title rather than reflowing: the dot only exists for
+        // color pickers, and every other dropdown must keep its exact leading inset.
+        swatch.layer?.backgroundColor = item?.swatch?.cgColor
+        swatch.isHidden = item?.swatch == nil
+        titleAfterSwatch.isActive = false
+        titleAtLeading.isActive = false
+        (swatch.isHidden ? titleAtLeading : titleAfterSwatch).isActive = true
     }
 
     /// Re-apply the live chrome colors after a config change — no relaunch. `restyle()` already
@@ -117,6 +163,7 @@ final class Dropdown: NSView {
         restyle()
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
+        swatch.layer?.borderColor = Theme.current.chrome.ink(alpha: 0.15).cgColor
     }
 
     // MARK: focus
@@ -365,8 +412,9 @@ final class Dropdown: NSView {
     }
 }
 
-/// One selectable row in the open list: a leading title, an optional trailing note, and a check
-/// when it's the current selection. Highlight fill is driven by `Dropdown.refreshListHighlight()`.
+/// One selectable row in the open list: an optional leading color dot, a title, an optional
+/// trailing note, and a check when it's the current selection. Highlight fill is driven by
+/// `Dropdown.refreshListHighlight()`.
 private final class DropdownRowView: NSView {
     let index: Int
     private let onSelect: (Int) -> Void
@@ -385,10 +433,27 @@ private final class DropdownRowView: NSView {
         title.lineBreakMode = .byTruncatingTail
         title.translatesAutoresizingMaskIntoConstraints = false
         addSubview(title)
-        NSLayoutConstraint.activate([
-            title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            title.centerYAnchor.constraint(equalTo: centerYAnchor),
-        ])
+        NSLayoutConstraint.activate([title.centerYAnchor.constraint(equalTo: centerYAnchor)])
+        if let swatchColor = item.swatch {
+            let dot = NSView()
+            dot.wantsLayer = true
+            dot.layer?.cornerRadius = Dropdown.swatchSize / 2
+            dot.layer?.backgroundColor = swatchColor.cgColor
+            // A dark theme's black slot would vanish against the list card, so ring every dot.
+            dot.layer?.borderWidth = 1
+            dot.layer?.borderColor = chrome.ink(alpha: 0.15).cgColor
+            dot.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(dot)
+            NSLayoutConstraint.activate([
+                dot.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+                dot.centerYAnchor.constraint(equalTo: centerYAnchor),
+                dot.widthAnchor.constraint(equalToConstant: Dropdown.swatchSize),
+                dot.heightAnchor.constraint(equalToConstant: Dropdown.swatchSize),
+                title.leadingAnchor.constraint(equalTo: dot.trailingAnchor, constant: 7),
+            ])
+        } else {
+            title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8).isActive = true
+        }
 
         var trailing: [NSView] = []
         if let note = item.note {

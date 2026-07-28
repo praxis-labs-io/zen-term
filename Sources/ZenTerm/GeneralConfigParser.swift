@@ -31,6 +31,8 @@ enum GeneralConfigParser {
             switch key {
             case "theme":
                 if !value.isEmpty { config.themeName = value }
+            case "accent-color":
+                if let slot = parseAccentSlot(value, &diagnostics) { config.accentColor = slot }
             case "font-family":
                 if !value.isEmpty { config.fontName = value }
             case "font-size":
@@ -220,6 +222,20 @@ enum GeneralConfigParser {
             diagnostics.append(invalid("cursor-style", got: value, expected: "block, bar, or underline"))
             return nil
         }
+    }
+
+    /// The 16 ANSI hue names. The expected-value list is built from `AccentSlot.allCases` rather
+    /// than spelled out, so a new slot can't leave the diagnostic naming a stale set.
+    private static func parseAccentSlot(
+        _ value: String, _ diagnostics: inout [ConfigDiagnostic]
+    ) -> AccentSlot? {
+        if let slot = AccentSlot(rawValue: value.lowercased()) { return slot }
+        let expected = AccentSlot.allCases.map(\.rawValue).joined(separator: ", ")
+        Log.warning(
+            "GeneralConfig: `accent-color` got `\(value)` — using default",
+            category: .config)
+        diagnostics.append(invalid("accent-color", got: value, expected: expected))
+        return nil
     }
 
     private static func parseReduceMotion(

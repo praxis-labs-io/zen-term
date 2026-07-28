@@ -26,6 +26,20 @@
 # key; restart the app to apply the change.
 # theme = rose-pine-moon
 
+# The chrome's accent: the color for focus, active state, and confirm. It paints
+# the focused pane's glow and border, focus rings, the active tab's underline, a
+# tool's activity dot, primary buttons, and the progress bar. Pick any slot of the
+# theme's palette and the whole chrome follows; the terminal is untouched, so a
+# program printing in that color is unaffected.
+#
+# The names are the usual ANSI hues, so what you get is whatever your theme put in
+# that slot: on Rosé Pine Moon, magenta is iris. Settings → Appearance → Accent
+# color shows each one's swatch and hex. Unset → magenta (palette 5).
+#
+#   black    red    green    yellow    blue    magenta    cyan    white
+#   and a bright- variant of each (bright-red, bright-cyan, …)
+# accent-color = magenta
+
 # ─── Terminal appearance ─────────────────────────────────────────────────────
 
 # Monospaced font for the terminal surfaces. (Colors live in a theme file, not

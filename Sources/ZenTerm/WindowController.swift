@@ -1018,7 +1018,7 @@ final class WindowController: NSObject {
             "cursor-shader", "background-alpha", "macos-option-as-alt", "scroll-multiplier", "shell",
             "shell-args", "editor", "ai":
             return .terminal
-        case "theme", "window-chrome", "backdrop-alpha", "window-gutter", "pane-gap",
+        case "theme", "accent-color", "window-chrome", "backdrop-alpha", "window-gutter", "pane-gap",
             "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",
             "reduce-motion", "diff-layout":
             return .appearance
