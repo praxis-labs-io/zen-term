@@ -698,10 +698,18 @@ symlinked into a dotfiles repo must keep pointing there). `ConfigWriter` preserv
 comments, blank lines, and unknown keys verbatim.
 
 **Theming is derived, never hardcoded.** `ChromeThemeDeriver` maps ANSI slots onto
-eight chrome roles: info is ansi[4], warning ansi[3], destructive ansi[1], accent
-ansi[5], attention ansi[6], muted a blend of fg and bg. Fifteen themes ship bundled;
-a user file shadows a bundled one of the same name. See CLAUDE.md for the rule that
-the chrome never hardcodes a color.
+sixteen chrome roles. Nine carry chrome meaning: background and foreground come from
+the theme's own, info is ansi[4], warning ansi[3], destructive ansi[1], accent ansi[5],
+attention ansi[6], positive ansi[2], and muted a blend of fg and bg. The other seven
+are the diff viewer's syntax roles, resolved through `SyntaxRole`: synKeyword ansi[5],
+synString ansi[2], synNumber ansi[3], synType ansi[6], synFunction ansi[4],
+synPunctuation ansi[1], and synComment a fainter fg/bg blend than muted.
+
+Roles are named for meaning, not hue, so several share a slot: accent and synKeyword
+are both ansi[5], info and synFunction both ansi[4]. That is why the roles are
+separate fields rather than one alias, and why repointing one leaves the others alone.
+Fifteen themes ship bundled; a user file shadows a bundled one of the same name. See
+CLAUDE.md for the rule that the chrome never hardcodes a color.
 
 **`accent` is the one role the user can repoint.** It is the chrome's primary and
 is read live at every focus, active, and confirm surface, so `accent-color` in the
