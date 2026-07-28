@@ -34,6 +34,13 @@ public struct TerminalColor: Sendable, Equatable {
             blue: UInt8(value & 0xFF))
     }
 
+    /// `#rrggbb` — the color syntax ghostty's config parser accepts, and the inverse of
+    /// `init?(hex:)`. Public because the chrome shows it too: the accent picker labels each ANSI
+    /// slot with the hex the active theme put there.
+    public var hex: String {
+        String(format: "#%02x%02x%02x", red, green, blue)
+    }
+
     public var nsColor: NSColor {
         NSColor(srgbRed: CGFloat(red) / 255.0, green: CGFloat(green) / 255.0, blue: CGFloat(blue) / 255.0, alpha: 1)
     }

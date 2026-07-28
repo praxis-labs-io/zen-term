@@ -22,6 +22,52 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(chrome.muted, TerminalColor(red: 134, green: 132, blue: 150))
     }
 
+    /// `accent-color` repoints the accent role and nothing else (ZEN-255). The "nothing else" half
+    /// is the one that can rot silently: accent is aliased to a slot other roles also read, so a
+    /// deriver change could drag `info` or `attention` along with it and still look plausible.
+    func test_accentOverride_movesOnlyTheAccentRole() {
+        let base = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
+        let overridden = ChromeThemeDeriver.derive(from: Theme.rosePineMoon, accent: .brightGreen)
+
+        XCTAssertEqual(overridden.accent, TerminalColor(hex: "#3e8fb0"))  // palette[10]
+        XCTAssertNotEqual(overridden.accent, base.accent)
+        XCTAssertEqual(overridden.info, base.info)
+        XCTAssertEqual(overridden.warning, base.warning)
+        XCTAssertEqual(overridden.destructive, base.destructive)
+        XCTAssertEqual(overridden.attention, base.attention)
+        XCTAssertEqual(overridden.muted, base.muted)
+        XCTAssertEqual(overridden.background, base.background)
+        XCTAssertEqual(overridden.foreground, base.foreground)
+    }
+
+    /// An unset key has to derive exactly what it always did, or the setting silently recolors the
+    /// chrome for every user who never opened it.
+    func test_noAccentOverride_derivesTheHistoricalSlotFive() {
+        XCTAssertEqual(
+            ChromeThemeDeriver.derive(from: Theme.rosePineMoon, accent: nil).accent,
+            ChromeThemeDeriver.derive(from: Theme.rosePineMoon, accent: .magenta).accent)
+    }
+
+    /// Every slot has to name the ANSI entry the palette actually put there — an off-by-one here
+    /// would hand the user a color under the wrong name, which no assertion elsewhere would catch.
+    func test_everySlotResolvesToItsPaletteEntry() {
+        for slot in AccentSlot.allCases {
+            XCTAssertEqual(
+                ChromeThemeDeriver.derive(from: Theme.rosePineMoon, accent: slot).accent,
+                Theme.rosePineMoon.ansi[slot.ansiIndex],
+                "\(slot.rawValue) resolved to the wrong palette entry")
+        }
+    }
+
+    /// A hand-written theme file may declare fewer than 16 entries; a high slot must fall back, not
+    /// trap. `slot(_:)` already did this for the fixed roles — the override must not bypass it.
+    func test_slotBeyondAShortPalette_fallsBackToForeground() {
+        var short = Theme.rosePineMoon
+        short.ansi = Array(short.ansi.prefix(8))
+        XCTAssertEqual(
+            ChromeThemeDeriver.derive(from: short, accent: .brightWhite).accent, short.foreground)
+    }
+
     func test_inkIsThemeForegroundAtBoostedAlpha() {
         let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
         let expected = min(1, 0.55 * ChromeTheme.inkBoost)

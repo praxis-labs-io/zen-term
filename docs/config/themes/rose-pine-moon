@@ -11,7 +11,7 @@
 # font-family etc.) is ignored: the font lives in `config`, not here.
 #
 # Both the terminal AND the chrome recolor from these values: the chrome derives
-# its accent/warning/destructive roles from palette entries 4/3/1.
+# its color roles from the palette entries listed at the bottom of this file.
 
 # Base surfaces.
 background = #191724
@@ -40,6 +40,12 @@ palette = 14=#ea9a97
 palette = 15=#e0def4
 
 # Chrome roles derived from the palette (for reference, not separate keys):
-#   accent / info  ← palette 4  (#9ccfd8, foam)
-#   warning        ← palette 3  (#f6c177, gold)
-#   destructive    ← palette 1  (#eb6f92, love)
+#   accent       ← palette 5  (#c4a7e7, iris)
+#   info         ← palette 4  (#9ccfd8, foam)
+#   warning      ← palette 3  (#f6c177, gold)
+#   destructive  ← palette 1  (#eb6f92, love)
+#   attention    ← palette 6  (#ea9a97, rose)
+#   muted        ← a foreground/background blend, not a palette entry
+#
+# `accent` is the one you can repoint without editing this file: `accent-color`
+# in `config` sends it to any palette entry by ANSI hue name.

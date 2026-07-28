@@ -604,6 +604,15 @@ ansi[5], attention ansi[6], muted a blend of fg and bg. Fifteen themes ship bund
 a user file shadows a bundled one of the same name. See CLAUDE.md for the rule that
 the chrome never hardcodes a color.
 
+**`accent` is the one role the user can repoint.** It is the chrome's primary and
+is read live at every focus, active, and confirm surface, so `accent-color` in the
+config sends all of them at once by naming an `AccentSlot` (an ANSI hue name, ZEN-255).
+The override is applied to the `accent` field alone inside the deriver, so the roles
+that carry meaning stay put: a warning is not a taste. What makes this work with no
+call-site changes is that nothing caches the color: `ConfigChange.between` sets
+`.theme` from a whole-value `AppTheme` diff, and the existing `reapplyTheme()` fan-out
+repaints even the sites that bake their color at init, like the tab bar's tracer.
+
 ## Invariants that will bite you
 
 - **Closures capture by id, never by object.** A closure stored on a controller
