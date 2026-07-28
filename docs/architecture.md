@@ -14,7 +14,7 @@ chrome: it vends an `NSView`, a title, a cwd, and a busy flag, and it takes
 `start`, `focus`, `terminate`, `paste`, `copySelection`, `applyAppearance`.
 
 Four types travel with it: `TerminalSurfaceConfig` (spawn params),
-`TerminalSurfaceDelegate` (nine events out, all defaulted to no-ops),
+`TerminalSurfaceDelegate` (ten events out, all defaulted to no-ops),
 `TerminalTheme`, and `TerminalBehavior`.
 
 **The rule:** if only one backend can do a thing, it stays below the seam. The
@@ -603,6 +603,19 @@ eight chrome roles: info is ansi[4], warning ansi[3], destructive ansi[1], accen
 ansi[5], attention ansi[6], muted a blend of fg and bg. Fifteen themes ship bundled;
 a user file shadows a bundled one of the same name. See CLAUDE.md for the rule that
 the chrome never hardcodes a color.
+
+**A program can move one color, and only inside its own pane.** OSC 11 (and OSC 4/10/12)
+is applied by libghostty *below* the seam — it writes the color into `terminal.colors` and
+its renderer draws from there — so the grid follows a program whether the chrome reacts or
+not, and there is no config key to stop it. What the chrome decides is how far that reaches
+(ZEN-23). `GHOSTTY_ACTION_COLOR_CHANGE` is the notification that lands afterwards, and the
+background alone is carried up, as `surface(_:backgroundDidChange:)` plus the
+`backgroundOverride` pull for a host built after the fact. It repaints the fill that pane
+paints around and under its own terminal — `PanelHostView`, `SurfaceFloatOverlay`, and the
+layer behind the grid — so a repainted pane doesn't sit inside a ring of the old color.
+Every `ChromeTheme` role stays `Theme.current`: a program recolors its pane, never the frame
+around it. Foreground, cursor and palette changes are dropped, because the terminal draws
+those and no chrome surface repeats them.
 
 **`accent` is the one role the user can repoint.** It is the chrome's primary and
 is read live at every focus, active, and confirm surface, so `accent-color` in the

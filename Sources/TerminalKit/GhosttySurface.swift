@@ -27,6 +27,11 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     private var lastTheme: TerminalTheme?
     private var lastBehavior: TerminalBehavior = .default
 
+    /// The background a program set with OSC 11, or nil while this surface is on the theme's.
+    /// It outranks `lastTheme.background` everywhere the fill behind the grid is painted, and a
+    /// theme change deliberately does not clear it — see `applyAppearance`.
+    public private(set) var backgroundOverride: TerminalColor?
+
     /// Focus as libghostty last heard it, which is what tells a real focus change from a repeat.
     /// `start` sets it to what it actually told libghostty; until then it matches libghostty's
     /// own default (`flags.focused = true`, "up to the apprt to set the correct value").
@@ -145,6 +150,14 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         lastTheme = config.theme
         lastBehavior = config.behavior ?? .default
         hostView.scrollMultiplier = (config.behavior ?? .default).scrollMultiplier
+        // This is a brand-new libghostty surface on default colors, but not necessarily a new
+        // object: a retry after a failed start (`PaneCanvasController.retryStart`) re-runs `start`
+        // on the surface the chrome already mounted. Drop any OSC background the previous terminal
+        // set, and tell the chrome, or its host keeps painting a color nothing is asking for.
+        if backgroundOverride != nil {
+            backgroundOverride = nil
+            delegate?.surface(self, backgroundDidChange: nil)
+        }
 
         // A fresh libghostty surface defaults to focused=true, and only `resignFirstResponder`
         // ever flips it false — so a surface that never becomes first responder (a hidden drawer,
@@ -258,6 +271,10 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// Re-apply appearance/behavior in place. libghostty config is app-global, so this
     /// re-themes every surface via `GhosttyApp.updateConfig` (deduped there); the pieces
     /// scoped to this surface (layer backing, scroll multiplier, redraw) are applied here.
+    /// An OSC-set background survives this. libghostty keeps a color a program set through a
+    /// config change — only OSC 111 restores the default — so the grid stays on the program's
+    /// color, and clearing our copy here would put the chrome back on the theme while the
+    /// terminal inside it stayed repainted.
     public func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {
         lastTheme = theme
         lastBehavior = behavior
@@ -310,11 +327,16 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// removed (backdrop-alpha 0.5, cursor_warp, 5K) across vim, nvim, less, fzf and lazygit: no
     /// flash. It also bought nothing — the window is translucent below backdrop-alpha 1
     /// regardless, so the compositor blends it either way (ZEN-271).
+    ///
+    /// The fill takes `backgroundOverride` ahead of the theme, so a surface a program has
+    /// repainted (OSC 11) doesn't flash the theme color through a redraw gap or the uncovered
+    /// strip a resize leaves — the two colors have to be the same one for this to hide anything.
     private func applyLayerBacking(theme: TerminalTheme?, behavior: TerminalBehavior) {
         guard let layer = hostView.layer else { return }
         let isSolid = behavior.isBackgroundSolid
+        let fill = backgroundOverride ?? theme?.background
         layer.isOpaque = isSolid
-        layer.backgroundColor = isSolid ? (theme?.background.nsColor ?? .black).cgColor : nil
+        layer.backgroundColor = isSolid ? (fill?.nsColor ?? .black).cgColor : nil
         // libghostty pins its contents top-left rather than stretching them, so whenever its
         // drawable is smaller than this layer — every resize, and the stretch between a
         // surface's first layout and its final one — the rest of the layer is uncovered. That is
@@ -574,9 +596,55 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         case GHOSTTY_ACTION_SECURE_INPUT:
             setSecureInput(for: action.action.secure_input)
             return true
+        case GHOSTTY_ACTION_COLOR_CHANGE:
+            applyColorChange(action.action.color_change)
+            return true
         default:
             return false
         }
+    }
+
+    /// React to a dynamic color a program set with OSC 4/10/11/12 (or reset with OSC 110–112).
+    ///
+    /// **This is not what makes the terminal honor them.** libghostty writes the color into
+    /// `terminal.colors` before it sends this, and its renderer draws from there, so the grid
+    /// already follows the program whether we handle this or not. The action exists so the app
+    /// around the terminal can match — which is where the decision is (ZEN-23): the pane's own
+    /// fill matches, and nothing else does. Every chrome role stays `Theme.current` (ZEN-27), so
+    /// a program can recolor its own pane but never the frame around it.
+    ///
+    /// Only the background reaches anything. The foreground, the cursor and the 256 palette slots
+    /// are drawn by the terminal itself and no chrome surface repeats them, so they are consumed
+    /// and dropped rather than left to fall through as an unhandled action.
+    private func applyColorChange(_ change: ghostty_action_color_change_s) {
+        guard case .background(let color) = Self.effect(of: change, theme: lastTheme) else { return }
+        backgroundOverride = color
+        applyLayerBacking(theme: lastTheme, behavior: lastBehavior)
+        delegate?.surface(self, backgroundDidChange: color)
+    }
+
+    /// What a `COLOR_CHANGE` means to the chrome. Pure, so the mapping is tested without a live
+    /// surface.
+    ///
+    /// A reset (OSC 111) arrives as an ordinary change carrying the color libghostty is restoring
+    /// — our own theme background — with nothing to tell it apart from a program setting that same
+    /// color. So the test is the value: matching the theme IS "back on the theme", and it maps to
+    /// nil rather than to a copy of today's theme color. Passing the color through instead would
+    /// pin the surface to a snapshot that a later theme change could never move.
+    static func effect(
+        of change: ghostty_action_color_change_s, theme: TerminalTheme?
+    ) -> ColorChangeEffect {
+        guard change.kind == GHOSTTY_ACTION_COLOR_KIND_BACKGROUND else { return .ignored }
+        let color = TerminalColor(red: change.r, green: change.g, blue: change.b)
+        return .background(color == theme?.background ? nil : color)
+    }
+
+    /// The chrome-visible consequence of a `COLOR_CHANGE`.
+    enum ColorChangeEffect: Equatable {
+        /// The surface's background moved. nil means it is back on the theme's.
+        case background(TerminalColor?)
+        /// Foreground, cursor or a palette slot: the terminal draws it, the chrome does not.
+        case ignored
     }
 
     /// Open a link libghostty resolved from a ⌘-click. Decode by `len` (not `strlen`) so an

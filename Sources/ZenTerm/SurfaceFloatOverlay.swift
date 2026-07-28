@@ -1,4 +1,5 @@
 import AppKit
+import TerminalKit
 
 /// A float over a tab's tile region that centers a hosted content view inside a rounded
 /// card, lifted off the panes by a dark elevation shadow, over a transparent click-catcher
@@ -17,6 +18,24 @@ class SurfaceFloatOverlay: NSView {
     private let elevation = OutsideShadowView()  // the elevation shadow, drawn around the card
     private let blur = NSVisualEffectView()  // frosts the panes behind a translucent card
     private var dismiss = DismissGate()
+
+    /// The background a program set in this float's own terminal with OSC 11, or nil while the
+    /// float is on the theme's (ZEN-23). Reaches the card's interior fill alone; the card edge,
+    /// the elevation shadow and the frost stay as they are. Same rule a pane follows in
+    /// `PanelHostView`, because a float hosts the same kind of surface.
+    var backgroundOverride: TerminalColor? {
+        didSet {
+            guard oldValue != backgroundOverride else { return }
+            applyBackground()
+        }
+    }
+
+    /// Test hook: the colors actually painted into the card's interior (ZEN-23), read off the
+    /// layer and the ring view rather than off `backgroundOverride`. `fill` is nil below
+    /// `background-alpha` 1, where the ring paints instead.
+    var paintedBackgroundForTesting: (fill: CGColor?, ring: NSColor) {
+        (card.layer?.backgroundColor, ring.color)
+    }
 
     /// How far the elevation shadow reaches past the card. Measured: at `shadowBlur` it dies out
     /// 38pt below the card's bottom edge, the `shadowOffset` included, and less on the other three
@@ -171,7 +190,7 @@ class SurfaceFloatOverlay: NSView {
     /// their text. Both values are re-read here rather than captured at init, so a Settings edit
     /// applies live.
     private func applyBackground() {
-        let background = Theme.current.chrome.background.nsColor
+        let background = (backgroundOverride ?? Theme.current.chrome.background).nsColor
         let alpha = CGFloat(GeneralConfig.current.backgroundAlpha)
         let isSolid = GeneralConfig.current.terminalBehavior.isBackgroundSolid
         card.layer?.backgroundColor = isSolid ? background.cgColor : nil

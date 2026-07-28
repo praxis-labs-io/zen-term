@@ -278,6 +278,10 @@ final class PaneCanvasController: NSObject {
             onFocusRequest: { [weak self] in
                 self?.focus(id)
             })
+        // A host is normally built before its surface can have repainted anything, but it is built
+        // lazily and the surface may already be running — so take whatever background it is on now
+        // rather than assuming the theme's (ZEN-23).
+        host.backgroundOverride = surface.backgroundOverride
         hostByLeaf[id] = host
         return host
     }
@@ -546,6 +550,13 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     }
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
         onNotification?(n)
+    }
+    /// A program repainted its pane's background (OSC 11) — carry it to that pane's own fill so
+    /// the padding around the terminal matches instead of ringing it in the theme color (ZEN-23).
+    /// Scoped to the one host: the canvas, the other panes and every chrome role are untouched.
+    func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor?) {
+        guard let id = leafID(of: s) else { return }
+        hostByLeaf[id]?.backgroundOverride = color
     }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }
