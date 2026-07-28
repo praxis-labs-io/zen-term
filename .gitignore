@@ -9,7 +9,12 @@ DerivedData/
 # ghostty source); the downloaded Zig toolchain under vendor/, the built xcframework,
 # and the staged runtime resources are rebuilt from source by bin/build-ghosttykit and
 # never committed. See docs/architecture.md.
+#
+# No trailing slash on the two below: a slash matches a directory only, and a worktree
+# symlinks these to the main checkout's copies rather than holding its own. A symlink is
+# not a directory to git, so the slashed form left both showing as untracked in every
+# worktree, which is how a symlink carrying a machine-absolute path got committed once.
 /vendor/*
 !/vendor/ghostty
-/Frameworks/GhosttyKit.xcframework/
-/Sources/TerminalKit/Resources/ghostty-resources/
+/Frameworks/GhosttyKit.xcframework
+/Sources/TerminalKit/Resources/ghostty-resources
