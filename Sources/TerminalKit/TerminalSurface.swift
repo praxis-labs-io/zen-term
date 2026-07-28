@@ -56,6 +56,21 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     func surfaceDidRingBell(_ s: TerminalSurface)
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification)
     func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?)
+    /// The program running in this surface repainted its own background (OSC 11, or an OSC 111
+    /// reset). Only the fill the chrome paints around and under THIS surface follows it: the
+    /// pane's padding ring and the layer behind the grid, so a repainted pane still reads as one
+    /// surface. Every other chrome color stays `Theme.current`, because a program may recolor its
+    /// own pane and never the app frame around it.
+    ///
+    /// The color is whatever the terminal now reports rendering, a reset included. There is no
+    /// "back on the theme" value, because a reset does not put the terminal back on a theme that
+    /// can still move: it pins the background to the theme color of that moment. Mirroring the
+    /// reported color is what keeps the chrome matched to the grid once the theme changes under
+    /// both.
+    ///
+    /// Foreground, cursor and palette changes get no event: the terminal draws those itself
+    /// and no chrome surface mirrors them, so there is nothing for the chrome to do.
+    func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor)
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?)
     func surfaceWantsClose(_ s: TerminalSurface)
     /// The user clicked the surface's content — the chrome should route unified focus
@@ -77,6 +92,7 @@ public extension TerminalSurfaceDelegate {
     func surfaceDidRingBell(_ s: TerminalSurface) {}
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {}
     func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?) {}
+    func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {}
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {}
     func surfaceWantsClose(_ s: TerminalSurface) {}
     func surfaceWantsFocus(_ s: TerminalSurface) {}
@@ -98,6 +114,13 @@ public protocol TerminalSurface: AnyObject {
     /// Whether the surface's shell has a running foreground command or a
     /// backgrounded job. Lets the chrome warn before closing live work.
     var isBusy: Bool { get }
+
+    /// The background this surface's terminal last reported rendering (OSC 11), or nil while it
+    /// has never reported one. The pull half of `surface(_:backgroundDidChange:)`, for a chrome
+    /// surface built after the change landed: a tool float is torn down to its surface when
+    /// hidden and gets a fresh card on re-open, which would otherwise come back on the theme
+    /// color while the terminal inside it stayed repainted.
+    var backgroundOverride: TerminalColor? { get }
 
     func start(_ config: TerminalSurfaceConfig)
     func focus()
@@ -151,6 +174,9 @@ public extension TerminalSurface {
 
     /// Backends that can't inspect the child process report "not busy".
     var isBusy: Bool { false }
+
+    /// Default nil: a backend with no dynamic-color path is always on the theme's background.
+    var backgroundOverride: TerminalColor? { nil }
 
     /// Default no-op: a backend that can't reconfigure live needs nothing here.
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {}

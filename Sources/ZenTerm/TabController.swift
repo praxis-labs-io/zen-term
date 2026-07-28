@@ -1276,6 +1276,19 @@ extension TabController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
         onNotification?(n)
     }
+    /// A program repainted a drawer's background (OSC 11). Carry it to that drawer's own fill,
+    /// exactly as a pane does (ZEN-23). Panes are handled in `PaneCanvasController` and floats in
+    /// `ToolFloatController`; this only reacts to the two drawer surfaces.
+    ///
+    /// No pull to go with it, for the same reason a pane needs none: a drawer's surface and its
+    /// panel are created together and cleared together, so the panel never postdates the surface.
+    func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {
+        if s === bottomDrawerSurface {
+            bottomDrawerPanel?.backgroundOverride = color
+        } else if s === rightDrawerSurface {
+            rightDrawerPanel?.backgroundOverride = color
+        }
+    }
     /// A drawer's shell exited on its own (e.g. the user typed `exit`): close+clear
     /// that drawer entirely — rather than leaving a dead shell docked — so the next
     /// toggle lazily spawns a fresh one. Panes have their own exit handling in
