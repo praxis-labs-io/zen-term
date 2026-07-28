@@ -4,6 +4,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Spotlight indexes every object file a build writes, which costs more CPU than the build does and
+# lands after it, so it reads as the machine bogging down for no reason. This marker tells Spotlight
+# to skip the directory. Written here and in bin/run because `.build` is gitignored and disposable;
+# a bare `swift build` into a fresh `.build` still misses it, so this is a cheap mitigation rather
+# than a guarantee. `|| true` so a read-only checkout can never fail a run over a cache hint.
+mkdir -p .build 2>/dev/null && touch .build/.metadata_never_index 2>/dev/null || true
+
 # Harmless linker noise from the prebuilt CodeEditLanguages xcframework (debug info pointing at its
 # maintainer's build paths) and libghostty-fat.a — filtered out so real output stands out.
 # `-Xlinker -w` doesn't suppress these on the current linker.
@@ -29,11 +36,6 @@ if [[ "${1:-}" == "--fix" ]]; then
     echo "✓ fixes applied — re-run bin/check to verify"
     exit 0
 fi
-
-# Spotlight indexes every object file a build writes, which costs more CPU than the build does and
-# lands after it, so it reads as the machine bogging down for no reason. The marker is what tells
-# Spotlight to skip a directory. Recreated each run because `.build` is gitignored and disposable.
-mkdir -p .build && touch .build/.metadata_never_index
 
 echo "▸ swift build"
 swift build 2>&1 | filter_noise

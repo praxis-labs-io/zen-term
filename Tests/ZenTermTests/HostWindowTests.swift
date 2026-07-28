@@ -8,7 +8,7 @@ import XCTest
 /// a real `HostWindow` and asserts the buttons' actual `isHidden`, and that the runtime setter the
 /// live Settings toggle calls flips them.
 @MainActor
-final class HostWindowTests: XCTestCase {
+final class HostWindowTests: WindowTestCase {
     private var originalConfig: GeneralConfig!
 
     override func setUp() {
