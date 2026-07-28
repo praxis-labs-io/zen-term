@@ -11,7 +11,7 @@ import XCTest
 /// behavior the manual runbook then confirms end-to-end with an actual theme file. (A
 /// DEBUG-only `Theme.setCurrentForTesting(_:)` seam exists for direct before/after color
 /// assertions; the `ReapplyThemeTests` suite uses it.)
-final class TabBarViewTests: XCTestCase {
+final class TabBarViewTests: WindowTestCase {
     func test_reapplyTheme_reRendersStoredSnapshot() {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
         tabBar.translatesAutoresizingMaskIntoConstraints = true

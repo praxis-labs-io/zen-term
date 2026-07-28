@@ -9,7 +9,7 @@ import XCTest
 /// rule that a control tested only through its view-model can ship dead) — asserting each button
 /// runs its closure and dismisses the toast.
 @MainActor
-final class SurfaceFailureToastTests: XCTestCase {
+final class SurfaceFailureToastTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var controller: WindowController?
 

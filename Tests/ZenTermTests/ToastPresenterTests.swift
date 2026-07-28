@@ -7,7 +7,7 @@ import XCTest
 /// (ZEN-106). The key-equivalent assertions matter: a sticky/passive toast that armed Return/Esc
 /// would hijack those keys from the focused terminal.
 @MainActor
-final class ToastPresenterTests: XCTestCase {
+final class ToastPresenterTests: WindowTestCase {
     private func makeHost() -> NSView {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),

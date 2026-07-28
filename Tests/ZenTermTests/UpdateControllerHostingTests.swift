@@ -10,7 +10,7 @@ import XCTest
 /// card freezes on a stale state whose `fireOnce` reply is already spent, and Later / Relaunch go
 /// dead with no way to dismiss but restart. These drive `UpdateController` through a real window.
 @MainActor
-final class UpdateControllerHostingTests: XCTestCase {
+final class UpdateControllerHostingTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var controller: WindowController?
 

@@ -7,7 +7,7 @@ import XCTest
 /// keybind always (swapping to a "<drawer>: Focus Mode" ⌘F variant while zoomed); a pane shows a
 /// "Terminal pane: Focus Mode" header only while zoomed. Per the house rule "GUI controls need
 /// interaction tests", these mount the panel and drive its zoom state.
-final class PanelHostViewTests: XCTestCase {
+final class PanelHostViewTests: WindowTestCase {
     /// `PanelHostView` reads `GeneralConfig.current` at construction to decide which arrangement
     /// paints the panel, so every test here would otherwise build against the developer's own
     /// `~/.config/zen-term`. Saved and restored rather than reset, so a sibling suite's pin

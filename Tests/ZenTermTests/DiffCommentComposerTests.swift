@@ -9,7 +9,7 @@ import XCTest
 /// the dropdown's own control. A version that called `send` directly, or set the selected index on the
 /// view model, would stay green with the keys unwired and the dropdown dead — which is exactly how a
 /// fully broken dropdown shipped past two reviews before.
-final class DiffCommentComposerTests: XCTestCase {
+final class DiffCommentComposerTests: WindowTestCase {
     private var window: NSWindow?
     private var originalConfig: GeneralConfig!
 

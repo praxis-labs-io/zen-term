@@ -8,7 +8,7 @@ import XCTest
 /// the reload toast's "Open Settings" button lands on the right section. State-only assertions would
 /// pass while the row/notice is dead, so these mount the real sections in a window and read what's
 /// actually rendered (`renderedMessageForTesting`), driving the same view tree the user sees.
-final class SettingsConfigDiagnosticRenderTests: XCTestCase {
+final class SettingsConfigDiagnosticRenderTests: WindowTestCase {
     private var tempRoot: URL!
     /// The section + host window are retained for the test's lifetime (the rows capture the section
     /// weakly; a deallocated section would silently stop rendering).

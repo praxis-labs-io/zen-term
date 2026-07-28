@@ -10,7 +10,7 @@ import XCTest
 ///
 /// `NSApp.currentEvent` is nil in a test, so the Return handler can't read live modifiers —
 /// the Shift+Enter (replace) path is driven through the `activate(index:modifiers:)` seam directly.
-final class PaletteInteractionTests: XCTestCase {
+final class PaletteInteractionTests: WindowTestCase {
     /// Retained so a mounted overlay's window outlives the mount call (Esc is dispatched through it).
     private var window: NSWindow?
 

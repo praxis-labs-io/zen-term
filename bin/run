@@ -4,6 +4,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Keep Spotlight out of the build tree; see the same line in bin/check for why.
+mkdir -p .build 2>/dev/null && touch .build/.metadata_never_index 2>/dev/null || true
+
 # The GhosttyKit binaryTarget is linked unconditionally and its runtime resources are
 # a declared SwiftPM resource, so both must exist to build either backend. They're
 # gitignored — bin/build-ghosttykit produces both in one run.

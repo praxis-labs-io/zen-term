@@ -8,7 +8,7 @@ import XCTest
 /// calls `reapplyTheme()`, and asserts a real color-bearing property actually changed — not
 /// just that the method exists. Per the house rule "GUI controls need interaction tests," the
 /// controls are mounted in a real (borderless) `NSWindow` rather than tested state-only.
-final class ReapplyThemeTests: XCTestCase {
+final class ReapplyThemeTests: WindowTestCase {
     private var originalTheme: AppTheme!
     private var tempRoots: [URL] = []
     /// The float below reads `GeneralConfig.current` at construction to pick which arrangement

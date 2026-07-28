@@ -56,6 +56,11 @@ final class SurfaceTeardownLeakTests: XCTestCase {
         let window = NSWindow(
             contentRect: NSRect(x: 100, y: 100, width: 800, height: 600),
             styleMask: [.titled], backing: .buffered, defer: false)
+        // Callers `close()` rather than order out: an ordered-out window keeps its window-server
+        // surface for the rest of the run, and this suite's own flakiness is load-sensitive
+        // (ZEN-302, ZEN-312). `isReleasedWhenClosed` defaults to true for a window built in code,
+        // so clear it or closing frees one the caller still holds.
+        window.isReleasedWhenClosed = false
         window.orderFront(nil)
         return window
     }
@@ -83,7 +88,7 @@ final class SurfaceTeardownLeakTests: XCTestCase {
         line: UInt = #line
     ) {
         let window = makeWindow()
-        defer { window.orderOut(nil) }
+        defer { window.close() }
 
         let surface = startSurface(script: script, in: window)
         XCTAssertNotNil(surface.surfacePtr, "surface failed to start", file: file, line: line)
@@ -112,7 +117,7 @@ final class SurfaceTeardownLeakTests: XCTestCase {
         try skipOnCI()
         _ = NSApplication.shared
         let window = makeWindow()
-        defer { window.orderOut(nil) }
+        defer { window.close() }
 
         let first = startSurface(script: "/bin/sleep 945 & /bin/sleep 999", in: window)
         let second = startSurface(script: "/bin/sleep 946 & /bin/sleep 999", in: window)
@@ -175,7 +180,7 @@ final class SurfaceTeardownLeakTests: XCTestCase {
         try skipOnCI()
         _ = NSApplication.shared
         let window = makeWindow()
-        defer { window.orderOut(nil) }
+        defer { window.close() }
 
         // Started back to back with no turn of the run loop between them, the way
         // `PaneCanvasController.reconcileAndRender` starts a workspace's panes.

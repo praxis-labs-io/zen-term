@@ -9,7 +9,7 @@ import XCTest
 /// notice actually reaches the screen, per the house rule that a control tested only through its
 /// view-model can ship dead. A silent no-op here would leave the whole feature invisible.
 @MainActor
-final class WindowControllerToastSeamTests: XCTestCase {
+final class WindowControllerToastSeamTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var controller: WindowController?
 

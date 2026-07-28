@@ -6,7 +6,7 @@ import XCTest
 /// Interaction tests for the workspace add / edit form's ZEN-112 additions — edit-mode prefill and
 /// the Delete button — driven through the real controls in a window. A state-only test would pass
 /// while the control was dead, the failure mode the project's interaction-test rule guards against.
-final class AddWorkspaceOverlayTests: XCTestCase {
+final class AddWorkspaceOverlayTests: WindowTestCase {
     private final class Sink {
         var submitted: [Workspace] = []
         var cancelled = 0

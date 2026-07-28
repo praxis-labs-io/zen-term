@@ -8,7 +8,7 @@ import XCTest
 /// flag: whether the inset ring paints at all, and whether the elevation shadow stays outside the
 /// card. Everything else about the float — where it sits, how the shadow reads, the ring's shade
 /// beside a pane — is a look and belongs in the handover runbook.
-final class SurfaceFloatOverlayTests: XCTestCase {
+final class SurfaceFloatOverlayTests: WindowTestCase {
     /// `SurfaceFloatOverlay` reads `GeneralConfig.current` to decide which arrangement paints the
     /// card, so every test here would otherwise build against the developer's own
     /// `~/.config/zen-term`. Saved and restored rather than reset, so a sibling suite's pin

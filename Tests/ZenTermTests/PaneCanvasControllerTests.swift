@@ -8,7 +8,7 @@ import XCTest
 /// ZEN-54: the canvas reuses each leaf's `PanelHostView` across restructures instead of
 /// rebuilding the pane chrome on every reconcile. Window-mounted per the house rule, so the
 /// assertions run against the real built view tree.
-final class PaneCanvasControllerTests: XCTestCase {
+final class PaneCanvasControllerTests: WindowTestCase {
     private var window: NSWindow!
     private var controller: PaneCanvasController!
 

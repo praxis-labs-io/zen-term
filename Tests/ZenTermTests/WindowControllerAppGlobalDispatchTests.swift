@@ -10,7 +10,7 @@ import XCTest
 /// silent no-op — which is exactly how "Reload Config" from the palette shipped doing nothing
 /// (ZEN-20). This pins the forwarding so it can't regress to a bare `break` again.
 @MainActor
-final class WindowControllerAppGlobalDispatchTests: XCTestCase {
+final class WindowControllerAppGlobalDispatchTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var controller: WindowController?
 

@@ -8,7 +8,7 @@ import XCTest
 /// inserted into a window (AppKit re-realizes backing layers and syncs `NSView.shadow`,
 /// nil, over it) — which is exactly how every overlay presents its card. These mount into
 /// a live, displayed window and assert the shadow actually survives insertion.
-final class FloatShadowTests: XCTestCase {
+final class FloatShadowTests: WindowTestCase {
     private var window: NSWindow!
     /// `SurfaceFloatOverlay` reads `GeneralConfig.current` at construction to pick which
     /// arrangement paints its card (ZEN-287), so without this the float below is built against the

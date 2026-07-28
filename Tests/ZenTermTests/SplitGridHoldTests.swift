@@ -15,7 +15,7 @@ import XCTest
 /// say why. Exactly the silently-dead class, and not something a runbook check would catch, since
 /// it needs a rebuild to land inside a 0.28s window.
 @MainActor
-final class SplitGridHoldTests: XCTestCase {
+final class SplitGridHoldTests: WindowTestCase {
     /// Build a laid-out one-split container in a real window, so `animateSplitIn`'s geometry guards
     /// (non-nil children, extent > 1) are actually satisfied rather than silently skipped.
     private func makeSplit() -> (window: NSWindow, container: SplitContainerView) {

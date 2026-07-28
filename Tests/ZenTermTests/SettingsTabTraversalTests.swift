@@ -10,7 +10,7 @@ import XCTest
 /// These drive a real `NSEvent` at a mounted stop and assert `window.firstResponder` moved. No
 /// existing test did that — they unit-test the decoder or set the first responder directly, which
 /// is exactly how a stop with no `.tab` case at all passed as "wired".
-final class SettingsTabTraversalTests: XCTestCase {
+final class SettingsTabTraversalTests: WindowTestCase {
     private var tempRoot: URL!
     private var window: NSWindow?
     /// The mounted section, retained the way the Settings card retains it: the Workspaces section

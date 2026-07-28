@@ -7,7 +7,7 @@ import XCTest
 /// here goes `keyDown` → `DiffTableView` → `DiffPaneTable` → the pasteboard, never by calling the yank
 /// or the cursor move directly. A state-only version of these would stay green with the whole key
 /// route unwired, which is exactly how a dead control has shipped here before.
-final class DiffSelectionInteractionTests: XCTestCase {
+final class DiffSelectionInteractionTests: WindowTestCase {
     private var window: NSWindow?
     private var originalConfig: GeneralConfig!
     /// A private board, so running the suite never clobbers the developer's clipboard.

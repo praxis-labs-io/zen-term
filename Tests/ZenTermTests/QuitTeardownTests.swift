@@ -6,7 +6,7 @@ import XCTest
 
 /// Quitting must terminate every surface. `windowWillClose` does not fire on app termination,
 /// so the window's teardown has to be driven explicitly or every shell is orphaned (ZEN-269).
-final class QuitTeardownTests: XCTestCase {
+final class QuitTeardownTests: WindowTestCase {
     private var spawned: [RecordingSurface] = []
     private var controller: WindowController?
 
