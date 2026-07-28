@@ -17,7 +17,7 @@ program last reported, and it takes
 
 **`setFontSize` is separate from `applyAppearance` on purpose.** Appearance travels
 as a whole theme through the app-global config, which on a file-configured backend
-costs a synchronous write/read/parse per distinct value — fine for a theme swap,
+costs a synchronous write/read/parse per distinct value: fine for a theme swap,
 not for a size the user is holding a key to change (ZEN-224). It takes an absolute
 size, never a delta, so the chrome stays the single owner of the number: a stepping
 API would leave the running size inside each surface where the chrome can't read it
@@ -585,8 +585,8 @@ picker, ⌘, settings, ⌘⌥R reload, ⌘= and ⌘+ and ⌘- font size, ⌘0 re
 **No tool float is built in**; a float's chord comes from its own `key:` field.
 
 **Increase ships two chords, and the second is load-bearing.** ⌘+ on a US layout is
-physically ⌘⇧=, which `Chord` folds onto `=` because Shift is set — a different
-dictionary key from bare ⌘=. Bind only ⌘= and the keypress most people make falls
+physically ⌘⇧=, which `Chord` folds onto `=` because Shift is set, making it a
+different dictionary key from bare ⌘=. Bind only ⌘= and the keypress most people make falls
 through to libghostty, which still has it bound per surface, reproducing ZEN-224
 for the common case. It is the one action with two defaults; `assemble` drops all of
 an action's defaults on a rebind, and `Chord.displayed` sorts by config token, so a
@@ -666,11 +666,11 @@ it is reached.
 
 Two rules keep it honest, and both were silent failures without them:
 
-- **The re-seed runs in `AppConfig.reload()`, before the broadcast** — not in an
+- **The re-seed runs in `AppConfig.reload()`, before the broadcast**, not in an
   observer. `.configDidChange` observers run in registration order, so a window that
   re-applied first would push the pre-reload size. It re-seeds only when `font-size`
   itself moved (`reseedIfBaseChanged` compares the base value), because
-  `ConfigChange.theme` subsumes every color and the font family too — gating on the
+  `ConfigChange.theme` subsumes every color and the font family too, so gating on the
   change set would throw a stepped size away whenever the user recolored the theme.
 - **New surfaces are seeded, not just live ones.** `ShellLaunch` and
   `ToolFloatController` carry `SessionFontSize.points` in the spawn config, so a pane

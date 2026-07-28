@@ -172,9 +172,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         switch chord {
-        case .increaseFontSize: applyFontSize { SessionFontSize.step(by: 1) }
-        case .decreaseFontSize: applyFontSize { SessionFontSize.step(by: -1) }
-        case .resetFontSize: applyFontSize { SessionFontSize.reset() }
+        case .increaseFontSize, .decreaseFontSize, .resetFontSize:
+            // Same hand-rolled modal gate ⌘N uses, and for the same reason: these are intercepted
+            // here, ahead of `handle(_:)`, so the gate cascade that would otherwise swallow them
+            // while Settings, the palette or a confirm is up never runs. A palette *pick* still
+            // works — `runCommand` closes the modal before it dispatches.
+            if let key = keyController(), key.isModalOverlayOpen || key.isConfirmOpen { return }
+            switch chord {
+            case .increaseFontSize: applyFontSize { SessionFontSize.step(by: 1) }
+            case .decreaseFontSize: applyFontSize { SessionFontSize.step(by: -1) }
+            default: applyFontSize { SessionFontSize.reset() }
+            }
         default: keyController()?.handle(chord)
         }
     }
