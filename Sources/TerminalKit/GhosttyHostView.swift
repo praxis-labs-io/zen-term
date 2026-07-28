@@ -239,6 +239,10 @@ final class GhosttyHostView: NSView {
 
     override func resignFirstResponder() -> Bool {
         let ok = super.resignFirstResponder()
+        // libghostty releases both sides of every held modifier when a surface loses focus
+        // (`Surface.zig`, `focusCallback`), so the presses this surface reported are already
+        // retired. Holding on to them would suppress the next real press as a duplicate.
+        reportedModifiers = 0
         owner?.focusDidChange(false)
         return ok
     }
@@ -339,27 +343,61 @@ final class GhosttyHostView: NSView {
     /// only other consumer of `flagsChanged` in ZenTerm is the Settings keybind recorder, and
     /// that reads events from a local monitor, which runs ahead of the responder chain.
     override func flagsChanged(with event: NSEvent) {
-        // Mid-composition a modifier belongs to the input method, not the terminal.
-        guard !hasMarkedText(), let action = Self.modifierAction(for: event) else { return }
+        guard let action = modifierActionToForward(for: event) else { return }
         _ = keyAction(action, event: event)
     }
 
-    /// The modifier each `flagsChanged` keyCode moves, paired with the device-specific flag for
-    /// the *side* it sits on. Caps lock is unsided and has no device flag.
-    private static let modifierKeyCodes: [UInt16: (named: UInt32, side: UInt?)] = [
-        0x39: (GHOSTTY_MODS_CAPS.rawValue, nil),
-        0x38: (GHOSTTY_MODS_SHIFT.rawValue, UInt(NX_DEVICELSHIFTKEYMASK)),
-        0x3C: (GHOSTTY_MODS_SHIFT.rawValue, UInt(NX_DEVICERSHIFTKEYMASK)),
-        0x3B: (GHOSTTY_MODS_CTRL.rawValue, UInt(NX_DEVICELCTLKEYMASK)),
-        0x3E: (GHOSTTY_MODS_CTRL.rawValue, UInt(NX_DEVICERCTLKEYMASK)),
-        0x3A: (GHOSTTY_MODS_ALT.rawValue, UInt(NX_DEVICELALTKEYMASK)),
-        0x3D: (GHOSTTY_MODS_ALT.rawValue, UInt(NX_DEVICERALTKEYMASK)),
-        0x37: (GHOSTTY_MODS_SUPER.rawValue, UInt(NX_DEVICELCMDKEYMASK)),
-        0x36: (GHOSTTY_MODS_SUPER.rawValue, UInt(NX_DEVICERCMDKEYMASK)),
+    /// What to forward to libghostty for a `flagsChanged`, or nil to send nothing. Updates the
+    /// record of what this surface has said is down, so every release can be matched to the press
+    /// that earned it.
+    ///
+    /// Three ordinary paths emit an unpaired event without that pairing, and all three land on a
+    /// program under the kitty keyboard protocol as a key event it cannot reconcile:
+    ///
+    /// * **A preedit** swallows the press but not the release that follows it, once the
+    ///   composition has ended. This is the failure `keyUp` guards against for the soft-newline
+    ///   chord, in the same shape.
+    /// * **A ⌘ chord that moves pane focus** lands the press on one surface and the release on
+    ///   another: `KeyInterceptor` consumes the chord's `keyDown` at its event monitor, but
+    ///   `flagsChanged` passes straight through to whichever surface is first responder at the
+    ///   time, and by the release that is the pane the chord moved to.
+    /// * **Caps lock** sets its flag on the key going down *and* on it coming back up, so the
+    ///   naive path reports two presses and no release for as long as the lock is engaged.
+    ///
+    /// A release is forwarded even mid-composition, because libghostty is holding that press and
+    /// suppressing it would strand the modifier down.
+    func modifierActionToForward(for event: NSEvent) -> ghostty_input_action_e? {
+        guard let transition = Self.modifierTransition(for: event) else { return nil }
+        if transition.action == GHOSTTY_ACTION_PRESS {
+            guard !hasMarkedText(), reportedModifiers & transition.mod == 0 else { return nil }
+            reportedModifiers |= transition.mod
+        } else {
+            guard reportedModifiers & transition.mod != 0 else { return nil }
+            reportedModifiers &= ~transition.mod
+        }
+        return transition.action
+    }
+
+    /// The modifiers this surface has told libghostty are down. See `modifierActionToForward`.
+    private var reportedModifiers: UInt32 = 0
+
+    /// The modifier each `flagsChanged` keyCode moves: the ghostty bit it sets, the device flag
+    /// for the side it sits on, and the flag for the opposite side. Caps lock is unsided and has
+    /// neither.
+    private static let modifierKeyCodes: [UInt16: (named: UInt32, side: UInt?, otherSide: UInt?)] = [
+        0x39: (GHOSTTY_MODS_CAPS.rawValue, nil, nil),
+        0x38: (GHOSTTY_MODS_SHIFT.rawValue, UInt(NX_DEVICELSHIFTKEYMASK), UInt(NX_DEVICERSHIFTKEYMASK)),
+        0x3C: (GHOSTTY_MODS_SHIFT.rawValue, UInt(NX_DEVICERSHIFTKEYMASK), UInt(NX_DEVICELSHIFTKEYMASK)),
+        0x3B: (GHOSTTY_MODS_CTRL.rawValue, UInt(NX_DEVICELCTLKEYMASK), UInt(NX_DEVICERCTLKEYMASK)),
+        0x3E: (GHOSTTY_MODS_CTRL.rawValue, UInt(NX_DEVICERCTLKEYMASK), UInt(NX_DEVICELCTLKEYMASK)),
+        0x3A: (GHOSTTY_MODS_ALT.rawValue, UInt(NX_DEVICELALTKEYMASK), UInt(NX_DEVICERALTKEYMASK)),
+        0x3D: (GHOSTTY_MODS_ALT.rawValue, UInt(NX_DEVICERALTKEYMASK), UInt(NX_DEVICELALTKEYMASK)),
+        0x37: (GHOSTTY_MODS_SUPER.rawValue, UInt(NX_DEVICELCMDKEYMASK), UInt(NX_DEVICERCMDKEYMASK)),
+        0x36: (GHOSTTY_MODS_SUPER.rawValue, UInt(NX_DEVICERCMDKEYMASK), UInt(NX_DEVICELCMDKEYMASK)),
     ]
 
-    /// Whether a `flagsChanged` event is a modifier going down or coming up, or nil when its
-    /// keyCode is not a modifier at all (the globe key, which AppKit also reports here).
+    /// Which modifier a `flagsChanged` moved and in which direction, or nil when its keyCode is
+    /// not a modifier at all (the globe key, which AppKit also reports here).
     ///
     /// The whole difficulty is that AppKit reports the *resulting* modifier state, not which
     /// direction the key moved. With both shifts held, releasing one still leaves `.shift` set,
@@ -368,15 +406,25 @@ final class GhosttyHostView: NSView {
     ///
     /// Ghostty's own app checks only the right-hand device flags and treats every left-modifier
     /// keyCode as a press whenever the named flag is set, so releasing left-shift while right is
-    /// held reports a press there. macOS carries a flag for both sides, so this checks whichever
-    /// side the keyCode names and stays symmetric.
-    static func modifierAction(for event: NSEvent) -> ghostty_input_action_e? {
+    /// held reports a press there. macOS carries a flag for both sides, so this consults the side
+    /// the keyCode names and stays symmetric. What it keeps from Ghostty is the fallback: an
+    /// event carrying the named flag but *no* device flag at all still reads as a press, because
+    /// the named flag is then the only evidence there is. Synthesized input (`CGEvent` from
+    /// automation or accessibility tooling) arrives that way, and reading it as a release would
+    /// tell the terminal a held modifier had come up.
+    static func modifierTransition(for event: NSEvent) -> (action: ghostty_input_action_e, mod: UInt32)? {
         guard let modifier = modifierKeyCodes[event.keyCode] else { return nil }
         // The named flag is clear, so that modifier is fully up whichever side was let go.
-        guard event.ghosttyMods.rawValue & modifier.named != 0 else { return GHOSTTY_ACTION_RELEASE }
-        // Held, and unsided (caps lock): nothing further to tell apart.
-        guard let side = modifier.side else { return GHOSTTY_ACTION_PRESS }
-        return event.modifierFlags.rawValue & side != 0 ? GHOSTTY_ACTION_PRESS : GHOSTTY_ACTION_RELEASE
+        guard event.ghosttyMods.rawValue & modifier.named != 0 else {
+            return (GHOSTTY_ACTION_RELEASE, modifier.named)
+        }
+        let raw = event.modifierFlags.rawValue
+        if let side = modifier.side, raw & side != 0 { return (GHOSTTY_ACTION_PRESS, modifier.named) }
+        // This side is up, and the other one is what is still holding the named flag set.
+        if let other = modifier.otherSide, raw & other != 0 {
+            return (GHOSTTY_ACTION_RELEASE, modifier.named)
+        }
+        return (GHOSTTY_ACTION_PRESS, modifier.named)
     }
 
     /// Encode one key event to libghostty. `translationEvent` carries the mod-translated
@@ -430,6 +478,9 @@ final class GhosttyHostView: NSView {
     // they were pressed (ZEN-308). Middle-click paste is deliberately not wired: libghostty is
     // told `supports_selection_clipboard` is false on macOS, which is correct for the platform.
     override func otherMouseDown(with event: NSEvent) {
+        // Focus the pane, the same as a left click: the button is reported to whichever pane was
+        // hit, so without this the click lands in one pane and the next keystroke in another.
+        owner?.reportFocusWanted()
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(
             surfacePtr, GHOSTTY_MOUSE_PRESS, Self.mouseButton(for: event.buttonNumber), event.ghosttyMods)
@@ -578,11 +629,26 @@ extension NSEvent {
         if flags.contains(.option) { mods |= GHOSTTY_MODS_ALT.rawValue }
         if flags.contains(.command) { mods |= GHOSTTY_MODS_SUPER.rawValue }
         if flags.contains(.capsLock) { mods |= GHOSTTY_MODS_CAPS.rawValue }
-        // Which side the modifier is on, from the device-specific bits AppKit carries alongside
-        // the named flags. The kitty keyboard protocol encodes left and right as different keys,
-        // so without these every right modifier reports as its left counterpart. There is no
-        // "both sides held" encoding in the ghostty bitmask, which matches ghostty's own app —
-        // nothing downstream distinguishes that case.
+        return ghostty_input_mods_e(mods)
+    }
+
+    /// Ghostty modifier bitmask *plus which side* each modifier is on, from the device-specific
+    /// bits AppKit carries alongside the named flags.
+    ///
+    /// **Key events only.** The kitty keyboard protocol encodes left and right as different keys,
+    /// so a key event without these reports every right-hand modifier as its left-hand
+    /// counterpart. The mouse callbacks must not get them: libghostty stores its mouse mods as
+    /// `Mods.binding()`, which strips the sides, and then compares that stored value against the
+    /// raw mods handed to it (`Surface.modsChanged`). Sided bits make that comparison
+    /// permanently unequal, so while a right-hand modifier is held, every key event and every
+    /// mouse move marks the whole grid dirty and rebuilds every row.
+    ///
+    /// There is no "both sides held" encoding, which matches ghostty's own app: nothing
+    /// downstream distinguishes that case.
+    var ghosttySidedMods: ghostty_input_mods_e { Self.ghosttySidedMods(modifierFlags) }
+
+    static func ghosttySidedMods(_ flags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {
+        var mods = ghosttyMods(flags).rawValue
         let rawFlags = flags.rawValue
         if rawFlags & UInt(NX_DEVICERSHIFTKEYMASK) != 0 { mods |= GHOSTTY_MODS_SHIFT_RIGHT.rawValue }
         if rawFlags & UInt(NX_DEVICERCTLKEYMASK) != 0 { mods |= GHOSTTY_MODS_CTRL_RIGHT.rawValue }
@@ -615,7 +681,9 @@ extension NSEvent {
         key.keycode = UInt32(keyCode)
         key.text = nil
         key.composing = false
-        key.mods = ghosttyMods
+        // Sided here and nowhere else: the key encoder needs to know left from right, and the
+        // mouse path is actively harmed by it. See `ghosttySidedMods`.
+        key.mods = ghosttySidedMods
         // Heuristic that has held for years in Ghostty: control and command never
         // contribute to text translation; everything else may.
         let consumed = (translationMods ?? modifierFlags).subtracting([.control, .command])

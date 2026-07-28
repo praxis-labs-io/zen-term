@@ -81,6 +81,31 @@ final class GhosttyInputForwardingTests: XCTestCase {
         XCTAssertEqual(parent.otherMouseDraggedCount, 0, "otherMouseDragged was not overridden")
     }
 
+    /// Middle click has to focus the pane it hits, the same as a left click does. AppKit
+    /// hit-tests the button to whichever pane is under the cursor, so without this the button is
+    /// reported to one pane while the keyboard stays pointed at another, and the user's next
+    /// keystroke lands somewhere they did not click.
+    func test_middleClickFocusesThePaneItHits() throws {
+        let surface = GhosttySurface()
+        let delegate = FocusRecordingDelegate()
+        surface.delegate = delegate
+        view.owner = surface
+
+        window.sendEvent(try otherMouse(.otherMouseDown))
+
+        XCTAssertEqual(delegate.focusRequests, 1, "the pane the button landed in must take focus")
+    }
+
+    /// The sided bits have to reach the key event itself, not merely exist as a function. This is
+    /// what the kitty protocol reads to tell left from right.
+    func test_theEncodedKeyEventCarriesTheSide() throws {
+        let event = try flagsChanged(keyCode: 0x3C, named: .shift, held: [UInt(NX_DEVICERSHIFTKEYMASK)])
+        let key = event.ghosttyKeyEvent(GHOSTTY_ACTION_PRESS)
+        XCTAssertNotEqual(
+            key.mods.rawValue & GHOSTTY_MODS_SHIFT_RIGHT.rawValue, 0,
+            "a key event built from a right-shift press has to say it was the right one")
+    }
+
     // MARK: Translation — which side moved
 
     func test_pressingAModifierReportsAPress() throws {
@@ -97,7 +122,7 @@ final class GhosttyInputForwardingTests: XCTestCase {
         for item in cases {
             let event = try flagsChanged(keyCode: item.keyCode, named: item.named, held: [item.side])
             XCTAssertEqual(
-                GhosttyHostView.modifierAction(for: event), GHOSTTY_ACTION_PRESS,
+                GhosttyHostView.modifierTransition(for: event)?.action, GHOSTTY_ACTION_PRESS,
                 "\(item.name) going down is a press")
         }
     }
@@ -105,7 +130,7 @@ final class GhosttyInputForwardingTests: XCTestCase {
     func test_releasingTheLastHeldModifierReportsARelease() throws {
         // Nothing held: AppKit reports the resulting state, which is a bare flag set.
         let event = try flagsChanged(keyCode: 0x38)
-        XCTAssertEqual(GhosttyHostView.modifierAction(for: event), GHOSTTY_ACTION_RELEASE)
+        XCTAssertEqual(GhosttyHostView.modifierTransition(for: event)?.action, GHOSTTY_ACTION_RELEASE)
     }
 
     /// The case the whole side-discrimination exists for, in both directions. With both shifts
@@ -116,49 +141,129 @@ final class GhosttyInputForwardingTests: XCTestCase {
         let leftReleased = try flagsChanged(
             keyCode: 0x38, named: .shift, held: [UInt(NX_DEVICERSHIFTKEYMASK)])
         XCTAssertEqual(
-            GhosttyHostView.modifierAction(for: leftReleased), GHOSTTY_ACTION_RELEASE,
+            GhosttyHostView.modifierTransition(for: leftReleased)?.action, GHOSTTY_ACTION_RELEASE,
             "left shift came up; right is what is still holding .shift set")
 
         let rightReleased = try flagsChanged(
             keyCode: 0x3C, named: .shift, held: [UInt(NX_DEVICELSHIFTKEYMASK)])
         XCTAssertEqual(
-            GhosttyHostView.modifierAction(for: rightReleased), GHOSTTY_ACTION_RELEASE,
+            GhosttyHostView.modifierTransition(for: rightReleased)?.action, GHOSTTY_ACTION_RELEASE,
             "right shift came up; left is what is still holding .shift set")
+    }
+
+    /// An event carrying the named flag but no device flag for either side. Synthesized input
+    /// (`CGEvent` from automation or accessibility tooling) arrives this way, and reading a
+    /// side-less event as a release would tell the terminal a modifier the user is holding had
+    /// come up, so shift-selection and ctrl chords from that source would silently do nothing.
+    func test_aModifierWithNoSideInformationReadsAsAPress() throws {
+        let event = try flagsChanged(keyCode: 0x38, named: .shift)
+        XCTAssertEqual(
+            GhosttyHostView.modifierTransition(for: event)?.action, GHOSTTY_ACTION_PRESS,
+            "the named flag is the only evidence there is, and it says shift is down")
     }
 
     /// Caps lock is the one modifier macOS does not side, so it has no device flag to consult and
     /// the named flag is the whole story.
     func test_capsLockUsesTheNamedFlagAlone() throws {
         XCTAssertEqual(
-            GhosttyHostView.modifierAction(for: try flagsChanged(keyCode: 0x39, named: .capsLock)),
-            GHOSTTY_ACTION_PRESS)
+            GhosttyHostView.modifierTransition(for: try flagsChanged(keyCode: 0x39, named: .capsLock))?
+                .action, GHOSTTY_ACTION_PRESS)
         XCTAssertEqual(
-            GhosttyHostView.modifierAction(for: try flagsChanged(keyCode: 0x39)),
+            GhosttyHostView.modifierTransition(for: try flagsChanged(keyCode: 0x39))?.action,
             GHOSTTY_ACTION_RELEASE)
     }
 
     /// The globe key also arrives as `flagsChanged`, and libghostty has no modifier for it.
     func test_aNonModifierKeyCodeIsNotAModifierTransition() throws {
-        XCTAssertNil(GhosttyHostView.modifierAction(for: try flagsChanged(keyCode: 0x3F)))
+        XCTAssertNil(GhosttyHostView.modifierTransition(for: try flagsChanged(keyCode: 0x3F)))
+    }
+
+    // MARK: Pairing a release to the press that earned it
+
+    /// A release for a modifier this surface never pressed must not be forwarded. Two ordinary
+    /// paths produce one: a ⌘ chord that moves pane focus lands the press on the old pane and the
+    /// release on the new one, and a preedit swallows a press but not the release after it.
+    func test_aReleaseWithNoMatchingPressIsNotForwarded() throws {
+        let release = try flagsChanged(keyCode: 0x38, held: [])
+        XCTAssertNil(
+            view.modifierActionToForward(for: release),
+            "nothing pressed shift on this surface, so libghostty must not be told it came up")
+
+        // And the surface is not left in a state that swallows the next real press.
+        let press = try flagsChanged(keyCode: 0x38, named: .shift, held: [UInt(NX_DEVICELSHIFTKEYMASK)])
+        XCTAssertEqual(view.modifierActionToForward(for: press), GHOSTTY_ACTION_PRESS)
+        XCTAssertEqual(view.modifierActionToForward(for: release), GHOSTTY_ACTION_RELEASE)
+    }
+
+    /// Caps lock sets its flag on the key going down and again on it coming back up. Forwarding
+    /// both leaves a TUI holding caps for as long as the lock is engaged.
+    func test_aSecondPressForAModifierAlreadyDownIsNotForwarded() throws {
+        let down = try flagsChanged(keyCode: 0x39, named: .capsLock)
+        XCTAssertEqual(view.modifierActionToForward(for: down), GHOSTTY_ACTION_PRESS)
+        XCTAssertNil(view.modifierActionToForward(for: down), "the key coming back up is not a second press")
+
+        let up = try flagsChanged(keyCode: 0x39)
+        XCTAssertEqual(view.modifierActionToForward(for: up), GHOSTTY_ACTION_RELEASE)
+        XCTAssertNil(view.modifierActionToForward(for: up), "and that release does not repeat either")
+    }
+
+    /// A preedit swallows the press, so the release that follows must be swallowed too. The
+    /// release is only unpaired *because* the press was suppressed.
+    func test_aModifierPressedDuringACompositionIsNeverReleased() throws {
+        view.markedText.mutableString.setString("か")
+
+        let press = try flagsChanged(keyCode: 0x38, named: .shift, held: [UInt(NX_DEVICELSHIFTKEYMASK)])
+        XCTAssertNil(view.modifierActionToForward(for: press), "a modifier mid-preedit is the IME's")
+
+        view.markedText.mutableString.setString("")
+        let release = try flagsChanged(keyCode: 0x38)
+        XCTAssertNil(
+            view.modifierActionToForward(for: release),
+            "libghostty was never told shift went down, so it must not be told it came up")
+    }
+
+    /// The other half: a modifier pressed *before* a composition starts is genuinely held by
+    /// libghostty, so its release has to be forwarded even though a preedit is live. Suppressing
+    /// it would strand the modifier down.
+    func test_aModifierHeldIntoACompositionIsStillReleased() throws {
+        let press = try flagsChanged(keyCode: 0x38, named: .shift, held: [UInt(NX_DEVICELSHIFTKEYMASK)])
+        XCTAssertEqual(view.modifierActionToForward(for: press), GHOSTTY_ACTION_PRESS)
+
+        view.markedText.mutableString.setString("か")
+        let release = try flagsChanged(keyCode: 0x38)
+        XCTAssertEqual(
+            view.modifierActionToForward(for: release), GHOSTTY_ACTION_RELEASE,
+            "libghostty is holding that press; the composition does not retire it")
     }
 
     // MARK: Translation — sided modifier bits
 
-    /// `ghosttyMods` has to carry the side too, not just the named modifier: the kitty protocol
-    /// encodes left and right as different keys, so without the sided bit every right-hand
-    /// modifier arrives at the program as its left-hand counterpart.
-    func test_ghosttyModsCarriesTheSideOfTheModifier() {
-        let right = NSEvent.ghosttyMods(
-            NSEvent.ModifierFlags(rawValue: NSEvent.ModifierFlags.shift.rawValue | UInt(NX_DEVICERSHIFTKEYMASK)))
+    /// The key event has to carry the side: the kitty protocol encodes left and right as
+    /// different keys, so without the sided bit every right-hand modifier arrives at the program
+    /// as its left-hand counterpart.
+    func test_sidedModsCarryTheSideOfTheModifier() {
+        let right = NSEvent.ghosttySidedMods(sided(.shift, UInt(NX_DEVICERSHIFTKEYMASK)))
         XCTAssertNotEqual(right.rawValue & GHOSTTY_MODS_SHIFT.rawValue, 0, "shift is held")
         XCTAssertNotEqual(right.rawValue & GHOSTTY_MODS_SHIFT_RIGHT.rawValue, 0, "and it is the right one")
 
-        let left = NSEvent.ghosttyMods(
-            NSEvent.ModifierFlags(rawValue: NSEvent.ModifierFlags.shift.rawValue | UInt(NX_DEVICELSHIFTKEYMASK)))
+        let left = NSEvent.ghosttySidedMods(sided(.shift, UInt(NX_DEVICELSHIFTKEYMASK)))
         XCTAssertNotEqual(left.rawValue & GHOSTTY_MODS_SHIFT.rawValue, 0, "shift is held")
         XCTAssertEqual(
             left.rawValue & GHOSTTY_MODS_SHIFT_RIGHT.rawValue, 0,
             "the left shift must not set the right-hand bit")
+    }
+
+    /// And the plain mods must NOT carry it. libghostty stores its mouse mods as `Mods.binding()`,
+    /// which strips the sides, then compares that stored value against whatever it is handed
+    /// (`Surface.modsChanged`). A sided value can never equal a stripped one, so the guard never
+    /// holds and every key event and mouse move while a right-hand modifier is down marks the
+    /// whole grid dirty and rebuilds every row.
+    func test_plainModsDoNotCarryTheSide_soLibghosttysMouseGuardStillHolds() {
+        let mods = NSEvent.ghosttyMods(sided(.shift, UInt(NX_DEVICERSHIFTKEYMASK)))
+        XCTAssertNotEqual(mods.rawValue & GHOSTTY_MODS_SHIFT.rawValue, 0, "shift is still reported")
+        XCTAssertEqual(
+            mods.rawValue & GHOSTTY_MODS_SHIFT_RIGHT.rawValue, 0,
+            "the mouse path must see no sided bits")
     }
 
     // MARK: Translation — mouse buttons
@@ -166,6 +271,12 @@ final class GhosttyInputForwardingTests: XCTestCase {
     /// AppKit numbers buttons in hardware order and libghostty names them by the X11 numbering a
     /// terminal reports. The two agree up to the middle button and then diverge, which is the
     /// only reason this mapping is a table rather than an offset.
+    ///
+    /// This table restates the switch it tests, so read the *oracle* as ghostty's
+    /// `Input.MouseButton(fromNSEventButtonNumber:)`
+    /// (`macos/Sources/Ghostty/Ghostty.Input.swift`, the `init(fromNSEventButtonNumber:)` case
+    /// list), not this file. A pair transcribed wrong in both places would agree with itself and
+    /// stay green; re-derive against that source rather than against the switch next door.
     func test_appKitButtonNumbersMapToTheButtonsATerminalReports() {
         let expected: [Int: ghostty_input_mouse_button_e] = [
             0: GHOSTTY_MOUSE_LEFT,
@@ -193,6 +304,12 @@ final class GhosttyInputForwardingTests: XCTestCase {
     }
 
     // MARK: Events
+
+    /// A named modifier plus the device flag for the side it sits on, the pair AppKit puts on a
+    /// real event.
+    private func sided(_ named: NSEvent.ModifierFlags, _ side: UInt) -> NSEvent.ModifierFlags {
+        NSEvent.ModifierFlags(rawValue: named.rawValue | side)
+    }
 
     /// A `flagsChanged` shaped the way AppKit actually delivers one: the modifier state that
     /// *results* from the key moving, carrying both the named flag and the device flag for
@@ -225,6 +342,13 @@ final class GhosttyInputForwardingTests: XCTestCase {
 /// Records what its subview declined to handle. `NSResponder`'s default `flagsChanged` and
 /// `otherMouse*` implementations pass the event to `nextResponder`, so a count above zero here
 /// means `GhosttyHostView` has no override for that event — which is the ZEN-308 bug exactly.
+/// Counts focus requests reaching the seam. Every other delegate method has a default
+/// implementation, so this only has to state the one it cares about.
+private final class FocusRecordingDelegate: TerminalSurfaceDelegate {
+    var focusRequests = 0
+    func surfaceWantsFocus(_ s: TerminalSurface) { focusRequests += 1 }
+}
+
 private final class RecordingResponderView: NSView {
     var flagsChangedCount = 0
     var otherMouseDownCount = 0
