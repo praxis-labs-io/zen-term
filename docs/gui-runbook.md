@@ -1,8 +1,18 @@
 # Handing over a GUI runbook
 
-zen-term is a GUI app whose features are keyboard-triggered. The tool shell has no
-TCC permissions, so it cannot screenshot the app or send it keystrokes. Anything
-that has to be *looked at* gets handed to Drew as a checklist.
+zen-term is a GUI app whose features are keyboard-triggered. Anything that has to
+be *looked at* gets handed to Drew as a checklist.
+
+Some of it no longer has to be. With Accessibility and Screen Recording granted, a
+`bin/run` dev build can be driven directly: launched, sent commands and chords,
+screenshotted. The `drive-dev-app` skill owns that, including the safety model,
+which is not optional (both instances present to System Events as "ZenTerm", and
+one of them usually hosts a Claude Code session).
+
+That moves the line but does not erase it. Drive what has a machine-checkable
+outcome: a process exited, a port freed, a window closed. Hand over what needs
+eyes: layout, spacing, motion, color, focus rings. A screenshot proves a thing is
+on screen, never that it looks right.
 
 This is the only standing runbook. Runbooks for individual tickets are **never
 written to disk**: they are printed in chat, as checkboxes, in the message that

@@ -1,15 +1,18 @@
 ---
 name: ship-feature
-description: Run zen-term's feature-complete process. Full local Swift check, gather /code-review (and Copilot if there's a remote) findings, triage them (fix / mitigate / ignore, no tech debt), then mark the PR ready for review. Manual invocation only, never auto-run: use it when Drew asks to ship, not because a feature looks finished.
+description: Run zen-term's feature-complete process. Full local Swift check, doc accuracy pass, draft PR, gather Copilot + /code-review findings, triage them (fix / mitigate / ignore, no tech debt), apply, push again, then mark the PR ready for review. Manual invocation only, never auto-run: use it when Drew asks to ship, not because a feature looks finished.
 ---
 
 # Ship Feature (zen-term)
 
 Swift/SwiftPM adaptation of the feature-complete process. Solo, terminal-native
-tool, so the GitHub PR / Copilot steps are **conditional on a remote existing**.
-Until zen-term has a remote, this runs as: local check → local review → triage →
-move the Linear ticket. The discipline (no tech debt, everything triaged) is the
-same regardless of remote.
+tool, so verification leans on a GUI someone has to look at — step 1 and the
+step 9 handover runbook carry that weight, and no green CI substitutes for
+either.
+
+zen-term ran without a remote for part of its life; it has one now
+(`zen-term/zen-term`), so the PR path is unconditional. That history is also why
+the PR path is the one exercised least and trusted most — see step 8.
 
 ## 1. Full local check
 
@@ -34,20 +37,16 @@ edited here and any cross-repo work gets flagged rather than silently dropped.
 Do this **before** opening the PR so the doc edits land in the diff `/code-review`
 and Copilot see. Fold any downstream flags into your close-out summary.
 
-## 3. Determine remote state
+## 3. Push the branch and open the PR as a draft
 
-- `git remote -v`. If there is **no remote**, this is a local-only ship: skip
-  this step's PR actions and step 4 entirely, keep the branch committed, and go
-  to step 5, running `/code-review` locally. Step 8 is skipped too — there is
-  nothing to push or mark ready. Note in your summary that PR flow activates
-  once a remote exists.
-- If there **is** a remote, push the branch and open the PR **as a draft**, with
-  the Linear issue id in the title/body. Use Linear's generated branch name.
+Push the branch, then open the PR **as a draft** — review happens before a full
+CI run is spent. Put the Linear issue id in the title and body so Linear
+auto-links it, and use Linear's generated branch name rather than inventing one.
 
-## 4. Request a Copilot review (remote only)
+## 4. Request a Copilot review
 
-If a draft PR was opened, request a Copilot review. It runs async, so continue and
-re-check later.
+Request a Copilot review on the draft PR. It runs async, so continue and re-check
+later.
 
 **`gh pr edit --add-reviewer` cannot do this.** It lowercases the login and fails
 with "Could not resolve user with login 'copilot'", and
@@ -72,10 +71,25 @@ every edit of the comment that carries it. Read its findings from the review
 comments and write your triage as ordinary prose that does not address it. This
 holds for every comment on the PR, the description included.
 
-## 5. Run /code-review
+## 5. Run /code-review — Drew runs this, not you
 
-Invoke `/code-review` against the working branch diff (works with or without a
-remote). Capture its findings.
+**Stop here and ask.** `/code-review` is user-triggered and billed; a session
+cannot invoke it — not via the Skill tool, not via Bash, not via a Workflow.
+Don't try, and don't treat the failure as a bug to route around.
+
+Say plainly that you're blocked on this and what to run:
+
+- `/code-review` for the working diff
+- `/code-review ultra` for a multi-agent review of the branch, or
+  `/code-review ultra <PR#>` for the draft PR opened in step 3
+
+Then **wait** for the findings before starting step 6. Don't run steps 6–9 while
+you wait — the triage in step 7 needs every source in front of it.
+
+If Drew declines or says to skip it, continue with whatever Copilot produced and
+**say so in the step 6 output** — that leaves a solo repo's review resting on one
+bot. What you must never do is run your own review pass and present it as
+`/code-review`'s findings; name which review actually produced each finding.
 
 ## 6. Gather combined findings
 
@@ -95,8 +109,6 @@ Present the triage table to the user, apply the agreed fixes, then re-run
 `swift build` + `swift test` (step 1) until green again.
 
 ## 8. Push the fixes, then mark ready — as two separate actions
-
-Remote only; a local-only ship has neither, so skip to step 9.
 
 **Push, let the push register, and only then mark the PR ready. Never chain
 them** (`git push && gh pr ready`).
@@ -118,20 +130,24 @@ fire a clean `reopened` event rather than pushing an empty commit.
 
 This one bites harder here than elsewhere: zen-term spent part of its life
 without a remote, so the PR path is the branch you exercise least and trust
-most.
+most. Read the run list; don't infer from the checks badge.
 
 ## 9. Close out
 
-- **If a PR exists:** it was marked ready in step 8. Linear moves the ticket to
-  **In Review** itself from there (auto-linked via the issue id); don't set that
-  status by hand.
-- **Linear ticket:** update its description with any scope changes. On a
-  local-only ship there's no PR to trigger the move, so set **In Review**
-  yourself: `save_issue` with `state: "In Review"` on the ZenTerm team. Address
-  the status by name, never a UUID (per CLAUDE.md) — the workspace move
-  invalidated every hardcoded id. If no ticket exists yet, note that and skip.
-- Report final state: branch, PR link (if any), build/test status, ticket status,
-  and the triage summary.
+- **Let Linear move the ticket.** Marking the PR ready in step 8 moves it to
+  **In Review** on its own (auto-linked via the issue id in the branch/PR). Don't
+  set that status by hand — a manual move is a second copy of a transition the
+  integration owns, and it drifts the moment the automation changes.
+- **Move it yourself only if the automation didn't fire.** Check first, then
+  `save_issue` with `state: "In Review"` on the ZenTerm team. Address the status
+  **by name, never a UUID** (per CLAUDE.md) — the workspace move invalidated
+  every hardcoded id. Say in your summary that you moved it by hand and why.
+- **Linear ticket:** update its description with any scope changes uncovered
+  during the build. If no ticket exists yet, note that and skip.
+- **Never merge.** Shipping ends at "ready for review"; merge only on an explicit
+  instruction to merge. Solo repo, no second approver — nothing else stops it.
+- Report final state: branch, PR link, CI status (from an actual check, not an
+  assumption), build/test status, ticket status, and the triage summary.
 - **Hand over a runbook for this PR, in the response itself.** A markdown
   checklist of what Drew should look at on screen, one per PR: the things a test
   can't judge (layout, motion, color, a new chord crossing `KeyInterceptor`) and
