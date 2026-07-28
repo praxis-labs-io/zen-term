@@ -278,10 +278,6 @@ final class PaneCanvasController: NSObject {
             onFocusRequest: { [weak self] in
                 self?.focus(id)
             })
-        // A host is normally built before its surface can have repainted anything, but it is built
-        // lazily and the surface may already be running — so take whatever background it is on now
-        // rather than assuming the theme's (ZEN-23).
-        host.backgroundOverride = surface.backgroundOverride
         hostByLeaf[id] = host
         return host
     }
@@ -551,10 +547,16 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
         onNotification?(n)
     }
-    /// A program repainted its pane's background (OSC 11) — carry it to that pane's own fill so
-    /// the padding around the terminal matches instead of ringing it in the theme color (ZEN-23).
+    /// A program repainted its pane's background (OSC 11). Carry it to that pane's own fill so the
+    /// padding around the terminal matches instead of ringing it in the theme color (ZEN-23).
     /// Scoped to the one host: the canvas, the other panes and every chrome role are untouched.
-    func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor?) {
+    ///
+    /// A pane needs no `backgroundOverride` pull to go with this. `reconcile` starts a leaf's
+    /// surface and builds its host in the same synchronous turn, and a host is dropped only when
+    /// its leaf is removed and the surface terminated with it, so no repaint can land in a window
+    /// where the host does not exist. A tool float, whose card is rebuilt on every open over a
+    /// surface that kept running, is the one place that pull is load-bearing.
+    func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {
         guard let id = leafID(of: s) else { return }
         hostByLeaf[id]?.backgroundOverride = color
     }

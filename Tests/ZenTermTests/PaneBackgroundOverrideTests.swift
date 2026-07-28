@@ -12,15 +12,29 @@ import XCTest
 ///
 /// Window-mounted per the house rule, and the assertions read the colors off the real layer and
 /// ring view (`paintedBackgroundForTesting`) rather than off the `backgroundOverride` that was set
-/// — a hook that never reached the paint has to fail.
+/// (a hook that never reached the paint has to fail).
+///
+/// `background-alpha` decides which of the two arrangements paints, so it is pinned rather than
+/// inherited: unpinned, Drew's own config (`background-alpha = 0`) runs only the ring path locally
+/// while CI runs only the clip path, and the half the change rewrote goes unexercised on both.
+/// `solid`/`translucent` run each. That unpinned shape is what ZEN-287 cost a run of intermittent
+/// failures in unrelated suites, so it is pinned here too rather than left to luck.
 final class PaneBackgroundOverrideTests: XCTestCase {
     private var window: NSWindow!
     private var controller: PaneCanvasController!
+    private var originalConfig: GeneralConfig!
+    private var originalReduceMotion: (() -> Bool)!
 
     private let osc11 = TerminalColor(red: 0x3B, green: 0x2E, blue: 0x2E)
 
     override func setUp() {
         super.setUp()
+        originalConfig = GeneralConfig.current
+        GeneralConfig.setCurrentForTesting(.builtIn)
+        // `split` branches on Reduce Motion, so pin it rather than inherit the machine's setting.
+        // Instant, so the assertions never read a frame mid-slide.
+        originalReduceMotion = Motion.isReduceMotionEnabled
+        Motion.isReduceMotionEnabled = { true }
         controller = PaneCanvasController(makeSurface: { RecordingSurface() })
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
@@ -36,13 +50,15 @@ final class PaneBackgroundOverrideTests: XCTestCase {
         controller.shutdown()
         controller = nil
         window = nil
+        Motion.isReduceMotionEnabled = originalReduceMotion
+        GeneralConfig.setCurrentForTesting(originalConfig)
         super.tearDown()
     }
 
     private func layout() { controller.canvasView.layoutSubtreeIfNeeded() }
 
     /// The host that actually contains a surface's view, found by walking the built tree rather
-    /// than by asking the controller — the same containment the user sees, so a surface routed to
+    /// than by asking the controller: the same containment the user sees, so a surface routed to
     /// the wrong host can't satisfy it.
     private func host(showing surface: TerminalSurface) -> PanelHostView? {
         controller.hostsForTesting.values.first { surface.view.isDescendant(of: $0) }
@@ -85,22 +101,44 @@ final class PaneBackgroundOverrideTests: XCTestCase {
             "a program repainted a pane it does not own")
     }
 
-    /// nil is how the backend reports OSC 111, and it has to put the pane back rather than pin it
-    /// to a color.
-    func test_nilPutsThePaneBackOnTheTheme() throws {
+    /// The other arrangement: below `background-alpha` 1 the clip stops filling and the ring paints
+    /// the padding instead, so the override has to reach a different view entirely.
+    func test_backgroundChangeReachesTheRingWhenTranslucent() throws {
+        var config = GeneralConfig.builtIn
+        config.backgroundAlpha = 0.5
+        GeneralConfig.setCurrentForTesting(config)
         let surface = try XCTUnwrap(controller.allSurfaces.first)
         let host = try XCTUnwrap(host(showing: surface))
 
         controller.surface(surface, backgroundDidChange: osc11)
-        controller.surface(surface, backgroundDidChange: nil)
 
-        assertPaints(
-            host, Theme.current.chrome.background, "the reset left the program's color painted")
+        let painted = host.paintedBackgroundForTesting
+        XCTAssertNil(painted.fill, "the clip should not fill while the background is translucent")
+        let ring = try XCTUnwrap(painted.ring.usingColorSpace(.sRGB))
+        XCTAssertEqual(ring.redComponent, osc11.nsColor.redComponent, accuracy: 0.01)
+        XCTAssertEqual(ring.greenComponent, osc11.nsColor.greenComponent, accuracy: 0.01)
+        XCTAssertEqual(ring.blueComponent, osc11.nsColor.blueComponent, accuracy: 0.01)
+        XCTAssertEqual(
+            ring.alphaComponent, 0.5, accuracy: 0.01,
+            "the ring has to blend at the same alpha the terminal does (ZEN-282)")
     }
 
-    /// A theme reload re-runs `applyBackground` on every pane. libghostty keeps an OSC-set color
-    /// through a config change, so the grid stays repainted — and the chrome has to as well, or the
-    /// reload is what reintroduces the mismatched ring.
+    /// A reset (OSC 111) reaches the chrome as an ordinary change carrying the restored color, so
+    /// the pane follows it back the same way it followed the repaint out.
+    func test_aLaterChangeReplacesTheEarlierOne() throws {
+        let surface = try XCTUnwrap(controller.allSurfaces.first)
+        let host = try XCTUnwrap(host(showing: surface))
+        let restored = Theme.current.chrome.background
+
+        controller.surface(surface, backgroundDidChange: osc11)
+        controller.surface(surface, backgroundDidChange: restored)
+
+        assertPaints(host, restored, "the second change did not replace the first")
+    }
+
+    /// A theme reload re-runs `applyBackground` on every pane. libghostty keeps the color a program
+    /// set through a config change, so the grid stays repainted, and the chrome has to as well or
+    /// the reload is what reintroduces the mismatched ring.
     func test_themeReloadDoesNotClobberTheOverride() throws {
         let surface = try XCTUnwrap(controller.allSurfaces.first)
         let host = try XCTUnwrap(host(showing: surface))
@@ -109,24 +147,5 @@ final class PaneBackgroundOverrideTests: XCTestCase {
         controller.reapplyChromeColors()
 
         assertPaints(host, osc11, "a theme reload dropped the program's background")
-    }
-
-    /// Hosts are built lazily, so a surface can already be repainted by the time the chrome makes
-    /// the view that has to match it. The pull (`TerminalSurface.backgroundOverride`) is what
-    /// covers that, and it is the only thing covering a tool float, whose card is rebuilt on every
-    /// open while its surface lives on in the background.
-    func test_aHostBuiltForAnAlreadyRepaintedSurfaceTakesItsColor() throws {
-        let surface = RecordingSurface()
-        surface.backgroundOverride = osc11
-        let fresh = PaneCanvasController(makeSurface: { surface })
-        defer { fresh.shutdown() }
-        let canvas = fresh.canvasView
-        canvas.frame = NSRect(x: 0, y: 0, width: 900, height: 600)
-        window.contentView?.addSubview(canvas)
-        fresh.start()
-        canvas.layoutSubtreeIfNeeded()
-
-        let host = try XCTUnwrap(fresh.hostsForTesting[fresh.focusedLeafID])
-        assertPaints(host, osc11, "the new host ignored the background its surface was already on")
     }
 }

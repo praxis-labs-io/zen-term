@@ -249,8 +249,9 @@ final class PanelHostView: NSView {
     /// Re-apply the live pane border / focus-halo colors after a config change, no relaunch. The
     /// glow's color is set once at init (only its opacity is toggled elsewhere), so it's reset
     /// explicitly; the border color is picked up by re-running `updateHalo()`, which reads
-    /// `idleBorder`/`accent` fresh. `applyBackground()` re-reads the live alpha as well as the
-    /// live color, and the header rebuilds its title/keybind against the theme and keymap.
+    /// `idleBorder`/`accent` fresh. `applyBackground()` re-reads the live alpha, and the live theme
+    /// color unless a program has repainted this panel's terminal (see `backgroundOverride`), and
+    /// the header rebuilds its title/keybind against the theme and keymap.
     func reapplyTheme() {
         halo.color = Theme.current.chrome.accent.nsColor
         applyBackground()
@@ -268,6 +269,10 @@ final class PanelHostView: NSView {
     /// region alone at the same alpha the terminal blends at, so the two read as one surface
     /// instead of the ring sitting a shade lighter (ZEN-282). Both values are re-read here rather
     /// than captured at init, so a Settings edit applies live.
+    ///
+    /// The color is `backgroundOverride` ahead of the theme, so once a program has repainted this
+    /// panel's terminal a theme change moves the rest of the chrome and leaves this fill matched to
+    /// the grid (ZEN-23). Everything else here still follows the theme.
     private func applyBackground() {
         let background = (backgroundOverride ?? Theme.current.chrome.background).nsColor
         let alpha = CGFloat(GeneralConfig.current.backgroundAlpha)

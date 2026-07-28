@@ -189,6 +189,11 @@ class SurfaceFloatOverlay: NSView {
     /// frost comes up underneath both, so what shows through is a blur of the panes rather than
     /// their text. Both values are re-read here rather than captured at init, so a Settings edit
     /// applies live.
+    ///
+    /// The colour is `backgroundOverride` ahead of the theme, so once a program has repainted this
+    /// card's terminal a theme change moves the rest of the chrome and leaves this fill matched to
+    /// the grid (ZEN-23). That also keeps the alpha identity above intact, since what the terminal
+    /// blends toward is the repainted colour, not the theme's.
     private func applyBackground() {
         let background = (backgroundOverride ?? Theme.current.chrome.background).nsColor
         let alpha = CGFloat(GeneralConfig.current.backgroundAlpha)
@@ -201,7 +206,8 @@ class SurfaceFloatOverlay: NSView {
 
     /// Re-apply the card's theme-dependent colors after a live theme change, and re-read
     /// `background-alpha` — so this has to be reached by a terminal-behavior change too, not only
-    /// a theme swap. The elevation shadow is theme-independent and untouched.
+    /// a theme swap. The elevation shadow is theme-independent and untouched, and so is the
+    /// interior fill while a program holds it (see `backgroundOverride`).
     func reapplyTheme() {
         CardChrome.reapplyEdge(to: card, halo: true)
         applyBackground()

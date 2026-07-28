@@ -350,11 +350,11 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         onNotification?(n, spec)
     }
 
-    /// A program repainted a float's background (OSC 11) — carry it to that card's own fill, the
+    /// A program repainted a float's background (OSC 11). Carry it to that card's own fill, the
     /// same rule a pane and a drawer follow (ZEN-23). Only the shown card can paint; a hidden
     /// persistent float has no overlay, and picks the color up from `surface.backgroundOverride`
     /// when its next card is built.
-    func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor?) {
+    func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {
         guard let active = activeFloat, s === active.surface else { return }
         active.overlay.backgroundOverride = color
     }
