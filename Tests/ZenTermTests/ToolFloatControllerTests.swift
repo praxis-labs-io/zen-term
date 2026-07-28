@@ -11,7 +11,7 @@ import XCTest
 /// test would pass while the surface was actually being killed. The window-scope claims the engine
 /// exists for — one instance across two tabs, a card that rides a tab switch — need real tabs and
 /// live in `WindowControllerToolFloatTests`.
-final class ToolFloatControllerTests: XCTestCase {
+final class ToolFloatControllerTests: WindowTestCase {
     private var windows: [NSWindow] = []
     private var floatControllers: [ToolFloatController] = []
     private var root = FileManager.default.temporaryDirectory

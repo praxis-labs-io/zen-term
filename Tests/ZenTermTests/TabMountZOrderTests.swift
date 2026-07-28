@@ -12,7 +12,7 @@ import XCTest
 /// at the very back of the container so a canvas can't cover a float card dismissing above it,
 /// which put the incoming canvas under the outgoing one too.
 @MainActor
-final class TabMountZOrderTests: XCTestCase {
+final class TabMountZOrderTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var originalReduceMotion: (() -> Bool)!
     private var controller: WindowController?

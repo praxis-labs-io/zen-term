@@ -19,7 +19,7 @@ import XCTest
 /// while CI runs only the clip path, and the half the change rewrote goes unexercised on both.
 /// `solid`/`translucent` run each. That unpinned shape is what ZEN-287 cost a run of intermittent
 /// failures in unrelated suites, so it is pinned here too rather than left to luck.
-final class PaneBackgroundOverrideTests: XCTestCase {
+final class PaneBackgroundOverrideTests: WindowTestCase {
     private var window: NSWindow!
     private var controller: PaneCanvasController!
     private var originalConfig: GeneralConfig!

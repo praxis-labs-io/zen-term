@@ -12,7 +12,7 @@ import XCTest
 ///    color, and motion stay in the runbook.
 /// 2. The bullet parser turns the appcast's markdown `<description>` into clean lines. Pure logic
 ///    that can silently rot (stop stripping the dash, leak blank lines), so it's unit-tested.
-final class UpdateCardTests: XCTestCase {
+final class UpdateCardTests: WindowTestCase {
     // MARK: - Measured: the notes column wraps at the real inner width
 
     func test_notesColumn_wrapsAtTheExposedBudgetWidth() {

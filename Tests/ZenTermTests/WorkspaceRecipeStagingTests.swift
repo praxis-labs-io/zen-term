@@ -11,7 +11,7 @@ import XCTest
 /// leaves the workspace open with no drawers at all and nothing on screen to say a step was
 /// skipped. A ⇧⏎ replace has no motion to wait for and must still apply its recipe inline.
 @MainActor
-final class WorkspaceRecipeStagingTests: XCTestCase {
+final class WorkspaceRecipeStagingTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var originalReduceMotion: (() -> Bool)!
     private var controller: WindowController?

@@ -20,7 +20,7 @@ import XCTest
 /// change kind at once, so widening the fingerprint is the way to shrink the blind spot — but it
 /// does not close it.
 @MainActor
-final class ConfigFanOutDifferentialTests: XCTestCase {
+final class ConfigFanOutDifferentialTests: WindowTestCase {
     private var originalConfig: GeneralConfig!
     private var originalTheme: AppTheme!
     private var originalOverride: (() -> TerminalSurface)?

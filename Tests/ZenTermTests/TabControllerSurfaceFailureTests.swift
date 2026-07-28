@@ -9,7 +9,7 @@ import XCTest
 /// guard for the identity-dispatch bug: the failure callback used to fire synchronously inside
 /// `start()`, before `bottomDrawerSurface` was assigned, so every identity check missed and the
 /// failure was silently dropped. Fixed by delivering the callback asynchronously.
-final class TabControllerSurfaceFailureTests: XCTestCase {
+final class TabControllerSurfaceFailureTests: WindowTestCase {
     private var window: NSWindow?
     private var controller: TabController?
 

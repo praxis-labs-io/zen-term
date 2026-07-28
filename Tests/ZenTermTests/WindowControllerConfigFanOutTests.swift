@@ -13,7 +13,7 @@ import XCTest
 /// chrome and drives the actual notification, so dropping `tabBar.reapplyTheme()` from the
 /// fan-out fails a test rather than shipping stale chrome after a theme swap.
 @MainActor
-final class WindowControllerConfigFanOutTests: XCTestCase {
+final class WindowControllerConfigFanOutTests: WindowTestCase {
     private var originalTheme: AppTheme!
     private var originalConfig: GeneralConfig!
     private var originalOverride: (() -> TerminalSurface)?

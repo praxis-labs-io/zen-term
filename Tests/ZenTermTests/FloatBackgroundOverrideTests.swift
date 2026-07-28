@@ -16,7 +16,7 @@ import XCTest
 /// `background-alpha` is pinned rather than inherited, because it decides which view paints the
 /// card's interior and an unpinned suite mounting a `SurfaceFloatOverlay` is exactly the shape
 /// that caused ZEN-287's cross-suite flakiness.
-final class FloatBackgroundOverrideTests: XCTestCase {
+final class FloatBackgroundOverrideTests: WindowTestCase {
     private var windows: [NSWindow] = []
     private var floatControllers: [ToolFloatController] = []
     private var root = FileManager.default.temporaryDirectory

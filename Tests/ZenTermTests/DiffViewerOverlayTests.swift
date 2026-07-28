@@ -6,7 +6,7 @@ import XCTest
 /// Interaction tests for the diff viewer, driven through the real outline view in a window. The git
 /// work is a fake `loader`, so no repo. State-only assertions would pass while the tree was dead, the
 /// failure mode the project's interaction-test rule guards against.
-final class DiffViewerOverlayTests: XCTestCase {
+final class DiffViewerOverlayTests: WindowTestCase {
     private var window: NSWindow?
     private var originalConfig: GeneralConfig!
 

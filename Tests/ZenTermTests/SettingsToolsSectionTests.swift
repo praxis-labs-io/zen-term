@@ -7,7 +7,7 @@ import XCTest
 /// sandboxed config, assert it renders a row per configured float, that add / edit route out
 /// through `onEditFloat`, and that remove writes the config and drops the row. The write→reload
 /// roundtrip is sandboxed via `ConfigLoader.defaultRootOverrideForTesting`.
-final class SettingsToolsSectionTests: XCTestCase {
+final class SettingsToolsSectionTests: WindowTestCase {
     /// Records the float `onEditFloat` was invoked with (`nil` = add).
     private final class EditSink {
         var calls: [ToolFloat?] = []

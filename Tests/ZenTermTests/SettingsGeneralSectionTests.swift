@@ -11,7 +11,7 @@ import XCTest
 ///
 /// The write→reload pipeline is rooted at `ConfigLoader.defaultRoot`; the test points that at a temp
 /// dir via `defaultRootOverrideForTesting` so it never touches the real config.
-final class SettingsGeneralSectionTests: XCTestCase {
+final class SettingsGeneralSectionTests: WindowTestCase {
     private var tempRoot: URL!
     /// Retained for the test's lifetime: the row's `onChange` captures the section `[weak self]`, so
     /// a deallocated section would silently no-op the write.

@@ -13,7 +13,7 @@ import XCTest
 /// active tab's `content`, so a tab switch doesn't unmount it. That second one is the whole
 /// hazard — a tab-hosted card is exactly why `closeModal()` has to run before any tab-bar op.
 @MainActor
-final class WindowControllerToolFloatTests: XCTestCase {
+final class WindowControllerToolFloatTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
     private var controller: WindowController?

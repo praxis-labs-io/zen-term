@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-final class IconPickerFieldTests: XCTestCase {
+final class IconPickerFieldTests: WindowTestCase {
     /// ZEN-268 (same class as `Dropdown`): the open grid card lives on `window.contentView`, not
     /// inside the field's own subtree, so tearing the field's host out of the window — what a
     /// tab-switch `closeModal()` does to the workspace / tool-float form hosting this field — must

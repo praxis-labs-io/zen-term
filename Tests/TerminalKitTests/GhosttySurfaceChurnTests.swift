@@ -22,7 +22,11 @@ final class GhosttySurfaceChurnTests: XCTestCase {
             contentRect: NSRect(x: 100, y: 100, width: 800, height: 600),
             styleMask: [.titled], backing: .buffered, defer: false)
         window.orderFront(nil)
-        defer { window.orderOut(nil) }
+        // Closed, not ordered out: an ordered-out window keeps its window-server surface for the
+        // rest of the run, and the suite's peak is what ZEN-312 is about. `isReleasedWhenClosed`
+        // defaults to true for a window built in code, so clear it before closing one still held.
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
 
         // Tunable for soak runs (linear footprint growth = leak; plateau = warm caches).
         let iterations =

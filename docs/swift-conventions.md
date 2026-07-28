@@ -411,6 +411,26 @@ the control through the view tree" to a runbook step. Corollary to ZEN-145 (ZEN-
 `NSOpenPanel` (inject a present-panel seam so the test asserts the wiring without a sheet). Both leak
 into the machine on every `swift test` otherwise (ZEN-235).
 
+**A window a test opens stays open for the whole run, so suites that mount views inherit
+`WindowTestCase`, not `XCTestCase`.** XCTest tears down no AppKit state between cases. Nothing closed
+its windows, so a full suite climbed monotonically to 69 live window-server surfaces, several
+Metal-backed: every test ran under more load than the one before it, which is the load `ZEN-302`'s
+flakiness is sensitive to. `WindowTestCase.tearDown` closes them (ZEN-312).
+
+Two details that decide whether the sweep works. **Close, do not order out:** a `WindowController`
+drives its teardown from `windowWillClose`, so `close()` also invalidates the title poll and shuts
+down every tab's shells, while `orderOut(_:)` leaves both running and the shells then outlive the
+process as orphans (the ZEN-269 failure mode, reproduced by the test suite itself). And
+**`isReleasedWhenClosed` defaults to true for a window built in code**, so closing one the suite
+still holds in a stored property frees it under ARC and the next access is a use-after-free: clear
+the flag before closing.
+
+Measure this with CoreGraphics, never the accessibility API. `xctest` runs `.prohibited`, so its
+windows are on screen and in Mission Control while absent from the accessibility tree: System Events
+reports `0` windows for the entire run. `CGWindowListCopyWindowInfo([.optionOnScreenOnly,
+.excludeDesktopElements], kCGNullWindowID)` ignores activation policy and sees all of them. A null
+result from System Events here is an artifact of the instrument, not evidence.
+
 **Tests must not read the real user config either.** `GeneralConfig.current` reads
 `~/.config/zen-term/config`, so a suite that doesn't pin it asserts against whatever the developer
 happens to run. Pin `GeneralConfig.setCurrentForTesting(.builtIn)` in `setUp` and restore in

@@ -11,7 +11,7 @@ import XCTest
 /// the card two separate turns of the main queue, which is the shape that needs pinning — nothing
 /// may present twice, and a load landing after the user changed their mind may not present at all.
 @MainActor
-final class RepoPickerPresentationTests: XCTestCase {
+final class RepoPickerPresentationTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
     private var controller: WindowController?

@@ -9,7 +9,7 @@ import XCTest
 /// surface. The paste shape is the load-bearing part — `TerminalSurface.paste` is bracketed, so the
 /// message has to arrive as one paste and the Return as a separate one, or a TUI reads the Return as
 /// a literal newline inside the block and the message sits there unsent.
-final class TabControllerSendTests: XCTestCase {
+final class TabControllerSendTests: WindowTestCase {
     private var window: NSWindow?
     private var controller: TabController?
     private var surfaces: [RecordingSurface] = []

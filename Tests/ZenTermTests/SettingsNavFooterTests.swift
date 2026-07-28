@@ -13,7 +13,7 @@ import XCTest
 /// The versions are named explicitly rather than read from `AppVersion.current`: under xctest the
 /// bundle reports the *test runner's* version ("16.0"), so measuring the live string here would
 /// prove nothing about what ZenTerm actually renders.
-final class SettingsNavFooterTests: XCTestCase {
+final class SettingsNavFooterTests: WindowTestCase {
     private var window: NSWindow?
 
     override func tearDown() {
