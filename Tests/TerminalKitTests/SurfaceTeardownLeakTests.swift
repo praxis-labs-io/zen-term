@@ -35,10 +35,23 @@ final class SurfaceTeardownLeakTests: XCTestCase {
             .split(separator: "\n").compactMap { pid_t($0) }
     }
 
+    /// A ceiling on a broken start, not an estimate of a healthy one (ZEN-302).
+    ///
+    /// Polling is what makes a high ceiling free: a green run returns the moment the marker
+    /// appears and never pays this, so the only cost is how long a genuinely broken start takes
+    /// to report. Sizing it to a warm machine instead bought nothing and cost the suite its
+    /// credibility. Measured first-marker waits: 0.65s idle, 2.2s with the test process throttled
+    /// to the background band, and past 3.0s for all six markers when that throttle was applied
+    /// to the whole suite — which is milder than the concurrent `swift build` that first surfaced
+    /// this. At the old 3.0s those six were the reported flake.
+    private static let markerTimeout: TimeInterval = 30
+
     /// Poll for the worker rather than pumping a fixed interval: `zsh -l -i` sources the user's
     /// rc files first, which is fast on a warm machine and can take seconds on a cold one, so a
     /// fixed wait is both a flake and a tax paid on every green run.
-    private func waitForPids(matching marker: String, timeout: TimeInterval = 3.0) -> [pid_t] {
+    private func waitForPids(
+        matching marker: String, timeout: TimeInterval = markerTimeout
+    ) -> [pid_t] {
         let deadline = Date().addingTimeInterval(timeout)
         var found = pids(matching: marker)
         while found.isEmpty, Date() < deadline {
@@ -46,6 +59,20 @@ final class SurfaceTeardownLeakTests: XCTestCase {
             found = pids(matching: marker)
         }
         return found
+    }
+
+    /// Which half of the start path failed, for a marker that never appeared. Without it a
+    /// timeout reads as "the thing under test broke" when the shell simply never got that far,
+    /// which is the misread ZEN-302 cost a session to.
+    ///
+    /// `leaderChildren` filters on `ppid == getpid()`, so it sees only shells this test process
+    /// forked. A `pgrep` for the shell's command line cannot be used here: `zsh -l -i` matches
+    /// the developer's own open terminals, so it would report a shell that started when none did.
+    private func startDiagnosis() -> String {
+        let leaders = ShellSession.leaderChildren()
+        return leaders.isEmpty
+            ? "no live shell leader under this process, so libghostty never forked one"
+            : "\(leaders.count) live shell leader(s), so a shell started but its worker did not"
     }
 
     private func survivors(of pids: [pid_t]) -> [pid_t] {
@@ -79,6 +106,10 @@ final class SurfaceTeardownLeakTests: XCTestCase {
         surface.view.removeFromSuperview()
         surface.terminate()
         let swept = expectation(description: "sweep finished")
+        // Left at 3.0s deliberately (ZEN-302). Measured against the load that broke the marker
+        // wait, this drain takes 0.25s (0.15s idle): a 12x margin, and it barely degrades because
+        // ZEN-306 made the reaper wait on a process-exit source rather than poll, so it is not
+        // competing for CPU the way the shell fork is.
         ShellSessionReaper.shared.drain(timeout: 3.0) { swept.fulfill() }
         wait(for: [swept], timeout: 5.0)
     }
@@ -93,8 +124,14 @@ final class SurfaceTeardownLeakTests: XCTestCase {
         let surface = startSurface(script: script, in: window)
         XCTAssertNotNil(surface.surfacePtr, "surface failed to start", file: file, line: line)
 
+        // Reaching here means libghostty built the surface, so this can only be the shell half:
+        // the assertion above is the one that fires when the surface itself never came up. Naming
+        // the wait keeps the two apart in the log, which is what the old timeout blurred.
         let spawned = waitForPids(matching: marker)
-        XCTAssertFalse(spawned.isEmpty, "marker \(marker) never spawned", file: file, line: line)
+        XCTAssertFalse(
+            spawned.isEmpty,
+            "marker \(marker) never spawned within \(Self.markerTimeout)s: \(startDiagnosis())",
+            file: file, line: line)
 
         teardownAndDrain(surface)
 
@@ -126,8 +163,12 @@ final class SurfaceTeardownLeakTests: XCTestCase {
 
         let firstWorker = waitForPids(matching: "^/bin/sleep 945$")
         let secondWorker = waitForPids(matching: "^/bin/sleep 946$")
-        XCTAssertFalse(firstWorker.isEmpty, "first marker never spawned")
-        XCTAssertFalse(secondWorker.isEmpty, "second marker never spawned")
+        XCTAssertFalse(
+            firstWorker.isEmpty,
+            "first marker never spawned within \(Self.markerTimeout)s: \(startDiagnosis())")
+        XCTAssertFalse(
+            secondWorker.isEmpty,
+            "second marker never spawned within \(Self.markerTimeout)s: \(startDiagnosis())")
         defer { (firstWorker + secondWorker).forEach { kill($0, SIGKILL) } }
 
         // The gap is the point. Terminated together, both leaders orphan together and a single
@@ -191,8 +232,12 @@ final class SurfaceTeardownLeakTests: XCTestCase {
 
         let stayingWorker = waitForPids(matching: "^/bin/sleep 943$")
         let closingWorker = waitForPids(matching: "^/bin/sleep 944$")
-        XCTAssertFalse(stayingWorker.isEmpty, "sibling marker never spawned")
-        XCTAssertFalse(closingWorker.isEmpty, "marker never spawned")
+        XCTAssertFalse(
+            stayingWorker.isEmpty,
+            "sibling marker never spawned within \(Self.markerTimeout)s: \(startDiagnosis())")
+        XCTAssertFalse(
+            closingWorker.isEmpty,
+            "marker never spawned within \(Self.markerTimeout)s: \(startDiagnosis())")
         defer { (stayingWorker + closingWorker).forEach { kill($0, SIGKILL) } }
 
         teardownAndDrain(closing)
