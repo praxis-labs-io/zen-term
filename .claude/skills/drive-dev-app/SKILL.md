@@ -107,8 +107,27 @@ Privacy & Security:
 - **Accessibility** (send keystrokes)
 - **Screen Recording** (screenshots)
 
-`zt-drive.sh preflight` reports which are missing. If either is denied, say so and
-hand the runbook to Drew instead of working around it.
+`zt-drive.sh preflight` reports which are missing.
+
+**macOS will not prompt for them.** TCC asks once per responsible process, and after
+a decision (especially a revoke) every later attempt fails silently: error `1002` on
+a keystroke, `-25211` on a UI query. Drew watching for a permission dialog will wait
+forever. So if preflight reports a denial:
+
+1. **Ask him to grant it**, naming both panes and saying plainly that no dialog is
+   coming. `preflight` prints the `open x-apple.systempreferences:…` links.
+2. **Wait.** Do not drive anything, and do not fall back to a partial run.
+3. If he would rather not, hand the runbook over as a checklist and say which steps
+   a machine would have checked.
+
+Probe the permission that actually gates input. Reading `name of first process whose
+frontmost is true` succeeds **without** assistive access, so an earlier version of
+preflight reported "granted" while every keystroke failed and the run drove nothing
+at all, printing results for steps that never happened. Touching a UI element needs
+the same permission sending input does; that is what preflight now uses.
+
+A tool that reports a result when it did nothing is worse than one that refuses to
+start. If a send fails, die loudly.
 
 ## The flow
 
@@ -166,6 +185,17 @@ Never guess a chord and send it. An unknown chord in a terminal is arbitrary inp
   Drew's machine, not a tidiness issue.
 - **Quitting the app ends the run.** `bin/run` exits with it, so relaunch to
   continue.
+- **No GNU coreutils.** `timeout(1)` is not on a stock macOS. Shelling out to it made
+  every `osascript` call fail with "command not found" while the run read as
+  proceeding normally. Check a tool exists before depending on it, or hand-roll it.
+- **Never `grep -q` on a pipe under `set -o pipefail`.** grep exits at the first
+  match, the producer takes SIGPIPE, and the pipeline reports failure despite the
+  match. That made `verify-symbol` incapable of succeeding, and the same pattern in
+  `validate_text` would have failed **open**, letting a denied command through. Count
+  matches instead, so the reader consumes the whole stream.
+- **Never a bare `wait "$pid"` under `set -e`.** A non-zero wait aborts before the
+  exit code can be read, so the error handler never runs and the real cause is
+  swallowed. Use `rc=0; wait "$pid" || rc=$?`.
 
 ## Reporting
 

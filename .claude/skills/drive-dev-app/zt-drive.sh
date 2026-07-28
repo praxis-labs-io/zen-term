@@ -56,9 +56,12 @@ validate_text() {
         *$'\n'*|*$'\r'*) die "refusing multi-line input — send one command per call" ;;
     esac
     [ ${#text} -gt 2000 ] && die "refusing input over 2000 chars"
-    local pat
+    # Counted, not `grep -q`, for the same pipefail/SIGPIPE reason as `verify-symbol`. Here the
+    # failure would be silent and the wrong way round: a denied pattern reading as allowed.
+    local pat hits
     for pat in "${FORBIDDEN[@]}"; do
-        if printf '%s' "$text" | grep -qE "$pat"; then
+        hits=$(printf '%s' "$text" | grep -cE "$pat" || true)
+        if [ "${hits:-0}" -gt 0 ]; then
             die "refusing dangerous input (matched /$pat/): $text"
         fi
     done
@@ -72,10 +75,32 @@ validate_text() {
 }
 
 # Never let a hung UI wedge the run. Every osascript call goes through this.
+#
+# The timeout is hand-rolled because `timeout(1)` is GNU coreutils and is NOT on a stock
+# macOS. Shelling out to it made every call here fail with "command not found", which read
+# as "the app would not respond" and silently drove nothing at all.
 osa() {
-    if ! out=$(timeout 10 osascript "$@" 2>&1); then
-        die "osascript failed or timed out: ${out:-<no output>}"
+    local out rc tmp waited=0 pid
+    tmp=$(mktemp -t ztosa)
+    osascript "$@" >"$tmp" 2>&1 &
+    pid=$!
+    while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 100 ]; do
+        sleep 0.1
+        waited=$((waited + 1))
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+        kill -9 "$pid" 2>/dev/null || true
+        rm -f "$tmp"
+        die "osascript timed out after 10s (hung UI?)"
     fi
+    # `|| rc=$?` rather than a bare `wait`: under `set -e` a non-zero wait aborts the script
+    # before `rc` is ever read, so the die below never runs and the real osascript error is
+    # swallowed. That turned a denied-permission error into a silent exit 1.
+    rc=0
+    wait "$pid" || rc=$?
+    out=$(cat "$tmp")
+    rm -f "$tmp"
+    [ "$rc" -ne 0 ] && die "osascript failed: ${out:-<no output>}"
     printf '%s' "$out"
 }
 
@@ -139,18 +164,42 @@ guard() {
 
 cmd_preflight() {
     local ok=0
-    if osascript -e 'tell application "System Events" to get name of first process whose frontmost is true' >/dev/null 2>&1; then
-        note "Accessibility: granted"
+    # Probe UI-element access, not the process list. Reading `name of first process whose
+    # frontmost is true` succeeds WITHOUT assistive access, so it reported "granted" while
+    # every keystroke failed with error 1002. Touching a UI element needs the same permission
+    # sending input does, and fails with -25211 when it is missing.
+    if osascript -e 'tell application "System Events" to tell (first process whose frontmost is true) to count of windows' >/dev/null 2>&1; then
+        note "Accessibility: granted (UI elements reachable)"
     else
-        echo "✗ Accessibility: DENIED — System Settings > Privacy & Security > Accessibility" >&2; ok=1
+        echo "✗ Accessibility: DENIED — keystrokes fail with error 1002, nothing is driven." >&2
+        ok=1
     fi
     local tmp; tmp=$(mktemp -t ztshot).png
     if screencapture -x -o "$tmp" >/dev/null 2>&1 && [ -s "$tmp" ]; then
         note "Screen Recording: granted"
     else
-        echo "✗ Screen Recording: DENIED — System Settings > Privacy & Security > Screen Recording" >&2; ok=1
+        echo "✗ Screen Recording: DENIED — screenshots fail, so a failed step cannot be diagnosed." >&2
+        ok=1
     fi
     rm -f "$tmp"
+
+    if [ "$ok" -ne 0 ]; then
+        cat >&2 <<'ASK'
+
+  ── ACTION NEEDED FROM DREW ──────────────────────────────────────────────
+  macOS will NOT prompt for these. TCC asks once per responsible process;
+  after a decision (especially a revoke) it fails silently forever. Waiting
+  for a dialog will wait forever. Grant by hand, tick the entry for the
+  terminal hosting this session, then re-run preflight:
+
+    open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+    open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+
+  A toggle may need to be switched off and on again to take effect, and the
+  host app usually has to be restarted before the new grant applies.
+  ─────────────────────────────────────────────────────────────────────────
+ASK
+    fi
     if t=$(target_pid 2>/dev/null); then note "target: pid $t ($(ps -o comm= -p "$t"))"; else note "target: none running"; fi
     note "other ZenTerm instances (never targeted):"
     ps -Ao pid,comm | grep -E "MacOS/ZenTerm" | grep -v grep | sed 's/^/    /' || echo "    none"
@@ -177,8 +226,16 @@ cmd_verify_symbol() {
     t=$(require_target); path=$(ps -o comm= -p "$t")
     note "binary: $path"
     note "built:  $(stat -f '%Sm' "$path")"
-    if nm -gU "$path" 2>/dev/null | grep -qi -- "$sym" || strings "$path" 2>/dev/null | grep -q -- "$sym"; then
-        note "symbol '$sym' PRESENT — this build has the change"
+    # No `grep -q` on a pipe under `set -o pipefail`: grep exits at the first match, the
+    # producer takes SIGPIPE, and the pipeline reports failure even though the symbol matched.
+    # That made this check incapable of ever succeeding, which is worse than not having it:
+    # it reports "stale build" against a binary compiled seconds ago. Count instead, so the
+    # reader consumes the whole stream.
+    local hits
+    hits=$(nm -a "$path" 2>/dev/null | grep -ci -- "$sym" || true)
+    [ "${hits:-0}" -eq 0 ] && hits=$(strings "$path" 2>/dev/null | grep -ci -- "$sym" || true)
+    if [ "${hits:-0}" -gt 0 ]; then
+        note "symbol '$sym' PRESENT ($hits hits) — this build has the change"
     else
         die "symbol '$sym' MISSING — the running build predates your change"
     fi
