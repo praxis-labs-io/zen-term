@@ -37,9 +37,10 @@ final class GhosttyInputForwardingTests: XCTestCase {
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
             styleMask: [.titled], backing: .buffered, defer: false)
-        // A programmatically created NSWindow defaults to releasing itself on close, and this
-        // test holds a strong reference to it. Left alone, the `close()` in tearDown over-releases
-        // and the process segfaults later, inside whatever unrelated test happens to be running.
+        // Closed in tearDown, not ordered out, so the window-server surface goes with it
+        // (ZEN-312). `isReleasedWhenClosed` defaults to true for a window built in code, so clear
+        // it or the close frees one this suite still holds: that lands as a segfault later, inside
+        // whatever unrelated test happens to be running when the reference is next touched.
         window.isReleasedWhenClosed = false
         parent = RecordingResponderView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
         view = GhosttyHostView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
@@ -50,7 +51,6 @@ final class GhosttyInputForwardingTests: XCTestCase {
     }
 
     override func tearDown() {
-        window.orderOut(nil)
         window.close()
         window = nil
         parent = nil
