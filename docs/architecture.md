@@ -608,7 +608,7 @@ the chrome never hardcodes a color.
 is read live at every focus, active, and confirm surface, so `accent-color` in the
 config sends all of them at once by naming an `AccentSlot` (an ANSI hue name, ZEN-255).
 The override is applied to the `accent` field alone inside the deriver, so the roles
-read as meanings — a warning is not a taste — stay put. What makes this work with no
+that carry meaning stay put: a warning is not a taste. What makes this work with no
 call-site changes is that nothing caches the color: `ConfigChange.between` sets
 `.theme` from a whole-value `AppTheme` diff, and the existing `reapplyTheme()` fan-out
 repaints even the sites that bake their color at init, like the tab bar's tracer.

@@ -149,6 +149,16 @@ final class SettingsAppearanceSection: SettingsFormSection {
         accentDropdown?.setItems(accentItems(selected: selected), selectedIndex: selected)
     }
 
+    /// A theme change this card didn't make reaches sections through `reapplyTheme()`, which
+    /// recolors controls but does not re-supply row *data* (`refreshRows()` runs only after this
+    /// card's own write). The accent row is the only row whose contents are theme-derived, so
+    /// without this its swatches and hexes keep the old palette until the section is rebuilt.
+    /// The paths that get here: another window's Settings write, and ⌘⌥R after a hand-edit.
+    override func reapplyTheme() {
+        super.reapplyTheme()
+        refreshAccentRow()
+    }
+
     /// Reduce-motion shown as On/Off; `system` resolves via the OS accessibility setting. Static so the
     /// `read` closure the base stores per row doesn't capture `self` (which would retain-cycle through
     /// the section's `refreshers`); it reads only the passed config and the OS setting.

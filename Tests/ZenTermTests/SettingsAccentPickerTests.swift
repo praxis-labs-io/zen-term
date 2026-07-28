@@ -114,6 +114,28 @@ final class SettingsAccentPickerTests: XCTestCase {
         XCTAssertNotEqual(Theme.current.chrome.accent, before)
     }
 
+    /// A theme change this card didn't make (another window's Settings, ⌘⌥R after a hand-edit)
+    /// arrives as `reapplyTheme()`, which recolors controls but does not re-supply row data. The
+    /// accent row's contents ARE theme-derived, so without an explicit refresh its swatches keep
+    /// the old palette while the rest of the card recolors: stale, and invisible to a color check.
+    func test_anExternalThemeChange_reResolvesTheSwatches() throws {
+        let dropdown = mountAccentDropdown()
+        let before = dropdown.itemsForTesting[1 + AccentSlot.green.ansiIndex]
+
+        let themes = tempRoot.appendingPathComponent("themes", isDirectory: true)
+        try FileManager.default.createDirectory(at: themes, withIntermediateDirectories: true)
+        try "palette = 2=#00ff00\n".write(
+            to: themes.appendingPathComponent("greenish"), atomically: true, encoding: .utf8)
+        try "theme = greenish\n".write(
+            to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+        AppConfig.reload()  // the reload another window's write would cause
+        (section as? SettingsAppearanceSection)?.reapplyTheme()
+
+        let after = dropdown.itemsForTesting[1 + AccentSlot.green.ansiIndex]
+        XCTAssertEqual(after.note, "#00ff00")
+        XCTAssertNotEqual(after.note, before.note)
+    }
+
     /// Every row carries the swatch that makes a hue name honest, and the hex of what the theme
     /// actually put in that slot. Dropping either leaves the user picking names blind.
     func test_everyRowCarriesItsSwatchAndHex() {
