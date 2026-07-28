@@ -329,6 +329,56 @@ final class GhosttyHostView: NSView {
         _ = keyAction(GHOSTTY_ACTION_RELEASE, event: event)
     }
 
+    /// Modifier presses and releases. AppKit delivers these as `flagsChanged` rather than
+    /// `keyDown`/`keyUp`, and nothing upstream forwards them (`KeyInterceptor`'s monitor passes
+    /// them straight through outside capture mode), so without this override libghostty is never
+    /// told a modifier moved — and the kitty keyboard protocol's report-all-keys mode, which
+    /// Helix and nvim-with-kitty-protocol rely on, reports no modifiers at all (ZEN-308).
+    ///
+    /// Unhandled events are swallowed rather than passed up, matching Ghostty's own app: the
+    /// only other consumer of `flagsChanged` in ZenTerm is the Settings keybind recorder, and
+    /// that reads events from a local monitor, which runs ahead of the responder chain.
+    override func flagsChanged(with event: NSEvent) {
+        // Mid-composition a modifier belongs to the input method, not the terminal.
+        guard !hasMarkedText(), let action = Self.modifierAction(for: event) else { return }
+        _ = keyAction(action, event: event)
+    }
+
+    /// The modifier each `flagsChanged` keyCode moves, paired with the device-specific flag for
+    /// the *side* it sits on. Caps lock is unsided and has no device flag.
+    private static let modifierKeyCodes: [UInt16: (named: UInt32, side: UInt?)] = [
+        0x39: (GHOSTTY_MODS_CAPS.rawValue, nil),
+        0x38: (GHOSTTY_MODS_SHIFT.rawValue, UInt(NX_DEVICELSHIFTKEYMASK)),
+        0x3C: (GHOSTTY_MODS_SHIFT.rawValue, UInt(NX_DEVICERSHIFTKEYMASK)),
+        0x3B: (GHOSTTY_MODS_CTRL.rawValue, UInt(NX_DEVICELCTLKEYMASK)),
+        0x3E: (GHOSTTY_MODS_CTRL.rawValue, UInt(NX_DEVICERCTLKEYMASK)),
+        0x3A: (GHOSTTY_MODS_ALT.rawValue, UInt(NX_DEVICELALTKEYMASK)),
+        0x3D: (GHOSTTY_MODS_ALT.rawValue, UInt(NX_DEVICERALTKEYMASK)),
+        0x37: (GHOSTTY_MODS_SUPER.rawValue, UInt(NX_DEVICELCMDKEYMASK)),
+        0x36: (GHOSTTY_MODS_SUPER.rawValue, UInt(NX_DEVICERCMDKEYMASK)),
+    ]
+
+    /// Whether a `flagsChanged` event is a modifier going down or coming up, or nil when its
+    /// keyCode is not a modifier at all (the globe key, which AppKit also reports here).
+    ///
+    /// The whole difficulty is that AppKit reports the *resulting* modifier state, not which
+    /// direction the key moved. With both shifts held, releasing one still leaves `.shift` set,
+    /// so reading the named flag alone encodes that release as a second press. The device flag
+    /// for the side whose key actually moved is what separates them.
+    ///
+    /// Ghostty's own app checks only the right-hand device flags and treats every left-modifier
+    /// keyCode as a press whenever the named flag is set, so releasing left-shift while right is
+    /// held reports a press there. macOS carries a flag for both sides, so this checks whichever
+    /// side the keyCode names and stays symmetric.
+    static func modifierAction(for event: NSEvent) -> ghostty_input_action_e? {
+        guard let modifier = modifierKeyCodes[event.keyCode] else { return nil }
+        // The named flag is clear, so that modifier is fully up whichever side was let go.
+        guard event.ghosttyMods.rawValue & modifier.named != 0 else { return GHOSTTY_ACTION_RELEASE }
+        // Held, and unsided (caps lock): nothing further to tell apart.
+        guard let side = modifier.side else { return GHOSTTY_ACTION_PRESS }
+        return event.modifierFlags.rawValue & side != 0 ? GHOSTTY_ACTION_PRESS : GHOSTTY_ACTION_RELEASE
+    }
+
     /// Encode one key event to libghostty. `translationEvent` carries the mod-translated
     /// event (for `consumed_mods`); `composing` marks input that is part of an in-flight
     /// IME composition so libghostty doesn't forward it to the shell. Returns whether
@@ -375,9 +425,48 @@ final class GhosttyHostView: NSView {
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_RIGHT, event.ghosttyMods)
     }
 
+    // Middle click and the side buttons. Without these `ghostty_surface_mouse_button` only ever
+    // sees left and right, so a program with mouse reporting on (tmux, vim, htop) never learns
+    // they were pressed (ZEN-308). Middle-click paste is deliberately not wired: libghostty is
+    // told `supports_selection_clipboard` is false on macOS, which is correct for the platform.
+    override func otherMouseDown(with event: NSEvent) {
+        guard let surfacePtr else { return }
+        _ = ghostty_surface_mouse_button(
+            surfacePtr, GHOSTTY_MOUSE_PRESS, Self.mouseButton(for: event.buttonNumber), event.ghosttyMods)
+    }
+
+    override func otherMouseUp(with event: NSEvent) {
+        guard let surfacePtr else { return }
+        _ = ghostty_surface_mouse_button(
+            surfacePtr, GHOSTTY_MOUSE_RELEASE, Self.mouseButton(for: event.buttonNumber), event.ghosttyMods)
+    }
+
+    /// Translate an AppKit `buttonNumber` to libghostty's button. AppKit numbers buttons in
+    /// hardware order (0 left, 1 right, 2 middle, 3 back, 4 forward), while libghostty names them
+    /// by the X11 numbering a terminal reports, where back and forward are buttons 8 and 9 — so
+    /// the two orders diverge past the middle button rather than running parallel. Ported from
+    /// Ghostty's `Input.MouseButton(fromNSEventButtonNumber:)`.
+    static func mouseButton(for buttonNumber: Int) -> ghostty_input_mouse_button_e {
+        switch buttonNumber {
+        case 0: return GHOSTTY_MOUSE_LEFT
+        case 1: return GHOSTTY_MOUSE_RIGHT
+        case 2: return GHOSTTY_MOUSE_MIDDLE
+        case 3: return GHOSTTY_MOUSE_EIGHT
+        case 4: return GHOSTTY_MOUSE_NINE
+        case 5: return GHOSTTY_MOUSE_SIX
+        case 6: return GHOSTTY_MOUSE_SEVEN
+        case 7: return GHOSTTY_MOUSE_FOUR
+        case 8: return GHOSTTY_MOUSE_FIVE
+        case 9: return GHOSTTY_MOUSE_TEN
+        case 10: return GHOSTTY_MOUSE_ELEVEN
+        default: return GHOSTTY_MOUSE_UNKNOWN
+        }
+    }
+
     override func mouseMoved(with event: NSEvent) { reportMousePos(event) }
     override func mouseDragged(with event: NSEvent) { reportMousePos(event) }
     override func rightMouseDragged(with event: NSEvent) { reportMousePos(event) }
+    override func otherMouseDragged(with event: NSEvent) { reportMousePos(event) }
 
     override func mouseExited(with event: NSEvent) {
         guard let surfacePtr, NSEvent.pressedMouseButtons == 0 else { return }
@@ -489,6 +578,16 @@ extension NSEvent {
         if flags.contains(.option) { mods |= GHOSTTY_MODS_ALT.rawValue }
         if flags.contains(.command) { mods |= GHOSTTY_MODS_SUPER.rawValue }
         if flags.contains(.capsLock) { mods |= GHOSTTY_MODS_CAPS.rawValue }
+        // Which side the modifier is on, from the device-specific bits AppKit carries alongside
+        // the named flags. The kitty keyboard protocol encodes left and right as different keys,
+        // so without these every right modifier reports as its left counterpart. There is no
+        // "both sides held" encoding in the ghostty bitmask, which matches ghostty's own app —
+        // nothing downstream distinguishes that case.
+        let rawFlags = flags.rawValue
+        if rawFlags & UInt(NX_DEVICERSHIFTKEYMASK) != 0 { mods |= GHOSTTY_MODS_SHIFT_RIGHT.rawValue }
+        if rawFlags & UInt(NX_DEVICERCTLKEYMASK) != 0 { mods |= GHOSTTY_MODS_CTRL_RIGHT.rawValue }
+        if rawFlags & UInt(NX_DEVICERALTKEYMASK) != 0 { mods |= GHOSTTY_MODS_ALT_RIGHT.rawValue }
+        if rawFlags & UInt(NX_DEVICERCMDKEYMASK) != 0 { mods |= GHOSTTY_MODS_SUPER_RIGHT.rawValue }
         return ghostty_input_mods_e(mods)
     }
 
