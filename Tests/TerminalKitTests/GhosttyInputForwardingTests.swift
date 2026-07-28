@@ -32,8 +32,10 @@ final class GhosttyInputForwardingTests: XCTestCase {
         super.setUp()
         _ = NSApplication.shared
 
-        // One window for the whole class, torn down in tearDown. Tests here open real windows,
-        // and a window per test method is how a suite ends up with dozens on screen (ZEN-312).
+        // A window per test method, closed in tearDown. XCTest tears down no AppKit state between
+        // cases, so one left open stays on screen for the rest of the run and a suite climbs to
+        // dozens of live window-server surfaces, each test running under more load than the last
+        // (ZEN-312).
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
             styleMask: [.titled], backing: .buffered, defer: false)
