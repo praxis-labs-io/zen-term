@@ -415,7 +415,16 @@ into the machine on every `swift test` otherwise (ZEN-235).
 `WindowTestCase`, not `XCTestCase`.** XCTest tears down no AppKit state between cases. Nothing closed
 its windows, so a full suite climbed monotonically to 69 live window-server surfaces, several
 Metal-backed: every test ran under more load than the one before it, which is the load `ZEN-302`'s
-flakiness is sensitive to. `WindowTestCase.tearDown` closes them (ZEN-312).
+flakiness is sensitive to. `WindowTestCase` closes them (ZEN-312).
+
+**The sweep hangs off `tearDownWithError`, and the order is the reason.** XCTest runs
+`tearDown()` *before* `tearDownWithError()`, and `addTeardownBlock` earlier than either: measured
+order is test body, then teardown block, then `tearDown`, then `tearDownWithError`. Most suites here
+clean up in `tearDownWithError`, so a sweep in `tearDown` closed their windows before their own
+teardown body ran, and an explicit `controller?.windowWillClose(...)` became a no-op absorbed by
+`WindowController`'s `didTearDown` guard. Everything still passed while the coverage those lines
+exist for was gone. Sweeping from `tearDownWithError` after `super` puts it last, which holds only
+because every subclass calls `super.tearDownWithError()` as its final statement.
 
 Two details that decide whether the sweep works. **Close, do not order out:** a `WindowController`
 drives its teardown from `windowWillClose`, so `close()` also invalidates the title poll and shuts
@@ -424,6 +433,14 @@ process as orphans (the ZEN-269 failure mode, reproduced by the test suite itsel
 **`isReleasedWhenClosed` defaults to true for a window built in code**, so closing one the suite
 still holds in a stored property frees it under ARC and the next access is a use-after-free: clear
 the flag before closing.
+
+That second one reads like a precaution and is not. Review flagged the cleared flag as a leak, since
+a closed window then stays in `NSApp.windows` for the run; removing it segfaults the suite, signal
+11, in `ConfigFanOutDifferentialTests`, because `WindowController` holds `let window: HostWindow`
+and `close()` releases it while ARC still counts the owner. The residency is real and is the price:
+it is bounded by the windows the suite builds, re-closing a closed window neither re-posts
+`willClose` nor costs anything measurable, and the window-server surfaces this section is about are
+still reclaimed. Do not re-litigate it without reproducing the crash first.
 
 Measure this with CoreGraphics, never the accessibility API. `xctest` runs `.prohibited`, so its
 windows are on screen and in Mission Control while absent from the accessibility tree: System Events
