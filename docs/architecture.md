@@ -142,6 +142,13 @@ masking a resolution failure.
   and a quit (ZEN-269). `ShellSessionLedger` records every shell session the app
   starts; teardown sweeps the ones whose *leader has exited*, via
   `ShellSessionReaper` (`SIGTERM`, 150ms grace, `SIGKILL`, off-main).
+  **Each leader is watched for its own exit**, with a kqueue process source armed
+  when it is recorded. It used to be polled for inside a one-second window, which
+  meant a leader slower than that was never swept at all: nothing rescheduled a
+  look, so on the last pane its dev server outlived the close (ZEN-306). No
+  duration is correct here, because a shell waiting on a foreground child exits
+  when that child does. These leaders are the app's own direct children, so the
+  kernel can name the moment instead.
   **A surface cannot name its own session.** libghostty forks the shell
   asynchronously under a setuid `/usr/bin/login` whose command line and
   environment the kernel hides, so neither fork order nor a planted env tag
@@ -153,8 +160,12 @@ masking a resolution failure.
   identifying *this* surface's background work would need the attribution above.
 - **Quit drives window teardown by hand.** `windowWillClose` does not fire on app
   termination, so `applicationShouldTerminate` calls `tearDownForQuit()` on every
-  window and waits on `ShellSessionReaper.drain` (capped) before replying. Without
-  it, quit frees no surface at all (ZEN-269).
+  window and waits on `ShellSessionReaper.drainAllSessions` (capped) before
+  replying. That waits for the shells to actually go, not merely for outstanding
+  work to finish: at the moment the last surface is freed no leader has exited
+  yet, so a drain watching only for idle sees none and lets the process go before
+  a single signal is sent. Without any of it, quit frees no surface at all
+  (ZEN-269).
 - **`GHOSTTY_RESOURCES_DIR` is force-overridden.** Launching ZenTerm from inside
   Ghostty.app would otherwise inherit a mismatched version's shell integration and
   terminfo.
@@ -845,7 +856,6 @@ Do not describe these as features, and do not assume them when reading:
 - **No smooth scroll.** The viewport moves in whole cells and nothing below the
   seam can change that. See "What the backend will and won't do".
 - **No tab drag-to-reorder**, no config file watcher, no scrollback search.
-- **Three seam events are emitted with zero consumers**: `surfaceDidRingBell`,
-  `progressDidChange`, and `surfaceWantsClose`. The backend translates all three,
-  but nothing in the chrome implements them. Pane exit runs entirely through
-  `surfaceDidExit`.
+- **Two seam events are emitted with zero consumers**: `surfaceDidRingBell` and
+  `progressDidChange`. The backend translates both, but nothing in the chrome
+  implements them. Pane exit runs entirely through `surfaceDidExit`.

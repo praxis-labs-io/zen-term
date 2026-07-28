@@ -28,6 +28,21 @@ final class OrphanWatcherTests: XCTestCase {
 
     private func isAlive(_ pid: pid_t) -> Bool { kill(pid, 0) == 0 || errno == EPERM }
 
+    /// Poll for the sweep to reach `pid` rather than sleeping a fixed interval and looking once.
+    ///
+    /// The timeout is a ceiling on failure, not a wait a green run pays: a sweep that lands in
+    /// 50ms returns in 50ms. A fixed sleep here would be both a flake on a loaded machine and a
+    /// tax on every passing run, which is what made the previous version of these tests
+    /// timing-dependent (ZEN-306).
+    private func waitForDeath(of pid: pid_t, timeout: TimeInterval = 8.0) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if !isAlive(pid) { return true }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        return !isAlive(pid)
+    }
+
     /// A session leader with one child parked in its own process group, so killing the leader
     /// orphans the session while leaving the child running. `childSleep` distinguishes the
     /// children of two concurrent fixtures.
@@ -71,41 +86,63 @@ final class OrphanWatcherTests: XCTestCase {
         return session
     }
 
-    /// A second session orphaning *after* the watcher has already swept the first, with no
-    /// second `reapOrphans()` call to rescue it.
+    /// A leader that takes longer to exit than the watcher is willing to wait.
     ///
-    /// That is exactly the shape of two panes closing a moment apart: the second teardown's
-    /// call is coalesced into the running watcher, so if that watcher stops at its first find,
-    /// nothing is left looking when the second leader finally exits. Its pane's dev server then
-    /// outlives the close, which is the bug this whole ticket is about.
-    func test_watcherSweepsASessionThatOrphansAfterTheFirstSweep() throws {
+    /// This is the shape of a pane running a dev server: freeing the surface closes the pty, but
+    /// the shell is waiting on a foreground child that takes its time shutting down, so the
+    /// session leader is still alive when the watcher gives up. Nothing reschedules a look, so on
+    /// the last pane the session sits in the ledger forever and its children outlive the close.
+    func test_watcherSweepsALeaderThatTakesItsTimeExiting() throws {
+        let session = try startSession(childSleep: 953)
+        XCTAssertTrue(isAlive(session.child), "child never started")
+
+        ShellSessionLedger.shared.record([session.leader])
+
+        // The surface is freed and the sweep runs, but the leader is still running, so there is
+        // nothing orphaned to find yet.
+        ShellSessionReaper.shared.reapOrphans()
+
+        // Well past the 1.0s window the sweep used to give up at. Any fixed budget is a guess:
+        // a shell waiting on a foreground child exits when that child does, not on a schedule.
+        Thread.sleep(forTimeInterval: 2.0)
+        XCTAssertTrue(
+            isAlive(session.child), "child died before the leader did, so this proves nothing")
+        kill(session.leader, SIGKILL)
+
+        XCTAssertTrue(
+            waitForDeath(of: session.child),
+            "the leader exited after the sweep gave up, so the session was never swept")
+    }
+
+    /// A second session orphaning long after the first has already been swept, with no second
+    /// `reapOrphans()` call to rescue it.
+    ///
+    /// That is the shape of two panes closing a moment apart, and of one pane closing while
+    /// another's shell is still winding down. Each leader is watched for its own exit, so the
+    /// gap between them does not matter and nothing has to still be looking when the second
+    /// one goes.
+    func test_eachSessionIsSweptWhenItsOwnLeaderExits() throws {
         let first = try startSession(childSleep: 951)
         let second = try startSession(childSleep: 952)
-        Thread.sleep(forTimeInterval: 0.3)  // let both children land in the process table
         XCTAssertTrue(isAlive(first.child), "first child never started")
         XCTAssertTrue(isAlive(second.child), "second child never started")
 
         ShellSessionLedger.shared.record([first.leader, second.leader])
 
-        // Orphan the first, then start watching: this is the first pane closing.
+        // The first pane closes and its shell exits.
         kill(first.leader, SIGKILL)
         ShellSessionReaper.shared.reapOrphans()
+        XCTAssertTrue(waitForDeath(of: first.child), "the first session was never swept")
 
-        // Long enough for the watcher to find and sweep the first. A watcher that stops there
-        // has already exited by the time the second orphans below.
-        Thread.sleep(forTimeInterval: 0.3)
-
-        // The second pane closed while the watcher was running, so its own `reapOrphans()` was
-        // coalesced away. Deliberately not called again here — that is the bug's precondition.
+        // The second closed at the same time but its shell takes far longer to go, well past
+        // any window the sweep used to run on. Deliberately no second `reapOrphans()` here.
+        Thread.sleep(forTimeInterval: 2.0)
+        XCTAssertTrue(
+            isAlive(second.child), "second child died on its own, so this proves nothing")
         kill(second.leader, SIGKILL)
 
-        let swept = expectation(description: "sweep finished")
-        ShellSessionReaper.shared.drain(timeout: 5.0) { swept.fulfill() }
-        wait(for: [swept], timeout: 8.0)
-
-        XCTAssertFalse(isAlive(first.child), "the first session was never swept")
-        XCTAssertFalse(
-            isAlive(second.child),
-            "the watcher stopped at its first sweep and left the second session running")
+        XCTAssertTrue(
+            waitForDeath(of: second.child),
+            "nothing was left watching the second leader, so its session ran on")
     }
 }

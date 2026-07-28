@@ -13,32 +13,20 @@ public final class ShellSessionReaper {
     /// How long a process gets to exit on its own after `SIGTERM`.
     private static let grace: TimeInterval = 0.15
 
-    /// How long a freed surface's session leader gets to notice its pty closed and exit. It
-    /// took 45ms when measured; the window is wide enough to cover a loaded machine and is a
-    /// ceiling, not a wait — the sweep runs the moment the leader goes.
-    private static let orphanWindow: TimeInterval = 1.0
+    /// The longest quit will wait for the shells to go before leaving anyway.
+    ///
+    /// A cap, not a wait: leaders exit about 45ms after their pty closes, so an ordinary quit
+    /// spends roughly that plus one `grace` here. It is only reached by a foreground child that
+    /// is slow to die, and reaching it costs one pause on the way out rather than a leaked dev
+    /// server. It can never hang the quit.
+    public static let quitSweepBudget: TimeInterval = 3.0
 
-    /// How often that window is checked.
-    private static let orphanPoll: TimeInterval = 0.02
-
-    /// The longest a full sweep can take: wait out the leader, then one graced pass over
-    /// however many sessions it found. Every session is signalled in the same pass, so this
-    /// does not grow with pane count. `drain` callers size their cap from this rather than
-    /// picking a literal that silently truncates the sweep.
-    public static var worstCaseSweep: TimeInterval { orphanWindow + grace }
+    /// How often the quit drain re-checks whether the shells have gone.
+    private static let quitPoll: TimeInterval = 0.02
 
     private let queue = DispatchQueue(
         label: "com.drucial.zenterm.shell-session-reaper", qos: .userInitiated)
     private let pending = DispatchGroup()
-
-    /// Guards `isWatching`. The watcher is process-wide, so several surfaces tearing down at
-    /// once must not each start one.
-    private let watchLock = NSLock()
-    private var isWatching = false
-
-    /// When the running watcher stops. A teardown landing mid-watch pushes this out instead of
-    /// starting a second watcher, so the window always covers the most recent close.
-    private var watchDeadline: Date?
 
     private init() {}
 
@@ -71,60 +59,33 @@ public final class ShellSessionReaper {
         }
     }
 
-    /// Sweep the sessions a torn-down surface left behind: the ones whose leader exited when its
-    /// pty closed. Waits for that exit rather than assuming it has already happened, and stops at
-    /// the first sweep, so a surface closed on its own costs one round trip.
+    /// Sweep every session whose leader has exited, right now.
     ///
-    /// It sweeps whatever is orphaned, not "this surface's" session, because nothing can say
-    /// which session a surface owned (see `ShellSessionLedger`). That is the point: a live pane's
-    /// leader is alive, so a live pane is never in reach.
+    /// Called by the ledger the moment one of its watched leaders goes, and by a teardown just
+    /// after it frees a surface. It sweeps whatever is orphaned, not "this surface's" session,
+    /// because nothing can say which session a surface owned (see `ShellSessionLedger`). That is
+    /// the point: a live pane's leader is alive, so a live pane is never in reach.
     ///
-    /// One watcher serves every caller. `takeOrphans` empties the ledger, so a second watcher
-    /// would spin its whole window finding nothing while parking a dispatch thread: closing a
-    /// twenty-pane workspace held twenty of them.
-    ///
-    /// A caller arriving while one is already running **extends its deadline** rather than being
-    /// dropped, and the watcher keeps sweeping until that deadline instead of stopping at its
-    /// first find. Both halves are load-bearing. Dropping the caller and returning early leaves
-    /// the case where surface A's leader exits first: the watcher sweeps A, exits, and B's
-    /// leader then exits with nothing left watching, so B's session sits in the ledger forever
-    /// and its dev server outlives the close. That is the ZEN-269 leak, so the watcher runs to
-    /// the last caller's deadline and sweeps everything that orphans along the way.
-    public func reapOrphans() {
-        let deadline = Date().addingTimeInterval(Self.orphanWindow)
-        watchLock.lock()
-        if isWatching {
-            watchDeadline = max(watchDeadline ?? deadline, deadline)
-            watchLock.unlock()
-            return
-        }
-        isWatching = true
-        watchDeadline = deadline
-        watchLock.unlock()
-
+    /// Cheap to call speculatively. `takeOrphans` hands each session out once, so overlapping
+    /// callers cannot both sweep the same one, and finding nothing costs one process-table walk.
+    public func sweepOrphans() {
+        // Held across the take so the group is never transiently empty between a session
+        // leaving the ledger and its sweep entering: a quit draining in that gap would see
+        // idle and exit with the signals still unsent.
         pending.enter()
-        // Its own queue, not the serial sweep queue: the wait below must not queue up behind
-        // a grace period already running there.
-        DispatchQueue.global(qos: .userInitiated).async { [pending] in
-            defer {
-                self.watchLock.lock()
-                self.isWatching = false
-                self.watchDeadline = nil
-                self.watchLock.unlock()
-                pending.leave()
-            }
-            while true {
-                self.watchLock.lock()
-                let until = self.watchDeadline ?? Date()
-                self.watchLock.unlock()
-                guard Date() < until else { return }
+        defer { pending.leave() }
+        let orphans = ShellSessionLedger.shared.takeOrphans()
+        guard !orphans.isEmpty else { return }
+        reap(sessions: Set(orphans))
+    }
 
-                let orphans = ShellSessionLedger.shared.takeOrphans()
-                if !orphans.isEmpty { self.reap(sessions: Set(orphans)) }
-                // Off-main by construction, so sleeping here blocks nothing the user can see.
-                Thread.sleep(forTimeInterval: Self.orphanPoll)
-            }
-        }
+    /// Sweep the sessions a torn-down surface left behind.
+    ///
+    /// The leader usually has not exited yet when this runs, and that is fine: it is armed with
+    /// its own watch, which fires the moment it goes. This is the immediate look for anything
+    /// already orphaned, not the mechanism.
+    public func reapOrphans() {
+        DispatchQueue.global(qos: .userInitiated).async { self.sweepOrphans() }
     }
 
     /// Wait for outstanding sweeps, capped by `timeout` so a quit can never hang on a
@@ -139,5 +100,25 @@ public final class ShellSessionReaper {
         // Both paths land on main, so the `fired` check needs no further synchronization.
         pending.notify(queue: .main) { fire() }
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { fire() }
+    }
+
+    /// Hold quit open until every shell this app started has gone and been swept, capped by
+    /// `timeout`. `completion` runs exactly once, on the main queue.
+    ///
+    /// Waiting on the ledger emptying rather than on outstanding work is what makes this
+    /// correct at quit. The leaders have not exited yet when the last surface is freed, so
+    /// there is nothing in flight to wait for: a drain that only watched for idle would see
+    /// none and let the process go before a single signal went out, which is the leak on the
+    /// most ordinary way to close the app (ZEN-269, ZEN-306).
+    public func drainAllSessions(timeout: TimeInterval, completion: @escaping () -> Void) {
+        let deadline = Date().addingTimeInterval(timeout)
+        DispatchQueue.global(qos: .userInitiated).async {
+            while !ShellSessionLedger.shared.isEmpty, Date() < deadline {
+                // Off-main by construction, so sleeping here blocks nothing the user can see.
+                Thread.sleep(forTimeInterval: Self.quitPoll)
+            }
+            let left = max(0, deadline.timeIntervalSinceNow)
+            DispatchQueue.main.async { self.drain(timeout: left, completion: completion) }
+        }
     }
 }

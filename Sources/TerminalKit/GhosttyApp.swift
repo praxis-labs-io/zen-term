@@ -295,10 +295,19 @@ final class GhosttyApp {
         }
     }
 
-    /// libghostty wants the surface closed (shell exited, or `exit`). Report it up the
-    /// seam so the chrome can tear down the pane.
-    private static func closeSurface(_ userdata: UnsafeMutableRawPointer?, _ processAlive: Bool) {
-        guard let surface = surface(from: userdata) else { return }
-        DispatchQueue.main.async { surface.reportClose() }
-    }
+    /// libghostty wants the surface closed. Deliberately does nothing, and is registered only
+    /// so libghostty doesn't log "runtime embedder does not support closing a surface" on every
+    /// close.
+    ///
+    /// Nothing is lost by ignoring it. libghostty raises `show_child_exited` unconditionally
+    /// when a child exits (`Surface.zig:1238` is explicit that this happens even when the
+    /// surface is about to close immediately), and only then does `wait-after-command` being
+    /// false take it on to `close`. So every close that reaches here has already reached
+    /// `surfaceDidExit`, which is where the chrome tears the pane down. Routing both would
+    /// mean two events for one exit.
+    ///
+    /// The `processAlive` argument is libghostty's `needsConfirmQuit()`, not "something is
+    /// still running in this session". Confirmation is the chrome's own, and what survives a
+    /// close is the reaper's (ZEN-306), so neither wants it.
+    private static func closeSurface(_ userdata: UnsafeMutableRawPointer?, _ processAlive: Bool) {}
 }

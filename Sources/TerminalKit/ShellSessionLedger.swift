@@ -14,11 +14,23 @@ import Foundation
 /// takes that session's leader down with it, and a session whose leader has exited is by
 /// definition nobody's live pane. Teardown sweeps exactly those, which reaches every leftover
 /// of the surface that just went away and can never reach a pane that is still running.
+///
+/// Every recorded leader is watched for its own exit rather than polled for within a window.
+/// The window was a wall-clock guess at how long a leader takes to notice its pty closed, and
+/// a leader that took longer was never swept at all: nothing rescheduled a look, so on the last
+/// pane its dev server outlived the close (ZEN-306). There is no correct duration to guess,
+/// because a shell waiting on a foreground child exits when that child does. These leaders are
+/// our own direct children, so the kernel will tell us the moment each one goes.
 final class ShellSessionLedger {
     static let shared = ShellSessionLedger()
 
     private let lock = NSLock()
     private var known: Set<pid_t> = []
+
+    /// One kqueue watch per recorded leader, armed while it is provably alive and torn down
+    /// when its session is swept. Keyed by pid so a leader recorded twice (the start sampler
+    /// and the teardown snapshot both see it) is watched once.
+    private var watches: [pid_t: DispatchSourceProcess] = [:]
 
     /// Guards the sampler. Separate from `lock` so a running sample never holds up a sweep.
     private let sampleLock = NSLock()
@@ -26,10 +38,40 @@ final class ShellSessionLedger {
 
     private init() {}
 
-    func record(_ sessions: Set<pid_t>) {
+    /// Whether every recorded session has been handed to a sweep. The quit drain waits on this:
+    /// `takeOrphans` empties the ledger as it hands sessions out, so empty means nothing is
+    /// still waiting for its leader to go.
+    var isEmpty: Bool {
         lock.lock()
         defer { lock.unlock() }
+        return known.isEmpty
+    }
+
+    func record(_ sessions: Set<pid_t>) {
+        lock.lock()
+        let fresh = sessions.subtracting(known)
         known.formUnion(sessions)
+        for pid in fresh where watches[pid] == nil {
+            watches[pid] = makeWatch(for: pid)
+        }
+        lock.unlock()
+    }
+
+    /// Arm a watch for one leader's exit.
+    ///
+    /// `leaderChildren` only returns leaders that were alive in its snapshot, so the watch is
+    /// always armed against a live process. If the leader exits in the gap between that
+    /// snapshot and this call the source still fires, because an unreaped child stays in the
+    /// table as a zombie. A fire is only a prompt to look: the sweep re-checks the process
+    /// table through `takeOrphans` and matches sessions with `getsid`, so a stale or recycled
+    /// pid costs one wasted look and can never reach a live pane's session.
+    private func makeWatch(for pid: pid_t) -> DispatchSourceProcess {
+        let source = DispatchSource.makeProcessSource(
+            identifier: pid, eventMask: .exit,
+            queue: DispatchQueue.global(qos: .userInitiated))
+        source.setEventHandler { ShellSessionReaper.shared.sweepOrphans() }
+        source.resume()
+        return source
     }
 
     /// Watch for new shell sessions for `duration`, checking every `interval`.
@@ -76,6 +118,9 @@ final class ShellSessionLedger {
         defer { lock.unlock() }
         let orphans = ShellSession.orphaned(among: known)
         known.subtract(orphans)
+        for pid in orphans {
+            watches.removeValue(forKey: pid)?.cancel()
+        }
         return orphans
     }
 }

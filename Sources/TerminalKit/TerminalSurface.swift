@@ -72,7 +72,6 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     /// and no chrome surface mirrors them, so there is nothing for the chrome to do.
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor)
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?)
-    func surfaceWantsClose(_ s: TerminalSurface)
     /// The user clicked the surface's content — the chrome should route unified focus
     /// (halo + first-responder) to this surface. The surface only reports the intent;
     /// the chrome stays the single owner of focus.
@@ -94,7 +93,6 @@ public extension TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?) {}
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {}
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {}
-    func surfaceWantsClose(_ s: TerminalSurface) {}
     func surfaceWantsFocus(_ s: TerminalSurface) {}
     func surfaceDidFailToStart(_ s: TerminalSurface) {}
 }

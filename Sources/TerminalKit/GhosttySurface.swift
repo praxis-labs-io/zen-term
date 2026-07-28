@@ -562,7 +562,6 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     }
 
     func reportFocusWanted() { delegate?.surfaceWantsFocus(self) }
-    func reportClose() { delegate?.surfaceWantsClose(self) }
 
     /// Translate an inbound libghostty action into a seam delegate event. Returns whether
     /// it was consumed.

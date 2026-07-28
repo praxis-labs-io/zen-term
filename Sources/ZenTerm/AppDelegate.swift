@@ -268,14 +268,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         drainSessionSweeps(then: completion)
     }
 
-    /// Hold the quit open until the session sweeps finish. The cap comes from the reaper's own
-    /// worst case rather than a literal: a smaller number silently truncates the sweep and
-    /// leaves running exactly what ZEN-269 is about, and since every session is signalled in
-    /// one pass it does not grow with pane count. Still a cap, so a process that ignores both
-    /// signals can never hang the quit.
+    /// Hold the quit open until every shell has gone and been swept. The cap comes from the
+    /// reaper rather than a literal: a smaller number silently truncates the sweep and leaves
+    /// running exactly what ZEN-269 is about, and since every session is signalled in one pass
+    /// it does not grow with pane count. Still a cap, so a process that ignores both signals
+    /// can never hang the quit.
     private func drainSessionSweeps(then completion: @escaping () -> Void) {
-        ShellSessionReaper.shared.drain(
-            timeout: ShellSessionReaper.worstCaseSweep, completion: completion)
+        ShellSessionReaper.shared.drainAllSessions(
+            timeout: ShellSessionReaper.quitSweepBudget, completion: completion)
     }
 
     /// ⌘Q always confirms: tally tabs across every window and gate on the key window's
