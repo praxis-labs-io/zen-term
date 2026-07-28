@@ -54,9 +54,9 @@ event (ZEN-145).
 **A single-column `NSOutlineView` left at the default `.automatic` style is permanently wider than
 its clip.** `.automatic` resolves to the inset/source-list family, whose tiling reserves a constant
 **+32pt in the outline's own frame beyond the column width**, and reports `intercellSpacing` as
-`(17, 0)` — not the classic `(3, 2)` most code assumes. So an outline sized to fill its clip with the
+`(17, 0)`, not the classic `(3, 2)` most code assumes. So an outline sized to fill its clip with the
 documented formula (`column.width = clipWidth - intercellSpacing.width`) still leaves the document
-~15pt wider than the clip at *every* width, independent of row content — a static geometry overflow,
+~15pt wider than the clip at *every* width, independent of row content: a static geometry overflow,
 not a scroll artifact, so a `constrainBoundsRect` origin-clamp and `horizontalScrollElasticity = .none`
 defend against dragging into it but never remove it. Force `outline.style = .plain` and zero the
 intercell width (`intercellSpacing = NSSize(width: 0, height: intercellSpacing.height)`); `.plain`
@@ -67,17 +67,17 @@ triangle pokes left of a selection pill: shift level-0 cells right by one `inden
 `frameOfOutlineCell`/`frameOfCell` to seat them inside the pill (ZEN-236).
 
 **`NSTableView` shares the same `.automatic` inset trap.** Left at the default style, a plain
-`NSTableView` reserves a source-list-style horizontal row inset, so its rows — and any full-row
-selection or background — sit off the pane's leading and trailing edges by a fixed margin you never
+`NSTableView` reserves a source-list-style horizontal row inset, so its rows, and any full-row
+selection or background, sit off the pane's leading and trailing edges by a fixed margin you never
 asked for. The diff pane read as gapped from the tree divider on the left and the card edge on the
 right until `table.style = .plain` removed it. Once it's `.plain`, add whatever margin you *do* want
 explicitly (a leading/trailing constant on the table, or the row content's own insets) so the amount
-is yours, not the framework's — and a full-row pill takes no extra inset of its own on top of that
+is yours, not the framework's, and a full-row pill takes no extra inset of its own on top of that
 margin, or it nests a second gap inside the first (ZEN-243).
 
 **`NSScrollView.contentInsets` is scrollable range, not padding.** A nonzero inset on an edge
-extends the clip view's pannable range by exactly that many points on that edge — same model as
-`UIScrollView.contentInset` — *even when the document view exactly fills the clip on that axis*. A
+extends the clip view's pannable range by exactly that many points on that edge, the same model as
+`UIScrollView.contentInset`, *even when the document view exactly fills the clip on that axis*. A
 single-column `NSOutlineView` sized to fill its clip's width exactly still scrolled sideways by a
 fixed few points at every window width because `contentInsets.left`/`.right` were nonzero (wanted
 for visual breathing room); no amount of recomputing the column's width against
@@ -93,7 +93,7 @@ document's reported frame width (ZEN-226).
 **A width-responsive relayout must key off a frame-change notification, not a child's `bounds` read
 inside `layout()`.** AppKit resolves a view's own frame before its `layout()` runs, but a *descendant*
 (an `NSScrollView`'s document, a table tiling its rows) gets its new frame *after* the ancestor's
-`layout()` returns — so reading `table.bounds.width` from the enclosing view's `layout()` sees the
+`layout()` returns, so reading `table.bounds.width` from the enclosing view's `layout()` sees the
 *previous* width on a live window resize. It looks correct in a unit test only because
 `layoutSubtreeIfNeeded()` flushes the whole subtree first, which the app's incremental passes don't.
 For "do X when this view's width crosses a threshold," observe the view itself:
@@ -106,42 +106,42 @@ the *final* frame on every resize and on first layout. The diff viewer's auto-fo
 a couple of points inside its frame, so a column sized to `characters * digitWidth` is a hair too
 narrow and clips even a single digit. Size a content-fit label to its string plus a few points of
 padding (`DiffCellMetrics.numberColumnWidth`), or measure the actual string with the label's own
-attributes and pad — never the raw advance sum (ZEN-243).
+attributes and pad, never the raw advance sum (ZEN-243).
 
-**A non-truncating label holds its container — and the window — open.** A label defaults to a high
+**A non-truncating label holds its container, and the window, open.** A label defaults to a high
 horizontal compression resistance and no truncation, so its intrinsic width becomes a hard floor for
 everything it's pinned inside. A long value (a footer showing the full branch name) propagated up
 through the card's proportional width constraint and *stopped the window from reaching its own
 `contentMinSize`*. For any label that should yield when space is tight, set a truncating
 `lineBreakMode` **and** lower its horizontal compression resistance
-(`setContentCompressionResistancePriority(.defaultLow, for: .horizontal)`) — setting it on the
+(`setContentCompressionResistancePriority(.defaultLow, for: .horizontal)`) fixes it; setting it on the
 enclosing `NSStackView` is not enough; the child label resists on its own (ZEN-243).
 
 **A custom `NSView` with no `intrinsicContentSize` cannot resist stretching in a stack, at any
 priority.** Content-hugging and compression-resistance only install their constraints on an axis where
 `intrinsicContentSize` returns a real value. A view sized purely by its own internal constraints (a
 `KeycapView`: an inner token stack pinned leading/trailing + a height constant) returns
-`noIntrinsicMetric`, so `setContentHuggingPriority(.required, …)` **on that view** is a silent no-op —
+`noIntrinsicMetric`, so `setContentHuggingPriority(.required, …)` **on that view** is a silent no-op:
 there is nothing for the priority to attach to. Inside an `NSStackView` (default `.fill` distribution)
 it is then the only elastic member and absorbs every point of slack: a one-glyph keycap stretched into
-a wide pill, because the neighboring `NSTextField` ships with horizontal hugging 251 — one above the
-keycap's transitively-inherited 250 — and wins the tie for who does *not* stretch. Override
+a wide pill, because the neighboring `NSTextField` ships with horizontal hugging 251, one above the
+keycap's transitively-inherited 250, and wins the tie for who does *not* stretch. Override
 `intrinsicContentSize` to report the width the view's own constraints already produce
 (`tokenStack.fittingSize.width + insets`), and `invalidateIntrinsicContentSize()` when its content
 changes; only then do hugging/compression priorities engage. Setting those priorities at the call site
 is correct code aimed at nothing until the view itself reports an intrinsic size (ZEN-262).
 
-**In an `NSStackView`, name the view that absorbs the slack — the solver's default is rarely what you
+**In an `NSStackView`, name the view that absorbs the slack. The solver's default is rarely what you
 meant.** When a stack's main axis is larger than the sum of its content, `distribution` hands the extra
 to the arranged views; the default `.fill` grows the **lowest** content-hugging view first. The slack is
 often invisible in the code: a `.leading`- or `.trailing`-aligned *cross*-axis still sizes the stack to
 its widest child, so every narrower row is stretched to that width and one view inside each has to take
-up the difference. Keep it deterministic in two moves — give anything that should hold its natural size
+up the difference. Keep it deterministic in two moves. Give anything that should hold its natural size
 a real width (an `intrinsicContentSize`, per above, or an explicit constraint) so it is not a growth
 candidate, and make the one thing that *should* flex (a trailing spacer, or a label with a truncating
 `lineBreakMode`) the lowest-hugging so the slack lands there on purpose. Spacing follows the same "be
 explicit" rule: uniform `spacing` sits between every pair, and `setCustomSpacing(_:after:)` overrides a
-single gap — reach for it rather than padding a view to fake a wider gap, since a padded view is one
+single gap, so reach for it rather than padding a view to fake a wider gap, since a padded view is one
 more thing the distribution can stretch. The keycap-pill bug was the general failure in miniature: the
 keycap was the only view with no real resistance, so it was the one that grew (ZEN-262).
 
