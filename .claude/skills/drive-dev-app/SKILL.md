@@ -1,15 +1,27 @@
 ---
 name: drive-dev-app
-description: Drive an in-flight `bin/run` dev build of ZenTerm to verify behavior no test can reach. Launches the worktree build, proves it contains the change, sends commands and chords into its panes, screenshots to inspect state. Use when a runbook step needs the running app rather than Drew's eyes. Never targets the installed or Dev app.
+description: Drive an in-flight `bin/run` dev build of ZenTerm to verify behavior no test can reach. Launches the worktree build, proves it contains the change, sends commands and chords into its panes, screenshots to inspect state. Manual invocation only, never auto-run: it synthesizes OS-level input, so use it when Drew asks for it, not because a runbook step looks automatable. Never targets the installed or Dev app.
 ---
 
 # Driving the dev app (zen-term)
 
 Some behavior is only true in the running app: process teardown across a real pane,
 a chord crossing `KeyInterceptor`, anything spanning the chrome and a live shell.
-`docs/gui-runbook.md` covers what to **hand to Drew**. This covers what you can
-**verify yourself**, which is anything with a machine-checkable outcome (a process
-died, a port freed, a window closed).
+`docs/gui-runbook.md` covers what to **hand to Drew**. This covers what can be
+**verified without him**, which is anything with a machine-checkable outcome (a
+process died, a port freed, a window closed).
+
+## Drew invokes this, not you
+
+**Never auto-run it.** A runbook step looking automatable is not the trigger; Drew
+asking is. This synthesizes real keyboard input into a real session, and that input
+cannot be scoped to one app by the OS. Offer it and wait:
+
+> These three steps have machine-checkable outcomes. Want me to drive them with
+> `drive-dev-app`, or would you rather run the runbook yourself?
+
+The same holds mid-run. If a step turns out to need a chord or a command outside
+what was agreed, stop and ask rather than improvising input.
 
 The split is the outcome, not the surface:
 

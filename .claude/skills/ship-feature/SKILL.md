@@ -27,6 +27,24 @@ the PR path is the one exercised least and trusted most — see step 8.
 
 Do not proceed until build + tests are green.
 
+### 1a. Offer to drive the machine-checkable steps — Drew's call
+
+Some runbook steps have an outcome a machine can check: a process exited, a port
+freed, a window closed. The `drive-dev-app` skill runs those against a real
+`bin/run` build instead of spending Drew's attention on them.
+
+**Offer it and wait. Never auto-run it.** It synthesizes real keyboard input into
+a real session, and macOS cannot scope that to one app, so it goes when Drew asks
+and not because a step looks automatable. Name the steps you mean:
+
+> Steps 2, 4 and 5 have machine-checkable outcomes. Want me to drive them with
+> `drive-dev-app`, or would you rather run the whole runbook yourself?
+
+If he says yes, report those results in step 9 **as driven**, and say plainly
+which steps a machine checked and which still need his eyes. The eyes-only ones
+still go to him as the handover list. If he declines, or the TCC permissions are
+missing, everything goes to the handover list as usual.
+
 ## 2. Documentation accuracy
 
 Run the `update-documentation` skill against this change. It carries ZenTerm's
