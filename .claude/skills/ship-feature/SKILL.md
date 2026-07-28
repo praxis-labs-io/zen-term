@@ -66,6 +66,12 @@ The requestable actor is `copilot-swe-agent`; it comes back as
 id from `suggestedActors` rather than hardcoding it, and if that query returns no
 Bot, say the request failed rather than that Copilot is unavailable.
 
+**Never `@copilot`, in a comment or anywhere else.** The mutation above is the only
+way to request a review. An `@`-mention summons it out of band, and it re-fires on
+every edit of the comment that carries it. Read its findings from the review
+comments and write your triage as ordinary prose that does not address it. This
+holds for every comment on the PR, the description included.
+
 ## 5. Run /code-review
 
 Invoke `/code-review` against the working branch diff (works with or without a
