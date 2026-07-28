@@ -30,6 +30,11 @@ if [[ "${1:-}" == "--fix" ]]; then
     exit 0
 fi
 
+# Spotlight indexes every object file a build writes, which costs more CPU than the build does and
+# lands after it, so it reads as the machine bogging down for no reason. The marker is what tells
+# Spotlight to skip a directory. Recreated each run because `.build` is gitignored and disposable.
+mkdir -p .build && touch .build/.metadata_never_index
+
 echo "▸ swift build"
 swift build 2>&1 | filter_noise
 
