@@ -80,7 +80,7 @@ final class QuitTeardownTests: XCTestCase {
         // The reply must land exactly once: `.terminateLater` treats two as a crash and none as
         // a quit that hangs forever. Wait past the cap so a second fire would have arrived.
         let settled = expectation(description: "past the drain cap")
-        DispatchQueue.main.asyncAfter(deadline: .now() + ShellSessionReaper.worstCaseSweep + 0.3) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + ShellSessionReaper.quitSweepBudget + 0.3) {
             settled.fulfill()
         }
         wait(for: [settled], timeout: 10)

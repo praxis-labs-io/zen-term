@@ -14,11 +14,23 @@ import Foundation
 /// takes that session's leader down with it, and a session whose leader has exited is by
 /// definition nobody's live pane. Teardown sweeps exactly those, which reaches every leftover
 /// of the surface that just went away and can never reach a pane that is still running.
+///
+/// Every recorded leader is watched for its own exit rather than polled for within a window.
+/// The window was a wall-clock guess at how long a leader takes to notice its pty closed, and
+/// a leader that took longer was never swept at all: nothing rescheduled a look, so on the last
+/// pane its dev server outlived the close (ZEN-306). There is no correct duration to guess,
+/// because a shell waiting on a foreground child exits when that child does. These leaders are
+/// our own direct children, so the kernel will tell us the moment each one goes.
 final class ShellSessionLedger {
     static let shared = ShellSessionLedger()
 
     private let lock = NSLock()
     private var known: Set<pid_t> = []
+
+    /// One kqueue watch per recorded leader, armed while it is provably alive and torn down
+    /// when its session is swept. Keyed by pid so a leader recorded twice (the start sampler
+    /// and the teardown snapshot both see it) is watched once.
+    private var watches: [pid_t: DispatchSourceProcess] = [:]
 
     /// Guards the sampler. Separate from `lock` so a running sample never holds up a sweep.
     private let sampleLock = NSLock()
@@ -26,10 +38,45 @@ final class ShellSessionLedger {
 
     private init() {}
 
-    func record(_ sessions: Set<pid_t>) {
+    /// How many recorded sessions are still waiting for their leader to go. The quit drain
+    /// watches this: `takeOrphans` removes sessions as it hands them out, so zero means nothing
+    /// is outstanding, and a count that stops falling means nothing more is going to happen.
+    var count: Int {
         lock.lock()
         defer { lock.unlock() }
+        return known.count
+    }
+
+    func record(_ sessions: Set<pid_t>) {
+        lock.lock()
+        let fresh = sessions.subtracting(known)
         known.formUnion(sessions)
+        for pid in fresh {
+            watches[pid] = makeWatch(for: pid)
+        }
+        lock.unlock()
+    }
+
+    /// Arm a watch for one leader's exit.
+    ///
+    /// `leaderChildren` only returns leaders that were alive in its snapshot, so the watch is
+    /// always armed against a live process. If the leader exits in the gap between that
+    /// snapshot and this call the source still fires, because an unreaped child stays in the
+    /// table as a zombie. A fire is only a prompt to look: the sweep re-checks the process
+    /// table through `takeOrphans` and matches sessions with `getsid`, so a stale or recycled
+    /// pid costs one wasted look and can never reach a live pane's session.
+    ///
+    /// Fires go through `scheduleSweep`, not straight to a sweep. A window's panes close
+    /// together and their leaders exit milliseconds apart, so one sweep per fire would put one
+    /// graced `reap` pass per pane on the reaper's serial queue and the tail would still be
+    /// waiting, unsignalled, when quit gave up.
+    private func makeWatch(for pid: pid_t) -> DispatchSourceProcess {
+        let source = DispatchSource.makeProcessSource(
+            identifier: pid, eventMask: .exit,
+            queue: DispatchQueue.global(qos: .userInitiated))
+        source.setEventHandler { ShellSessionReaper.shared.scheduleSweep() }
+        source.resume()
+        return source
     }
 
     /// Watch for new shell sessions for `duration`, checking every `interval`.
@@ -65,6 +112,23 @@ final class ShellSessionLedger {
         }
     }
 
+    /// Every recorded session, emptied out, whether or not its leader has exited.
+    ///
+    /// **Only valid once every surface has been torn down**, which is true exactly on the quit
+    /// path. The leader-exited test that guards `takeOrphans` exists to keep a live pane out of
+    /// reach; when no pane is left alive there is nothing to protect, and a leader still running
+    /// at that point is a shell that has not noticed its pty yet, not somebody's work. Calling
+    /// this while a pane is open would SIGKILL that pane's session, which is the ZEN-269 bug.
+    func takeAll() -> [pid_t] {
+        lock.lock()
+        defer { lock.unlock() }
+        let all = Array(known)
+        known.removeAll()
+        watches.values.forEach { $0.cancel() }
+        watches.removeAll()
+        return all
+    }
+
     /// The recorded sessions whose leader has exited, dropped from the ledger as they are
     /// handed out so two teardowns racing each other can't both sweep the same one.
     ///
@@ -76,6 +140,9 @@ final class ShellSessionLedger {
         defer { lock.unlock() }
         let orphans = ShellSession.orphaned(among: known)
         known.subtract(orphans)
+        for pid in orphans {
+            watches.removeValue(forKey: pid)?.cancel()
+        }
         return orphans
     }
 }

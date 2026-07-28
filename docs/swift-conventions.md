@@ -290,6 +290,24 @@ entry (`EnableSecureEventInput`) left engaged after you Cmd-Tab away from a `sud
 keyboard input system-wide in other apps. Scope such state to the *focused* surface and tie it to
 `NSApplication.didResignActive` / `didBecomeActive` (ZEN-72).
 
+**A `DispatchGroup` drain reports "done" when the work has not started yet.** `notify` fires the
+moment the group is empty, and empty means *nothing is in flight*, which is indistinguishable from
+*nothing has begun*. Quit freed every surface and then waited on the group, but the shells had not
+exited yet, so nothing had entered it: the drain fired immediately and the process left before a
+single signal went out (ZEN-306). Wait on the **condition you actually care about** (the ledger of
+recorded sessions emptying) and use the group only for work already entered. Where a gap between
+"claim the work" and "enter the group" exists, hold the group across both, or a drain landing in
+that window sees idle.
+
+**Wait for the event, not for a duration you guessed.** The same sweep polled for orphaned sessions
+inside a fixed 1.0s window, chosen against a measured 45ms. A session leader slower than that was
+never swept at all, because nothing rescheduled a look. There is no correct number: a shell waiting
+on a foreground child exits when that child does. These leaders are the app's own direct children,
+so `DispatchSource.makeProcessSource(identifier:eventMask: .exit)` names the moment exactly.
+Registering against a child that has already exited still fires, because an unreaped child stays in
+the table as a zombie, so the race between snapshotting and arming is safe. Treat a fire as a prompt
+to re-check rather than as proof, and a recycled pid costs one wasted look instead of a wrong kill.
+
 ## Carbon and the main thread
 
 **Every TIS call is main-thread-only in a GUI app, and violating it does not look like a crash.** Called from a background queue in a running app it takes the whole
