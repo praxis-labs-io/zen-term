@@ -61,7 +61,7 @@ final class SettingsConfigDiagnosticRenderTests: WindowTestCase {
     func test_clampedScalar_showsOnTheTerminalRow() {
         loadConfig("font-size = 200\n")
         let messages = rowMessages(mount(SettingsTerminalSection()))
-        XCTAssertEqual(messages, ["font-size = 200 is out of range. Using 72."])
+        XCTAssertEqual(messages, ["font-size = 200 is out of range. Using 32."])
     }
 
     func test_invalidEnum_showsOnTheTerminalRow() {

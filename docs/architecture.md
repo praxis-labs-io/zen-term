@@ -12,7 +12,16 @@ everything else here is ours.
 contract, and it is deliberately small. A surface is anything that can *be* a terminal inside our
 chrome: it vends an `NSView`, a title, a cwd, a busy flag, and the background its
 program last reported, and it takes
-`start`, `focus`, `terminate`, `paste`, `copySelection`, `applyAppearance`.
+`start`, `focus`, `terminate`, `paste`, `copySelection`, `applyAppearance`,
+`setFontSize`.
+
+**`setFontSize` is separate from `applyAppearance` on purpose.** Appearance travels
+as a whole theme through the app-global config, which on a file-configured backend
+costs a synchronous write/read/parse per distinct value — fine for a theme swap,
+not for a size the user is holding a key to change (ZEN-224). It takes an absolute
+size, never a delta, so the chrome stays the single owner of the number: a stepping
+API would leave the running size inside each surface where the chrome can't read it
+back, and surfaces would drift apart at whatever bounds the backend enforces.
 
 Four types travel with it: `TerminalSurfaceConfig` (spawn params),
 `TerminalSurfaceDelegate` (ten events out, all defaulted to no-ops),
@@ -120,6 +129,14 @@ masking a resolution failure.
   `applyAppearance` on any surface calls `GhosttyApp.shared.updateConfig`, deduped
   by generated config text, so N surfaces cause one real swap. A consequence:
   **there is no per-surface theming.** Every pane shares one theme.
+- **Font size is the exception to that, and it bites.** `setFontSize` goes through
+  `ghostty_surface_binding_action("set_font_size:…")`, which performs the action
+  inline with no config round-trip. libghostty then marks the surface
+  `font_size_adjusted` and **stops applying config reloads to its font**, on the
+  reasoning that the user asked for a specific size. So once a surface has been
+  stepped, the theme's `fontSize` no longer reaches it: the chrome re-pushes
+  `SessionFontSize.points` after every `applyAppearance`, or a theme edit leaves
+  panes at two different sizes.
 - **One surface can still run its own config.** `updateSurfaceConfig` pushes a
   config to a single surface without touching the app-global one, which is how the
   cursor shader stands down on an unfocused pane (ZEN-237). Theming stays global:
@@ -353,6 +370,7 @@ stranded in capture mode, swallowing every keystroke in every window).
 | Tool floats | `ToolFloatController` | per window |
 | Settings, command palette, workspace picker | `WindowController.modal` | per window |
 | Toasts, confirms | `ToastPresenter` | per window |
+| Terminal font size | `SessionFontSize` | **per app** |
 
 **Drawers are tiled, not floating.** The right drawer is a full-height column; the
 bottom drawer sits under the canvas in the remaining left column, so the two never
@@ -563,9 +581,17 @@ mislabel a chord, never invent one.**
 Defaults (`KeymapDefaults.map`): ⌘⇧\ and ⌘⇧- split, ⌘HJKL nav, ⌘⇧HJKL resize, ⌘W
 close pane, ⌘T new tab, ⌘N new window, ⌘[ ⌘] tabs, ⌘1-9 select, ⌘B bottom drawer,
 ⌘\ right drawer, ⌘F Focus Mode, ⌘⇧F Fill Screen, ⌘P command palette, ⌘⇧P workspace
-picker, ⌘, settings, ⌘⌥R reload. ⌘⇧- rather than bare ⌘- leaves ⌘- free for ghostty's text
-magnification. **No tool float is built in**; a float's chord comes from its own
-`key:` field.
+picker, ⌘, settings, ⌘⌥R reload, ⌘= and ⌘+ and ⌘- font size, ⌘0 reset it.
+**No tool float is built in**; a float's chord comes from its own `key:` field.
+
+**Increase ships two chords, and the second is load-bearing.** ⌘+ on a US layout is
+physically ⌘⇧=, which `Chord` folds onto `=` because Shift is set — a different
+dictionary key from bare ⌘=. Bind only ⌘= and the keypress most people make falls
+through to libghostty, which still has it bound per surface, reproducing ZEN-224
+for the common case. It is the one action with two defaults; `assemble` drops all of
+an action's defaults on a rebind, and `Chord.displayed` sorts by config token, so a
+keycap renders the plainer ⌘=. (ZEN-142 had moved split off bare ⌘- to leave it to
+libghostty; ZEN-224 took it back, and ⌘⇧- stays split on its own merits.)
 
 `KeymapAssembler.assemble` resolves defaults, then float chords, then user
 keybinds, later winning. **A user keybind moves its action**: the action's default
@@ -573,7 +599,8 @@ chords are dropped first, so the old key is freed rather than both firing.
 
 **The modal gate cascade** in `WindowController.handle(_:)` runs confirm, then
 modal card, then tool float, then dispatch. The app-global chords (⌘N new window,
-⌘⌥R reload config, and the unbound-by-default Check for Updates command) bypass it on
+⌘⌥R reload config, the three font-size chords, and the unbound-by-default Check for
+Updates command) bypass it on
 the keyboard path (`AppDelegate.route`) and re-implement the gate by hand, because
 they are app-global rather than window-scoped. A command-palette pick, though,
 dispatches through `handle`, which forwards those same app-global chords back to
@@ -628,6 +655,27 @@ workspaces, so the ⌘⇧P picker shows only its `＋ Add workspace` row.
 
 `docs/config/config` ships **fully commented out**, and `ReferenceConfigTests`
 asserts that parsing it yields exactly `.builtIn`, so copying it is a clean slate.
+
+**The terminal font size has a running value the file doesn't hold.**
+`SessionFontSize.points` starts at the config's `font-size` and is what ⌘+ / ⌘- move
+(whole points, libghostty's own increment) and ⌘0 returns to. It is app-global,
+never persisted, and nothing writes it back: the file stays the thing the user
+edits, this stays the thing they nudge. `font-size` and the stepping share one range
+(`SessionFontSize.range`, 6…32) so one concept has one set of bounds whichever way
+it is reached.
+
+Two rules keep it honest, and both were silent failures without them:
+
+- **The re-seed runs in `AppConfig.reload()`, before the broadcast** — not in an
+  observer. `.configDidChange` observers run in registration order, so a window that
+  re-applied first would push the pre-reload size. It re-seeds only when `font-size`
+  itself moved (`reseedIfBaseChanged` compares the base value), because
+  `ConfigChange.theme` subsumes every color and the font family too — gating on the
+  change set would throw a stepped size away whenever the user recolored the theme.
+- **New surfaces are seeded, not just live ones.** `ShellLaunch` and
+  `ToolFloatController` carry `SessionFontSize.points` in the spawn config, so a pane
+  split after a step opens matched. Fanning a step out to what is already on screen
+  is only half of ZEN-224; the next split lands at the config size otherwise.
 
 **Live reload works because most call sites re-read.** `GeneralConfig.current` and
 `Theme.current` are process-global mutable statics, and things like

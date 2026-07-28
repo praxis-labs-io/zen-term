@@ -20,6 +20,9 @@ enum AppConfig {
     static func loadAtLaunch() {
         GeneralConfig.reloadCurrent()
         Theme.reloadCurrent()
+        // Seed the session font size before any surface spawns, so the first pane opens at the
+        // config's size rather than the built-in default (ZEN-224).
+        SessionFontSize.seed(from: GeneralConfig.current)
     }
 
     /// - Parameter force: broadcast `.all` instead of the diff, so every observer re-applies even
@@ -35,6 +38,11 @@ enum AppConfig {
         let oldTheme = Theme.current
         GeneralConfig.reloadCurrent()
         Theme.reloadCurrent()
+        // Before the broadcast, not in an observer: `.configDidChange` observers run in registration
+        // order, so a window that re-applied first would push the pre-reload size and leave its
+        // surfaces stale. Only a moved `font-size` re-seeds — a color or font-family edit leaves a
+        // size the user stepped exactly where they put it (ZEN-224).
+        SessionFontSize.reseedIfBaseChanged(from: GeneralConfig.current)
         let change =
             force
             ? .all

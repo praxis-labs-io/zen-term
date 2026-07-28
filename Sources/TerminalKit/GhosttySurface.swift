@@ -1,4 +1,5 @@
 import AppKit
+import AppLog
 import GhosttyKit
 
 /// libghostty-backed terminal surface — the sole backend (ZEN-45, ZEN-66).
@@ -296,6 +297,29 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         applyLayerBacking(theme: theme, behavior: behavior)
         hostView.scrollMultiplier = behavior.scrollMultiplier
         if let surfacePtr { ghostty_surface_refresh(surfacePtr) }
+    }
+
+    /// Set the font size in points, without touching the app-global config.
+    ///
+    /// Goes through libghostty's binding-action entry rather than `updateConfig`, which is what
+    /// makes it cheap enough for a held ⌘+ (ZEN-224): `ghostty_surface_binding_action` parses the
+    /// action and performs it inline, where writing a config would be a synchronous file
+    /// write/read/parse on the main thread for every distinct size.
+    ///
+    /// `set_font_size` marks the surface `font_size_adjusted`, and libghostty then leaves its font
+    /// size alone across config reloads ("we assume the user wants a specific size"). So this is
+    /// the *only* thing that moves a surface's size once it has been called, and the chrome has to
+    /// re-push after an `applyAppearance` rather than expect the theme's size to land.
+    public func setFontSize(_ points: CGFloat) {
+        guard let surfacePtr else { return }
+        // libghostty parses the same action text a `keybind =` line carries.
+        let action = "set_font_size:\(points)"
+        let performed = action.withCString {
+            ghostty_surface_binding_action(surfacePtr, $0, UInt(action.utf8.count))
+        }
+        if !performed {
+            Log.error("GhosttySurface: libghostty rejected \(action)", category: .surface)
+        }
     }
 
     /// How the surface's layer composites against the window behind it. Three entry points run

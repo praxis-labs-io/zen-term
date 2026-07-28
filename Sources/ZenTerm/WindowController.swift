@@ -64,6 +64,58 @@ final class WindowController: NSObject {
     /// outside can reach into this window's toast stack.
     func showToast(_ content: ToastContent) { toasts.show(content) }
 
+    /// The font-size card currently up in this window, if any, held so a repeat re-labels it rather
+    /// than stacking a second one (see `FontSizeCard`).
+    private var fontSizeCard: FontSizeCard?
+    /// The pending dismissal, cancelled and re-armed on every step so the card lives a full beat
+    /// past the *last* keystroke rather than the first.
+    private var fontSizeDismissal: DispatchWorkItem?
+    /// How long the card stays up after the last step. Shorter than a toast's 4s: it reports a state
+    /// the user is actively driving and can re-raise with one keystroke, so it shouldn't sit over
+    /// the terminal once they've stopped.
+    private static let fontSizeCardLinger: TimeInterval = 1.2
+
+    /// Show (or re-label) the font-size card. Called on the key window only — `AppDelegate` owns the
+    /// size itself and pushes it to every window; this is just where the number is read.
+    func showFontSize(_ text: String) {
+        if let card = fontSizeCard {
+            card.update(text: text)
+        } else {
+            let card = FontSizeCard(text: text)
+            fontSizeCard = card
+            toasts.present(card: card)
+        }
+        fontSizeDismissal?.cancel()
+        let dismissal = DispatchWorkItem { [weak self] in self?.dismissFontSizeCard() }
+        fontSizeDismissal = dismissal
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.fontSizeCardLinger, execute: dismissal)
+    }
+
+    private func dismissFontSizeCard() {
+        guard let card = fontSizeCard else { return }
+        fontSizeCard = nil
+        fontSizeDismissal = nil
+        toasts.remove(card: card)
+    }
+
+    /// Push the session font size to every terminal surface this window owns — the panes of every
+    /// tab, both drawers, and any tool float, open or standing by.
+    ///
+    /// The reach is the whole ticket (ZEN-224): libghostty resized only the focused surface. It is
+    /// also why this is a separate pass rather than a value folded into `applyAppearance` — once a
+    /// surface has been given an explicit size, libghostty stops applying config reloads to its
+    /// font, so the theme's size would no longer land on a stepped surface anyway.
+    func applySessionFontSize() {
+        for surface in allTerminalSurfaces { surface.setFontSize(SessionFontSize.points) }
+    }
+
+    /// Every terminal surface under this window: the pane trees of all tabs plus the tool floats.
+    /// Single-sourced because the appearance re-apply and the font-size push must not drift — a
+    /// surface either collection missed would keep a stale font or a stale theme.
+    private var allTerminalSurfaces: [TerminalSurface] {
+        controllers.values.flatMap { $0.allSurfaces } + floats.allSurfaces
+    }
+
     /// Host the app-global update card in this window's toast stack (ZEN-118). `UpdateController`
     /// presents into the key window this way and re-homes here if its prior host closes.
     func presentUpdateCard(_ card: UpdateCardView) { toasts.present(card: card) }
@@ -381,14 +433,21 @@ final class WindowController: NSObject {
                     // would otherwise keep its old card fill, ink, and ⌘N keycap — washed out over the new
                     // chrome until the user dismisses it.
                     self.waitingToasts.values.forEach { $0.reapplyTheme() }
+                    self.fontSizeCard?.reapplyTheme()
                 }
                 if change.contains(.theme) || change.contains(.terminalBehavior) {
-                    for surface in self.controllers.values.flatMap({ $0.allSurfaces })
-                        + self.floats.allSurfaces
-                    {
+                    for surface in self.allTerminalSurfaces {
                         surface.applyAppearance(
                             theme: Theme.current.terminal, behavior: GeneralConfig.current.terminalBehavior)
                     }
+                    // Re-push the session size on top, unconditionally (ZEN-224). Two reasons, and
+                    // both are silent failures without it. libghostty stops applying config reloads
+                    // to a surface's font once that surface has been given an explicit size, so a
+                    // stepped surface ignores the theme size that just landed. And a surface spawned
+                    // at the stepped size has *not* been given one explicitly, so it would follow the
+                    // theme back down — leaving panes in one tab at different sizes after any theme
+                    // edit. Pushing to all of them settles both on the one number the chrome owns.
+                    self.applySessionFontSize()
                 }
                 if change.contains(.floats) {
                     // A float add / edit / remove changes the catalog — rebuild the dock's per-float
@@ -1486,8 +1545,12 @@ final class WindowController: NSObject {
                 return
             case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .openDiffViewer:
                 floats.close()  // close it, then fall through to open the other
-            case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab, .fillScreen:
-                break  // cross-tab/window chords still act; Fill Screen is window-level
+            case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab, .fillScreen,
+                .increaseFontSize, .decreaseFontSize, .resetFontSize:
+                // Cross-tab/window chords still act; Fill Screen is window-level. Font size is
+                // app-wide and the float itself is a terminal surface, so resizing over an open
+                // float resizes the float too — blocking it here would be the ZEN-224 bug again.
+                break
             default:
                 return
             }
@@ -1516,9 +1579,12 @@ final class WindowController: NSObject {
         case .closePane:
             Log.info("close pane", category: .panes)
             requestClosePane()
-        case .newWindow, .reloadConfig, .checkForUpdates:
-            // App-global (window manager / config reload / update check). The keyboard path routes
-            // these in AppDelegate before handle; a palette pick lands here, so forward it back.
+        case .newWindow, .reloadConfig, .checkForUpdates,
+            .increaseFontSize, .decreaseFontSize, .resetFontSize:
+            // App-global (window manager / config reload / update check / font size). The keyboard
+            // path routes these in AppDelegate before handle; a palette pick lands here, so forward
+            // it back. Font size is app-global for the reason ZEN-224 exists: scoping it to a window
+            // would leave the same "didn't propagate" bug one level up.
             onAppGlobalCommand?(chord)
         case .toggleBottomDrawer:
             Log.info("bottom drawer toggled", category: .drawers)

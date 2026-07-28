@@ -37,7 +37,7 @@ final class CommandCatalogTests: XCTestCase {
                 "Focus Pane Left", "Focus Pane Down", "Focus Pane Up", "Focus Pane Right",
                 "Resize Pane Left", "Resize Pane Down", "Resize Pane Up", "Resize Pane Right",
                 "Focus Mode", "Close Pane",
-                "Fill Screen",
+                "Fill Screen", "Increase Font Size", "Decrease Font Size", "Reset Font Size",
             ])
     }
 

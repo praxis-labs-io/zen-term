@@ -170,13 +170,31 @@ final class ChordTests: XCTestCase {
     }
 
     func test_liveUnshiftedMinus_isNotTheSplit() {
-        // The bug ZEN-142 reports: ⌘- must reach the terminal for ghostty's text zoom.
+        // The bug ZEN-142 reports: an unshifted ⌘- must never land on the split, which is ⌘⇧-.
+        // ZEN-142 kept it unbound so it reached libghostty's per-surface text zoom; ZEN-224 bound it
+        // to the chrome's app-wide decrease instead. Either way the claim under test is the same one
+        // — ⌘- is not ⌘⇧- — so this asserts what it resolves to rather than that it resolves at all.
         let event = NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: 0,
             context: nil, characters: "-", charactersIgnoringModifiers: "-", isARepeat: false, keyCode: 0)!
         let chord = Chord(event: event)
         XCTAssertEqual(chord, Chord(command: true, key: "-"))
-        XCTAssertNil(KeymapDefaults.map[chord!])
+        XCTAssertEqual(KeymapDefaults.map[chord!], .decreaseFontSize)
+    }
+
+    /// The live ⌘+ press, built as the event AppKit actually delivers: Shift is held and
+    /// `charactersIgnoringModifiers` has already applied it, so the event arrives carrying "+".
+    /// It has to fold onto ⌘⇧= and find increase — the whole reason increase ships two default
+    /// chords. A `Chord(command:shift:key:"+")` built by hand would pass while the real keypress
+    /// fell through to libghostty, which is exactly the bug ZEN-224 fixes.
+    func test_liveShiftedEquals_isIncreaseFontSize() {
+        let event = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: 0,
+            windowNumber: 0, context: nil, characters: "+", charactersIgnoringModifiers: "+",
+            isARepeat: false, keyCode: 24)!
+        let chord = Chord(event: event)
+        XCTAssertEqual(chord, Chord(command: true, shift: true, key: "="))
+        XCTAssertEqual(KeymapDefaults.map[chord!], .increaseFontSize)
     }
 
     func test_configToken_arrowGlyph_roundTrips() {

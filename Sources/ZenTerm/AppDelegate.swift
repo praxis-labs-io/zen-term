@@ -143,9 +143,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Route a chord: `⌘n` makes a new window, `.reloadConfig` re-reads config + theme from
-    /// disk, `.checkForUpdates` runs a manual update check — all app-global, not window-scoped;
-    /// everything else goes to the key window's controller. The palette also lands here for the
-    /// app-global chords, via `WindowController.onAppGlobalCommand` (they're a no-op in `handle`).
+    /// disk, `.checkForUpdates` runs a manual update check, and the three font-size chords resize
+    /// every terminal surface the app owns — all app-global, not window-scoped; everything else goes
+    /// to the key window's controller. The palette also lands here for the app-global chords, via
+    /// `WindowController.onAppGlobalCommand` (they're a no-op in `handle`).
     private func route(_ chord: KeyInterceptor.ReservedChord) {
         if case .newWindow = chord {
             // ⌘N is intercepted here before `handle(_:)`, so a palette's / confirm's modal
@@ -170,7 +171,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             updateController.checkForUpdates()
             return
         }
-        keyController()?.handle(chord)
+        switch chord {
+        case .increaseFontSize: applyFontSize { SessionFontSize.step(by: 1) }
+        case .decreaseFontSize: applyFontSize { SessionFontSize.step(by: -1) }
+        case .resetFontSize: applyFontSize { SessionFontSize.reset() }
+        default: keyController()?.handle(chord)
+        }
+    }
+
+    /// Move the session font size, then push it to every terminal surface the app owns and show
+    /// where it landed.
+    ///
+    /// App-global on purpose (ZEN-224): libghostty binds these chords itself and applies each to the
+    /// one focused surface, which is the bug. Every window, every tab, and every tool float gets the
+    /// same size, and `SessionFontSize` also seeds surfaces spawned later — a pane split after a
+    /// step has to open matched, or it has propagated no better than before.
+    private func applyFontSize(_ move: () -> Void) {
+        let before = SessionFontSize.points
+        move()
+        // Only re-push when it actually moved — but always show the card, including at a bound. The
+        // card reports where the user stands, and standing at the floor is an answer; going silent
+        // there reads as a dropped keystroke.
+        if SessionFontSize.points != before {
+            for window in windows { window.applySessionFontSize() }
+        }
+        keyController()?.showFontSize(SessionFontSize.display)
     }
 
     /// A banner was clicked: bring the app forward and jump to its originating tab. Routes by

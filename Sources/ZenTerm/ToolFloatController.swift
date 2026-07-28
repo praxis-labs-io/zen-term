@@ -273,7 +273,8 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         surface.start(
             TerminalSurfaceConfig(
                 command: ShellLaunch.userShell, args: ["-l", "-i", "-c", spec.command],
-                workingDirectory: cwd, theme: Theme.current.terminal,
+                workingDirectory: cwd, fontSize: SessionFontSize.points,
+                theme: Theme.current.terminal,
                 behavior: GeneralConfig.current.terminalBehavior))
         return surface
     }

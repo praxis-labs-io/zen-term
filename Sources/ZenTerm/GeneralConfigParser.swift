@@ -37,7 +37,12 @@ enum GeneralConfigParser {
                 if !value.isEmpty { config.fontName = value }
             case "font-size":
                 if let n = parseDouble(value, key, &diagnostics) {
-                    config.fontSize = CGFloat(clamp(n, 6, 72, key, &diagnostics))
+                    // The same range ⌘+ / ⌘- step within — one concept, one set of bounds, whichever
+                    // way the user reaches it.
+                    config.fontSize = CGFloat(
+                        clamp(
+                            n, Double(SessionFontSize.range.lowerBound),
+                            Double(SessionFontSize.range.upperBound), key, &diagnostics))
                 }
             case "cursor-style":
                 if let style = parseCursorStyle(value, &diagnostics) { config.cursorStyle = style }

@@ -125,8 +125,15 @@ final class GeneralConfigParserTests: XCTestCase {
             "backdrop-alpha = 2.5\nbackground-alpha = -0.5\nfont-size = 2\nmax-drawer-fraction = 0.99\n")
         XCTAssertEqual(config.backdropAlpha, 1.0)  // clamped to [0, 1]
         XCTAssertEqual(config.backgroundAlpha, 0)  // clamped to [0, 1]
-        XCTAssertEqual(config.fontSize, 6)  // clamped to [6, 72]
+        XCTAssertEqual(config.fontSize, 6)  // clamped to [6, 32]
         XCTAssertEqual(config.maxDrawerFraction, 0.95)  // clamped to [0.3, 0.95]
+    }
+
+    /// The ceiling came down to 32 with ZEN-224, so that ⌘+ / ⌘- and the config file bound the size
+    /// the same way. A config asking for more lands on 32 rather than the old 72.
+    func test_fontSize_clampsToTheSteppingCeiling() {
+        XCTAssertEqual(parse("font-size = 40\n").fontSize, 32)
+        XCTAssertEqual(parse("font-size = 32\n").fontSize, 32)  // the ceiling itself is legal
     }
 
     func test_nonFiniteValues_fallBackWithoutCrashing() {
@@ -276,7 +283,7 @@ final class GeneralConfigParserTests: XCTestCase {
     func test_outOfRangeNumber_collectsAClampedDiagnostic() {
         XCTAssertEqual(
             parse("font-size = 200\n").configDiagnostics,
-            [ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .clamped(value: "200", to: "72"))])
+            [ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .clamped(value: "200", to: "32"))])
     }
 
     func test_nonFiniteNumber_collectsInvalidValueNotClamp() {
@@ -319,7 +326,7 @@ final class GeneralConfigParserTests: XCTestCase {
         ).configDiagnostics
         XCTAssertTrue(
             diagnostics.contains(
-                ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .clamped(value: "200", to: "72"))))
+                ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .clamped(value: "200", to: "32"))))
         XCTAssertTrue(diagnostics.contains { if case .keybind = $0.scope { return true } else { return false } })
     }
 }
