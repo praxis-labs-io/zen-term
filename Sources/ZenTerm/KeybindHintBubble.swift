@@ -22,7 +22,7 @@ final class KeybindHintBubble: ShadowCardView {
         layer?.borderColor = FloatShadow.edge.cgColor
         FloatShadow.applyShadow(to: self)
 
-        let accent = Theme.current.chrome.info.nsColor
+        let accent = Theme.current.chrome.accent.nsColor
 
         let badge = NSView()
         badge.wantsLayer = true

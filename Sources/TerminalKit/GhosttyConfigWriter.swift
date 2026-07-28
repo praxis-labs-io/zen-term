@@ -100,10 +100,3 @@ enum GhosttyConfigWriter {
         }
     }
 }
-
-extension TerminalColor {
-    /// `#rrggbb` — the color syntax ghostty's config parser accepts.
-    var hex: String {
-        String(format: "#%02x%02x%02x", red, green, blue)
-    }
-}

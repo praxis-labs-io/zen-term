@@ -1,6 +1,7 @@
 import AppKit
+import TerminalKit
 
-/// The Appearance settings section: theme picker (Task 7) plus the chrome Layout knobs and the
+/// The Appearance settings section: theme and accent pickers plus the chrome Layout knobs and the
 /// Motion preference. A subclass of `SettingsFormSection` — it only declares its groups; the base
 /// owns the row builders, live-apply debounce, focus stops, and Reset-all.
 final class SettingsAppearanceSection: SettingsFormSection {
@@ -8,9 +9,17 @@ final class SettingsAppearanceSection: SettingsFormSection {
 
     private var themeEntries: [ThemeEntry] = []
     private weak var themeDropdown: Dropdown?
+    private weak var accentDropdown: Dropdown?
+
+    /// The accent picker's rows: "Theme default" first, then the 16 ANSI slots. Index 0 clears the
+    /// key, so it stays correct when a theme swap moves what the default resolves to.
+    private static let accentSlots: [AccentSlot?] = [nil] + AccentSlot.allCases
 
     override func populate() {
-        addGroup("Theme") { self.addThemeRow() }
+        addGroup("Theme") {
+            self.addThemeRow()
+            self.addAccentRow()
+        }
         addGroup("Window") {
             self.addSegmentedRow(
                 key: "window-chrome", caption: "Window buttons",
@@ -94,6 +103,50 @@ final class SettingsAppearanceSection: SettingsFormSection {
     private func refreshThemeRow() {
         let selected = currentThemeIndex()
         themeDropdown?.setItems(themeItems(selected: selected), selectedIndex: selected)
+    }
+
+    private func addAccentRow() {
+        let selected = currentAccentIndex()
+        let dropdown = Dropdown(items: accentItems(selected: selected), selectedIndex: selected) {
+            [weak self] index in self?.selectAccent(index)
+        }
+        accentDropdown = dropdown
+
+        addCustomRow(
+            key: "accent-color", caption: "Accent color",
+            description: "The color for focus, active state, and confirm",
+            control: dropdown, focusStop: dropdown, controlNote: nil, width: 220,
+            refresh: { [weak self] in self?.refreshAccentRow() })
+    }
+
+    /// Swatches and hexes resolve against the *live* theme, so switching theme re-renders this row
+    /// with the new palette's colors under the same names.
+    private func accentItems(selected: Int) -> [DropdownItem] {
+        let terminal = Theme.current.terminal
+        return Self.accentSlots.enumerated().map { index, slot in
+            let resolved = (slot ?? .themeDefault).color(in: terminal)
+            return DropdownItem(
+                title: slot?.displayName ?? "Theme default",
+                group: slot.map { $0.isBright ? "Bright" : "Normal" },
+                note: resolved.hex,
+                isSelected: index == selected,
+                swatch: resolved.nsColor)
+        }
+    }
+
+    private func currentAccentIndex() -> Int {
+        let slot = GeneralConfig.current.accentColor
+        return Self.accentSlots.firstIndex { $0 == slot } ?? 0
+    }
+
+    private func selectAccent(_ index: Int) {
+        guard Self.accentSlots.indices.contains(index) else { return }
+        writeOrRemove("accent-color", Self.accentSlots[index]?.rawValue, row: "accent-color")
+    }
+
+    private func refreshAccentRow() {
+        let selected = currentAccentIndex()
+        accentDropdown?.setItems(accentItems(selected: selected), selectedIndex: selected)
     }
 
     /// Reduce-motion shown as On/Off; `system` resolves via the OS accessibility setting. Static so the
