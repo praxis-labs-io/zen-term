@@ -75,6 +75,7 @@ final class DiffViewerHighlightOrchestrationTests: WindowTestCase {
             session: session,
             loader: loader,
             branchesLoader: { completion in completion(branches) },
+            headsLoader: { completion in completion([]) },
             sendTargets: { [] },
             sender: { _, _, _ in },
             onCancel: {})
@@ -111,7 +112,7 @@ final class DiffViewerHighlightOrchestrationTests: WindowTestCase {
         let load = status([diff])
         session.lastStatus = load
 
-        let overlay = mount(session: session, loader: { _, completion in completion(.success(load)) })
+        let overlay = mount(session: session, loader: { _, _, completion in completion(.success(load)) })
 
         XCTAssertEqual(overlay.selectedFilePathForTesting, "A.swift")
         XCTAssertEqual(spans(of: overlay.renderedDiffRowsForTesting), [expected])
@@ -137,7 +138,7 @@ final class DiffViewerHighlightOrchestrationTests: WindowTestCase {
             DiffFileSpans(old: [1: [TokenSpan(range: NSRange(location: 0, length: 3), role: .keyword)]], new: [:]))
         let load = status([first, second])
         session.lastStatus = load
-        let overlay = mount(session: session, loader: { _, completion in completion(.success(load)) })
+        let overlay = mount(session: session, loader: { _, _, completion in completion(.success(load)) })
 
         XCTAssertEqual(overlay.selectedFilePathForTesting, "A.swift")
         XCTAssertFalse(overlay.renderedDiffRowsForTesting.isEmpty, "precondition: the first file painted")
@@ -159,7 +160,7 @@ final class DiffViewerHighlightOrchestrationTests: WindowTestCase {
         let store = session.highlights
         let load = status([diff])
 
-        _ = mount(session: session, loader: { _, completion in completion(.success(load)) })
+        _ = mount(session: session, loader: { _, _, completion in completion(.success(load)) })
 
         guard let cached = store.cached(diff.highlightKey) else {
             return XCTFail("an unhighlightable file should still be cached as resolved")
@@ -185,7 +186,7 @@ final class DiffViewerHighlightOrchestrationTests: WindowTestCase {
             status([selected, changed, untouched]),
             status([selected, file("B.swift", text: "let y = 2"), untouched]),  // only B changed
         ])
-        let overlay = mount(session: session, loader: { base, completion in spy.load(base, completion) })
+        let overlay = mount(session: session, loader: { base, _, completion in spy.load(base, completion) })
 
         let spans = DiffFileSpans(
             old: [1: [TokenSpan(range: NSRange(location: 0, length: 3), role: .keyword)]], new: [:])
@@ -209,7 +210,7 @@ final class DiffViewerHighlightOrchestrationTests: WindowTestCase {
         let session = makeSession()
         let store = session.highlights
         let load = status([diff])
-        let overlay = mount(session: session, loader: { _, completion in completion(.success(load)) })
+        let overlay = mount(session: session, loader: { _, _, completion in completion(.success(load)) })
 
         let cached = DiffFileSpans(
             old: [1: [TokenSpan(range: NSRange(location: 0, length: 3), role: .keyword)]], new: [:])

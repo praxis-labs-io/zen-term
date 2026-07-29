@@ -78,8 +78,9 @@ final class DiffViewerComposerTests: WindowTestCase {
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
             session: DiffViewerSession(repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo")),
-            loader: { _, completion in completion(.success(status)) },
+            loader: { _, _, completion in completion(.success(status)) },
             branchesLoader: { completion in completion([]) },
+            headsLoader: { completion in completion([]) },
             sendTargets: { targets },
             sender: { _, _, _ in },
             onCancel: { [weak self] in self?.closes += 1 })

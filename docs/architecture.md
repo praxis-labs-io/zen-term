@@ -433,10 +433,55 @@ layout-agnostic `DiffRow` model. A narrow pane force-folds to inline (two column
 reading as code), where the `\` toggle is disabled and its footer hint hidden; a `\` pin
 governs only the wide state. The committed slice forks from the repo's default branch
 (`origin/HEAD`, else main/master; git records no parent, so a stacked branch's parent
-isn't guessed). A static header above the tree carries a `Base: <branch>` `Dropdown`
-(the same control the theme picker uses; branches default-first then by recency, the
-checked-out branch excluded) that re-runs the committed slice against the chosen branch
-and is reachable from the tree by arrow key or bare `b`. Navigation is vim-native and
+isn't guessed). A static header above the tree carries two stacked `Dropdown`s (the same
+control the theme picker uses). They stack, so focus steps through them vertically: Up
+from the tree's top row reaches the lower of the two, Up again reaches the upper, and
+Down walks back. Bare `b` still lands on the base picker and Tab still steps between
+them. Each hop falls through to whatever is actually showing, so a repo with no resolved
+base doesn't swallow Up and strand the branch picker on the mouse.
+`Base: <branch>` re-runs the committed slice against the chosen
+branch, ordered default-first then by recency. `Branch: <name>` picks what is being
+*read* rather than what it is measured against (ZEN-313), ordered checked-out-first.
+They stack rather than sharing a row because both hold unbounded branch names: split one
+row between them and both truncate while the card is held open. Both set
+`titleTruncatesUnderPressure`, so the pickers yield their width instead of driving the
+tree column's.
+
+**Neither picker offers the other's selection.** A branch is never comparable to itself,
+so the base list hides the selected head and the head list hides the selected base, each
+keeping its own selection so picking can't remove what you just picked. Both exclusions
+live in `DiffViewerOverlay` because only it knows both, and both move as you pick.
+`GitDiffRunner.orderedBranches` used to drop the checked-out branch for this reason; it
+excludes nothing now, since once a head is selectable it is the *selection* that decides,
+not the checkout. Picking rebuilds the header immediately rather than waiting for the
+load, because a reload landing an identical status is a deliberate no-op (ZEN-233) and
+would otherwise strand both pickers on the old pair.
+
+**A picked branch is read two different ways.** One with a worktree is a real checkout on
+disk, so `WindowController` builds a second `GitDiffRunner` rooted at that path and all
+three slices stay live. One without exists only as commits, so the pinned runner answers
+with the branch as its head, the two working-tree slices come back empty by definition,
+and the list marks it `committed only`. Which case applies is the host's call, not the
+overlay's, which is why the whole `BranchOption` crosses the loader seam rather than a
+name.
+
+**Two different things move, and both have to.** For a branch with no worktree the *ref*
+moves: `FileDiff.headRef` carries it down so a committed-slice blob is fetched from the
+branch the diff was computed against. For a branch with one, the *root* moves instead, and
+the highlighter reads blobs on its own path (`DiffHighlighter.enrich` plus the prefetcher's
+background pass) rather than through the loader. So `DiffViewerOverlay.retargetRepoRoot`
+repoints its root and rebuilds the prefetcher on every pick, and clears
+`DiffHighlightStore`, whose keys carry no notion of which root produced them. Miss that and
+the diff is right while its colours come from another branch's file contents, and a file
+added on the picked branch caches a nil span set and renders plain forever.
+
+**The branch lists refresh on every load, ahead of the unchanged-status guard.** That guard
+exists so an identical diff repaints nothing (ZEN-233), but it says nothing about whether
+branches were created or deleted. Gated behind it, a picker could name a branch that no
+longer existed until some unrelated edit happened to change the diff. A refresh also
+re-resolves any override by name, so a deleted branch or a moved worktree drops the
+selection rather than leaving the picker showing one branch while the loader is asked for
+another. An empty listing is treated as a failed read, not as proof the branch is gone. Navigation is vim-native and
 local to the card (ZEN-262). ⌘h/⌘l move focus between the tree and the diff (the app's
 own pane chords, forwarded from `WindowController.handle` since `KeyInterceptor` consumes
 chords before the responder chain); everything else is a bare key the panes handle in
@@ -628,6 +673,16 @@ dispatches through `handle`, which forwards those same app-global chords back to
 `route` via `WindowController.onAppGlobalCommand`. Without that they'd be a no-op in
 `handle` (that's how Reload Config from the palette used to do nothing). Copy and
 paste take a third path through the responder chain.
+
+**The modal-card stage swallows, with one exception.** A card takes the window, so
+every chord that is not its own toggle or another surface's toggle is dropped: a
+palette, a form, or a confirm is mid-question, and acting on a chord behind it would
+answer by walking away. The diff viewer is the exception for tab chords (⌘1-9, ⌘[,
+⌘]), because it is a reading surface you live in rather than a question. It cannot
+ride the switch the way a tool float does, since a card is tab-hosted
+(`presentTileOverlay`) and unmounts with its tab, so it closes and the switch
+happens. Each tab keeps its own `DiffViewerSession` (ZEN-298), so ⌘D on the far side
+comes back where that tab left off.
 
 **The float stage speaks rather than swallowing.** A pane command (nav, split,
 resize, drawer, Focus Mode) pressed over an open float has nowhere to go, so it

@@ -35,14 +35,29 @@ final class DiffViewerOverlayTests: WindowTestCase {
         var status: GitDiffRunner.StatusLoad
         let failure: GitDiffRunner.Failure?
         let branches: [String]
-        init(status: GitDiffRunner.StatusLoad, failure: GitDiffRunner.Failure?, branches: [String]) {
+        /// The head picker's options. Its `worktree` is what decides whether a pick reads a whole
+        /// working tree or only the committed slice (ZEN-313).
+        /// A `var` so a test can hand the *next* refresh a different branch list — a branch
+        /// vanishing between refreshes is what the reconciliation exists for.
+        var heads: [GitDiffRunner.BranchOption]
+        /// The head the overlay asked each load for — nil while it is showing the checkout's own.
+        var lastHead: GitDiffRunner.BranchOption?
+        init(
+            status: GitDiffRunner.StatusLoad, failure: GitDiffRunner.Failure?, branches: [String],
+            heads: [GitDiffRunner.BranchOption] = []
+        ) {
             self.status = status
             self.failure = failure
             self.branches = branches
+            self.heads = heads
         }
-        func load(_ base: String?, _ completion: (DiffViewerOverlay.StatusResult) -> Void) {
+        func load(
+            _ base: String?, _ head: GitDiffRunner.BranchOption?,
+            _ completion: (DiffViewerOverlay.StatusResult) -> Void
+        ) {
             calls += 1
             lastBase = base
+            lastHead = head
             if let failure {
                 completion(.failure(failure))
             } else {
@@ -63,12 +78,13 @@ final class DiffViewerOverlayTests: WindowTestCase {
     private func mount(
         unstaged: [FileDiff] = [], staged: [FileDiff] = [], committed: [FileDiff] = [],
         base: (branch: String, sha: String)? = nil, branches: [String] = [],
+        heads: [GitDiffRunner.BranchOption] = [],
         failure: GitDiffRunner.Failure? = nil, onCancel: @escaping () -> Void = {},
         // A shared session mounts overlay B on the state overlay A left behind — the reopen path.
         session: DiffViewerSession? = nil
     ) -> (overlay: DiffViewerOverlay, spy: LoaderSpy) {
         let status = makeStatus(unstaged: unstaged, staged: staged, committed: committed, base: base)
-        let spy = LoaderSpy(status: status, failure: failure, branches: branches)
+        let spy = LoaderSpy(status: status, failure: failure, branches: branches, heads: heads)
         // A path that doesn't exist, so the syntax highlighter no-ops (these tests exercise layout and
         // selection, not highlighting) and never spawns git. Its last component is the footer's repo
         // name, so it reads `repo`.
@@ -78,8 +94,9 @@ final class DiffViewerOverlayTests: WindowTestCase {
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
             session: session,
-            loader: { base, completion in spy.load(base, completion) },
+            loader: { base, head, completion in spy.load(base, head, completion) },
             branchesLoader: { completion in completion(spy.branches) },
+            headsLoader: { completion in completion(spy.heads) },
             sendTargets: { [] },
             sender: { _, _, _ in },
             onCancel: onCancel)
@@ -287,6 +304,319 @@ final class DiffViewerOverlayTests: WindowTestCase {
         let (overlay, _) = mount(unstaged: [file("U.swift")])  // no committed slice, no base
 
         XCTAssertFalse(overlay.isBaseHeaderShownForTesting)
+    }
+
+    // MARK: branch (head) dropdown — ZEN-313
+
+    private static func head(_ name: String, worktree: String? = nil, current: Bool = false)
+        -> GitDiffRunner.BranchOption
+    {
+        GitDiffRunner.BranchOption(
+            name: name, worktree: worktree.map { URL(fileURLWithPath: $0) }, isCurrent: current)
+    }
+
+    /// Pick a branch through the real open → highlight → commit path, the same one a person uses.
+    private func pickHead(_ overlay: DiffViewerOverlay, steps: Int) throws {
+        let dropdown = overlay.headDropdownForTesting
+        dropdown.openListForTesting()
+        dropdown.moveHighlightForTesting(steps)
+        window!.makeFirstResponder(dropdown)
+        let commit = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false,
+                keyCode: 36))
+        dropdown.keyDown(with: commit)
+    }
+
+    func test_headDropdown_leadsWithTheCheckedOutBranch() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main"],
+            heads: [Self.head("feature", current: true), Self.head("main", worktree: "/tmp/wt")])
+
+        XCTAssertEqual(overlay.headDropdownForTesting.buttonTitleForTesting, "Branch: feature")
+    }
+
+    /// A branch with no worktree can only show committed work, and the reader is told so in the list
+    /// rather than discovering it as "my uncommitted changes vanished".
+    func test_headDropdown_notesBranchesThatCanOnlyShowCommittedWork() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [
+                Self.head("feature", current: true),
+                Self.head("has-tree", worktree: "/tmp/wt"),
+                Self.head("no-tree"),
+            ])
+
+        let items = overlay.headDropdownForTesting.itemsForTesting
+        XCTAssertNil(items.first { $0.title == "has-tree" }?.note, "a real working tree needs no caveat")
+        XCTAssertEqual(items.first { $0.title == "no-tree" }?.note, "committed only")
+    }
+
+    /// The pick reaches the loader as the whole option, because only the host can turn a worktree path
+    /// into a runner rooted there.
+    func test_pickingABranchWithAWorktree_handsTheOptionToTheLoader() throws {
+        let (overlay, spy) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [Self.head("feature", current: true), Self.head("other", worktree: "/tmp/wt")])
+
+        try pickHead(overlay, steps: 1)
+
+        XCTAssertEqual(spy.lastHead?.name, "other")
+        XCTAssertEqual(spy.lastHead?.worktree, URL(fileURLWithPath: "/tmp/wt"))
+    }
+
+    func test_pickingABranchWithoutAWorktree_stillHandsItOver() throws {
+        let (overlay, spy) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [Self.head("feature", current: true), Self.head("no-tree")])
+
+        try pickHead(overlay, steps: 1)
+
+        XCTAssertEqual(spy.lastHead?.name, "no-tree")
+        XCTAssertNil(spy.lastHead?.worktree, "the host reads this as committed-only")
+    }
+
+    /// Picking the checked-out branch clears the override rather than pinning it, so the viewer goes
+    /// back to plain "this checkout" and follows it if the reader switches branches underneath.
+    func test_pickingBackToTheCheckedOutBranch_clearsTheOverride() throws {
+        let (overlay, spy) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [Self.head("feature", current: true), Self.head("other", worktree: "/tmp/wt")])
+
+        try pickHead(overlay, steps: 1)
+        XCTAssertEqual(spy.lastHead?.name, "other")
+
+        try pickHead(overlay, steps: -1)
+        XCTAssertNil(spy.lastHead, "back on the checkout, the viewer stops pinning a branch")
+    }
+
+    /// The pickers are stacked, so the arrows step between them vertically. Up off the base picker
+    /// reaches the branch one, which was the whole way in for a keyboard user.
+    func test_arrowUpFromTheBasePicker_reachesTheBranchPicker() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main"],
+            heads: [Self.head("feature", current: true), Self.head("other")])
+
+        window!.makeFirstResponder(overlay.baseDropdownForTesting)
+        overlay.baseDropdownForTesting.keyDown(with: keyDown(126))
+
+        XCTAssertTrue(overlay.isHeadDropdownFocusedForTesting)
+    }
+
+    /// And back down again, rather than skipping past it into the tree.
+    func test_arrowDownFromTheBranchPicker_landsOnTheBasePicker() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main"],
+            heads: [Self.head("feature", current: true), Self.head("other")])
+
+        window!.makeFirstResponder(overlay.headDropdownForTesting)
+        overlay.headDropdownForTesting.keyDown(with: keyDown(125))
+
+        XCTAssertTrue(overlay.isBaseDropdownFocusedForTesting)
+    }
+
+    /// With no base to land on, Down falls through to the tree instead of stranding focus.
+    func test_arrowDownFromTheBranchPicker_fallsThroughToTheTreeWhenThereIsNoBase() {
+        let (overlay, _) = mount(
+            unstaged: [file("U.swift")],  // no committed slice, so no base resolves
+            heads: [Self.head("feature", current: true), Self.head("other")])
+
+        window!.makeFirstResponder(overlay.headDropdownForTesting)
+        overlay.headDropdownForTesting.keyDown(with: keyDown(125))
+
+        XCTAssertFalse(overlay.isBaseDropdownFocusedForTesting)
+        XCTAssertFalse(overlay.isHeadDropdownFocusedForTesting, "focus moved on into the tree")
+    }
+
+    /// The branch being compared against is never worth reading, since its diff with itself is empty.
+    /// The mirror of the base picker excluding the checked-out branch.
+    func test_headDropdown_excludesWhicheverBranchIsTheBase() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [
+                Self.head("feature", current: true),
+                Self.head("main", worktree: "/tmp/main"),
+                Self.head("other"),
+            ])
+
+        let titles = overlay.headDropdownForTesting.itemsForTesting.map(\.title)
+        XCTAssertFalse(titles.contains("main"), "reading the base against itself is an empty diff")
+        XCTAssertEqual(titles, ["feature", "other"])
+    }
+
+    // MARK: review findings — the three caught on PR #159
+
+    /// Copilot: the head picker was never hidden, so before `headsLoader` returns (which is every open)
+    /// an empty untitled control sat above the base picker inside a header sized for one row, pushing
+    /// the base picker under `clipsToBounds`. Both pickers hide independently now and the stack
+    /// collapses whichever is gone.
+    func test_headPickerHidden_whileTheBranchListIsStillEmpty() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main"], heads: [])  // heads not yet loaded
+
+        XCTAssertFalse(overlay.isHeadDropdownShownForTesting, "no branches to offer, so no empty control")
+        XCTAssertTrue(overlay.isBaseDropdownShownForTesting)
+        XCTAssertTrue(overlay.isBaseHeaderShownForTesting)
+        XCTAssertEqual(
+            overlay.baseHeaderHeightForTesting, DiffViewerOverlay.headerHeight(forPickers: 1),
+            "one showing picker means a one-row header, not a two-row one with a gap in it")
+    }
+
+    /// And the height follows the count rather than a fixed pair, so the base picker is never sized out
+    /// of a header it is inside.
+    func test_headerHeight_followsHowManyPickersAreShowing() {
+        XCTAssertEqual(DiffViewerOverlay.headerHeight(forPickers: 0), 0)
+        XCTAssertLessThan(
+            DiffViewerOverlay.headerHeight(forPickers: 1),
+            DiffViewerOverlay.headerHeight(forPickers: 2),
+            "two pickers need more room than one")
+    }
+
+    /// Ultrareview: the overlay's repo root was frozen at init, so a picked worktree branch's diff was
+    /// highlighted from the *checkout's* file contents. The root has to follow the loader.
+    func test_pickingAWorktreeBranch_retargetsTheRootTheHighlighterReads() throws {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [Self.head("feature", current: true), Self.head("other", worktree: "/tmp/wt")])
+        let opened = overlay.repoRootForTesting
+
+        try pickHead(overlay, steps: 1)
+
+        XCTAssertEqual(
+            overlay.repoRootForTesting, URL(fileURLWithPath: "/tmp/wt"),
+            "blobs must come from the worktree the diff came from")
+        XCTAssertNotEqual(overlay.repoRootForTesting, opened)
+    }
+
+    /// A branch with no worktree keeps the original root: there the *ref* moves (`FileDiff.headRef`),
+    /// not the root, because there is no second checkout to read.
+    func test_pickingABranchWithoutAWorktree_leavesTheRootAlone() throws {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [Self.head("feature", current: true), Self.head("no-tree")])
+        let opened = overlay.repoRootForTesting
+
+        try pickHead(overlay, steps: 1)
+
+        XCTAssertEqual(overlay.repoRootForTesting, opened)
+    }
+
+    /// Back on the checked-out branch, the root goes back with it.
+    func test_returningToTheCheckedOutBranch_restoresTheOpenedRoot() throws {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [Self.head("feature", current: true), Self.head("other", worktree: "/tmp/wt")])
+        let opened = overlay.repoRootForTesting
+
+        try pickHead(overlay, steps: 1)
+        try pickHead(overlay, steps: -1)
+
+        XCTAssertEqual(overlay.repoRootForTesting, opened)
+    }
+
+    /// Copilot: a branch can vanish between refreshes (deleted, or its worktree moved), and a session
+    /// restores an override from a previous open. Left alone, the picker showed one branch while the
+    /// loader was asked for another. The override is re-resolved by name against what git just reported.
+    func test_anOverrideForAVanishedBranch_isDroppedOnTheNextRefresh() throws {
+        let (overlay, spy) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [Self.head("feature", current: true), Self.head("gone", worktree: "/tmp/wt")])
+
+        try pickHead(overlay, steps: 1)
+        XCTAssertEqual(spy.lastHead?.name, "gone")
+        XCTAssertEqual(overlay.repoRootForTesting, URL(fileURLWithPath: "/tmp/wt"))
+
+        // The branch is deleted out from under the viewer; the next refresh no longer reports it.
+        spy.heads = [Self.head("feature", current: true)]
+        overlay.reloadForTesting()
+
+        XCTAssertEqual(
+            overlay.headDropdownForTesting.buttonTitleForTesting, "Branch: feature",
+            "the picker falls back to the checkout rather than naming a branch that is gone")
+        XCTAssertNotEqual(
+            overlay.repoRootForTesting, URL(fileURLWithPath: "/tmp/wt"),
+            "and the root comes back off the vanished worktree")
+    }
+
+    /// A refresh that returns nothing (a failed listing) must not discard a live selection — that would
+    /// silently reset the reader's branch on a transient git hiccup.
+    func test_anEmptyRefresh_doesNotDiscardTheSelection() throws {
+        let (overlay, spy) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [Self.head("feature", current: true), Self.head("other", worktree: "/tmp/wt")])
+
+        try pickHead(overlay, steps: 1)
+        spy.heads = []  // listing failed
+        overlay.reloadForTesting()
+
+        XCTAssertEqual(
+            overlay.repoRootForTesting, URL(fileURLWithPath: "/tmp/wt"),
+            "a failed listing is not evidence the branch is gone")
+    }
+
+    /// The other half of the symmetry: the base list hides whichever branch is selected as the head.
+    /// It follows the *selection*, not the checkout, which is why this moved out of `GitDiffRunner`.
+    func test_baseDropdown_excludesTheSelectedBranch() throws {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main", "feature", "other"],
+            heads: [Self.head("feature", current: true), Self.head("other", worktree: "/tmp/wt")])
+
+        XCTAssertFalse(
+            overlay.baseDropdownForTesting.itemsForTesting.map(\.title).contains("feature"),
+            "the branch being read is not something to read it against")
+
+        // Point the viewer at `other`; the base list must follow the new selection, not the checkout.
+        try pickHead(overlay, steps: 1)
+
+        let titles = overlay.baseDropdownForTesting.itemsForTesting.map(\.title)
+        XCTAssertFalse(titles.contains("other"), "the newly selected branch drops out of the bases")
+        XCTAssertTrue(titles.contains("feature"), "and the one no longer selected comes back")
+    }
+
+    /// The checked-out branch survives the filter even when it is also the base, because it is the
+    /// default and the way back to it.
+    func test_headDropdown_keepsTheCheckedOutBranchEvenWhenItIsTheBase() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [Self.head("main", current: true), Self.head("other")])
+
+        XCTAssertEqual(overlay.headDropdownForTesting.itemsForTesting.map(\.title), ["main", "other"])
+    }
+
+    /// A long branch name must truncate rather than hold the tree column open. The label itself has to
+    /// yield, not just its container, or its intrinsic width still wins (the ZEN-243 rule).
+    func test_branchPickers_yieldTheirWidthRatherThanWideningTheColumn() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main"],
+            heads: [
+                Self.head("feature", current: true),
+                Self.head("a-very-long-branch-name-that-would-otherwise-hold-the-column-open"),
+            ])
+
+        for dropdown in [overlay.headDropdownForTesting, overlay.baseDropdownForTesting] {
+            XCTAssertEqual(
+                dropdown.contentCompressionResistancePriority(for: .horizontal), .defaultLow,
+                "the picker must yield before the column does")
+        }
+    }
+
+    /// "Nothing to compare against" and "nothing to look at" are different states. The base picker
+    /// hides for the first; the branch picker must survive it, because it is the way out of the second.
+    func test_branchPickerSurvivesARepoWithNoResolvedBase() {
+        let (overlay, _) = mount(
+            unstaged: [file("U.swift")],  // no committed slice, so no base resolves
+            heads: [Self.head("feature", current: true), Self.head("other")])
+
+        XCTAssertTrue(overlay.isBaseHeaderShownForTesting, "the header stays for the branch picker")
+        XCTAssertFalse(overlay.isBaseDropdownShownForTesting, "but there is no base to offer")
+        XCTAssertEqual(overlay.headDropdownForTesting.buttonTitleForTesting, "Branch: feature")
     }
 
     func test_choosingABranch_reloadsTheDiffAgainstThatBase() {

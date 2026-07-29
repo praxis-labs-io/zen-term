@@ -41,6 +41,11 @@ struct FileDiff: Equatable {
     let hunks: [Hunk]
     var scope: DiffScope = .unstaged
     var baseSHA: String?
+    /// The ref the committed slice's *new* side lives at, when the reader picked a branch with no
+    /// worktree (ZEN-313). Nil means the checkout's own `HEAD`, which is the ordinary case. Without
+    /// it the highlighter would fetch the new-side blob from `HEAD` while the diff itself was
+    /// computed against another branch, and highlight the wrong file contents.
+    var headRef: String?
 
     var addedCount: Int {
         hunks.reduce(0) { $0 + $1.lines.lazy.filter { $0.kind == .added }.count }

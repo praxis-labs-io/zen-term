@@ -1012,31 +1012,45 @@ final class WindowController: NSObject {
                     message: "This folder isn't a Git repository."))
             return
         }
+        guard let tab = activeController else { return }  // no tab, no viewer to mount it in
         if modal != nil { closeModal() }  // single slot — dismiss whatever's up first
         let runner = GitDiffRunner(repoRoot: repoRoot)
         // One session per repo, reused across opens: it carries the last status (so a reopen renders
         // instantly and refreshes behind the card instead of flashing a spinner), the highlight cache
         // (so it paints highlighted with no re-parse), and where the reader left off. A different repo
-        // starts fresh rather than accumulating a session per repo the window has ever visited.
+        // starts fresh rather than accumulating a session per repo the tab has ever visited.
+        //
+        // The session lives on the tab, not the window (ZEN-298). A window-level slot meant two tabs
+        // on two repos shared one session, so opening the viewer in the second discarded the first's
+        // place and cache, and going back rendered a spinner at the top of the file.
         let session: DiffViewerSession
-        if let existing = diffViewerSession, existing.repoRoot == repoRoot {
+        if let existing = tab.diffViewerSession, existing.repoRoot == repoRoot {
             session = existing
         } else {
             session = DiffViewerSession(repoRoot: repoRoot)
-            diffViewerSession = session
+            tab.diffViewerSession = session
         }
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
             session: session,
-            loader: { base, completion in
-                runner.loadStatus(base: base) { result in
-                    // Only the default-base load restamps the cache — a picked base is a transient
+            loader: { base, head, completion in
+                // Picking a branch that has a worktree means reading a different directory, so it gets
+                // its own runner rooted there and all three slices stay live. A branch without one has
+                // no working tree to read, so the pinned runner answers with the branch as its head and
+                // only the committed slice comes back (ZEN-313).
+                let target = head?.worktree.map(GitDiffRunner.init(repoRoot:)) ?? runner
+                let headRef = head?.hasWorktree == false ? head?.name : nil
+                target.loadStatus(base: base, head: headRef) { result in
+                    // Only the plain load restamps the cache — a picked base or branch is a transient
                     // override, not the state a plain reopen should render.
-                    if base == nil, case .success(let load) = result { session.lastStatus = load }
+                    if base == nil, head == nil, case .success(let load) = result {
+                        session.lastStatus = load
+                    }
                     completion(result)
                 }
             },
             branchesLoader: { completion in runner.loadBranches(completion: completion) },
+            headsLoader: { completion in runner.loadHeads(completion: completion) },
             sendTargets: { [weak self] in self?.activeController?.sendTargets() ?? [] },
             // Submit closes the viewer; queue leaves it open to stack another comment. Close before the
             // send on submit — `closeModal` restores focus to the panel that had it, which would
@@ -1048,9 +1062,6 @@ final class WindowController: NSObject {
             onCancel: { [weak self] in self?.closeModal() })
         presentModal(overlay, kind: .diffViewer)
     }
-
-    /// What the diff viewer remembers about the repo it last opened — see `DiffViewerSession`.
-    private var diffViewerSession: DiffViewerSession?
 
     /// Which section the Settings card opens on. `.tools` / `.workspaces` are used when a sub-form
     /// (tool-float or workspace editor) hands back to the section it was launched from; the
@@ -1520,6 +1531,18 @@ final class WindowController: NSObject {
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
                 .openDiffViewer:
                 closeModal()  // close the current card, then open the requested surface below
+            case .selectTab, .prevTab, .nextTab:
+                // The diff viewer is a reading surface you live in, not a form waiting on an answer,
+                // so a tab switch acts instead of being swallowed — the same as with a tool float
+                // open (see the `floats.isOpen` block below). It can't *ride* the switch the way a
+                // float does, because a card is tab-hosted (`presentTileOverlay`) and unmounts with
+                // its tab, so it closes. ZEN-298 keeps each tab's session, so ⌘D in the tab you land
+                // on comes back where that tab left off.
+                //
+                // Every other card stays swallowed: a palette, a form, or a confirm is mid-question,
+                // and answering it by walking away is not the same act as leaving a diff open.
+                guard modal.kind == .diffViewer else { return }
+                closeModal()
             default:
                 return
             }
@@ -1894,6 +1917,14 @@ final class WindowController: NSObject {
     func waitingToastForTesting(tabIndex: Int) -> ToastView? {
         guard tabs.order.indices.contains(tabIndex) else { return nil }
         return waitingToasts[tabs.order[tabIndex]]
+    }
+
+    /// Test hook: the diff-viewer session a given tab is holding (ZEN-298). The overlay keeps its
+    /// `session` private, so identity across a tab round-trip is only reachable from the tab that owns
+    /// it — which is the thing the ticket is about.
+    func diffViewerSessionForTesting(tabIndex: Int) -> DiffViewerSession? {
+        guard tabs.order.indices.contains(tabIndex) else { return nil }
+        return controllers[tabs.order[tabIndex]]?.diffViewerSession
     }
 
     /// Test hook: open `count` extra tabs, so a test can drive tab-order changes under a live toast.

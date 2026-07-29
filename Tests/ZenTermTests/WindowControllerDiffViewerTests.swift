@@ -83,6 +83,124 @@ final class WindowControllerDiffViewerTests: WindowTestCase {
         XCTAssertTrue(diffOverlays(c).isEmpty, "a non-repo must not present a viewer")
     }
 
+    /// Two tabs on two repos each keep their own session (ZEN-298). The slot used to live on
+    /// `WindowController`, so opening the viewer in a second tab on a different repo evicted the
+    /// first tab's session; going back rebuilt from nothing, which the reader sees as a spinner and
+    /// the top of the file they were part-way through.
+    ///
+    /// Identity is the assertion because the session *is* the preserved place: `DiffViewerOverlay`
+    /// keeps its `session` private and seeds `pendingPlace` from it on open, so a surviving session
+    /// is exactly what "lands you back where you left off" means.
+    func test_diffViewerSession_survivesAnotherTabOpeningAnotherRepo() throws {
+        let c = makeWindow()
+        let repoB = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-diff-viewer-b-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: repoB.appendingPathComponent(".git", isDirectory: true), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: repoB) }
+
+        // Tab 0 reads repo A, and the reader gets part-way into a file.
+        c.resolveRepoRoot = { _, completion in completion(self.root) }
+        c.openDiffViewer()
+        let first = try XCTUnwrap(c.diffViewerSessionForTesting(tabIndex: 0))
+        c.openDiffViewer()  // ⌘D again dismisses it; every other chord is swallowed while it's up
+        // Stamped after the dismiss, because dismissing runs `snapshotPlace()` and that is what
+        // writes the reader's real place into the session — stamping before it would just be
+        // overwritten by the empty place of a viewer nobody scrolled.
+        first.place.selectedPath = "Sources/ZenTerm/WindowController.swift"
+
+        // A second tab opens the viewer on a different repo.
+        c.newTabForTesting()
+        c.selectTabForTesting(index: 1)
+        c.resolveRepoRoot = { _, completion in completion(repoB) }
+        c.openDiffViewer()
+        XCTAssertEqual(
+            c.diffViewerSessionForTesting(tabIndex: 1)?.repoRoot, repoB,
+            "the second tab reads its own repo")
+        c.openDiffViewer()
+
+        // Back in tab 0: the same session, still holding where the reader was.
+        c.selectTabForTesting(index: 0)
+        let returned = try XCTUnwrap(c.diffViewerSessionForTesting(tabIndex: 0))
+        XCTAssertTrue(
+            returned === first, "tab 0's session must survive another tab opening another repo")
+        XCTAssertEqual(
+            returned.place.selectedPath, "Sources/ZenTerm/WindowController.swift",
+            "the reader's place comes back with it")
+    }
+
+    /// The eviction that *should* still happen: one tab, two repos. A session is per repo, so
+    /// pointing the same tab at a different repo starts fresh rather than accumulating one session
+    /// per repo the tab has ever visited.
+    func test_diffViewerSession_sameTabDifferentRepo_startsFresh() throws {
+        let c = makeWindow()
+        let repoB = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-diff-viewer-b-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: repoB.appendingPathComponent(".git", isDirectory: true), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: repoB) }
+
+        c.resolveRepoRoot = { _, completion in completion(self.root) }
+        c.openDiffViewer()
+        let first = try XCTUnwrap(c.diffViewerSessionForTesting(tabIndex: 0))
+        c.openDiffViewer()  // dismiss before pointing the same tab at another repo
+
+        c.resolveRepoRoot = { _, completion in completion(repoB) }
+        c.openDiffViewer()
+        let second = try XCTUnwrap(c.diffViewerSessionForTesting(tabIndex: 0))
+
+        XCTAssertFalse(second === first, "a different repo in the same tab starts a new session")
+        XCTAssertEqual(second.repoRoot, repoB)
+    }
+
+    /// A tab switch acts with the viewer up instead of being swallowed, the same as with a tool
+    /// float open. The card is tab-hosted so it closes rather than riding the switch; ZEN-298's
+    /// per-tab session is what makes that cheap, since ⌘D on the far side comes back in place.
+    func test_diffViewer_tabSwitchChordActs_insteadOfBeingSwallowed() throws {
+        let c = makeWindow()
+        c.resolveRepoRoot = { _, completion in completion(self.root) }
+        c.newTabForTesting()
+        c.selectTabForTesting(index: 0)
+
+        c.openDiffViewer()
+        XCTAssertTrue(c.isModalOverlayOpen, "the viewer is up before the switch")
+
+        c.handle(.selectTab(2))  // ⌘2 while reading a diff
+
+        XCTAssertFalse(c.isModalOverlayOpen, "the viewer closes rather than eating the chord")
+        c.openDiffViewer()
+        XCTAssertNotNil(
+            c.diffViewerSessionForTesting(tabIndex: 1),
+            "⌘2 landed on the second tab, so its own session is the one that opened")
+    }
+
+    /// ⌘[ / ⌘] too, since they take the same route.
+    func test_diffViewer_cycleTabChordActs_insteadOfBeingSwallowed() {
+        let c = makeWindow()
+        c.resolveRepoRoot = { _, completion in completion(self.root) }
+        c.newTabForTesting()
+        c.selectTabForTesting(index: 0)
+
+        c.openDiffViewer()
+        c.handle(.nextTab)
+
+        XCTAssertFalse(c.isModalOverlayOpen)
+    }
+
+    /// The carve-out is the diff viewer's alone. A palette is mid-question, and walking away from
+    /// it is not the same act as leaving a diff open, so it still swallows the chord.
+    func test_commandPalette_stillSwallowsTabSwitch() {
+        let c = makeWindow()
+        c.newTabForTesting()
+        c.selectTabForTesting(index: 0)
+
+        c.handle(.toggleCommandPalette)
+        XCTAssertTrue(c.isModalOverlayOpen, "the palette is up")
+
+        c.handle(.selectTab(2))
+        XCTAssertTrue(c.isModalOverlayOpen, "a card awaiting an answer keeps swallowing tab chords")
+    }
+
     /// A second ⌘D in the resolve gap is dropped, not queued — otherwise the resolve completion
     /// would present a second viewer over the first.
     func test_openDiffViewer_doublePressMidResolve_presentsOne() {

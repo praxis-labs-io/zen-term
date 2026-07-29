@@ -20,12 +20,20 @@ import AppKit
 /// else the `diff-layout` config default.
 final class DiffViewerOverlay: NSView, ModalOverlay {
     typealias StatusResult = Result<GitDiffRunner.StatusLoad, GitDiffRunner.Failure>
-    /// Loads the repo status for a chosen base (nil = the repo's default) and calls back on the main
-    /// thread. Injected so the overlay never touches `Process` itself; `WindowController` wires this to
-    /// a `GitDiffRunner`.
-    typealias Loader = (String?, @escaping (StatusResult) -> Void) -> Void
+    /// Loads the repo status for a chosen base (nil = the repo's default) and a chosen head (nil = the
+    /// checkout's own `HEAD`) and calls back on the main thread. Injected so the overlay never touches
+    /// `Process` itself; `WindowController` wires this to a `GitDiffRunner`.
+    ///
+    /// The head is passed as the whole `BranchOption` rather than a name because picking a branch that
+    /// has a worktree means reading a *different directory*, which needs a different runner. Only the
+    /// host can build that, so the overlay hands over the choice and stays out of it (ZEN-313).
+    typealias Loader = (String?, GitDiffRunner.BranchOption?, @escaping (StatusResult) -> Void) -> Void
     /// Loads the repo's branches (base-picker order) and calls back on the main thread.
     typealias BranchesLoader = (@escaping ([String]) -> Void) -> Void
+    /// Loads the branches the viewer can be pointed at, checked-out first, each tagged with its
+    /// worktree. Separate from `BranchesLoader` because the base picker hides the current branch and
+    /// the head picker leads with it.
+    typealias HeadsLoader = (@escaping ([GitDiffRunner.BranchOption]) -> Void) -> Void
     /// The terminals in the active tab a comment can go to, **focused one first** — the composer
     /// defaults to index 0, so a send with no dropdown interaction lands where you were working.
     typealias SendTargets = () -> [DiffSendTarget]
@@ -35,6 +43,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     private let loader: Loader
     private let branchesLoader: BranchesLoader
+    private let headsLoader: HeadsLoader
     private let sendTargets: SendTargets
     private let sender: Sender
     private let onCancel: () -> Void
@@ -46,6 +55,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// dropdown is populated (git branch listing is fast, but async).
     private var branches: [String] = []
 
+    /// The branch the viewer is showing once the reader picks one, nil for the checkout's own head.
+    /// A branch with a worktree reads that worktree (all three slices live); one without shows only
+    /// the committed slice, because there is no working tree to read (ZEN-313).
+    private var headOverride: GitDiffRunner.BranchOption?
+    /// The branches offerable as heads, loaded alongside `branches`.
+    private var heads: [GitDiffRunner.BranchOption] = []
+
     private let card = CardView()
     private var dismiss = DismissGate()
 
@@ -54,6 +70,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// repo with no commits vs. its base shows just the tree.
     private let baseHeader = NSView()
     private var baseDropdown: Dropdown!  // created in buildLayout (its onChange needs self)
+    private var headDropdown: Dropdown!  // ditto — reads `Branch: <name>`
+    private let pickerStack = NSStackView()
     private var baseHeaderHeight: NSLayoutConstraint!
 
     private let outline = NavOutlineView()
@@ -74,7 +92,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     private var selectedFilePath: String?
     /// The repo root, for the syntax highlighter's blob fetch (ZEN-239).
-    private let repoRoot: URL
+    /// The root every git read resolves against: the worktree of the picked branch when it has one,
+    /// else the repo the viewer opened on. A `var` because picking a worktree head retargets it, and
+    /// the highlighter has to follow the loader (ZEN-313). It used to be frozen at init, so a picked
+    /// worktree branch's diff was highlighted with the *checkout's* file contents.
+    private var repoRoot: URL
     /// Discards a stale highlight result when the selection moved on before the off-main parse landed
     /// (fast file-switching) — mirrors `loadToken`.
     private var highlightToken = 0
@@ -93,7 +115,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private var pendingCursor: (path: String, line: DiffSelection.LineNumbers)?
     /// Warms the highlight cache for the non-selected files in the background, so navigation lands on a
     /// warm cache instead of a fetch+parse wait. Rescheduled on every `apply`, cancelled on `deinit`.
-    private let prefetcher: DiffFilePrefetcher
+    private var prefetcher: DiffFilePrefetcher
     /// The parsed diff currently shown, kept so a layout flip re-renders without a git re-run.
     private var currentFileDiff: FileDiff?
     /// The layout the shown rows were built with — a config-default change only re-renders when it
@@ -128,6 +150,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     init(
         background: NSColor, session: DiffViewerSession,
         loader: @escaping Loader, branchesLoader: @escaping BranchesLoader,
+        headsLoader: @escaping HeadsLoader,
         sendTargets: @escaping SendTargets, sender: @escaping Sender, onCancel: @escaping () -> Void
     ) {
         self.session = session
@@ -139,6 +162,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         self.prefetcher = DiffFilePrefetcher(repoRoot: session.repoRoot, highlightStore: session.highlights)
         self.loader = loader
         self.branchesLoader = branchesLoader
+        self.headsLoader = headsLoader
+        self.headOverride = session.headOverride
         self.sendTargets = sendTargets
         self.sender = sender
         self.onCancel = onCancel
@@ -174,7 +199,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // show the spinner while the first load runs. A session carrying a picked base can't take the
         // warm path — the cached status is the *default* base's, so rendering it would show the wrong
         // comparison until the re-run lands.
-        if let cached = session.lastStatus, baseOverride == nil {
+        // `lastStatus` is the default base's, for the checkout's own head. Either override makes it the
+        // wrong thing to paint, so a session carrying one loads instead of rendering from cache.
+        if let cached = session.lastStatus, baseOverride == nil, headOverride == nil {
             apply(cached)
             reload(showSpinner: false)
         } else {
@@ -201,6 +228,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         didSnapshotPlace = true
         session.place = currentPlace()
         session.baseOverride = baseOverride
+        session.headOverride = headOverride
     }
 
     /// Pull the repo's branches so the base dropdown is populated. Cheap (a local `for-each-ref`);
@@ -209,6 +237,24 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         branchesLoader { [weak self] branches in
             self?.branches = branches
             self?.updateBaseHeader()
+        }
+        headsLoader { [weak self] heads in
+            guard let self else { return }
+            self.heads = heads
+            // A branch can vanish between refreshes (deleted, or its worktree moved), and a session
+            // restores an override from a previous open. Re-resolve by name against what git just
+            // reported: the picker would otherwise show one branch while `reload` asked the host for
+            // another. Skipped on an empty list so a failed listing doesn't discard a live selection.
+            if !heads.isEmpty {
+                if let override = self.headOverride {
+                    self.headOverride = heads.first { $0.name == override.name }
+                }
+                // Unconditional, because clearing an override needs the root moved back just as much as
+                // setting one needs it moved. `retargetRepoRoot` is idempotent, so a no-change refresh
+                // costs nothing.
+                self.retargetRepoRoot()
+            }
+            self.updateBaseHeader()
         }
     }
 
@@ -503,20 +549,74 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// with it: shown whenever a base resolved (so the base is always changeable), hidden when there's
     /// none (a repo with no base). Called on each load and whenever the branch list refreshes.
     private func updateBaseHeader() {
-        guard let currentBase = displayedStatus?.baseBranch else {
-            baseHeader.isHidden = true
-            baseHeaderHeight.constant = 0
+        // A branch is never comparable to itself, so each picker hides the other's selection. Both
+        // exclusions live here because only this layer knows both, and both move as the reader picks.
+        // Each keeps its *own* selection regardless, or picking would remove the thing you just picked.
+        let currentBase = displayedStatus?.baseBranch
+        let currentHead = headOverride?.name ?? heads.first(where: \.isCurrent)?.name
+
+        updateHeadDropdown(excludingBase: currentBase, selected: currentHead)
+
+        if let currentBase {
+            var items = branches.filter { $0 == currentBase || $0 != currentHead }
+            if !items.contains(currentBase) { items.insert(currentBase, at: 0) }  // an override off the list
+            baseItems = items
+            let selected = items.firstIndex(of: currentBase) ?? 0
+            baseDropdown.setItems(
+                items.map { DropdownItem(title: $0, group: nil, note: nil, isSelected: $0 == currentBase) },
+                selectedIndex: selected)
+        }
+        // The base picker hides with no resolved base, but the branch picker does not: "there is nothing
+        // to compare against" and "there is nothing to look at" are different, and the second is the
+        // state a reader most needs a way out of (ZEN-313). So the header stays for either one.
+        // Both pickers hide independently, and the stack collapses whichever is hidden. The head one
+        // is empty on every open until `headsLoader` returns, so leaving it visible-but-blank showed an
+        // untitled control and sized the header for a row nothing was in.
+        headDropdown.isHidden = headItems.isEmpty
+        baseDropdown.isHidden = currentBase == nil
+        let shown = [headItems.isEmpty ? nil : headDropdown, currentBase == nil ? nil : baseDropdown]
+            .compactMap { $0 }
+        baseHeader.isHidden = shown.isEmpty
+        baseHeaderHeight.constant = Self.headerHeight(forPickers: shown.count)
+    }
+
+    /// The branch order backing the head dropdown, so `onChange`'s index maps back to a branch.
+    private var headItems: [GitDiffRunner.BranchOption] = []
+
+    /// Rebuild the head dropdown. A branch with no worktree is noted as committed-only, because that
+    /// is the difference the reader will otherwise discover as "my uncommitted work vanished".
+    private func updateHeadDropdown(excludingBase base: String?, selected currentName: String?) {
+        headItems = heads.filter { $0.name == currentName || $0.name != base }
+        guard !headItems.isEmpty else {
+            headDropdown.setItems([], selectedIndex: 0)
             return
         }
-        var items = branches
-        if !items.contains(currentBase) { items.insert(currentBase, at: 0) }  // an override off the list
-        baseItems = items
-        let selected = items.firstIndex(of: currentBase) ?? 0
-        baseDropdown.setItems(
-            items.map { DropdownItem(title: $0, group: nil, note: nil, isSelected: $0 == currentBase) },
+        let selected = headItems.firstIndex { $0.name == currentName } ?? 0
+        headDropdown.setItems(
+            headItems.map {
+                DropdownItem(
+                    title: $0.name, group: nil, note: $0.hasWorktree ? nil : "committed only",
+                    isSelected: $0.name == currentName)
+            },
             selectedIndex: selected)
-        baseHeader.isHidden = false
-        baseHeaderHeight.constant = Self.baseHeaderShownHeight
+    }
+
+    /// Point the viewer at the chosen branch. Reselecting the one already shown is a no-op; picking the
+    /// checked-out branch clears the override rather than pinning it, so the viewer goes back to plain
+    /// "this checkout" and follows it if the reader switches branches underneath.
+    private func chooseHeadAt(_ index: Int) {
+        guard headItems.indices.contains(index) else { return }
+        let picked = headItems[index]
+        let shownName = headOverride?.name ?? heads.first(where: \.isCurrent)?.name
+        guard picked.name != shownName else { return }
+        headOverride = picked.isCurrent ? nil : picked
+        retargetRepoRoot()
+        // Rebuild both pickers now rather than waiting for the load. What each one offers depends on
+        // the *selection*, and a reload that lands an identical status is a deliberate no-op (ZEN-233),
+        // so leaving it to `apply` strands them showing the old pair whenever two branches happen to
+        // produce the same diff.
+        updateBaseHeader()
+        reload(showSpinner: false)
     }
 
     /// Compare the committed slice against the chosen branch: re-run against it, keeping the current
@@ -538,8 +638,42 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         refreshFocusStyling()
     }
 
+    /// Point every git read at the picked branch's worktree, or back at the repo the viewer opened on.
+    ///
+    /// The loader already does this for the *diff* by building a runner rooted at the worktree. The
+    /// highlighter reads whole-file blobs separately (`DiffHighlighter.enrich`, and the prefetcher's
+    /// background pass), and both took the root captured at init, so a picked worktree branch showed
+    /// the right diff coloured by another branch's file contents. `FileDiff.headRef` covers only the
+    /// no-worktree case: there the runner stays put and the *ref* moves, here the root itself moves.
+    ///
+    /// The highlight cache is keyed per file with no notion of which root produced it, so spans from
+    /// the old root have to go rather than be reused under the same key. That also clears the poisoned
+    /// nil a file added on the picked branch would otherwise cache forever.
+    private func retargetRepoRoot() {
+        let target = headOverride?.worktree ?? session.repoRoot
+        guard target != repoRoot else { return }
+        repoRoot = target
+        prefetcher.cancelAll()
+        prefetcher = DiffFilePrefetcher(repoRoot: target, highlightStore: highlightStore)
+        highlightStore.clear()
+    }
+
+    /// Step up out of the tree onto the nearest picker: the base one when it is showing, else the
+    /// branch one. Without the fallback, a repo with no resolved base swallows Up at the top row, and
+    /// the branch picker becomes mouse-only in exactly the case it matters most.
+    private func focusHeaderFromTree() {
+        if !baseDropdown.isHidden { focusBaseDropdown() } else { focusHeadDropdown() }
+    }
+
+    /// Step onto the branch picker. Inert when there are no branches to offer, so Tab off the base
+    /// picker doesn't strand focus on a dropdown with an empty list.
+    private func focusHeadDropdown() {
+        guard guardComposer(), !baseHeader.isHidden, !headItems.isEmpty else { return }
+        window?.makeFirstResponder(headDropdown)
+    }
+
     private func focusBaseDropdown() {
-        guard guardComposer(), !baseHeader.isHidden else { return }
+        guard guardComposer(), !baseHeader.isHidden, !baseDropdown.isHidden else { return }
         // The base dropdown is a header control, not a pane, and it isn't reachable via the panes'
         // `becomeFirstResponder` hook — so it inherits whichever pane legend is up rather than flipping
         // it, keeping the keyboard (`b`) and the mouse (click) paths consistent.
@@ -596,7 +730,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // The vim keys are plain letters, so AppKit's type-select would race j/k for every keystroke.
         outline.allowsTypeSelect = false
         outline.onEscape = { [weak self] in self?.handleViewerEscape() }
-        outline.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
+        outline.onFocusBase = { [weak self] in self?.focusHeaderFromTree() }
         outline.onHalfPageDiff = { [weak self] direction in self?.diffTable.halfPage(direction) }
         outline.onMoveFile = { [weak self] delta in self?.moveFileSelection(delta) }
         outline.onPageFiles = { [weak self] direction in self?.pageFileSelection(direction) }
@@ -609,7 +743,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         diffTable.onYank = { [weak self] wantsReference in self?.yank(reference: wantsReference) }
         diffTable.onCompose = { [weak self] in self?.openComposer() }
         diffTable.onToggleLayout = { [weak self] in self?.toggleLayout() }
-        diffTable.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
+        diffTable.onFocusBase = { [weak self] in self?.focusHeaderFromTree() }
         diffTable.onFocusTree = { [weak self] in self?.focusTree() }
         diffTable.onClose = { [weak self] in self?.requestClose() }
         diffTable.onShowKeys = { [weak self] in self?.toggleKeySheet() }
@@ -741,7 +875,20 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         ])
     }
 
+    /// One picker: 8pt above, the control, 8pt below.
     private static let baseHeaderShownHeight: CGFloat = 44
+    private static let pickerRowHeight: CGFloat = baseHeaderShownHeight - 16  // the control alone
+    private static let pickerRowGap: CGFloat = 6
+
+    /// The header's height for however many pickers are showing. Derived rather than a constant per
+    /// case, because either picker can be absent: a fixed pair-height stranded the base picker under
+    /// the clip whenever the branch list hadn't loaded yet.
+    static func headerHeight(forPickers count: Int) -> CGFloat {
+        guard count > 0 else { return 0 }
+        let rows = CGFloat(count) * pickerRowHeight
+        let gaps = CGFloat(count - 1) * pickerRowGap
+        return rows + gaps + 16  // 8pt above and below
+    }
 
     /// The static header above the tree: just the branch dropdown, its trigger reading `Base: <branch>`
     /// (no separate caption, no bottom border — the padding alone separates it from the tree). The
@@ -751,15 +898,49 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         baseHeader.translatesAutoresizingMaskIntoConstraints = false
         baseHeader.clipsToBounds = true  // stays tidy when collapsed to zero height
 
+        headDropdown = Dropdown(items: [], selectedIndex: 0) { [weak self] index in self?.chooseHeadAt(index) }
+        headDropdown.titlePrefix = "Branch: "
+        // Stacked, so the arrows step vertically: Down off the branch picker lands on the base one
+        // below it, and only falls through to the tree when there is no base to land on.
+        headDropdown.onArrowDown = { [weak self] in
+            guard let self else { return }
+            if !baseDropdown.isHidden { focusBaseDropdown() } else { focusTreeTop() }
+        }
+        // The two pickers step between themselves with Tab, so the branch one is reachable without the
+        // mouse. `b` still lands on the base picker, which is where it has always landed.
+        headDropdown.onTab = { [weak self] in self?.focusBaseDropdown() }
+        headDropdown.titleTruncatesUnderPressure = true
+
         baseDropdown = Dropdown(items: [], selectedIndex: 0) { [weak self] index in self?.chooseBaseAt(index) }
         baseDropdown.titlePrefix = "Base: "
         baseDropdown.onArrowDown = { [weak self] in self?.focusTreeTop() }
+        baseDropdown.onArrowUp = { [weak self] in self?.focusHeadDropdown() }
+        baseDropdown.onBacktab = { [weak self] in self?.focusHeadDropdown() }
+        baseDropdown.titleTruncatesUnderPressure = true
 
-        baseHeader.addSubview(baseDropdown)
+        // Stacked, not side by side: both carry branch names, which are long and unbounded, so a row
+        // split between them truncates two things at once and the card can't get narrow. Reading order
+        // runs top to bottom, this branch then what it is measured against.
+        //
+        // An `NSStackView` rather than pinned constraints, because either picker can be absent and a
+        // hidden view still participates in Auto Layout. Chaining `baseDropdown.top` off
+        // `headDropdown.bottom` meant an empty branch list left the base picker pushed below a
+        // one-row header that `clipsToBounds` then cut off. `detachesHiddenViews` (the default) drops
+        // a hidden arranged subview out of the layout entirely, so the stack is however tall the
+        // showing pickers need.
+        pickerStack.orientation = .vertical
+        pickerStack.alignment = .leading
+        pickerStack.spacing = 6
+        pickerStack.translatesAutoresizingMaskIntoConstraints = false
+        pickerStack.setViews([headDropdown, baseDropdown], in: .leading)
+        baseHeader.addSubview(pickerStack)
         NSLayoutConstraint.activate([
-            baseDropdown.leadingAnchor.constraint(equalTo: baseHeader.leadingAnchor, constant: 10),
-            baseDropdown.trailingAnchor.constraint(equalTo: baseHeader.trailingAnchor, constant: -10),
-            baseDropdown.centerYAnchor.constraint(equalTo: baseHeader.centerYAnchor),
+            pickerStack.leadingAnchor.constraint(equalTo: baseHeader.leadingAnchor, constant: 10),
+            pickerStack.trailingAnchor.constraint(equalTo: baseHeader.trailingAnchor, constant: -10),
+            pickerStack.topAnchor.constraint(equalTo: baseHeader.topAnchor, constant: 8),
+            // Both pickers span the stack, so each truncates at the column's width rather than its own.
+            headDropdown.widthAnchor.constraint(equalTo: pickerStack.widthAnchor),
+            baseDropdown.widthAnchor.constraint(equalTo: pickerStack.widthAnchor),
         ])
     }
 
@@ -878,10 +1059,15 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         loadToken += 1
         let token = loadToken
         if showSpinner { showMessage("Loading…") }
-        loader(baseOverride) { [weak self] result in
+        loader(baseOverride, headOverride) { [weak self] result in
             guard let self, token == self.loadToken else { return }
             switch result {
             case .success(let status):
+                // The branch lists refresh on every load, ahead of the unchanged-status guard below.
+                // That guard is about the *diff*: an identical diff says nothing about whether branches
+                // were created or deleted, and gating the lists on it left a picker naming a branch that
+                // no longer existed until some unrelated edit changed the diff.
+                self.refreshBranches()
                 guard status != self.displayedStatus else { return }  // unchanged — keep the view (and cache)
                 self.evictStaleHighlights(from: self.displayedStatus, to: status)
                 self.apply(status)
@@ -1187,6 +1373,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     var isBaseHeaderShownForTesting: Bool { !baseHeader.isHidden }
     /// The base dropdown, for asserting its branch list and driving a pick through the real control.
     var baseDropdownForTesting: Dropdown { baseDropdown }
+    var headDropdownForTesting: Dropdown { headDropdown }
+    var isBaseDropdownShownForTesting: Bool { !baseDropdown.isHidden }
+    var isHeadDropdownShownForTesting: Bool { !headDropdown.isHidden }
+    var baseHeaderHeightForTesting: CGFloat { baseHeaderHeight.constant }
+    /// The root git reads resolve against — the picked branch's worktree, or the repo the viewer opened
+    /// on. Exposed because the highlighter following the loader is the whole point of `retargetRepoRoot`.
+    var repoRootForTesting: URL { repoRoot }
     /// Choose a base branch the way the dropdown's `onChange` does, to exercise the base-override load.
     func chooseBaseForTesting(_ branch: String) {
         guard let index = baseItems.firstIndex(of: branch) else { return }
@@ -1202,6 +1395,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     var isTreeFocusedForTesting: Bool { window?.firstResponder === outline }
     var isDiffFocusedForTesting: Bool { window?.firstResponder === diffTable.scrollFocusTarget }
     var isBaseDropdownFocusedForTesting: Bool { window?.firstResponder === baseDropdown }
+    var isHeadDropdownFocusedForTesting: Bool { window?.firstResponder === headDropdown }
 }
 
 /// A clip view that refuses to scroll horizontally: it pins the visible rect's x to 0, so the single

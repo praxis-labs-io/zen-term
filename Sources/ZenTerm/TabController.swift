@@ -72,6 +72,12 @@ final class TabController: NSObject {
     /// on a panel hidden behind a modal card.
     private let isToolFloatOpen: () -> Bool
 
+    /// What the diff viewer remembers about the repo this tab last opened — see `DiffViewerSession`.
+    /// Per tab, not per window (ZEN-298): a window-level slot meant two tabs on two repos shared one
+    /// session, so opening the viewer in the second discarded the first's place, base, and highlight
+    /// cache. `WindowController` reads and writes it through the active tab; the tab only stores it.
+    var diffViewerSession: DiffViewerSession?
+
     /// Which panel currently holds the tab's single unified focus/halo.
     private enum PanelRef: Equatable {
         case pane, bottomDrawer, rightDrawer
@@ -133,7 +139,15 @@ final class TabController: NSObject {
     /// focused pane's shell `cd`s. Nil for tabs opened any other way.
     var pinnedTitle: String?
     var title: String { pinnedTitle ?? paneCanvas.title }
-    var focusedCWD: URL? { paneCanvas.focusedCWD }
+    /// The focused *panel's* cwd: a focused drawer's, else the focused pane's. Reading the canvas
+    /// unconditionally meant a drawer you had `cd`'d elsewhere still reported the pane's directory,
+    /// so ⌘D opened the wrong repo's diff, ⌘T inherited the wrong directory, a new window opened in
+    /// the wrong place, and a `persist:dir` tool float anchored to the wrong one. Mirrors
+    /// `focusedDrawerSurface`, which is nil exactly when the canvas has focus.
+    ///
+    /// Falls back to the pane rather than nil when a drawer's backend can't resolve a cwd, because
+    /// nil reads downstream as "no repository" rather than "unknown".
+    var focusedCWD: URL? { focusedDrawerSurface?.currentDirectory ?? paneCanvas.focusedCWD }
 
     /// True when the tab has a single pane, so ⌘W on it would close the whole tab.
     var isSinglePane: Bool { paneCanvas.paneCount == 1 }
