@@ -52,10 +52,44 @@ final class ColorSchemeReportTests: XCTestCase {
         XCTAssertEqual(replies.last, Self.lightReply, "the repaint to light must move the report")
     }
 
+    /// A pane opened at a stepped font size keeps it *and* reports its scheme, in one surface.
+    ///
+    /// These two have to be asserted together or neither means anything. Reporting the scheme
+    /// requires a config push, and a config push is what reset the font size (ZEN-224): the first
+    /// version of this feature shipped the report working and the size silently dropped. Assert
+    /// the size alone and a regression that stops pushing config passes; assert the scheme alone
+    /// and the size regression comes back. The pair pins the interaction.
+    ///
+    /// Column counts rather than a fixed geometry, so this does not depend on the machine's font
+    /// metrics: a bigger font in the same view is fewer columns, whatever the absolute numbers.
+    func test_steppedFontSizeSurvivesTheSchemePush() throws {
+        let base = try schemeAndGrid(fontSize: 13)
+        let stepped = try schemeAndGrid(fontSize: 26)
+        XCTAssertEqual(base.scheme, Self.darkReply, "the base pane must still report dark")
+        XCTAssertEqual(stepped.scheme, Self.darkReply, "the stepped pane must still report dark")
+        XCTAssertLessThan(
+            stepped.columns, base.columns,
+            "a 26pt pane must render fewer columns than a 13pt one; equal means the config push "
+                + "reset it to the theme's size (ZEN-224)")
+    }
+
+    /// Ask one surface for both its color scheme and its grid size.
+    private func schemeAndGrid(fontSize: CGFloat) throws -> (scheme: String, columns: Int) {
+        let replies = try schemeReplies(
+            background: Self.darkBackground, queries: 1, bornFontSize: fontSize, alsoQueryGrid: true)
+        let grid = try XCTUnwrap(replies.last)
+        // `CSI 8 ; rows ; cols t`
+        let columns = try XCTUnwrap(
+            grid.split(separator: ";").last.flatMap { Int($0.dropLast()) },
+            "could not parse a column count from \(grid.debugDescription)")
+        return (replies[0], columns)
+    }
+
     /// Run a shell that queries the color scheme, optionally repaints the background with OSC 11
     /// between queries, and hand back the raw replies libghostty wrote to the pty.
     private func schemeReplies(
-        background: TerminalColor, queries: Int, repaintTo: TerminalColor? = nil
+        background: TerminalColor, queries: Int, repaintTo: TerminalColor? = nil,
+        bornFontSize: CGFloat? = nil, alsoQueryGrid: Bool = false
     ) throws -> [String] {
         _ = NSApplication.shared
         let window = NSWindow(
@@ -68,7 +102,7 @@ final class ColorSchemeReportTests: XCTestCase {
         // UUID-scoped, matching the temp paths under Tests/ZenTermTests. Two `swift test` runs on
         // this checkout at once is routine, and fixed names let them read each other's replies.
         let stem = NSTemporaryDirectory() + "zen307-\(UUID().uuidString)"
-        let outputs = (0..<queries).map { "\(stem)-reply\($0).txt" }
+        let outputs = (0..<(queries + (alsoQueryGrid ? 1 : 0))).map { "\(stem)-reply\($0).txt" }
         let script = "\(stem).sh"
         defer {
             for path in outputs + [script] { try? FileManager.default.removeItem(atPath: path) }
@@ -95,6 +129,15 @@ final class ColorSchemeReportTests: XCTestCase {
                 "done",
             ]
         }
+        if alsoQueryGrid {
+            // `CSI 18 t` reports the text area in characters, which is how many columns the font
+            // actually in force yields for this view. 24 bytes is past any plausible reply; `dd`
+            // writes each byte as it reads, so the poll below sees the whole thing regardless.
+            lines += [
+                "printf '\\033[18t'",
+                "dd bs=1 count=24 2>/dev/null > '\(outputs[outputs.count - 1])'",
+            ]
+        }
         try lines.joined(separator: "\n").write(toFile: script, atomically: true, encoding: .utf8)
 
         let surface = GhosttySurface()
@@ -102,7 +145,8 @@ final class ColorSchemeReportTests: XCTestCase {
         window.contentView?.addSubview(surface.view)
         surface.start(
             TerminalSurfaceConfig(
-                command: "/bin/sh", args: [script], theme: Self.theme(background: background)))
+                command: "/bin/sh", args: [script], fontSize: bornFontSize,
+                theme: Self.theme(background: background)))
         defer {
             surface.view.removeFromSuperview()
             surface.terminate()
@@ -116,6 +160,9 @@ final class ColorSchemeReportTests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))
             let data = outputs.map { FileManager.default.contents(atPath: $0) ?? Data() }
             guard data.allSatisfy({ $0.count >= 9 }) else { continue }
+            // The grid reply is variable width and terminated by `t`, so length alone would let a
+            // half-written one through.
+            if alsoQueryGrid, data[data.count - 1].last != UInt8(ascii: "t") { continue }
             // The last reply is rewritten in place until it settles, so let the retry loop finish
             // rather than reading the first value it happens to land.
             if repaintTo != nil, String(decoding: data[data.count - 1], as: UTF8.self) != Self.lightReply,
