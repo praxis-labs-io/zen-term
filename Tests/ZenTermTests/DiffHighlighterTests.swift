@@ -28,20 +28,34 @@ final class DiffHighlighterTests: XCTestCase {
         XCTAssertTrue(DiffHighlighter.perLineSpans(text: "let x = 1", captures: []).isEmpty)
     }
 
-    // MARK: - Size ceiling (ZEN-90 guard)
+    // MARK: - Size ceiling
 
     func test_sizeCeiling_acceptsSmallFile() {
         XCTAssertTrue(DiffHighlighter.isWithinSizeCeiling("let x = 1\nlet y = 2\n"))
     }
 
-    func test_sizeCeiling_rejectsTooManyLines() {
-        let manyLines = String(repeating: "x\n", count: 2001)
-        XCTAssertFalse(DiffHighlighter.isWithinSizeCeiling(manyLines))
+    /// Line count is not a ceiling. It used to be, at 2000, and it fired earlier than the byte cap for
+    /// ordinary source: `WindowController.swift` went permanently plain the day it passed 2000 lines,
+    /// while parsing in 54 ms off the main thread. A long file of short lines is cheap; the byte cap is
+    /// what bounds the expensive case.
+    func test_sizeCeiling_acceptsAFileWellOverTwoThousandLines() {
+        let manyShortLines = String(repeating: "x\n", count: 5000)  // 10 KB, 5001 lines
+        XCTAssertLessThan(manyShortLines.utf8.count, 256 * 1024, "well inside the byte ceiling")
+        XCTAssertTrue(
+            DiffHighlighter.isWithinSizeCeiling(manyShortLines),
+            "a long file of short lines is cheap to parse and must still highlight")
     }
 
     func test_sizeCeiling_rejectsTooManyBytes() {
         let big = String(repeating: "x", count: 256 * 1024 + 1)
         XCTAssertFalse(DiffHighlighter.isWithinSizeCeiling(big))
+    }
+
+    /// A few very long lines is the shape that actually costs, and the byte cap catches it where a line
+    /// cap never would.
+    func test_sizeCeiling_rejectsAFewEnormousLines() {
+        let minified = String(repeating: String(repeating: "x", count: 100 * 1024) + "\n", count: 3)
+        XCTAssertFalse(DiffHighlighter.isWithinSizeCeiling(minified))
     }
 
     // MARK: - Real tree-sitter pipeline (CodeEditLanguages Swift grammar)

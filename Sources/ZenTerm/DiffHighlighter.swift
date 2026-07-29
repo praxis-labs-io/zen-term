@@ -10,10 +10,20 @@ import SwiftTreeSitter
 /// fixture without a grammar. The off-main orchestration (blob fetch, size ceiling, generation token)
 /// lives in the caller.
 enum DiffHighlighter {
-    /// Skip a side larger than this — a huge or generated file would hitch the parse. Protects the main
-    /// thread's responsiveness (ZEN-90); an oversized side renders plain.
+    /// Skip a side larger than this, so a generated or minified blob can't tie up a parse slot. An
+    /// oversized side renders plain.
+    ///
+    /// **Bytes only, deliberately.** There was a 2000-line ceiling here too, and it was the wrong shape:
+    /// parse cost tracks size, not line count, so it fired earlier than the byte cap for ordinary source
+    /// while doing nothing extra for the case that actually costs (a few very long lines). Measured on
+    /// this repo: 109 KB / 2019 lines of Swift parses in 53.6 ms, 75 KB in 38.7 ms, 9 KB in 7.2 ms, so
+    /// roughly 0.5 ms/KB and 256 KB bounds the worst case near 125 ms. All of it runs off the main
+    /// thread (`enrich` on a global queue, the prefetcher on its own), so that is latency before a file
+    /// paints highlighted, not a hitch.
+    ///
+    /// The line cap made `WindowController.swift` render permanently plain the day it passed 2000 lines,
+    /// which is a bad trade for a guard the byte ceiling already covers.
     private static let maxBytes = 256 * 1024
-    private static let maxLines = 2000
 
     /// Resolve the grammar, fetch both sides' whole-file blobs, parse and map them to per-side line spans
     /// — all off the main thread — then hand the result back on main. Returns nil when the language is
@@ -35,16 +45,10 @@ enum DiffHighlighter {
         return old.isEmpty && new.isEmpty ? nil : DiffFileSpans(old: old, new: new)
     }
 
-    /// Whether a blob is small enough to parse on the shared queue without hitching (ZEN-90): under the
-    /// byte and line ceilings. A file over either renders plain.
+    /// Whether a blob is small enough to parse without tying up a slot: under the byte ceiling. A file
+    /// over it renders plain. Line count is deliberately not a factor, see `maxBytes`.
     static func isWithinSizeCeiling(_ text: String) -> Bool {
-        guard text.utf8.count <= maxBytes else { return false }
-        var lineCount = 1
-        for byte in text.utf8 where byte == 0x0A {
-            lineCount += 1
-            if lineCount > maxLines { return false }
-        }
-        return true
+        text.utf8.count <= maxBytes
     }
 
     /// Per-line spans for one side's blob, or empty when the blob is absent or over the size ceiling.
