@@ -530,10 +530,16 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// with it: shown whenever a base resolved (so the base is always changeable), hidden when there's
     /// none (a repo with no base). Called on each load and whenever the branch list refreshes.
     private func updateBaseHeader() {
-        updateHeadDropdown()
+        // A branch is never comparable to itself, so each picker hides the other's selection. Both
+        // exclusions live here because only this layer knows both, and both move as the reader picks.
+        // Each keeps its *own* selection regardless, or picking would remove the thing you just picked.
         let currentBase = displayedStatus?.baseBranch
+        let currentHead = headOverride?.name ?? heads.first(where: \.isCurrent)?.name
+
+        updateHeadDropdown(excludingBase: currentBase, selected: currentHead)
+
         if let currentBase {
-            var items = branches
+            var items = branches.filter { $0 == currentBase || $0 != currentHead }
             if !items.contains(currentBase) { items.insert(currentBase, at: 0) }  // an override off the list
             baseItems = items
             let selected = items.firstIndex(of: currentBase) ?? 0
@@ -545,7 +551,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // to compare against" and "there is nothing to look at" are different, and the second is the
         // state a reader most needs a way out of (ZEN-313). So the header stays for either one.
         baseDropdown.isHidden = currentBase == nil
-        let showsHead = !heads.isEmpty
+        let showsHead = !headItems.isEmpty  // filtered by updateHeadDropdown just above
         let showsBase = currentBase != nil
         baseHeader.isHidden = !(showsHead || showsBase)
         baseHeaderHeight.constant =
@@ -561,16 +567,15 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     /// Rebuild the head dropdown. A branch with no worktree is noted as committed-only, because that
     /// is the difference the reader will otherwise discover as "my uncommitted work vanished".
-    private func updateHeadDropdown() {
-        headItems = heads
-        guard !heads.isEmpty else {
+    private func updateHeadDropdown(excludingBase base: String?, selected currentName: String?) {
+        headItems = heads.filter { $0.name == currentName || $0.name != base }
+        guard !headItems.isEmpty else {
             headDropdown.setItems([], selectedIndex: 0)
             return
         }
-        let currentName = headOverride?.name ?? heads.first(where: \.isCurrent)?.name
-        let selected = heads.firstIndex { $0.name == currentName } ?? 0
+        let selected = headItems.firstIndex { $0.name == currentName } ?? 0
         headDropdown.setItems(
-            heads.map {
+            headItems.map {
                 DropdownItem(
                     title: $0.name, group: nil, note: $0.hasWorktree ? nil : "committed only",
                     isSelected: $0.name == currentName)
@@ -587,6 +592,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         let shownName = headOverride?.name ?? heads.first(where: \.isCurrent)?.name
         guard picked.name != shownName else { return }
         headOverride = picked.isCurrent ? nil : picked
+        // Rebuild both pickers now rather than waiting for the load. What each one offers depends on
+        // the *selection*, and a reload that lands an identical status is a deliberate no-op (ZEN-233),
+        // so leaving it to `apply` strands them showing the old pair whenever two branches happen to
+        // produce the same diff.
+        updateBaseHeader()
         reload(showSpinner: false)
     }
 
@@ -612,7 +622,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// Step onto the branch picker. Inert when there are no branches to offer, so Tab off the base
     /// picker doesn't strand focus on a dropdown with an empty list.
     private func focusHeadDropdown() {
-        guard guardComposer(), !baseHeader.isHidden, !heads.isEmpty else { return }
+        guard guardComposer(), !baseHeader.isHidden, !headItems.isEmpty else { return }
         window?.makeFirstResponder(headDropdown)
     }
 
@@ -840,12 +850,14 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // The two pickers step between themselves with Tab, so the branch one is reachable without the
         // mouse. `b` still lands on the base picker, which is where it has always landed.
         headDropdown.onTab = { [weak self] in self?.focusBaseDropdown() }
+        headDropdown.titleTruncatesUnderPressure = true
 
         baseDropdown = Dropdown(items: [], selectedIndex: 0) { [weak self] index in self?.chooseBaseAt(index) }
         baseDropdown.titlePrefix = "Base: "
         baseDropdown.onArrowDown = { [weak self] in self?.focusTreeTop() }
         baseDropdown.onBacktab = { [weak self] in self?.focusHeadDropdown() }
         baseDropdown.onArrowLeft = { [weak self] in self?.focusHeadDropdown() }
+        baseDropdown.titleTruncatesUnderPressure = true
 
         // Stacked, not side by side: both carry branch names, which are long and unbounded, so a row
         // split between them truncates two things at once and the card can't get narrow. Reading order

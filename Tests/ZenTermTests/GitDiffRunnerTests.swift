@@ -46,33 +46,34 @@ final class GitDiffRunnerTests: XCTestCase {
 
     func test_orderedBranches_pinsDefaultFirstThenRecency() {
         let ordered = GitDiffRunner.orderedBranches(
-            recency: ["feature-x", "main", "bugfix"], default: "main", current: "feature-x")
-        // main hoisted out of its recency slot; the checked-out feature-x dropped.
-        XCTAssertEqual(ordered, ["main", "bugfix"])
+            recency: ["feature-x", "main", "bugfix"], default: "main")
+        // main hoisted out of its recency slot; everything else keeps git's recency order.
+        XCTAssertEqual(ordered, ["main", "feature-x", "bugfix"])
     }
 
     func test_orderedBranches_defaultNotAmongLocalsIsStillPinned() {
-        let ordered = GitDiffRunner.orderedBranches(
-            recency: ["feature-x", "bugfix"], default: "main", current: "feature-x")
-        XCTAssertEqual(ordered, ["main", "bugfix"])  // remote default with no local branch, current dropped
+        let ordered = GitDiffRunner.orderedBranches(recency: ["feature-x", "bugfix"], default: "main")
+        XCTAssertEqual(ordered, ["main", "feature-x", "bugfix"])  // remote default with no local branch
     }
 
-    func test_orderedBranches_excludesTheCurrentBranch() {
+    /// This layer excludes nothing now. Which branch to keep out of the base list depends on the
+    /// *selected* head, which only `DiffViewerOverlay` knows, so the exclusion moved there (ZEN-313).
+    /// `DiffViewerOverlayTests` covers it on both sides.
+    func test_orderedBranches_excludesNothing_theOverlayDecidesThat() {
         let ordered = GitDiffRunner.orderedBranches(
-            recency: ["feature-x", "main", "bugfix"], default: "main", current: "bugfix")
-        XCTAssertFalse(ordered.contains("bugfix"))  // the checked-out branch is never offered
-        XCTAssertEqual(ordered, ["main", "feature-x"])
+            recency: ["feature-x", "main", "bugfix"], default: "main")
+        XCTAssertEqual(ordered, ["main", "feature-x", "bugfix"])
     }
 
     func test_orderedBranches_noDefaultKeepsRecencyOrder() {
-        let ordered = GitDiffRunner.orderedBranches(recency: ["feature-x", "bugfix"], default: nil, current: nil)
+        let ordered = GitDiffRunner.orderedBranches(recency: ["feature-x", "bugfix"], default: nil)
         XCTAssertEqual(ordered, ["feature-x", "bugfix"])
     }
 
     func test_orderedBranches_deduplicates() {
         let ordered = GitDiffRunner.orderedBranches(
-            recency: ["main", "feature-x", "feature-x"], default: "main", current: "feature-x")
-        XCTAssertEqual(ordered, ["main"])  // feature-x is the current branch, dropped
+            recency: ["main", "feature-x", "feature-x"], default: "main")
+        XCTAssertEqual(ordered, ["main", "feature-x"])  // the repeat collapses, nothing is excluded
     }
 
     // MARK: untracked fold (always unstaged)
@@ -165,17 +166,16 @@ final class GitDiffRunnerTests: XCTestCase {
         XCTAssertEqual(heads.map(\.isCurrent), [true, false, false])
     }
 
-    /// The base picker's ordering must keep excluding the current branch, so the two stay distinct.
-    func test_orderedBranches_stillExcludesCurrent_whileOrderedHeadsIncludesIt() {
+    /// Both orderings now offer every branch. Which one each picker hides depends on what the *other*
+    /// picker has selected, and neither is knowable here, so the exclusion is the overlay's on both
+    /// sides. What stays different at this layer is only the ordering: default-first vs current-first.
+    func test_orderedBranchesAndHeads_bothOfferEveryBranch_differingOnlyInOrder() {
         let recency = ["feature", "main"]
-        XCTAssertFalse(
-            GitDiffRunner.orderedBranches(recency: recency, default: "main", current: "main")
-                .contains("main"),
-            "comparing committed work against the branch it is on is meaningless")
-        XCTAssertTrue(
-            GitDiffRunner.orderedHeads(recency: recency, current: "main", worktrees: [:])
-                .contains { $0.name == "main" },
-            "but it is exactly the default head")
+        XCTAssertEqual(
+            GitDiffRunner.orderedBranches(recency: recency, default: "main"), ["main", "feature"])
+        XCTAssertEqual(
+            GitDiffRunner.orderedHeads(recency: recency, current: "feature", worktrees: [:])
+                .map(\.name), ["feature", "main"])
     }
 
     /// Which branches have a worktree decides what the viewer can show, so the tagging has to survive

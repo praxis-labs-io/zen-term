@@ -76,9 +76,7 @@ final class GitDiffRunner {
                     in: repoRoot))?
                 .split(separator: "\n").map(String.init) ?? []
             let preferred = try? Self.resolveDefaultBase(in: repoRoot)
-            let current = (try? Self.runGit(["rev-parse", "--abbrev-ref", "HEAD"], in: repoRoot))?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let ordered = Self.orderedBranches(recency: recency, default: preferred, current: current)
+            let ordered = Self.orderedBranches(recency: recency, default: preferred)
             DispatchQueue.main.async { completion(ordered) }
         }
     }
@@ -110,16 +108,19 @@ final class GitDiffRunner {
 
     /// The base dropdown's branch order: the default branch first (so `main` sits on top even when it
     /// hasn't been committed to recently), then every other branch by the recency order git returned,
-    /// deduplicated. The `current` (checked-out) branch is excluded outright — comparing the committed
-    /// work against the branch it's on is meaningless. A `default` not among the local branches is
-    /// still pinned first (it may be a remote default the user forks from without a local branch),
-    /// unless it *is* the current branch.
-    static func orderedBranches(recency: [String], default preferred: String?, current: String?) -> [String] {
+    /// deduplicated. A `default` not among the local branches is still pinned first, since it may be a
+    /// remote default the user forks from without a local branch.
+    ///
+    /// **Nothing is excluded here.** This used to drop the checked-out branch, on the grounds that
+    /// comparing committed work against the branch it is on is meaningless. That is still true, but it
+    /// is no longer the checkout that decides it: once the reader can pick a head (ZEN-313), the branch
+    /// to keep out of the base list is whichever head is *selected*, which this layer does not know.
+    /// `DiffViewerOverlay` owns both selections and does the excluding on both sides.
+    static func orderedBranches(recency: [String], default preferred: String?) -> [String] {
         var seen = Set<String>()
-        if let current, !current.isEmpty { seen.insert(current) }  // never offer the checked-out branch
         var ordered: [String] = []
         func add(_ name: String) {
-            guard seen.insert(name).inserted else { return }
+            guard !name.isEmpty, seen.insert(name).inserted else { return }
             ordered.append(name)
         }
         if let preferred, !preferred.isEmpty { add(preferred) }

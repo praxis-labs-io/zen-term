@@ -390,6 +390,70 @@ final class DiffViewerOverlayTests: WindowTestCase {
         XCTAssertNil(spy.lastHead, "back on the checkout, the viewer stops pinning a branch")
     }
 
+    /// The branch being compared against is never worth reading, since its diff with itself is empty.
+    /// The mirror of the base picker excluding the checked-out branch.
+    func test_headDropdown_excludesWhicheverBranchIsTheBase() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [
+                Self.head("feature", current: true),
+                Self.head("main", worktree: "/tmp/main"),
+                Self.head("other"),
+            ])
+
+        let titles = overlay.headDropdownForTesting.itemsForTesting.map(\.title)
+        XCTAssertFalse(titles.contains("main"), "reading the base against itself is an empty diff")
+        XCTAssertEqual(titles, ["feature", "other"])
+    }
+
+    /// The other half of the symmetry: the base list hides whichever branch is selected as the head.
+    /// It follows the *selection*, not the checkout, which is why this moved out of `GitDiffRunner`.
+    func test_baseDropdown_excludesTheSelectedBranch() throws {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main", "feature", "other"],
+            heads: [Self.head("feature", current: true), Self.head("other", worktree: "/tmp/wt")])
+
+        XCTAssertFalse(
+            overlay.baseDropdownForTesting.itemsForTesting.map(\.title).contains("feature"),
+            "the branch being read is not something to read it against")
+
+        // Point the viewer at `other`; the base list must follow the new selection, not the checkout.
+        try pickHead(overlay, steps: 1)
+
+        let titles = overlay.baseDropdownForTesting.itemsForTesting.map(\.title)
+        XCTAssertFalse(titles.contains("other"), "the newly selected branch drops out of the bases")
+        XCTAssertTrue(titles.contains("feature"), "and the one no longer selected comes back")
+    }
+
+    /// The checked-out branch survives the filter even when it is also the base, because it is the
+    /// default and the way back to it.
+    func test_headDropdown_keepsTheCheckedOutBranchEvenWhenItIsTheBase() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [Self.head("main", current: true), Self.head("other")])
+
+        XCTAssertEqual(overlay.headDropdownForTesting.itemsForTesting.map(\.title), ["main", "other"])
+    }
+
+    /// A long branch name must truncate rather than hold the tree column open. The label itself has to
+    /// yield, not just its container, or its intrinsic width still wins (the ZEN-243 rule).
+    func test_branchPickers_yieldTheirWidthRatherThanWideningTheColumn() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main"],
+            heads: [
+                Self.head("feature", current: true),
+                Self.head("a-very-long-branch-name-that-would-otherwise-hold-the-column-open"),
+            ])
+
+        for dropdown in [overlay.headDropdownForTesting, overlay.baseDropdownForTesting] {
+            XCTAssertEqual(
+                dropdown.contentCompressionResistancePriority(for: .horizontal), .defaultLow,
+                "the picker must yield before the column does")
+        }
+    }
+
     /// "Nothing to compare against" and "nothing to look at" are different states. The base picker
     /// hides for the first; the branch picker must survive it, because it is the way out of the second.
     func test_branchPickerSurvivesARepoWithNoResolvedBase() {

@@ -436,12 +436,22 @@ governs only the wide state. The committed slice forks from the repo's default b
 isn't guessed). A static header above the tree carries two stacked `Dropdown`s (the same
 control the theme picker uses), reachable from the tree by arrow key or bare `b` and
 from each other by Tab. `Base: <branch>` re-runs the committed slice against the chosen
-branch: branches default-first then by recency, the checked-out branch excluded, because
-comparing committed work against the branch it is on is meaningless. `Branch: <name>`
-picks what is being *read* rather than what it is measured against (ZEN-313), and leads
-with the checked-out branch for the opposite reason. They stack rather than sharing a
-row because both hold unbounded branch names, and splitting one row between them
-truncates both and holds the card open.
+branch, ordered default-first then by recency. `Branch: <name>` picks what is being
+*read* rather than what it is measured against (ZEN-313), ordered checked-out-first.
+They stack rather than sharing a row because both hold unbounded branch names: split one
+row between them and both truncate while the card is held open. Both set
+`titleTruncatesUnderPressure`, so the pickers yield their width instead of driving the
+tree column's.
+
+**Neither picker offers the other's selection.** A branch is never comparable to itself,
+so the base list hides the selected head and the head list hides the selected base, each
+keeping its own selection so picking can't remove what you just picked. Both exclusions
+live in `DiffViewerOverlay` because only it knows both, and both move as you pick.
+`GitDiffRunner.orderedBranches` used to drop the checked-out branch for this reason; it
+excludes nothing now, since once a head is selectable it is the *selection* that decides,
+not the checkout. Picking rebuilds the header immediately rather than waiting for the
+load, because a reload landing an identical status is a deliberate no-op (ZEN-233) and
+would otherwise strand both pickers on the old pair.
 
 **A picked branch is read two different ways.** One with a worktree is a real checkout on
 disk, so `WindowController` builds a second `GitDiffRunner` rooted at that path and all
