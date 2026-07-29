@@ -45,12 +45,15 @@ final class GitDiffRunner {
     /// Loads the repo's status off-main and calls `completion` on the main thread. `base` names the
     /// ref the committed slice forks from; nil uses the repo's default branch. A prior call is not
     /// cancelled; the caller drives one load at a time.
-    func loadStatus(base: String? = nil, completion: @escaping (Result<StatusLoad, Failure>) -> Void) {
+    func loadStatus(
+        base: String? = nil, head: String? = nil,
+        completion: @escaping (Result<StatusLoad, Failure>) -> Void
+    ) {
         let repoRoot = self.repoRoot
         DispatchQueue.global(qos: .userInitiated).async {
             let result: Result<StatusLoad, Failure>
             do {
-                result = .success(try Self.loadSync(base: base, repoRoot: repoRoot))
+                result = .success(try Self.loadSync(base: base, head: head, repoRoot: repoRoot))
             } catch let failure as Failure {
                 result = .failure(failure)
             } catch {
@@ -80,6 +83,29 @@ final class GitDiffRunner {
         }
     }
 
+    /// Loads the branches the viewer can be pointed at, each tagged with its worktree if it has one,
+    /// checked-out branch first (ZEN-313). Separate from `loadBranches` because the two pickers want
+    /// opposite things: the base picker hides the current branch, the head picker leads with it.
+    /// A git failure yields an empty list, leaving the picker empty rather than failing the load.
+    func loadHeads(completion: @escaping ([BranchOption]) -> Void) {
+        let repoRoot = self.repoRoot
+        DispatchQueue.global(qos: .userInitiated).async {
+            let recency =
+                (try? Self.runGit(
+                    ["for-each-ref", "--format=%(refname:short)", "--sort=-committerdate", "refs/heads"],
+                    in: repoRoot))?
+                .split(separator: "\n").map(String.init) ?? []
+            let porcelain = (try? Self.runGit(["worktree", "list", "--porcelain"], in: repoRoot)) ?? ""
+            let current = (try? Self.runGit(["rev-parse", "--abbrev-ref", "HEAD"], in: repoRoot))?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let ordered = Self.orderedHeads(
+                recency: recency,
+                current: (current == "HEAD" || current?.isEmpty == true) ? nil : current,
+                worktrees: Self.worktrees(fromPorcelain: porcelain))
+            DispatchQueue.main.async { completion(ordered) }
+        }
+    }
+
     // MARK: - Pure helpers (unit-tested)
 
     /// The base dropdown's branch order: the default branch first (so `main` sits on top even when it
@@ -104,14 +130,76 @@ final class GitDiffRunner {
     /// The `git diff` argument list for a slice. `--no-color`/`--no-ext-diff` keep the output a plain
     /// unified diff the parser can read regardless of git config; `--find-renames` makes a moved file
     /// read as a rename rather than an add plus a delete. Unstaged is working-tree vs index; staged is
-    /// index vs HEAD (`--cached`); committed is the fork point (`mergeBase`) vs HEAD.
-    static func diffArguments(scope: DiffScope, mergeBase: String) -> [String] {
+    /// index vs HEAD (`--cached`); committed is the fork point (`mergeBase`) vs `head`.
+    ///
+    /// `head` is `HEAD` for the checkout being read, or a branch name when the reader picked a branch
+    /// that has no worktree of its own (ZEN-313). Only the committed slice can honour it: unstaged and
+    /// staged are working-tree state, which exists only where a branch is actually checked out.
+    static func diffArguments(scope: DiffScope, mergeBase: String, head: String = "HEAD") -> [String] {
         let base = ["diff", "--no-color", "--no-ext-diff", "--find-renames"]
         switch scope {
         case .unstaged: return base
         case .staged: return base + ["--cached"]
-        case .committed: return base + [mergeBase, "HEAD"]
+        case .committed: return base + [mergeBase, head]
         }
+    }
+
+    /// A branch the reader can point the viewer at, and whether it has a worktree on disk.
+    ///
+    /// The distinction decides what the viewer can show. A branch with a worktree has a real working
+    /// tree, so all three slices are live once the runner is pointed at that path. A branch without
+    /// one exists only as commits, so only the committed slice means anything.
+    struct BranchOption: Equatable {
+        let name: String
+        let worktree: URL?
+        /// The branch checked out in the repo the viewer opened on. It is the default head, and the
+        /// one whose worktree is the repo root itself.
+        let isCurrent: Bool
+
+        var hasWorktree: Bool { worktree != nil }
+    }
+
+    /// Branch-to-worktree pairs from `git worktree list --porcelain`. Records are blank-line separated
+    /// and each carries `worktree <path>` plus either `branch refs/heads/<name>` or `detached`. A
+    /// detached worktree is skipped: there is no branch name to offer for it.
+    ///
+    /// Pure, so the parse is unit-testable without laying down real worktrees on disk.
+    static func worktrees(fromPorcelain text: String) -> [String: URL] {
+        var result: [String: URL] = [:]
+        for record in text.components(separatedBy: "\n\n") {
+            var path: URL?
+            var branch: String?
+            for line in record.split(separator: "\n") {
+                if line.hasPrefix("worktree ") {
+                    path = URL(fileURLWithPath: String(line.dropFirst("worktree ".count)))
+                } else if line.hasPrefix("branch refs/heads/") {
+                    branch = String(line.dropFirst("branch refs/heads/".count))
+                }
+            }
+            if let path, let branch, !branch.isEmpty { result[branch] = path }
+        }
+        return result
+    }
+
+    /// The head picker's branch order: the checked-out branch first (it is what the viewer opens on),
+    /// then the rest by the recency order git returned, deduplicated.
+    ///
+    /// The mirror of `orderedBranches`, and deliberately not the same function: the base picker
+    /// *excludes* the current branch, because comparing committed work against the branch it is on is
+    /// meaningless. The head picker must include it, because it is the default.
+    static func orderedHeads(recency: [String], current: String?, worktrees: [String: URL])
+        -> [BranchOption]
+    {
+        var seen = Set<String>()
+        var ordered: [BranchOption] = []
+        func add(_ name: String) {
+            guard !name.isEmpty, seen.insert(name).inserted else { return }
+            ordered.append(
+                BranchOption(name: name, worktree: worktrees[name], isCurrent: name == current))
+        }
+        if let current { add(current) }
+        recency.forEach(add)
+        return ordered
     }
 
     /// The branch name from a ref, e.g. `origin/release/1.x` -> `release/1.x`. Strips only the leading
@@ -146,9 +234,18 @@ final class GitDiffRunner {
 
     /// Runs synchronously on a background queue: the three diff slices, the fork base for the
     /// committed slice, and the untracked fold into unstaged. Throws `Failure` on any git failure.
-    private static func loadSync(base: String?, repoRoot: URL) throws -> StatusLoad {
-        let unstagedPatch = try runGit(diffArguments(scope: .unstaged, mergeBase: ""), in: repoRoot)
-        let stagedPatch = try runGit(diffArguments(scope: .staged, mergeBase: ""), in: repoRoot)
+    private static func loadSync(base: String?, head: String?, repoRoot: URL) throws -> StatusLoad {
+        // A picked branch with no worktree has no working tree to read, so the two working-tree slices
+        // are empty by definition rather than by failure (ZEN-313). Reading them anyway would show the
+        // *checkout's* uncommitted work under a heading naming someone else's branch, which is worse
+        // than showing nothing: it would look like that branch had those edits.
+        let readsWorkingTree = head == nil
+        let unstagedPatch =
+            readsWorkingTree
+            ? try runGit(diffArguments(scope: .unstaged, mergeBase: ""), in: repoRoot) : ""
+        let stagedPatch =
+            readsWorkingTree
+            ? try runGit(diffArguments(scope: .staged, mergeBase: ""), in: repoRoot) : ""
 
         // The committed slice degrades gracefully: a base that can't be resolved (no default, unrelated
         // histories so `merge-base` fails, or a picked branch deleted since the picker loaded) leaves the
@@ -158,11 +255,13 @@ final class GitDiffRunner {
         var baseSHA: String?
         var committedBase: String?  // full merge-base SHA, for the committed slice's old-side blob fetch
         var committedPatch = ""
+        let headRef = head ?? "HEAD"
         if let resolved = base ?? (try? resolveDefaultBase(in: repoRoot)) {
             let ref = existingRef(for: resolved, in: repoRoot)
-            if let mergeBase = (try? runGit(["merge-base", ref, "HEAD"], in: repoRoot))?
+            if let mergeBase = (try? runGit(["merge-base", ref, headRef], in: repoRoot))?
                 .trimmingCharacters(in: .whitespacesAndNewlines), !mergeBase.isEmpty,
-                let patch = try? runGit(diffArguments(scope: .committed, mergeBase: mergeBase), in: repoRoot)
+                let patch = try? runGit(
+                    diffArguments(scope: .committed, mergeBase: mergeBase, head: headRef), in: repoRoot)
             {
                 baseBranch = defaultBranchName(fromSymbolicRef: resolved)
                 baseSHA = String(mergeBase.prefix(7))
@@ -171,30 +270,41 @@ final class GitDiffRunner {
             }
         }
 
-        // The checked-out branch for the footer. `--abbrev-ref HEAD` yields the literal "HEAD" when
-        // detached, which isn't a branch name — treat that as none.
-        let head = (try? runGit(["rev-parse", "--abbrev-ref", "HEAD"], in: repoRoot))?
+        // The branch the viewer is showing, for the footer. A picked head names itself; otherwise it is
+        // the checked-out branch. `--abbrev-ref HEAD` yields the literal "HEAD" when detached, which
+        // isn't a branch name — treat that as none.
+        let checkedOut = (try? runGit(["rev-parse", "--abbrev-ref", "HEAD"], in: repoRoot))?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let currentBranch = (head == nil || head == "HEAD" || head?.isEmpty == true) ? nil : head
+        let resolvedCheckout =
+            (checkedOut == nil || checkedOut == "HEAD" || checkedOut?.isEmpty == true) ? nil : checkedOut
+        let currentBranch = head ?? resolvedCheckout
 
         var unstaged = DiffParser.parse(unstagedPatch)
-        unstaged += syntheticUntrackedDiffs(untrackedFiles: readUntracked(repoRoot: repoRoot))
+        if readsWorkingTree {
+            unstaged += syntheticUntrackedDiffs(untrackedFiles: readUntracked(repoRoot: repoRoot))
+        }
         return StatusLoad(
             unstaged: stamp(unstaged, scope: .unstaged, baseSHA: nil),
             staged: stamp(DiffParser.parse(stagedPatch), scope: .staged, baseSHA: nil),
-            committed: stamp(DiffParser.parse(committedPatch), scope: .committed, baseSHA: committedBase),
+            committed: stamp(
+                DiffParser.parse(committedPatch), scope: .committed, baseSHA: committedBase,
+                headRef: head),
             baseBranch: baseBranch,
             baseSHA: baseSHA,
             currentBranch: currentBranch)
     }
 
-    /// Stamp a parsed slice with the scope it came from and (for committed) its base SHA, so the syntax
-    /// highlighter can pick the right refs for each side's whole-file blob (ZEN-239).
-    private static func stamp(_ diffs: [FileDiff], scope: DiffScope, baseSHA: String?) -> [FileDiff] {
+    /// Stamp a parsed slice with the scope it came from and (for committed) the refs each side's
+    /// whole-file blob is fetched from, so the syntax highlighter reads the right content (ZEN-239,
+    /// and `headRef` for ZEN-313's picked branch).
+    private static func stamp(
+        _ diffs: [FileDiff], scope: DiffScope, baseSHA: String?, headRef: String? = nil
+    ) -> [FileDiff] {
         diffs.map {
             var diff = $0
             diff.scope = scope
             diff.baseSHA = baseSHA
+            diff.headRef = headRef
             return diff
         }
     }
@@ -222,7 +332,7 @@ final class GitDiffRunner {
         case (.committed, .old):
             guard let sha = file.baseSHA else { return nil }
             return .git(["show", "\(sha):\(oldPath)"])
-        case (.committed, .new): return .git(["show", "HEAD:\(file.path)"])
+        case (.committed, .new): return .git(["show", "\(file.headRef ?? "HEAD"):\(file.path)"])
         }
     }
 

@@ -39,6 +39,10 @@ final class DiffViewerSession {
     /// The base the reader picked in the dropdown, nil for the repo's default. Restored on reopen, which
     /// is why a session carrying one can't render `lastStatus`: that status is the *default* base's.
     var baseOverride: String?
+    /// The branch the reader pointed the viewer at, nil for the checkout's own head (ZEN-313). Restored
+    /// on reopen for the same reason as `baseOverride`, and it disqualifies `lastStatus` the same way:
+    /// that status is the checkout's, not the picked branch's.
+    var headOverride: GitDiffRunner.BranchOption?
     var place = DiffViewerPlace()
 
     init(repoRoot: URL) {

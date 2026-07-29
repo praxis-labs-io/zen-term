@@ -433,10 +433,24 @@ layout-agnostic `DiffRow` model. A narrow pane force-folds to inline (two column
 reading as code), where the `\` toggle is disabled and its footer hint hidden; a `\` pin
 governs only the wide state. The committed slice forks from the repo's default branch
 (`origin/HEAD`, else main/master; git records no parent, so a stacked branch's parent
-isn't guessed). A static header above the tree carries a `Base: <branch>` `Dropdown`
-(the same control the theme picker uses; branches default-first then by recency, the
-checked-out branch excluded) that re-runs the committed slice against the chosen branch
-and is reachable from the tree by arrow key or bare `b`. Navigation is vim-native and
+isn't guessed). A static header above the tree carries two stacked `Dropdown`s (the same
+control the theme picker uses), reachable from the tree by arrow key or bare `b` and
+from each other by Tab. `Base: <branch>` re-runs the committed slice against the chosen
+branch: branches default-first then by recency, the checked-out branch excluded, because
+comparing committed work against the branch it is on is meaningless. `Branch: <name>`
+picks what is being *read* rather than what it is measured against (ZEN-313), and leads
+with the checked-out branch for the opposite reason. They stack rather than sharing a
+row because both hold unbounded branch names, and splitting one row between them
+truncates both and holds the card open.
+
+**A picked branch is read two different ways.** One with a worktree is a real checkout on
+disk, so `WindowController` builds a second `GitDiffRunner` rooted at that path and all
+three slices stay live. One without exists only as commits, so the pinned runner answers
+with the branch as its head, the two working-tree slices come back empty by definition,
+and the list marks it `committed only`. Which case applies is the host's call, not the
+overlay's, which is why the whole `BranchOption` crosses the loader seam rather than a
+name. `FileDiff.headRef` carries the picked branch down to the highlighter so a
+committed-slice blob is fetched from the branch the diff was computed against. Navigation is vim-native and
 local to the card (ZEN-262). ⌘h/⌘l move focus between the tree and the diff (the app's
 own pane chords, forwarded from `WindowController.handle` since `KeyInterceptor` consumes
 chords before the responder chain); everything else is a bare key the panes handle in

@@ -1033,15 +1033,24 @@ final class WindowController: NSObject {
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
             session: session,
-            loader: { base, completion in
-                runner.loadStatus(base: base) { result in
-                    // Only the default-base load restamps the cache — a picked base is a transient
+            loader: { base, head, completion in
+                // Picking a branch that has a worktree means reading a different directory, so it gets
+                // its own runner rooted there and all three slices stay live. A branch without one has
+                // no working tree to read, so the pinned runner answers with the branch as its head and
+                // only the committed slice comes back (ZEN-313).
+                let target = head?.worktree.map(GitDiffRunner.init(repoRoot:)) ?? runner
+                let headRef = head?.hasWorktree == false ? head?.name : nil
+                target.loadStatus(base: base, head: headRef) { result in
+                    // Only the plain load restamps the cache — a picked base or branch is a transient
                     // override, not the state a plain reopen should render.
-                    if base == nil, case .success(let load) = result { session.lastStatus = load }
+                    if base == nil, head == nil, case .success(let load) = result {
+                        session.lastStatus = load
+                    }
                     completion(result)
                 }
             },
             branchesLoader: { completion in runner.loadBranches(completion: completion) },
+            headsLoader: { completion in runner.loadHeads(completion: completion) },
             sendTargets: { [weak self] in self?.activeController?.sendTargets() ?? [] },
             // Submit closes the viewer; queue leaves it open to stack another comment. Close before the
             // send on submit — `closeModal` restores focus to the panel that had it, which would
