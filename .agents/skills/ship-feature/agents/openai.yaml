@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ship ZenTerm Feature"
+  short_description: "Run ZenTerm's reviewed shipping workflow"
+  default_prompt: "Use $ship-feature to ship this completed ZenTerm feature."
