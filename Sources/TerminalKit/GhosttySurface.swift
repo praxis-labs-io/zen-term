@@ -36,6 +36,15 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// A theme change deliberately does not clear this — see `applyAppearance`.
     public private(set) var backgroundOverride: TerminalColor?
 
+    /// The color scheme libghostty last heard from us, so a repeat push is skipped (ZEN-307).
+    ///
+    /// Not only an optimization. `applyColorChange` pushes the scheme, a push libghostty answers
+    /// with a config reload, and a config reload can itself surface as a color change. Deriving
+    /// the same scheme twice in a row therefore has to be silent, or that round trip has no
+    /// bottom. libghostty dedupes internally too (`colorSchemeCallback` returns early when the
+    /// scheme has not moved), so this is belt and braces on a loop that would be expensive.
+    private var lastReportedScheme: ghostty_color_scheme_e?
+
     /// Focus as libghostty last heard it, which is what tells a real focus change from a repeat.
     /// `start` sets it to what it actually told libghostty; until then it matches libghostty's
     /// own default (`flags.focused = true`, "up to the apprt to set the correct value").
@@ -193,6 +202,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         }
 
         applyLayerBacking(theme: config.theme, behavior: config.behavior ?? .default)
+        syncColorScheme()
 
         // The host view may already be mounted, in which case its own `viewDidMoveToWindow`
         // ran before `surfacePtr` existed and couldn't push the display id.
@@ -296,7 +306,59 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         }
         applyLayerBacking(theme: theme, behavior: behavior)
         hostView.scrollMultiplier = behavior.scrollMultiplier
+        // Last, because the push is answered synchronously with a config reload that re-pushes
+        // whichever shape this surface is currently in, and the branch above is what decides it.
+        syncColorScheme()
         if let surfacePtr { ghostty_surface_refresh(surfacePtr) }
+    }
+
+    /// Tell libghostty whether this surface reads as light or dark, so a program asking
+    /// (DSR `CSI ? 996 n`, mode 2031) gets the truth instead of libghostty's `.light` default
+    /// (ZEN-307).
+    ///
+    /// Derived from the background rather than `NSApplication.effectiveAppearance`, which is what
+    /// Ghostty.app reads. The chrome is theme-driven, not appearance-driven (ZEN-27), so
+    /// `effectiveAppearance` would answer "light" for a dark theme under a light system
+    /// appearance. The source is the same `backgroundOverride ?? theme` that `applyLayerBacking`
+    /// paints from, so a program that repaints its own background with OSC 11 also moves what the
+    /// pane reports, and the two answers can never contradict each other.
+    ///
+    /// Only half the fix. The scheme reaches the report through a config re-derive, which is what
+    /// `GHOSTTY_ACTION_RELOAD_CONFIG` below is for, and that re-derive only carries it because
+    /// `GhosttyConfigWriter` marks the theme conditional.
+    private func syncColorScheme() {
+        guard let surfacePtr, let background = backgroundOverride ?? lastTheme?.background else {
+            return
+        }
+        let scheme = background.isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT
+        guard scheme != lastReportedScheme else { return }
+        lastReportedScheme = scheme
+        ghostty_surface_set_color_scheme(surfacePtr, scheme)
+    }
+
+    /// Re-push this surface's current config so a conditional-state change reaches the terminal.
+    ///
+    /// libghostty raises this after `set_color_scheme` moves the scheme, and the re-derive it asks
+    /// for is the only thing that carries the new state into `Termio`, which is what answers the
+    /// color-scheme query. Ignoring it leaves the surface knowing its scheme and still reporting
+    /// the old one.
+    ///
+    /// `soft` is not branched on, unlike Ghostty.app, which re-reads the user's config file for a
+    /// hard reload. There is no such file here: the config is generated from the chrome's theme,
+    /// so re-pushing what this surface currently runs is the whole of either job.
+    private func reapplySurfaceConfig() {
+        guard let surfacePtr else { return }
+        guard hasPerSurfaceShaderConfig else {
+            GhosttyApp.shared.updateSurfaceConfig(
+                surfacePtr, theme: lastTheme, behavior: lastBehavior, shaderAnimation: .whileFocused)
+            return
+        }
+        // Mid-burst or already stood down, matching the shapes `applyAppearance` chooses between.
+        if shaderSettleWorkItem != nil {
+            applyShaderConfig(lastBehavior, animation: .always)
+        } else {
+            applyShaderConfig(stoodDownBehavior, animation: .whileFocused)
+        }
     }
 
     /// Set the font size in points, without touching the app-global config.
@@ -645,6 +707,9 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         case GHOSTTY_ACTION_COLOR_CHANGE:
             applyColorChange(action.action.color_change)
             return true
+        case GHOSTTY_ACTION_RELOAD_CONFIG:
+            reapplySurfaceConfig()
+            return true
         default:
             return false
         }
@@ -666,6 +731,9 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         guard case .background(let color) = Self.effect(of: change) else { return }
         backgroundOverride = color
         applyLayerBacking(theme: lastTheme, behavior: lastBehavior)
+        // A program that repaints its background to the other end of the range has changed what
+        // this pane reports, so the answer follows the paint (see `syncColorScheme`).
+        syncColorScheme()
         delegate?.surface(self, backgroundDidChange: color)
     }
 

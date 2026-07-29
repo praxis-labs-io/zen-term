@@ -41,6 +41,23 @@ public struct TerminalColor: Sendable, Equatable {
         String(format: "#%02x%02x%02x", red, green, blue)
     }
 
+    /// Whether this color reads as dark, by the W3C perceived-luminance formula
+    /// (<https://www.w3.org/TR/AERT/#color-contrast>) against a 0.5 midpoint.
+    ///
+    /// Deliberately the same formula and threshold ghostty applies to a background when it has
+    /// to decide light from dark itself (`RGB.perceivedLuminance`, used by its GTK apprt for
+    /// `window-theme = auto`). Matching it means the scheme zen-term reports to programs and the
+    /// one ghostty would infer never disagree. Note it is the *perceived* luminance, not the
+    /// WCAG relative luminance ghostty also carries: that one linearizes each channel for
+    /// contrast ratios, and ghostty's own comment marks this one as "better for determining
+    /// light vs dark".
+    public var isDark: Bool {
+        let luminance =
+            0.299 * (Double(red) / 255) + 0.587 * (Double(green) / 255)
+            + 0.114 * (Double(blue) / 255)
+        return luminance <= 0.5
+    }
+
     public var nsColor: NSColor {
         NSColor(srgbRed: CGFloat(red) / 255.0, green: CGFloat(green) / 255.0, blue: CGFloat(blue) / 255.0, alpha: 1)
     }
