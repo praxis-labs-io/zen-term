@@ -1012,18 +1012,23 @@ final class WindowController: NSObject {
                     message: "This folder isn't a Git repository."))
             return
         }
+        guard let tab = activeController else { return }  // no tab, no viewer to mount it in
         if modal != nil { closeModal() }  // single slot — dismiss whatever's up first
         let runner = GitDiffRunner(repoRoot: repoRoot)
         // One session per repo, reused across opens: it carries the last status (so a reopen renders
         // instantly and refreshes behind the card instead of flashing a spinner), the highlight cache
         // (so it paints highlighted with no re-parse), and where the reader left off. A different repo
-        // starts fresh rather than accumulating a session per repo the window has ever visited.
+        // starts fresh rather than accumulating a session per repo the tab has ever visited.
+        //
+        // The session lives on the tab, not the window (ZEN-298). A window-level slot meant two tabs
+        // on two repos shared one session, so opening the viewer in the second discarded the first's
+        // place and cache, and going back rendered a spinner at the top of the file.
         let session: DiffViewerSession
-        if let existing = diffViewerSession, existing.repoRoot == repoRoot {
+        if let existing = tab.diffViewerSession, existing.repoRoot == repoRoot {
             session = existing
         } else {
             session = DiffViewerSession(repoRoot: repoRoot)
-            diffViewerSession = session
+            tab.diffViewerSession = session
         }
         let overlay = DiffViewerOverlay(
             background: Theme.current.chrome.background.nsColor,
@@ -1048,9 +1053,6 @@ final class WindowController: NSObject {
             onCancel: { [weak self] in self?.closeModal() })
         presentModal(overlay, kind: .diffViewer)
     }
-
-    /// What the diff viewer remembers about the repo it last opened — see `DiffViewerSession`.
-    private var diffViewerSession: DiffViewerSession?
 
     /// Which section the Settings card opens on. `.tools` / `.workspaces` are used when a sub-form
     /// (tool-float or workspace editor) hands back to the section it was launched from; the
@@ -1894,6 +1896,14 @@ final class WindowController: NSObject {
     func waitingToastForTesting(tabIndex: Int) -> ToastView? {
         guard tabs.order.indices.contains(tabIndex) else { return nil }
         return waitingToasts[tabs.order[tabIndex]]
+    }
+
+    /// Test hook: the diff-viewer session a given tab is holding (ZEN-298). The overlay keeps its
+    /// `session` private, so identity across a tab round-trip is only reachable from the tab that owns
+    /// it — which is the thing the ticket is about.
+    func diffViewerSessionForTesting(tabIndex: Int) -> DiffViewerSession? {
+        guard tabs.order.indices.contains(tabIndex) else { return nil }
+        return controllers[tabs.order[tabIndex]]?.diffViewerSession
     }
 
     /// Test hook: open `count` extra tabs, so a test can drive tab-order changes under a live toast.

@@ -72,6 +72,12 @@ final class TabController: NSObject {
     /// on a panel hidden behind a modal card.
     private let isToolFloatOpen: () -> Bool
 
+    /// What the diff viewer remembers about the repo this tab last opened — see `DiffViewerSession`.
+    /// Per tab, not per window (ZEN-298): a window-level slot meant two tabs on two repos shared one
+    /// session, so opening the viewer in the second discarded the first's place, base, and highlight
+    /// cache. `WindowController` reads and writes it through the active tab; the tab only stores it.
+    var diffViewerSession: DiffViewerSession?
+
     /// Which panel currently holds the tab's single unified focus/halo.
     private enum PanelRef: Equatable {
         case pane, bottomDrawer, rightDrawer
