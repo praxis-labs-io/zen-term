@@ -1522,6 +1522,18 @@ final class WindowController: NSObject {
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
                 .openDiffViewer:
                 closeModal()  // close the current card, then open the requested surface below
+            case .selectTab, .prevTab, .nextTab:
+                // The diff viewer is a reading surface you live in, not a form waiting on an answer,
+                // so a tab switch acts instead of being swallowed — the same as with a tool float
+                // open (see the `floats.isOpen` block below). It can't *ride* the switch the way a
+                // float does, because a card is tab-hosted (`presentTileOverlay`) and unmounts with
+                // its tab, so it closes. ZEN-298 keeps each tab's session, so ⌘D in the tab you land
+                // on comes back where that tab left off.
+                //
+                // Every other card stays swallowed: a palette, a form, or a confirm is mid-question,
+                // and answering it by walking away is not the same act as leaving a diff open.
+                guard modal.kind == .diffViewer else { return }
+                closeModal()
             default:
                 return
             }

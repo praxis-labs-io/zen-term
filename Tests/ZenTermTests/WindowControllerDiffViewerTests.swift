@@ -153,6 +153,54 @@ final class WindowControllerDiffViewerTests: WindowTestCase {
         XCTAssertEqual(second.repoRoot, repoB)
     }
 
+    /// A tab switch acts with the viewer up instead of being swallowed, the same as with a tool
+    /// float open. The card is tab-hosted so it closes rather than riding the switch; ZEN-298's
+    /// per-tab session is what makes that cheap, since ⌘D on the far side comes back in place.
+    func test_diffViewer_tabSwitchChordActs_insteadOfBeingSwallowed() throws {
+        let c = makeWindow()
+        c.resolveRepoRoot = { _, completion in completion(self.root) }
+        c.newTabForTesting()
+        c.selectTabForTesting(index: 0)
+
+        c.openDiffViewer()
+        XCTAssertTrue(c.isModalOverlayOpen, "the viewer is up before the switch")
+
+        c.handle(.selectTab(2))  // ⌘2 while reading a diff
+
+        XCTAssertFalse(c.isModalOverlayOpen, "the viewer closes rather than eating the chord")
+        c.openDiffViewer()
+        XCTAssertNotNil(
+            c.diffViewerSessionForTesting(tabIndex: 1),
+            "⌘2 landed on the second tab, so its own session is the one that opened")
+    }
+
+    /// ⌘[ / ⌘] too, since they take the same route.
+    func test_diffViewer_cycleTabChordActs_insteadOfBeingSwallowed() {
+        let c = makeWindow()
+        c.resolveRepoRoot = { _, completion in completion(self.root) }
+        c.newTabForTesting()
+        c.selectTabForTesting(index: 0)
+
+        c.openDiffViewer()
+        c.handle(.nextTab)
+
+        XCTAssertFalse(c.isModalOverlayOpen)
+    }
+
+    /// The carve-out is the diff viewer's alone. A palette is mid-question, and walking away from
+    /// it is not the same act as leaving a diff open, so it still swallows the chord.
+    func test_commandPalette_stillSwallowsTabSwitch() {
+        let c = makeWindow()
+        c.newTabForTesting()
+        c.selectTabForTesting(index: 0)
+
+        c.handle(.toggleCommandPalette)
+        XCTAssertTrue(c.isModalOverlayOpen, "the palette is up")
+
+        c.handle(.selectTab(2))
+        XCTAssertTrue(c.isModalOverlayOpen, "a card awaiting an answer keeps swallowing tab chords")
+    }
+
     /// A second ⌘D in the resolve gap is dropped, not queued — otherwise the resolve completion
     /// would present a second viewer over the first.
     func test_openDiffViewer_doublePressMidResolve_presentsOne() {

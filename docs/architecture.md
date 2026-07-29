@@ -629,6 +629,16 @@ dispatches through `handle`, which forwards those same app-global chords back to
 `handle` (that's how Reload Config from the palette used to do nothing). Copy and
 paste take a third path through the responder chain.
 
+**The modal-card stage swallows, with one exception.** A card takes the window, so
+every chord that is not its own toggle or another surface's toggle is dropped: a
+palette, a form, or a confirm is mid-question, and acting on a chord behind it would
+answer by walking away. The diff viewer is the exception for tab chords (⌘1-9, ⌘[,
+⌘]), because it is a reading surface you live in rather than a question. It cannot
+ride the switch the way a tool float does, since a card is tab-hosted
+(`presentTileOverlay`) and unmounts with its tab, so it closes and the switch
+happens. Each tab keeps its own `DiffViewerSession` (ZEN-298), so ⌘D on the far side
+comes back where that tab left off.
+
 **The float stage speaks rather than swallowing.** A pane command (nav, split,
 resize, drawer, Focus Mode) pressed over an open float has nowhere to go, so it
 raises a notice naming the float instead of doing nothing at all (ZEN-270). Held
