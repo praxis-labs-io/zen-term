@@ -434,8 +434,12 @@ reading as code), where the `\` toggle is disabled and its footer hint hidden; a
 governs only the wide state. The committed slice forks from the repo's default branch
 (`origin/HEAD`, else main/master; git records no parent, so a stacked branch's parent
 isn't guessed). A static header above the tree carries two stacked `Dropdown`s (the same
-control the theme picker uses), reachable from the tree by arrow key or bare `b` and
-from each other by Tab. `Base: <branch>` re-runs the committed slice against the chosen
+control the theme picker uses). They stack, so focus steps through them vertically: Up
+from the tree's top row reaches the lower of the two, Up again reaches the upper, and
+Down walks back. Bare `b` still lands on the base picker and Tab still steps between
+them. Each hop falls through to whatever is actually showing, so a repo with no resolved
+base doesn't swallow Up and strand the branch picker on the mouse.
+`Base: <branch>` re-runs the committed slice against the chosen
 branch, ordered default-first then by recency. `Branch: <name>` picks what is being
 *read* rather than what it is measured against (ZEN-313), ordered checked-out-first.
 They stack rather than sharing a row because both hold unbounded branch names: split one

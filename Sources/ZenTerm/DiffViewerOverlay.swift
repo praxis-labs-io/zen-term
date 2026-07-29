@@ -619,6 +619,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         refreshFocusStyling()
     }
 
+    /// Step up out of the tree onto the nearest picker: the base one when it is showing, else the
+    /// branch one. Without the fallback, a repo with no resolved base swallows Up at the top row, and
+    /// the branch picker becomes mouse-only in exactly the case it matters most.
+    private func focusHeaderFromTree() {
+        if !baseDropdown.isHidden { focusBaseDropdown() } else { focusHeadDropdown() }
+    }
+
     /// Step onto the branch picker. Inert when there are no branches to offer, so Tab off the base
     /// picker doesn't strand focus on a dropdown with an empty list.
     private func focusHeadDropdown() {
@@ -684,7 +691,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // The vim keys are plain letters, so AppKit's type-select would race j/k for every keystroke.
         outline.allowsTypeSelect = false
         outline.onEscape = { [weak self] in self?.handleViewerEscape() }
-        outline.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
+        outline.onFocusBase = { [weak self] in self?.focusHeaderFromTree() }
         outline.onHalfPageDiff = { [weak self] direction in self?.diffTable.halfPage(direction) }
         outline.onMoveFile = { [weak self] delta in self?.moveFileSelection(delta) }
         outline.onPageFiles = { [weak self] direction in self?.pageFileSelection(direction) }
@@ -697,7 +704,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         diffTable.onYank = { [weak self] wantsReference in self?.yank(reference: wantsReference) }
         diffTable.onCompose = { [weak self] in self?.openComposer() }
         diffTable.onToggleLayout = { [weak self] in self?.toggleLayout() }
-        diffTable.onFocusBase = { [weak self] in self?.focusBaseDropdown() }
+        diffTable.onFocusBase = { [weak self] in self?.focusHeaderFromTree() }
         diffTable.onFocusTree = { [weak self] in self?.focusTree() }
         diffTable.onClose = { [weak self] in self?.requestClose() }
         diffTable.onShowKeys = { [weak self] in self?.toggleKeySheet() }
@@ -846,7 +853,12 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
         headDropdown = Dropdown(items: [], selectedIndex: 0) { [weak self] index in self?.chooseHeadAt(index) }
         headDropdown.titlePrefix = "Branch: "
-        headDropdown.onArrowDown = { [weak self] in self?.focusTreeTop() }
+        // Stacked, so the arrows step vertically: Down off the branch picker lands on the base one
+        // below it, and only falls through to the tree when there is no base to land on.
+        headDropdown.onArrowDown = { [weak self] in
+            guard let self else { return }
+            if !baseDropdown.isHidden { focusBaseDropdown() } else { focusTreeTop() }
+        }
         // The two pickers step between themselves with Tab, so the branch one is reachable without the
         // mouse. `b` still lands on the base picker, which is where it has always landed.
         headDropdown.onTab = { [weak self] in self?.focusBaseDropdown() }
@@ -855,8 +867,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         baseDropdown = Dropdown(items: [], selectedIndex: 0) { [weak self] index in self?.chooseBaseAt(index) }
         baseDropdown.titlePrefix = "Base: "
         baseDropdown.onArrowDown = { [weak self] in self?.focusTreeTop() }
+        baseDropdown.onArrowUp = { [weak self] in self?.focusHeadDropdown() }
         baseDropdown.onBacktab = { [weak self] in self?.focusHeadDropdown() }
-        baseDropdown.onArrowLeft = { [weak self] in self?.focusHeadDropdown() }
         baseDropdown.titleTruncatesUnderPressure = true
 
         // Stacked, not side by side: both carry branch names, which are long and unbounded, so a row
@@ -1315,6 +1327,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     var isTreeFocusedForTesting: Bool { window?.firstResponder === outline }
     var isDiffFocusedForTesting: Bool { window?.firstResponder === diffTable.scrollFocusTarget }
     var isBaseDropdownFocusedForTesting: Bool { window?.firstResponder === baseDropdown }
+    var isHeadDropdownFocusedForTesting: Bool { window?.firstResponder === headDropdown }
 }
 
 /// A clip view that refuses to scroll horizontally: it pins the visible rect's x to 0, so the single

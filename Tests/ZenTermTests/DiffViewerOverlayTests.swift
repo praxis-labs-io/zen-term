@@ -390,6 +390,46 @@ final class DiffViewerOverlayTests: WindowTestCase {
         XCTAssertNil(spy.lastHead, "back on the checkout, the viewer stops pinning a branch")
     }
 
+    /// The pickers are stacked, so the arrows step between them vertically. Up off the base picker
+    /// reaches the branch one, which was the whole way in for a keyboard user.
+    func test_arrowUpFromTheBasePicker_reachesTheBranchPicker() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main"],
+            heads: [Self.head("feature", current: true), Self.head("other")])
+
+        window!.makeFirstResponder(overlay.baseDropdownForTesting)
+        overlay.baseDropdownForTesting.keyDown(with: keyDown(126))
+
+        XCTAssertTrue(overlay.isHeadDropdownFocusedForTesting)
+    }
+
+    /// And back down again, rather than skipping past it into the tree.
+    func test_arrowDownFromTheBranchPicker_landsOnTheBasePicker() {
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main"],
+            heads: [Self.head("feature", current: true), Self.head("other")])
+
+        window!.makeFirstResponder(overlay.headDropdownForTesting)
+        overlay.headDropdownForTesting.keyDown(with: keyDown(125))
+
+        XCTAssertTrue(overlay.isBaseDropdownFocusedForTesting)
+    }
+
+    /// With no base to land on, Down falls through to the tree instead of stranding focus.
+    func test_arrowDownFromTheBranchPicker_fallsThroughToTheTreeWhenThereIsNoBase() {
+        let (overlay, _) = mount(
+            unstaged: [file("U.swift")],  // no committed slice, so no base resolves
+            heads: [Self.head("feature", current: true), Self.head("other")])
+
+        window!.makeFirstResponder(overlay.headDropdownForTesting)
+        overlay.headDropdownForTesting.keyDown(with: keyDown(125))
+
+        XCTAssertFalse(overlay.isBaseDropdownFocusedForTesting)
+        XCTAssertFalse(overlay.isHeadDropdownFocusedForTesting, "focus moved on into the tree")
+    }
+
     /// The branch being compared against is never worth reading, since its diff with itself is empty.
     /// The mirror of the base picker excluding the checked-out branch.
     func test_headDropdown_excludesWhicheverBranchIsTheBase() {
