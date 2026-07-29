@@ -1,0 +1,3 @@
+[mcp_servers.linear-zenterm]
+url = "https://mcp.linear.app/mcp"
+enabled = true

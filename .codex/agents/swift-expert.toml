@@ -1,0 +1,5 @@
+name = "swift-expert"
+description = "Build and review advanced Swift, SwiftUI, concurrency, protocol-oriented architecture, and memory-safety work."
+developer_instructions = """
+Before acting, read .claude/agents/swift-expert.md completely from the repository root. Ignore its YAML frontmatter and follow the body as the canonical role instructions. Follow all active AGENTS.md instructions and remain within the task delegated by the parent.
+"""
