@@ -13,6 +13,11 @@ import XCTest
 ///
 /// Nobody looks at a DSR reply, so nothing here would be caught by eye. That is what earns it a
 /// test rather than a runbook line.
+///
+/// **Light is libghostty's default, so no assertion of light can prove anything on its own.** A
+/// test that ends on light stays green with this whole feature deleted. Every test here is either
+/// anchored on dark or asserts a transition whose dark half does the work; the one light-theme
+/// case is kept for what it *can* catch and is labelled with what it cannot.
 final class ColorSchemeReportTests: XCTestCase {
     /// `CSI ? 997 ; 1 n` is dark, `; 2 n` is light (`Termio.colorSchemeReportLocked`).
     private static let darkReply = "\u{1b}[?997;1n"
@@ -21,33 +26,37 @@ final class ColorSchemeReportTests: XCTestCase {
     private static let lightBackground = TerminalColor(hex: "#faf4ed")!
 
     func test_darkThemeReportsDark() throws {
-        XCTAssertEqual(try schemeReply(background: Self.darkBackground), Self.darkReply)
+        let replies = try schemeReplies(background: Self.darkBackground, queries: 1)
+        XCTAssertEqual(replies.first, Self.darkReply)
     }
 
+    /// Guards an inverted or mis-thresholded `TerminalColor.isDark`, which is the failure this can
+    /// catch. It cannot catch the feature being absent: light is what libghostty answers when
+    /// nothing is wired up, so this stays green in that case. `test_darkThemeReportsDark` and
+    /// `test_reportFollowsAnOsc11Repaint` are the ones that fail then.
     func test_lightThemeReportsLight() throws {
-        XCTAssertEqual(try schemeReply(background: Self.lightBackground), Self.lightReply)
+        let replies = try schemeReplies(background: Self.lightBackground, queries: 1)
+        XCTAssertEqual(replies.first, Self.lightReply)
     }
 
     /// A program repainting its own background with OSC 11 moves the answer with it, so a pane
     /// never reports one thing while rendering the other.
     ///
-    /// Light theme repainted dark, deliberately, and not the other way around. libghostty's own
-    /// default is light, so a test that ends on light passes just as happily when nothing is
-    /// wired up at all — the first draft of this did exactly that, and stayed green with the
-    /// whole feature deleted. Ending on dark is the only direction that can tell them apart.
-    func test_osc11RepaintMovesTheReport() throws {
-        let reply = try schemeReply(
-            background: Self.lightBackground,
-            // Repaint dark, then give the action a moment to cross to the main thread.
-            preamble: ["printf '\\033]11;#191724\\007'", "sleep 0.5"],
-            label: "osc11")
-        XCTAssertEqual(reply, Self.darkReply)
+    /// Both directions from one surface: a dark theme has to report dark first, and only then does
+    /// the repaint to light mean anything. The dark half is what fails if the feature regresses.
+    func test_reportFollowsAnOsc11Repaint() throws {
+        let replies = try schemeReplies(
+            background: Self.darkBackground, queries: 2, repaintTo: Self.lightBackground)
+        XCTAssertEqual(replies.count, 2)
+        XCTAssertEqual(replies.first, Self.darkReply, "a dark theme must report dark to start")
+        XCTAssertEqual(replies.last, Self.lightReply, "the repaint to light must move the report")
     }
 
-    /// Ask a real shell to send the query and hand back the raw reply libghostty wrote to the pty.
-    private func schemeReply(
-        background: TerminalColor, preamble: [String] = [], label: String = "theme"
-    ) throws -> String {
+    /// Run a shell that queries the color scheme, optionally repaints the background with OSC 11
+    /// between queries, and hand back the raw replies libghostty wrote to the pty.
+    private func schemeReplies(
+        background: TerminalColor, queries: Int, repaintTo: TerminalColor? = nil
+    ) throws -> [String] {
         _ = NSApplication.shared
         let window = NSWindow(
             contentRect: NSRect(x: 100, y: 100, width: 800, height: 600),
@@ -56,17 +65,36 @@ final class ColorSchemeReportTests: XCTestCase {
         window.isReleasedWhenClosed = false
         defer { window.close() }
 
-        let name = "\(label)-\(background.hex.dropFirst())"
-        let out = NSTemporaryDirectory() + "zen307-reply-\(name).txt"
-        let script = NSTemporaryDirectory() + "zen307-query-\(name).sh"
-        try? FileManager.default.removeItem(atPath: out)
-        // Raw mode with echo off, or the reply sits in the line discipline waiting for a newline
+        // UUID-scoped, matching the temp paths under Tests/ZenTermTests. Two `swift test` runs on
+        // this checkout at once is routine, and fixed names let them read each other's replies.
+        let stem = NSTemporaryDirectory() + "zen307-\(UUID().uuidString)"
+        let outputs = (0..<queries).map { "\(stem)-reply\($0).txt" }
+        let script = "\(stem).sh"
+        defer {
+            for path in outputs + [script] { try? FileManager.default.removeItem(atPath: path) }
+        }
+
+        // Raw mode with echo off, or a reply sits in the line discipline waiting for a newline
         // that a DSR answer never carries. `count` is the reply's exact width.
-        let lines =
-            ["stty raw -echo"] + preamble + [
-                "printf '\\033[?996n'",
-                "dd bs=1 count=9 2>/dev/null > '\(out)'",
+        var lines = ["stty raw -echo", "printf '\\033[?996n'", "dd bs=1 count=9 2>/dev/null > '\(outputs[0])'"]
+        if let repaintTo, outputs.count > 1 {
+            // Re-query until the answer moves rather than sleeping a fixed interval. The repaint
+            // has to cross to the main thread, push a scheme, come back as a config reload and
+            // reach the io thread before the reply can change, and no fixed wait covers that on a
+            // loaded machine (ZEN-302). A shell that keeps asking is its own synchronization; if
+            // the answer never moves, the last reply is the wrong one and the assertion says so.
+            lines += [
+                "printf '\\033]11;\(repaintTo.hex)\\007'",
+                "i=0",
+                "while [ $i -lt 200 ]; do",
+                "  printf '\\033[?996n'",
+                "  dd bs=1 count=9 2>/dev/null > '\(outputs[1])'",
+                "  case \"$(cat '\(outputs[1])')\" in *';2n') break;; esac",
+                "  i=$((i+1))",
+                "  sleep 0.05",
+                "done",
             ]
+        }
         try lines.joined(separator: "\n").write(toFile: script, atomically: true, encoding: .utf8)
 
         let surface = GhosttySurface()
@@ -81,17 +109,24 @@ final class ColorSchemeReportTests: XCTestCase {
         }
         try XCTSkipIf(surface.surfacePtr == nil, "ghostty_surface_new failed")
 
-        // Poll rather than sleep a flat interval: the shell has to start first, and CI is slower
-        // than this machine (ZEN-302). The runloop also carries libghostty's action callbacks.
-        let deadline = Date().addingTimeInterval(15)
+        // Poll rather than sleep: the shell has to start first, and CI is slower than this machine
+        // (ZEN-302). The runloop is also what carries libghostty's action callbacks to us.
+        let deadline = Date().addingTimeInterval(30)
         while Date() < deadline {
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-            if let data = FileManager.default.contents(atPath: out), data.count >= 9 {
-                return String(decoding: data, as: UTF8.self)
+            let data = outputs.map { FileManager.default.contents(atPath: $0) ?? Data() }
+            guard data.allSatisfy({ $0.count >= 9 }) else { continue }
+            // The last reply is rewritten in place until it settles, so let the retry loop finish
+            // rather than reading the first value it happens to land.
+            if repaintTo != nil, String(decoding: data[data.count - 1], as: UTF8.self) != Self.lightReply,
+                Date() < deadline.addingTimeInterval(-1)
+            {
+                continue
             }
+            return data.map { String(decoding: $0, as: UTF8.self) }
         }
-        XCTFail("no color-scheme reply within 15s")
-        return ""
+        XCTFail("no color-scheme reply within 30s")
+        return []
     }
 
     private static func theme(background: TerminalColor) -> TerminalTheme {

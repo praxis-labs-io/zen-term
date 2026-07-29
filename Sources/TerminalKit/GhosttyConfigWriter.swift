@@ -19,9 +19,18 @@ enum GhosttyConfigWriter {
     /// The full generated config: theme-derived colors and font, plus the terminal
     /// behavior (cursor shape/thickness, Option semantics) the chrome dials from user config.
     /// A nil `behavior` uses the shipped `TerminalBehavior.default`.
+    /// `fontSize` overrides the theme's own size for a config bound to ONE surface.
+    ///
+    /// Load-bearing, not a convenience. `Surface.updateConfig` resets the font size of any surface
+    /// libghostty has not marked `font_size_adjusted` to whatever the pushed config carries, so a
+    /// per-surface push built from the theme alone silently drops a pane's stepped size (ZEN-224).
+    /// Passing the size the surface is actually running keeps the pushed config truthful, which is
+    /// cheaper than repairing the size afterwards and avoids marking the surface adjusted as a
+    /// side effect. Nil for the app-global config, whose size is the theme's by definition.
     static func configText(
         for theme: TerminalTheme?, behavior: TerminalBehavior? = nil,
-        shaderAnimation: ShaderAnimation = .whileFocused
+        shaderAnimation: ShaderAnimation = .whileFocused,
+        fontSize: CGFloat? = nil
     ) -> String {
         let behavior = behavior ?? .default
         var lines = [
@@ -46,7 +55,7 @@ enum GhosttyConfigWriter {
         }
         if let theme {
             lines.append("font-family = \(theme.fontName)")
-            lines.append("font-size = \(theme.fontSize)")
+            lines.append("font-size = \(fontSize ?? theme.fontSize)")
             lines.append("background = \(theme.background.hex)")
             lines.append("foreground = \(theme.foreground.hex)")
             lines.append("cursor-color = \(theme.cursor.hex)")
@@ -96,6 +105,14 @@ enum GhosttyConfigWriter {
     /// - **Only the two paths need to differ.** `finalize` compares the two strings, not the file
     ///   contents, so identical files at different paths are enough.
     ///
+    /// The pair has exactly one other effect on the resolved config, found by diffing
+    /// `ghostty +show-config` with and without this line: `finalize` moves `window-theme` off its
+    /// `auto` default to `system` in the same branch that sets the flag. Inert here. Only ghostty's
+    /// GTK apprt reads that key, it appears nowhere in `apprt/embedded.zig` or in core, and the
+    /// chrome never calls `ghostty_config_get`. Every other resolved key is byte-identical, so the
+    /// explicit colors do outrank the loaded files, as `loadTheme` intends. That diff is the check
+    /// to re-run on a pin bump; it is what caught the `window-theme` move in the first place.
+    ///
     /// Paths rather than bundled theme names, so nothing here depends on which themes libghostty
     /// happens to ship. Pid-scoped like the generated config, and left for the OS to reap.
     /// ZEN-320 re-checks the whole mechanism on every ghostty pin bump.
@@ -109,14 +126,26 @@ enum GhosttyConfigWriter {
             ).path
     }
 
-    /// Put the two scheme theme files on disk. Idempotent, and cheap enough to call on every
-    /// config write: the paths are fixed for the process, so only the first call writes.
+    /// Whether this process has already laid down its scheme theme files.
+    ///
+    /// A flag rather than a `fileExists` check, deliberately. Testing the filesystem would mean
+    /// trusting whatever sits at the path: these names are pid-scoped, pids are reused, and the
+    /// temp directory is not reliably swept between runs, so a leftover file would be loaded as a
+    /// theme and its keys applied. Everything else here is overwritten on every write, and these
+    /// two are the one thing that has to stay empty, so they are the last thing that should be
+    /// taken from disk unexamined. The flag also keeps the once-per-process cost the comment above
+    /// promises, which a plain unconditional write would put on the per-surface config path.
+    private static var didWriteSchemeThemeFiles = false
+
+    /// Put the two scheme theme files on disk, once per process.
     ///
     /// A failure here is not fatal and deliberately does not block the config. `finalize` inserts
     /// `.theme` on the strength of the `theme` line alone, before it knows whether either file
     /// resolved, so the scheme still reports correctly against a missing file. All that is lost is
     /// a libghostty diagnostic per config load, which is worth a log line and nothing more.
     private static func writeSchemeThemeFiles() {
+        guard !didWriteSchemeThemeFiles else { return }
+        didWriteSchemeThemeFiles = true
         let contents = """
             # Written by zen-term. Sets nothing, on purpose.
             # Its twin file and this one exist so libghostty treats the theme as conditional,
@@ -124,8 +153,7 @@ enum GhosttyConfigWriter {
             # Every color comes from the generated config next to this file.
 
             """
-        for path in [lightSchemeThemePath, darkSchemeThemePath]
-        where !FileManager.default.fileExists(atPath: path) {
+        for path in [lightSchemeThemePath, darkSchemeThemePath] {
             do {
                 try contents.write(toFile: path, atomically: true, encoding: .utf8)
             } catch {
@@ -146,7 +174,8 @@ enum GhosttyConfigWriter {
     /// libghostty loads the file inside the same call that wrote it.
     static func writeConfig(
         for theme: TerminalTheme?, behavior: TerminalBehavior? = nil,
-        shaderAnimation: ShaderAnimation = .whileFocused, variant: String? = nil
+        shaderAnimation: ShaderAnimation = .whileFocused, variant: String? = nil,
+        fontSize: CGFloat? = nil
     ) -> String? {
         writeSchemeThemeFiles()
         let suffix = variant.map { "-\($0)" } ?? ""
@@ -154,8 +183,10 @@ enum GhosttyConfigWriter {
             .appendingPathComponent(
                 "zenterm-ghostty-config-\(ProcessInfo.processInfo.processIdentifier)\(suffix)")
         do {
-            try configText(for: theme, behavior: behavior, shaderAnimation: shaderAnimation)
-                .write(to: url, atomically: true, encoding: .utf8)
+            try configText(
+                for: theme, behavior: behavior, shaderAnimation: shaderAnimation, fontSize: fontSize
+            )
+            .write(to: url, atomically: true, encoding: .utf8)
             return url.path
         } catch {
             Log.error(

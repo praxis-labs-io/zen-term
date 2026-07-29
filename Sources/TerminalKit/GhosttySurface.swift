@@ -36,6 +36,14 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// A theme change deliberately does not clear this — see `applyAppearance`.
     public private(set) var backgroundOverride: TerminalColor?
 
+    /// The font size this surface is actually running, which is not always the theme's.
+    ///
+    /// A pane opened while the session size is stepped is born at that size (ZEN-224), and
+    /// `setFontSize` moves it afterwards. Every per-surface config push has to carry this, because
+    /// `Surface.updateConfig` resets the size of any surface libghostty has not marked
+    /// `font_size_adjusted` to whatever the pushed config says. Nil until `start` has run.
+    private var lastFontSize: CGFloat?
+
     /// The color scheme libghostty last heard from us, so a repeat push is skipped (ZEN-307).
     ///
     /// Not only an optimization. `applyColorChange` pushes the scheme, a push libghostty answers
@@ -162,6 +170,9 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
         lastTheme = config.theme
         lastBehavior = config.behavior ?? .default
+        // What libghostty was handed as `cfg.font_size`, so a later per-surface config push can
+        // carry it rather than reset the pane to the theme's size (ZEN-224).
+        lastFontSize = config.fontSize ?? config.theme?.fontSize
         hostView.scrollMultiplier = (config.behavior ?? .default).scrollMultiplier
 
         // A fresh libghostty surface defaults to focused=true, and only `resignFirstResponder`
@@ -348,17 +359,22 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// so re-pushing what this surface currently runs is the whole of either job.
     private func reapplySurfaceConfig() {
         guard let surfacePtr else { return }
-        guard hasPerSurfaceShaderConfig else {
-            GhosttyApp.shared.updateSurfaceConfig(
-                surfacePtr, theme: lastTheme, behavior: lastBehavior, shaderAnimation: .whileFocused)
-            return
-        }
-        // Mid-burst or already stood down, matching the shapes `applyAppearance` chooses between.
-        if shaderSettleWorkItem != nil {
-            applyShaderConfig(lastBehavior, animation: .always)
+        let pushed: Bool
+        if hasPerSurfaceShaderConfig {
+            // Mid-burst or already stood down, matching the shapes `applyAppearance` picks between.
+            pushed =
+                shaderSettleWorkItem != nil
+                ? applyShaderConfig(lastBehavior, animation: .always)
+                : applyShaderConfig(stoodDownBehavior, animation: .whileFocused)
         } else {
-            applyShaderConfig(stoodDownBehavior, animation: .whileFocused)
+            pushed = GhosttyApp.shared.updateSurfaceConfig(
+                surfacePtr, theme: lastTheme, behavior: lastBehavior,
+                shaderAnimation: .whileFocused, fontSize: lastFontSize)
         }
+        // The scheme only reaches `Termio` on the back of a config push, so a push that never
+        // happened leaves this surface reporting the old one. Drop the latch so the next
+        // `syncColorScheme` retries instead of short-circuiting on a scheme that never landed.
+        if !pushed { lastReportedScheme = nil }
     }
 
     /// Set the font size in points, without touching the app-global config.
@@ -374,6 +390,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// re-push after an `applyAppearance` rather than expect the theme's size to land.
     public func setFontSize(_ points: CGFloat) {
         guard let surfacePtr else { return }
+        lastFontSize = points
         // libghostty parses the same action text a `keybind =` line carries.
         let action = "set_font_size:\(points)"
         let performed = action.withCString {
@@ -532,12 +549,17 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         return stoodDown
     }
 
+    /// Carries `lastFontSize` like every other per-surface push. Without it a settle-burst on a
+    /// pane opened at a stepped size would reset that pane to the theme's size (ZEN-224), since
+    /// the config libghostty is handed is what it clamps an unadjusted surface to.
+    @discardableResult
     private func applyShaderConfig(
         _ behavior: TerminalBehavior, animation: GhosttyConfigWriter.ShaderAnimation
-    ) {
-        guard let surfacePtr else { return }
-        GhosttyApp.shared.updateSurfaceConfig(
-            surfacePtr, theme: lastTheme, behavior: behavior, shaderAnimation: animation)
+    ) -> Bool {
+        guard let surfacePtr else { return false }
+        return GhosttyApp.shared.updateSurfaceConfig(
+            surfacePtr, theme: lastTheme, behavior: behavior, shaderAnimation: animation,
+            fontSize: lastFontSize)
     }
 
     private func cancelShaderSettle() {
@@ -731,10 +753,18 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         guard case .background(let color) = Self.effect(of: change) else { return }
         backgroundOverride = color
         applyLayerBacking(theme: lastTheme, behavior: lastBehavior)
+        delegate?.surface(self, backgroundDidChange: color)
         // A program that repaints its background to the other end of the range has changed what
         // this pane reports, so the answer follows the paint (see `syncColorScheme`).
-        syncColorScheme()
-        delegate?.surface(self, backgroundDidChange: color)
+        //
+        // Deferred a turn, and that is load-bearing. This runs inside libghostty's own mailbox
+        // drain, and the push ends in `ghostty_app_tick`, which drains the mailbox again. Called
+        // inline, a second queued color change would be popped and completed *inside* this one,
+        // so the nested handler would set `backgroundOverride` and notify the chrome with the
+        // newer color, then this frame would unwind and notify with the older one, leaving the
+        // pane's fill and frame painted a color the grid has already moved off. Deferring keeps
+        // `handle` a leaf, which is what it was before this surface pushed anything back.
+        DispatchQueue.main.async { [weak self] in self?.syncColorScheme() }
     }
 
     /// What a `COLOR_CHANGE` means to the chrome. Pure, so the mapping is tested without a live
