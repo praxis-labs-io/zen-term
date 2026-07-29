@@ -463,8 +463,25 @@ three slices stay live. One without exists only as commits, so the pinned runner
 with the branch as its head, the two working-tree slices come back empty by definition,
 and the list marks it `committed only`. Which case applies is the host's call, not the
 overlay's, which is why the whole `BranchOption` crosses the loader seam rather than a
-name. `FileDiff.headRef` carries the picked branch down to the highlighter so a
-committed-slice blob is fetched from the branch the diff was computed against. Navigation is vim-native and
+name.
+
+**Two different things move, and both have to.** For a branch with no worktree the *ref*
+moves: `FileDiff.headRef` carries it down so a committed-slice blob is fetched from the
+branch the diff was computed against. For a branch with one, the *root* moves instead, and
+the highlighter reads blobs on its own path (`DiffHighlighter.enrich` plus the prefetcher's
+background pass) rather than through the loader. So `DiffViewerOverlay.retargetRepoRoot`
+repoints its root and rebuilds the prefetcher on every pick, and clears
+`DiffHighlightStore`, whose keys carry no notion of which root produced them. Miss that and
+the diff is right while its colours come from another branch's file contents, and a file
+added on the picked branch caches a nil span set and renders plain forever.
+
+**The branch lists refresh on every load, ahead of the unchanged-status guard.** That guard
+exists so an identical diff repaints nothing (ZEN-233), but it says nothing about whether
+branches were created or deleted. Gated behind it, a picker could name a branch that no
+longer existed until some unrelated edit happened to change the diff. A refresh also
+re-resolves any override by name, so a deleted branch or a moved worktree drops the
+selection rather than leaving the picker showing one branch while the loader is asked for
+another. An empty listing is treated as a failed read, not as proof the branch is gone. Navigation is vim-native and
 local to the card (ZEN-262). ⌘h/⌘l move focus between the tree and the diff (the app's
 own pane chords, forwarded from `WindowController.handle` since `KeyInterceptor` consumes
 chords before the responder chain); everything else is a bare key the panes handle in
