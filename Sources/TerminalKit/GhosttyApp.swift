@@ -165,27 +165,36 @@ final class GhosttyApp {
     /// derives its own copy (`Surface.updateConfig` → `DerivedConfig.init`) and never retains
     /// ours. That is what makes a single cached config safe to hand to every surface and every
     /// later call. See `surfaceConfigCache`.
+    /// Returns whether a config actually reached the surface. Callers that depend on the push
+    /// having landed have to check: the two failure paths below leave the surface on its previous
+    /// config, and anything riding along with the push (a conditional-state change, ZEN-307) does
+    /// not take effect either.
+    ///
+    /// `fontSize` overrides the theme's own size, and a per-surface push should pass the size the
+    /// surface is running. See `GhosttyConfigWriter.configText`: a config that carries the theme's
+    /// size resets any surface libghostty has not marked `font_size_adjusted` (ZEN-224).
+    @discardableResult
     func updateSurfaceConfig(
         _ surfacePtr: ghostty_surface_t, theme: TerminalTheme?, behavior: TerminalBehavior,
-        shaderAnimation: GhosttyConfigWriter.ShaderAnimation
-    ) {
+        shaderAnimation: GhosttyConfigWriter.ShaderAnimation, fontSize: CGFloat? = nil
+    ) -> Bool {
         let text = GhosttyConfigWriter.configText(
-            for: theme, behavior: behavior, shaderAnimation: shaderAnimation)
+            for: theme, behavior: behavior, shaderAnimation: shaderAnimation, fontSize: fontSize)
         if let cached = surfaceConfigCache[text] {
             ghostty_surface_update_config(surfacePtr, cached)
             tick()
-            return
+            return true
         }
-        guard let cfg = ghostty_config_new() else { return }
+        guard let cfg = ghostty_config_new() else { return false }
         guard
             let path = GhosttyConfigWriter.writeConfig(
                 for: theme, behavior: behavior, shaderAnimation: shaderAnimation,
-                variant: "surface")
+                variant: "surface", fontSize: fontSize)
         else {
             // Same reasoning as updateConfig: a failed write means keep what the surface has
             // rather than push an effectively-default config that would drop its theme.
             ghostty_config_free(cfg)
-            return
+            return false
         }
         ghostty_config_load_file(cfg, path)
         ghostty_config_finalize(cfg)
@@ -193,6 +202,7 @@ final class GhosttyApp {
         surfaceConfigCache[text] = cfg
         ghostty_surface_update_config(surfacePtr, cfg)
         tick()
+        return true
     }
 
     /// Free every cached per-surface config. Called when the app-global config moves, because each

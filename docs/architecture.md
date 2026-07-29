@@ -148,6 +148,27 @@ masking a resolution failure.
   ZenTerm's appearance. Because that means a synchronous write, read and parse on
   the main thread, the per-surface configs are cached by their generated text and
   cleared when the app-global config moves (ZEN-90, ZEN-271).
+- **A per-surface config push must carry that surface's font size.** `Surface.updateConfig`
+  resets the size of any surface libghostty has not marked `font_size_adjusted` to
+  whatever the pushed config says, so a push built from the theme alone silently
+  drops a pane's stepped size. `updateSurfaceConfig` takes a `fontSize` for this;
+  the app-global config leaves it nil, where the theme's size is correct by
+  definition (ZEN-224).
+- **The generated config's `theme` line is not a theme.** It names two files
+  (`$TMPDIR/zenterm-ghostty-scheme-<pid>-{light,dark}`) that ZenTerm writes empty
+  and that set nothing. They exist only because libghostty answers the color-scheme
+  query (DSR `CSI ? 996 n`, mode 2031) out of the *Config's* `_conditional_state`,
+  and the only thing that moves it there is `Config.changeConditionalState`, which
+  returns null unless `_conditional_set` contains `.theme`. That flag is set in one
+  place: `Config.finalize`, when `theme` is a light/dark pair whose halves differ.
+  Without the pair, `ghostty_surface_set_color_scheme` reports nothing and every
+  pane claims to be light forever. Ghostty.app has the same bug on any config that
+  sets its colors directly. The files are genuinely loaded, so they have to stay
+  empty; only the two *paths* need to differ, since `finalize` compares the strings.
+  The pair also moves `window-theme` off `auto`, which is inert here: only ghostty's
+  GTK apprt reads that key, and the chrome never calls `ghostty_config_get`. So a
+  surface's conditional state can differ from the app config's, which is the one
+  place per-surface state is real (ZEN-307; ZEN-320 re-checks it on a pin bump).
 - **Shader draw stops when nobody can see it.** The focus libghostty is told about
   is `paneFocused && isAppActive`, and `GhosttyHostView` reports its window's
   occlusion, so a backgrounded, covered or minimized window runs no shader draw
