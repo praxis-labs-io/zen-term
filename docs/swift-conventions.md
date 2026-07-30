@@ -484,3 +484,20 @@ pre-existing.
 finishes in about 5s, so minutes means hung, not slow. Two shell traps around that: swift test
 processes are named `swift-test` with a hyphen, so `pkill -f "swift test"` matches nothing, and
 concurrent `swift test` runs deadlock on the SwiftPM lock.
+
+### A path is not a diff row identity
+
+A repo-relative path can appear in more than one diff scope at once. For example,
+the staged version and a later working-tree edit both produce rows for the same
+path with different content. Diff selection and render deduplication must include
+the scope and content represented by `FileDiff`, not only the path. ZEN-256 exposed
+this when switching between Staged and Unstaged kept the previously rendered diff.
+
+### Event debounce does not provide load backpressure
+
+A trailing filesystem debounce limits one burst, but separate settled bursts can arrive while
+the work triggered by the first is still running. A watcher-driven subprocess path must also be
+single-flight and retain one pending request. Rejecting stale completions only protects the UI;
+it does not recover the CPU, disk work, or subprocesses already spent producing them. The watcher
+must also follow any root the reader retargets to and stop on both card and window teardown
+(ZEN-256).

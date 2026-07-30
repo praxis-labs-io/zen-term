@@ -42,6 +42,8 @@ final class DiffViewerOverlayTests: WindowTestCase {
         var heads: [GitDiffRunner.BranchOption]
         /// The head the overlay asked each load for — nil while it is showing the checkout's own.
         var lastHead: GitDiffRunner.BranchOption?
+        var branchCalls = 0
+        var headCalls = 0
         init(
             status: GitDiffRunner.StatusLoad, failure: GitDiffRunner.Failure?, branches: [String],
             heads: [GitDiffRunner.BranchOption] = []
@@ -80,6 +82,7 @@ final class DiffViewerOverlayTests: WindowTestCase {
         base: (branch: String, sha: String)? = nil, branches: [String] = [],
         heads: [GitDiffRunner.BranchOption] = [],
         failure: GitDiffRunner.Failure? = nil, onCancel: @escaping () -> Void = {},
+        onRepoRootChange: @escaping (URL) -> Void = { _ in },
         // A shared session mounts overlay B on the state overlay A left behind — the reopen path.
         session: DiffViewerSession? = nil
     ) -> (overlay: DiffViewerOverlay, spy: LoaderSpy) {
@@ -95,10 +98,17 @@ final class DiffViewerOverlayTests: WindowTestCase {
             background: Theme.current.chrome.background.nsColor,
             session: session,
             loader: { base, head, completion in spy.load(base, head, completion) },
-            branchesLoader: { completion in completion(spy.branches) },
-            headsLoader: { completion in completion(spy.heads) },
+            branchesLoader: { completion in
+                spy.branchCalls += 1
+                completion(spy.branches)
+            },
+            headsLoader: { completion in
+                spy.headCalls += 1
+                completion(spy.heads)
+            },
             sendTargets: { [] },
             sender: { _, _, _ in },
+            onRepoRootChange: onRepoRootChange,
             onCancel: onCancel)
         let win = NSWindow(
             // Wide enough that the diff pane defaults to side-by-side (above the auto-fold threshold);
@@ -125,6 +135,31 @@ final class DiffViewerOverlayTests: WindowTestCase {
             hunks: [Hunk(header: "@@ -1,3 +1,3 @@", oldStart: 1, newStart: 1, lines: lines)])
     }
 
+    private func file(_ path: String, scope: DiffScope, addedLine: String) -> FileDiff {
+        FileDiff(
+            path: path, oldPath: nil, changeKind: .modified,
+            hunks: [
+                Hunk(
+                    header: "@@ -0,0 +1 @@",
+                    oldStart: 0,
+                    newStart: 1,
+                    lines: [
+                        DiffLine(kind: .added, oldLineNumber: nil, newLineNumber: 1, text: addedLine)
+                    ])
+            ],
+            scope: scope)
+    }
+
+    private func renderedTexts(_ overlay: DiffViewerOverlay) -> [String] {
+        overlay.renderedDiffRowsForTesting.flatMap { row in
+            switch row {
+            case .hunkHeader(let text): return [text]
+            case .split(let left, let right): return [left?.text, right?.text].compactMap { $0 }
+            case .unified(let text, _, _, _, _): return [text]
+            }
+        }
+    }
+
     // MARK: tests
 
     func test_initialLoad_loadsOnceAndFillsTheTreeUnderASection() {
@@ -140,6 +175,23 @@ final class DiffViewerOverlayTests: WindowTestCase {
 
         XCTAssertEqual(overlay.selectedFilePathForTesting, "a/b/One.swift")
         XCTAssertGreaterThan(overlay.diffRowCountForTesting, 0)
+    }
+
+    func test_samePathInTwoScopes_switchesTheRenderedDiffWithTheRealTreeSelection() {
+        let path = "Probe.txt"
+        let (overlay, _) = mount(
+            unstaged: [file(path, scope: .unstaged, addedLine: "working tree")],
+            staged: [file(path, scope: .staged, addedLine: "index")])
+
+        XCTAssertTrue(renderedTexts(overlay).contains("working tree"))
+
+        overlay.selectRowForTesting(3)  // Staged section is row 2; its Probe.txt is row 3.
+        XCTAssertTrue(
+            renderedTexts(overlay).contains("index"),
+            "the same path in Staged is a different diff, not a duplicate selection")
+
+        overlay.selectRowForTesting(1)  // Back to Unstaged/Probe.txt.
+        XCTAssertTrue(renderedTexts(overlay).contains("working tree"))
     }
 
     /// The bare `\` layout key must actually swap the rendered pane, not just flip a flag — the "control
@@ -365,6 +417,18 @@ final class DiffViewerOverlayTests: WindowTestCase {
 
         XCTAssertEqual(spy.lastHead?.name, "other")
         XCTAssertEqual(spy.lastHead?.worktree, URL(fileURLWithPath: "/tmp/wt"))
+    }
+
+    func test_pickingABranchWithAWorktree_retargetsTheHostWatcher() throws {
+        var watchedRoots: [URL] = []
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [Self.head("feature", current: true), Self.head("other", worktree: "/tmp/wt")],
+            onRepoRootChange: { watchedRoots.append($0) })
+
+        try pickHead(overlay, steps: 1)
+
+        XCTAssertEqual(watchedRoots, [URL(fileURLWithPath: "/tmp/wt")])
     }
 
     func test_pickingABranchWithoutAWorktree_stillHandsItOver() throws {
@@ -913,6 +977,97 @@ final class DiffViewerOverlayTests: WindowTestCase {
 
         XCTAssertEqual(
             overlay.selectedFilePathForTesting, "One.swift", "a vanished file falls back to the first")
+    }
+
+    func test_backgroundRefresh_keepsAnOpenBaseListOpen_whenTheStatusIsUnchanged() {
+        let (overlay, spy) = mount(
+            committed: [file("One.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main", "develop"])
+        let dropdown = overlay.baseDropdownForTesting
+        dropdown.openListForTesting()
+        let callsBeforeRefresh = spy.calls
+
+        overlay.refresh()
+
+        XCTAssertEqual(spy.calls, callsBeforeRefresh + 1, "the watcher seam runs the injected loader")
+        XCTAssertTrue(dropdown.isPopoverOpen, "a background no-op must not close a branch list mid-pick")
+    }
+
+    func test_backgroundRefresh_isSingleFlight_andCoalescesToOnePendingLoad() {
+        let status = makeStatus(unstaged: [file("One.swift")])
+        var completions: [(DiffViewerOverlay.StatusResult) -> Void] = []
+        var loadCalls = 0
+        var branchCalls = 0
+        var headCalls = 0
+        let session = DiffViewerSession(
+            repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo/repo"))
+        let overlay = DiffViewerOverlay(
+            background: Theme.current.chrome.background.nsColor,
+            session: session,
+            loader: { _, _, completion in
+                loadCalls += 1
+                completions.append(completion)
+            },
+            branchesLoader: { completion in
+                branchCalls += 1
+                completion([])
+            },
+            headsLoader: { completion in
+                headCalls += 1
+                completion([])
+            },
+            sendTargets: { [] },
+            sender: { _, _, _ in },
+            onCancel: {})
+
+        XCTAssertEqual(loadCalls, 1)
+        overlay.refresh()
+        overlay.refresh()
+        overlay.refresh()
+        XCTAssertEqual(loadCalls, 1, "events during a load must not stack Git work")
+
+        let first = completions.removeFirst()
+        first(.success(status))
+        XCTAssertEqual(loadCalls, 2, "the burst becomes one trailing load")
+        XCTAssertEqual(branchCalls, 0, "a stale completion does not start branch probes")
+
+        let second = completions.removeFirst()
+        second(.success(status))
+        XCTAssertEqual(loadCalls, 2)
+        XCTAssertEqual(branchCalls, 1)
+        XCTAssertEqual(headCalls, 1, "the current result refreshes branch metadata exactly once")
+    }
+
+    func test_backgroundRefresh_tracksOnePathFromUnstagedToStagedAndBackToBothScopes() {
+        let path = "Probe.txt"
+        let (overlay, spy) = mount(
+            unstaged: [file(path, scope: .unstaged, addedLine: "new file")])
+
+        spy.status = makeStatus(
+            staged: [file(path, scope: .staged, addedLine: "index")])
+        overlay.refresh()
+        XCTAssertTrue(renderedTexts(overlay).contains("index"), "git add moves the shown file to Staged")
+
+        spy.status = makeStatus(
+            unstaged: [file(path, scope: .unstaged, addedLine: "working edit")],
+            staged: [file(path, scope: .staged, addedLine: "index")])
+        overlay.refresh()
+        XCTAssertTrue(
+            renderedTexts(overlay).contains("index"),
+            "a new Unstaged copy does not pull the selection out of Staged")
+
+        overlay.selectRowForTesting(1)
+        XCTAssertTrue(
+            renderedTexts(overlay).contains("working edit"),
+            "selecting the Unstaged copy renders its own hunk")
+
+        spy.status = makeStatus(
+            unstaged: [file(path, scope: .unstaged, addedLine: "burst final")],
+            staged: [file(path, scope: .staged, addedLine: "index")])
+        overlay.refresh()
+        XCTAssertTrue(
+            renderedTexts(overlay).contains("burst final"),
+            "the selected Unstaged copy follows the latest background refresh")
     }
 
     func test_changedReload_expandsADirectoryThatFirstAppears() {

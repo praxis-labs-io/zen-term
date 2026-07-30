@@ -47,6 +47,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private let sendTargets: SendTargets
     private let sender: Sender
     private let onCancel: () -> Void
+    private let onRepoRootChange: (URL) -> Void
 
     /// The base the committed slice is compared against once the user overrides the default via the
     /// base dropdown; nil defers to the repo's default (main/master).
@@ -146,12 +147,20 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private var displayedStatus: GitDiffRunner.StatusLoad?
     /// Guards against a slower older load overwriting a newer one.
     private var loadToken = 0
+    /// Git status loads are deliberately single-flight. Filesystem events can keep arriving while a
+    /// large diff is loading; one pending bit preserves the newest requested state without stacking
+    /// subprocesses that can only be discarded when they finish.
+    private var loadInFlight = false
+    private var pendingReload = false
+    private var pendingReloadShowsSpinner = false
 
     init(
         background: NSColor, session: DiffViewerSession,
         loader: @escaping Loader, branchesLoader: @escaping BranchesLoader,
         headsLoader: @escaping HeadsLoader,
-        sendTargets: @escaping SendTargets, sender: @escaping Sender, onCancel: @escaping () -> Void
+        sendTargets: @escaping SendTargets, sender: @escaping Sender,
+        onRepoRootChange: @escaping (URL) -> Void = { _ in },
+        onCancel: @escaping () -> Void
     ) {
         self.session = session
         self.repoName = session.repoRoot.lastPathComponent
@@ -166,6 +175,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         self.headOverride = session.headOverride
         self.sendTargets = sendTargets
         self.sender = sender
+        self.onRepoRootChange = onRepoRootChange
         self.onCancel = onCancel
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -207,7 +217,6 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         } else {
             reload(showSpinner: true)
         }
-        refreshBranches()
     }
 
     /// A fallback snapshot for a teardown that skips `animateOut` — the whole window closing (⌘W) pulls
@@ -656,6 +665,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         prefetcher.cancelAll()
         prefetcher = DiffFilePrefetcher(repoRoot: target, highlightStore: highlightStore)
         highlightStore.clear()
+        onRepoRootChange(target)
     }
 
     /// Step up out of the tree onto the nearest picker: the base one when it is showing, else the
@@ -1059,24 +1069,50 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         loadToken += 1
         let token = loadToken
         if showSpinner { showMessage("Loading…") }
+        guard !loadInFlight else {
+            pendingReload = true
+            pendingReloadShowsSpinner = pendingReloadShowsSpinner || showSpinner
+            return
+        }
+        startLoad(token: token)
+    }
+
+    private func startLoad(token: Int) {
+        loadInFlight = true
         loader(baseOverride, headOverride) { [weak self] result in
-            guard let self, token == self.loadToken else { return }
-            switch result {
-            case .success(let status):
-                // The branch lists refresh on every load, ahead of the unchanged-status guard below.
-                // That guard is about the *diff*: an identical diff says nothing about whether branches
-                // were created or deleted, and gating the lists on it left a picker naming a branch that
-                // no longer existed until some unrelated edit changed the diff.
+            guard let self else { return }
+            self.loadInFlight = false
+            if token == self.loadToken {
+                // Branch metadata is refreshed once per current status result. Keeping it ahead of the
+                // unchanged-status guard lets a ref change update the picker even when the diff did not.
                 self.refreshBranches()
-                guard status != self.displayedStatus else { return }  // unchanged — keep the view (and cache)
-                self.evictStaleHighlights(from: self.displayedStatus, to: status)
-                self.apply(status)
-            case .failure(let failure):
-                self.displayedStatus = nil
-                self.updateRepoBranch()
-                self.showMessage(self.failureMessage(for: failure))
+                switch result {
+                case .success(let status):
+                    if status != self.displayedStatus {
+                        self.evictStaleHighlights(from: self.displayedStatus, to: status)
+                        self.apply(status)
+                    }
+                case .failure(let failure):
+                    self.displayedStatus = nil
+                    self.updateRepoBranch()
+                    self.showMessage(self.failureMessage(for: failure))
+                }
+            }
+            if self.pendingReload {
+                let showSpinner = self.pendingReloadShowsSpinner
+                self.pendingReload = false
+                self.pendingReloadShowsSpinner = false
+                if showSpinner { self.showMessage("Loading…") }
+                self.startLoad(token: self.loadToken)
             }
         }
+    }
+
+    /// Re-read the repo without disturbing the current surface while the load is in flight. The
+    /// watcher owns when to call this; the overlay keeps the reaction identical to every other
+    /// background reload, including stale-load rejection and unchanged-status no-ops.
+    func refresh() {
+        reload(showSpinner: false)
     }
 
     /// Evict only the highlight-cache keys a changed reload actually moved, instead of wiping the whole
@@ -1107,7 +1143,6 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         pendingPlace = nil
         displayedStatus = status
         updateBaseHeader()  // reflect the base this load resolved to
-        refreshBranches()  // and refresh the branch list behind it
         updateRepoBranch()  // reflect the checked-out branch this load carries
 
         let controller = DiffTreeOutlineController(
@@ -1193,8 +1228,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     private func selectFile(_ file: FileDiff) {
         // Dedup: the load both selects the row (firing this via the delegate) and calls here directly,
-        // and re-selecting the shown file shouldn't re-render.
-        guard selectedFilePath != file.path else { return }
+        // and re-selecting the exact shown diff shouldn't re-render. Path alone is not identity: one
+        // path can have different hunks in Unstaged and Staged at the same time.
+        guard selectedFilePath != file.path || currentFileDiff != file else { return }
         selectedFilePath = file.path
         currentFileDiff = file
         messageLabel.isHidden = true
@@ -1345,7 +1381,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     var renderedDiffRowsForTesting: [DiffRow] { diffTable.rows }
     /// Re-run the loader the way a background refresh does, so a test can assert what a load carrying
     /// *changed* content does to the highlight cache.
-    func reloadForTesting() { reload(showSpinner: false) }
+    func reloadForTesting() { refresh() }
 
     var renderedDiffLayoutForTesting: GeneralConfig.DiffLayout? { renderedLayout }
     /// The footer's repo name, and the branch it shows (nil when the branch glyph/name are collapsed).
@@ -1380,6 +1416,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// The root git reads resolve against — the picked branch's worktree, or the repo the viewer opened
     /// on. Exposed because the highlighter following the loader is the whole point of `retargetRepoRoot`.
     var repoRootForTesting: URL { repoRoot }
+    /// The host watches the same root the loader and highlighter read. Unlike the testing alias, this
+    /// is part of the overlay-host lifecycle seam.
+    var effectiveRepoRoot: URL { repoRoot }
     /// Choose a base branch the way the dropdown's `onChange` does, to exercise the base-override load.
     func chooseBaseForTesting(_ branch: String) {
         guard let index = baseItems.firstIndex(of: branch) else { return }

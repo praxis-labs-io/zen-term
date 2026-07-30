@@ -83,6 +83,17 @@ final class WindowControllerDiffViewerTests: WindowTestCase {
         XCTAssertTrue(diffOverlays(c).isEmpty, "a non-repo must not present a viewer")
     }
 
+    func test_windowTeardownStopsTheOpenDiffWatcher() {
+        let c = makeWindow()
+        c.resolveRepoRoot = { _, completion in completion(self.root) }
+        c.openDiffViewer()
+        XCTAssertTrue(c.hasDiffWatcherForTesting)
+
+        c.tearDownForQuit()
+
+        XCTAssertFalse(c.hasDiffWatcherForTesting, "window teardown must release the repo stream")
+    }
+
     /// Two tabs on two repos each keep their own session (ZEN-298). The slot used to live on
     /// `WindowController`, so opening the viewer in a second tab on a different repo evicted the
     /// first tab's session; going back rebuilt from nothing, which the reader sees as a spinner and
