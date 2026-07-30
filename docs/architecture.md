@@ -564,8 +564,10 @@ on the watcher's utility queue; a trailing debounce coalesces each write burst, 
 edge asks the overlay to refresh on main. Status loading is single-flight: events during an
 active load collapse into one trailing load instead of stacking Git subprocesses. Each current
 result refreshes branch metadata once and treats an unchanged status as a no-op, so ignored-file
-churn costs a Git read but no rebuild. Closing the card or its window stops the stream and
-invalidates any pending edge before teardown continues.
+churn costs a Git read but no rebuild. If the selected worktree disappears, branch reconciliation
+returns the watcher and reader to the original checkout, then reloads there so the base, tree, and
+footer cannot remain stranded on the deleted branch. Closing the card or its window stops the
+stream and invalidates any pending edge before teardown continues.
 
 Its git work is `GitDiffRunner`, the app's first real subprocess: `git diff` runs off
 the main thread on a global queue, both pipes drained to EOF before `waitUntilExit`,

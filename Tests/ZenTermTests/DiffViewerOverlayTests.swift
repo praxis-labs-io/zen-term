@@ -40,6 +40,7 @@ final class DiffViewerOverlayTests: WindowTestCase {
         /// A `var` so a test can hand the *next* refresh a different branch list — a branch
         /// vanishing between refreshes is what the reconciliation exists for.
         var heads: [GitDiffRunner.BranchOption]
+        var nextFailure: GitDiffRunner.Failure?
         /// The head the overlay asked each load for — nil while it is showing the checkout's own.
         var lastHead: GitDiffRunner.BranchOption?
         var branchCalls = 0
@@ -60,7 +61,10 @@ final class DiffViewerOverlayTests: WindowTestCase {
             calls += 1
             lastBase = base
             lastHead = head
-            if let failure {
+            if let nextFailure {
+                self.nextFailure = nil
+                completion(.failure(nextFailure))
+            } else if let failure {
                 completion(.failure(failure))
             } else {
                 completion(.success(status))
@@ -455,6 +459,32 @@ final class DiffViewerOverlayTests: WindowTestCase {
         try pickHead(overlay, steps: 1)
 
         XCTAssertEqual(watchedRoots, [URL(fileURLWithPath: "/tmp/wt")])
+    }
+
+    func test_selectedWorktreeVanishing_reloadsTheCheckoutAndRestoresItsHeaderAndFooter() throws {
+        var watchedRoots: [URL] = []
+        let (overlay, spy) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            branches: ["main"],
+            heads: [Self.head("feature", current: true), Self.head("other", worktree: "/tmp/wt")],
+            onRepoRootChange: { watchedRoots.append($0) })
+        try pickHead(overlay, steps: 1)
+        XCTAssertEqual(spy.lastHead?.name, "other")
+
+        spy.heads = [Self.head("feature", current: true)]
+        spy.nextFailure = .gitError("fatal: linked worktree was removed")
+        overlay.refresh()
+        waitUntil(spy.lastHead == nil, "the vanished worktree selection to reload from the checkout")
+
+        XCTAssertEqual(
+            watchedRoots,
+            [
+                URL(fileURLWithPath: "/tmp/wt"),
+                URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo/repo"),
+            ])
+        XCTAssertTrue(overlay.isBaseDropdownShownForTesting)
+        XCTAssertEqual(overlay.baseDropdownForTesting.buttonTitleForTesting, "Base: main")
+        XCTAssertEqual(overlay.footerBranchForTesting, "feature")
     }
 
     func test_pickingABranchWithoutAWorktree_stillHandsItOver() throws {

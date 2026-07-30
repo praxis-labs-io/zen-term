@@ -251,6 +251,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         headsLoader { [weak self] heads in
             guard let self else { return }
             self.heads = heads
+            let hadOverride = self.headOverride != nil
             // A branch can vanish between refreshes (deleted, or its worktree moved), and a session
             // restores an override from a previous open. Re-resolve by name against what git just
             // reported: the picker would otherwise show one branch while `reload` asked the host for
@@ -265,6 +266,14 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
                 self.retargetRepoRoot()
             }
             self.updateBaseHeader()
+            if hadOverride, self.headOverride == nil {
+                // The status load that prompted this branch refresh still targeted the vanished
+                // worktree and may already have failed. Reload on the next main turn, after that result
+                // has settled, so the restored root repopulates the base picker, tree, and footer.
+                DispatchQueue.main.async { [weak self] in
+                    self?.reload(showSpinner: false)
+                }
+            }
         }
     }
 
