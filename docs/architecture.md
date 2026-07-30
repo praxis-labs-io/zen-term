@@ -551,9 +551,23 @@ re-close, the selection follows its file even when a `git add` moves it Unstaged
 and the cursor lands back on its line by number (never index). A directory a load is the
 first to show comes up expanded, like any first-seen row. `DiffViewerSession` holds that
 place plus the status cache, the highlight cache, and the picked base for the repo the
-viewer last opened, so ⌘D reopens where you left off; it lives as long as the window and is
+viewer last opened, so ⌘D reopens where you left off; it lives as long as the tab and is
 never written to disk, and a different repo starts fresh. The overlay snapshots the place
 into the session on teardown (`viewDidMoveToWindow` with no window), not per keystroke.
+
+While the card is open, `WindowController` owns a recursive `RepoWatcher` on the effective
+repository root. Picking a branch in another worktree retargets the stream along with the
+loader and highlighter. A linked worktree's `.git` pointer does not sit above its index,
+`HEAD`, or shared refs, so the watcher resolves its `gitdir` and `commondir` and adds both
+external metadata roots to the stream. FSEvents delivers working-tree and Git metadata changes
+on the watcher's utility queue; a trailing debounce coalesces each write burst, then the settled
+edge asks the overlay to refresh on main. Status loading is single-flight: events during an
+active load collapse into one trailing load instead of stacking Git subprocesses. Each current
+result refreshes branch metadata once and treats an unchanged status as a no-op, so ignored-file
+churn costs a Git read but no rebuild. If the selected worktree disappears, branch reconciliation
+returns the watcher and reader to the original checkout, then reloads there so the base, tree, and
+footer cannot remain stranded on the deleted branch. Closing the card or its window stops the
+stream and invalidates any pending edge before teardown continues.
 
 Its git work is `GitDiffRunner`, the app's first real subprocess: `git diff` runs off
 the main thread on a global queue, both pipes drained to EOF before `waitUntilExit`,

@@ -896,6 +896,7 @@ final class WindowController: NSObject {
     private func closeModal() {
         pendingModal = nil  // a card still loading is closed by never being presented
         guard let overlay = modal?.overlay else { return }
+        stopDiffWatcher()
         modal = nil
         overlay.animateOut { overlay.removeFromSuperview() }
         restoreFocusToActive()
@@ -1059,8 +1060,34 @@ final class WindowController: NSObject {
                 if action == .submit { self?.closeModal() }
                 self?.activeController?.send(message, to: target, action: action)
             },
+            onRepoRootChange: { [weak self] root in self?.retargetDiffWatcher(to: root) },
             onCancel: { [weak self] in self?.closeModal() })
         presentModal(overlay, kind: .diffViewer)
+        startDiffWatcher(at: overlay.effectiveRepoRoot) { [weak overlay] in overlay?.refresh() }
+    }
+
+    /// Lives exactly as long as the open diff card. `closeModal` stops it before the overlay's close
+    /// animation, so a settled filesystem burst cannot reload a surface that is already leaving.
+    private var diffWatcher: RepoWatcher?
+    private var diffWatcherAction: (() -> Void)?
+
+    private func startDiffWatcher(at root: URL, onChange: @escaping () -> Void) {
+        stopDiffWatcher()
+        let watcher = RepoWatcher()
+        diffWatcherAction = onChange
+        watcher.start(repoRoot: root, onChange: onChange)
+        diffWatcher = watcher
+    }
+
+    private func retargetDiffWatcher(to root: URL) {
+        guard let watcher = diffWatcher, let action = diffWatcherAction else { return }
+        watcher.start(repoRoot: root, onChange: action)
+    }
+
+    private func stopDiffWatcher() {
+        diffWatcher?.stop()
+        diffWatcher = nil
+        diffWatcherAction = nil
     }
 
     /// Which section the Settings card opens on. `.tools` / `.workspaces` are used when a sub-form
@@ -1927,6 +1954,8 @@ final class WindowController: NSObject {
         return controllers[tabs.order[tabIndex]]?.diffViewerSession
     }
 
+    var hasDiffWatcherForTesting: Bool { diffWatcher != nil }
+
     /// Test hook: open `count` extra tabs, so a test can drive tab-order changes under a live toast.
     func newTabForTesting() { handle(.newTab) }
     func closeTabForTesting(index: Int) {
@@ -2020,6 +2049,7 @@ final class WindowController: NSObject {
         // arrive to a nil `activeController`, but only after constructing its overlay and kicking
         // off a git probe per workspace. `floats.shutdown()` below does the same for a float.
         pendingModal = nil
+        stopDiffWatcher()
         // Closing the window with a confirm still up must resolve its owner's pending state —
         // e.g. a quit confirm's `.terminateLater` reply — or the app hangs mid-quit.
         cancelConfirm()
