@@ -7,7 +7,7 @@ description: Run zen-term's feature-complete process. Full local Swift check, do
 
 Swift/SwiftPM adaptation of the feature-complete process. Solo, terminal-native
 tool, so verification leans on a GUI someone has to look at — step 1 and the
-step 9 handover runbook carry that weight, and no green CI substitutes for
+step 9 interactive runbook carry that weight, and no green CI substitutes for
 either.
 
 zen-term ran without a remote for part of its life; it has one now
@@ -22,28 +22,10 @@ the PR path is the one exercised least and trusted most — see step 8.
   resolve findings. If none is configured, skip; do not add one here.
 - For work with GUI behavior no unit test covers, run `swift run ZenTerm` and
   confirm it yourself as far as the tool shell allows. What you can't verify
-  (anything needing eyes on screen) becomes the handover runbook in step 9 —
-  written in chat, never written to disk. See `docs/gui-runbook.md`.
+  (anything needing eyes on screen) becomes the interactive runbook in step 9.
+  See `docs/gui-runbook.md`.
 
 Do not proceed until build + tests are green.
-
-### 1a. Offer to drive the machine-checkable steps — Drew's call
-
-Some runbook steps have an outcome a machine can check: a process exited, a port
-freed, a window closed. The `drive-dev-app` skill runs those against a real
-`bin/run` build instead of spending Drew's attention on them.
-
-**Offer it and wait. Never auto-run it.** It synthesizes real keyboard input into
-a real session, and macOS cannot scope that to one app, so it goes when Drew asks
-and not because a step looks automatable. Name the steps you mean:
-
-> Steps 2, 4 and 5 have machine-checkable outcomes. Want me to drive them with
-> `drive-dev-app`, or would you rather run the whole runbook yourself?
-
-If he says yes, report those results in step 9 **as driven**, and say plainly
-which steps a machine checked and which still need his eyes. The eyes-only ones
-still go to him as the handover list. If he declines, or the TCC permissions are
-missing, everything goes to the handover list as usual.
 
 ## 2. Documentation accuracy
 
@@ -166,14 +148,11 @@ most. Read the run list; don't infer from the checks badge.
   instruction to merge. Solo repo, no second approver — nothing else stops it.
 - Report final state: branch, PR link, CI status (from an actual check, not an
   assumption), build/test status, ticket status, and the triage summary.
-- **Hand over a runbook for this PR, in the response itself.** A markdown
-  checklist of what Drew should look at on screen, one per PR: the things a test
-  can't judge (layout, motion, color, a new chord crossing `KeyInterceptor`) and
-  anything the change could plausibly have broken that CI would still call green.
-  Each item names where to go, what to do, and what right looks like, so it can be
-  worked down without re-reading the diff. Lead with the check most likely to
-  catch a regression, and say plainly which behavior has no test behind it.
-  **Never write these to disk.** `docs/gui-runbook.md` is the one standing runbook
-  and it holds the instructions for building a handover list, not the lists
-  themselves. A per-ticket section written into `docs/` goes stale the moment it
-  ships.
+- **Invoke the global `interactive-runbook` skill for this PR.** Work through the
+  checks with Drew one at a time: give one instruction or make one controlled
+  fixture change, wait for his observation, record the result, then continue.
+  Cover the things a test cannot judge (layout, motion, color, a new chord crossing
+  `KeyInterceptor`) and anything the change could plausibly have broken that CI
+  would still call green. Stop on a failure, diagnose it, and repeat the failed
+  check after the fix before resuming. **Never write the run to disk.**
+  `docs/gui-runbook.md` holds the standing rules, not per-PR results.

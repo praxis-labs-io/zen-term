@@ -12,4 +12,4 @@ Read `.claude/skills/ship-feature/SKILL.md` completely and follow it as the cano
 - Recommend `/review` for either the working diff or draft PR; Codex chooses the review target interactively.
 - Use connected GitHub and Linear tools when available, with `gh` only where connector coverage is insufficient.
 
-Preserve every ZenTerm-specific gate, especially Swift build/test verification, the optional `drive-dev-app` handoff, documentation accuracy, separate push and ready actions, explicit triage, GUI runbook handoff, and the prohibition on merging without direct instruction.
+Preserve every ZenTerm-specific gate, especially Swift build/test verification, documentation accuracy, separate push and ready actions, explicit triage, the interactive-runbook closeout, and the prohibition on merging without direct instruction.

@@ -1,24 +1,18 @@
-# Handing over a GUI runbook
+# Running a GUI runbook
 
 zen-term is a GUI app whose features are keyboard-triggered. Anything that has to
-be *looked at* gets handed to Drew as a checklist.
+be *looked at* is verified with Drew in the running dev build.
 
-Some of it no longer has to be. With Accessibility and Screen Recording granted, a
-`bin/run` dev build can be driven directly: launched, sent commands and chords,
-screenshotted. The `drive-dev-app` skill owns that, including the safety model,
-which is not optional (both instances present to System Events as "ZenTerm", and
-one of them usually hosts a Claude Code session).
-
-That moves the line but does not erase it. Drive what has a machine-checkable
-outcome: a process exited, a port freed, a window closed. Hand over what needs
-eyes: layout, spacing, motion, color, focus rings. A screenshot proves a thing is
-on screen, never that it looks right.
+The global `interactive-runbook` skill owns the session. It gives one instruction
+or makes one controlled fixture change, waits for Drew's observation, records the
+result, then advances. It never synthesizes input and never infers a pass from a
+screenshot or silence. `drive-dev-app` remains a separately invoked debugging tool,
+not part of the normal shipping path.
 
 This is the only standing runbook. Runbooks for individual tickets are **never
-written to disk**: they are printed in chat, as checkboxes, in the message that
-hands the work over.
+written to disk: their checks and results live in the interactive chat session.
 
-## When to hand one over
+## When to run one
 
 - At the end of a major ticket implementation.
 - At an intermediary step where the tests are not sufficient confirmation that the
@@ -51,24 +45,27 @@ when the budget is one the eye cannot check. Two of those:
 
 ## Shape
 
-Start with how to get the build running, then group the checks by implementation
-area. One line per check, each phrased as something to do and something to see.
+Start with how to get the build running, then order the checks by dependency and
+risk. Present only one check at a time, phrased as something to do and something
+to see.
 
 ```markdown
 **Run:** `swift run ZenTerm`
 
-**Pane focus halo**
-- [ ] Split with `⌘⇧\`. The focused pane carries the halo, the other does not.
-- [ ] `⌘H` / `⌘L` moves the halo with the focus.
+Check 1: Split with `⌘⇧\`. The focused pane should carry the halo and the other
+should not. Tell me what you see.
 
-**Settings card**
-- [ ] `⌘,` opens it centered, springing in with no flash.
-- [ ] `Esc` closes it and returns focus to the pane that had it.
+<wait for Drew's result>
+
+Check 2: Press `⌘H`, then `⌘L`. The halo should follow focus in both directions.
+Tell me what you see.
 ```
 
 Rules that keep them useful:
 
-- **Every check names the keystroke or click that drives it.** "Verify the halo
+- **One check per turn.** Do not batch instructions or continue before Drew reports
+  the result.
+- **Every check names the keystroke, click, or fixture change that drives it.** "Verify the halo
   works" is not a check.
 - **Wrap chords in backticks.** A bare `⌘⇧\` loses its backslash when the checklist
   is rendered as Markdown, which turns it into a different chord.
@@ -78,6 +75,12 @@ Rules that keep them useful:
   `KeyInterceptor` reason above.
 - **Say what is expected to look odd.** If a step is supposed to sit there doing
   nothing for a moment, write that down: silence reads as a broken build.
+- **Stop on failure.** Diagnose it, fix it when authorized, repeat the failed check
+  from clean state, then resume.
+- **Treat teardown as behavior.** An unexpected state while removing a fixture is
+  a product failure, not cleanup noise.
+- **Clean up controlled fixtures.** Remove temporary files, branches, worktrees,
+  and test data, then report that cleanup succeeded.
 
 ## Probes handed over for measurement
 
