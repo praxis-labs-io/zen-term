@@ -104,8 +104,11 @@ final class ColorSchemeReportTests: XCTestCase {
         let stem = NSTemporaryDirectory() + "zen307-\(UUID().uuidString)"
         let outputs = (0..<(queries + (alsoQueryGrid ? 1 : 0))).map { "\(stem)-reply\($0).txt" }
         let script = "\(stem).sh"
+        let gridSettled = "\(stem)-grid-settled"
         defer {
-            for path in outputs + [script] { try? FileManager.default.removeItem(atPath: path) }
+            for path in outputs + [script, gridSettled] {
+                try? FileManager.default.removeItem(atPath: path)
+            }
         }
 
         // Raw mode with echo off, or a reply sits in the line discipline waiting for a newline
@@ -131,11 +134,25 @@ final class ColorSchemeReportTests: XCTestCase {
         }
         if alsoQueryGrid {
             // `CSI 18 t` reports the text area in characters, which is how many columns the font
-            // actually in force yields for this view. 24 bytes is past any plausible reply; `dd`
-            // writes each byte as it reads, so the poll below sees the whole thing regardless.
+            // actually in force yields for this view. The scheme reply can precede the renderer's
+            // font-driven grid relayout, so sample through a bounded settling window rather than
+            // treating the first geometry as final. The marker keeps the host poll from returning
+            // while the shell is still replacing that reply.
             lines += [
-                "printf '\\033[18t'",
-                "dd bs=1 count=24 2>/dev/null > '\(outputs[outputs.count - 1])'",
+                "i=0",
+                "while [ $i -lt 20 ]; do",
+                "  printf '\\033[18t'",
+                "  reply=''",
+                "  while :; do",
+                "    ch=$(dd bs=1 count=1 2>/dev/null)",
+                "    reply=\"${reply}${ch}\"",
+                "    [ \"$ch\" = 't' ] && break",
+                "  done",
+                "  printf '%s' \"$reply\" > '\(outputs[outputs.count - 1])'",
+                "  i=$((i+1))",
+                "  sleep 0.05",
+                "done",
+                "touch '\(gridSettled)'",
             ]
         }
         try lines.joined(separator: "\n").write(toFile: script, atomically: true, encoding: .utf8)
@@ -163,6 +180,7 @@ final class ColorSchemeReportTests: XCTestCase {
             // The grid reply is variable width and terminated by `t`, so length alone would let a
             // half-written one through.
             if alsoQueryGrid, data[data.count - 1].last != UInt8(ascii: "t") { continue }
+            if alsoQueryGrid, !FileManager.default.fileExists(atPath: gridSettled) { continue }
             // The last reply is rewritten in place until it settles, so let the retry loop finish
             // rather than reading the first value it happens to land.
             if repaintTo != nil, String(decoding: data[data.count - 1], as: UTF8.self) != Self.lightReply,
