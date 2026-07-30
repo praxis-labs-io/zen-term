@@ -557,11 +557,13 @@ into the session on teardown (`viewDidMoveToWindow` with no window), not per key
 
 While the card is open, `WindowController` owns a recursive `RepoWatcher` on the effective
 repository root. Picking a branch in another worktree retargets the stream along with the
-loader and highlighter. FSEvents delivers working-tree and `.git` changes on the watcher's
-utility queue; a trailing debounce coalesces each write burst, then the settled edge asks the
-overlay to refresh on main. Status loading is single-flight: events during an active load
-collapse into one trailing load instead of stacking Git subprocesses. Each current result
-refreshes branch metadata once and treats an unchanged status as a no-op, so ignored-file
+loader and highlighter. A linked worktree's `.git` pointer does not sit above its index,
+`HEAD`, or shared refs, so the watcher resolves its `gitdir` and `commondir` and adds both
+external metadata roots to the stream. FSEvents delivers working-tree and Git metadata changes
+on the watcher's utility queue; a trailing debounce coalesces each write burst, then the settled
+edge asks the overlay to refresh on main. Status loading is single-flight: events during an
+active load collapse into one trailing load instead of stacking Git subprocesses. Each current
+result refreshes branch metadata once and treats an unchanged status as a no-op, so ignored-file
 churn costs a Git read but no rebuild. Closing the card or its window stops the stream and
 invalidates any pending edge before teardown continues.
 

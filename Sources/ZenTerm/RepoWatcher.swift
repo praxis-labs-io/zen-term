@@ -52,6 +52,7 @@ final class RepoWatcher {
     /// changes take the same refresh path.
     func start(repoRoot: URL, onChange: @escaping () -> Void) {
         stop()
+        let watchPaths = Self.watchPaths(repoRoot: repoRoot)
 
         let sink = EventSink(watcher: self)
         self.sink = sink
@@ -76,7 +77,7 @@ final class RepoWatcher {
                     Unmanaged<EventSink>.fromOpaque(info).takeUnretainedValue().watcher?.receiveEvent()
                 },
                 &context,
-                [repoRoot.path] as CFArray,
+                watchPaths as CFArray,
                 FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
                 0.1,
                 FSEventStreamCreateFlags(kFSEventStreamCreateFlagWatchRoot))
@@ -118,6 +119,60 @@ final class RepoWatcher {
 
     private func receiveEvent() {
         debouncer.signal()
+    }
+
+    /// A linked worktree's `.git` is a pointer file. Its index and HEAD live in the referenced Git
+    /// directory, and refs may live one level farther away in the directory named by `commondir`.
+    /// FSEvents does not follow either pointer, so add those external roots explicitly.
+    static func watchPaths(
+        repoRoot: URL,
+        readFile: (URL) -> String? = { try? String(contentsOf: $0, encoding: .utf8) }
+    ) -> [String] {
+        let root = repoRoot.standardizedFileURL
+        let dotGit = root.appendingPathComponent(".git")
+        guard
+            let pointer = readFile(dotGit),
+            let gitDirectory = referencedDirectory(
+                prefix: "gitdir:", contents: pointer, relativeTo: root)
+        else {
+            return [root.path]
+        }
+
+        var directories = [root, gitDirectory]
+        if let commonPointer = readFile(gitDirectory.appendingPathComponent("commondir")),
+            let commonDirectory = referencedDirectory(
+                contents: commonPointer, relativeTo: gitDirectory)
+        {
+            directories.append(commonDirectory)
+        }
+
+        return directories.reduce(into: [String]()) { paths, directory in
+            let path = directory.standardizedFileURL.path
+            let isAlreadyCovered = paths.contains { existing in
+                path == existing || path.hasPrefix(existing + "/")
+            }
+            if !isAlreadyCovered {
+                paths.append(path)
+            }
+        }
+    }
+
+    private static func referencedDirectory(
+        prefix: String? = nil,
+        contents: String,
+        relativeTo base: URL
+    ) -> URL? {
+        var path = contents.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let prefix {
+            guard path.hasPrefix(prefix) else { return nil }
+            path = String(path.dropFirst(prefix.count))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard !path.isEmpty else { return nil }
+        if path.hasPrefix("/") {
+            return URL(fileURLWithPath: path)
+        }
+        return base.appendingPathComponent(path)
     }
 }
 
