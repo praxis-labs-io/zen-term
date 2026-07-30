@@ -74,6 +74,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private var headDropdown: Dropdown!  // ditto — reads `Branch: <name>`
     private let pickerStack = NSStackView()
     private var baseHeaderHeight: NSLayoutConstraint!
+    private var treeWidthProportional: NSLayoutConstraint!
 
     private let outline = NavOutlineView()
     private var outlineController: DiffTreeOutlineController?
@@ -821,8 +822,8 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // fraction crosses the cap. Kept below 500 (`.defaultLow`), the equality yields (the tree
         // clamps to 360) and the window is left alone. The min/max clamps are inequalities and don't
         // trip this, so their priority is free to stay above the proportional term so it wins.
-        let treeWidthProportional = treeScroll.widthAnchor.constraint(equalTo: card.widthAnchor, multiplier: 0.2)
-        treeWidthProportional.priority = .defaultLow
+        treeWidthProportional = treeScroll.widthAnchor.constraint(equalTo: card.widthAnchor, multiplier: 0.2)
+        treeWidthProportional.priority = NSLayoutConstraint.Priority(rawValue: 251)
         let treeMinWidth = treeScroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 200)
         treeMinWidth.priority = .defaultHigh
         let treeMaxWidth = treeScroll.widthAnchor.constraint(lessThanOrEqualToConstant: 360)
@@ -1413,6 +1414,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     var isBaseDropdownShownForTesting: Bool { !baseDropdown.isHidden }
     var isHeadDropdownShownForTesting: Bool { !headDropdown.isHidden }
     var baseHeaderHeightForTesting: CGFloat { baseHeaderHeight.constant }
+    var treeWidthForTesting: CGFloat {
+        (treeWidthProportional.firstItem as? NSView)?.frame.width ?? 0
+    }
+    var treeWidthPriorityForTesting: NSLayoutConstraint.Priority { treeWidthProportional.priority }
+    var treeTitleCompressionPriorityForTesting: NSLayoutConstraint.Priority {
+        headDropdown.contentCompressionResistancePriority(for: .horizontal)
+    }
     /// The root git reads resolve against — the picked branch's worktree, or the repo the viewer opened
     /// on. Exposed because the highlighter following the loader is the whole point of `retargetRepoRoot`.
     var repoRootForTesting: URL { repoRoot }

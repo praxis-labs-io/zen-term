@@ -132,6 +132,13 @@ through the card's proportional width constraint and *stopped the window from re
 (`setContentCompressionResistancePriority(.defaultLow, for: .horizontal)`) fixes it; setting it on the
 enclosing `NSStackView` is not enough; the child label resists on its own (ZEN-243).
 
+**Two optional constraints at the same priority do not have a stable winner.** The diff tree's
+proportional width and its branch title's compression resistance were both priority 250. Either
+truncating the title or widening the tree satisfied an equal amount of optional pressure, so a
+key-window relayout could choose the other solution and make the tree jump wider. Give the intended
+winner a strict ordering while keeping both below any window-sizing boundary: the tree proportion is
+251, title compression is 250, and the window stay-put constraint is 500 (ZEN-256).
+
 **A custom `NSView` with no `intrinsicContentSize` cannot resist stretching in a stack, at any
 priority.** Content-hugging and compression-resistance only install their constraints on an axis where
 `intrinsicContentSize` returns a real value. A view sized purely by its own internal constraints (a

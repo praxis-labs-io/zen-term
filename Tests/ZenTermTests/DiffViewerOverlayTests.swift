@@ -390,6 +390,32 @@ final class DiffViewerOverlayTests: WindowTestCase {
         XCTAssertEqual(overlay.headDropdownForTesting.buttonTitleForTesting, "Branch: feature")
     }
 
+    func test_windowKeyChange_keepsTheTreeWidthAndItsProportionWinsTitleCompression() {
+        let priorKeyWindow = NSApp.keyWindow
+        defer { priorKeyWindow?.makeKeyAndOrderFront(nil) }
+        let (overlay, _) = mount(
+            committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
+            heads: [
+                Self.head(
+                    "a-branch-name-long-enough-to-compete-with-the-tree-width", current: true)
+            ])
+        window?.makeKeyAndOrderFront(nil)
+        window?.contentView?.layoutSubtreeIfNeeded()
+        let keyWidth = overlay.treeWidthForTesting
+
+        window?.resignKey()
+        window?.contentView?.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(overlay.treeWidthForTesting, keyWidth, accuracy: 0.5)
+        XCTAssertGreaterThan(
+            overlay.treeWidthPriorityForTesting,
+            overlay.treeTitleCompressionPriorityForTesting,
+            "the tree proportion must win before an unbounded branch title can widen it")
+        XCTAssertLessThan(
+            overlay.treeWidthPriorityForTesting, .init(rawValue: 500),
+            "the tree proportion must still yield before AppKit resizes the window")
+    }
+
     /// A branch with no worktree can only show committed work, and the reader is told so in the list
     /// rather than discovering it as "my uncommitted changes vanished".
     func test_headDropdown_notesBranchesThatCanOnlyShowCommittedWork() {
