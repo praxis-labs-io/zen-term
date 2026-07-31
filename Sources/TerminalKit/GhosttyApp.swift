@@ -81,6 +81,7 @@ final class GhosttyApp {
             ghostty_config_load_file(cfg, generated)
         }
         ghostty_config_finalize(cfg)
+        Self.logDiagnostics(of: cfg, context: "init")
         config = cfg
 
         var runtime = ghostty_runtime_config_s(
@@ -148,6 +149,7 @@ final class GhosttyApp {
         }
         ghostty_config_load_file(cfg, path)
         ghostty_config_finalize(cfg)
+        Self.logDiagnostics(of: cfg, context: "updateConfig")
         ghostty_app_update_config(app, cfg)
         let old = config
         config = cfg
@@ -198,11 +200,28 @@ final class GhosttyApp {
         }
         ghostty_config_load_file(cfg, path)
         ghostty_config_finalize(cfg)
+        Self.logDiagnostics(of: cfg, context: "updateSurfaceConfig")
         // Retained, not freed: it goes in the cache for every later call with this same shape.
         surfaceConfigCache[text] = cfg
         ghostty_surface_update_config(surfacePtr, cfg)
         tick()
         return true
+    }
+
+    /// Every diagnostic libghostty attached to a finalized config. The config is entirely
+    /// generated, so a diagnostic never means user error: it means `GhosttyConfigWriter` emitted
+    /// something this libghostty pin does not understand — typically a key upstream renamed or
+    /// removed — and that setting is silently not applying (ZEN-309).
+    static func diagnostics(of cfg: ghostty_config_t) -> [String] {
+        (0..<ghostty_config_diagnostics_count(cfg)).compactMap { index in
+            ghostty_config_get_diagnostic(cfg, index).message.map { String(cString: $0) }
+        }
+    }
+
+    private static func logDiagnostics(of cfg: ghostty_config_t, context: String) {
+        for message in diagnostics(of: cfg) {
+            Log.error("GhosttyApp: config diagnostic (\(context)): \(message)", category: .config)
+        }
     }
 
     /// Free every cached per-surface config. Called when the app-global config moves, because each
