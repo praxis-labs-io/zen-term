@@ -83,6 +83,27 @@ final class GhosttyInputForwardingTests: XCTestCase {
         XCTAssertEqual(parent.otherMouseDraggedCount, 0, "otherMouseDragged was not overridden")
     }
 
+    /// Enter and exit are what keep libghostty's viewport state honest: exit pushes (-1, -1) and
+    /// enter restores a real position after a window or the app becomes active with the pointer
+    /// already parked over a pane (ZEN-310). `NSWindow.sendEvent` routes tracking events by
+    /// tracking number, and a synthesized event cannot match the live tracking area's, so these
+    /// are dispatched at the view directly; `NSResponder`'s defaults still forward up the chain,
+    /// so the recording superview sees exactly what a missing override would have declined to
+    /// handle.
+    func test_theSurfaceTakesEnterAndExit_ratherThanPassingThemUp() throws {
+        view.mouseEntered(with: try enterExit(.mouseEntered))
+        view.mouseExited(with: try enterExit(.mouseExited))
+
+        XCTAssertEqual(
+            parent.mouseEnteredCount, 0,
+            "an enter reaching the superview means GhosttyHostView never overrode mouseEntered, "
+                + "so the (-1, -1) a mouseExited pushed is never replaced with a real position")
+        XCTAssertEqual(
+            parent.mouseExitedCount, 0,
+            "an exit reaching the superview means GhosttyHostView never overrode mouseExited, "
+                + "so libghostty is never told the pointer left the viewport")
+    }
+
     /// Middle click has to focus the pane it hits, the same as a left click does. AppKit
     /// hit-tests the button to whichever pane is under the cursor, so without this the button is
     /// reported to one pane while the keyboard stays pointed at another, and the user's next
@@ -339,6 +360,14 @@ final class GhosttyInputForwardingTests: XCTestCase {
                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
                 pressure: 1))
     }
+
+    private func enterExit(_ type: NSEvent.EventType) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.enterExitEvent(
+                with: type, location: NSPoint(x: 200, y: 150), modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0,
+                userData: nil))
+    }
 }
 
 /// Records what its subview declined to handle. `NSResponder`'s default `flagsChanged` and
@@ -356,9 +385,13 @@ private final class RecordingResponderView: NSView {
     var otherMouseDownCount = 0
     var otherMouseUpCount = 0
     var otherMouseDraggedCount = 0
+    var mouseEnteredCount = 0
+    var mouseExitedCount = 0
 
     override func flagsChanged(with event: NSEvent) { flagsChangedCount += 1 }
     override func otherMouseDown(with event: NSEvent) { otherMouseDownCount += 1 }
     override func otherMouseUp(with event: NSEvent) { otherMouseUpCount += 1 }
     override func otherMouseDragged(with event: NSEvent) { otherMouseDraggedCount += 1 }
+    override func mouseEntered(with event: NSEvent) { mouseEnteredCount += 1 }
+    override func mouseExited(with event: NSEvent) { mouseExitedCount += 1 }
 }
