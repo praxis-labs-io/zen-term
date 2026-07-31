@@ -221,6 +221,7 @@ final class GhosttyHostView: NSView {
     }
 
     override func updateTrackingAreas() {
+        super.updateTrackingAreas()
         if let trackingArea { removeTrackingArea(trackingArea) }
         // `.activeInActiveApp`, decided in ZEN-310: a pane in a background window still gets
         // hover reports (a watched dashboard in a second window), but tracking stops with the
@@ -473,6 +474,7 @@ final class GhosttyHostView: NSView {
     override func mouseUp(with event: NSEvent) {
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, event.ghosttyMods)
+        settleSkippedExit(event)
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -483,6 +485,7 @@ final class GhosttyHostView: NSView {
     override func rightMouseUp(with event: NSEvent) {
         guard let surfacePtr else { return super.rightMouseUp(with: event) }
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_RIGHT, event.ghosttyMods)
+        settleSkippedExit(event)
     }
 
     // Middle click and the side buttons. Without these `ghostty_surface_mouse_button` only ever
@@ -502,6 +505,18 @@ final class GhosttyHostView: NSView {
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(
             surfacePtr, GHOSTTY_MOUSE_RELEASE, Self.mouseButton(for: event.buttonNumber), event.ghosttyMods)
+        settleSkippedExit(event)
+    }
+
+    /// `mouseExited` skips its (-1, -1) while a button is down, matching Ghostty: drags keep
+    /// reporting positions past the edge, so the exit is redundant mid-drag. Ghostty can rely on
+    /// a later real exit because its tracking is `.activeAlways`; ours stands down with the app,
+    /// so a drag that ends after the app deactivated would leave the last in-viewport position
+    /// standing until the pointer happens to re-cross the pane (ZEN-310). Settle the skipped
+    /// exit when the last button comes up with no tracking area left to do it.
+    private func settleSkippedExit(_ event: NSEvent) {
+        guard let surfacePtr, NSEvent.pressedMouseButtons == 0, !NSApp.isActive else { return }
+        ghostty_surface_mouse_pos(surfacePtr, -1, -1, event.ghosttyMods)
     }
 
     /// Translate an AppKit `buttonNumber` to libghostty's button. AppKit numbers buttons in
