@@ -732,6 +732,18 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         case GHOSTTY_ACTION_RELOAD_CONFIG:
             reapplySurfaceConfig()
             return true
+        case GHOSTTY_ACTION_RENDERER_HEALTH:
+            // Edge-triggered: libghostty raises this once when the Metal renderer degrades and
+            // once when it recovers. An unhealthy renderer is a silently black pane, so log it
+            // loudly enough to tell apart from a hung shell in a bug report (ZEN-309).
+            if action.action.renderer_health == GHOSTTY_RENDERER_HEALTH_HEALTHY {
+                Log.info("GhosttySurface: renderer recovered", category: .surface)
+            } else {
+                Log.error(
+                    "GhosttySurface: renderer unhealthy, pane may render black",
+                    category: .surface)
+            }
+            return true
         default:
             return false
         }
