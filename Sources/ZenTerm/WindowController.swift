@@ -148,7 +148,7 @@ final class WindowController: NSObject {
                     DispatchQueue.main.async {
                         self.showToast(
                             ToastContent(
-                                variant: .info, title: "Diagnostics Exported",
+                                variant: .positive, title: "Diagnostics Exported",
                                 message:
                                     "Saved \(destination.lastPathComponent). It holds your logs and system info."
                             ))
@@ -1962,11 +1962,11 @@ final class WindowController: NSObject {
         // sticky toast past dismissal (ZEN-229); the presenter's stack keeps it alive until dismissed.
         weak var toast: ToastView?
         let actions = [
-            ToastAction(title: "Close Pane", kind: .cancel) { [weak self] in
+            ToastAction(title: "Close Pane", kind: .destructive) { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
                 close()
             },
-            ToastAction(title: "Retry", kind: .destructive) { [weak self] in
+            ToastAction(title: "Retry", kind: .primary) { [weak self] in
                 toast.map { self?.toasts.dismiss($0) }
                 retry()
             },
