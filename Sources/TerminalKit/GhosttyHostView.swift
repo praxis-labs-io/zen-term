@@ -222,9 +222,14 @@ final class GhosttyHostView: NSView {
 
     override func updateTrackingAreas() {
         if let trackingArea { removeTrackingArea(trackingArea) }
+        // `.activeInActiveApp`, decided in ZEN-310: a pane in a background window still gets
+        // hover reports (a watched dashboard in a second window), but tracking stops with the
+        // rest of the app when it is not frontmost, matching the ZEN-271 stand-down. Ghostty's
+        // `.activeAlways` would keep reporting while the app is backgrounded; that gap is
+        // deliberate, not a parity miss.
         let area = NSTrackingArea(
             rect: bounds,
-            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
             owner: self)
         addTrackingArea(area)
         trackingArea = area
@@ -525,6 +530,11 @@ final class GhosttyHostView: NSView {
     override func mouseDragged(with event: NSEvent) { reportMousePos(event) }
     override func rightMouseDragged(with event: NSEvent) { reportMousePos(event) }
     override func otherMouseDragged(with event: NSEvent) { reportMousePos(event) }
+
+    // Restores a real position after `mouseExited` pushed (-1, -1): libghostty gates mouse
+    // reporting on the position being inside the viewport, and when a window becomes key with
+    // the pointer already over a pane, no `mouseMoved` arrives to correct it (ZEN-310).
+    override func mouseEntered(with event: NSEvent) { reportMousePos(event) }
 
     override func mouseExited(with event: NSEvent) {
         guard let surfacePtr, NSEvent.pressedMouseButtons == 0 else { return }
