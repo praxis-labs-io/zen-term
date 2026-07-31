@@ -72,6 +72,13 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     /// and no chrome surface mirrors them, so there is nothing for the chrome to do.
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor)
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?)
+    /// The pointer is over a clickable link (nil when it leaves one). The backend decides what
+    /// counts as a link and when it is live — for libghostty that is hover with the link
+    /// modifier held, the same gate that underlines it and makes it clickable — so this fires
+    /// exactly when a click would open the URL. A `String` rather than a `URL` because an OSC 8
+    /// URI is arbitrary program-chosen text and may not parse; the chrome shows it, never
+    /// resolves it.
+    func surface(_ s: TerminalSurface, hoveredLinkDidChange url: String?)
     /// The user clicked the surface's content — the chrome should route unified focus
     /// (halo + first-responder) to this surface. The surface only reports the intent;
     /// the chrome stays the single owner of focus.
@@ -93,6 +100,7 @@ public extension TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?) {}
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {}
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {}
+    func surface(_ s: TerminalSurface, hoveredLinkDidChange url: String?) {}
     func surfaceWantsFocus(_ s: TerminalSurface) {}
     func surfaceDidFailToStart(_ s: TerminalSurface) {}
 }

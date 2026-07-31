@@ -270,6 +270,15 @@ The I-beam over link text and a plain click doing nothing are correct, not bugs:
 all terminal text is selectable, and plain click is reserved for cursor positioning
 and selection. This matches Terminal.app and iTerm2.
 
+⌘-hover also raises `MOUSE_OVER_LINK`, which crosses the seam as
+`surface(_:hoveredLinkDidChange:)` and mounts a `LinkPreviewView` near the pointer
+(`LinkPreviewPresenter`, ZEN-24), so underline, pointer cursor and URL preview
+appear together. Plain-hover underlining was considered and declined: the highlight
+condition is hardcoded per link and the `link` config that could change it is
+unsettable upstream, and since highlight is also what makes a link clickable
+(`src/input/Link.zig`), plain-hover underline would make bare clicks open links.
+Changing that means a carried vendor patch, judged not worth it.
+
 **There is no per-pane user variable.** `OSC 1337 ; SetUserVar` cannot reach the
 chrome: `GhosttySurface.handle(_:)` dispatches libghostty *actions*
 (`GHOSTTY_ACTION_*`) and the xcframework header has no user-var action, and in

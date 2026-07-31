@@ -568,6 +568,12 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
         guard let id = leafID(of: s) else { return }
         hostByLeaf[id]?.backgroundOverride = color
     }
+    /// The pointer is over a link in one of the panes (nil when it leaves) — mirror it into the
+    /// shared preview so the user sees where a Cmd+click would go (ZEN-24).
+    func surface(_ s: TerminalSurface, hoveredLinkDidChange url: String?) {
+        guard let id = leafID(of: s), let host = hostByLeaf[id] else { return }
+        LinkPreviewPresenter.shared.update(url, near: host)
+    }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }
         closePane(id)

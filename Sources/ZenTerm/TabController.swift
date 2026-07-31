@@ -1364,6 +1364,17 @@ extension TabController: TerminalSurfaceDelegate {
             rightDrawerPanel?.backgroundOverride = color
         }
     }
+    /// The pointer is over a link in one of the drawer surfaces (nil when it leaves) — mirror it
+    /// into the shared preview, exactly as a pane does (ZEN-24). Panes are handled in
+    /// `PaneCanvasController` and floats in `ToolFloatController`; this only reacts to the two
+    /// drawer surfaces.
+    func surface(_ s: TerminalSurface, hoveredLinkDidChange url: String?) {
+        if s === bottomDrawerSurface, let panel = bottomDrawerPanel {
+            LinkPreviewPresenter.shared.update(url, near: panel)
+        } else if s === rightDrawerSurface, let panel = rightDrawerPanel {
+            LinkPreviewPresenter.shared.update(url, near: panel)
+        }
+    }
     /// A drawer's shell exited on its own (e.g. the user typed `exit`): close+clear
     /// that drawer entirely — rather than leaving a dead shell docked — so the next
     /// toggle lazily spawns a fresh one. Panes have their own exit handling in

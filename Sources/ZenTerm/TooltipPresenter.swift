@@ -15,7 +15,6 @@ final class TooltipPresenter {
 
     private static let delay: TimeInterval = 0.45
     private static let gap: CGFloat = 6
-    private static let margin: CGFloat = 8
 
     private var tooltip: ChromeTooltip?
     /// The view the current (shown or pending) tooltip belongs to — guards against a stale
@@ -52,29 +51,14 @@ final class TooltipPresenter {
         let tip = ChromeTooltip(label: label, shortcut: shortcut)
         content.addSubview(tip)
         tip.layoutSubtreeIfNeeded()
-        let size = tip.fittingSize
-
-        let anchor = content.convert(source.bounds, from: source)  // trigger rect in content space
-        var x = anchor.midX - size.width / 2
-        x = max(Self.margin, min(x, content.bounds.width - size.width - Self.margin))
-
-        // Sit above the trigger; the "up" direction and the clip test depend on the content view's
-        // flippedness. Flip to below if the tooltip would run off the visual top edge.
-        let y: CGFloat
-        if content.isFlipped {
-            let above = anchor.minY - Self.gap - size.height
-            y = above < Self.margin ? anchor.maxY + Self.gap : above
-        } else {
-            let above = anchor.maxY + Self.gap
-            y =
-                above + size.height > content.bounds.height - Self.margin
-                ? anchor.minY - Self.gap - size.height : above
-        }
 
         // Frame it directly (not via Auto Layout), so a later `layout()` on the content view can't
         // reset an unconstrained tooltip to the origin.
         tip.translatesAutoresizingMaskIntoConstraints = true
-        tip.frame = CGRect(x: x, y: y, width: size.width, height: size.height)
+        tip.frame = HoverCardView.placementFrame(
+            size: tip.fittingSize,
+            anchor: content.convert(source.bounds, from: source),  // trigger rect in content space
+            in: content, gap: Self.gap)
         tooltip = tip
         installDismissTriggers(in: window)
     }
@@ -100,16 +84,8 @@ final class TooltipPresenter {
             self?.teardown()
             return event
         }
-        let center = NotificationCenter.default
-        for name in [NSWindow.didResignKeyNotification, NSWindow.willCloseNotification] {
-            dismissObservers.append(
-                center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                    self?.teardown()
-                })
+        dismissObservers = HoverCardView.windowDismissObservers(in: window) { [weak self] in
+            self?.teardown()
         }
-        dismissObservers.append(
-            center.addObserver(
-                forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
-            ) { [weak self] _ in self?.teardown() })
     }
 }

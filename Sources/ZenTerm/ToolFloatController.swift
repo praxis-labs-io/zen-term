@@ -366,6 +366,14 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         active.overlay.backgroundOverride = color
     }
 
+    /// The pointer is over a link in the shown float (nil when it leaves) — mirror it into the
+    /// shared preview, exactly as a pane does (ZEN-24). A hidden persistent float has no card
+    /// under the pointer, so only the active card can report.
+    func surface(_ s: TerminalSurface, hoveredLinkDidChange url: String?) {
+        guard let active = activeFloat, s === active.surface else { return }
+        LinkPreviewPresenter.shared.update(url, near: active.overlay)
+    }
+
     /// The spec behind a live surface — the shown card's, or a hidden persistent float's.
     private func spec(for s: TerminalSurface) -> ToolFloat? {
         if let active = activeFloat, s === active.surface { return active.spec }
