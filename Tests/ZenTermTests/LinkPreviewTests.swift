@@ -87,6 +87,47 @@ final class LinkPreviewTests: WindowTestCase {
             "the old pane's clear tore down the new pane's preview")
     }
 
+    /// Closing a pane mid-hover is reachable (⌘W is a Cmd chord, so it fires exactly while
+    /// previews show), and the dead surface can never send the empty-URL clear. The presenter
+    /// sweeps the owner's validity on the next input event instead.
+    func test_closingTheOwningPaneDismissesThePreviewOnTheNextEvent() throws {
+        controller.split(.vertical)
+        controller.canvasView.layoutSubtreeIfNeeded()
+        let surfaces = controller.allSurfaces
+        XCTAssertEqual(surfaces.count, 2)
+        controller.surface(surfaces[0], hoveredLinkDidChange: "https://example.com/gone")
+        XCTAssertEqual(shownPreviews().count, 1)
+
+        controller.surfaceDidExit(surfaces[0], code: 0)
+        controller.canvasView.layoutSubtreeIfNeeded()
+        try sendMouseMoved()
+
+        XCTAssertTrue(shownPreviews().isEmpty, "the closed pane's preview outlived its owner")
+    }
+
+    /// The sweep is validity-triggered, not event-triggered: input while the owner is live
+    /// leaves the card alone (moving along a link must not blink the preview).
+    func test_anInputEventWithALiveOwnerKeepsThePreview() throws {
+        let surface = try XCTUnwrap(controller.allSurfaces.first)
+        controller.surface(surface, hoveredLinkDidChange: "https://example.com/live")
+
+        try sendMouseMoved()
+
+        XCTAssertEqual(shownPreviews().count, 1)
+    }
+
+    /// A real event through `NSApp.sendEvent`, which is where the presenter's local monitor
+    /// listens; calling the sweep directly would pass with the monitor never installed.
+    private func sendMouseMoved() throws {
+        let event = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .mouseMoved, location: NSPoint(x: 10, y: 10), modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 0,
+                pressure: 0))
+        NSApp.sendEvent(event)
+    }
+
     /// The width budget is the one visual property the eye cannot check: a URL a few characters
     /// past the cap looks identical to one under it, so measure it (the ToastView rule). The card
     /// must cap at the text budget plus its insets while the full URL survives for the ends the
