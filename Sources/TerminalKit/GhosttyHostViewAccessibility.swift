@@ -44,16 +44,22 @@ extension GhosttyHostView {
     override func accessibilityLine(for index: Int) -> Int {
         let contents = screenContents() as NSString
         let clamped = min(max(index, 0), contents.length)
-        return contents.substring(to: clamped).components(separatedBy: .newlines).count - 1
+        // Count separators rather than splitting: VoiceOver walks lines one query at a
+        // time, and a components() split re-allocates every line above the probe on each.
+        let prefix = contents.substring(to: clamped)
+        return prefix.unicodeScalars.lazy.filter(CharacterSet.newlines.contains).count
     }
 
     override func accessibilityString(for range: NSRange) -> String? {
         let contents = screenContents() as NSString
-        // Assistive clients probe with ranges from earlier snapshots; the grid may have
-        // scrolled since, so out-of-bounds is an expected answer, not a programmer error.
-        guard range.location >= 0, range.length >= 0, NSMaxRange(range) <= contents.length else {
-            return nil
-        }
+        // Assistive clients probe with ranges from earlier snapshots — including NSNotFound
+        // and near-Int.max values — so out-of-bounds is an expected answer, not a programmer
+        // error. Subtraction, not NSMaxRange: the addition inside NSMaxRange wraps on those
+        // probes, slips past a `<= length` check, and the range then raises in substring.
+        guard range.location >= 0, range.length >= 0,
+            range.location <= contents.length,
+            range.length <= contents.length - range.location
+        else { return nil }
         return contents.substring(with: range)
     }
 

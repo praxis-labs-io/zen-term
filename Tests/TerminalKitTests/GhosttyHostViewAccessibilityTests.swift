@@ -31,6 +31,17 @@ final class GhosttyHostViewAccessibilityTests: XCTestCase {
         XCTAssertNil(view.accessibilitySelectedText())
     }
 
+    /// Assistive clients probe with `NSNotFound` and near-`Int.max` ranges. `NSMaxRange`
+    /// wraps on those (C addition, no trap), which lets a `NSMaxRange <= length` bounds
+    /// check pass and the bogus range reach `substring(with:)`, which raises. The answer
+    /// has to be nil, not an exception.
+    func test_stringForRangeToleratesHostileRanges() {
+        let view = GhosttyHostView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        XCTAssertNil(view.accessibilityString(for: NSRange(location: NSNotFound, length: 1)))
+        XCTAssertNil(view.accessibilityString(for: NSRange(location: 1, length: Int.max)))
+        XCTAssertNil(view.accessibilityAttributedString(for: NSRange(location: NSNotFound, length: 1)))
+    }
+
     /// One real surface, several faces of the same contract: what the shell printed is what
     /// `accessibilityValue` exposes, and the range-parameterized API indexes into that same
     /// string. Asserted together because they share the one cached screen read — a mismatch
