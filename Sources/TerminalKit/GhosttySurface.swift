@@ -579,6 +579,12 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // machine can fork after the sampler stops, and a session never recorded is one no
         // teardown can ever sweep — the ZEN-269 leak back, silently. Here the shell provably
         // still exists, and a sibling caught by the same snapshot is alive and so unsweepable.
+        //
+        // The walk deliberately stays on the main thread. It cost ~0.2ms against an ~850-process
+        // table (measured, ZEN-314), it is dominated by the free below, and it cannot run after
+        // the free: the free closes the pty and takes the shell down, so a deferred snapshot can
+        // miss the session entirely, which is the same leak. Don't move it without a new record
+        // path that sees the shell before the pty closes.
         ShellSessionLedger.shared.record(ShellSession.leaderChildren())
         ghostty_surface_free(surfacePtr)
         self.surfacePtr = nil
