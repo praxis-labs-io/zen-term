@@ -85,10 +85,11 @@ final class GhosttyInputForwardingTests: XCTestCase {
 
     /// Enter and exit are what keep libghostty's viewport state honest: exit pushes (-1, -1) and
     /// enter restores a real position after a window or the app becomes active with the pointer
-    /// already parked over a pane (ZEN-310). `NSWindow.sendEvent` routes tracking events by the
-    /// tracking number a synthesized event cannot carry, so these are dispatched at the view
-    /// directly; `NSResponder`'s defaults still forward up the chain, so the recording superview
-    /// sees exactly what a missing override would have declined to handle.
+    /// already parked over a pane (ZEN-310). `NSWindow.sendEvent` routes tracking events by
+    /// tracking number, and a synthesized event cannot match the live tracking area's, so these
+    /// are dispatched at the view directly; `NSResponder`'s defaults still forward up the chain,
+    /// so the recording superview sees exactly what a missing override would have declined to
+    /// handle.
     func test_theSurfaceTakesEnterAndExit_ratherThanPassingThemUp() throws {
         view.mouseEntered(with: try enterExit(.mouseEntered))
         view.mouseExited(with: try enterExit(.mouseExited))
