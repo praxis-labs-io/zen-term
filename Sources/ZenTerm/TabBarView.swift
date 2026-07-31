@@ -368,7 +368,7 @@ final class TabBarView: NSView {
         case .waiting: numberColor = Theme.current.chrome.attention.nsColor
         }
         // A bare number — the ⌘N binding for tabs 1–9 lives in the hover tooltip now, not inline
-        // (ZEN-110). The prefix shares `numberColor`, so it recolors with the agent-waiting state.
+        // (ZEN-110). The prefix shares `numberColor`, so it recolors with the tab attention state.
         let prefix = "\(item.index) "
         let s = NSMutableAttributedString(
             string: prefix,

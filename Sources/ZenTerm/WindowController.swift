@@ -430,7 +430,7 @@ final class WindowController: NSObject {
                     self.tabBar.reapplyTheme()
                     self.dock.reapplyTheme()
                     self.confirmToast?.reapplyTheme()
-                    // Waiting toasts are sticky with no auto-dismiss, so one left up across a theme edit
+                    // Attention toasts are sticky with no auto-dismiss, so one left up across a theme edit
                     // would otherwise keep its old card fill, ink, and ⌘N keycap — washed out over the new
                     // chrome until the user dismisses it.
                     self.attentionToasts.values.forEach { $0.reapplyTheme() }
@@ -1900,7 +1900,7 @@ final class WindowController: NSObject {
                 self.renderTabBar()
             },
             ToastAction(
-                title: "Switch", kind: .destructive,
+                title: "Switch", kind: .primary,
                 shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" }
             ) { [weak self] in self?.select(id) },
         ]
@@ -1937,12 +1937,12 @@ final class WindowController: NSObject {
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
                 guard let self else { return }
                 self.clearAttention(id)
-                self.renderTabBar()  // "Dismiss" also drops the rose flag
+                self.renderTabBar()  // "Dismiss" also clears the tab attention marker
             },
             // ⌘N already switches while this toast is up (it's non-modal and arms no key
             // equivalents) — the keycap just says so. Resolved lazily, never baked.
             ToastAction(
-                title: "Switch", kind: .destructive,
+                title: "Switch", kind: .primary,
                 shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" }
             ) { [weak self] in self?.select(id) },
         ]
@@ -2066,7 +2066,7 @@ final class WindowController: NSObject {
                 attentionState: attentionStates[id] ?? .idle)
         }
         tabBar.render(items)
-        // A waiting toast is built once per notification, but its ⌘N keycap names the target tab's
+        // An attention toast is built once per notification, but its ⌘N keycap names the target tab's
         // CURRENT index — so re-resolve every live toast here, the one path every tab mutation
         // already runs through. Otherwise a toast for tab 3 keeps reading "⌘3" after tab 1 closes.
         attentionToasts.values.forEach { $0.refreshShortcuts() }
