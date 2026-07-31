@@ -709,6 +709,10 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         case GHOSTTY_ACTION_PROGRESS_REPORT:
             delegate?.surface(self, progressDidChange: Self.progress(action.action.progress_report))
             return true
+        case GHOSTTY_ACTION_COMMAND_FINISHED:
+            delegate?.surface(
+                self, commandDidFinish: Self.commandResult(action.action.command_finished))
+            return true
         case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
             let code = Int32(action.action.child_exited.exit_code)
             // Defer to the next main-loop turn: the chrome frees this surface in
@@ -757,6 +761,12 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         default:
             return false
         }
+    }
+
+    static func commandResult(_ finished: ghostty_action_command_finished_s) -> TerminalCommandResult {
+        TerminalCommandResult(
+            exitCode: finished.exit_code < 0 ? nil : Int(finished.exit_code),
+            duration: TimeInterval(finished.duration) / 1_000_000_000)
     }
 
     /// React to a dynamic color a program set with OSC 4/10/11/12 (or reset with OSC 110–112).

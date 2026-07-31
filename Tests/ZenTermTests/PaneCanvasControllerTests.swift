@@ -34,6 +34,17 @@ final class PaneCanvasControllerTests: WindowTestCase {
 
     private func layout() { controller.canvasView.layoutSubtreeIfNeeded() }
 
+    func test_commandCompletionRelaysFromPaneToTabOwner() throws {
+        var received: TerminalCommandResult?
+        controller.onCommandFinished = { received = $0 }
+        let surface = try XCTUnwrap(controller.surface(for: controller.focusedLeafID))
+        let result = TerminalCommandResult(exitCode: 0, duration: 42)
+
+        surface.delegate?.surface(surface, commandDidFinish: result)
+
+        XCTAssertEqual(received, result)
+    }
+
     func test_split_reusesRetainedHost() {
         let first = controller.focusedLeafID
         guard let original = controller.hostsForTesting[first] else {

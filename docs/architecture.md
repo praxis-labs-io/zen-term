@@ -372,6 +372,15 @@ tab bar, and the dock. `TabController` owns one tab: a
 the active tab's view is mounted. The canvas mounts at the *back* of the container
 (`.below, relativeTo: nil`) because it is the backdrop all window chrome sits on.
 
+**Shell command completion is a background-tab signal.** libghostty decodes OSC 133 and emits
+`GHOSTTY_ACTION_COMMAND_FINISHED`; `GhosttySurface` converts its signed exit-code sentinel and
+nanosecond duration into `TerminalCommandResult`, then panes and drawers relay it through their tab.
+Commands under 10 seconds stay quiet, as do commands in the active tab. A longer command in a
+background tab marks the tab number with the theme's positive color and raises one sticky result
+toast with Dismiss and Switch actions. A later agent notification replaces that completion state;
+command completion never replaces an agent request that still needs attention. Selecting or closing
+the tab clears either state.
+
 **Hidden drawers are detached, not `isHidden`.** A hidden view kept in the layout
 collapses to 0x0, which resizes its PTY to zero columns and crashes size-sensitive
 TUIs.
