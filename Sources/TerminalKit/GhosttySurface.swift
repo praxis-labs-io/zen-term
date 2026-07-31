@@ -730,6 +730,9 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         case GHOSTTY_ACTION_OPEN_URL:
             openURL(action.action.open_url)
             return true
+        case GHOSTTY_ACTION_MOUSE_OVER_LINK:
+            delegate?.surface(self, hoveredLinkDidChange: Self.hoveredLink(action.action.mouse_over_link))
+            return true
         case GHOSTTY_ACTION_SECURE_INPUT:
             setSecureInput(for: action.action.secure_input)
             return true
@@ -811,6 +814,16 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         case background(TerminalColor)
         /// Foreground, cursor or a palette slot: the terminal draws it, the chrome does not.
         case ignored
+    }
+
+    /// Map a `MOUSE_OVER_LINK` payload onto the seam's hovered-link value. Pure, so the mapping
+    /// is tested without a live surface. libghostty sends an empty string when the pointer leaves
+    /// a link; the seam carries that as nil, matching `progressDidChange`'s "cleared" shape.
+    /// Decode by `len` (not `strlen`) so an interior NUL can't truncate the URL, like `openURL`.
+    static func hoveredLink(_ link: ghostty_action_mouse_over_link_s) -> String? {
+        guard let ptr = link.url, link.len > 0 else { return nil }
+        return String(
+            decoding: UnsafeRawBufferPointer(start: ptr, count: Int(link.len)), as: UTF8.self)
     }
 
     /// Open a link libghostty resolved from a ⌘-click. Decode by `len` (not `strlen`) so an
