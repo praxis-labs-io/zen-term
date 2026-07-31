@@ -132,13 +132,31 @@ final class ShellSessionLedger {
     /// The recorded sessions whose leader has exited, dropped from the ledger as they are
     /// handed out so two teardowns racing each other can't both sweep the same one.
     ///
-    /// The process-table walk deliberately runs inside the lock: reading and subtracting have
-    /// to be one atomic step, or two teardowns both see the same orphan and one sweeps a
-    /// session the other already took. No caller is on the main thread. Don't narrow this.
+    /// The process-table walk runs *outside* the lock. It used to run inside, and a close of
+    /// many panes queues one walk per pane: with the lock held across each ~0.3ms walk and no
+    /// fairness from `NSLock`, a main-thread `record` arriving behind 19 queued walks measured
+    /// a 5.6ms stall (ZEN-314). Two things make the narrower critical section still safe:
+    ///
+    /// - Hand-out stays exclusive. The subtraction from `known` is one atomic step under the
+    ///   lock, and orphans are filtered against `known` *at that moment*, so of two teardowns
+    ///   racing each other only the first can take a given session — and a `takeAll` draining
+    ///   the ledger in the gap leaves nothing here to hand out twice.
+    /// - The snapshot never judges a session newer than itself. Candidates are read before the
+    ///   walk, so every pid checked was recorded first; a session recorded mid-walk waits for
+    ///   the next look instead of being matched against a table from before its shell forked,
+    ///   which would have swept a live pane (the ZEN-269 bug).
+    ///
+    /// No caller is on the main thread.
     func takeOrphans() -> [pid_t] {
         lock.lock()
+        let candidates = known
+        lock.unlock()
+        let exited = ShellSession.orphaned(among: candidates)
+        guard !exited.isEmpty else { return [] }
+
+        lock.lock()
         defer { lock.unlock() }
-        let orphans = ShellSession.orphaned(among: known)
+        let orphans = exited.filter { known.contains($0) }
         known.subtract(orphans)
         for pid in orphans {
             watches.removeValue(forKey: pid)?.cancel()
