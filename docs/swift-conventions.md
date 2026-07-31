@@ -58,6 +58,17 @@ preserves any raw bits handed to `init(rawValue:)`, so the device-specific `NX_D
 say *which side* a modifier sits on do survive synthesis, and a `flagsChanged` built without them
 skips every side check in silence (ZEN-308).
 
+**AppKit's synthesized tracking enter/exit are not symmetric across app activation.** When a
+`.activeInActiveApp` tracking area stands down at app deactivation, AppKit synthesizes the
+`mouseExited`; when the area reactivates with the pointer already inside it, no `mouseEntered`
+arrives until the pointer physically moves. Proven against a live build with a raw mouse-report
+probe (ZEN-310): the exit's `(-1, -1)` reached libghostty, and a click after reactivation was
+suppressed until the mouse moved. Occlusion boundaries within the active app *are* symmetric:
+covering the pointer's spot with another window synthesizes the exit, uncovering it the enter. So
+state pushed on exit that must be undone on re-entry needs its own
+`didBecomeActiveNotification` restore; a `mouseEntered` override alone only covers real pointer
+crossings and the occlusion pair.
+
 **To prove an `NSView` override exists at all, let the responder chain answer.** `NSResponder`'s
 default `flagsChanged` and `otherMouse*` implementations forward to `nextResponder`, so a recording
 superview counts exactly the events the view under test declined to handle. That catches a missing
