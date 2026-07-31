@@ -43,6 +43,13 @@ final class GhosttyHostView: NSView {
     /// standalone event like dictation or the character palette (commit it immediately).
     var keyTextAccumulator: [String]?
 
+    // MARK: Accessibility state
+
+    /// The screen contents last read for the accessibility conformance, and when. Lives here
+    /// because extensions cannot hold storage; read and refreshed only by `screenContents()`
+    /// in GhosttyHostViewAccessibility.swift, which evicts it lazily after 500ms.
+    var accessibilityContentsCache: (value: String, fetchedAt: ContinuousClock.Instant)?
+
     override var acceptsFirstResponder: Bool { true }
 
     // The host window is chromeless and drags by its background
