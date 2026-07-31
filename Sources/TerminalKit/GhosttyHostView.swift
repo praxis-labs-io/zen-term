@@ -18,6 +18,7 @@ final class GhosttyHostView: NSView {
     /// Token for the `NSWindow.didChangeScreenNotification` observer (see `observeScreenChanges`).
     private var screenChangeObserver: NSObjectProtocol?
     private var occlusionObserver: NSObjectProtocol?
+    private var appActivationObserver: NSObjectProtocol?
 
     /// The cursor libghostty last asked for via `GHOSTTY_ACTION_MOUSE_SHAPE` (I-beam over
     /// text, pointing hand over a ⌘-hovered link, …). Applied through cursor rects
@@ -145,6 +146,7 @@ final class GhosttyHostView: NSView {
         super.viewDidMoveToWindow()
         observeScreenChanges()
         observeOcclusion()
+        observeAppActivation()
         syncDisplayID()
         syncOcclusion()
         syncLayerContentsScale()
@@ -174,6 +176,33 @@ final class GhosttyHostView: NSView {
             else { return }
             self.syncOcclusion()
         }
+    }
+
+    /// AppKit stands the `.activeInActiveApp` tracking area down with a synthesized
+    /// `mouseExited` when the app deactivates, but reactivation synthesizes no matching
+    /// `mouseEntered` (proved against a live build, ZEN-310): a pointer parked over a pane
+    /// stayed at (-1, -1), suppressing mouse reports until it physically moved. Restore the
+    /// position ourselves when the app comes back. Registered once, for any window, matching
+    /// the observers above.
+    private func observeAppActivation() {
+        guard appActivationObserver == nil else { return }
+        appActivationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.reportPointerIfOverThisPane() }
+    }
+
+    private func reportPointerIfOverThisPane() {
+        guard let surfacePtr, let window else { return }
+        // Hit-test the screen's frontmost window first: a pane whose rect contains the pointer
+        // may still be covered by another window, and a covered pane keeps its (-1, -1).
+        guard
+            NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0)
+                == window.windowNumber
+        else { return }
+        let pos = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        guard bounds.contains(pos) else { return }
+        ghostty_surface_mouse_pos(
+            surfacePtr, pos.x, frame.height - pos.y, NSEvent.ghosttyMods(NSEvent.modifierFlags))
     }
 
     override func viewDidChangeBackingProperties() {
@@ -217,6 +246,9 @@ final class GhosttyHostView: NSView {
         }
         if let occlusionObserver {
             NotificationCenter.default.removeObserver(occlusionObserver)
+        }
+        if let appActivationObserver {
+            NotificationCenter.default.removeObserver(appActivationObserver)
         }
     }
 
