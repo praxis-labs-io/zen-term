@@ -88,6 +88,11 @@ final class RecordingSurface: NSObject, TerminalSurface {
     /// one-row grid and every step scrolls, which passes while proving nothing.
     var cellMetrics: TerminalCellMetrics? = TerminalCellMetrics(
         columns: 80, rows: 24, cellWidth: 8, cellHeight: 16, gridInset: 2)
+
+    /// Where this surface claims its cursor is. Defaults to a half-filled screen, which is the
+    /// case that exposed the entry bug: the last written line and the bottom of the viewport are
+    /// the same row on a full screen, so a full one hides the difference.
+    var cursorRow: Int? = 11
     /// Records a real Return keypress separately from pastes, so a test can assert submit went through
     /// the key path (a real Enter) rather than a bracketed `"\r"` paste that a TUI wouldn't act on.
     private(set) var submitCount = 0

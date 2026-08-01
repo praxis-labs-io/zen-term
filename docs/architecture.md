@@ -794,15 +794,30 @@ the cursor moves for the height of the viewport and the buffer only moves once t
 cursor is pinned at an edge. Scrolling on every `j` would drag the whole screen to
 track a marker that never moved.
 
+**The mode opens on the terminal's cursor, not the bottom of the pane.** Those are the
+same row only on a full screen; on a half-filled one the bottom of the viewport is empty
+space below everything there is to read. `ghostty_surface_ime_point` is the only place
+the C API reports the cursor, and it reports it as geometry (the cursor cell's bottom
+edge, in points, including the grid inset), so `GhosttySurface.cursorRow` divides it back
+out into a row.
+
 **A move that names a destination puts the cursor on it**, rather than bringing it into
-view and leaving the cursor elsewhere. `gg`/`G` carry it to the ends. `[`/`]` carry it
-to the prompt, which lands on row 0: libghostty scrolls to a prompt by setting the
-viewport pin to it (`PageList.scrollPrompt`) and that pin is the viewport's top row.
-The exception is a prompt already inside the active area, where `pinIsActive` sends the
-viewport to the bottom instead and the prompt sits wherever it does on the live screen;
-prompt marks are OSC 133 state rather than text, so the chrome cannot find that row, and
-the cursor is off for that one jump. A page move is the other case: it carries the
-cursor with the viewport, so your place on screen is kept.
+view and leaving the cursor elsewhere. `gg`/`G` carry it to the ends.
+
+`[`/`]` are the awkward case and are handled **after the fact, not on the keystroke**.
+libghostty scrolls to a prompt by setting the viewport pin to it
+(`PageList.scrollPrompt`), and that pin is the viewport's top row, so a jump that scrolls
+puts the prompt on row 0. But `scrollPrompt` returns without moving when there is no
+prompt that way, and it takes a `pinIsActive` branch to the bottom when the prompt is
+already on the live screen. Moving the cursor at keystroke time got both of those wrong:
+the band jumped to the top of a screen that never scrolled. So the mode marks the jump
+pending and places the cursor when `scrollPositionDidChange` says the viewport moved and
+did not land at the bottom. Prompt marks are OSC 133 state rather than text, so the row
+of a prompt on the live screen is not knowable from the chrome, and leaving the cursor
+alone beats moving it somewhere known to be wrong.
+
+A page move is the other case: it carries the cursor with the viewport, so your place on
+screen is kept.
 
 Below the seam each command is one `ghostty_surface_binding_action` string, and the
 signs match (`TerminalScroll.lines(1)` is down, as `scroll_page_lines:1` is).

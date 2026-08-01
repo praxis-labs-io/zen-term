@@ -694,6 +694,28 @@ public final class GhosttySurface: NSObject, TerminalSurface {
             gridInset: GhosttyConfigWriter.gridInset)
     }
 
+    /// The row the terminal's cursor is on, recovered from the IME anchor point.
+    ///
+    /// `ghostty_surface_ime_point` is the only place libghostty reports the cursor's position
+    /// through the C API, and it reports it as geometry: `Surface.imePoint` reads
+    /// `screens.active.cursor` and returns the cursor cell's **bottom** edge, measured from the
+    /// top, already divided by the content scale and already including the grid inset. So the row
+    /// is `(y - inset) / cellHeight - 1`.
+    ///
+    /// libghostty's own comment on `imePoint` notes it does not account for a scrolled viewport,
+    /// so this is the live screen's row. Scroll mode reads it once, on entry, where the viewport
+    /// is at the bottom and the two agree.
+    public var cursorRow: Int? {
+        guard let surfacePtr, let metrics = cellMetrics, metrics.cellHeight > 0 else { return nil }
+        var x = 0.0
+        var y = 0.0
+        var width = 0.0
+        var height = 0.0
+        ghostty_surface_ime_point(surfacePtr, &x, &y, &width, &height)
+        let row = Int(((y - metrics.gridInset) / metrics.cellHeight).rounded()) - 1
+        return min(max(row, 0), max(metrics.rows - 1, 0))
+    }
+
     /// Positive `lines`/`pageFraction` scroll down in libghostty too (`Binding.zig`: "Positive
     /// values scroll downwards"), so the seam's sign convention passes straight through.
     public func scroll(_ command: TerminalScroll) {

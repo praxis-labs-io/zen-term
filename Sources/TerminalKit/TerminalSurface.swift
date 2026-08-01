@@ -282,6 +282,15 @@ public protocol TerminalSurface: AnyObject {
     /// and with every resize.
     var cellMetrics: TerminalCellMetrics? { get }
 
+    /// The viewport row the terminal's own cursor sits on, which is the last written line: the
+    /// prompt. Scroll mode opens here, because the bottom of the viewport is the bottom of the
+    /// *pane*, and on a half-filled screen that is empty space below everything you can read.
+    ///
+    /// Only meaningful while the viewport is at the bottom, which is where a surface rests. A
+    /// backend reports the row against the live screen, so a viewport already scrolled up puts
+    /// the cursor somewhere else entirely.
+    var cursorRow: Int? { get }
+
     /// Deliver a Return **keypress** to the shell — a real Enter, not a pasted `"\r"`. A pasted
     /// carriage return arrives inside bracketed paste, where a TUI (Claude Code, an editor) reads it
     /// as a literal newline in its input rather than a submit. This is the chrome's way to submit a
@@ -305,6 +314,9 @@ public extension TerminalSurface {
 
     /// Default nil: a backend that can't report its grid geometry gets no chrome drawn on it.
     var cellMetrics: TerminalCellMetrics? { nil }
+
+    /// Default nil: a backend that can't locate its cursor leaves the caller to pick a row.
+    var cursorRow: Int? { nil }
 
     /// Default no-op: a backend that can't reconfigure live needs nothing here.
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {}

@@ -41,6 +41,11 @@ final class ScrollModeController {
     /// on screen is the row you are looking at.
     private(set) var cursorRow = 0
 
+    /// A prompt jump has been asked for and we are waiting to hear whether the viewport moved.
+    /// See the `.prompt` case in `handle` for why the cursor cannot be placed at the time of the
+    /// keystroke.
+    private var awaitingPromptLanding = false
+
     /// Fires whenever the mode opens or closes, so the window can install and remove its key
     /// hook without this type reaching back into `KeyInterceptor`.
     var onActiveChanged: ((Bool) -> Void)?
@@ -57,8 +62,10 @@ final class ScrollModeController {
         self.panel = panel
         sawG = false
         isActive = true
-        // Open on the bottom row: that is the prompt, and it is where the eye already is.
-        cursorRow = max((surface.cellMetrics?.rows ?? 1) - 1, 0)
+        // Open on the terminal's own cursor, which is the last written line. The bottom of the
+        // viewport is the bottom of the pane, and on a half-filled screen that is empty space
+        // below everything there is to read.
+        cursorRow = surface.cursorRow ?? max((surface.cellMetrics?.rows ?? 1) - 1, 0)
         Log.info("scroll mode entered", category: .panes)
         updateHeader(position: nil)
         refreshCursor()
@@ -75,6 +82,7 @@ final class ScrollModeController {
         guard isActive else { return }
         isActive = false
         sawG = false
+        awaitingPromptLanding = false
         panel?.modeMeta = nil
         panel?.setScrollCursor(row: nil) { nil }
         panel = nil
@@ -107,6 +115,7 @@ final class ScrollModeController {
             end()
         case .step(let delta):
             sawG = false
+            awaitingPromptLanding = false
             step(delta)
         case .scroll(let move):
             sawG = false
@@ -115,9 +124,17 @@ final class ScrollModeController {
             // thing you asked for somewhere in view and leaving the cursor elsewhere makes the
             // cursor a decoration.
             switch move {
-            case .top: cursorRow = 0
-            case .bottom: cursorRow = lastRow
-            case .prompt: cursorRow = Self.promptRow
+            case .top:
+                cursorRow = 0
+                awaitingPromptLanding = false
+            case .bottom:
+                cursorRow = lastRow
+                awaitingPromptLanding = false
+            // Deferred, not set here. A prompt jump often moves nothing at all: `scrollPrompt`
+            // finds no prompt in that direction and returns, and moving the cursor anyway makes
+            // the band jump to the top of a screen that never scrolled. Wait to be told the
+            // viewport actually moved.
+            case .prompt: awaitingPromptLanding = true
             default: break
             }
             surface?.scroll(move)
@@ -189,19 +206,6 @@ final class ScrollModeController {
         }
     }
 
-    /// Where a prompt jump leaves the prompt, and so where the cursor belongs after one.
-    ///
-    /// libghostty scrolls to a prompt by setting the viewport pin to it (`PageList.scrollPrompt`),
-    /// and the viewport pin is the viewport's **top** row. So the prompt lands on row 0 every time
-    /// it scrolls to one.
-    ///
-    /// The exception is a prompt already inside the active area: `pinIsActive` sends the viewport
-    /// to the bottom instead, and the prompt is then wherever it sits on the live screen. The
-    /// chrome cannot see that row (prompt marks are OSC 133 state, not text), so the cursor is a
-    /// row or more off for that one jump. It corrects on the next `[`, which goes back to
-    /// scrollback where the rule holds.
-    private static let promptRow = 0
-
     private static let escapeKeyCode: UInt16 = 53
     /// Arrow keys arrive as private-use scalars in `charactersIgnoringModifiers`, matched here so
     /// the arrows work without a second keyCode branch.
@@ -215,6 +219,26 @@ final class ScrollModeController {
     func report(position: TerminalScrollPosition, from s: AnyObject) {
         guard isActive, isDriving(s) else { return }
         updateHeader(position: position)
+        landPromptJump(position)
+    }
+
+    /// Place the cursor once a prompt jump has been confirmed to move the viewport.
+    ///
+    /// libghostty scrolls to a prompt by setting the viewport pin to it
+    /// (`PageList.scrollPrompt`), and that pin IS the viewport's top row, so a jump that scrolls
+    /// puts the prompt on row 0.
+    ///
+    /// Unless it landed at the bottom. A prompt already inside the live screen takes the
+    /// `pinIsActive` branch, which sends the viewport to the bottom rather than pinning, and the
+    /// prompt is then wherever it sits there. Prompt marks are OSC 133 state rather than text, so
+    /// the chrome cannot find that row, and leaving the cursor alone beats moving it somewhere
+    /// known to be wrong.
+    private func landPromptJump(_ position: TerminalScrollPosition) {
+        guard awaitingPromptLanding else { return }
+        awaitingPromptLanding = false
+        guard position.linesBelow > 0 else { return }
+        cursorRow = 0
+        refreshCursor()
     }
 
     private func updateHeader(position: TerminalScrollPosition?) {
