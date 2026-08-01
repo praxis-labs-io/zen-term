@@ -90,13 +90,27 @@ final class ScrollCursorView: NSView {
         path.stroke()
     }
 
+    /// Fill a span's rows so only its outer corners are round.
+    ///
+    /// Each row grows past its own edge into whichever neighbour continues the span, and is clipped
+    /// back to itself: the overhang carries the corner radius out of sight and the interior seams
+    /// square off. Rounding every row instead pinches each seam and the span reads as scalloped.
+    /// Same trick as `DiffLineRowView.pillRect`.
     private func fill(_ rects: [CGRect]) {
-        for rect in rects {
+        for (index, rect) in rects.enumerated() {
             let clipped = bounds.intersection(rect)
             guard !clipped.isEmpty else { continue }
-            NSBezierPath(
-                roundedRect: clipped, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius
-            ).fill()
+            var grown = clipped
+            if index > 0 {
+                grown.origin.y -= Self.cornerRadius
+                grown.size.height += Self.cornerRadius
+            }
+            if index < rects.count - 1 { grown.size.height += Self.cornerRadius }
+            NSGraphicsContext.saveGraphicsState()
+            NSBezierPath(rect: clipped).setClip()
+            NSBezierPath(roundedRect: grown, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius)
+                .fill()
+            NSGraphicsContext.restoreGraphicsState()
         }
     }
 
