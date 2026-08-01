@@ -674,6 +674,26 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         return String(cString: ptr)
     }
 
+    /// The grid's geometry, converted out of libghostty's backing pixels into points.
+    ///
+    /// Every `_px` field is in the same units the chrome pushed through
+    /// `ghostty_surface_set_size`, which is `convertToBacking` of the view's bounds. So this
+    /// divides by the same backing scale to get back to the points AppKit lays views out in.
+    /// A zero cell height means the surface has not been sized yet, and reporting it would put a
+    /// zero-height band on the pane.
+    public var cellMetrics: TerminalCellMetrics? {
+        guard let surfacePtr else { return nil }
+        let size = ghostty_surface_size(surfacePtr)
+        guard size.cell_height_px > 0, size.cell_width_px > 0 else { return nil }
+        let scale = hostView.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+        return TerminalCellMetrics(
+            columns: Int(size.columns),
+            rows: Int(size.rows),
+            cellWidth: CGFloat(size.cell_width_px) / scale,
+            cellHeight: CGFloat(size.cell_height_px) / scale,
+            gridInset: GhosttyConfigWriter.gridInset)
+    }
+
     /// Positive `lines`/`pageFraction` scroll down in libghostty too (`Binding.zig`: "Positive
     /// values scroll downwards"), so the seam's sign convention passes straight through.
     public func scroll(_ command: TerminalScroll) {

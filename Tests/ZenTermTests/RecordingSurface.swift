@@ -82,6 +82,12 @@ final class RecordingSurface: NSObject, TerminalSurface {
     /// key outside scroll mode produced none.
     private(set) var scrolls: [TerminalScroll] = []
     func scroll(_ command: TerminalScroll) { scrolls.append(command) }
+
+    /// The grid this surface claims to have. Defaults to a 24-row viewport rather than nil, so a
+    /// test drives scroll mode's real cursor behavior: with no metrics the cursor is pinned to a
+    /// one-row grid and every step scrolls, which passes while proving nothing.
+    var cellMetrics: TerminalCellMetrics? = TerminalCellMetrics(
+        columns: 80, rows: 24, cellWidth: 8, cellHeight: 16, gridInset: 2)
     /// Records a real Return keypress separately from pastes, so a test can assert submit went through
     /// the key path (a real Enter) rather than a bracketed `"\r"` paste that a TUI wouldn't act on.
     private(set) var submitCount = 0

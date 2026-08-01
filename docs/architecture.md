@@ -13,7 +13,8 @@ contract, and it is deliberately small. A surface is anything that can *be* a te
 chrome: it vends an `NSView`, a title, a cwd, a busy flag, and the background its
 program last reported, and it takes
 `start`, `focus`, `terminate`, `paste`, `copySelection`, `applyAppearance`,
-`setFontSize`, `scroll`.
+`setFontSize`, `scroll`, and it reports its grid geometry as `cellMetrics` so the
+chrome can draw on the grid rather than near it.
 
 **`setFontSize` is separate from `applyAppearance` on purpose.** Appearance travels
 as a whole theme through the app-global config, which on a file-configured backend
@@ -765,11 +766,34 @@ UI mentions. A mode borrows the keys while it is up and gives them back on exit.
 
 `command(for:afterG:)` is a pure static over `NSEvent`, the same testable seam as
 `DiffPaneTable.vimKey(for:)`, and it reads shiftedness from the modifier flags
-rather than character case for the same Caps Lock reason. j/k move a line, ⌃d/⌃u a
-half page, ⌃f/⌃b and space a page, gg/G the ends, [ and ] hop prompts, and Esc/q/i
-leave. **Every key is consumed, mapped or not**: passing misses through would drop a
-stray keystroke into the shell behind the mode, which is worse than one that does
-nothing.
+rather than character case for the same Caps Lock reason. j/k step the cursor, ⌃d/⌃u
+move a half page, ⌃f/⌃b and space a page, gg/G the ends, [ and ] hop prompts, and
+Esc/q/i leave. **Every key is consumed, mapped or not**: passing misses through would
+drop a stray keystroke into the shell behind the mode, which is worse than one that
+does nothing.
+
+**The cursor is the chrome's, drawn on the pane.** libghostty has no copy mode and no
+cursor outside the shell's own, so `ScrollCursorView` paints a translucent accent band
+on the current row, added last inside `PanelHostView.clip` and pinned to the terminal
+view rather than to the clip, so its row math is in the surface's own coordinates. It
+returns nil from `hitTest`, because the thing behind it is a live terminal that still
+has to take clicks and drag-selection.
+
+Geometry comes from `TerminalCellMetrics`, which `GhosttySurface` reads out of
+`ghostty_surface_size` **at draw time, never cached**: the row height moves with the
+font size and the row count with every resize. Two conversions matter. Every `_px`
+field is in the backing pixels the chrome pushed through `ghostty_surface_set_size`,
+so it divides by the backing scale to get points. And the grid does not start at the
+view's origin: libghostty insets it, leftover space that doesn't divide into a whole
+cell collects at the *far* edge, and `GhosttyConfigWriter` now emits
+`window-padding-x/y` explicitly rather than inheriting a default that could move on a
+pin bump and put every band a row out of true.
+
+`j`/`k` are `.step(±1)`, not `.scroll(.lines(±1))`, and the distinction is the feature:
+the cursor moves for the height of the viewport and the buffer only moves once the
+cursor is pinned at an edge. Scrolling on every `j` would drag the whole screen to
+track a marker that never moved. `gg`/`G` name an end of the buffer, so they carry the
+cursor there; a page move leaves it where it sits on screen.
 
 Below the seam each command is one `ghostty_surface_binding_action` string, and the
 signs match (`TerminalScroll.lines(1)` is down, as `scroll_page_lines:1` is).

@@ -23,6 +23,7 @@ final class PanelHostView: NSView {
     private let pane = NSView()  // the bordered card; the glow is cast by `halo`, not by a shadow
     private let clip = NSView()  // inner clip so terminal content stays inside the radius
     private let ring = RingFillView()  // paints the padding ring once the clip stops filling it
+    private let cursor = ScrollCursorView()  // scroll mode's row band, hidden until the mode is up
     private let halo = OutsideShadowView()  // the focus glow, cast around the card from beneath it
     private let headerView: PanelHeader?
     /// The header content for the resting vs zoomed state. A pane has only `zoomMeta` (header hidden
@@ -53,6 +54,20 @@ final class PanelHostView: NSView {
     ///
     /// It carries live text, so it is assigned on every scroll report, which is why
     /// `PanelHeader.apply` rebuilds the keycap only when the action actually moves.
+    /// Show scroll mode's cursor band on `row`, or nil to take it down. `metrics` is asked for on
+    /// every layout pass, so a resize or a font step moves the band without a second call.
+    func setScrollCursor(row: Int?, metrics: @escaping () -> TerminalCellMetrics?) {
+        guard let row else {
+            cursor.isHidden = true
+            cursor.metrics = nil
+            return
+        }
+        cursor.metrics = metrics
+        cursor.row = row
+        cursor.isHidden = false
+        cursor.needsDisplay = true
+    }
+
     var modeMeta: PanelMeta? {
         didSet {
             guard oldValue?.title != modeMeta?.title || oldValue?.action != modeMeta?.action else { return }
@@ -122,6 +137,11 @@ final class PanelHostView: NSView {
         ring.contentView = content
         clip.addSubview(ring)  // bottom of the clip: content and header draw over it
         clip.addSubview(content)
+        // Above the terminal, pinned to it rather than to `clip`, so its row math is in the
+        // surface's own coordinates and the pane's padding is already out of the way.
+        cursor.translatesAutoresizingMaskIntoConstraints = false
+        cursor.isHidden = true
+        clip.addSubview(cursor)
         applyBackground()
 
         pane.translatesAutoresizingMaskIntoConstraints = false
@@ -145,6 +165,10 @@ final class PanelHostView: NSView {
             content.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
             content.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
             content.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -padding),
+            cursor.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            cursor.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            cursor.topAnchor.constraint(equalTo: content.topAnchor),
+            cursor.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
 
         contentTopToClip = content.topAnchor.constraint(equalTo: clip.topAnchor, constant: padding)

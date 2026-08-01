@@ -122,11 +122,102 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let surface = try XCTUnwrap(spawned.first)
         let handler = try XCTUnwrap(host.modeHandler)
 
-        XCTAssertTrue(handler(try keyDown("j")))
-        XCTAssertTrue(handler(try keyDown("k")))
+        XCTAssertTrue(handler(try keyDown("d", flags: .control)))
+        XCTAssertTrue(handler(try keyDown("u", flags: .control)))
         XCTAssertTrue(handler(try keyDown("G", unshifted: "g", flags: .shift)))
 
-        XCTAssertEqual(surface.scrolls, [.lines(1), .lines(-1), .bottom])
+        XCTAssertEqual(surface.scrolls, [.pageFraction(0.5), .pageFraction(-0.5), .bottom])
+    }
+
+    // MARK: the cursor
+
+    func test_theModeOpensWithTheCursorOnTheBottomRow() throws {
+        // The bottom row is the prompt, which is where the eye already is.
+        let controller = makeWindow()
+        controller.handle(.toggleScrollMode)
+        XCTAssertEqual(controller.scrollMode.cursorRow, 23, "a 24-row grid puts the cursor on row 23")
+    }
+
+    func test_kMovesTheCursorWithoutScrolling() throws {
+        // The distinction that makes it a cursor rather than a scrollbar: for the height of the
+        // viewport, `k` moves a marker and the text underneath stays put.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<5 { XCTAssertTrue(handler(try keyDown("k"))) }
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 18)
+        XCTAssertEqual(surface.scrolls, [], "nothing should have scrolled while the cursor had room")
+    }
+
+    func test_theViewportOnlyMovesOnceTheCursorIsPinned() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<23 { XCTAssertTrue(handler(try keyDown("k"))) }  // cursor to the top row
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0)
+        XCTAssertEqual(surface.scrolls, [])
+
+        XCTAssertTrue(handler(try keyDown("k")))  // nowhere left to go
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0, "the cursor stays pinned at the edge")
+        XCTAssertEqual(surface.scrolls, [.lines(-1)], "and the buffer moves under it instead")
+    }
+
+    func test_ggAndGCarryTheCursorToTheEndsTheyName() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("g")))
+        XCTAssertTrue(handler(try keyDown("g")))
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0)
+
+        XCTAssertTrue(handler(try keyDown("G", unshifted: "g", flags: .shift)))
+        XCTAssertEqual(controller.scrollMode.cursorRow, 23)
+    }
+
+    func test_aPageMoveLeavesTheCursorWhereItIsOnScreen() throws {
+        // A page move carries the cursor with the viewport, so your place on screen is kept.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<5 { XCTAssertTrue(handler(try keyDown("k"))) }
+        XCTAssertEqual(controller.scrollMode.cursorRow, 18)
+
+        XCTAssertTrue(handler(try keyDown("u", flags: .control)))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 18)
+    }
+
+    func test_theCursorIsClampedToAShrunkenGrid() throws {
+        // A pane resized smaller while the mode is up must not leave the band off the grid.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        let handler = try XCTUnwrap(host.modeHandler)
+        XCTAssertEqual(controller.scrollMode.cursorRow, 23)
+
+        surface.cellMetrics = TerminalCellMetrics(
+            columns: 80, rows: 8, cellWidth: 8, cellHeight: 16, gridInset: 2)
+        XCTAssertTrue(handler(try keyDown("k")))
+
+        XCTAssertLessThanOrEqual(controller.scrollMode.cursorRow, 7)
     }
 
     func test_ggTopsOutOnlyOnTheSecondG() throws {

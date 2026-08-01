@@ -284,9 +284,10 @@
 #
 # `toggle_scroll_mode` (⌘⇧S) reads back through the focused pane's scrollback with
 # the keyboard. While it's up the pane header says SCROLL and how far below the
-# viewport the buffer runs, these keys move the view, and nothing reaches the shell:
+# viewport the buffer runs, a band marks the row you're on, and nothing reaches the
+# shell:
 #
-#   j / k            one line down / up            [ / ]   previous / next prompt
+#   j / k            move the cursor a row          [ / ]   previous / next prompt
 #   ctrl+d / ctrl+u  half a page                   gg / G  top / bottom
 #   ctrl+f / ctrl+b  a full page (space = ctrl+f)  esc, q  leave
 #

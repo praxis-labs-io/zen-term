@@ -20,6 +20,10 @@ final class ScrollModeController {
     /// the exits and the `g` prefix (neither of which is a scroll) live in the same decode.
     enum Command: Equatable {
         case scroll(TerminalScroll)
+        /// A one-line step, which moves the cursor rather than the viewport until the cursor is
+        /// pinned at an edge. Kept apart from `.scroll(.lines(±1))` because that distinction is
+        /// the whole difference between a cursor and a scrollbar.
+        case step(Int)
         /// First `g` of `gg`. Arms the prefix; a second `g` tops out.
         case pendingTop
         case exit
@@ -31,6 +35,11 @@ final class ScrollModeController {
     private weak var surface: (AnyObject & TerminalSurface)?
     private weak var panel: PanelHostView?
     private var sawG = false
+
+    /// The viewport row the cursor sits on, 0 at the top. Viewport-relative rather than absolute
+    /// in the buffer, so it survives output arriving underneath without any bookkeeping: the row
+    /// on screen is the row you are looking at.
+    private(set) var cursorRow = 0
 
     /// Fires whenever the mode opens or closes, so the window can install and remove its key
     /// hook without this type reaching back into `KeyInterceptor`.
@@ -48,8 +57,11 @@ final class ScrollModeController {
         self.panel = panel
         sawG = false
         isActive = true
+        // Open on the bottom row: that is the prompt, and it is where the eye already is.
+        cursorRow = max((surface.cellMetrics?.rows ?? 1) - 1, 0)
         Log.info("scroll mode entered", category: .panes)
         updateHeader(position: nil)
+        refreshCursor()
         onActiveChanged?(true)
     }
 
@@ -64,6 +76,7 @@ final class ScrollModeController {
         isActive = false
         sawG = false
         panel?.modeMeta = nil
+        panel?.setScrollCursor(row: nil) { nil }
         panel = nil
         surface = nil
         Log.info("scroll mode left", category: .panes)
@@ -92,11 +105,46 @@ final class ScrollModeController {
             sawG = true
         case .exit:
             end()
+        case .step(let delta):
+            sawG = false
+            step(delta)
         case .scroll(let move):
             sawG = false
+            // A page move carries the cursor with the viewport, so it keeps its place on screen.
+            // gg and G are the exception: they name an end of the buffer, so the cursor goes there.
+            switch move {
+            case .top: cursorRow = 0
+            case .bottom: cursorRow = lastRow
+            default: break
+            }
             surface?.scroll(move)
+            refreshCursor()
         }
         return true
+    }
+
+    /// Move the cursor one row, and scroll only once it has nowhere left to go.
+    ///
+    /// This is what makes it a cursor. Scrolling on every `j` would move the whole screen to
+    /// track a marker that never moved, which is a scrollbar with extra steps.
+    private func step(_ delta: Int) {
+        let next = cursorRow + delta
+        if next >= 0 && next <= lastRow {
+            cursorRow = next
+        } else {
+            surface?.scroll(.lines(delta))  // pinned at an edge: the buffer moves under the cursor
+        }
+        refreshCursor()
+    }
+
+    /// The bottom row of the viewport. Zero while the surface has no metrics to report, which
+    /// pins the cursor to the top row rather than letting it run off a grid of unknown size.
+    private var lastRow: Int { max((surface?.cellMetrics?.rows ?? 1) - 1, 0) }
+
+    private func refreshCursor() {
+        guard isActive, let surface else { return }
+        cursorRow = min(cursorRow, lastRow)
+        panel?.setScrollCursor(row: cursorRow) { [weak surface] in surface?.cellMetrics }
     }
 
     /// Decode a `keyDown` into a scroll-mode command, or nil for a key the mode does not map.
@@ -126,8 +174,8 @@ final class ScrollModeController {
         if event.keyCode == Self.escapeKeyCode { return .exit }
         let shift = held.contains(.shift)
         switch (event.charactersIgnoringModifiers?.lowercased() ?? "", shift) {
-        case ("j", false), (Self.downArrow, false): return .scroll(.lines(1))
-        case ("k", false), (Self.upArrow, false): return .scroll(.lines(-1))
+        case ("j", false), (Self.downArrow, false): return .step(1)
+        case ("k", false), (Self.upArrow, false): return .step(-1)
         case (" ", false): return .scroll(.pageFraction(1))
         case ("g", false): return afterG ? .scroll(.top) : .pendingTop
         case ("g", true): return .scroll(.bottom)

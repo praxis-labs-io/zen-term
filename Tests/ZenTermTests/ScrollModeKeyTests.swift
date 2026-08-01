@@ -26,9 +26,10 @@ final class ScrollModeKeyTests: XCTestCase {
 
     // MARK: the moves
 
-    func test_jAndKMoveOneLineInOppositeDirections() throws {
-        XCTAssertEqual(decode(try keyDown("j")), .scroll(.lines(1)))
-        XCTAssertEqual(decode(try keyDown("k")), .scroll(.lines(-1)))
+    func test_jAndKStepTheCursorInOppositeDirections() throws {
+        // A step, not a scroll: the cursor moves and the viewport only follows once it is pinned.
+        XCTAssertEqual(decode(try keyDown("j")), .step(1))
+        XCTAssertEqual(decode(try keyDown("k")), .step(-1))
     }
 
     func test_arrowsMirrorJAndK() throws {
@@ -36,8 +37,8 @@ final class ScrollModeKeyTests: XCTestCase {
         // mask would miss every one of them (the ZEN-145 trap).
         let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
         let up = String(UnicodeScalar(NSUpArrowFunctionKey)!)
-        XCTAssertEqual(decode(try keyDown(down, flags: [.function, .numericPad])), .scroll(.lines(1)))
-        XCTAssertEqual(decode(try keyDown(up, flags: [.function, .numericPad])), .scroll(.lines(-1)))
+        XCTAssertEqual(decode(try keyDown(down, flags: [.function, .numericPad])), .step(1))
+        XCTAssertEqual(decode(try keyDown(up, flags: [.function, .numericPad])), .step(-1))
     }
 
     func test_controlPairsAreHalfAndFullPages() throws {
@@ -70,7 +71,7 @@ final class ScrollModeKeyTests: XCTestCase {
         // Caps Lock uppercases too. Read case instead of flags and a single `g` with Caps Lock on
         // jumps to the bottom of the buffer, and `j` stops scrolling entirely.
         XCTAssertEqual(decode(try keyDown("G", unshifted: "G")), .pendingTop)
-        XCTAssertEqual(decode(try keyDown("J", unshifted: "J")), .scroll(.lines(1)))
+        XCTAssertEqual(decode(try keyDown("J", unshifted: "J")), .step(1))
     }
 
     // MARK: leaving

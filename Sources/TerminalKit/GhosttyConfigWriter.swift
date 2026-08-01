@@ -27,6 +27,11 @@ enum GhosttyConfigWriter {
     /// Passing the size the surface is actually running keeps the pushed config truthful, which is
     /// cheaper than repairing the size afterwards and avoids marking the surface adjusted as a
     /// side effect. Nil for the app-global config, whose size is the theme's by definition.
+    /// Blank space libghostty leaves between the surface's edge and the first cell, in points.
+    /// `TerminalCellMetrics.gridInset` reports this up to the chrome, which positions the
+    /// scroll-mode cursor with it. Kept here because this is where it is written.
+    static let gridInset: CGFloat = 2
+
     static func configText(
         for theme: TerminalTheme?, behavior: TerminalBehavior? = nil,
         shaderAnimation: ShaderAnimation = .whileFocused,
@@ -43,6 +48,12 @@ enum GhosttyConfigWriter {
             // cursor-style rule.
             "shell-integration-features = no-cursor",
             "mouse-hide-while-typing = true",
+            // Emitted rather than left to libghostty's default because the chrome draws ON the
+            // grid: scroll mode's cursor band is placed from this inset, so a default that moved
+            // on a pin bump would silently put every band a row out of true. The value IS the
+            // current default, so nothing about how a pane looks changes.
+            "window-padding-x = \(Int(gridInset))",
+            "window-padding-y = \(Int(gridInset))",
             "font-thicken = true",
             // Option acts as Alt/Meta — ⌥f/⌥b word-nav in readline, Meta chords in
             // vim/emacs — the terminal convention, chosen over macOS accent composing.

@@ -98,6 +98,39 @@ public struct TerminalScrollPosition: Equatable {
     public var linesBelow: Int { max(0, total - offset - viewport) }
 }
 
+/// Where a terminal's character grid sits inside its view, so the chrome can draw *on* the grid
+/// rather than near it. All lengths are in **points**, already divided out of whatever backing
+/// scale the backend works in, because the chrome positions AppKit views with them.
+///
+/// The chrome's scroll-mode cursor is what this exists for: a band on row `n` has to land on the
+/// row, and a value derived from the view's bounds instead of the terminal's own numbers is off
+/// by the grid inset plus whatever the row height rounds away.
+public struct TerminalCellMetrics: Equatable {
+    public var columns: Int
+    public var rows: Int
+    public var cellWidth: CGFloat
+    public var cellHeight: CGFloat
+    /// Blank space between the view's top-left and the first cell's. Leftover space that does not
+    /// divide into a whole cell collects at the far edge, not here, so this is the near inset only.
+    public var gridInset: CGFloat
+
+    public init(columns: Int, rows: Int, cellWidth: CGFloat, cellHeight: CGFloat, gridInset: CGFloat) {
+        self.columns = columns
+        self.rows = rows
+        self.cellWidth = cellWidth
+        self.cellHeight = cellHeight
+        self.gridInset = gridInset
+    }
+
+    /// The frame of one viewport row, in the surface view's coordinates with the origin at the
+    /// top. Clamped to the grid, so a stale row from before a resize cannot draw outside it.
+    public func rowFrame(_ row: Int, width: CGFloat) -> CGRect {
+        let clamped = min(max(row, 0), max(rows - 1, 0))
+        return CGRect(
+            x: 0, y: gridInset + CGFloat(clamped) * cellHeight, width: width, height: cellHeight)
+    }
+}
+
 /// Events flowing OUT of a surface, up into the chrome. Each backend translates
 /// its native callbacks into these.
 public protocol TerminalSurfaceDelegate: AnyObject {
@@ -244,6 +277,11 @@ public protocol TerminalSurface: AnyObject {
     /// the keymap, and this is the whole of what it needs a terminal to do.
     func scroll(_ command: TerminalScroll)
 
+    /// The grid's geometry right now, or nil from a backend that has no cells to report or has
+    /// not been laid out yet. Read at draw time rather than cached: it moves with the font size
+    /// and with every resize.
+    var cellMetrics: TerminalCellMetrics? { get }
+
     /// Deliver a Return **keypress** to the shell — a real Enter, not a pasted `"\r"`. A pasted
     /// carriage return arrives inside bracketed paste, where a TUI (Claude Code, an editor) reads it
     /// as a literal newline in its input rather than a submit. This is the chrome's way to submit a
@@ -264,6 +302,9 @@ public extension TerminalSurface {
 
     /// Default nil: a backend with no dynamic-color path is always on the theme's background.
     var backgroundOverride: TerminalColor? { nil }
+
+    /// Default nil: a backend that can't report its grid geometry gets no chrome drawn on it.
+    var cellMetrics: TerminalCellMetrics? { nil }
 
     /// Default no-op: a backend that can't reconfigure live needs nothing here.
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {}
