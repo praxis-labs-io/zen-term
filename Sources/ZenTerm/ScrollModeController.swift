@@ -3,8 +3,8 @@ import AppLog
 import TerminalKit
 
 /// Scroll mode: a sticky keyboard mode over one focused terminal, where vim keys move the
-/// viewport through the scrollback instead of reaching the shell (ZEN-330), and `v`/`V`/`y`
-/// select and copy out of it (ZEN-331).
+/// viewport through the scrollback instead of reaching the shell, and `v`/`V`/`y` select and copy
+/// out of it.
 ///
 /// It exists because the keys that should scroll a buffer are the ones the shell already owns.
 /// `j`, `k`, `⌃d` and `⌃u` cannot be reserved chords without taking them from every program
@@ -55,23 +55,20 @@ final class ScrollModeController {
     /// screen is the row you are looking at.
     private(set) var cursor = ScrollCell.origin
 
-    /// The row half of the cursor, which is all most of the mode cares about.
     var cursorRow: Int { cursor.row }
 
-    /// The visual selection, or nil in normal mode. It holds the anchor only; the cursor above is
-    /// the moving end for both modes.
+    /// Nil in normal mode. Holds the anchor only: `cursor` above is the moving end for both modes.
     private(set) var selection: ScrollSelection?
 
     /// Where a yank lands. The system pasteboard in the app; a test points it at its own board so
     /// running the suite never clobbers what the developer had copied.
     var yankPasteboard: NSPasteboard = .general
 
-    /// Each viewport row's text, read lazily and dropped whenever the screen can have moved. Both
-    /// the paragraph motion and the word motions read through it. See `rowText`.
+    /// See `rowText`.
     private var rowCache: [Int: String] = [:]
 
-    /// The last position the terminal reported, so the header can be rewritten (on entering visual,
-    /// on a yank) without inventing a count between reports.
+    /// The last position reported, so the header can be rewritten between reports without inventing
+    /// a count.
     private var lastPosition: TerminalScrollPosition?
 
     private var flashRange: TerminalViewportRange?
@@ -160,11 +157,9 @@ final class ScrollModeController {
     /// size without moving a view's frame, which is what a font step is: no layout pass runs, so
     /// the overlay never hears about it on its own.
     ///
-    /// It also remembers the line the cursor is reading, because holding the row *index* across a
-    /// font step is what moves the band onto different text. A step changes the cell size in both
-    /// directions at once: the grid gets more or fewer rows, and the text rewraps into them, so
-    /// viewport row 11 is a different line afterward. No coordinate survives that. The content
-    /// does, and it is what the reader meant by "where I am".
+    /// It also remembers the line the cursor is reading. A step changes the cell size in both
+    /// directions, so the grid gains or loses rows and the text rewraps into them: no coordinate
+    /// survives that, absolute buffer rows included. The content does.
     func refreshGeometry() {
         guard isActive else { return }
         let line = rowText(cursor.row)
@@ -173,15 +168,12 @@ final class ScrollModeController {
         refreshCursor()
     }
 
-    /// The line the cursor was on when the geometry last moved, held until the terminal reports
-    /// the grid it reflowed into. Nil when there is nothing to re-find: a blank row has no content
-    /// to identify it by, so the index is all there is and it stays put.
+    /// Held until the terminal reports the grid it reflowed into. Nil for a blank row, which has no
+    /// content to be found by.
     private var pendingAnchorLine: String?
 
-    /// Put the cursor back on `line` after a reflow, or leave it where it is if the line is gone.
-    ///
-    /// Nearest match wins. A prompt string repeats down the whole viewport, so an exact search from
-    /// the top would drag the cursor to the first prompt on screen every time the font changed.
+    /// Nearest match wins: a prompt string repeats down the whole viewport, so a search from the top
+    /// would drag the cursor to the first prompt on screen every time.
     private func reanchor(to line: String) {
         var best: Int?
         for row in 0...lastRow where rowText(row) == line {
@@ -220,8 +212,8 @@ final class ScrollModeController {
         case .exit:
             end()
         case .cancel:
-            // Esc gives the selection back before it closes anything, the way the diff viewer's
-            // does. Otherwise the only way out of a mis-anchored selection is out of the mode.
+            // Matches the diff viewer: without it the only way out of a mis-anchored selection is
+            // out of the mode.
             if selection != nil { closeSelection() } else { end() }
         case .step(let delta):
             step(delta)
@@ -287,8 +279,7 @@ final class ScrollModeController {
     /// pins the cursor to the top row rather than letting it run off a grid of unknown size.
     private var lastRow: Int { max((surface?.cellMetrics?.rows ?? 1) - 1, 0) }
 
-    /// The last column of a row that has a character on it. Zero for a blank row, so the cursor
-    /// has somewhere to be rather than vanishing off a row with nothing written on it.
+    /// Zero on a blank row, so the cursor has somewhere to be.
     private func lastColumn(of row: Int) -> Int { max(rowText(row).count - 1, 0) }
 
     /// Vim's paragraph motion over the viewport: from `row`, step past any blank rows we are
@@ -313,8 +304,8 @@ final class ScrollModeController {
         return min(max(next, 0), limit)
     }
 
-    /// A screen for the word motions to walk, reading through the same cache the rest of the mode
-    /// does so a `w` across the viewport costs no more locked reads than a `}` over it.
+    /// Reads through the same cache as everything else, so a `w` across the viewport costs no more
+    /// locked reads than a `}` over it.
     private func screen() -> ScrollWordMotion.Screen {
         ScrollWordMotion.Screen(lastRow: lastRow) { [weak self] row in self?.rowText(row) ?? "" }
     }
@@ -326,11 +317,8 @@ final class ScrollModeController {
     /// repeat rate against the thread the chrome's responsiveness depends on. Held keys re-walk
     /// mostly the same rows, so caching per viewport state is what takes the repeat rate out of it.
     ///
-    /// A row the backend declines is cached as empty. Nothing downstream tells the two apart: a
-    /// motion stops on both, and neither has a character to put a cursor on.
-    ///
-    /// Every path that can move the viewport or resize the grid clears this, so a hit only ever
-    /// describes the screen as it is now.
+    /// A row the backend declines caches as empty; nothing downstream tells that from a blank row.
+    /// Every path that can move the viewport or resize the grid clears this.
     private func rowText(_ row: Int) -> String {
         if let known = rowCache[row] { return known }
         let text = surface?.text(viewportRow: row) ?? ""
@@ -352,8 +340,7 @@ final class ScrollModeController {
 
     // MARK: selection
 
-    /// `v` / `V`. Opens a selection anchored where the cursor is, swaps between the two kinds when
-    /// one is already up, and closes it when the same key comes again, which is what vim does.
+    /// The same key twice closes the selection and the other key swaps its kind, as in vim.
     private func openSelection(_ kind: ScrollSelection.Kind) {
         if var current = selection {
             guard current.kind != kind else { return closeSelection() }
@@ -374,20 +361,17 @@ final class ScrollModeController {
 
     /// Give the anchor back before the viewport moves.
     ///
-    /// A selection is viewport-bounded, and not by choice: libghostty resolves an exact coordinate
-    /// through `Point.pin`, which clamps y to the grid height for every point tag, so no coordinate
-    /// names a scrollback row. A selection that outlived a scroll would highlight rows it no longer
-    /// covers and yank text the reader never saw.
+    /// A selection is viewport-bounded because `Point.pin` clamps an exact coordinate's y to the
+    /// grid height for every point tag, so no coordinate names a scrollback row. One that outlived a
+    /// scroll would highlight rows it no longer covers and yank text the reader never saw.
     private func releaseForScrolling() {
         guard selection != nil else { return }
         selection = nil
         updateHeader()
     }
 
-    /// `y`. Copies the selection, drops back to normal mode, and pulses what it took.
-    ///
-    /// The pulse comes after the write, not on the keystroke: a yank leaves nothing on screen, so
-    /// a copy that silently didn't take would look exactly like one that did.
+    /// The pulse comes after the write, not on the keystroke: a yank leaves nothing on screen, so a
+    /// copy that silently didn't take would look exactly like one that did.
     private func yank() {
         guard let surface, let selection, let columns = surface.cellMetrics?.columns else { return }
         let range = selection.range(to: cursor, columns: columns)
@@ -406,8 +390,8 @@ final class ScrollModeController {
         flashLevel = 1
         refreshCursor()
         guard !Motion.isReduceMotionEnabled() else {
-            // No fade, but still a beat of highlight. The pulse *is* the confirmation, so it can
-            // be made still but not dropped.
+            // Still a beat of highlight: the pulse is the confirmation, so it can be made still
+            // but not dropped.
             flashTimer = Timer.scheduledTimer(withTimeInterval: Self.flashDuration, repeats: false) {
                 [weak self] _ in MainActor.assumeIsolated { self?.cancelFlash() }
             }
@@ -424,7 +408,6 @@ final class ScrollModeController {
         }
     }
 
-    /// Drop the pulse immediately: on a new one, on the way out of the mode, and at the fade's end.
     private func cancelFlash() {
         flashTimer?.invalidate()
         flashTimer = nil
@@ -434,8 +417,8 @@ final class ScrollModeController {
         refreshCursor()
     }
 
-    /// Whether the yank pulse is running, so a test can assert the confirmation is wired to a copy
-    /// that actually landed. Its timing and color are the runbook's, not a test's.
+    /// So a test can assert the confirmation is wired to a copy that landed. Its timing and color
+    /// are the runbook's.
     var isFlashingForTesting: Bool { flashLevel > 0 }
 
     private static let flashDuration: TimeInterval = 0.22
@@ -480,9 +463,8 @@ final class ScrollModeController {
         // Everything else is bare or shifted. ⌘ and ⌥ belong to another handler.
         guard held.isSubset(of: .shift) else { return nil }
         if event.keyCode == Self.escapeKeyCode { return .cancel }
-        // The keys their shifted form names. Matched on the typed character, which is the only form
-        // that arrives: `charactersIgnoringModifiers` applies Shift, so a US shift+[ reports "{" in
-        // both fields. A layout that puts these somewhere else reports them here too.
+        // Matched on the typed character, the only form that arrives: `charactersIgnoringModifiers`
+        // applies Shift, so a US shift+[ reports "{" in both fields.
         switch event.characters {
         case "{": return .paragraph(-1)
         case "}": return .paragraph(1)
@@ -526,9 +508,8 @@ final class ScrollModeController {
         guard isActive, isDriving(s) else { return }
         invalidateRows()  // output arrived, or a scroll landed
         lastPosition = position
-        // The first report after a geometry change is the reflowed grid. libghostty emits the
-        // scrollbar only from a draw, and only when it differs from the last one it sent, so a
-        // report that arrives here is one where the resize has already landed.
+        // The first report after a geometry change is the reflowed grid: libghostty emits the
+        // scrollbar only from a draw, and only when it differs from the last one sent.
         if let line = pendingAnchorLine {
             pendingAnchorLine = nil
             reanchor(to: line)
@@ -553,8 +534,8 @@ final class ScrollModeController {
         return "Scroll: \(groupedCount(below)) below"
     }
 
-    /// What it reads while a selection is up. A charwise selection gets no count: the number that
-    /// would mean anything is characters, and it moves on every `l`.
+    /// A charwise selection gets no count: the number that would mean anything is characters, and it
+    /// moves on every `l`.
     static func visualTitle(kind: ScrollSelection.Kind, rows: Int) -> String {
         switch kind {
         case .character: return "Visual"

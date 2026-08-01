@@ -1,20 +1,12 @@
-/// Vim's `w`, `b` and `e` over a terminal viewport (ZEN-331).
+/// Vim's `w`, `b` and `e` over a terminal viewport.
 ///
-/// Pure statics over a row reader, so the whole of it tests against a dictionary of fixture rows.
-/// The reader is non-optional and answers `""` for a row it cannot read, because a row the backend
-/// declines and an empty row separate two words identically.
+/// A row's text ends where its characters do: `read_text` trims a row's trailing blanks, so the
+/// columns past the last character are not cells to land on and stepping off the end of a row lands
+/// on the start of the next.
 ///
-/// A row's text ends where its characters do. `read_text` trims the trailing blanks off a row, so
-/// the columns past the last character are not cells a motion can land on, and stepping off the end
-/// of a row lands on the start of the next one. That is what vim does with a line ending, arrived at
-/// from the other direction.
-///
-/// **A word never spans a row break**, even where the classes line up. `one two` above `three` has
-/// `two` and `three` as separate words, and a run allowed to cross would carry a `w` from `two`
-/// clean past `three` to whatever follows it.
+/// **A word never spans a row break**, even where the classes line up, or a `w` from `two` in
+/// `one two` runs clean past `three` on the row below.
 enum ScrollWordMotion {
-    /// Which of the three a keystroke asked for, so the key decoder can name a motion without the
-    /// controller switching over three near-identical calls.
     enum Motion: Equatable {
         case next  // w
         case back  // b
@@ -29,8 +21,8 @@ enum ScrollWordMotion {
         }
     }
 
-    /// Vim's three character classes. A word is a run of one of the two non-blank ones, so
-    /// `foo.bar` is three words and a class change starts one without any blank between.
+    /// A word is a run of one of the two non-blank classes, so `foo.bar` is three words: a class
+    /// change starts one with no blank between.
     enum CharacterClass {
         case keyword
         case punctuation
@@ -44,11 +36,10 @@ enum ScrollWordMotion {
         return .punctuation
     }
 
-    /// A screen the motions walk: rows by index, and the last row they may reach.
+    /// The rows a motion walks. `row` answers `""` for anything unreadable, which behaves as blank.
     ///
-    /// A class rather than a struct so it can hold each row's characters once it has built them.
-    /// A single `w` across a long row asks for a character per step, and re-splitting the string
-    /// each time makes one keystroke quadratic in the row's length.
+    /// A class so it can hold each row's characters once. A `w` along a long row asks for a
+    /// character per step, and re-splitting the string each time makes one keystroke quadratic.
     final class Screen {
         let lastRow: Int
         private let reader: (Int) -> String
@@ -89,10 +80,8 @@ enum ScrollWordMotion {
         }
     }
 
-    /// `w`: the start of the next word.
-    ///
-    /// Every motion here stops on the last cell it reached rather than failing when it runs out of
-    /// screen, so a `w` held down at the bottom of the viewport parks instead of doing nothing.
+    /// `w`: the start of the next word. Every motion here parks on the last cell it reached rather
+    /// than failing at the edge of the screen.
     static func nextWordStart(from cell: ScrollCell, on screen: Screen) -> ScrollCell {
         var current = cell
         let opening = screen.characterClass(at: current)

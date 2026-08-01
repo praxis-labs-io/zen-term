@@ -91,8 +91,7 @@ final class TerminalCellMetricsTests: XCTestCase {
     }
 
     func test_theFirstColumnStartsAtTheGridInsetToo() {
-        // The same inset the rows carry, on the other axis. `window-padding-x` and `-y` are emitted
-        // at one value with balancing off, so leftover width collects past the last column.
+        // `window-padding-x` and `-y` are emitted at one value with balancing off.
         XCTAssertEqual(
             metrics.cellFrame(row: 0, columns: 0...0),
             CGRect(x: 2, y: 2, width: 8, height: 16))
@@ -105,16 +104,15 @@ final class TerminalCellMetricsTests: XCTestCase {
     }
 
     func test_aRunPastTheLastColumnStopsAtIt() {
-        // Selection rects run to the grid's edge, not the view's: the leftover strip past the last
-        // column holds no characters, and painting it puts selection color on nothing.
+        // The leftover strip past the last column holds no characters to paint over.
         XCTAssertEqual(metrics.cellFrame(row: 0, columns: 0...999).maxX, 2 + 80 * 8)
         XCTAssertEqual(metrics.cellFrame(row: 0, columns: -5...2).origin.x, 2)
     }
 }
 
-/// The span a yank reads and a selection paints (ZEN-331). Its ordering is the whole of its job:
-/// handed a reversed span the backend reads nothing, so a selection dragged upward would copy an
-/// empty string while looking highlighted on screen.
+/// The span a yank reads and a selection paints. Ordering is the whole of its job: handed a
+/// reversed span the backend reads nothing, so a selection dragged upward copies an empty string
+/// while looking highlighted on screen.
 final class TerminalViewportRangeTests: XCTestCase {
     func test_aForwardSpanIsLeftAlone() {
         let range = TerminalViewportRange(startRow: 2, startColumn: 4, endRow: 5, endColumn: 9)

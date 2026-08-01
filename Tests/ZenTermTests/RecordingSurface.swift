@@ -111,12 +111,10 @@ final class RecordingSurface: NSObject, TerminalSurface {
         return rows[row]
     }
 
-    /// Slices `rows` the way a yank reads a selection: the first and last rows cut at their
-    /// columns, everything between them whole.
+    /// Slices `rows`: first and last cut at their columns, everything between them whole.
     ///
-    /// It does **not** model the backend's unwrapping of soft-wrapped rows. That is deliberate:
-    /// a fake that joined rows would make a test's expected string depend on where the fixture
-    /// happened to wrap, which tests the fixture rather than the selection.
+    /// It does **not** model the backend's soft-wrap unwrapping. A fake that joined rows would make
+    /// a test's expected string depend on where the fixture wrapped.
     func text(in range: TerminalViewportRange) -> String? {
         guard rows.indices.contains(range.startRow), rows.indices.contains(range.endRow) else {
             return nil

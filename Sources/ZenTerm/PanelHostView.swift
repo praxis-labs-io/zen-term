@@ -75,14 +75,11 @@ final class PanelHostView: NSView {
         cursor.metrics = metrics
         cursor.state = state
         cursor.isHidden = false
-        // Unconditional, and an equality check on `state` is the wrong guard. A font step moves the
-        // cell size without moving a view's frame or the cursor, so the overlay's own state is
-        // identical while everything it derives from has changed.
+        // Unconditional. See `ScrollCursorView.redraw()` for why an equality check on `state` is
+        // the wrong guard.
         cursor.redraw()
     }
 
-    /// The scroll-mode overlay, so a test can assert a redraw was asked for after a change the
-    /// overlay's own state cannot show.
     var scrollCursorForTesting: ScrollCursorView { cursor }
 
     /// Inner breathing room between the pane border and the terminal content, even on

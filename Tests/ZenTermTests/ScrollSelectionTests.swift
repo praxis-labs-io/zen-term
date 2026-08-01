@@ -3,9 +3,8 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The span a visual selection resolves to (ZEN-331). It is what gets painted and what gets
-/// yanked, so an ordering it gets wrong copies text the reader never highlighted, and the
-/// pasteboard is the one place a mistake leaves the app.
+/// The span a visual selection resolves to. It is what gets painted and what gets yanked, so a
+/// wrong ordering copies text the reader never highlighted.
 final class ScrollSelectionTests: XCTestCase {
     private func cell(_ row: Int, _ column: Int) -> ScrollCell {
         ScrollCell(row: row, column: column)
@@ -24,8 +23,7 @@ final class ScrollSelectionTests: XCTestCase {
     }
 
     func test_aSelectionDraggedUpwardsReadsForwards() {
-        // `v` then `k`: the anchor is now the LOWER end. Left unordered, the yank reads from a row
-        // below to a row above and the backend hands back nothing.
+        // `v` then `k`: the anchor is the LOWER end. Unordered, the backend reads nothing.
         let selection = ScrollSelection(kind: .character, anchor: cell(5, 9))
         let range = selection.range(to: cell(2, 4), columns: 80)
 
@@ -67,9 +65,8 @@ final class ScrollSelectionTests: XCTestCase {
     }
 
     func test_alineSelectionDraggedUpwardsStillStartsAtColumnZero() {
-        // The ordering trap this exists for: handed (row 10, col 0) and (row 5, col 79), a
-        // column-aware swap pairs each column with the row it arrived on and hands back a span
-        // that starts at the LAST column of row 5 and ends at the first of row 10.
+        // A column-aware swap pairs each column with the row it arrived on, so this comes back
+        // starting at the last column of row 5.
         let selection = ScrollSelection(kind: .line, anchor: cell(10, 3))
         let range = selection.range(to: cell(5, 60), columns: 80)
 
@@ -80,8 +77,7 @@ final class ScrollSelectionTests: XCTestCase {
     }
 
     func test_aGridWithNoColumnsDoesNotProduceANegativeColumn() {
-        // A surface that has not been sized yet reports zero columns, and a -1 end column would
-        // reach the backend as a huge unsigned coordinate.
+        // An unsized surface reports zero columns, and -1 reaches the backend as a huge unsigned.
         let selection = ScrollSelection(kind: .line, anchor: cell(0, 0))
         let range = selection.range(to: cell(1, 0), columns: 0)
 

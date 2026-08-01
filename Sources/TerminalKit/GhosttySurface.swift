@@ -710,9 +710,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
     /// A span of viewport cells, read in one call.
     ///
-    /// The span cannot leave the viewport, and no argument here can make it: `Point.pin` clamps an
-    /// exact coordinate's y to the grid height whichever tag it carries, so a scrollback row has no
-    /// coordinate to name it. Callers keep their selections on screen for that reason.
+    /// The span cannot leave the viewport and no argument here can make it: `Point.pin` clamps an
+    /// exact coordinate's y to the grid height whichever tag it carries.
     public func text(in range: TerminalViewportRange) -> String? {
         guard let surfacePtr, let metrics = cellMetrics else { return nil }
         let lastRow = max(metrics.rows - 1, 0)

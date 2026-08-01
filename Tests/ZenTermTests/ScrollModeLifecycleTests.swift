@@ -559,8 +559,8 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
     // MARK: selection and yank (ZEN-331)
 
-    /// Enter the mode and hand back its key handler plus a pasteboard of its own, so a yank in the
-    /// suite never clobbers what the developer had copied.
+    /// A key handler and a pasteboard of its own, so a yank in the suite never clobbers the
+    /// developer's clipboard.
     private func enterModeForYanking(_ controller: WindowController) throws -> (
         handler: (NSEvent) -> Bool, board: NSPasteboard
     ) {
@@ -639,9 +639,8 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aScrollKeyGivesTheAnchorBack() throws {
-        // A selection is viewport-bounded: `Point.pin` clamps an exact coordinate to the grid
-        // height for every tag, so no coordinate names a scrollback row. One that survived a page
-        // move would highlight rows it no longer covers and yank text the reader never saw.
+        // `Point.pin` clamps an exact coordinate to the grid height for every tag, so a selection
+        // that survived a page move would cover rows it no longer names.
         let controller = makeWindow()
         let (handler, board) = try enterModeForYanking(controller)
 
@@ -706,10 +705,8 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aFontStepRedrawsTheBandThoughNothingAboutItMoved() throws {
-        // A font step changes the cell height without moving any view's frame, so no layout pass
-        // runs, and the overlay's own state (same cursor, same selection) is identical either way.
-        // Keying the redraw off that state leaves the band drawing at the old row height over text
-        // that just reflowed at the new one, which reads as a rounding error in the cell math.
+        // No layout pass runs and the overlay's state is identical either way, so a redraw keyed
+        // off that state leaves the band at the old row height.
         let controller = makeWindow()
         controller.handle(.toggleScrollMode)
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
@@ -724,9 +721,8 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aFontStepKeepsTheBandOnTheLineItWasReading() throws {
-        // A font step changes the cell size in both directions at once: the grid gains or loses
-        // rows and the text rewraps into them, so the row INDEX the band held now names a different
-        // line. Holding the index is what moved the band off the line the reader was on.
+        // A font step resizes the grid in both directions and the text rewraps into it, so the row
+        // INDEX the band held names a different line afterward.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let host = ModeHostSpy()
@@ -754,8 +750,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aReflowThatLosesTheLineLeavesTheBandWhereItIs() throws {
-        // Nothing to re-find is not a reason to jump. A line scrolled off by the reflow leaves the
-        // index as the only answer there is.
+        // Nothing to re-find is not a reason to jump.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let host = ModeHostSpy()

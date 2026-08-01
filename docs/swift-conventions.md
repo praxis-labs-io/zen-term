@@ -448,17 +448,15 @@ takes it as an injectable property (`ScrollModeController.yankPasteboard`,
 
 **`needsDisplay` cannot tell you a redraw was requested.** AppKit holds it *true* on a view that has
 never drawn, and setting it false on one does not stick, so it reads as a pending repaint whether or
-not anything asked for one. A test asserting it passes with the bug reinstated, which is how a
-stale-geometry regression got a green test in ZEN-331 before the mutation check caught the test
-rather than the code. When "did this ask to repaint" is the thing under test, route the request
-through a method that counts its calls (`ScrollCursorView.redraw()`) and assert the count moved.
+not anything asked for one, so a test asserting it passes with the bug reinstated. When "did this
+ask to repaint" is the thing under test, route the request through a method that counts its calls
+(`ScrollCursorView.redraw()`) and assert the count moved (ZEN-331).
 
 **A redraw keyed off an `Equatable` view-state is a trap for anything the state cannot see.**
 Folding an overlay's fields into one value and repainting on `didSet` looks tidy and silently drops
 every change that lives outside it: a font step moves the cell size without moving the view's frame
-or the cursor, so the state compares equal and nothing repaints (ZEN-330, regressed and re-fixed in
-ZEN-331). Mark dirty unconditionally when the geometry a view derives from is not part of what it
-stores.
+or the cursor, so the state compares equal and nothing repaints. Mark dirty unconditionally when the
+geometry a view derives from is not part of what it stores (ZEN-330, ZEN-331).
 
 **A window a test opens stays open for the whole run, so suites that mount views inherit
 `WindowTestCase`, not `XCTestCase`.** XCTest tears down no AppKit state between cases. Nothing closed

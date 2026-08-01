@@ -114,8 +114,7 @@ final class ScrollModeKeyTests: XCTestCase {
     }
 
     func test_controlBStillPagesUpRatherThanMovingAWord() throws {
-        // `b` is a word motion bare and a page up with Control. The Control branch runs first, so
-        // the pair cannot collide, and this is the assertion that keeps it that way.
+        // `b` is a word motion bare and a page up with Control. The Control branch runs first.
         XCTAssertEqual(decode(try keyDown("b", flags: .control)), .scroll(.pageFraction(-1)))
     }
 
@@ -140,8 +139,7 @@ final class ScrollModeKeyTests: XCTestCase {
     // MARK: leaving
 
     func test_escapeCancelsAndQAndILeaveTheMode() throws {
-        // Esc is `.cancel`, not `.exit`: with a selection up it gives the selection back, and only
-        // an Esc with nothing to give back closes the mode. `q` and `i` leave either way.
+        // Esc is `.cancel`, not `.exit`: only an Esc with nothing to give back closes the mode.
         XCTAssertEqual(decode(try keyDown("\u{1b}", keyCode: 53)), .cancel)
         XCTAssertEqual(decode(try keyDown("q")), .exit)
         XCTAssertEqual(decode(try keyDown("i")), .exit)
@@ -194,8 +192,6 @@ final class ScrollModeHeaderTests: XCTestCase {
     }
 
     func test_aCharacterSelectionGetsNoCount() {
-        // The number that would mean anything is characters, and it moves on every `l`. A row count
-        // beside a charwise selection reads as the thing the yank will take, and is not.
         XCTAssertEqual(ScrollModeController.visualTitle(kind: .character, rows: 3), "Visual")
     }
 }

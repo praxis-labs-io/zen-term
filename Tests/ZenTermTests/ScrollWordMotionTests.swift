@@ -2,14 +2,13 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Vim's `w`, `b` and `e` over a viewport (ZEN-331).
+/// Vim's `w`, `b` and `e` over a viewport.
 ///
-/// Every one of these is a silent failure on screen: a motion that lands one character out looks
-/// identical to one that landed right, and the reader only finds out when the yank hands them
-/// half a path. The rules are vim's, so they have a correct answer to assert against.
+/// A motion that lands one character out looks identical on screen to one that landed right; the
+/// reader finds out when the yank hands them half a path. The rules are vim's, so there is a
+/// correct answer to assert against.
 final class ScrollWordMotionTests: XCTestCase {
-    /// A fixture screen. `w` on the last row has nowhere to go, which is a case the motions have
-    /// to survive rather than run off.
+    /// A fixture screen.
     private func screen(_ rows: [String]) -> ScrollWordMotion.Screen {
         ScrollWordMotion.Screen(lastRow: rows.count - 1) { row in
             rows.indices.contains(row) ? rows[row] : ""
@@ -23,9 +22,7 @@ final class ScrollWordMotionTests: XCTestCase {
     // MARK: classes
 
     func test_aRunOfPunctuationIsItsOwnWord() {
-        // `foo.bar` is three words in vim, not two: a class change starts a word with no blank
-        // between. Treating punctuation as part of the word beside it makes `w` skip the dot and
-        // land on `bar`, which is `W`'s behavior, not `w`'s.
+        // Treating punctuation as part of the word beside it is `W`'s behavior, not `w`'s.
         let sut = screen(["foo.bar"])
 
         XCTAssertEqual(ScrollWordMotion.nextWordStart(from: cell(0, 0), on: sut), cell(0, 3))
@@ -56,7 +53,6 @@ final class ScrollWordMotionTests: XCTestCase {
     }
 
     func test_wCrossesIntoTheNextRow() {
-        // A row's text ends where its characters do; the columns past it are not cells to land on.
         let sut = screen(["one two", "three"])
 
         XCTAssertEqual(ScrollWordMotion.nextWordStart(from: cell(0, 4), on: sut), cell(1, 0))
