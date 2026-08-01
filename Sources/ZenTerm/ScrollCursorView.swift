@@ -62,7 +62,9 @@ final class ScrollCursorView: NSView {
             drawBand(metrics: metrics, row: state.cursor.row)
         }
 
-        drawCursorCell(metrics: metrics, accent: accent, cursor: state.cursor)
+        drawCursorCell(
+            metrics: metrics, accent: accent, cursor: state.cursor,
+            inSelection: state.selection != nil)
 
         if let flash = state.flash, state.flashLevel > 0 {
             accent.withAlphaComponent(Self.flashPeakAlpha * min(1, state.flashLevel)).setFill()
@@ -85,13 +87,25 @@ final class ScrollCursorView: NSView {
         NSBezierPath(roundedRect: band, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius).fill()
     }
 
-    /// Stroked rather than filled: a real terminal cursor inverts its cell, an overlay cannot, and a
-    /// fill solid enough to read as a cursor hides the character it is naming.
-    private func drawCursorCell(metrics: TerminalCellMetrics, accent: NSColor, cursor: ScrollCell) {
+    /// The cell the cursor is on: filled inside a selection, stroked outside one.
+    ///
+    /// Over bare terminal text a fill solid enough to read as a cursor hides the character it is
+    /// naming, and an overlay cannot invert a cell the way a real terminal cursor does, so the
+    /// stroke is what is left. Inside a selection there is already an accent wash to build on, and
+    /// a brighter patch of it reads as the moving end without a second visual language.
+    private func drawCursorCell(
+        metrics: TerminalCellMetrics, accent: NSColor, cursor: ScrollCell, inSelection: Bool
+    ) {
         let cell = bounds.intersection(
             metrics.cellFrame(
                 row: cursor.row, columns: Self.columns(cursor.column, cursor.column, metrics)))
         guard !cell.isEmpty else { return }
+        guard !inSelection else {
+            accent.withAlphaComponent(Self.cursorFillAlpha).setFill()
+            NSBezierPath(roundedRect: cell, xRadius: Self.cursorRadius, yRadius: Self.cursorRadius)
+                .fill()
+            return
+        }
         accent.withAlphaComponent(Self.cursorAlpha).setStroke()
         let path = NSBezierPath(
             roundedRect: cell.insetBy(dx: Self.cursorStroke / 2, dy: Self.cursorStroke / 2),
@@ -160,8 +174,12 @@ final class ScrollCursorView: NSView {
 
     // `selectionAlpha` and `flashPeakAlpha` match `DiffLineRowView`: same objects, same values.
     // The band deliberately does not: accent means "this is what a `y` takes", so the band is `ink`.
+    //
+    // `cursorFillAlpha` is picked so the composite lands on the diff viewer's cursor row rather
+    // than beside it: laid over the selection, 1 - (1 - 0.16)(1 - 0.14) = 0.28.
     private static let bandAlpha: CGFloat = 0.08
     private static let selectionAlpha: CGFloat = 0.16
+    private static let cursorFillAlpha: CGFloat = 0.14
     private static let flashPeakAlpha: CGFloat = 0.5
     private static let cornerRadius: CGFloat = 3
     private static let cursorAlpha: CGFloat = 0.9
