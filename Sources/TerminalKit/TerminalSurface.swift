@@ -48,6 +48,19 @@ public struct TerminalProgress {
     }
 }
 
+/// The result of a foreground command reported by shell integration. `exitCode` is nil when the
+/// shell did not report one; `duration` is measured in seconds so the seam does not expose a
+/// backend's wire-unit choice.
+public struct TerminalCommandResult: Equatable {
+    public var exitCode: Int?
+    public var duration: TimeInterval
+
+    public init(exitCode: Int?, duration: TimeInterval) {
+        self.exitCode = exitCode
+        self.duration = duration
+    }
+}
+
 /// Events flowing OUT of a surface, up into the chrome. Each backend translates
 /// its native callbacks into these.
 public protocol TerminalSurfaceDelegate: AnyObject {
@@ -56,6 +69,7 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     func surfaceDidRingBell(_ s: TerminalSurface)
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification)
     func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?)
+    func surface(_ s: TerminalSurface, commandDidFinish result: TerminalCommandResult)
     /// The program running in this surface repainted its own background (OSC 11, or an OSC 111
     /// reset). Only the fill the chrome paints around and under THIS surface follows it: the
     /// pane's padding ring and the layer behind the grid, so a repainted pane still reads as one
@@ -98,6 +112,7 @@ public extension TerminalSurfaceDelegate {
     func surfaceDidRingBell(_ s: TerminalSurface) {}
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {}
     func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?) {}
+    func surface(_ s: TerminalSurface, commandDidFinish result: TerminalCommandResult) {}
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {}
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {}
     func surface(_ s: TerminalSurface, hoveredLinkDidChange url: String?) {}

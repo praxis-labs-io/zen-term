@@ -21,7 +21,7 @@ final class TabBarViewTests: WindowTestCase {
         window.contentView?.addSubview(tabBar)
         tabBar.frame = NSRect(x: 0, y: 0, width: 400, height: 30)
 
-        let items = [TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, agentState: .idle)]
+        let items = [TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle)]
         tabBar.render(items)
         let chipBefore = tabBar.chipsForTesting.first
 
@@ -37,7 +37,7 @@ final class TabBarViewTests: WindowTestCase {
 
     func test_reapplyTheme_resetsTracerColor() {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
-        let items = [TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, agentState: .idle)]
+        let items = [TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle)]
         tabBar.render(items)
 
         tabBar.reapplyTheme()
@@ -58,9 +58,9 @@ final class TabBarViewTests: WindowTestCase {
     func test_tabLabel_isBareNumberWithNoCommandGlyph() {
         // The inline label is a bare number for every tab now — the ⌘N shortcut moved to the
         // hover tooltip, so the glyph never sits inline (ZEN-110).
-        let one = TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, agentState: .idle)
-        let nine = TabBarItem(id: TabID(9), index: 9, title: "nine", isActive: false, agentState: .idle)
-        let ten = TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, agentState: .idle)
+        let one = TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle)
+        let nine = TabBarItem(id: TabID(9), index: 9, title: "nine", isActive: false, attentionState: .idle)
+        let ten = TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, attentionState: .idle)
         XCTAssertTrue(TabBarView.tabLabelStringForTesting(one).hasPrefix("1 "))
         XCTAssertTrue(TabBarView.tabLabelStringForTesting(nine).hasPrefix("9 "))
         XCTAssertTrue(TabBarView.tabLabelStringForTesting(ten).hasPrefix("10 "))
@@ -74,8 +74,8 @@ final class TabBarViewTests: WindowTestCase {
         // the live keymap, 10+ have no binding so no keycap (ZEN-110).
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
         tabBar.render([
-            TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, agentState: .idle),
-            TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, agentState: .idle),
+            TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle),
+            TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, attentionState: .idle),
         ])
         let tooltips = tabBar.chipTooltipsForTesting
         XCTAssertEqual(tooltips.count, 2)
@@ -96,7 +96,7 @@ final class TabBarViewTests: WindowTestCase {
         tabBar.frame = NSRect(x: 0, y: 0, width: 160, height: 30)
 
         let many = (1...14).map {
-            TabBarItem(id: TabID($0), index: $0, title: "tab\($0)", isActive: $0 == 1, agentState: .idle)
+            TabBarItem(id: TabID($0), index: $0, title: "tab\($0)", isActive: $0 == 1, attentionState: .idle)
         }
         tabBar.render(many)
         tabBar.layoutSubtreeIfNeeded()
@@ -112,7 +112,7 @@ final class TabBarViewTests: WindowTestCase {
         window.contentView?.addSubview(tabBar)
         tabBar.frame = NSRect(x: 0, y: 0, width: 800, height: 30)
 
-        tabBar.render([TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, agentState: .idle)])
+        tabBar.render([TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle)])
         tabBar.layoutSubtreeIfNeeded()
         XCTAssertFalse(tabBar.isOverflowFadedForTesting, "a single tab in a wide bar must not fade")
     }
@@ -127,7 +127,7 @@ final class TabBarViewTests: WindowTestCase {
         tabBar.frame = NSRect(x: 0, y: 0, width: 160, height: 30)
 
         let many = (1...14).map {
-            TabBarItem(id: TabID($0), index: $0, title: "tab\($0)", isActive: $0 == 1, agentState: .idle)
+            TabBarItem(id: TabID($0), index: $0, title: "tab\($0)", isActive: $0 == 1, attentionState: .idle)
         }
         tabBar.render(many)
         tabBar.layoutSubtreeIfNeeded()

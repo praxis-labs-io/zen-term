@@ -94,7 +94,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
             userInitiated = false
             controller?.announce(
                 ToastContent(
-                    variant: .info, title: "You're on the latest",
+                    variant: .positive, title: "You're on the latest",
                     message: "ZenTerm \(AppVersion.current)"))
         }
         acknowledgement()

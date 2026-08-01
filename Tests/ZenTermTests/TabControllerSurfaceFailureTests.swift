@@ -28,6 +28,28 @@ final class TabControllerSurfaceFailureTests: WindowTestCase {
         wait(for: [drained], timeout: 2)
     }
 
+    func test_commandCompletionRelaysFromDrawerToWindowOwner() throws {
+        var spawned: [RecordingSurface] = []
+        let controller = TabController(
+            initialCWD: nil,
+            makeSurface: {
+                let surface = RecordingSurface()
+                spawned.append(surface)
+                return surface
+            })
+        self.controller = controller
+        controller.start()
+        controller.toggleBottomDrawer()
+        let drawer = try XCTUnwrap(spawned.last)
+        var received: TerminalCommandResult?
+        controller.onCommandFinished = { received = $0 }
+        let result = TerminalCommandResult(exitCode: 2, duration: 18)
+
+        drawer.delegate?.surface(drawer, commandDidFinish: result)
+
+        XCTAssertEqual(received, result)
+    }
+
     func test_bottomDrawerSurfaceFailsToStart_warnsAndTearsDown() {
         // Arm failure only around the drawer toggle, so exactly the drawer surface — created
         // synchronously inside `toggleBottomDrawer()` — fails, and the initial pane doesn't.

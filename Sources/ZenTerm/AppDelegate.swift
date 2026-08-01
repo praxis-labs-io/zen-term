@@ -111,7 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // The "fire for any tab when unfocused" path can leave a banner for a tab that's already
-        // frontmost — its `clearWaiting` never fires (the active tab is never re-selected). Reactivating
+        // frontmost — its `clearAttention` never fires (the active tab is never re-selected). Reactivating
         // means the user is now looking at it, so clear each window's active-tab banner.
         NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main

@@ -1,10 +1,9 @@
 import AppKit
 import TabKit
 
-/// The agent activity a tab's number signals: `idle` is the default muted color; `waiting`
-/// (an agent needs feedback/permission) is rose.
-enum TabAgentState {
-    case idle, waiting
+/// Attention signaled by a tab's number. Agent input stays stronger than command completion.
+enum TabAttentionState {
+    case idle, completed, waiting
 }
 
 struct TabBarItem {
@@ -12,7 +11,7 @@ struct TabBarItem {
     let index: Int  // 1-based number shown before the title
     let title: String
     let isActive: Bool
-    let agentState: TabAgentState
+    let attentionState: TabAttentionState
 }
 
 /// The bottom-left numbered tab bar. Stateless beyond its last rendered snapshot;
@@ -363,12 +362,13 @@ final class TabBarView: NSView {
         let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
         let ink = item.isActive ? activeInk : idleInk
         let numberColor: NSColor
-        switch item.agentState {
+        switch item.attentionState {
         case .idle: numberColor = numberInk
+        case .completed: numberColor = Theme.current.chrome.positive.nsColor
         case .waiting: numberColor = Theme.current.chrome.attention.nsColor
         }
         // A bare number — the ⌘N binding for tabs 1–9 lives in the hover tooltip now, not inline
-        // (ZEN-110). The prefix shares `numberColor`, so it recolors with the agent-waiting state.
+        // (ZEN-110). The prefix shares `numberColor`, so it recolors with the tab attention state.
         let prefix = "\(item.index) "
         let s = NSMutableAttributedString(
             string: prefix,

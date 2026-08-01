@@ -216,6 +216,9 @@ final class TabController: NSObject {
     /// message-bearing "needs attention" signal the `WindowController` latches onto the tab.
     var onNotification: ((TerminalNotification) -> Void)?
 
+    /// Any pane or drawer completed a foreground command under shell integration.
+    var onCommandFinished: ((TerminalCommandResult) -> Void)?
+
     /// A startup command for the right drawer (a workspace recipe's `right`, e.g. `claude`).
     /// When set, opening the right drawer launches the program-then-shell recipe instead of a
     /// plain shell. Nil → plain shell. The sentinel `"shell"` also means a plain shell.
@@ -270,6 +273,7 @@ final class TabController: NSObject {
         paneCanvas.onSocketFocus = { [weak self] dir in self?.navigate(dir) }
         paneCanvas.onZoomEnded = { [weak self] in self?.paneZoomEndedInternally() }
         paneCanvas.onNotification = { [weak self] n in self?.onNotification?(n) }
+        paneCanvas.onCommandFinished = { [weak self] result in self?.onCommandFinished?(result) }
         paneCanvas.onSurfaceStartFailed = { [weak self] retry, close in self?.onPaneStartFailed?(retry, close) }
     }
 
@@ -1350,6 +1354,11 @@ extension TabController: TerminalSurfaceDelegate {
     /// it as the tab's attention signal, same as a pane.
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
         onNotification?(n)
+    }
+    /// A drawer command completed. Panes relay the same event through `PaneCanvasController`.
+    func surface(_ s: TerminalSurface, commandDidFinish result: TerminalCommandResult) {
+        guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
+        onCommandFinished?(result)
     }
     /// A program repainted a drawer's background (OSC 11). Carry it to that drawer's own fill,
     /// exactly as a pane does (ZEN-23). Panes are handled in `PaneCanvasController` and floats in

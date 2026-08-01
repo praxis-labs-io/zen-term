@@ -172,6 +172,66 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         XCTAssertEqual(keycaps(in: toast), ["⌘2"], "the keycap must follow the tab, not go stale at ⌘3")
     }
 
+    // MARK: command completion (ZEN-38)
+
+    func test_longCommandInBackgroundTabShowsCompletedAttention() throws {
+        let controller = makeController()
+        controller.newTabForTesting()
+
+        controller.notifyCommandFinishedForTesting(
+            tabIndex: 0, result: TerminalCommandResult(exitCode: 0, duration: 126))
+        drainMainQueue()
+
+        XCTAssertEqual(controller.attentionStateForTesting(tabIndex: 0), .completed)
+        let toast = try XCTUnwrap(controller.waitingToastForTesting(tabIndex: 0))
+        let copy = descendants(of: toast).compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(copy.contains("Finished in 2m 6s."))
+        XCTAssertEqual(keycaps(in: toast), ["⌘1"])
+    }
+
+    func test_shortCommandStaysQuiet() {
+        let controller = makeController()
+        controller.newTabForTesting()
+
+        controller.notifyCommandFinishedForTesting(
+            tabIndex: 0, result: TerminalCommandResult(exitCode: 0, duration: 9.999))
+        drainMainQueue()
+
+        XCTAssertNil(controller.attentionStateForTesting(tabIndex: 0))
+    }
+
+    func test_longCommandInActiveTabStaysQuiet() {
+        let controller = makeController()
+
+        controller.notifyCommandFinishedForTesting(
+            tabIndex: 0, result: TerminalCommandResult(exitCode: 0, duration: 60))
+        drainMainQueue()
+
+        XCTAssertNil(controller.attentionStateForTesting(tabIndex: 0))
+    }
+
+    func test_commandCompletionDoesNotReplaceAgentWaitingState() throws {
+        let controller = makeController()
+        controller.newTabForTesting()
+        controller.notifyAgentForTesting(tabIndex: 0, message: "needs your input")
+        drainMainQueue()
+        let waitingToast = try XCTUnwrap(controller.waitingToastForTesting(tabIndex: 0))
+
+        controller.notifyCommandFinishedForTesting(
+            tabIndex: 0, result: TerminalCommandResult(exitCode: 0, duration: 60))
+        drainMainQueue()
+
+        XCTAssertEqual(controller.attentionStateForTesting(tabIndex: 0), .waiting)
+        XCTAssertTrue(controller.waitingToastForTesting(tabIndex: 0) === waitingToast)
+    }
+
+    func test_failedCommandMessageCarriesExitAndElapsed() {
+        XCTAssertEqual(
+            WindowController.commandResultMessage(
+                TerminalCommandResult(exitCode: 1, duration: 3_661)),
+            "Exited 1 after 1h 1m 1s.")
+    }
+
     // MARK: the config-diagnostics toast (ZEN-7)
 
     func test_configDiagnosticsToast_mountsWithOpenSettingsAndDismiss() throws {

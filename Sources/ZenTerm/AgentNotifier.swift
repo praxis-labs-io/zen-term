@@ -53,7 +53,7 @@ final class AgentNotifier: NSObject {
     /// Post (or replace) the banner for `(windowID, tabID)`. Authorization is requested lazily on the
     /// first delivery (Apple's HIG contextual pattern — avoids a cold-launch prompt) and never
     /// re-prompts. The request identifier is the window+tab pair, so a fresh event on the same tab
-    /// replaces its prior banner instead of stacking (mirrors the toast's `waitingToasts[id]` replace
+    /// replaces its prior banner instead of stacking (mirrors the toast's `attentionToasts[id]` replace
     /// behavior).
     func notify(windowID: Int, tabID: TabID, title: String, body: String) {
         guard isBundled else { return }

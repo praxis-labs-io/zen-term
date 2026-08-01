@@ -85,6 +85,9 @@ final class PaneCanvasController: NSObject {
     /// relays it up.
     var onNotification: ((TerminalNotification) -> Void)?
 
+    /// Fired when shell integration reports that a foreground command completed in any pane.
+    var onCommandFinished: ((TerminalCommandResult) -> Void)?
+
     /// Fired when zoom ends on its own because the zoomed leaf disappeared (its shell
     /// exited) — the owning `TabController` clears its `zoomedPanel` so zoom state and
     /// panel visibility stay in sync.
@@ -554,6 +557,9 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     }
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
         onNotification?(n)
+    }
+    func surface(_ s: TerminalSurface, commandDidFinish result: TerminalCommandResult) {
+        onCommandFinished?(result)
     }
     /// A program repainted its pane's background (OSC 11). Carry it to that pane's own fill so the
     /// padding around the terminal matches instead of ringing it in the theme color (ZEN-23).
