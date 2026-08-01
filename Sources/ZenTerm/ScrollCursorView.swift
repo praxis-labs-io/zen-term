@@ -58,13 +58,8 @@ final class ScrollCursorView: NSView {
         if let selection = state.selection {
             accent.withAlphaComponent(Self.selectionAlpha).setFill()
             fill(Self.rects(for: selection, metrics: metrics))
-        }
-
-        let band = bounds.intersection(metrics.rowFrame(state.cursor.row, width: bounds.width))
-        if !band.isEmpty {
-            Theme.current.chrome.ink(alpha: Self.bandAlpha).setFill()
-            NSBezierPath(roundedRect: band, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius)
-                .fill()
+        } else {
+            drawBand(metrics: metrics, row: state.cursor.row)
         }
 
         drawCursorCell(metrics: metrics, accent: accent, cursor: state.cursor)
@@ -73,6 +68,21 @@ final class ScrollCursorView: NSView {
             accent.withAlphaComponent(Self.flashPeakAlpha * min(1, state.flashLevel)).setFill()
             fill(Self.rects(for: flash, metrics: metrics))
         }
+    }
+
+    /// The row the cursor is on, drawn only in normal mode.
+    ///
+    /// A selection says where you are more precisely than the band does, so leaving both up puts two
+    /// answers to the same question on one row. It steps aside instead.
+    ///
+    /// Spans the row's **cells**, not the view: the grid does not fill the view, so a band taking
+    /// `bounds.width` overshoots every other rect here into the padding on both sides.
+    private func drawBand(metrics: TerminalCellMetrics, row: Int) {
+        let band = bounds.intersection(
+            metrics.cellFrame(row: row, columns: Self.columns(0, metrics.columns - 1, metrics)))
+        guard !band.isEmpty else { return }
+        Theme.current.chrome.ink(alpha: Self.bandAlpha).setFill()
+        NSBezierPath(roundedRect: band, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius).fill()
     }
 
     /// Stroked rather than filled: a real terminal cursor inverts its cell, an overlay cannot, and a
@@ -149,8 +159,7 @@ final class ScrollCursorView: NSView {
     }
 
     // `selectionAlpha` and `flashPeakAlpha` match `DiffLineRowView`: same objects, same values.
-    // The band deliberately does not. Accent means "this is what a `y` takes", so the band is `ink`
-    // and separates by tone rather than by a few points of alpha.
+    // The band deliberately does not: accent means "this is what a `y` takes", so the band is `ink`.
     private static let bandAlpha: CGFloat = 0.08
     private static let selectionAlpha: CGFloat = 0.16
     private static let flashPeakAlpha: CGFloat = 0.5
