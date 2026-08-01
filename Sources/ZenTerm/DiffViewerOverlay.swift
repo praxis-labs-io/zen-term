@@ -1314,16 +1314,27 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             renderRows(file, spans: cached, keepingSelection: keepingSelection)
             return
         }
-        // Won't ever highlight (no repo on disk, or unsupported language) — plain now is the final state.
-        guard FileManager.default.fileExists(atPath: repoRoot.path), SyntaxLanguage.isSupported(path: file.path)
+        // Won't ever highlight (no repo on disk, or an extension no grammar claims) — plain now is the
+        // final state. A path with no extension is not a "no": its blob may still name a language
+        // through a shebang or modeline, so it goes on to the enrich path like any other (ZEN-329).
+        guard
+            FileManager.default.fileExists(atPath: repoRoot.path),
+            SyntaxLanguage.mayHighlight(path: file.path)
         else {
             highlightStore.store(key, nil)
             renderRows(file, spans: nil, keepingSelection: keepingSelection)
             return
         }
-        // Supported + uncached: withhold the first paint until the highlight lands, so even a cold open
+        // Resolvable + uncached: withhold the first paint until the highlight lands, so even a cold open
         // goes straight from the loading state to highlighted — never a flash of unhighlighted text. The
         // token drops a stale file-switch; the safety cap paints plain if the highlighter never answers.
+        //
+        // Extensionless files take this same single-paint path deliberately, rather than painting plain
+        // and repainting when the sniff answers. A second paint runs `renderRows`, which closes an open
+        // comment composer (losing whatever was typed into it) and re-centres the cursor row, so a
+        // reader who started working in the gap would lose it. Waiting costs nothing extra: `enrich`
+        // calls back whether or not it resolved a language, so a config that resolves to nothing paints
+        // as soon as its one git spawn returns, not at the safety cap.
         //
         // Clear the pane first. Withholding the paint would otherwise leave the *previously* selected
         // file's rows on screen under the new selection for as long as the fetch+parse takes (up to the

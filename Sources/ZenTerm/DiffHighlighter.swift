@@ -37,12 +37,43 @@ enum DiffHighlighter {
     }
 
     /// The synchronous body of `enrich`, for a caller already off-main (the prefetch queue) that shouldn't
-    /// pay for another dispatch. Resolve → fetch both sides → parse → map; nil if unsupported or no spans.
+    /// pay for another dispatch. Resolve, fetch both sides, parse, map. nil if unsupported or no spans.
+    /// When the path alone can't answer, the blob's own content gets a turn: a shebang or modeline names
+    /// the language for an extensionless script (ZEN-329).
     static func enrichSync(file: FileDiff, repoRoot: URL) -> DiffFileSpans? {
-        guard let (language, query) = SyntaxLanguage.resolve(path: file.path) else { return nil }
-        let old = sideSpans(GitDiffRunner.blobText(for: file, side: .old, repoRoot: repoRoot), language, query)
-        let new = sideSpans(GitDiffRunner.blobText(for: file, side: .new, repoRoot: repoRoot), language, query)
-        return old.isEmpty && new.isEmpty ? nil : DiffFileSpans(old: old, new: new)
+        if let (language, query) = SyntaxLanguage.resolve(path: file.path) {
+            return fileSpans(
+                old: GitDiffRunner.blobText(for: file, side: .old, repoRoot: repoRoot),
+                new: GitDiffRunner.blobText(for: file, side: .new, repoRoot: repoRoot),
+                language, query)
+        }
+        guard SyntaxLanguage.isContentDetectable(path: file.path) else { return nil }
+        // Sniff the side the reader is looking at: the new blob, or the old one when the new side is
+        // absent (a deletion) or empty (the file was truncated but kept). Keying the fallback on nil
+        // alone made an emptied script sniff "" and render plain, while the same file deleted outright
+        // highlighted. The old side is fetched lazily, so a config that resolves to nothing, which is
+        // most extensionless files, still costs one git spawn rather than two.
+        let new = GitDiffRunner.blobText(for: file, side: .new, repoRoot: repoRoot)
+        let old =
+            (new?.isEmpty ?? true) ? GitDiffRunner.blobText(for: file, side: .old, repoRoot: repoRoot) : nil
+        let sniffed = (new?.isEmpty ?? true) ? old : new
+        // Detection is cheap but not free, and a blob over the ceiling renders plain whatever it says.
+        guard let sniffed, isWithinSizeCeiling(sniffed),
+            let (language, query) = SyntaxLanguage.resolve(path: file.path, content: sniffed)
+        else { return nil }
+        // `old` is nil here only when the new side carried content, so the `??` never repeats a fetch.
+        return fileSpans(
+            old: old ?? GitDiffRunner.blobText(for: file, side: .old, repoRoot: repoRoot), new: new,
+            language, query)
+    }
+
+    /// Both sides parsed and mapped, or nil when neither produced spans, leaving the file plain.
+    private static func fileSpans(
+        old: String?, new: String?, _ language: Language, _ query: Query
+    ) -> DiffFileSpans? {
+        let oldSpans = sideSpans(old, language, query)
+        let newSpans = sideSpans(new, language, query)
+        return oldSpans.isEmpty && newSpans.isEmpty ? nil : DiffFileSpans(old: oldSpans, new: newSpans)
     }
 
     /// Whether a blob is small enough to parse without tying up a slot: under the byte ceiling. A file

@@ -168,6 +168,71 @@ final class DiffViewerHighlightOrchestrationTests: WindowTestCase {
         XCTAssertNil(cached, "resolved-but-no-spans is cached as nil, not left absent")
     }
 
+    func test_extensionlessScript_endsUpHighlighted_onTheSameSinglePaintPathAsAnyOtherFile() throws {
+        // An extensionless file whose blob names a language (ZEN-329) takes the ordinary withhold path,
+        // so it paints once, already highlighted. It deliberately does not get a paint-plain-then-repaint
+        // path of its own: a second paint runs `renderRows`, which closes an open comment composer and
+        // re-centres the cursor, so a reader who started typing or scrolling in the gap loses it.
+        let repo = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("zenterm-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: repo) }
+        try "#!/bin/bash\nif true; then\n  echo hi\nfi\n"
+            .write(to: repo.appendingPathComponent("release"), atomically: true, encoding: .utf8)
+
+        // An unstaged file's new side reads the working tree, so no git fixture is needed. The old
+        // side's `git show` fails in a bare directory and renders plain, which the shebang path allows.
+        let script = FileDiff(
+            path: "release", oldPath: nil, changeKind: .modified,
+            hunks: [
+                Hunk(
+                    header: "@@ -2,1 +2,1 @@", oldStart: 2, newStart: 2,
+                    lines: [DiffLine(kind: .context, oldLineNumber: 2, newLineNumber: 2, text: "if true; then")])
+            ])
+        let session = makeSession(repoRoot: repo)
+        let load = status([script])
+        session.lastStatus = load
+        let overlay = mount(session: session, loader: { _, _, completion in completion(.success(load)) })
+
+        XCTAssertEqual(overlay.selectedFilePathForTesting, "release")
+
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline, spans(of: overlay.renderedDiffRowsForTesting).isEmpty {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        XCTAssertFalse(
+            spans(of: overlay.renderedDiffRowsForTesting).isEmpty,
+            "the shebang names bash, so the file must end up highlighted")
+    }
+
+    func test_extensionlessConfig_resolvesToPlainAndIsCachedSoItIsNotRetried() throws {
+        // The other half: a file with no shebang and no modeline resolves to nothing. It must be
+        // recorded as resolved-to-nil like any other unhighlightable file, or every re-render kicks a
+        // fresh git spawn for an answer that will not change.
+        let repo = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("zenterm-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: repo) }
+        try "[ZenTerm]\npath = ~/Dev/zen-term\n"
+            .write(to: repo.appendingPathComponent("workspaces"), atomically: true, encoding: .utf8)
+
+        let config = file("workspaces", text: "path = ~/Dev/zen-term")
+        let session = makeSession(repoRoot: repo)
+        let load = status([config])
+        session.lastStatus = load
+        let overlay = mount(session: session, loader: { _, _, completion in completion(.success(load)) })
+
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline, session.highlights.cached(config.highlightKey) == nil {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        guard let cached = session.highlights.cached(config.highlightKey) else {
+            return XCTFail("an unresolvable extensionless file should still be cached as resolved")
+        }
+        XCTAssertNil(cached, "no shebang and no modeline resolves to nil, not to spans")
+        XCTAssertFalse(overlay.renderedDiffRowsForTesting.isEmpty, "and it still paints, plain")
+    }
+
     func test_changedReload_dropsTheChangedFilesSpansButKeepsTheUnchangedOnes() {
         // A refresh that finds changed content must invalidate the spans of the file that *changed* —
         // they were computed from the old revision's blobs, so keeping them would paint stale colors on
