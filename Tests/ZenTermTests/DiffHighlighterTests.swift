@@ -116,6 +116,48 @@ final class DiffHighlighterTests: XCTestCase {
             "no shebang, no modeline — an ambiguous config resolves to nothing and renders plain")
     }
 
+    /// A real repo, so the old side resolves through `git show :path` rather than the working tree.
+    /// Returns nil when git isn't on the box, so the suite skips rather than fails.
+    private func gitRepo(committing name: String, contents: String) throws -> URL? {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("zenterm-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try contents.write(to: root.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        for args in [
+            ["init", "--quiet"], ["config", "user.email", "t@example.com"], ["config", "user.name", "T"],
+            ["add", name], ["commit", "--quiet", "-m", "seed"],
+        ] {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = ["git"] + args
+            process.currentDirectoryURL = root
+            process.standardOutput = Pipe()
+            process.standardError = Pipe()
+            do { try process.run() } catch { return nil }
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return nil }
+        }
+        return root
+    }
+
+    func test_enrichSync_emptiedScript_stillHighlightsFromTheOldSide() throws {
+        // Emptying a file (content deleted, file kept) makes the new-side blob "" rather than absent.
+        // Sniffing that empty string resolves nothing, so the old side has to get a turn: it still
+        // carries the shebang, and it is the side the reader is looking at as removed lines.
+        guard let repo = try gitRepo(committing: "release", contents: "#!/bin/bash\nif true; then\n  echo hi\nfi\n")
+        else { throw XCTSkip("git unavailable") }
+        defer { try? FileManager.default.removeItem(at: repo) }
+        try "".write(to: repo.appendingPathComponent("release"), atomically: true, encoding: .utf8)
+        let file = FileDiff(path: "release", oldPath: nil, changeKind: .modified, hunks: [], scope: .unstaged)
+
+        let spans = DiffHighlighter.enrichSync(file: file, repoRoot: repo)
+
+        XCTAssertNotNil(spans, "the old blob's shebang still names bash")
+        XCTAssertTrue(
+            (spans?.old[2] ?? []).contains { $0.role == .keyword && $0.range.location == 0 },
+            "`if` should be a keyword at column 0 of the old side's line 2")
+    }
+
     // MARK: - Query predicates must actually gate their captures
 
     func test_swift_dottedAccessBase_isNotTaggedAsAType() throws {

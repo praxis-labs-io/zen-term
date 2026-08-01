@@ -61,6 +61,24 @@ final class DiffFilePrefetcherTests: XCTestCase {
         XCTAssertEqual(paths, ["bin/release"])
     }
 
+    func test_candidates_orderPathSupportedFilesAheadOfContentDetectableOnes() {
+        // The queue runs 4 git spawns at a time. Most extensionless files (LICENSE, CHANGELOG, .env)
+        // resolve to nothing, so letting a batch of them take every slot leaves the real source files
+        // cold, and a cold file takes the withhold path, which blanks the pane until its own fetch
+        // lands. Certainties first, maybes after.
+        let load = status(unstaged: [
+            file("LICENSE"), file("CHANGELOG"), file("A.swift"), file(".env"), file("B.ts"),
+        ])
+
+        let paths = DiffFilePrefetcher.candidates(
+            in: load, excluding: nil, store: DiffHighlightStore()
+        ).map(\.path)
+
+        XCTAssertEqual(
+            Array(paths.prefix(2)), ["A.swift", "B.ts"], "path-supported files must be queued first")
+        XCTAssertEqual(Set(paths.dropFirst(2)), ["LICENSE", "CHANGELOG", ".env"])
+    }
+
     func test_candidates_emptyWhenNothingToPrefetch() {
         XCTAssertTrue(DiffFilePrefetcher.candidates(in: status(), excluding: nil, store: DiffHighlightStore()).isEmpty)
     }

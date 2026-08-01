@@ -89,6 +89,68 @@ final class SyntaxLanguageTests: XCTestCase {
             SyntaxLanguage.resolve(path: "workspaces", content: "[ZenTerm]\npath = ~/Dev/zen-term\n"))
     }
 
+    func test_resolve_crlfShebang_resolvesViaTheBashAlias() {
+        // Swift treats "\r\n" as a *single* grapheme cluster, so splitting on "\n" doesn't split a
+        // CRLF file at all. The "first line" swallows the rest of the file and the interpreter token
+        // came out as `zsh\r\necho`. Split on `isNewline` and tokenize on `isWhitespace` instead.
+        XCTAssertNotNil(
+            SyntaxLanguage.resolve(path: "bin/setup", content: "#!/bin/zsh\r\necho hi\r\n"),
+            "a CRLF-authored zsh script must still resolve")
+        XCTAssertNotNil(
+            SyntaxLanguage.resolve(path: "bin/setup", content: "#!/usr/bin/env zsh\r\necho hi\r\n"))
+    }
+
+    func test_resolve_zshExtension_resolvesViaTheBashAlias() {
+        // `.zsh` is the commonest way a zsh file is named, and CodeEditLanguages' bash definition
+        // lists `sh`/`bash` only. Without the alias reaching unknown *extensions*, `setup.zsh` renders
+        // plain while the extensionless `setup` with the same shebang highlights.
+        XCTAssertNotNil(SyntaxLanguage.resolve(path: "setup.zsh"))
+        XCTAssertTrue(SyntaxLanguage.isSupported(path: "setup.zsh"))
+    }
+
+    func test_mayHighlight_matchesTheDisjunctionItReplaces() {
+        // It is written in reduced form to evaluate `isSupported` once, so the equivalence is the thing
+        // that can silently break: drift here either stalls a file on the withhold path or refuses one
+        // that would have highlighted.
+        for path in [
+            "Foo.swift", "run.sh", "setup.zsh", "bin/release", ".zshrc", "notes.xyzzy", "Makefile",
+            "workspaces", "app.ts",
+        ] {
+            XCTAssertEqual(
+                SyntaxLanguage.mayHighlight(path: path),
+                SyntaxLanguage.isSupported(path: path) || SyntaxLanguage.isContentDetectable(path: path),
+                "mayHighlight must equal the disjunction for \(path)")
+        }
+    }
+
+    func test_detectionBuffers_areBoundedForAHugeSingleLineBlob() {
+        // The buffers exist to carry a shebang and a modeline, not the file. A blob with no newline at
+        // all (a minified bundle) used to hand the whole string to the modeline regexes, ahead of the
+        // 256 KB parse ceiling that was supposed to bound highlight work.
+        let huge = String(repeating: "x", count: 4 * 1024 * 1024)
+        let (prefix, suffix) = SyntaxLanguage.detectionBuffers(huge)
+        XCTAssertLessThan(prefix?.count ?? 0, 64 * 1024, "the prefix buffer must not be the whole blob")
+        XCTAssertLessThan(suffix?.count ?? 0, 64 * 1024, "the suffix buffer must not be the whole blob")
+    }
+
+    func test_detectionBuffers_stillCarryAShebangAndATrailingModeline() {
+        // Bounding the buffers must not cost the two signals they exist for. The body has to clear the
+        // budget at both ends, or the whole blob comes back as the prefix and the suffix is never
+        // exercised.
+        let content = "#!/bin/bash\n" + String(repeating: "echo hi\n", count: 4000) + "# -*- mode: sh -*-\n"
+        let (prefix, suffix) = SyntaxLanguage.detectionBuffers(content)
+        XCTAssertTrue(prefix?.hasPrefix("#!/bin/bash") ?? false, "the shebang must survive the bound")
+        XCTAssertTrue(suffix?.contains("mode: sh") ?? false, "a trailing modeline must survive the bound")
+    }
+
+    func test_detectionBuffers_shortBlobIsCarriedWhole() {
+        // Under the budget there is nothing to trim, and the modeline detection reads the prefix first,
+        // so a small file needs no suffix at all.
+        let (prefix, suffix) = SyntaxLanguage.detectionBuffers("#!/bin/bash\necho hi\n")
+        XCTAssertEqual(prefix, "#!/bin/bash\necho hi\n")
+        XCTAssertNil(suffix)
+    }
+
     func test_resolve_withoutContent_stillAnswersFromThePathAlone() {
         XCTAssertNotNil(SyntaxLanguage.resolve(path: "Foo.swift"))
         XCTAssertNil(SyntaxLanguage.resolve(path: "bin/release"))

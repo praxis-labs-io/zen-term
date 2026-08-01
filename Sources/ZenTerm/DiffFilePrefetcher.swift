@@ -66,13 +66,26 @@ final class DiffFilePrefetcher {
     /// no extension stays in: its blob may still name a language via a shebang or modeline (ZEN-329).
     /// Keyed by `highlightKey`, so the same path in two slices is two distinct candidates. Pure, so the
     /// filtering is unit-testable without spawning git.
+    ///
+    /// **Certainties first, maybes after.** The queue runs `maxConcurrency` git spawns at a time, and
+    /// most extensionless files (LICENSE, CHANGELOG, .env) resolve to nothing. Left interleaved, a batch
+    /// of them takes every slot and the real source files stay cold, which is the one thing this class
+    /// exists to prevent: a cold file takes the withhold path and blanks the pane until its own fetch
+    /// lands. Appending to two lists keeps each group in slice order, which `sort` would not: Swift's
+    /// sort is not stable.
     static func candidates(
         in status: GitDiffRunner.StatusLoad, excluding selectedKey: String?, store: DiffHighlightStore
     ) -> [FileDiff] {
-        (status.unstaged + status.staged + status.committed).filter { file in
-            file.highlightKey != selectedKey && store.cached(file.highlightKey) == nil
-                && (SyntaxLanguage.isSupported(path: file.path)
-                    || SyntaxLanguage.isContentDetectable(path: file.path))
+        var certain: [FileDiff] = []
+        var possible: [FileDiff] = []
+        for file in status.unstaged + status.staged + status.committed {
+            guard file.highlightKey != selectedKey, store.cached(file.highlightKey) == nil else { continue }
+            if SyntaxLanguage.isSupported(path: file.path) {
+                certain.append(file)
+            } else if SyntaxLanguage.isContentDetectable(path: file.path) {
+                possible.append(file)
+            }
         }
+        return certain + possible
     }
 }
