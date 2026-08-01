@@ -723,6 +723,57 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             "the band has to be redrawn against the new cell size")
     }
 
+    func test_aFontStepKeepsTheBandOnTheLineItWasReading() throws {
+        // A font step changes the cell size in both directions at once: the grid gains or loses
+        // rows and the text rewraps into them, so the row INDEX the band held now names a different
+        // line. Holding the index is what moved the band off the line the reader was on.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the seq command")
+
+        controller.applySessionFontSize()
+        // The reflow: a smaller font fits three more rows, so everything on screen slid down.
+        var reflowed = Array(repeating: "", count: 24)
+        for (offset, text) in surface.rows.enumerated() where offset + 3 < 24 {
+            reflowed[offset + 3] = text
+        }
+        surface.rows = reflowed
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 200, offset: 176, viewport: 24))
+
+        XCTAssertEqual(
+            controller.scrollMode.cursorRow, 5, "the band follows the line, not the row number")
+    }
+
+    func test_aReflowThatLosesTheLineLeavesTheBandWhereItIs() throws {
+        // Nothing to re-find is not a reason to jump. A line scrolled off by the reflow leaves the
+        // index as the only answer there is.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+
+        controller.applySessionFontSize()
+        surface.rows = Array(repeating: "", count: 24)
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 200, offset: 176, viewport: 24))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2)
+    }
+
     // MARK: helpers
 
     private func keyDown(

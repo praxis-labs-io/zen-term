@@ -95,6 +95,7 @@ final class ScrollModeController {
         sawG = false
         selection = nil
         lastPosition = nil
+        pendingAnchorLine = nil
         isActive = true
         invalidateRows()
         Log.info("scroll mode entered", category: .panes)
@@ -126,6 +127,7 @@ final class ScrollModeController {
         sawG = false
         selection = nil
         lastPosition = nil
+        pendingAnchorLine = nil
         invalidateRows()
         panel?.modeMeta = nil
         panel?.setScrollCursor(nil) { nil }
@@ -157,10 +159,36 @@ final class ScrollModeController {
     /// Re-place the overlay against the grid's current geometry. For a change that moves the cell
     /// size without moving a view's frame, which is what a font step is: no layout pass runs, so
     /// the overlay never hears about it on its own.
+    ///
+    /// It also remembers the line the cursor is reading, because holding the row *index* across a
+    /// font step is what moves the band onto different text. A step changes the cell size in both
+    /// directions at once: the grid gets more or fewer rows, and the text rewraps into them, so
+    /// viewport row 11 is a different line afterward. No coordinate survives that. The content
+    /// does, and it is what the reader meant by "where I am".
     func refreshGeometry() {
         guard isActive else { return }
+        let line = rowText(cursor.row)
+        pendingAnchorLine = Self.isBlank(line) ? nil : line
         invalidateRows()  // a different cell size means different rows
         refreshCursor()
+    }
+
+    /// The line the cursor was on when the geometry last moved, held until the terminal reports
+    /// the grid it reflowed into. Nil when there is nothing to re-find: a blank row has no content
+    /// to identify it by, so the index is all there is and it stays put.
+    private var pendingAnchorLine: String?
+
+    /// Put the cursor back on `line` after a reflow, or leave it where it is if the line is gone.
+    ///
+    /// Nearest match wins. A prompt string repeats down the whole viewport, so an exact search from
+    /// the top would drag the cursor to the first prompt on screen every time the font changed.
+    private func reanchor(to line: String) {
+        var best: Int?
+        for row in 0...lastRow where rowText(row) == line {
+            if best.map({ abs(row - cursor.row) < abs($0 - cursor.row) }) ?? true { best = row }
+        }
+        guard let best else { return }
+        move(to: ScrollCell(row: best, column: cursor.column))
     }
 
     /// Whether `s` is the surface the mode is currently driving, so a caller holding a surface
@@ -498,6 +526,13 @@ final class ScrollModeController {
         guard isActive, isDriving(s) else { return }
         invalidateRows()  // output arrived, or a scroll landed
         lastPosition = position
+        // The first report after a geometry change is the reflowed grid. libghostty emits the
+        // scrollbar only from a draw, and only when it differs from the last one it sent, so a
+        // report that arrives here is one where the resize has already landed.
+        if let line = pendingAnchorLine {
+            pendingAnchorLine = nil
+            reanchor(to: line)
+        }
         updateHeader()
     }
 
