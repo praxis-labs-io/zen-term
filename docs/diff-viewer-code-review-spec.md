@@ -314,16 +314,30 @@ created when work starts.
 - Copy for any new label/toast/empty-state runs through `docs/brand-voice.md` first
   (no em-dashes, no hype, name the actor; confirmations state the consequence).
 
-## Linear scaffolding (the handoff session's first job)
+## Linear scaffolding
 
-The Linear MCP (`linear-zenterm`, ZenTerm team, key `ZEN`) was unauthenticated in
-the planning session, so nothing was created. A non-sandboxed session with Linear
-access should scaffold this before touching code. Address statuses and projects
-**by name, never a UUID** (`save_issue` takes `state:`/`project:` strings). Branch
-names come from each ticket's `gitBranchName` field **verbatim**. Reference the
-issue id in commits and PRs so Linear auto-links. **Create tickets as we go** is
-the standing rule, so create Phase 1's tickets now and Phases 2-3 when they start;
-the table below is the intended shape, not a backlog to dump up front.
+**Done, at the end of the planning session (2026-08-01).** The workspace now holds:
+
+- Project **Diff Viewer: Code Review** on the ZenTerm team, with milestones
+  `Local foundation`, `GitHub read`, `GitHub write`.
+- Labels `diff-viewer`, `persistence`, `github`.
+- Phase 1 tickets, all Backlog, blocked-by relations wired:
+  - **ZEN-334** = T1 Review model + persisted store (`zen-334-review-model-persisted-store`)
+  - **ZEN-335** = T2 Comment anchoring engine (`zen-335-comment-anchoring-engine`)
+  - **ZEN-336** = T4 Mark files as reviewed + review roll-up (`zen-336-mark-files-as-reviewed-review-roll-up`)
+  - **ZEN-337** = T3 Persist comments on send + request-changes kind (`zen-337-persist-comments-on-send-request-changes-kind`)
+  - **ZEN-338** = T5 Render persisted comments + gutter markers (`zen-338-render-persisted-comments-gutter-markers`)
+  - **ZEN-339** = T6 Send whole review to agent (`zen-339-send-whole-review-to-agent`)
+
+**Do not re-create any of these.** What remains for a later session: create the
+Phase 2 tickets (T7-T9) when GitHub read starts and Phase 3 (T10-T12) when GitHub
+write starts, per the create-as-we-go rule. Address statuses and projects **by
+name, never a UUID**. Branch names come from each ticket's `gitBranchName` field
+**verbatim** (Phase 1's are listed above). Reference the issue id in commits and
+PRs so Linear auto-links.
+
+The conventions and full ticket bodies below remain the source for the Phase 2-3
+creations and for implementing Phase 1.
 
 - **Epic = a Linear Project** (an epic is a Project, never a tracking issue). Name
   it e.g. `Diff Viewer: Code Review`. Task tickets belong directly to it.
