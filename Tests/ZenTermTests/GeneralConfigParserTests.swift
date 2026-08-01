@@ -248,6 +248,39 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.floats.map(\.id), ["b", "c", "a"])
     }
 
+    // MARK: hide-toolbar-buttons (ZEN-327)
+
+    func test_hideToolbarButtons_absent_hidesNothing() {
+        XCTAssertEqual(parse("font-size = 14\n").hiddenToolbarButtons, [])
+    }
+
+    func test_hideToolbarButtons_parsesEverySlug() {
+        let config = parse(
+            "hide-toolbar-buttons = new-tab,split-h,split-v,bottom-drawer,right-drawer,"
+                + "focus-mode,command-palette,diff-viewer\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, Set(ToolbarButton.allCases))
+    }
+
+    func test_hideToolbarButtons_toleratesWhitespaceAndStrayCommas() {
+        let config = parse("hide-toolbar-buttons = split-h , ,diff-viewer,\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .diffViewer])
+        XCTAssertTrue(config.configDiagnostics.isEmpty)
+    }
+
+    func test_hideToolbarButtons_unknownSlug_diagnosesAndKeepsKnownOnes() {
+        let config = parse("hide-toolbar-buttons = split-h,zoom,diff-viewer\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .diffViewer])
+        XCTAssertEqual(
+            config.configDiagnostics,
+            [
+                ConfigDiagnostic(
+                    scope: .setting(key: "hide-toolbar-buttons"),
+                    problem: .invalidValue(
+                        got: "zoom",
+                        expected: ToolbarButton.allCases.map(\.rawValue).joined(separator: ", ")))
+            ])
+    }
+
     // MARK: config diagnostics (ZEN-7)
     //
     // The scalar/enum/float fallbacks used to log-and-drop with no trace a surface could show. Each

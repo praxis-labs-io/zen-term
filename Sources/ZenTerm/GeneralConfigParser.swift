@@ -96,6 +96,8 @@ enum GeneralConfigParser {
                 if let n = parseDouble(value, key, &diagnostics) {
                     config.maxDrawerFraction = CGFloat(clamp(n, 0.3, 0.95, key, &diagnostics))
                 }
+            case "hide-toolbar-buttons":
+                config.hiddenToolbarButtons = parseHiddenToolbarButtons(value, &diagnostics)
             case "reduce-motion":
                 if let r = parseReduceMotion(value, &diagnostics) { config.reduceMotion = r }
             case "diff-layout":
@@ -241,6 +243,30 @@ enum GeneralConfigParser {
             category: .config)
         diagnostics.append(invalid("accent-color", got: value, expected: expected))
         return nil
+    }
+
+    /// The `hide-toolbar-buttons` list: comma-separated `ToolbarButton` slugs. Empty segments
+    /// (trailing/doubled commas) pass silently; an unknown slug is dropped with a diagnostic while
+    /// the known slugs on the same line still apply. The expected-value list is built from
+    /// `ToolbarButton.allCases` rather than spelled out, mirroring `parseAccentSlot`.
+    private static func parseHiddenToolbarButtons(
+        _ value: String, _ diagnostics: inout [ConfigDiagnostic]
+    ) -> Set<ToolbarButton> {
+        var hidden: Set<ToolbarButton> = []
+        for raw in value.split(separator: ",") {
+            let slug = raw.trimmingCharacters(in: .whitespaces).lowercased()
+            guard !slug.isEmpty else { continue }
+            guard let button = ToolbarButton(rawValue: slug) else {
+                let expected = ToolbarButton.allCases.map(\.rawValue).joined(separator: ", ")
+                Log.warning(
+                    "GeneralConfig: `hide-toolbar-buttons` got unknown button `\(slug)` — ignored",
+                    category: .config)
+                diagnostics.append(invalid("hide-toolbar-buttons", got: slug, expected: expected))
+                continue
+            }
+            hidden.insert(button)
+        }
+        return hidden
     }
 
     private static func parseReduceMotion(
