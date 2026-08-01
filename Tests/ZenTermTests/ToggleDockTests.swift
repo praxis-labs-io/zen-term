@@ -117,4 +117,85 @@ final class ToggleDockTests: XCTestCase {
         // never scrolls away with the tabs.
         XCTAssertTrue(makeDock([]).hasNewTabButtonForTesting)
     }
+
+    // MARK: hidden buttons + divider grouping (ZEN-327)
+
+    private static let fixedDefault = [
+        "New tab", "│",
+        "Split horizontally", "Split vertically", "Toggle bottom drawer", "Toggle right drawer",
+        "Focus mode", "│",
+        "Command palette", "Diff viewer",
+    ]
+
+    func test_defaultLayout_groupsWithTwoDividers_noTrailingDivider() {
+        // No floats: the third divider must not dangle at the tail.
+        XCTAssertEqual(makeDock([]).visibleLayoutForTesting, Self.fixedDefault)
+    }
+
+    func test_floats_getTheirOwnDividerSeparatedGroup() {
+        XCTAssertEqual(
+            makeDock([float("dev")]).visibleLayoutForTesting,
+            Self.fixedDefault + ["│", "dev"])
+    }
+
+    func test_setHiddenButtons_hidesAndRestores() {
+        let dock = makeDock([])
+        dock.setHiddenButtons([.diffViewer, .splitVertical])
+        XCTAssertEqual(
+            dock.visibleLayoutForTesting,
+            [
+                "New tab", "│",
+                "Split horizontally", "Toggle bottom drawer", "Toggle right drawer", "Focus mode",
+                "│", "Command palette",
+            ])
+
+        dock.setHiddenButtons([])
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
+    }
+
+    func test_emptyMiddleGroup_collapsesToOneDivider() {
+        let dock = makeDock([])
+        dock.setHiddenButtons([.splitHorizontal, .splitVertical, .bottomDrawer, .rightDrawer, .focusMode])
+        XCTAssertEqual(
+            dock.visibleLayoutForTesting, ["New tab", "│", "Command palette", "Diff viewer"])
+    }
+
+    func test_hiddenFirstGroup_leavesNoLeadingDivider() {
+        let dock = makeDock([])
+        dock.setHiddenButtons([.newTab])
+        XCTAssertEqual(
+            dock.visibleLayoutForTesting,
+            [
+                "Split horizontally", "Split vertically", "Toggle bottom drawer",
+                "Toggle right drawer", "Focus mode", "│", "Command palette", "Diff viewer",
+            ])
+    }
+
+    func test_everyFixedButtonHidden_showsNothing_andFloatsStandAlone() {
+        let dock = makeDock([])
+        dock.setHiddenButtons(Set(ToolbarButton.allCases))
+        XCTAssertTrue(dock.visibleLayoutForTesting.isEmpty)
+
+        // A float alone gets no divider — there is nothing visible to its left.
+        dock.setToolFloats([float("dev")])
+        XCTAssertEqual(dock.visibleLayoutForTesting, ["dev"])
+    }
+
+    func test_hiddenNewTab_reportsNotMounted() {
+        // Guards the arrangedSubviews trap: a hidden arranged subview stays in the array, so the
+        // hook must read `isHidden`, not mere membership.
+        let dock = makeDock([])
+        dock.setHiddenButtons([.newTab])
+        XCTAssertFalse(dock.hasNewTabButtonForTesting)
+    }
+
+    func test_floatWithToolbarFalse_getsNoButton_andNoFloatDivider() {
+        var hidden = float("dev")
+        hidden.showsInToolbar = false
+        let dock = makeDock([hidden, float("top")])
+        XCTAssertEqual(dock.toolFloatButtonIDsForTesting, ["top"])
+
+        dock.setToolFloats([hidden])
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
+    }
 }

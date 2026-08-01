@@ -352,7 +352,8 @@ final class WindowController: NSObject {
             onPalette: { onPalette() }, onBottom: { onBottom() },
             onRight: { onRight() }, onZoom: { onZoom() },
             onDiffViewer: { onDiffViewer() },
-            toolFloats: ToolFloatCatalog.all, onToolFloat: { onToolFloat($0) })
+            toolFloats: ToolFloatCatalog.all, onToolFloat: { onToolFloat($0) },
+            hiddenButtons: GeneralConfig.current.hiddenToolbarButtons)
         super.init()
         nextTabID = 2
 
@@ -459,6 +460,9 @@ final class WindowController: NSObject {
                     self.dock.setToolFloats(ToolFloatCatalog.all)
                     self.dock.reapplyTheme()  // the rebuilt buttons bake their colors in at build time
                     self.renderDock()
+                }
+                if change.contains(.toolbarButtons) {
+                    self.dock.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
                 }
                 // An open palette re-renders its rows here, and it re-resolves the whole catalog to do
                 // it — so this tracks far more than a recolor. `.keymap` because a row's shortcut
@@ -1118,7 +1122,7 @@ final class WindowController: NSObject {
             return .terminal
         case "theme", "accent-color", "window-chrome", "backdrop-alpha", "window-gutter", "pane-gap",
             "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",
-            "reduce-motion", "diff-layout":
+            "reduce-motion", "diff-layout", "hide-toolbar-buttons":
             return .appearance
         case "agent-notifications", "automatic-update-checks":
             return .general
