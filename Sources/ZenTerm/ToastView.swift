@@ -72,7 +72,7 @@ final class ToastView: ShadowCardView {
         layer?.cornerRadius = 12
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         layer?.borderWidth = 1
-        layer?.borderColor = content.variant.border.cgColor  // neutral for info; tinted for warning/destructive
+        layer?.borderColor = FloatShadow.edge.cgColor
         FloatShadow.applyShadow(to: self)
 
         // Tinted icon badge (accent glyph on an accent-at-15% rounded square).
@@ -232,7 +232,7 @@ final class ToastView: ShadowCardView {
     /// otherwise stay stale until it's dismissed and replaced.
     func reapplyTheme() {
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        layer?.borderColor = variant.border.cgColor  // neutral for info; tinted for warning/destructive
+        layer?.borderColor = FloatShadow.edge.cgColor
         titleLabel.textColor = Self.titleColor
         messageLabel.textColor = Self.messageColor
         shortcutSlots.forEach { $0.reapplyTheme() }  // else the keycap ink goes stale on a theme swap

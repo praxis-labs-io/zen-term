@@ -2,8 +2,9 @@ import AppKit
 
 /// A toast's tone. Drives only the icon badge + accent color; the card's background,
 /// hairline border, and drop shadow stay the shared overlay-card chrome (`FloatShadow`),
-/// identical across variants. Accents come from the chrome theme (foam/gold/love under the
-/// Rosé Pine default).
+/// identical across variants: the icon and action buttons carry the tone, so the border
+/// stays neutral. Accents come from the chrome theme (foam/gold/love under the Rosé Pine
+/// default).
 enum ToastVariant: Equatable {
     case info, positive, warning, destructive
 
@@ -15,17 +16,6 @@ enum ToastVariant: Equatable {
         case .positive: return Theme.current.chrome.positive.nsColor
         case .warning: return Theme.current.chrome.warning.nsColor
         case .destructive: return Theme.current.chrome.destructive.nsColor
-        }
-    }
-
-    /// The card border. Info keeps the neutral overlay-card hairline; warning/destructive
-    /// take a tinted edge so the tone reads even before the text does.
-    var border: NSColor {
-        switch self {
-        case .info: return FloatShadow.edge
-        case .positive: return accent.withAlphaComponent(0.40)
-        case .warning: return accent.withAlphaComponent(0.40)
-        case .destructive: return accent.withAlphaComponent(0.50)
         }
     }
 
