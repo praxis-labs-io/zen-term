@@ -365,7 +365,7 @@ goes through the nil-guarded `activeController`.
 
 `WindowController` owns one window: its `TabList`, its
 `TabController`s, the toast presenter, the tool floats, the single modal slot, the
-tab bar, and the dock. `TabController` owns one tab: a
+tab bar, and the footer toolbar (`ToggleDock`). `TabController` owns one tab: a
 `PaneCanvasController` plus the two drawers.
 
 **Inactive tabs are detached but retained**, so their shells keep running. Only
@@ -594,7 +594,7 @@ then back to main with a parsed `[FileDiff]`. The model half (`DiffParser`, `Dif
 so the chrome never touches `Process` and the whole surface is drivable in a test
 without a repo. Opening is guarded upstream: a non-repo directory shows a toast and the
 overlay never mounts, so it always has a repo. Like the palette and floats it has no
-menu entry: chord + ⌘P + dock.
+menu entry: chord + ⌘P + toolbar.
 
 **Tool floats are window-level, not app-level**, because a surface is one `NSView`
 and can live in one view hierarchy: an app-global instance would physically yank
@@ -812,7 +812,7 @@ before re-resolving, diffs them, and carries a `ConfigChange` option set on the
 notification, so each observer runs only the blocks whose config actually changed.
 Settings live-apply is debounced at 180 ms, so typing in a numeric field posts about
 five times a second, and the ungated fan-out relaid out every tab, recolored every
-surface, and rebuilt the dock each time (~3.4 ms a post). Gated, a keybind rebind
+surface, and rebuilt the toolbar each time (~3.4 ms a post). Gated, a keybind rebind
 costs 0.8 ms and a gutter edit 0.4 ms.
 
 Those figures are **relative shape, not release timings**: they come from a debug
@@ -842,7 +842,7 @@ work. Before adding a kind or a call site, trace what it actually reads.
 **Default to the union gate.** `.theme || .keymap` costs a fraction of a
 millisecond, so a narrower gate needs a measured reason. Every bug the gating work
 produced came from gating too tightly for no measurable gain: the win is skipping
-the dock rebuild and the tab relayout, not shaving a keycap rebuild.
+the toolbar rebuild and the tab relayout, not shaving a keycap rebuild.
 
 **Two entries deliberately do not gate on the kind sharing their name, and both
 were regressions before they were comments.** `ConfigApplier` leaves

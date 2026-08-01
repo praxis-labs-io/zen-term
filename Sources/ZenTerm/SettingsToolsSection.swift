@@ -119,7 +119,8 @@ final class SettingsToolsSection: SettingsSection {
         }
 
         if floats.isEmpty {
-            let hint = NSTextField(labelWithString: "No tool floats yet. Add one to get a dock button and a shortcut.")
+            let hint = NSTextField(
+                labelWithString: "No tool floats yet. Add one to get a toolbar button and a shortcut.")
             hint.font = .systemFont(ofSize: 12)
             hint.textColor = Theme.current.chrome.ink(alpha: 0.5)
             hint.lineBreakMode = .byWordWrapping

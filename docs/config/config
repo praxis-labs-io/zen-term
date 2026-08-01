@@ -92,6 +92,14 @@
 # In-app Settings edit: applies live.
 # window-chrome = true                # true | false
 
+# Hide any of the footer toolbar's built-in buttons (bottom-right of the tab bar).
+# Comma-separated, any order. Hiding is visual only: every hidden button's
+# shortcut and palette entry stay live. Buttons, in toolbar order:
+#   new-tab, split-h, split-v, bottom-drawer, right-drawer, focus-mode,
+#   command-palette, diff-viewer
+# In-app Settings edit: applies live.
+# hide-toolbar-buttons =              # e.g. split-h,split-v,diff-viewer
+
 # Opacity of the on-brand tint over the behind-window blur. 1 = solid shell,
 # 0 = raw system blur showing your desktop through the whole window.
 # In-app Settings edit: applies live.
@@ -156,7 +164,7 @@
 
 # ─── Tool floats ─────────────────────────────────────────────────────────────
 #
-# Command overlays (dock button + command-palette entry + keybinding) whose
+# Command overlays (toolbar button + command-palette entry + keybinding) whose
 # process lifetime is set by `persist:` (default `none` = ephemeral, fresh every
 # open). There are NO built-in floats: define your own with `float = ` lines.
 # Repeat the key for as many as you like. A float's `key:` is the single source
@@ -168,9 +176,9 @@
 # "Open GitDash" -> open-gitdash.)
 #
 # Fields (whitespace-separated `field:value`; quote values with spaces):
-#   title    (required)  name in the palette, Settings, and the dock tooltip;
+#   title    (required)  name in the palette, Settings, and the toolbar tooltip;
 #                        must be unique, and must hold a letter or number
-#   order    (optional)  position in the dock, palette, and Settings (low to high)
+#   order    (optional)  position in the toolbar, palette, and Settings (low to high)
 #                        (default: the order the `float =` lines appear in here).
 #                        Settings writes these for you when you reorder with ⌥↑/⌥↓
 #   command  (required)  runs as `$SHELL -l -i -c <command>` at the focused cwd
@@ -192,6 +200,8 @@
 #                        every tab in the window, and its card stays up across a tab
 #                        switch. the instance dies when the tool quits on its own
 #                        (e.g. `q`); the next open is cold, not resumed
+#   toolbar  (optional)  false = no toolbar button; the shortcut     (default true)
+#                        and palette entry stay live
 #   icon     (optional)  SF Symbol name or bundled mark (github/git) (default square.on.square)
 #   width    (optional)  width as a fraction of the tab              (default 0.85)
 #   height   (optional)  height as a fraction of the tab            (default 0.85)

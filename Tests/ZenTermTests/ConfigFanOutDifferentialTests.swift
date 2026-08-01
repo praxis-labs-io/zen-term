@@ -87,6 +87,9 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         /// Same tab-bar exclusion, so a tooltip appearing under the cursor can't shift it.
         var text: [String]
         var dockFloatIDs: [String]
+        /// The toolbar's visible buttons and dividers left-to-right — the probe that catches a
+        /// `.toolbarButtons` gate skipping the hide/show re-apply (ZEN-327).
+        var dockLayout: [String]
         /// What each live surface was last handed. Nil means it was never told anything.
         var surfaces: [SurfaceAppearance?]
 
@@ -107,6 +110,7 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
             note("traffic lights hidden", trafficLightsHidden, other.trafficLightsHidden)
             note("backdrop tint", backdropTint, other.backdropTint)
             note("dock float buttons", dockFloatIDs, other.dockFloatIDs)
+            note("toolbar layout", dockLayout, other.dockLayout)
             // Listed rather than dumped: these run to hundreds of entries, and printing both whole
             // arrays produces a wall that hides the handful of views that actually moved.
             if colors != other.colors {
@@ -190,6 +194,8 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
             },
             text: stable.compactMap { ($0 as? NSTextField)?.stringValue },
             dockFloatIDs: views.compactMap { ($0 as? ToggleDock)?.toolFloatButtonIDsForTesting }
+                .flatMap { $0 },
+            dockLayout: views.compactMap { ($0 as? ToggleDock)?.visibleLayoutForTesting }
                 .flatMap { $0 },
             surfaces: surfaces.map { surface in
                 surface.lastAppearance.map { SurfaceAppearance(theme: $0.theme, behavior: $0.behavior) }
@@ -366,6 +372,13 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
                         requiresGitRepo: false, persist: .ephemeral,
                         toggle: Chord(command: true, shift: true, key: "n"))
                 ]
+            })
+    }
+
+    func test_hideToolbarButtons() throws {
+        try assertGateSkipsNothing(
+            Scenario(name: "hide-toolbar-buttons") {
+                $0.hiddenToolbarButtons = [.splitHorizontal, .diffViewer]
             })
     }
 

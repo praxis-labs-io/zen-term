@@ -145,7 +145,7 @@ enum GeneralConfigParser {
         return config
     }
 
-    /// Dock / palette / Settings order — one array, so all three surfaces stay in agreement. The key
+    /// Toolbar / palette / Settings order — one array, so all three surfaces stay in agreement. The key
     /// is the config `order:` with the float's line order as the tie-break: Swift's sort isn't stable,
     /// so two floats sharing an `order:` would otherwise be free to shuffle between launches.
     private static func sortedByOrder(_ floats: [ToolFloat]) -> [ToolFloat] {
