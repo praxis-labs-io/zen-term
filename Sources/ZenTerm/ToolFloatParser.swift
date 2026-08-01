@@ -125,7 +125,8 @@ enum ToolFloatParser {
             heightFraction: fraction(fields["height"], field: "height:", id: id, label: title, &diagnostics),
             requiresGitRepo: fields["git"]?.lowercased() == "true",
             persist: persistence(fields["persist"], id: id, label: title, &diagnostics),
-            toggle: toggle)
+            toggle: toggle,
+            showsInToolbar: toolbarVisibility(fields["toolbar"], id: id, label: title, &diagnostics))
         return (float, diagnostics)
     }
 
@@ -206,6 +207,25 @@ enum ToolFloatParser {
             return defaultPersist
         }
         return value
+    }
+
+    /// A float's `toolbar:` — false hides its toolbar button. The default is true, so garbage must
+    /// not fall through a `== "true"` comparison the way `git:` safely can: a typo'd `toolbar:fales`
+    /// would silently hide the button. Unknown values warn, surface, and keep the button shown.
+    private static func toolbarVisibility(
+        _ raw: String?, id: String, label: String, _ diags: inout [ConfigDiagnostic]
+    ) -> Bool {
+        guard let raw else { return true }
+        switch raw.lowercased() {
+        case "true": return true
+        case "false": return false
+        default:
+            Log.warning(
+                "GeneralConfig: float `\(id)` has unknown `toolbar:\(raw)` — showing the button",
+                category: .toolFloat)
+            diags.append(fieldInvalid(id, label, "toolbar:", got: raw, using: "true"))
+            return true
+        }
     }
 
     /// One home for the `dir:` grammar: tilde-expand + standardize raw text into the URL form

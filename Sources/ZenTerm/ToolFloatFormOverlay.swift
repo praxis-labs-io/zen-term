@@ -43,6 +43,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private let persistSegment = SegmentedControl(
         options: persistOptions.map(\.title), selectedIndex: 0
     ) { _ in }
+    private let toolbarSegment = SegmentedControl(options: ["Shown", "Hidden"], selectedIndex: 0) { _ in }
     private let dirPicker = DirectoryPickerField(placeholder: "Type a path, or Choose")
 
     private var titleGroup: LabeledField?
@@ -167,7 +168,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
         let controls: [ThemeReapplying] = [
             titleField, commandField, dirPicker, widthField, heightField, gitSegment,
-            persistSegment, cancelButton, submitButton, deleteButton,
+            persistSegment, toolbarSegment, cancelButton, submitButton, deleteButton,
         ]
         controls.forEach { $0.reapplyTheme() }
         chordChip.reapplyTheme()
@@ -262,6 +263,10 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         wireSegment(persistSegment)
         let persistGroup = Self.vStack([caption("KEEP RUNNING", required: false), persistSegment], spacing: 6)
 
+        // Hidden pulls the button from the toolbar; the shortcut and palette entry stay live.
+        wireSegment(toolbarSegment)
+        let toolbarGroup = Self.vStack([caption("TOOLBAR BUTTON", required: false), toolbarSegment], spacing: 6)
+
         cancelButton.onTap = { [weak self] in self?.onCancel() }
         submitButton.setTitle(editingFloat == nil ? "Add Tool Float" : "Save")
         submitButton.onTap = { [weak self] in self?.submit() }
@@ -305,7 +310,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
         let content = NSStackView(views: [
             header, titleGroup, iconGroup, chordGroup, commandGroup, dirGroup, sizeGroup,
-            gitGroup, persistGroup, footer,
+            gitGroup, persistGroup, toolbarGroup, footer,
         ])
         content.orientation = .vertical
         content.alignment = .leading
@@ -338,6 +343,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         if let index = Self.persistOptions.firstIndex(where: { $0.mode == float.persist }) {
             persistSegment.setSelection(index)  // programmatic sync must not fire onChange
         }
+        toolbarSegment.setSelection(float.showsInToolbar ? 0 : 1)
     }
 
     // MARK: chord capture
@@ -479,7 +485,8 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private func verticalStops() -> [NSView] {
         [
             titleField.field, iconPicker, chordChip, commandField.field,
-            dirPicker.field.field, widthField.field, gitSegment, persistSegment, submitButton,
+            dirPicker.field.field, widthField.field, gitSegment, persistSegment, toolbarSegment,
+            submitButton,
         ]
     }
 
@@ -568,7 +575,8 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             heightFraction: fraction(heightField),
             requiresGitRepo: gitSegment.selectedIndex == 1,
             persist: Self.persistOptions[persistSegment.selectedIndex].mode,
-            toggle: chord)
+            toggle: chord,
+            showsInToolbar: toolbarSegment.selectedIndex == 0)
     }
 
     /// A new float lands at the end of the dock; editing keeps the float's existing slot. Reads the

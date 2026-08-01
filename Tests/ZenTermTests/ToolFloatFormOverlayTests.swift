@@ -419,6 +419,42 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.submitted.first?.persist, .directory)
     }
 
+    func test_toolbarSegment_hiddenSelection_buildsHiddenFloat() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "Open GitDash").setText("dev")
+        field(in: overlay, placeholder: "npm run dev").setText("vim")
+        capture(novelChord, in: overlay, capturer)
+
+        segment(in: overlay, firstOption: "Shown").select(1)  // Hidden
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.showsInToolbar, false)
+    }
+
+    func test_toolbarSegment_untouched_buildsShown() {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "Open GitDash").setText("dev")
+        field(in: overlay, placeholder: "npm run dev").setText("vim")
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.showsInToolbar, true)
+    }
+
+    /// Editing a hidden-button float must prefill Hidden and keep it on an untouched save — the
+    /// same no-silent-flatten rule as `test_edit_prefillsPersistAndDir`.
+    func test_edit_prefillsHiddenToolbarSegment_andKeepsItOnSave() {
+        var existing = existingFloat(title: "dev")
+        existing.showsInToolbar = false
+        let (overlay, _, sink) = mount(editing: existing)
+        XCTAssertEqual(segment(in: overlay, firstOption: "Shown").selectedIndex, 1)
+
+        submit(in: overlay)
+
+        XCTAssertEqual(sink.submitted.first?.showsInToolbar, false)
+    }
+
     func test_persistSegment_untouched_buildsEphemeral() {
         let (overlay, capturer, sink) = mount()
         field(in: overlay, placeholder: "Open GitDash").setText("y")

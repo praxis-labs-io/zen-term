@@ -179,6 +179,16 @@ final class ConfigWriterTests: XCTestCase {
             ConfigWriter.serializeFloat(lean), "float = order:1 title:dev key:cmd+shift+d command:vim")
     }
 
+    /// `toolbar:` follows the omit-defaults rule: only a hidden button earns the token, and the
+    /// written line parses back to the same float.
+    func test_float_serialize_emitsToolbarFalse_andRoundTrips() throws {
+        var hidden = float(title: "dev", command: "vim", toggle: Chord(command: true, shift: true, key: "d"))
+        hidden.showsInToolbar = false
+        let line = ConfigWriter.serializeFloat(hidden)
+        XCTAssertEqual(line, "float = order:1 title:dev key:cmd+shift+d command:vim toolbar:false")
+        XCTAssertEqual(ToolFloatParser.parse(String(line.dropFirst("float = ".count))), hidden)
+    }
+
     func test_float_upsert_appendsWhenAbsent() throws {
         let dir = try makeTempDir()
         try seed("theme = x\n", in: dir)
