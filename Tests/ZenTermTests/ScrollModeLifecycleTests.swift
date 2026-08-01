@@ -705,6 +705,24 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertNil(board.string(forType: .string), "a reopened mode starts in normal mode")
     }
 
+    func test_aFontStepRedrawsTheBandThoughNothingAboutItMoved() throws {
+        // A font step changes the cell height without moving any view's frame, so no layout pass
+        // runs, and the overlay's own state (same cursor, same selection) is identical either way.
+        // Keying the redraw off that state leaves the band drawing at the old row height over text
+        // that just reflowed at the new one, which reads as a rounding error in the cell math.
+        let controller = makeWindow()
+        controller.handle(.toggleScrollMode)
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let overlay = panel.scrollCursorForTesting
+        let before = overlay.redrawRequestsForTesting
+
+        controller.applySessionFontSize()
+
+        XCTAssertGreaterThan(
+            overlay.redrawRequestsForTesting, before,
+            "the band has to be redrawn against the new cell size")
+    }
+
     // MARK: helpers
 
     private func keyDown(

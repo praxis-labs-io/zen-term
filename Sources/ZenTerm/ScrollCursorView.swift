@@ -27,9 +27,23 @@ final class ScrollCursorView: NSView {
     /// a resize or a font step is reflected without anything having to remember to push.
     var metrics: (() -> TerminalCellMetrics?)?
 
-    var state: State? {
-        didSet { if oldValue != state { needsDisplay = true } }
+    /// Assigned whole, and `redraw()` is what marks the view dirty rather than a `didSet` on this:
+    /// the geometry the overlay draws against moves without this value moving with it.
+    var state: State?
+
+    /// Ask for a repaint, and count the asks.
+    ///
+    /// The count is the only way a test can see this happen. A font step changes the cell size
+    /// without moving a view's frame or this view's `state`, so nothing observable about the
+    /// overlay differs between a redraw that was requested and one that was skipped, and
+    /// `needsDisplay` is no help: AppKit holds it true on a view that has never drawn, so it reads
+    /// as a pending repaint whether or not anyone asked for one.
+    func redraw() {
+        redrawRequestsForTesting += 1
+        needsDisplay = true
     }
+
+    private(set) var redrawRequestsForTesting = 0
 
     /// Top-down coordinates, matching how a terminal counts its rows. Without this every row
     /// index would have to be flipped against a row count that changes on resize.
@@ -41,7 +55,7 @@ final class ScrollCursorView: NSView {
 
     override func layout() {
         super.layout()
-        needsDisplay = true  // the row's frame is derived from metrics that just moved
+        redraw()  // the row's frame is derived from metrics that just moved
     }
 
     override func draw(_ dirtyRect: NSRect) {
