@@ -168,6 +168,47 @@ final class DiffViewerHighlightOrchestrationTests: WindowTestCase {
         XCTAssertNil(cached, "resolved-but-no-spans is cached as nil, not left absent")
     }
 
+    func test_extensionlessFile_paintsPlainImmediately_thenEnrichesWhenTheShebangResolves() throws {
+        // A file the path can't answer (no extension) must not take the withhold-paint path: most such
+        // files never resolve, so waiting would hold every config file's first paint to the safety cap.
+        // It paints plain at once, and the content pass (shebang) repaints it if a language lands
+        // (ZEN-329). The repaint is the silently-dead risk: if it stopped, scripts would stay plain
+        // forever and the suite would stay green.
+        let repo = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("zenterm-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: repo) }
+        try "#!/bin/bash\nif true; then\n  echo hi\nfi\n"
+            .write(to: repo.appendingPathComponent("release"), atomically: true, encoding: .utf8)
+
+        // An unstaged file's new side reads the working tree, so no git fixture is needed; the old
+        // side's `git show` fails in a bare directory and renders plain, which the shebang path allows.
+        let script = FileDiff(
+            path: "release", oldPath: nil, changeKind: .modified,
+            hunks: [
+                Hunk(
+                    header: "@@ -2,1 +2,1 @@", oldStart: 2, newStart: 2,
+                    lines: [DiffLine(kind: .context, oldLineNumber: 2, newLineNumber: 2, text: "if true; then")])
+            ])
+        let session = makeSession(repoRoot: repo)
+        let load = status([script])
+        session.lastStatus = load
+        let overlay = mount(session: session, loader: { _, _, completion in completion(.success(load)) })
+
+        XCTAssertEqual(overlay.selectedFilePathForTesting, "release")
+        XCTAssertFalse(
+            overlay.renderedDiffRowsForTesting.isEmpty,
+            "the first paint must land immediately — no cleared pane awaiting a content sniff")
+
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline, spans(of: overlay.renderedDiffRowsForTesting).isEmpty {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        XCTAssertFalse(
+            spans(of: overlay.renderedDiffRowsForTesting).isEmpty,
+            "the shebang names bash, so the enrichment repaint must carry spans")
+    }
+
     func test_changedReload_dropsTheChangedFilesSpansButKeepsTheUnchangedOnes() {
         // A refresh that finds changed content must invalidate the spans of the file that *changed* —
         // they were computed from the old revision's blobs, so keeping them would paint stale colors on

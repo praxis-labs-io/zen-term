@@ -49,6 +49,18 @@ final class DiffFilePrefetcherTests: XCTestCase {
         XCTAssertEqual(paths, ["A.swift"])
     }
 
+    func test_candidates_includeExtensionlessFiles_whichMayResolveFromContent() {
+        // An extensionless file can still resolve from its blob (shebang, modeline), so it must reach
+        // the highlight pass (ZEN-329). An unknown *extension* is a real answer and stays out.
+        let load = status(unstaged: [file("bin/release"), file("notes.xyzzy")])
+
+        let paths = DiffFilePrefetcher.candidates(
+            in: load, excluding: nil, store: DiffHighlightStore()
+        ).map(\.path)
+
+        XCTAssertEqual(paths, ["bin/release"])
+    }
+
     func test_candidates_emptyWhenNothingToPrefetch() {
         XCTAssertTrue(DiffFilePrefetcher.candidates(in: status(), excluding: nil, store: DiffHighlightStore()).isEmpty)
     }

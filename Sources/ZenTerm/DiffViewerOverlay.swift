@@ -1314,11 +1314,31 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             renderRows(file, spans: cached, keepingSelection: keepingSelection)
             return
         }
-        // Won't ever highlight (no repo on disk, or unsupported language) — plain now is the final state.
-        guard FileManager.default.fileExists(atPath: repoRoot.path), SyntaxLanguage.isSupported(path: file.path)
+        // Won't ever highlight (no repo on disk, or an extension no grammar claims) — plain now is the
+        // final state.
+        guard
+            FileManager.default.fileExists(atPath: repoRoot.path),
+            SyntaxLanguage.isSupported(path: file.path) || SyntaxLanguage.isContentDetectable(path: file.path)
         else {
             highlightStore.store(key, nil)
             renderRows(file, spans: nil, keepingSelection: keepingSelection)
+            return
+        }
+        if SyntaxLanguage.isContentDetectable(path: file.path) {
+            // The path can't answer but the blob might — a shebang or modeline (ZEN-329). Most such
+            // files are configs that never resolve, so the withhold path below would hold every one of
+            // them to the safety cap: paint plain now, and repaint only if the content pass lands a
+            // language. `keepingSelection` on the repaint because the reader may have moved by then.
+            renderRows(file, spans: nil, keepingSelection: keepingSelection)
+            highlightToken += 1
+            let token = highlightToken
+            DiffHighlighter.enrich(file: file, repoRoot: repoRoot) { [weak self] spans in
+                guard let self else { return }
+                self.highlightStore.store(key, spans)
+                guard spans != nil, token == self.highlightToken, self.currentFileDiff?.highlightKey == key
+                else { return }
+                self.renderRows(file, spans: spans, keepingSelection: true)
+            }
             return
         }
         // Supported + uncached: withhold the first paint until the highlight lands, so even a cold open

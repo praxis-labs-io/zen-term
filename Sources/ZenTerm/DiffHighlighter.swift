@@ -38,11 +38,37 @@ enum DiffHighlighter {
 
     /// The synchronous body of `enrich`, for a caller already off-main (the prefetch queue) that shouldn't
     /// pay for another dispatch. Resolve → fetch both sides → parse → map; nil if unsupported or no spans.
+    /// When the path alone can't answer, the blob's own content gets a turn: a shebang or modeline names
+    /// the language for an extensionless script (ZEN-329).
     static func enrichSync(file: FileDiff, repoRoot: URL) -> DiffFileSpans? {
-        guard let (language, query) = SyntaxLanguage.resolve(path: file.path) else { return nil }
-        let old = sideSpans(GitDiffRunner.blobText(for: file, side: .old, repoRoot: repoRoot), language, query)
-        let new = sideSpans(GitDiffRunner.blobText(for: file, side: .new, repoRoot: repoRoot), language, query)
-        return old.isEmpty && new.isEmpty ? nil : DiffFileSpans(old: old, new: new)
+        if let (language, query) = SyntaxLanguage.resolve(path: file.path) {
+            return fileSpans(
+                old: GitDiffRunner.blobText(for: file, side: .old, repoRoot: repoRoot),
+                new: GitDiffRunner.blobText(for: file, side: .new, repoRoot: repoRoot),
+                language, query)
+        }
+        guard SyntaxLanguage.isContentDetectable(path: file.path) else { return nil }
+        // Sniff the side that's on screen: the new blob, or the old one for a deletion. The old side
+        // is fetched lazily — when the sniff fails (most extensionless files are configs), the new
+        // side was the only git spawn paid.
+        let new = GitDiffRunner.blobText(for: file, side: .new, repoRoot: repoRoot)
+        let old = new == nil ? GitDiffRunner.blobText(for: file, side: .old, repoRoot: repoRoot) : nil
+        guard let (language, query) = SyntaxLanguage.resolve(path: file.path, content: new ?? old) else {
+            return nil
+        }
+        // `old` is only nil here when the new side existed, so the `??` fetch never repeats one.
+        return fileSpans(
+            old: old ?? GitDiffRunner.blobText(for: file, side: .old, repoRoot: repoRoot), new: new,
+            language, query)
+    }
+
+    /// Both sides parsed and mapped, or nil when neither produced spans — the caller leaves the file plain.
+    private static func fileSpans(
+        old: String?, new: String?, _ language: Language, _ query: Query
+    ) -> DiffFileSpans? {
+        let oldSpans = sideSpans(old, language, query)
+        let newSpans = sideSpans(new, language, query)
+        return oldSpans.isEmpty && newSpans.isEmpty ? nil : DiffFileSpans(old: oldSpans, new: newSpans)
     }
 
     /// Whether a blob is small enough to parse without tying up a slot: under the byte ceiling. A file

@@ -80,6 +80,42 @@ final class DiffHighlighterTests: XCTestCase {
             "`func` should be a keyword at column 0 of line 2")
     }
 
+    // MARK: - Extensionless files resolve from the blob's content (ZEN-329)
+
+    /// An unstaged file's new side reads the working tree directly, so a plain directory stands in for
+    /// the repo; the old side's `git show` fails there and renders plain, which is fine — the shebang
+    /// only needs one side.
+    private func workingTree(containing name: String, contents: String) throws -> URL {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("zenterm-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try contents.write(to: root.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        return root
+    }
+
+    func test_enrichSync_highlightsAnExtensionlessShebangScript() throws {
+        let repo = try workingTree(containing: "release", contents: "#!/bin/bash\nif true; then\n  echo hi\nfi\n")
+        defer { try? FileManager.default.removeItem(at: repo) }
+        let file = FileDiff(path: "release", oldPath: nil, changeKind: .added, hunks: [], scope: .unstaged)
+
+        let spans = DiffHighlighter.enrichSync(file: file, repoRoot: repo)
+
+        XCTAssertNotNil(spans, "the shebang names bash, so the blob must highlight")
+        XCTAssertTrue(
+            (spans?.new[2] ?? []).contains { $0.role == .keyword && $0.range.location == 0 },
+            "`if` should be a keyword at column 0 of line 2")
+    }
+
+    func test_enrichSync_leavesAnExtensionlessConfigPlain() throws {
+        let repo = try workingTree(containing: "workspaces", contents: "[ZenTerm]\npath = ~/Dev/zen-term\n")
+        defer { try? FileManager.default.removeItem(at: repo) }
+        let file = FileDiff(path: "workspaces", oldPath: nil, changeKind: .added, hunks: [], scope: .unstaged)
+
+        XCTAssertNil(
+            DiffHighlighter.enrichSync(file: file, repoRoot: repo),
+            "no shebang, no modeline — an ambiguous config resolves to nothing and renders plain")
+    }
+
     // MARK: - Query predicates must actually gate their captures
 
     func test_swift_dottedAccessBase_isNotTaggedAsAType() throws {

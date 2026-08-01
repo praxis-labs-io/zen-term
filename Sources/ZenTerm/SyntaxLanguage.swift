@@ -6,7 +6,8 @@ import SwiftTreeSitter
 /// Resolves a file path to a tree-sitter grammar + compiled highlight query (ZEN-239), and maps a
 /// query capture name to one of ZEN-238's `SyntaxRole`s. Thin façade over `CodeEditLanguages`, which
 /// bundles the grammars (incl. Swift) and their `highlights.scm` — so the engine never vendors a
-/// `parser.c`. Keyed off `FileDiff.path`'s extension.
+/// `parser.c`. Keyed off `FileDiff.path`'s extension (or well-known filename), with the blob's own
+/// shebang or modeline breaking the tie for an extensionless file (ZEN-329).
 enum SyntaxLanguage {
     /// Compiled-query cache, keyed by tree-sitter grammar name. `resolve` runs on concurrent background
     /// queues — one per prefetching file — and compiling a `Query` means loading `highlights.scm` off
@@ -19,16 +20,69 @@ enum SyntaxLanguage {
     private static var cache: [String: (language: Language, query: Query)?] = [:]
 
     /// The grammar + highlight query for a path, or nil when the language isn't supported (or has no
-    /// bundled query) — the caller renders that file plain.
+    /// bundled query) — the caller renders that file plain. `content` is the blob's text, when the
+    /// caller has it: it feeds shebang and modeline detection for a path the extension table can't
+    /// answer (ZEN-329). Never sniffed beyond those two signals — an ambiguous key=value config maps
+    /// to no grammar correctly, so it deliberately stays plain.
     ///
     /// The grammar comes from `CodeEditLanguages` (the linked tree-sitter parser), but the highlight
     /// query is loaded from *our* resource bundle: `CodeEditLanguages`' own query loader builds its
     /// `Bundle.module` path wrong under terminal-native SwiftPM (a doubled `Resources/Resources`), and
     /// the app already avoids `Bundle.module` for exactly this class of bug (`ZenTermResources`).
-    static func resolve(path: String) -> (language: Language, query: Query)? {
-        let code = CodeLanguage.detectLanguageFrom(url: URL(fileURLWithPath: path))
+    static func resolve(path: String, content: String? = nil) -> (language: Language, query: Query)? {
+        let (prefix, suffix) = detectionBuffers(content)
+        var code = CodeLanguage.detectLanguageFrom(
+            url: URL(fileURLWithPath: path), prefixBuffer: prefix, suffixBuffer: suffix)
+        if code.id == .plainText, let prefix, let aliased = aliasedInterpreterLanguage(prefix) {
+            code = aliased
+        }
         guard code.id != .plainText, let language = code.language else { return nil }
         return resolvedQuery(tsName: code.tsName, language: language)
+    }
+
+    /// Whether the path alone can't answer but the blob's content might: no extension, so a shebang
+    /// or modeline is the only signal. These files paint plain immediately and enrich if detection
+    /// lands — never the withhold-paint path, which would hold every extensionless config file's
+    /// first paint to the safety cap. A path with an *unknown* extension is not detectable: the
+    /// extension is a real answer, and it says plain.
+    static func isContentDetectable(path: String) -> Bool {
+        URL(fileURLWithPath: path).pathExtension.isEmpty && !isSupported(path: path)
+    }
+
+    /// The first and last few lines of the blob, sized for the two content signals: a shebang is
+    /// line 1, and editors keep modelines within the first or last handful of lines.
+    private static let detectionLineCount = 5
+
+    private static func detectionBuffers(_ content: String?) -> (prefix: String?, suffix: String?) {
+        guard let content else { return (nil, nil) }
+        let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
+        let prefix = lines.prefix(detectionLineCount).joined(separator: "\n")
+        let suffix =
+            lines.count > detectionLineCount
+            ? lines.suffix(detectionLineCount).joined(separator: "\n") : nil
+        return (prefix, suffix)
+    }
+
+    /// Interpreters `CodeEditLanguages`' shebang tables don't list, mapped to the grammar that parses
+    /// them: zsh is close enough to bash that its grammar highlights a zsh script correctly. The
+    /// dependency's tables aren't ours to edit, so the shim lives here.
+    private static let interpreterAliases: [String: CodeLanguage] = ["zsh": .bash]
+
+    /// Resolve `#!/bin/zsh` and `#!/usr/bin/env zsh` shapes the package's own matcher misses. Mirrors
+    /// its parse: the interpreter is the first token's last path component, or after `env`, the next
+    /// token that isn't an option (`-S`) or an assignment (`FOO=bar`).
+    private static func aliasedInterpreterLanguage(_ prefix: String) -> CodeLanguage? {
+        guard let firstLine = prefix.split(separator: "\n").first, firstLine.hasPrefix("#!") else { return nil }
+        let tokens = firstLine.dropFirst(2).split(whereSeparator: { $0 == " " || $0 == "\t" })
+        guard var interpreter = tokens.first?.split(separator: "/").last else { return nil }
+        if interpreter == "env" {
+            guard
+                let next = tokens.dropFirst().first(where: { !$0.hasPrefix("-") && !$0.contains("=") }),
+                let name = next.split(separator: "/").last
+            else { return nil }
+            interpreter = name
+        }
+        return interpreterAliases[interpreter.lowercased()]
     }
 
     /// Get-or-create the cached grammar/query pair, compiling on a miss. Holds `cacheLock` across the

@@ -55,6 +55,56 @@ final class SyntaxLanguageTests: XCTestCase {
         XCTAssertNil(SyntaxLanguage.resolve(path: "noextension"))
     }
 
+    // MARK: - Content detection for extensionless files (ZEN-329)
+
+    func test_resolve_shebang_resolvesAnExtensionlessScript() {
+        XCTAssertNotNil(
+            SyntaxLanguage.resolve(path: "bin/release", content: "#!/bin/bash\necho hi\n"),
+            "a bash shebang should resolve a script with no extension")
+    }
+
+    func test_resolve_envShebang_resolvesTheInterpreterAfterEnv() {
+        XCTAssertNotNil(
+            SyntaxLanguage.resolve(path: "bin/lint", content: "#!/usr/bin/env python3\nprint(1)\n"),
+            "env shebangs carry the interpreter as the next token")
+    }
+
+    func test_resolve_zshShebang_resolvesViaTheBashAlias() {
+        // CodeEditLanguages' tables know `sh` and `bash` but not `zsh`; the alias shim covers it,
+        // since the dependency's tables aren't ours to edit.
+        XCTAssertNotNil(SyntaxLanguage.resolve(path: "bin/setup", content: "#!/bin/zsh\necho hi\n"))
+        XCTAssertNotNil(SyntaxLanguage.resolve(path: "bin/setup", content: "#!/usr/bin/env zsh\necho hi\n"))
+    }
+
+    func test_resolve_emacsModeline_resolvesAnExtensionlessFile() {
+        XCTAssertNotNil(
+            SyntaxLanguage.resolve(path: "postinstall", content: "# -*- mode: python -*-\nprint(1)\n"),
+            "an Emacs modeline names the language when the path can't")
+    }
+
+    func test_resolve_keyValueConfigContent_staysPlain() {
+        // Deliberately no content-shape sniffing: an ambiguous key=value config maps to no grammar
+        // correctly (unquoted values are TOML parse errors), so plain is the right answer.
+        XCTAssertNil(
+            SyntaxLanguage.resolve(path: "workspaces", content: "[ZenTerm]\npath = ~/Dev/zen-term\n"))
+    }
+
+    func test_resolve_withoutContent_stillAnswersFromThePathAlone() {
+        XCTAssertNotNil(SyntaxLanguage.resolve(path: "Foo.swift"))
+        XCTAssertNil(SyntaxLanguage.resolve(path: "bin/release"))
+    }
+
+    func test_isContentDetectable_onlyForExtensionlessUnsupportedPaths() {
+        XCTAssertTrue(SyntaxLanguage.isContentDetectable(path: "bin/release"))
+        XCTAssertTrue(SyntaxLanguage.isContentDetectable(path: ".zshrc"), "a dotfile has no extension")
+        XCTAssertFalse(
+            SyntaxLanguage.isContentDetectable(path: "Foo.swift"),
+            "a path-supported file takes the withhold-paint path instead")
+        XCTAssertFalse(
+            SyntaxLanguage.isContentDetectable(path: "notes.xyzzy"),
+            "an unknown extension is a real answer: plain, no content pass")
+    }
+
     func test_role_mapsCaptureHeadComponentToRole() {
         XCTAssertEqual(SyntaxLanguage.role(forCapture: ["keyword", "function"]), .keyword)
         XCTAssertEqual(SyntaxLanguage.role(forCapture: ["string"]), .string)

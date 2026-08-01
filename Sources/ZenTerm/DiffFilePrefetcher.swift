@@ -62,15 +62,17 @@ final class DiffFilePrefetcher {
     }
 
     /// The files worth prefetching: every changed file across the three slices except the selected one
-    /// (foreground-fetched), files already resolved in the store, and unsupported languages. Keyed by
-    /// `highlightKey`, so the same path in two slices is two distinct candidates. Pure, so the filtering
-    /// is unit-testable without spawning git.
+    /// (foreground-fetched), files already resolved in the store, and unsupported languages. A file with
+    /// no extension stays in: its blob may still name a language via a shebang or modeline (ZEN-329).
+    /// Keyed by `highlightKey`, so the same path in two slices is two distinct candidates. Pure, so the
+    /// filtering is unit-testable without spawning git.
     static func candidates(
         in status: GitDiffRunner.StatusLoad, excluding selectedKey: String?, store: DiffHighlightStore
     ) -> [FileDiff] {
         (status.unstaged + status.staged + status.committed).filter { file in
             file.highlightKey != selectedKey && store.cached(file.highlightKey) == nil
-                && SyntaxLanguage.isSupported(path: file.path)
+                && (SyntaxLanguage.isSupported(path: file.path)
+                    || SyntaxLanguage.isContentDetectable(path: file.path))
         }
     }
 }
