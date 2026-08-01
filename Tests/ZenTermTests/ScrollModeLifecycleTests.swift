@@ -769,6 +769,20 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 2)
     }
 
+    func test_theModeRendersTheTerminalUnfocusedAndGivesItBackOnExit() throws {
+        // The shell takes no keys while the mode is up, so its blinking cursor competes with the
+        // mode's own. Left focused it blinks through the whole session; left unfocused after the
+        // mode ends, the pane you are typing into has a dead cursor and nothing says why.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+
+        controller.handle(.toggleScrollMode)
+        XCTAssertEqual(surface.focusRenders.last, false)
+
+        controller.handle(.toggleScrollMode)
+        XCTAssertEqual(surface.focusRenders.last, true)
+    }
+
     // MARK: helpers
 
     private func keyDown(

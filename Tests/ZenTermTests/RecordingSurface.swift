@@ -73,6 +73,11 @@ final class RecordingSurface: NSObject, TerminalSurface {
         focusCount += 1
     }
     func terminate() { terminated = true }
+    /// Every `setFocused` push, in order. Distinct from `isFocused`, which `focus()` drives and
+    /// nothing clears: this is how the surface was told to *render*, which is what a mode holding
+    /// the keyboard over a still-focused pane changes.
+    private(set) var focusRenders: [Bool] = []
+    func setFocused(_ focused: Bool) { focusRenders.append(focused) }
     /// Records paste text so a test can assert a ⌘V was (or was not) routed into a surface — the
     /// discriminator for "did the modal card swallow paste, or did it fall through to the terminal".
     private(set) var pastes: [String] = []

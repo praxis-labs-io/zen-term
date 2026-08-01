@@ -320,6 +320,12 @@ final class PaneCanvasController: NSObject {
         }
     }
 
+    /// Render the focused pane's surface as focused or not, **without moving focus**. For a mode
+    /// that holds the keyboard over a pane the chrome still considers focused.
+    func setFocusedSurfaceRendersFocused(_ focused: Bool) {
+        registry.surface(for: tree.focusedLeaf)?.setFocused(focused)
+    }
+
     /// Re-apply the live pane border / focus-halo colors to every built pane after a config
     /// change — no relaunch, no restructure.
     func reapplyChromeColors() {

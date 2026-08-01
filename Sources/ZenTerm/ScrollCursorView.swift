@@ -168,7 +168,7 @@ final class ScrollCursorView: NSView {
     // so the character it sits on still reads.
     private static let bandAlpha: CGFloat = 0.08
     private static let selectionAlpha: CGFloat = 0.16
-    private static let cursorFillAlpha: CGFloat = 0.55
+    private static let cursorFillAlpha: CGFloat = 0.8
     private static let flashPeakAlpha: CGFloat = 0.5
     private static let cornerRadius: CGFloat = 3
     private static let cursorRadius: CGFloat = 2
