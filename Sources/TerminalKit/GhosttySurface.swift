@@ -389,10 +389,18 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// the *only* thing that moves a surface's size once it has been called, and the chrome has to
     /// re-push after an `applyAppearance` rather than expect the theme's size to land.
     public func setFontSize(_ points: CGFloat) {
-        guard let surfacePtr else { return }
         lastFontSize = points
-        // libghostty parses the same action text a `keybind =` line carries.
-        let action = "set_font_size:\(points)"
+        performBindingAction("set_font_size:\(points)")
+    }
+
+    /// Perform one libghostty binding action on this surface by name.
+    ///
+    /// The action text is exactly what a `keybind =` line carries, and libghostty parses it the
+    /// same way, so anything in its surface-scope action list is reachable from here. A rejected
+    /// action is logged rather than thrown: every caller is a keystroke, and a keystroke that
+    /// does nothing is the right failure.
+    private func performBindingAction(_ action: String) {
+        guard let surfacePtr else { return }
         let performed = action.withCString {
             ghostty_surface_binding_action(surfacePtr, $0, UInt(action.utf8.count))
         }
@@ -666,10 +674,63 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         return String(cString: ptr)
     }
 
-    public func scrollToBottom() {
-        guard let surfacePtr else { return }
-        let action = "scroll_to_bottom"
-        _ = ghostty_surface_binding_action(surfacePtr, action, UInt(action.utf8.count))
+    /// The grid's geometry, converted out of libghostty's backing pixels into points.
+    ///
+    /// Every `_px` field is in the same units the chrome pushed through
+    /// `ghostty_surface_set_size`, which is `convertToBacking` of the view's bounds. So this
+    /// divides by the same backing scale to get back to the points AppKit lays views out in.
+    /// A zero cell height means the surface has not been sized yet, and reporting it would put a
+    /// zero-height band on the pane.
+    public var cellMetrics: TerminalCellMetrics? {
+        guard let surfacePtr else { return nil }
+        let size = ghostty_surface_size(surfacePtr)
+        guard size.cell_height_px > 0, size.cell_width_px > 0 else { return nil }
+        let scale = hostView.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+        return TerminalCellMetrics(
+            columns: Int(size.columns),
+            rows: Int(size.rows),
+            cellWidth: CGFloat(size.cell_width_px) / scale,
+            cellHeight: CGFloat(size.cell_height_px) / scale,
+            gridInset: GhosttyConfigWriter.gridInset)
+    }
+
+    /// The text on one viewport row.
+    ///
+    /// One row per call because `ghostty_surface_read_text` goes through `selectionString`, which
+    /// sets `unwrap = true` and joins soft-wrapped rows: a multi-row read comes back as logical
+    /// lines, so the caller's row index stops matching what it gets. A single-row selection has
+    /// nothing to unwrap into.
+    public func text(viewportRow row: Int) -> String? {
+        guard let surfacePtr, let metrics = cellMetrics, row >= 0, row < metrics.rows else { return nil }
+        var selection = ghostty_selection_s()
+        selection.top_left = Self.viewportPoint(x: 0, y: row)
+        selection.bottom_right = Self.viewportPoint(x: UInt32(max(metrics.columns - 1, 0)), y: row)
+        selection.rectangle = false
+        var text = ghostty_text_s()
+        guard ghostty_surface_read_text(surfacePtr, selection, &text) else { return nil }
+        defer { ghostty_surface_free_text(surfacePtr, &text) }
+        guard let ptr = text.text else { return nil }
+        return String(cString: ptr)
+    }
+
+    private static func viewportPoint(x: UInt32, y: Int) -> ghostty_point_s {
+        var point = ghostty_point_s()
+        point.tag = GHOSTTY_POINT_VIEWPORT
+        point.coord = GHOSTTY_POINT_COORD_EXACT
+        point.x = x
+        point.y = UInt32(max(y, 0))
+        return point
+    }
+
+    /// Positive `lines`/`pageFraction` scroll down in libghostty too (`Binding.zig`: "Positive
+    /// values scroll downwards"), so the seam's sign convention passes straight through.
+    public func scroll(_ command: TerminalScroll) {
+        switch command {
+        case .lines(let n): performBindingAction("scroll_page_lines:\(n)")
+        case .pageFraction(let f): performBindingAction("scroll_page_fractional:\(f)")
+        case .top: performBindingAction("scroll_to_top")
+        case .bottom: performBindingAction("scroll_to_bottom")
+        }
     }
 
     public func setSizeSyncSuspended(_ suspended: Bool) {
@@ -757,6 +818,16 @@ public final class GhosttySurface: NSObject, TerminalSurface {
                     "GhosttySurface: renderer unhealthy, pane may render black",
                     category: .surface)
             }
+            return true
+        case GHOSTTY_ACTION_SCROLLBAR:
+            // libghostty emits this whenever the viewport moves OR the buffer grows, so it
+            // arrives on ordinary output too, not only on a scroll. The chrome reads it to say
+            // where in the buffer scroll mode is sitting.
+            let bar = action.action.scrollbar
+            delegate?.surface(
+                self,
+                scrollPositionDidChange: TerminalScrollPosition(
+                    total: Int(bar.total), offset: Int(bar.offset), viewport: Int(bar.len)))
             return true
         default:
             return false

@@ -13,7 +13,8 @@ contract, and it is deliberately small. A surface is anything that can *be* a te
 chrome: it vends an `NSView`, a title, a cwd, a busy flag, and the background its
 program last reported, and it takes
 `start`, `focus`, `terminate`, `paste`, `copySelection`, `applyAppearance`,
-`setFontSize`.
+`setFontSize`, `scroll`, and it reports its grid geometry as `cellMetrics` so the
+chrome can draw on the grid rather than near it.
 
 **`setFontSize` is separate from `applyAppearance` on purpose.** Appearance travels
 as a whole theme through the app-global config, which on a file-configured backend
@@ -663,10 +664,32 @@ not from the near-invisible scale overshoot. Tying the fade to the spring's
 is the single most important thing to know when testing: a control's own `keyDown`
 test can be green while the key never reaches it in the running app.
 
-Order: capture mode (Settings recording) diverts and consumes everything, including
-bound chords. Otherwise `flagsChanged` passes through, and `keyDown` bails
-immediately if it carries no modifier (a reserved chord always has one) before
-allocating a `Chord`.
+Order, all of it in `KeyInterceptor.route(_:)` (factored out of the live monitor so
+it is unit-testable, the same reason `resolve(_:)` is): capture mode (Settings
+recording) diverts and consumes everything, including bound chords. Otherwise
+`flagsChanged` passes through; a `keyDown` carrying no modifier skips chord
+resolution without allocating a `Chord`, because a reserved chord always has one.
+Whatever no chord claimed is offered to `modeHandler`, and only then to the PTY.
+
+**`modeHandler` is the sticky-mode hook, and it sits *below* chord routing.** That
+placement is the design: a mode installed above it would swallow ⌘T, ⌘P and pane
+nav for as long as it was up. Below it, a mode still gets every un-reserved key,
+including the bare `j`/`k`/`g` that no chord is allowed to hold, while the user's
+own binds keep working inside the mode. It is installed only while a mode is live,
+so an idle app pays one nil check per keystroke.
+
+**`Route` distinguishes two ways of not consuming**, and collapsing them is a real
+bug rather than a tidiness question. `passThrough` means nothing claimed the key, so
+a mode may still take it. `deferToTerminal` means a chord *did* match and
+`passThroughGuard` handed it to the program on purpose (`Ctrl`-nav over an nvim
+pane), so nothing else may touch it. With one case, scroll mode ate the `⌃j` that was
+being handed to nvim, and the key did nothing at all.
+
+**A mode declines what the menu owns.** The monitor is local, so it runs before
+`NSApp.sendEvent` resolves menu key equivalents, and ⌘C/⌘V/⌘Q are menu items rather
+than reserved chords. A mode that consumed every unmapped key killed Copy and Quit
+for as long as it was up. A mode consumes an unmapped key only when it carries no
+⌘ or ⌥, which is exactly the set that would otherwise reach the shell as input.
 
 **`Chord` canonicalization** is the sharpest rule in the codebase. A shifted glyph
 folds onto its base key **only when Shift is set**, because
@@ -678,8 +701,9 @@ mislabel a chord, never invent one.**
 
 Defaults (`KeymapDefaults.map`): ⌘⇧\ and ⌘⇧- split, ⌘HJKL nav, ⌘⇧HJKL resize, ⌘W
 close pane, ⌘T new tab, ⌘N new window, ⌘[ ⌘] tabs, ⌘1-9 select, ⌘B bottom drawer,
-⌘\ right drawer, ⌘F Focus Mode, ⌘⇧F Fill Screen, ⌘P command palette, ⌘⇧P workspace
-picker, ⌘, settings, ⌘⌥R reload, ⌘= and ⌘+ and ⌘- font size, ⌘0 reset it.
+⌘\ right drawer, ⌘F Focus Mode, ⌘⇧F Fill Screen, ⌘⇧S scroll mode, ⌘P command
+palette, ⌘⇧P workspace picker, ⌘, settings, ⌘⌥R reload, ⌘= and ⌘+ and ⌘- font size,
+⌘0 reset it.
 **No tool float is built in**; a float's chord comes from its own `key:` field.
 
 **Increase ships two chords, and the second is load-bearing.** ⌘+ on a US layout is
@@ -740,6 +764,96 @@ is how Ctrl-hjkl died inside an nvim float (ZEN-270). The float path needs no vi
 check and no socket at all. A float mints no nav token and gets no `$ZEN_PANE`, so the
 plugin inside one degrades to plain `wincmd`, which is the right behavior for a modal
 surface with nowhere to hand off to.
+
+### Scroll mode
+
+⌘⇧S reads back through the focused panel's scrollback from the keyboard.
+`ScrollModeController` owns it, one per window, and it targets whichever panel held
+unified focus when it opened. It does not follow focus afterward.
+
+**It exists because the keys that should scroll a buffer are the shell's.** `j`,
+`k`, `⌃d` and `⌃u` cannot be reserved chords without taking them from every program
+in every pane, and libghostty's own ⌘Home/⌘PageUp defaults (live in ZenTerm, since
+the chrome never claims those chords) are fn-chords on a laptop that nothing in the
+UI mentions. A mode borrows the keys while it is up and gives them back on exit.
+
+`command(for:afterG:)` is a pure static over `NSEvent`, the same testable seam as
+`DiffPaneTable.vimKey(for:)`, and it reads shiftedness from the modifier flags
+rather than character case for the same Caps Lock reason. j/k step the cursor, ⌃d/⌃u
+move a half page, ⌃f/⌃b and space a page, gg/G the ends, { and } move by paragraph, and
+Esc/q/i leave. **Every key is consumed, mapped or not**: passing misses through would
+drop a stray keystroke into the shell behind the mode, which is worse than one that
+does nothing.
+
+**The cursor is the chrome's, drawn on the pane.** libghostty has no copy mode and no
+cursor outside the shell's own, so `ScrollCursorView` paints a translucent accent band
+on the current row, added last inside `PanelHostView.clip` and pinned to the terminal
+view rather than to the clip, so its row math is in the surface's own coordinates. It
+returns nil from `hitTest`, because the thing behind it is a live terminal that still
+has to take clicks and drag-selection.
+
+Geometry comes from `TerminalCellMetrics`, which `GhosttySurface` reads out of
+`ghostty_surface_size` **at draw time, never cached**: the row height moves with the
+font size and the row count with every resize. Two conversions matter. Every `_px`
+field is in the backing pixels the chrome pushed through `ghostty_surface_set_size`,
+so it divides by the backing scale to get points. And the grid does not start at the
+view's origin: libghostty insets it, leftover space that doesn't divide into a whole
+cell collects at the *far* edge, and `GhosttyConfigWriter` now emits
+`window-padding-x/y` explicitly rather than inheriting a default that could move on a
+pin bump and put every band a row out of true.
+
+`j`/`k` are `.step(±1)`, not `.scroll(.lines(±1))`, and the distinction is the feature:
+the cursor moves for the height of the viewport and the buffer only moves once the
+cursor is pinned at an edge. Scrolling on every `j` would drag the whole screen to
+track a marker that never moved.
+
+**The mode opens on the last written row of the viewport**, found by reading rows from
+the bottom up. Not the bottom of the pane, which on a half-filled screen is empty space
+below everything there is to read, and not the shell's cursor: `ghostty_surface_ime_point`
+reports that against the *live* screen with no account of scrolling, so a viewport the
+reader had already scrolled with the wheel put the band on an unrelated row.
+
+**The header goes up before the grid is measured.** A pane's header is hidden until a
+mode shows it, and showing it moves the content's top constraint down by its height, so
+the terminal loses a row or two and reflows. Measuring first put the band a row off the
+prompt, which is subtle enough to look like a rounding error in the cell math and is not
+one.
+
+**A move that names a destination puts the cursor on it**, rather than bringing it into
+view and leaving the cursor elsewhere. `gg`/`G` carry it to the ends.
+
+`{`/`}` are the chrome's own motion, not a backend call, and they have to be. libghostty's
+`jump_to_prompt` scrolls the viewport to a prompt **above** the screen, so it cannot reach
+any prompt you are looking at, and in a pane with no scrollback it does nothing at all while
+three prompts sit on screen. `ghostty.h` exposes no prompt marks (only a window-title action),
+so moving a cursor to a prompt is not expressible. Vim's `{`/`}` key off blank lines anyway,
+which are readable, and in a terminal a blank line is what separates one command's output from
+the next.
+
+So the motion walks the viewport: step past any blank rows the cursor already sits in, cross
+the block of text, land on the blank after it. `TerminalSurface.text(viewportRow:)` reads one
+row per call, because `read_text` goes through `selectionString` with `unwrap = true` and a
+multi-row read comes back as logical lines with the row index no longer matching. The walk
+stops at the first blank, so it is a handful of reads rather than one per row. Clamped to the
+viewport: a paragraph off-screen needs the buffer moved first, which is what the page keys do.
+
+A page move is the other case: it carries the cursor with the viewport, so your place on
+screen is kept.
+
+
+
+Below the seam each command is one `ghostty_surface_binding_action` string, and the
+signs match (`TerminalScroll.lines(1)` is down, as `scroll_page_lines:1` is).
+`GHOSTTY_ACTION_SCROLLBAR` feeds `scrollPositionDidChange` back up, which is what
+puts a live count in the pane header. It fires on output too, so the count stays
+right while a pane keeps printing.
+
+**The retractions are the load-bearing half.** The mode holds an app-global key
+handler, so one left up deafens whatever you switched to. It ends when pane focus
+moves (which covers pane close, split and tab switch, since all of them route
+through `restoreUnifiedFocus`), when a tool float or modal card takes the keyboard
+(neither moves pane focus, so neither fires the focus relay), and when the window
+resigns key. `end()` is idempotent, so overlapping triggers are free.
 
 ## Config
 

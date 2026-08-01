@@ -78,7 +78,38 @@ final class RecordingSurface: NSObject, TerminalSurface {
     private(set) var pastes: [String] = []
     func paste(_ text: String) { pastes.append(text) }
     func copySelection() -> String? { nil }
-    func scrollToBottom() {}
+    /// Records scroll commands so a test can assert which key produced which move, and that a
+    /// key outside scroll mode produced none.
+    private(set) var scrolls: [TerminalScroll] = []
+    func scroll(_ command: TerminalScroll) { scrolls.append(command) }
+
+    /// The grid this surface claims to have. Defaults to a 24-row viewport rather than nil, so a
+    /// test drives scroll mode's real cursor behavior: with no metrics the cursor is pinned to a
+    /// one-row grid and every step scrolls, which passes while proving nothing.
+    var cellMetrics: TerminalCellMetrics? = TerminalCellMetrics(
+        columns: 80, rows: 24, cellWidth: 8, cellHeight: 16, gridInset: 2)
+
+    /// The screen this surface claims to show, one entry per viewport row. Defaults to two
+    /// command blocks separated by a blank row, which is what paragraph motion moves between.
+    var rows: [String] = {
+        var rows = Array(repeating: "", count: 24)
+        rows[2] = "❯ seq 1 3"
+        rows[3] = "1"
+        rows[4] = "2"
+        rows[5] = "3"
+        rows[6] = ""  // the blank between blocks
+        rows[7] = "❯ echo hi"
+        rows[8] = "hi"
+        rows[9] = ""
+        rows[10] = "~/bin"
+        rows[11] = "❯"  // the prompt, and `cursorRow` above
+        return rows
+    }()
+
+    func text(viewportRow row: Int) -> String? {
+        guard rows.indices.contains(row) else { return nil }
+        return rows[row]
+    }
     /// Records a real Return keypress separately from pastes, so a test can assert submit went through
     /// the key path (a real Enter) rather than a bracketed `"\r"` paste that a TUI wouldn't act on.
     private(set) var submitCount = 0

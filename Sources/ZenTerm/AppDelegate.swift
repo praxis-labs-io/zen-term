@@ -228,6 +228,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let rect = NSRect(x: 0, y: 0, width: 900, height: 560).offsetBy(dx: offset, dy: -offset)
         let wc = WindowController(contentRect: rect, initialCWD: initialCWD)
         wc.keybindCapturer = keys
+        wc.keyModeHost = keys
         // The command palette dispatches through `handle(_:)`, where app-global chords are a no-op.
         // Hand them back to `route(_:)` so a palette pick reloads config / checks for updates too.
         wc.onAppGlobalCommand = { [weak self] chord in self?.route(chord) }

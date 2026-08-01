@@ -21,7 +21,7 @@ private final class SpySurface: TerminalSurface {
     func terminate() {}
     func paste(_ text: String) {}
     func copySelection() -> String? { nil }
-    func scrollToBottom() {}
+    func scroll(_ command: TerminalScroll) {}
 }
 
 private final class RecordingDelegate: TerminalSurfaceDelegate {
@@ -63,5 +63,30 @@ final class SeamTests: XCTestCase {
         let stub = SpySurface()
         TerminalSurfaceFactory.makeOverride = { stub }
         XCTAssertTrue(TerminalSurfaceFactory.make() is SpySurface)
+    }
+}
+
+/// Where a viewport row sits inside the surface view (ZEN-330). The chrome draws scroll mode's
+/// cursor band from this, and being one grid inset out puts every band a few pixels off the row
+/// it names. That is a budget the eye can't check against a moving terminal, so it is measured.
+final class TerminalCellMetricsTests: XCTestCase {
+    private let metrics = TerminalCellMetrics(
+        columns: 80, rows: 24, cellWidth: 8, cellHeight: 16, gridInset: 2)
+
+    func test_theFirstRowStartsAtTheGridInsetNotAtZero() {
+        // libghostty leaves blank space between the surface edge and the first cell. Placing row
+        // 0 at y=0 rides that high on every row in the grid.
+        XCTAssertEqual(metrics.rowFrame(0, width: 640), CGRect(x: 0, y: 2, width: 640, height: 16))
+    }
+
+    func test_eachRowIsOneCellFurtherDown() {
+        XCTAssertEqual(metrics.rowFrame(3, width: 640).origin.y, 2 + 3 * 16)
+        XCTAssertEqual(metrics.rowFrame(23, width: 640).origin.y, 2 + 23 * 16)
+    }
+
+    func test_aRowPastTheGridIsClampedIntoIt() {
+        // A resize can leave a stale row index behind for one pass; it must not draw off-grid.
+        XCTAssertEqual(metrics.rowFrame(99, width: 640), metrics.rowFrame(23, width: 640))
+        XCTAssertEqual(metrics.rowFrame(-4, width: 640), metrics.rowFrame(0, width: 640))
     }
 }

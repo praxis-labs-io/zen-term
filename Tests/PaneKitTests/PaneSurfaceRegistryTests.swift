@@ -16,7 +16,7 @@ private final class FakeSurface: NSObject, TerminalSurface {
     func terminate() { terminated = true }
     func paste(_ text: String) {}
     func copySelection() -> String? { nil }
-    func scrollToBottom() {}
+    func scroll(_ command: TerminalScroll) {}
 }
 
 final class PaneSurfaceRegistryTests: XCTestCase {

@@ -61,6 +61,73 @@ public struct TerminalCommandResult: Equatable {
     }
 }
 
+/// A move through the scrollback, expressed in the terminal's own units rather than pixels.
+///
+/// Lines and page fractions both take a signed amount where **positive scrolls down**, toward
+/// newer output. One vocabulary rather than a `scrollUp`/`scrollDown` pair because the caller
+/// is a vim-style keymap, where `j` and `k` differ only in that sign.
+public enum TerminalScroll: Equatable {
+    /// Whole lines. A backend clamps at the ends of the buffer.
+    case lines(Int)
+    /// A fraction of the visible grid's height, so a half page follows the pane's size
+    /// rather than a fixed count.
+    case pageFraction(Double)
+    case top, bottom
+}
+
+/// Where the viewport sits in the buffer, in lines: `total` rows exist, the viewport starts at
+/// `offset` and shows `viewport` of them. `offset + viewport == total` means resting at the
+/// bottom. Reported rather than polled, because the numbers move with output as well as with
+/// scrolling.
+public struct TerminalScrollPosition: Equatable {
+    public var total: Int
+    public var offset: Int
+    public var viewport: Int
+
+    public init(total: Int, offset: Int, viewport: Int) {
+        self.total = total
+        self.offset = offset
+        self.viewport = viewport
+    }
+
+    /// Rows of scrollback below the viewport's last line. Zero when resting at the bottom,
+    /// which is the distinction a reader needs and neither raw field states on its own.
+    public var linesBelow: Int { max(0, total - offset - viewport) }
+}
+
+/// Where a terminal's character grid sits inside its view, so the chrome can draw *on* the grid
+/// rather than near it. All lengths are in **points**, already divided out of whatever backing
+/// scale the backend works in, because the chrome positions AppKit views with them.
+///
+/// The chrome's scroll-mode cursor is what this exists for: a band on row `n` has to land on the
+/// row, and a value derived from the view's bounds instead of the terminal's own numbers is off
+/// by the grid inset plus whatever the row height rounds away.
+public struct TerminalCellMetrics: Equatable {
+    public var columns: Int
+    public var rows: Int
+    public var cellWidth: CGFloat
+    public var cellHeight: CGFloat
+    /// Blank space between the view's top-left and the first cell's. Leftover space that does not
+    /// divide into a whole cell collects at the far edge, not here, so this is the near inset only.
+    public var gridInset: CGFloat
+
+    public init(columns: Int, rows: Int, cellWidth: CGFloat, cellHeight: CGFloat, gridInset: CGFloat) {
+        self.columns = columns
+        self.rows = rows
+        self.cellWidth = cellWidth
+        self.cellHeight = cellHeight
+        self.gridInset = gridInset
+    }
+
+    /// The frame of one viewport row, in the surface view's coordinates with the origin at the
+    /// top. Clamped to the grid, so a stale row from before a resize cannot draw outside it.
+    public func rowFrame(_ row: Int, width: CGFloat) -> CGRect {
+        let clamped = min(max(row, 0), max(rows - 1, 0))
+        return CGRect(
+            x: 0, y: gridInset + CGFloat(clamped) * cellHeight, width: width, height: cellHeight)
+    }
+}
+
 /// Events flowing OUT of a surface, up into the chrome. Each backend translates
 /// its native callbacks into these.
 public protocol TerminalSurfaceDelegate: AnyObject {
@@ -103,6 +170,10 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     /// asynchronously (never synchronously inside `start`), so a consumer that dispatches
     /// on surface identity can rely on having finished wiring the surface into its state.
     func surfaceDidFailToStart(_ s: TerminalSurface)
+    /// The viewport moved within the buffer, or the buffer grew under it. Fires on output as
+    /// well as on `scroll(_:)`, so a chrome surface reading it stays right while a pane keeps
+    /// printing. A backend with no notion of a scrollback viewport never sends it.
+    func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition)
 }
 
 /// Default no-ops so a consumer implements only the events it cares about.
@@ -118,6 +189,7 @@ public extension TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, hoveredLinkDidChange url: String?) {}
     func surfaceWantsFocus(_ s: TerminalSurface) {}
     func surfaceDidFailToStart(_ s: TerminalSurface) {}
+    func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {}
 }
 
 /// The leaf contract. A backend is anything that can BE a terminal in our chrome.
@@ -197,7 +269,21 @@ public protocol TerminalSurface: AnyObject {
 
     func paste(_ text: String)
     func copySelection() -> String?
-    func scrollToBottom()
+
+    /// Move the viewport through the scrollback. The chrome's scroll mode is the caller: it owns
+    /// the keymap, and this is the whole of what it needs a terminal to do.
+    func scroll(_ command: TerminalScroll)
+
+    /// The grid's geometry right now, or nil from a backend that has no cells to report or has
+    /// not been laid out yet. Read at draw time rather than cached: it moves with the font size
+    /// and with every resize.
+    var cellMetrics: TerminalCellMetrics? { get }
+
+    /// The text on one viewport row, or nil for a row outside the grid or a backend that cannot
+    /// read its own screen. One row at a time on purpose: a backend that unwraps soft-wrapped
+    /// rows (libghostty does) collapses a multi-row read into fewer lines, and the row a caller
+    /// asked about stops being the line it gets back.
+    func text(viewportRow row: Int) -> String?
 
     /// Deliver a Return **keypress** to the shell — a real Enter, not a pasted `"\r"`. A pasted
     /// carriage return arrives inside bracketed paste, where a TUI (Claude Code, an editor) reads it
@@ -219,6 +305,12 @@ public extension TerminalSurface {
 
     /// Default nil: a backend with no dynamic-color path is always on the theme's background.
     var backgroundOverride: TerminalColor? { nil }
+
+    /// Default nil: a backend that can't report its grid geometry gets no chrome drawn on it.
+    var cellMetrics: TerminalCellMetrics? { nil }
+
+    /// Default nil: a backend that can't read its own screen supports no motion over its content.
+    func text(viewportRow row: Int) -> String? { nil }
 
     /// Default no-op: a backend that can't reconfigure live needs nothing here.
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {}
