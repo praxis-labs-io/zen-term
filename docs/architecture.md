@@ -14,7 +14,9 @@ chrome: it vends an `NSView`, a title, a cwd, a busy flag, and the background it
 program last reported, and it takes
 `start`, `focus`, `terminate`, `paste`, `copySelection`, `applyAppearance`,
 `setFontSize`, `scroll`, and it reports its grid geometry as `cellMetrics` so the
-chrome can draw on the grid rather than near it.
+chrome can draw on the grid rather than near it. It also reads its own screen back, a
+row at a time for motions (`text(viewportRow:)`) and a span at a time for a yank
+(`text(in:)`), which differ in whether soft-wrapped rows come back joined.
 
 **`setFontSize` is separate from `applyAppearance` on purpose.** Appearance travels
 as a whole theme through the app-global config, which on a file-configured backend
@@ -779,18 +781,22 @@ UI mentions. A mode borrows the keys while it is up and gives them back on exit.
 
 `command(for:afterG:)` is a pure static over `NSEvent`, the same testable seam as
 `DiffPaneTable.vimKey(for:)`, and it reads shiftedness from the modifier flags
-rather than character case for the same Caps Lock reason. j/k step the cursor, ⌃d/⌃u
-move a half page, ⌃f/⌃b and space a page, gg/G the ends, { and } move by paragraph, and
+rather than character case for the same Caps Lock reason. j/k step the cursor, h/l move
+a column, w/b/e move by word, 0/$ reach the ends of a row, ⌃d/⌃u move a half page, ⌃f/⌃b
+and space a page, gg/G the ends, { and } move by paragraph, v/V select, y copies, and
 Esc/q/i leave. **Every key is consumed, mapped or not**: passing misses through would
 drop a stray keystroke into the shell behind the mode, which is worse than one that
 does nothing.
 
 **The cursor is the chrome's, drawn on the pane.** libghostty has no copy mode and no
-cursor outside the shell's own, so `ScrollCursorView` paints a translucent accent band
-on the current row, added last inside `PanelHostView.clip` and pinned to the terminal
-view rather than to the clip, so its row math is in the surface's own coordinates. It
-returns nil from `hitTest`, because the thing behind it is a live terminal that still
-has to take clicks and drag-selection.
+cursor outside the shell's own, so `ScrollCursorView` paints the band on the current row,
+a stroked cell where the cursor is, the selection rects, and the yank pulse, added last
+inside `PanelHostView.clip` and pinned to the terminal view rather than to the clip, so
+its row math is in the surface's own coordinates. It returns nil from `hitTest`, because
+the thing behind it is a live terminal that still has to take clicks and drag-selection.
+The cursor cell is stroked rather than filled: a real terminal cursor inverts its cell,
+an overlay cannot, and a fill solid enough to read as a cursor takes the character with
+it.
 
 Geometry comes from `TerminalCellMetrics`, which `GhosttySurface` reads out of
 `ghostty_surface_size` **at draw time, never cached**: the row height moves with the
@@ -840,7 +846,41 @@ viewport: a paragraph off-screen needs the buffer moved first, which is what the
 A page move is the other case: it carries the cursor with the viewport, so your place on
 screen is kept.
 
+#### Selection and yank (ZEN-331)
 
+`v` and `V` anchor a selection at the cursor; motions grow it; `y` copies it, drops back
+to normal mode, and pulses what it took the way `DiffPaneTable.flashYank` does. The pulse
+runs after the write, not on the keystroke, because a yank leaves nothing on screen and a
+copy that silently didn't take looks identical to one that did. `Esc` hands the selection
+back before it closes anything, which is the diff viewer's rule too.
+
+`ScrollSelection` holds the **anchor only**. The cursor lives on the controller, which owns
+it in normal mode as well, and a second copy would be one to drift: every motion would have
+to write both, and the one that forgot would draw a selection ending where the cursor is
+not. `range(to:columns:)` orders the two ends, and orders `.line` itself rather than leaving
+it to `TerminalViewportRange`: that init pairs each row with the column it arrived on, so
+handed (row 10, col 0) and (row 5, col 79) it would swap the columns along with the rows.
+
+`ScrollWordMotion` is vim's `w`/`b`/`e` over a row reader, with `iskeyword` at its default
+so `foo.bar` is three words. **A word never spans a row break**, even where the classes line
+up, or a `w` from `two` in `one two` runs clean past `three` on the row below.
+
+**A selection cannot leave the viewport, and no design choice makes it possible.**
+libghostty resolves an exact coordinate through `Point.pin`
+(`vendor/ghostty/src/apprt/embedded.zig`), which does `@min(self.y, screen.pages.rows -| 1)`
+for **every** point tag, `screen` included, and `pages.rows` is the grid height rather than
+the scrollback total. So no coordinate names a scrollback row, and text off screen cannot be
+read. A key that would move the viewport releases the anchor first, because a selection that
+outlived a scroll would highlight rows it no longer covers and yank text the reader never saw.
+
+The other limit is columns. `read_text` hands back a string with no per-character cell
+mapping, so a column is a character offset into the row's text. A wide character (CJK, an
+emoji) fills two cells while counting as one offset, and the cursor cell sits one to the left
+of true for each one earlier in the row.
+
+`TerminalSurface.text(in:)` is the yank's read and the deliberate opposite of
+`text(viewportRow:)`: it *wants* `read_text`'s unwrapping, so a command line that soft-wrapped
+over three rows reaches the pasteboard as the one line it was typed as.
 
 Below the seam each command is one `ghostty_surface_binding_action` string, and the
 signs match (`TerminalScroll.lines(1)` is down, as `scroll_page_lines:1` is).
