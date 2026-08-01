@@ -73,9 +73,6 @@ public enum TerminalScroll: Equatable {
     /// rather than a fixed count.
     case pageFraction(Double)
     case top, bottom
-    /// Hop to a shell-integration prompt marker, signed the same way. Requires the shell
-    /// integration a backend injects; without markers it is a no-op rather than an error.
-    case prompt(Int)
 }
 
 /// Where the viewport sits in the buffer, in lines: `total` rows exist, the viewport starts at
@@ -291,6 +288,12 @@ public protocol TerminalSurface: AnyObject {
     /// the cursor somewhere else entirely.
     var cursorRow: Int? { get }
 
+    /// The text on one viewport row, or nil for a row outside the grid or a backend that cannot
+    /// read its own screen. One row at a time on purpose: a backend that unwraps soft-wrapped
+    /// rows (libghostty does) collapses a multi-row read into fewer lines, and the row a caller
+    /// asked about stops being the line it gets back.
+    func text(viewportRow row: Int) -> String?
+
     /// Deliver a Return **keypress** to the shell — a real Enter, not a pasted `"\r"`. A pasted
     /// carriage return arrives inside bracketed paste, where a TUI (Claude Code, an editor) reads it
     /// as a literal newline in its input rather than a submit. This is the chrome's way to submit a
@@ -317,6 +320,9 @@ public extension TerminalSurface {
 
     /// Default nil: a backend that can't locate its cursor leaves the caller to pick a row.
     var cursorRow: Int? { nil }
+
+    /// Default nil: a backend that can't read its own screen supports no motion over its content.
+    func text(viewportRow row: Int) -> String? { nil }
 
     /// Default no-op: a backend that can't reconfigure live needs nothing here.
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {}

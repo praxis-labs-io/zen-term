@@ -716,6 +716,34 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         return min(max(row, 0), max(metrics.rows - 1, 0))
     }
 
+    /// The text on one viewport row.
+    ///
+    /// One row per call because `ghostty_surface_read_text` goes through `selectionString`, which
+    /// sets `unwrap = true` and joins soft-wrapped rows: a multi-row read comes back as logical
+    /// lines, so the caller's row index stops matching what it gets. A single-row selection has
+    /// nothing to unwrap into.
+    public func text(viewportRow row: Int) -> String? {
+        guard let surfacePtr, let metrics = cellMetrics, row >= 0, row < metrics.rows else { return nil }
+        var selection = ghostty_selection_s()
+        selection.top_left = Self.viewportPoint(x: 0, y: row)
+        selection.bottom_right = Self.viewportPoint(x: UInt32(max(metrics.columns - 1, 0)), y: row)
+        selection.rectangle = false
+        var text = ghostty_text_s()
+        guard ghostty_surface_read_text(surfacePtr, selection, &text) else { return nil }
+        defer { ghostty_surface_free_text(surfacePtr, &text) }
+        guard let ptr = text.text else { return nil }
+        return String(cString: ptr)
+    }
+
+    private static func viewportPoint(x: UInt32, y: Int) -> ghostty_point_s {
+        var point = ghostty_point_s()
+        point.tag = GHOSTTY_POINT_VIEWPORT
+        point.coord = GHOSTTY_POINT_COORD_EXACT
+        point.x = x
+        point.y = UInt32(max(y, 0))
+        return point
+    }
+
     /// Positive `lines`/`pageFraction` scroll down in libghostty too (`Binding.zig`: "Positive
     /// values scroll downwards"), so the seam's sign convention passes straight through.
     public func scroll(_ command: TerminalScroll) {
@@ -724,7 +752,6 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         case .pageFraction(let f): performBindingAction("scroll_page_fractional:\(f)")
         case .top: performBindingAction("scroll_to_top")
         case .bottom: performBindingAction("scroll_to_bottom")
-        case .prompt(let n): performBindingAction("jump_to_prompt:\(n)")
         }
     }
 

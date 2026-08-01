@@ -767,7 +767,7 @@ UI mentions. A mode borrows the keys while it is up and gives them back on exit.
 `command(for:afterG:)` is a pure static over `NSEvent`, the same testable seam as
 `DiffPaneTable.vimKey(for:)`, and it reads shiftedness from the modifier flags
 rather than character case for the same Caps Lock reason. j/k step the cursor, ⌃d/⌃u
-move a half page, ⌃f/⌃b and space a page, gg/G the ends, { and } hop prompts, and
+move a half page, ⌃f/⌃b and space a page, gg/G the ends, { and } move by paragraph, and
 Esc/q/i leave. **Every key is consumed, mapped or not**: passing misses through would
 drop a stray keystroke into the shell behind the mode, which is worse than one that
 does nothing.
@@ -804,29 +804,25 @@ out into a row.
 **A move that names a destination puts the cursor on it**, rather than bringing it into
 view and leaving the cursor elsewhere. `gg`/`G` carry it to the ends.
 
-`{`/`}` are the awkward case and are handled **after the fact, not on the keystroke**.
-libghostty scrolls to a prompt by setting the viewport pin to it
-(`PageList.scrollPrompt`), and that pin is the viewport's top row, so a jump that scrolls
-puts the prompt on row 0. But `scrollPrompt` returns without moving when there is no
-prompt that way, and it takes a `pinIsActive` branch to the bottom when the prompt is
-already on the live screen. Moving the cursor at keystroke time got both of those wrong:
-the band jumped to the top of a screen that never scrolled. So the mode marks the jump
-pending and places the cursor when `scrollPositionDidChange` says the viewport moved and
-did not land at the bottom. Prompt marks are OSC 133 state rather than text, so the row
-of a prompt on the live screen is not knowable from the chrome, and leaving the cursor
-alone beats moving it somewhere known to be wrong.
+`{`/`}` are the chrome's own motion, not a backend call, and they have to be. libghostty's
+`jump_to_prompt` scrolls the viewport to a prompt **above** the screen, so it cannot reach
+any prompt you are looking at, and in a pane with no scrollback it does nothing at all while
+three prompts sit on screen. `ghostty.h` exposes no prompt marks (only a window-title action),
+so moving a cursor to a prompt is not expressible. Vim's `{`/`}` key off blank lines anyway,
+which are readable, and in a terminal a blank line is what separates one command's output from
+the next.
+
+So the motion walks the viewport: step past any blank rows the cursor already sits in, cross
+the block of text, land on the blank after it. `TerminalSurface.text(viewportRow:)` reads one
+row per call, because `read_text` goes through `selectionString` with `unwrap = true` and a
+multi-row read comes back as logical lines with the row index no longer matching. The walk
+stops at the first blank, so it is a handful of reads rather than one per row. Clamped to the
+viewport: a paragraph off-screen needs the buffer moved first, which is what the page keys do.
 
 A page move is the other case: it carries the cursor with the viewport, so your place on
 screen is kept.
 
-**A prompt jump with nowhere to go says so**, following the same rule as pane nav
-(`toastNoNeighbor`: no silent no-op, every dead nav attempt speaks). The condition is read
-off the last reported scroll position and is exactly the one libghostty checks:
-`scrollPrompt` searches from one row above the viewport and returns when there is no such
-row, so a viewport already at the top of the buffer can never find a prompt above it, and the
-mirror holds at the bottom. In between, whether a prompt exists in that direction is not
-knowable from the chrome, so those jumps go through and stay quiet. Throttled like the nav
-toast, because a held key would otherwise stack one per repeat over the pane being read.
+
 
 Below the seam each command is one `ghostty_surface_binding_action` string, and the
 signs match (`TerminalScroll.lines(1)` is down, as `scroll_page_lines:1` is).

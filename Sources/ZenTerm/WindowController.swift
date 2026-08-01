@@ -565,7 +565,6 @@ final class WindowController: NSObject {
             guard let self else { return }
             keyModeHost?.modeHandler = active ? { [weak self] event in self?.scrollMode.handle(event) ?? false } : nil
         }
-        scrollMode.onRequestToast = { [weak self] content in self?.toasts.show(content) }
     }
 
     func showAndStart() {

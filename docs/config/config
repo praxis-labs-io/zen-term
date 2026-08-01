@@ -287,12 +287,12 @@
 # viewport the buffer runs, a band marks the row you're on, and nothing reaches the
 # shell:
 #
-#   j / k            move the cursor a row          { / }   jump to a prompt
+#   j / k            move the cursor a row          { / }   move by paragraph
 #   ctrl+d / ctrl+u  half a page                   gg / G  top / bottom
 #   ctrl+f / ctrl+b  a full page (space = ctrl+f)  esc, q  leave
 #
 # Your own chords still work inside it, so ⌘T and pane nav are never swallowed.
-# Prompt jumps need the shell integration ZenTerm injects, which covers bash, elvish,
-# fish, nushell and zsh.
+# `{` and `}` are vim's paragraph motion: they move the cursor to the next blank
+# line, which in a terminal is what separates one command's output from the next.
 # The mode ends on its own when focus moves, the pane closes, you change tab, or a
 # tool float or palette opens.

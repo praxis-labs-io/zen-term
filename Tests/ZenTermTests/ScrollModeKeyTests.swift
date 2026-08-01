@@ -49,17 +49,17 @@ final class ScrollModeKeyTests: XCTestCase {
         XCTAssertEqual(decode(try keyDown(" ")), .scroll(.pageFraction(1)))
     }
 
-    func test_bracesJumpBetweenPrompts() throws {
+    func test_bracesAreTheParagraphMotion() throws {
         // Vim's paragraph motion, and the same keys the diff viewer jumps changes with. Matched
         // on the typed character, so a layout that doesn't put braces on shift-bracket works.
-        XCTAssertEqual(decode(try keyDown("{", unshifted: "[", flags: .shift)), .scroll(.prompt(-1)))
-        XCTAssertEqual(decode(try keyDown("}", unshifted: "]", flags: .shift)), .scroll(.prompt(1)))
+        XCTAssertEqual(decode(try keyDown("{", unshifted: "[", flags: .shift)), .paragraph(-1))
+        XCTAssertEqual(decode(try keyDown("}", unshifted: "]", flags: .shift)), .paragraph(1))
     }
 
-    func test_shiftBracketIsTheSameJumpOnALayoutThatTypesItDifferently() throws {
+    func test_shiftBracketIsTheSameMotionOnALayoutThatTypesItDifferently() throws {
         // No brace in `characters`, so this falls through to the unshifted-key switch.
-        XCTAssertEqual(decode(try keyDown("[", unshifted: "[", flags: .shift)), .scroll(.prompt(-1)))
-        XCTAssertEqual(decode(try keyDown("]", unshifted: "]", flags: .shift)), .scroll(.prompt(1)))
+        XCTAssertEqual(decode(try keyDown("[", unshifted: "[", flags: .shift)), .paragraph(-1))
+        XCTAssertEqual(decode(try keyDown("]", unshifted: "]", flags: .shift)), .paragraph(1))
     }
 
     func test_bareBracketsAreNotBound() throws {

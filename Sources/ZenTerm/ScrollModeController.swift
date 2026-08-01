@@ -24,6 +24,8 @@ final class ScrollModeController {
         /// pinned at an edge. Kept apart from `.scroll(.lines(±1))` because that distinction is
         /// the whole difference between a cursor and a scrollbar.
         case step(Int)
+        /// Vim's paragraph motion: move the cursor to the next blank row in this direction.
+        case paragraph(Int)
         /// First `g` of `gg`. Arms the prefix; a second `g` tops out.
         case pendingTop
         case exit
@@ -41,23 +43,9 @@ final class ScrollModeController {
     /// on screen is the row you are looking at.
     private(set) var cursorRow = 0
 
-    /// A prompt jump has been asked for and we are waiting to hear whether the viewport moved.
-    /// See the `.prompt` case in `handle` for why the cursor cannot be placed at the time of the
-    /// keystroke.
-    private var awaitingPromptLanding = false
-
     /// Fires whenever the mode opens or closes, so the window can install and remove its key
     /// hook without this type reaching back into `KeyInterceptor`.
     var onActiveChanged: ((Bool) -> Void)?
-
-    /// Say a prompt jump had nowhere to go, matching pane nav's rule that every dead nav attempt
-    /// speaks rather than silently doing nothing.
-    var onRequestToast: ((ToastContent) -> Void)?
-
-    /// The last position the surface reported, kept so a dead prompt jump can be recognised
-    /// before it is attempted. Nil until the first report arrives.
-    private var lastPosition: TerminalScrollPosition?
-    private var lastDeadJumpAt: Date?
 
     // MARK: lifecycle
 
@@ -75,6 +63,16 @@ final class ScrollModeController {
         // viewport is the bottom of the pane, and on a half-filled screen that is empty space
         // below everything there is to read.
         cursorRow = surface.cursorRow ?? max((surface.cellMetrics?.rows ?? 1) - 1, 0)
+        // The grid geometry the cursor band is placed from. Logged because a band that lands on
+        // the wrong row looks identical to one placed correctly against wrong numbers, and the
+        // numbers are the only way to tell which.
+        if let metrics = surface.cellMetrics {
+            Log.info(
+                "scroll mode geometry rows=\(metrics.rows) cellHeight=\(metrics.cellHeight) "
+                    + "inset=\(metrics.gridInset) viewHeight=\(panel.terminalHeightForTesting) "
+                    + "cursorRow=\(cursorRow) reported=\(surface.cursorRow.map(String.init) ?? "nil")",
+                category: .panes)
+        }
         Log.info("scroll mode entered", category: .panes)
         updateHeader(position: nil)
         refreshCursor()
@@ -91,9 +89,6 @@ final class ScrollModeController {
         guard isActive else { return }
         isActive = false
         sawG = false
-        awaitingPromptLanding = false
-        lastPosition = nil
-        lastDeadJumpAt = nil
         panel?.modeMeta = nil
         panel?.setScrollCursor(row: nil) { nil }
         panel = nil
@@ -126,8 +121,11 @@ final class ScrollModeController {
             end()
         case .step(let delta):
             sawG = false
-            awaitingPromptLanding = false
             step(delta)
+        case .paragraph(let delta):
+            sawG = false
+            cursorRow = paragraphRow(from: cursorRow, delta: delta)
+            refreshCursor()
         case .scroll(let move):
             sawG = false
             // A page move carries the cursor with the viewport, so it keeps its place on screen.
@@ -135,19 +133,8 @@ final class ScrollModeController {
             // thing you asked for somewhere in view and leaving the cursor elsewhere makes the
             // cursor a decoration.
             switch move {
-            case .top:
-                cursorRow = 0
-                awaitingPromptLanding = false
-            case .bottom:
-                cursorRow = lastRow
-                awaitingPromptLanding = false
-            // Deferred, not set here. A prompt jump often moves nothing at all: `scrollPrompt`
-            // finds no prompt in that direction and returns, and moving the cursor anyway makes
-            // the band jump to the top of a screen that never scrolled. Wait to be told the
-            // viewport actually moved.
-            case .prompt(let delta):
-                guard !reportDeadPromptJump(delta) else { return true }
-                awaitingPromptLanding = true
+            case .top: cursorRow = 0
+            case .bottom: cursorRow = lastRow
             default: break
             }
             surface?.scroll(move)
@@ -173,6 +160,39 @@ final class ScrollModeController {
     /// The bottom row of the viewport. Zero while the surface has no metrics to report, which
     /// pins the cursor to the top row rather than letting it run off a grid of unknown size.
     private var lastRow: Int { max((surface?.cellMetrics?.rows ?? 1) - 1, 0) }
+
+    /// Vim's paragraph motion over the viewport: from `row`, step past any blank rows we are
+    /// already sitting in, cross the block of text, and land on the blank row after it.
+    ///
+    /// This is the chrome's own motion rather than libghostty's `jump_to_prompt`, and it has to
+    /// be. `jump_to_prompt` scrolls the viewport to a prompt ABOVE the screen, so it cannot reach
+    /// any of the prompts you are looking at, and in a pane with no scrollback it does nothing at
+    /// all while three prompts sit on screen. The C API exposes no prompt marks (`ghostty.h` has
+    /// only a window-title action), so a cursor cannot be moved to a prompt at all. A blank line
+    /// is what vim actually keys off, it is readable from the text, and in a terminal it is what
+    /// separates one command's output from the next.
+    ///
+    /// Clamped to the viewport. A paragraph beyond the visible rows needs the buffer moved first,
+    /// which is what the page keys are for.
+    private func paragraphRow(from row: Int, delta: Int) -> Int {
+        guard let surface, delta != 0 else { return row }
+        let limit = lastRow
+        var next = row + delta
+        while next >= 0 && next <= limit && Self.isBlank(surface.text(viewportRow: next)) {
+            next += delta
+        }
+        while next >= 0 && next <= limit && !Self.isBlank(surface.text(viewportRow: next)) {
+            next += delta
+        }
+        return min(max(next, 0), limit)
+    }
+
+    /// A row counts as blank when it holds no non-whitespace. A row the backend cannot read is
+    /// treated as blank so a motion terminates rather than running to the edge of the grid.
+    static func isBlank(_ text: String?) -> Bool {
+        guard let text else { return true }
+        return text.allSatisfy(\.isWhitespace)
+    }
 
     private func refreshCursor() {
         guard isActive, let surface else { return }
@@ -209,8 +229,8 @@ final class ScrollModeController {
         // exactly a paragraph. Same keys the diff viewer jumps changes with. Matched on the typed
         // character first, so a layout that doesn't put braces on shift-bracket still works.
         switch event.characters {
-        case "{": return .scroll(.prompt(-1))
-        case "}": return .scroll(.prompt(1))
+        case "{": return .paragraph(-1)
+        case "}": return .paragraph(1)
         default: break
         }
         let shift = held.contains(.shift)
@@ -220,8 +240,8 @@ final class ScrollModeController {
         case (" ", false): return .scroll(.pageFraction(1))
         case ("g", false): return afterG ? .scroll(.top) : .pendingTop
         case ("g", true): return .scroll(.bottom)
-        case ("[", true): return .scroll(.prompt(-1))  // shift-bracket on a US layout
-        case ("]", true): return .scroll(.prompt(1))
+        case ("[", true): return .paragraph(-1)  // shift-bracket on a US layout
+        case ("]", true): return .paragraph(1)
         case ("q", false), ("i", false): return .exit
         default: return nil
         }
@@ -239,65 +259,7 @@ final class ScrollModeController {
     /// the driven surface, so the count tracks output as well as keys.
     func report(position: TerminalScrollPosition, from s: AnyObject) {
         guard isActive, isDriving(s) else { return }
-        lastPosition = position
         updateHeader(position: position)
-        landPromptJump(position)
-    }
-
-    /// Place the cursor once a prompt jump has been confirmed to move the viewport.
-    ///
-    /// libghostty scrolls to a prompt by setting the viewport pin to it
-    /// (`PageList.scrollPrompt`), and that pin IS the viewport's top row, so a jump that scrolls
-    /// puts the prompt on row 0.
-    ///
-    /// Unless it landed at the bottom. A prompt already inside the live screen takes the
-    /// `pinIsActive` branch, which sends the viewport to the bottom rather than pinning, and the
-    /// prompt is then wherever it sits there. Prompt marks are OSC 133 state rather than text, so
-    /// the chrome cannot find that row, and leaving the cursor alone beats moving it somewhere
-    /// known to be wrong.
-    /// Whether a prompt jump has nowhere to go, and say so if it doesn't. Returns true when the
-    /// jump was refused, so the caller skips it.
-    ///
-    /// Both ends are read off the last reported position, which is exactly the condition
-    /// libghostty checks: `scrollPrompt` searches from one row above the viewport and returns
-    /// when there is no such row, so a viewport already at the top of the buffer can never find a
-    /// prompt above it. The mirror at the bottom is the viewport already resting on the newest
-    /// line. In between, whether a prompt exists in that direction is not knowable from the
-    /// chrome (prompt marks are OSC 133 state rather than text), so those jumps go through and
-    /// stay quiet.
-    private func reportDeadPromptJump(_ delta: Int) -> Bool {
-        guard let position = lastPosition else { return false }  // nothing known yet, let it try
-        let word: String
-        if delta < 0 {
-            guard position.offset == 0 else { return false }
-            word = "above"
-        } else {
-            guard position.linesBelow == 0 else { return false }
-            word = "below"
-        }
-        // Throttled the way pane nav throttles its own: a held key would otherwise stack a toast
-        // per repeat over the pane being read.
-        let now = Date()
-        if let last = lastDeadJumpAt, now.timeIntervalSince(last) < Self.deadJumpToastThrottle {
-            return true
-        }
-        lastDeadJumpAt = now
-        onRequestToast?(
-            ToastContent(
-                variant: .info,
-                title: CommandCatalog.spec(for: .toggleScrollMode).title,
-                message: "No prompt \(word) to jump to"))
-        return true
-    }
-
-    private static let deadJumpToastThrottle: TimeInterval = 3
-
-    private func landPromptJump(_ position: TerminalScrollPosition) {
-        guard awaitingPromptLanding else { return }
-        awaitingPromptLanding = false
-        guard position.linesBelow > 0 else { return }
-        cursorRow = 0
-        refreshCursor()
     }
 
     private func updateHeader(position: TerminalScrollPosition?) {

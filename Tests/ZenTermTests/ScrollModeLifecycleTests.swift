@@ -197,131 +197,68 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 23)
     }
 
-    func test_aPromptJumpThatMovesTheViewportPutsTheCursorOnThePrompt() throws {
-        // libghostty scrolls to a prompt by pinning the viewport's top row to it, so a jump that
-        // scrolls leaves the prompt on row 0.
+    func test_theBraceMotionLandsOnTheBlankRowAfterTheBlockAbove() throws {
+        // The fixture screen: a command block, a blank, another block, a blank, the prompt on 11.
+        // From the prompt, `{` crosses "~/bin" and stops on the blank at 9.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
         controller.handle(.toggleScrollMode)
         let surface = try XCTUnwrap(spawned.first)
         let handler = try XCTUnwrap(host.modeHandler)
-
-        XCTAssertTrue(handler(try keyDown("{", unshifted: "[", flags: .shift)))
-        XCTAssertEqual(surface.scrolls, [.prompt(-1)])
-        XCTAssertEqual(controller.scrollMode.cursorRow, 11, "nothing has landed yet")
-
-        // The viewport reports it moved, with scrollback still below it.
-        surface.delegate?.surface(
-            surface, scrollPositionDidChange: TerminalScrollPosition(total: 5000, offset: 1200, viewport: 24))
-
-        XCTAssertEqual(controller.scrollMode.cursorRow, 0)
-    }
-
-    func test_aPromptJumpThatScrollsNothingLeavesTheCursorAlone() throws {
-        // The reported bug. `scrollPrompt` returns without moving when there is no prompt that
-        // way, and moving the cursor anyway sent the band to the top of a screen that never
-        // scrolled, which reads as "it jumped to the top instead of to a prompt".
-        let controller = makeWindow()
-        let host = ModeHostSpy()
-        controller.keyModeHost = host
-        controller.handle(.toggleScrollMode)
-        let handler = try XCTUnwrap(host.modeHandler)
-
-        XCTAssertTrue(handler(try keyDown("{", unshifted: "[", flags: .shift)))
-
-        XCTAssertEqual(
-            controller.scrollMode.cursorRow, 11,
-            "no scroll report means the viewport never moved, so the cursor must not either")
-    }
-
-    func test_aPromptJumpLandingAtTheBottomLeavesTheCursorAlone() throws {
-        // A prompt already on the live screen takes libghostty's `pinIsActive` branch, which goes
-        // to the bottom rather than pinning. The prompt is then somewhere on the active screen and
-        // the chrome cannot see which row, so row 0 would be a guess.
-        let controller = makeWindow()
-        let host = ModeHostSpy()
-        controller.keyModeHost = host
-        controller.handle(.toggleScrollMode)
-        let surface = try XCTUnwrap(spawned.first)
-        let handler = try XCTUnwrap(host.modeHandler)
-
-        XCTAssertTrue(handler(try keyDown("}", unshifted: "]", flags: .shift)))
-        surface.delegate?.surface(
-            surface, scrollPositionDidChange: TerminalScrollPosition(total: 500, offset: 476, viewport: 24))
-
         XCTAssertEqual(controller.scrollMode.cursorRow, 11)
+
+        XCTAssertTrue(handler(try keyDown("{", unshifted: "[", flags: .shift)))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 9)
+        XCTAssertEqual(surface.scrolls, [], "a motion within the viewport moves the cursor, not the buffer")
     }
 
-    func test_aLaterScrollReportDoesNotRetroactivelyMoveTheCursor() throws {
-        // Output arriving after a jump has landed must not be read as a second landing.
+    func test_repeatedBraceMotionsWalkBlockByBlock() throws {
+        // Each press crosses one block of text and stops on the blank before it, which is what
+        // makes it useful for stepping back through command output.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
         controller.handle(.toggleScrollMode)
-        let surface = try XCTUnwrap(spawned.first)
         let handler = try XCTUnwrap(host.modeHandler)
 
         XCTAssertTrue(handler(try keyDown("{", unshifted: "[", flags: .shift)))
-        surface.delegate?.surface(
-            surface, scrollPositionDidChange: TerminalScrollPosition(total: 5000, offset: 1200, viewport: 24))
+        XCTAssertEqual(controller.scrollMode.cursorRow, 9)
+        XCTAssertTrue(handler(try keyDown("{", unshifted: "[", flags: .shift)))
+        XCTAssertEqual(controller.scrollMode.cursorRow, 6, "past the echo block to the blank above it")
+        XCTAssertTrue(handler(try keyDown("{", unshifted: "[", flags: .shift)))
+        XCTAssertEqual(controller.scrollMode.cursorRow, 1, "past the seq block; row 1 is blank")
+    }
+
+    func test_theBraceMotionClampsToTheTopRatherThanRunningOff() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<10 { XCTAssertTrue(handler(try keyDown("{", unshifted: "[", flags: .shift))) }
+
         XCTAssertEqual(controller.scrollMode.cursorRow, 0)
-
-        for _ in 0..<4 { XCTAssertTrue(handler(try keyDown("j"))) }
-        XCTAssertEqual(controller.scrollMode.cursorRow, 4)
-
-        surface.delegate?.surface(
-            surface, scrollPositionDidChange: TerminalScrollPosition(total: 5001, offset: 1200, viewport: 24))
-
-        XCTAssertEqual(controller.scrollMode.cursorRow, 4)
     }
 
-    func test_aPromptJumpWithNowhereToGoSpeaks() throws {
-        // Pane nav's rule: no silent no-op, every dead nav attempt speaks. A viewport already at
-        // the top of the buffer is exactly libghostty's own "no row above to search from".
+    func test_theClosingBraceRunsToTheEndWhenOnlyBlanksFollow() throws {
+        // Vim's behavior: } with no further paragraph goes to the end.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
         controller.handle(.toggleScrollMode)
-        let surface = try XCTUnwrap(spawned.first)
         let handler = try XCTUnwrap(host.modeHandler)
 
-        XCTAssertNotNil(controller.scrollMode.onRequestToast, "the window has to have wired it")
-        var toasts: [ToastContent] = []
-        controller.scrollMode.onRequestToast = { toasts.append($0) }
-
-        surface.delegate?.surface(
-            surface, scrollPositionDidChange: TerminalScrollPosition(total: 24, offset: 0, viewport: 24))
-        XCTAssertTrue(handler(try keyDown("{", unshifted: "[", flags: .shift)))
-
-        XCTAssertEqual(toasts.map(\.message), ["No prompt above to jump to"])
-        XCTAssertEqual(surface.scrolls, [], "a refused jump must not also be sent")
-
-        // Throttled: a held key must not stack a toast per repeat over the pane being read.
-        XCTAssertTrue(handler(try keyDown("{", unshifted: "[", flags: .shift)))
-        XCTAssertEqual(toasts.count, 1)
-    }
-
-    func test_aDeadJumpDownSpeaksToo() throws {
-        let controller = makeWindow()
-        let host = ModeHostSpy()
-        controller.keyModeHost = host
-        controller.handle(.toggleScrollMode)
-        let surface = try XCTUnwrap(spawned.first)
-        let handler = try XCTUnwrap(host.modeHandler)
-
-        var toasts: [ToastContent] = []
-        controller.scrollMode.onRequestToast = { toasts.append($0) }
-
-        surface.delegate?.surface(
-            surface, scrollPositionDidChange: TerminalScrollPosition(total: 500, offset: 476, viewport: 24))
         XCTAssertTrue(handler(try keyDown("}", unshifted: "]", flags: .shift)))
 
-        XCTAssertEqual(toasts.map(\.message), ["No prompt below to jump to"])
+        XCTAssertEqual(controller.scrollMode.cursorRow, 23)
     }
 
-    func test_aJumpWithRoomToMoveStaysQuietAndIsSent() throws {
-        // Mid-buffer, whether a prompt exists that way isn't knowable here, so it goes through.
+    func test_theMotionReadsTheScreenNotAScrollAction() throws {
+        // The whole reason this is the chrome's own motion: jump_to_prompt scrolls the viewport to
+        // a prompt ABOVE the screen, so it can never reach a prompt you are looking at.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -329,15 +266,18 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let surface = try XCTUnwrap(spawned.first)
         let handler = try XCTUnwrap(host.modeHandler)
 
-        var toasts: [ToastContent] = []
-        controller.scrollMode.onRequestToast = { toasts.append($0) }
-
-        surface.delegate?.surface(
-            surface, scrollPositionDidChange: TerminalScrollPosition(total: 5000, offset: 1200, viewport: 24))
         XCTAssertTrue(handler(try keyDown("{", unshifted: "[", flags: .shift)))
+        XCTAssertTrue(handler(try keyDown("}", unshifted: "]", flags: .shift)))
 
-        XCTAssertEqual(toasts, [])
-        XCTAssertEqual(surface.scrolls, [.prompt(-1)])
+        XCTAssertEqual(surface.scrolls, [], "neither direction should ask the backend to scroll")
+    }
+
+    func test_aScreenTheBackendCannotReadStopsTheMotion() throws {
+        // An unreadable row counts as blank, so the motion terminates instead of running the
+        // cursor to the edge of a grid it knows nothing about.
+        XCTAssertTrue(ScrollModeController.isBlank(nil))
+        XCTAssertTrue(ScrollModeController.isBlank("   \t "))
+        XCTAssertFalse(ScrollModeController.isBlank(" x "))
     }
 
     func test_aPageMoveLeavesTheCursorWhereItIsOnScreen() throws {

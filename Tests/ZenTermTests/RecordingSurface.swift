@@ -93,6 +93,28 @@ final class RecordingSurface: NSObject, TerminalSurface {
     /// case that exposed the entry bug: the last written line and the bottom of the viewport are
     /// the same row on a full screen, so a full one hides the difference.
     var cursorRow: Int? = 11
+
+    /// The screen this surface claims to show, one entry per viewport row. Defaults to two
+    /// command blocks separated by a blank row, which is what paragraph motion moves between.
+    var rows: [String] = {
+        var rows = Array(repeating: "", count: 24)
+        rows[2] = "❯ seq 1 3"
+        rows[3] = "1"
+        rows[4] = "2"
+        rows[5] = "3"
+        rows[6] = ""  // the blank between blocks
+        rows[7] = "❯ echo hi"
+        rows[8] = "hi"
+        rows[9] = ""
+        rows[10] = "~/bin"
+        rows[11] = "❯"  // the prompt, and `cursorRow` above
+        return rows
+    }()
+
+    func text(viewportRow row: Int) -> String? {
+        guard rows.indices.contains(row) else { return nil }
+        return rows[row]
+    }
     /// Records a real Return keypress separately from pastes, so a test can assert submit went through
     /// the key path (a real Enter) rather than a bracketed `"\r"` paste that a TUI wouldn't act on.
     private(set) var submitCount = 0
