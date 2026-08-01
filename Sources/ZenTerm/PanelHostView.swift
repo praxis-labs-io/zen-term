@@ -54,10 +54,12 @@ final class PanelHostView: NSView {
     ///
     /// It carries live text, so it is assigned on every scroll report, which is why
     /// `PanelHeader.apply` rebuilds the keycap only when the action actually moves.
-    /// The height of the terminal content the cursor band is drawn over, in points. The band is
-    /// pinned to that view, so its own bounds are that height. Read when logging scroll mode's
-    /// geometry, where it is the check on whether the reported cell size is in the same units.
-    var terminalHeightForTesting: CGFloat { cursor.bounds.height }
+    var modeMeta: PanelMeta? {
+        didSet {
+            guard oldValue?.title != modeMeta?.title || oldValue?.action != modeMeta?.action else { return }
+            updateHeader()
+        }
+    }
 
     /// Show scroll mode's cursor band on `row`, or nil to take it down. `metrics` is asked for on
     /// every layout pass, so a resize or a font step moves the band without a second call.
@@ -71,13 +73,6 @@ final class PanelHostView: NSView {
         cursor.row = row
         cursor.isHidden = false
         cursor.needsDisplay = true
-    }
-
-    var modeMeta: PanelMeta? {
-        didSet {
-            guard oldValue?.title != modeMeta?.title || oldValue?.action != modeMeta?.action else { return }
-            updateHeader()
-        }
     }
 
     /// Inner breathing room between the pane border and the terminal content, even on

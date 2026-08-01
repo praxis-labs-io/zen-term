@@ -63,16 +63,6 @@ final class ScrollModeController {
         // viewport is the bottom of the pane, and on a half-filled screen that is empty space
         // below everything there is to read.
         cursorRow = surface.cursorRow ?? max((surface.cellMetrics?.rows ?? 1) - 1, 0)
-        // The grid geometry the cursor band is placed from. Logged because a band that lands on
-        // the wrong row looks identical to one placed correctly against wrong numbers, and the
-        // numbers are the only way to tell which.
-        if let metrics = surface.cellMetrics {
-            Log.info(
-                "scroll mode geometry rows=\(metrics.rows) cellHeight=\(metrics.cellHeight) "
-                    + "inset=\(metrics.gridInset) viewHeight=\(panel.terminalHeightForTesting) "
-                    + "cursorRow=\(cursorRow) reported=\(surface.cursorRow.map(String.init) ?? "nil")",
-                category: .panes)
-        }
         Log.info("scroll mode entered", category: .panes)
         updateHeader(position: nil)
         refreshCursor()
