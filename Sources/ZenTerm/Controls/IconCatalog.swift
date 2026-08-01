@@ -2,7 +2,7 @@ import AppKit
 
 /// The curated set of tool-float icons — dev-tooling metaphors (shells, builds, VCS, metrics, infra,
 /// files), laid out as an 8-wide grid by `IconPickerField`. `image` resolves a symbol the same way
-/// the dock does: an SF Symbol, else a bundled brand mark ("git" / "github").
+/// the dock does: an SF Symbol, else a bundled brand mark ("git" / "github" / "linear").
 enum IconCatalog {
     static let defaultSymbol = "square.on.square"
 
@@ -16,7 +16,7 @@ enum IconCatalog {
         "square.on.square", "terminal", "chevron.left.forwardslash.chevron.right", "curlybraces",
         "hammer", "wrench.and.screwdriver", "ladybug", "gearshape",
         "slider.horizontal.3", "chart.bar", "chart.line.uptrend.xyaxis", "gauge",
-        "cpu", "memorychip", "server.rack", "externaldrive",
+        "cpu", "linear", "server.rack", "externaldrive",
         "cylinder.split.1x2", "tablecells", "network", "globe",
         "shippingbox", "puzzlepiece", "doc.text", "note.text",
         "list.bullet.rectangle", "magnifyingglass", "folder", "tray.full",
@@ -51,11 +51,12 @@ enum IconCatalog {
         "envelope": "Email",  // humanizes to "Envelope" on its own; the metaphor is mail
         "git": "Git",
         "github": "GitHub",
+        "linear": "Linear",
         "spotify": "Spotify",
     ]
 
     /// Resolve a symbol to an image: an SF Symbol, else a bundled brand mark ("git", "github",
-    /// "spotify"). The one place this fallback lives — `IconButton` renders the same catalog and
+    /// "linear", "spotify"). The one place this fallback lives — `IconButton` renders the same catalog and
     /// used to carry its own copy. SF Symbol first, so a brand-mark name must never collide with a
     /// real symbol (none do).
     ///

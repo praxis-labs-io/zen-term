@@ -22,7 +22,7 @@ final class IconCatalogTests: XCTestCase {
     }
 
     /// Catches both a mistyped SF Symbol name and a brand mark that didn't make it into the bundle
-    /// — the Spotify asset being the new one.
+    /// — the Linear asset replacing memorychip in the curated roster.
     func test_everySymbol_resolvesToAnImage() {
         for symbol in IconCatalog.all {
             XCTAssertNotNil(IconCatalog.image(symbol), "\(symbol) resolves to nothing — blank cell")
@@ -32,7 +32,7 @@ final class IconCatalogTests: XCTestCase {
     /// The brand marks resolve through `BrandMark`, not SF Symbols, and must tint like a symbol
     /// rather than render as a fixed-color bitmap.
     func test_brandMarks_loadAsTemplateImages() throws {
-        for symbol in ["git", "github", "spotify"] {
+        for symbol in ["git", "github", "linear"] {
             XCTAssertNil(
                 NSImage(systemSymbolName: symbol, accessibilityDescription: nil),
                 "\(symbol) now collides with a real SF Symbol, which would win over the brand mark")
@@ -53,7 +53,7 @@ final class IconCatalogTests: XCTestCase {
     /// A float pinned to a dropped icon keeps rendering it — `IconCatalog.image` resolves any SF
     /// Symbol whether or not it's still on the roster, so an existing user's config never breaks.
     func test_droppedIcons_stillResolve_soExistingFloatsKeepTheirGlyph() {
-        for dropped in ["speedometer", "ant", "cube", "cloud"] {
+        for dropped in ["speedometer", "ant", "cube", "cloud", "memorychip"] {
             XCTAssertFalse(IconCatalog.all.contains(dropped), "\(dropped) was dropped from the roster")
             XCTAssertNotNil(IconCatalog.image(dropped), "but a float still configured with it must render")
         }
