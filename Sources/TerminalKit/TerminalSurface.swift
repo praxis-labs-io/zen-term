@@ -126,6 +126,48 @@ public struct TerminalCellMetrics: Equatable {
         return CGRect(
             x: 0, y: gridInset + CGFloat(clamped) * cellHeight, width: width, height: cellHeight)
     }
+
+    /// The frame of a run of cells on one row, from `columns.lowerBound` through its upper bound
+    /// inclusive. A single-cell range is the block cursor; `0...columns - 1` is the whole row.
+    ///
+    /// Stops at the last cell rather than running to the view's edge, because the grid does not
+    /// fill the view: leftover width that does not divide into a cell collects past the last
+    /// column, and painting over it puts selection color where there are no characters.
+    public func cellFrame(row: Int, columns range: ClosedRange<Int>) -> CGRect {
+        let last = max(columns - 1, 0)
+        let first = min(max(range.lowerBound, 0), last)
+        let final = min(max(range.upperBound, first), last)
+        let frame = rowFrame(row, width: 0)
+        return CGRect(
+            x: gridInset + CGFloat(first) * cellWidth, y: frame.origin.y,
+            width: CGFloat(final - first + 1) * cellWidth, height: cellHeight)
+    }
+}
+
+/// An inclusive span of cells on the **viewport**, start ordered before end.
+///
+/// Viewport-relative and not extendable past it, which is a backend limit rather than a choice:
+/// libghostty resolves an exact coordinate through `Point.pin`, which clamps y to the grid height
+/// for every point tag, so no coordinate names a scrollback row. What is off screen cannot be read.
+public struct TerminalViewportRange: Equatable {
+    public var startRow: Int
+    public var startColumn: Int
+    public var endRow: Int
+    public var endColumn: Int
+
+    /// Orders the two ends, so a caller can hand over an anchor and a cursor in whichever order the
+    /// user's motions left them and get a range that reads forwards.
+    public init(startRow: Int, startColumn: Int, endRow: Int, endColumn: Int) {
+        let startsFirst =
+            startRow < endRow || (startRow == endRow && startColumn <= endColumn)
+        self.startRow = startsFirst ? startRow : endRow
+        self.startColumn = startsFirst ? startColumn : endColumn
+        self.endRow = startsFirst ? endRow : startRow
+        self.endColumn = startsFirst ? endColumn : startColumn
+    }
+
+    /// How many rows the span touches, counting the partial ones at each end.
+    public var rowCount: Int { endRow - startRow + 1 }
 }
 
 /// Events flowing OUT of a surface, up into the chrome. Each backend translates
@@ -285,6 +327,14 @@ public protocol TerminalSurface: AnyObject {
     /// asked about stops being the line it gets back.
     func text(viewportRow row: Int) -> String?
 
+    /// The text a span of viewport cells holds, or nil for a backend that cannot read its own
+    /// screen. What a yank puts on the pasteboard.
+    ///
+    /// The counterpart to `text(viewportRow:)` and deliberately unlike it: this one *wants* the
+    /// unwrapping. A command line that soft-wrapped over three rows belongs on the pasteboard as
+    /// the one line it was typed as, not as three with newlines the user never pressed.
+    func text(in range: TerminalViewportRange) -> String?
+
     /// Deliver a Return **keypress** to the shell — a real Enter, not a pasted `"\r"`. A pasted
     /// carriage return arrives inside bracketed paste, where a TUI (Claude Code, an editor) reads it
     /// as a literal newline in its input rather than a submit. This is the chrome's way to submit a
@@ -311,6 +361,9 @@ public extension TerminalSurface {
 
     /// Default nil: a backend that can't read its own screen supports no motion over its content.
     func text(viewportRow row: Int) -> String? { nil }
+
+    /// Default nil for the same reason: nothing to read means nothing to yank.
+    func text(in range: TerminalViewportRange) -> String? { nil }
 
     /// Default no-op: a backend that can't reconfigure live needs nothing here.
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {}

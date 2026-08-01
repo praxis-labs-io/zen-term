@@ -89,4 +89,63 @@ final class TerminalCellMetricsTests: XCTestCase {
         XCTAssertEqual(metrics.rowFrame(99, width: 640), metrics.rowFrame(23, width: 640))
         XCTAssertEqual(metrics.rowFrame(-4, width: 640), metrics.rowFrame(0, width: 640))
     }
+
+    func test_theFirstColumnStartsAtTheGridInsetToo() {
+        // The same inset the rows carry, on the other axis. `window-padding-x` and `-y` are emitted
+        // at one value with balancing off, so leftover width collects past the last column.
+        XCTAssertEqual(
+            metrics.cellFrame(row: 0, columns: 0...0),
+            CGRect(x: 2, y: 2, width: 8, height: 16))
+    }
+
+    func test_aRunOfCellsIsAsWideAsItHasCells() {
+        XCTAssertEqual(
+            metrics.cellFrame(row: 3, columns: 4...7),
+            CGRect(x: 2 + 4 * 8, y: 2 + 3 * 16, width: 4 * 8, height: 16))
+    }
+
+    func test_aRunPastTheLastColumnStopsAtIt() {
+        // Selection rects run to the grid's edge, not the view's: the leftover strip past the last
+        // column holds no characters, and painting it puts selection color on nothing.
+        XCTAssertEqual(metrics.cellFrame(row: 0, columns: 0...999).maxX, 2 + 80 * 8)
+        XCTAssertEqual(metrics.cellFrame(row: 0, columns: -5...2).origin.x, 2)
+    }
+}
+
+/// The span a yank reads and a selection paints (ZEN-331). Its ordering is the whole of its job:
+/// handed a reversed span the backend reads nothing, so a selection dragged upward would copy an
+/// empty string while looking highlighted on screen.
+final class TerminalViewportRangeTests: XCTestCase {
+    func test_aForwardSpanIsLeftAlone() {
+        let range = TerminalViewportRange(startRow: 2, startColumn: 4, endRow: 5, endColumn: 9)
+
+        XCTAssertEqual(range.startRow, 2)
+        XCTAssertEqual(range.startColumn, 4)
+        XCTAssertEqual(range.endRow, 5)
+        XCTAssertEqual(range.endColumn, 9)
+    }
+
+    func test_aSpanGivenBackwardsIsOrderedOnConstruction() {
+        let range = TerminalViewportRange(startRow: 5, startColumn: 9, endRow: 2, endColumn: 4)
+
+        XCTAssertEqual(range.startRow, 2)
+        XCTAssertEqual(range.startColumn, 4)
+        XCTAssertEqual(range.endRow, 5)
+        XCTAssertEqual(range.endColumn, 9)
+    }
+
+    func test_theColumnsDecideTheOrderWhenTheRowsMatch() {
+        let range = TerminalViewportRange(startRow: 3, startColumn: 12, endRow: 3, endColumn: 6)
+
+        XCTAssertEqual(range.startColumn, 6)
+        XCTAssertEqual(range.endColumn, 12)
+    }
+
+    func test_rowCountCountsBothPartialEnds() {
+        let range = TerminalViewportRange(startRow: 4, startColumn: 70, endRow: 6, endColumn: 2)
+
+        XCTAssertEqual(range.rowCount, 3)
+        XCTAssertEqual(
+            TerminalViewportRange(startRow: 4, startColumn: 0, endRow: 4, endColumn: 9).rowCount, 1)
+    }
 }
