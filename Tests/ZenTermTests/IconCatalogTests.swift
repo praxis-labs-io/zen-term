@@ -22,7 +22,7 @@ final class IconCatalogTests: XCTestCase {
     }
 
     /// Catches both a mistyped SF Symbol name and a brand mark that didn't make it into the bundle
-    /// — the Linear asset replacing memorychip in the curated roster.
+    /// — the Neovim asset replacing note.text in the curated roster.
     func test_everySymbol_resolvesToAnImage() {
         for symbol in IconCatalog.all {
             XCTAssertNotNil(IconCatalog.image(symbol), "\(symbol) resolves to nothing — blank cell")
@@ -53,7 +53,7 @@ final class IconCatalogTests: XCTestCase {
     /// A float pinned to a dropped icon keeps rendering it — `IconCatalog.image` resolves any SF
     /// Symbol whether or not it's still on the roster, so an existing user's config never breaks.
     func test_droppedIcons_stillResolve_soExistingFloatsKeepTheirGlyph() {
-        for dropped in ["speedometer", "ant", "cube", "cloud", "memorychip"] {
+        for dropped in ["speedometer", "ant", "cube", "cloud", "memorychip", "note.text"] {
             XCTAssertFalse(IconCatalog.all.contains(dropped), "\(dropped) was dropped from the roster")
             XCTAssertNotNil(IconCatalog.image(dropped), "but a float still configured with it must render")
         }

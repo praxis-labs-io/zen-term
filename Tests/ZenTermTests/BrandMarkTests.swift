@@ -10,6 +10,7 @@ final class BrandMarkTests: XCTestCase {
         XCTAssertNotNil(BrandMark.image("github"), "GitHub mark must be bundled")
         XCTAssertNotNil(BrandMark.image("git"), "git mark must be bundled")
         XCTAssertNotNil(BrandMark.image("linear"), "Linear mark must be bundled")
+        XCTAssertNotNil(BrandMark.image("neovim"), "Neovim mark must be bundled")
         XCTAssertNotNil(BrandMark.image("spotify"), "Spotify mark must remain bundled for existing floats")
         XCTAssertNotNil(BrandMark.image("origami"), "origami mark must be bundled for the Settings footer")
     }

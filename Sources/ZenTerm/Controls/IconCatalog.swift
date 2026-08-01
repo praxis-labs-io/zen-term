@@ -2,7 +2,7 @@ import AppKit
 
 /// The curated set of tool-float icons — dev-tooling metaphors (shells, builds, VCS, metrics, infra,
 /// files), laid out as an 8-wide grid by `IconPickerField`. `image` resolves a symbol the same way
-/// the dock does: an SF Symbol, else a bundled brand mark ("git" / "github" / "linear").
+/// the dock does: an SF Symbol, else a bundled brand mark ("git" / "github" / "linear" / "neovim").
 enum IconCatalog {
     static let defaultSymbol = "square.on.square"
 
@@ -18,11 +18,11 @@ enum IconCatalog {
         "slider.horizontal.3", "chart.bar", "chart.line.uptrend.xyaxis", "gauge",
         "cpu", "linear", "server.rack", "externaldrive",
         "cylinder.split.1x2", "tablecells", "network", "globe",
-        "shippingbox", "puzzlepiece", "doc.text", "note.text",
-        "list.bullet.rectangle", "magnifyingglass", "folder", "tray.full",
-        "checklist", "envelope", "bubble.left.and.bubble.right", "bolt",
-        "play.rectangle", "arrow.triangle.branch", "arrow.triangle.pull", "key",
-        "lock", "git", "github", "spotify",
+        "shippingbox", "puzzlepiece", "doc.text", "list.bullet.rectangle",
+        "magnifyingglass", "folder", "tray.full", "checklist",
+        "envelope", "bubble.left.and.bubble.right", "bolt", "play.rectangle",
+        "arrow.triangle.branch", "arrow.triangle.pull", "key", "lock",
+        "git", "github", "neovim", "spotify",
     ]
 
     /// A humanized, sentence-case label for a symbol — the picker shows this instead of the raw
@@ -46,17 +46,18 @@ enum IconCatalog {
         "play.rectangle": "Run",
         "arrow.triangle.branch": "Git branch",
         "arrow.triangle.pull": "Pull request",
-        "note.text": "Notes",
+        "note.text": "Notes",  // off the roster, but a float pinned to it keeps this label
         "bubble.left.and.bubble.right": "Chat",
         "envelope": "Email",  // humanizes to "Envelope" on its own; the metaphor is mail
         "git": "Git",
         "github": "GitHub",
         "linear": "Linear",
+        "neovim": "Neovim",
         "spotify": "Spotify",
     ]
 
     /// Resolve a symbol to an image: an SF Symbol, else a bundled brand mark ("git", "github",
-    /// "linear", "spotify"). The one place this fallback lives — `IconButton` renders the same catalog and
+    /// "linear", "neovim", "spotify"). The one place this fallback lives — `IconButton` renders the same catalog and
     /// used to carry its own copy. SF Symbol first, so a brand-mark name must never collide with a
     /// real symbol (none do).
     ///

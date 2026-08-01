@@ -3163,7 +3163,7 @@ SOFTWARE.
 
 **CC0 1.0**
 
-`git.svg`, `github.svg`, `linear.svg`, and `spotify.svg`. CC0 waives attribution, so this entry is a courtesy rather than an obligation. It covers the artwork only, not the trademarks the marks depict.
+`git.svg`, `github.svg`, `linear.svg`, `neovim.svg`, and `spotify.svg`. CC0 waives attribution, so this entry is a courtesy rather than an obligation. It covers the artwork only, not the trademarks the marks depict.
 
 ## Shaders
 
