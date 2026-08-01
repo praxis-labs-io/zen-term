@@ -267,6 +267,9 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertTrue(config.configDiagnostics.isEmpty)
     }
 
+    /// `.ignoredListItem`, not `.invalidValue`: the latter's rendered message claims "Using the
+    /// default." while the known slugs on the line still apply — the message would contradict the
+    /// visibly hidden button.
     func test_hideToolbarButtons_unknownSlug_diagnosesAndKeepsKnownOnes() {
         let config = parse("hide-toolbar-buttons = split-h,zoom,diff-viewer\n")
         XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .diffViewer])
@@ -275,7 +278,7 @@ final class GeneralConfigParserTests: XCTestCase {
             [
                 ConfigDiagnostic(
                     scope: .setting(key: "hide-toolbar-buttons"),
-                    problem: .invalidValue(
+                    problem: .ignoredListItem(
                         got: "zoom",
                         expected: ToolbarButton.allCases.map(\.rawValue).joined(separator: ", ")))
             ])

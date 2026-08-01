@@ -261,7 +261,10 @@ enum GeneralConfigParser {
                 Log.warning(
                     "GeneralConfig: `hide-toolbar-buttons` got unknown button `\(slug)` — ignored",
                     category: .config)
-                diagnostics.append(invalid("hide-toolbar-buttons", got: slug, expected: expected))
+                diagnostics.append(
+                    ConfigDiagnostic(
+                        scope: .setting(key: "hide-toolbar-buttons"),
+                        problem: .ignoredListItem(got: slug, expected: expected)))
                 continue
             }
             hidden.insert(button)

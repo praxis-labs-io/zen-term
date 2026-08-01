@@ -17,6 +17,10 @@ struct CheckboxDropdownItem: Equatable {
 final class CheckboxDropdown: NSView {
     private(set) var items: [CheckboxDropdownItem]
     private let onToggle: (Int) -> Void
+    /// The row count is fixed at init — this list renders a static catalog whose checked states
+    /// move. `setItems` clamps to it, so a longer array can never outgrow the built rows (arrowing
+    /// past the last rendered row would toggle entries the user cannot see).
+    private let rowCount: Int
 
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
@@ -50,6 +54,7 @@ final class CheckboxDropdown: NSView {
 
     init(title: String, items: [CheckboxDropdownItem], onToggle: @escaping (Int) -> Void) {
         self.items = items
+        self.rowCount = items.count
         self.onToggle = onToggle
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -86,10 +91,9 @@ final class CheckboxDropdown: NSView {
 
     /// Programmatic sync after a config reload — never fires `onToggle`, and an open list re-renders
     /// its rows in place (a toggle's own reload lands here, and closing on it would eject the user
-    /// mid-multi-select). The row count is fixed at init: this renders a static catalog whose
-    /// checked states move, not a variable catalog.
+    /// mid-multi-select). Clamped to the init row count; see `rowCount`.
     func setItems(_ items: [CheckboxDropdownItem], title: String) {
-        self.items = Array(items.prefix(max(self.items.count, items.count)))
+        self.items = Array(items.prefix(rowCount))
         titleLabel.stringValue = title
         refreshRows()
     }
@@ -179,6 +183,9 @@ final class CheckboxDropdown: NSView {
         let card = buildListCard()
         window?.contentView?.addSubview(card)
         listCard = card
+        // After the assignment: `refreshRows` gates the highlight on `listCard != nil`, so painting
+        // from inside `buildListCard` would leave the first row unhighlighted until an arrow moves.
+        refreshRows()
         positionList()
         restyle()
     }
@@ -285,7 +292,6 @@ final class CheckboxDropdown: NSView {
             stack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -insets),
         ])
         card.frame = NSRect(x: 0, y: 0, width: width, height: cardHeight)
-        refreshRows()
         return card
     }
 

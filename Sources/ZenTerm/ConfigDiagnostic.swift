@@ -47,6 +47,10 @@ struct ConfigDiagnostic: Hashable {
         /// A scalar/enum value the parser couldn't read (`expected` names the valid set). The key
         /// fell back to its default.
         case invalidValue(got: String, expected: String)
+        /// One item of a list value the parser couldn't read (`expected` names the valid set). Only
+        /// that item dropped — the rest of the list still applies, so this must not share
+        /// `invalidValue`'s "Using the default." claim.
+        case ignoredListItem(got: String, expected: String)
         /// A number outside its range, clamped to the nearest valid extreme.
         case clamped(value: String, to: String)
         /// A `float =` line missing a required field (the config token, e.g. `command:`).
@@ -89,6 +93,7 @@ struct ConfigDiagnostic: Hashable {
         case .chordTaken: return "\(title) has no shortcut"
         case .unusableBind: return "\(title) has an unusable shortcut"
         case .invalidValue: return "\(title) has an invalid value"
+        case .ignoredListItem: return "\(title) has an invalid item"
         case .clamped: return "\(title) is out of range"
         case .floatMissingField, .floatUnusableKey: return "A tool float was ignored"
         case .floatFieldInvalid, .floatFieldClamped: return "\(title) has an invalid setting"
@@ -108,6 +113,8 @@ struct ConfigDiagnostic: Hashable {
             return "\(keybindActionToken)=\(chord.configToken) can't be typed on your keyboard. Ignoring it."
         case .invalidValue(let got, let expected):
             return "\(title) = \(got) isn't valid (\(expected)). Using the default."
+        case .ignoredListItem(let got, let expected):
+            return "\(title): \(got) isn't valid (\(expected)). Ignoring it; the rest still applies."
         case .clamped(let value, let to):
             return "\(title) = \(value) is out of range. Using \(to)."
         case .floatMissingField(let field):
@@ -135,6 +142,8 @@ struct ConfigDiagnostic: Hashable {
             return "\(chord.configToken) can't be typed"
         case .invalidValue(let got, _):
             return "\(got) isn't valid"
+        case .ignoredListItem(let got, _):
+            return "\(got) ignored"
         case .clamped(let value, let to):
             return "\(value) → \(to)"
         case .floatMissingField(let field):

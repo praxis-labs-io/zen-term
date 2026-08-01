@@ -12,7 +12,7 @@ struct ToolFloat: Equatable {
     /// by deliberate rename, while order is a property of the list and changes routinely (ZEN-145).
     let id: String
     /// Position in the toolbar, the palette, and Settings — the config `order:`, defaulting to the
-    /// float's line order in the file. The one `var` here: reordering resequences a whole list of
+    /// float's line order in the file. A `var` because reordering resequences a whole list of
     /// otherwise-untouched floats, and a `withOrder`-style copy helper would have to restate every
     /// other field, going stale the first time one is added.
     var order: Int

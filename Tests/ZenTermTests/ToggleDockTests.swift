@@ -189,7 +189,7 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertFalse(dock.hasNewTabButtonForTesting)
     }
 
-    func test_floatWithToolbarFalse_getsNoButton_andNoFloatDivider() {
+    func test_floatWithToolbarFalse_getsNoVisibleButton_andNoFloatDivider() {
         var hidden = float("dev")
         hidden.showsInToolbar = false
         let dock = makeDock([hidden, float("top")])
@@ -197,5 +197,44 @@ final class ToggleDockTests: XCTestCase {
 
         dock.setToolFloats([hidden])
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
+
+        // A render with the tool idle keeps it hidden — surfacing is for running tools only.
+        dock.render(overlay: OverlayState(), floatID: nil, paletteOpen: false)
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
+    }
+
+    /// The liveness handle: a `toolbar:false` float's button must surface (dot and all) while its
+    /// tool runs in the background, and hide again when it dies — otherwise a hidden persistent
+    /// float is a running process with no visible trace anywhere (the ZEN-150 dot is its only one).
+    func test_hiddenFloat_surfacesWhileLiveInBackground_andRehidesWhenItDies() {
+        var hidden = float("dev")
+        hidden.showsInToolbar = false
+        let dock = makeDock([hidden])
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
+
+        dock.render(
+            overlay: OverlayState(), floatID: nil, paletteOpen: false,
+            isLiveInBackground: { $0 == "dev" })
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault + ["│", "dev"])
+        XCTAssertEqual(dock.dottedToolFloatIDsForTesting, ["dev"])
+
+        dock.render(overlay: OverlayState(), floatID: nil, paletteOpen: false)
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault, "the handle leaves with the process")
+    }
+
+    func test_hiddenFloat_surfacesWhileItsCardIsShown() {
+        var hidden = float("dev")
+        hidden.showsInToolbar = false
+        let dock = makeDock([hidden])
+
+        dock.render(overlay: OverlayState(), floatID: "dev", paletteOpen: false)
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault + ["│", "dev"])
+    }
+
+    /// The stack order and recolor list derive from `ToolbarButton.groups` / `allCases`, so a case
+    /// missing from `groups` would silently never mount. Order-sensitive on purpose: the groups
+    /// flattened ARE the toolbar order.
+    func test_toolbarButtonGroups_coverEveryCaseInOrder() {
+        XCTAssertEqual(ToolbarButton.groups.flatMap { $0 }, ToolbarButton.allCases)
     }
 }

@@ -82,9 +82,10 @@ final class SettingsConfigDiagnosticRenderTests: WindowTestCase {
         loadConfig("hide-toolbar-buttons = split-h,zoom\n")
         let expected = ToolbarButton.allCases.map(\.rawValue).joined(separator: ", ")
         let messages = rowMessages(mount(SettingsAppearanceSection()))
+        // Must NOT say "Using the default." — split-h on the same line is genuinely hidden.
         XCTAssertEqual(
             messages,
-            ["hide-toolbar-buttons = zoom isn't valid (\(expected)). Using the default."])
+            ["hide-toolbar-buttons: zoom isn't valid (\(expected)). Ignoring it; the rest still applies."])
     }
 
     func test_diffLayout_showsOnTheAppearanceRow() {

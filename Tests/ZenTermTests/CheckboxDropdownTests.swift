@@ -133,6 +133,26 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertTrue(dropdown.isPopoverOpen)
     }
 
+    /// The row count is fixed at init: a longer array must clamp, or arrow keys walk past the last
+    /// rendered row and Space toggles an entry the user cannot see.
+    func test_setItems_clampsToTheInitRowCount() {
+        let dropdown = makeDropdown(["One", "Two", "Three"])
+        dropdown.setItems(
+            ["One", "Two", "Three", "Four"].map { CheckboxDropdownItem(title: $0, isChecked: true) },
+            title: "All shown")
+        XCTAssertEqual(dropdown.itemsForTesting.count, 3)
+    }
+
+    /// The first row must render its highlight the moment the list opens — not after the first
+    /// arrow move. (The bug: painting from inside the card build, before `listCard` was assigned,
+    /// while the highlight gates on `listCard != nil`.)
+    func test_openList_rendersTheInitialHighlight() {
+        let dropdown = makeDropdown()
+        dropdown.openListForTesting()
+        let highlightFill = Theme.current.chrome.ink(alpha: 0.10).cgColor
+        XCTAssertEqual(dropdown.rowViewsForTesting.first?.layer?.backgroundColor, highlightFill)
+    }
+
     func test_setItems_updatesTitleAndRows_withoutFiringOnToggle() {
         var toggled: [Int] = []
         let dropdown = makeDropdown(onToggle: { toggled.append($0) })

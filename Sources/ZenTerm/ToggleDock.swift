@@ -5,7 +5,8 @@ import AppKit
 /// `ToolFloatCatalog` entry — grouped by thin dividers. Active toggles tint iris. Buttons fire
 /// injected closures (routed through the window's chord handler, so they respect the modals).
 /// Any built-in button can be hidden by `hide-toolbar-buttons`, and a float's `toolbar:false`
-/// hides its button; a divider only renders between two groups that both show something.
+/// hides its button while the tool isn't running (a running tool always keeps its button, dot and
+/// all); a divider only renders between two groups that both show something.
 final class ToggleDock: NSView {
     private let paletteBtn: IconButton
     private let diffBtn: IconButton
@@ -13,10 +14,18 @@ final class ToggleDock: NSView {
     private let rightBtn: IconButton
     private let zoomBtn: IconButton
     /// The built-in buttons keyed by their config slug, so `refreshVisibility` can hide by
-    /// `ToolbarButton` — the same instances the named properties above hold.
+    /// `ToolbarButton` — the same instances the named properties above hold. The one place the
+    /// button set is stated: `allButtons`'s fixed portion and the stack order both derive from it
+    /// (via `ToolbarButton.allCases` / `.groups`), so a new button can't join one registry and
+    /// silently miss another.
     private var fixedButtons: [ToolbarButton: IconButton] = [:]
     private var hiddenButtons: Set<ToolbarButton>
     private var toolFloatBtns: [String: IconButton] = [:]
+    /// Floats declaring `toolbar:false`. Their buttons are built and hidden rather than skipped:
+    /// `render` surfaces one while its tool is running (shown, or live in background), because the
+    /// button's ZEN-150 dot is the only trace a hidden persistent float has — filtering it out
+    /// would leave a live process with no visible handle.
+    private var toolbarHiddenFloatIDs: Set<String> = []
     /// Every button + divider in the dock, retained so `reapplyTheme()` can re-color them all
     /// after a config change (some, like split-h/v and the dividers, have no other stored
     /// reference to reach through).
@@ -60,26 +69,27 @@ final class ToggleDock: NSView {
         zoomBtn = button("arrow.up.left.and.arrow.down.right", "Focus mode", .toggleZoom, onZoom)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        allButtons = [newTab, splitH, splitV, bottomBtn, rightBtn, zoomBtn, paletteBtn, diffBtn]
         fixedButtons = [
             .newTab: newTab, .splitHorizontal: splitH, .splitVertical: splitV,
             .bottomDrawer: bottomBtn, .rightDrawer: rightBtn, .focusMode: zoomBtn,
             .commandPalette: paletteBtn, .diffViewer: diffBtn,
         ]
-        // dividers[i] separates group i from group i+1 (`ToolbarButton.groups` + the float tail);
+        // Derived from the map, never restated: recolor order tracks `allCases`, and the stack
+        // interleaves each `ToolbarButton.groups` group with its trailing divider — dividers[i]
+        // separates group i from group i+1, the float tail being the last group.
         // `refreshVisibility` leans on that indexing.
-        dividers = [Self.divider(), Self.divider(), Self.divider()]
+        allButtons = ToolbarButton.allCases.compactMap { fixedButtons[$0] }
+        dividers = ToolbarButton.groups.map { _ in Self.divider() }
 
         stack.orientation = .horizontal
         stack.alignment = .centerY
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
-        let ordered: [NSView] = [
-            newTab, dividers[0], splitH, splitV, bottomBtn, rightBtn, zoomBtn, dividers[1],
-            paletteBtn, diffBtn, dividers[2],
-        ]
-        for view in ordered {
-            stack.addArrangedSubview(view)
+        for (index, group) in ToolbarButton.groups.enumerated() {
+            for view in group.compactMap({ fixedButtons[$0] }) {
+                stack.addArrangedSubview(view)
+            }
+            stack.addArrangedSubview(dividers[index])
         }
         addSubview(stack)
         NSLayoutConstraint.activate([
@@ -93,13 +103,14 @@ final class ToggleDock: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Test hook: the ids of the per-float buttons currently mounted in the dock, **left to right**.
+    /// Test hook: the ids of the per-float buttons currently **visible** in the dock, left to right.
     /// Read off the arranged subviews rather than `toolFloatBtns`, so it reports the order the user
     /// actually sees — a dictionary's keys couldn't, and the float order is the thing under test
-    /// (ZEN-145).
+    /// (ZEN-145). Visibility-filtered because a `toolbar:false` float's button is mounted hidden.
     var toolFloatButtonIDsForTesting: [String] {
         stack.arrangedSubviews.compactMap { view in
-            toolFloatBtns.first { $0.value === view }?.key
+            guard !view.isHidden else { return nil }
+            return toolFloatBtns.first { $0.value === view }?.key
         }
     }
 
@@ -135,8 +146,9 @@ final class ToggleDock: NSView {
 
     /// Rebuild the per-float buttons at the tail of the dock from the current catalog — called on
     /// init and whenever a config change adds / edits / removes a float, so the dock reflects it with
-    /// no relaunch. Floats with `toolbar:false` are skipped here, and only here: filtering inside
-    /// the dock keeps every caller passing the full catalog, so pruning and the palette never see a
+    /// no relaunch. Every float gets a button; a `toolbar:false` float's starts hidden and `render`
+    /// surfaces it while its tool runs (see `toolbarHiddenFloatIDs`). Handling visibility inside the
+    /// dock keeps every caller passing the full catalog, so pruning and the palette never see a
     /// narrowed list. The fixed buttons and dividers are untouched; the caller re-runs `render`
     /// after to restore active states.
     func setToolFloats(_ toolFloats: [ToolFloat]) {
@@ -146,13 +158,15 @@ final class ToggleDock: NSView {
         }
         allButtons.removeAll { button in toolFloatBtns.values.contains { $0 === button } }
         toolFloatBtns = [:]
-        for spec in toolFloats where spec.showsInToolbar {
+        toolbarHiddenFloatIDs = Set(toolFloats.filter { !$0.showsInToolbar }.map(\.id))
+        for spec in toolFloats {
             // Like the fixed buttons, resolve the glyph from the live keymap so the tooltip tracks
             // user rebinds of the float's `toggle_float:<id>` chord (ZEN-44).
             let btn = IconButton(
                 symbol: spec.icon, pointSize: Self.iconPointSize, accessibilityLabel: spec.title,
                 shortcut: { CommandCatalog.spec(for: .toggleToolFloat(spec.id)).shortcut }
             ) { [weak self] in self?.onToolFloat(spec) }
+            btn.isHidden = !spec.showsInToolbar
             toolFloatBtns[spec.id] = btn
             allButtons.append(btn)
             stack.addArrangedSubview(btn)
@@ -179,7 +193,7 @@ final class ToggleDock: NSView {
         let groupVisible =
             ToolbarButton.groups.map { group in
                 group.contains { !hiddenButtons.contains($0) }
-            } + [!toolFloatBtns.isEmpty]
+            } + [toolFloatBtns.values.contains { !$0.isHidden }]
         for (index, divider) in dividers.enumerated() {
             divider.isHidden = !(groupVisible[...index].contains(true) && groupVisible[index + 1])
         }
@@ -203,9 +217,15 @@ final class ToggleDock: NSView {
         paletteBtn.isActive = paletteOpen
         diffBtn.isActive = diffViewerOpen
         for (id, btn) in toolFloatBtns {
+            let isLive = isLiveInBackground(id)
             btn.isActive = floatID == id
-            btn.showsActivity = isLiveInBackground(id)
+            btn.showsActivity = isLive
+            // A `toolbar:false` button surfaces while its tool is running — shown, or live behind
+            // the scenes (the dot is the only trace a hidden persistent float has) — and hides
+            // again when the tool dies, so a live process always keeps a visible handle.
+            btn.isHidden = toolbarHiddenFloatIDs.contains(id) && floatID != id && !isLive
         }
+        refreshVisibility()  // a surfaced or re-hidden float button moves the tools divider
 
         // A float covers the tab, so zoom/drawer state beneath it would read as lit-but-hidden.
         let floatCoversTab = floatID != nil
