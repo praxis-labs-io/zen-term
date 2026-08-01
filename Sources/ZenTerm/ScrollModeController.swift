@@ -111,10 +111,13 @@ final class ScrollModeController {
         case .scroll(let move):
             sawG = false
             // A page move carries the cursor with the viewport, so it keeps its place on screen.
-            // gg and G are the exception: they name an end of the buffer, so the cursor goes there.
+            // The moves that name a destination put the cursor ON it instead, because landing the
+            // thing you asked for somewhere in view and leaving the cursor elsewhere makes the
+            // cursor a decoration.
             switch move {
             case .top: cursorRow = 0
             case .bottom: cursorRow = lastRow
+            case .prompt: cursorRow = Self.promptRow
             default: break
             }
             surface?.scroll(move)
@@ -185,6 +188,19 @@ final class ScrollModeController {
         default: return nil
         }
     }
+
+    /// Where a prompt jump leaves the prompt, and so where the cursor belongs after one.
+    ///
+    /// libghostty scrolls to a prompt by setting the viewport pin to it (`PageList.scrollPrompt`),
+    /// and the viewport pin is the viewport's **top** row. So the prompt lands on row 0 every time
+    /// it scrolls to one.
+    ///
+    /// The exception is a prompt already inside the active area: `pinIsActive` sends the viewport
+    /// to the bottom instead, and the prompt is then wherever it sits on the live screen. The
+    /// chrome cannot see that row (prompt marks are OSC 133 state, not text), so the cursor is a
+    /// row or more off for that one jump. It corrects on the next `[`, which goes back to
+    /// scrollback where the rule holds.
+    private static let promptRow = 0
 
     private static let escapeKeyCode: UInt16 = 53
     /// Arrow keys arrive as private-use scalars in `charactersIgnoringModifiers`, matched here so

@@ -792,8 +792,17 @@ pin bump and put every band a row out of true.
 `j`/`k` are `.step(±1)`, not `.scroll(.lines(±1))`, and the distinction is the feature:
 the cursor moves for the height of the viewport and the buffer only moves once the
 cursor is pinned at an edge. Scrolling on every `j` would drag the whole screen to
-track a marker that never moved. `gg`/`G` name an end of the buffer, so they carry the
-cursor there; a page move leaves it where it sits on screen.
+track a marker that never moved.
+
+**A move that names a destination puts the cursor on it**, rather than bringing it into
+view and leaving the cursor elsewhere. `gg`/`G` carry it to the ends. `[`/`]` carry it
+to the prompt, which lands on row 0: libghostty scrolls to a prompt by setting the
+viewport pin to it (`PageList.scrollPrompt`) and that pin is the viewport's top row.
+The exception is a prompt already inside the active area, where `pinIsActive` sends the
+viewport to the bottom instead and the prompt sits wherever it does on the live screen;
+prompt marks are OSC 133 state rather than text, so the chrome cannot find that row, and
+the cursor is off for that one jump. A page move is the other case: it carries the
+cursor with the viewport, so your place on screen is kept.
 
 Below the seam each command is one `ghostty_surface_binding_action` string, and the
 signs match (`TerminalScroll.lines(1)` is down, as `scroll_page_lines:1` is).

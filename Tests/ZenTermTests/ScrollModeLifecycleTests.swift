@@ -187,6 +187,40 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 23)
     }
 
+    func test_aPromptJumpPutsTheCursorOnThePrompt() throws {
+        // libghostty scrolls to a prompt by pinning the viewport's top row to it, so the prompt
+        // lands on row 0. Leaving the cursor where it was would put the prompt in view and the
+        // cursor on an unrelated line, which is the cursor doing nothing.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        let handler = try XCTUnwrap(host.modeHandler)
+        XCTAssertEqual(controller.scrollMode.cursorRow, 23)
+
+        XCTAssertTrue(handler(try keyDown("[")))
+
+        XCTAssertEqual(surface.scrolls, [.prompt(-1)])
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0)
+    }
+
+    func test_theNextPromptAlsoTakesTheCursorWithIt() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("[")))
+        for _ in 0..<4 { XCTAssertTrue(handler(try keyDown("j"))) }  // wander off the prompt
+        XCTAssertEqual(controller.scrollMode.cursorRow, 4)
+
+        XCTAssertTrue(handler(try keyDown("]")))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0)
+    }
+
     func test_aPageMoveLeavesTheCursorWhereItIsOnScreen() throws {
         // A page move carries the cursor with the viewport, so your place on screen is kept.
         let controller = makeWindow()

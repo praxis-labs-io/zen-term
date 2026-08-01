@@ -38,16 +38,16 @@ final class ScrollCursorView: NSView {
         let row = bounds.intersection(metrics.rowFrame(self.row, width: bounds.width))
         guard !row.isEmpty else { return }
         Theme.current.chrome.accent.nsColor.withAlphaComponent(Self.fillAlpha).setFill()
-        NSBezierPath(
-            roundedRect: row.insetBy(dx: 0, dy: Self.verticalInset),
-            xRadius: Self.cornerRadius, yRadius: Self.cornerRadius
-        ).fill()
+        NSBezierPath(roundedRect: row, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius).fill()
     }
 
-    // The diff viewer's cursor row, matched value for value (`DiffLineRowView`): same accent role,
-    // same alpha, same radius and inset. Two cursor lines in the same app that read differently
-    // are two features as far as the eye is concerned, and this one is the same idea.
+    // The diff viewer's cursor row (`DiffLineRowView`): same accent role, same alpha, same radius.
+    // Two cursor lines in one app that read differently are two features as far as the eye is
+    // concerned.
+    //
+    // Its 1.5pt vertical inset is the one value not carried over. Diff rows are spaced, so the
+    // inset reads as a pill; terminal rows are contiguous, so it reads as a band that fails to
+    // cover its own line.
     private static let fillAlpha: CGFloat = 0.28
     private static let cornerRadius: CGFloat = 3
-    private static let verticalInset: CGFloat = 1.5
 }
