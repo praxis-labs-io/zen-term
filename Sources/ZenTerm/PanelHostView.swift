@@ -61,18 +61,20 @@ final class PanelHostView: NSView {
         }
     }
 
-    /// Show scroll mode's cursor band on `row`, or nil to take it down. `metrics` is asked for on
+    /// Show scroll mode's overlay in `state`, or nil to take it down. `metrics` is asked for on
     /// every layout pass, so a resize or a font step moves the band without a second call.
-    func setScrollCursor(row: Int?, metrics: @escaping () -> TerminalCellMetrics?) {
-        guard let row else {
+    func setScrollCursor(
+        _ state: ScrollCursorView.State?, metrics: @escaping () -> TerminalCellMetrics?
+    ) {
+        guard let state else {
             cursor.isHidden = true
             cursor.metrics = nil
+            cursor.state = nil
             return
         }
         cursor.metrics = metrics
-        cursor.row = row
+        cursor.state = state
         cursor.isHidden = false
-        cursor.needsDisplay = true
     }
 
     /// Inner breathing room between the pane border and the terminal content, even on

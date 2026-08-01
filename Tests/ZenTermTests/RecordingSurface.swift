@@ -110,6 +110,28 @@ final class RecordingSurface: NSObject, TerminalSurface {
         guard rows.indices.contains(row) else { return nil }
         return rows[row]
     }
+
+    /// Slices `rows` the way a yank reads a selection: the first and last rows cut at their
+    /// columns, everything between them whole.
+    ///
+    /// It does **not** model the backend's unwrapping of soft-wrapped rows. That is deliberate:
+    /// a fake that joined rows would make a test's expected string depend on where the fixture
+    /// happened to wrap, which tests the fixture rather than the selection.
+    func text(in range: TerminalViewportRange) -> String? {
+        guard rows.indices.contains(range.startRow), rows.indices.contains(range.endRow) else {
+            return nil
+        }
+        let sliced = (range.startRow...range.endRow).map { row -> String in
+            let text = rows[row]
+            let from = row == range.startRow ? range.startColumn : 0
+            let through = row == range.endRow ? range.endColumn : text.count - 1
+            guard from <= through, from < text.count else { return "" }
+            let start = text.index(text.startIndex, offsetBy: from)
+            let end = text.index(text.startIndex, offsetBy: min(through + 1, text.count))
+            return String(text[start..<end])
+        }
+        return sliced.joined(separator: "\n")
+    }
     /// Records a real Return keypress separately from pastes, so a test can assert submit went through
     /// the key path (a real Enter) rather than a bracketed `"\r"` paste that a TUI wouldn't act on.
     private(set) var submitCount = 0
