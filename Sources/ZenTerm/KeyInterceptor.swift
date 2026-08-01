@@ -8,6 +8,13 @@ protocol KeybindCapturing: AnyObject {
     func endCapture()
 }
 
+/// The narrow capability a window needs to run a sticky keyboard mode: install a handler for the
+/// keys the keymap didn't claim, and take it back down. Separate from `KeybindCapturing` because
+/// the two differ in strength, not just in caller (see `modeHandler`).
+protocol KeyModeHosting: AnyObject {
+    var modeHandler: ((NSEvent) -> Bool)? { get set }
+}
+
 /// Selective global interception: consume a small reserved allowlist of chrome
 /// chords, pass everything else through to the PTY. This is the mechanism behind
 /// the "don't steal Ctrl+hjkl from nvim" rule — un-reserved chords are returned
@@ -36,6 +43,7 @@ final class KeyInterceptor {
         // Terminal font size, app-wide (ZEN-224). Taken over from libghostty, which binds the same
         // chords itself but applies each to the one focused surface.
         case increaseFontSize, decreaseFontSize, resetFontSize
+        case toggleScrollMode  // enter/leave scroll mode over the focused pane (ZEN-330)
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?
@@ -64,29 +72,50 @@ final class KeyInterceptor {
     func beginCapture(_ handler: @escaping (NSEvent) -> Void) { captureHandler = handler }
     func endCapture() { captureHandler = nil }
 
+    /// A sticky keyboard mode (scroll mode, ZEN-330) claiming the keys the keymap left alone.
+    /// Returns whether it consumed the event; an event it declines still reaches the PTY.
+    ///
+    /// Weaker than `captureHandler` on purpose, and consulted after chord routing rather than
+    /// before it. A mode that also swallowed ⌘T, ⌘P and pane nav would brick the app for as long
+    /// as it stayed up. This way a reserved chord still wins, so the mode's own exit chord fires
+    /// and a user's `ctrl+j` still navigates, while every un-reserved key routes here, including
+    /// the bare `j`/`k`/`g` no chord can ever hold.
+    var modeHandler: ((NSEvent) -> Bool)?
+
     func start() {
         stop()  // idempotent: never stack a second monitor on repeat calls
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
             guard let self else { return event }
-            if let captureHandler = self.captureHandler {
-                captureHandler(event)  // keyDown AND flagsChanged (live modifier preview) are diverted
-                return nil  // consumed — never routes or reaches the PTY while capturing
-            }
-            // Outside capture, flagsChanged passes straight through; only keyDown routes to a chord.
-            guard event.type == .keyDown else { return event }
-            // A reserved chord always carries a modifier (`Chord.parse` rejects modifier-less
-            // binds), so a bare keystroke can never match the keymap. Bail before allocating a
-            // Chord + its lowercased string on the hot per-keystroke path.
-            let reservableModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
-            guard !event.modifierFlags.intersection(reservableModifiers).isEmpty else { return event }
-            switch self.resolve(Chord(event: event)) {
-            case .passThrough:
-                return event
-            case .consume(let action):
-                self.onReservedChord?(action)
+            return self.route(event)
+        }
+    }
+
+    /// The monitor's whole decision, factored out of the live closure so it's unit-testable the
+    /// same way `resolve(_:)` is. Returns the event to pass on, or nil to consume it.
+    ///
+    /// Order is the design: capture beats everything, then reserved chords, then a sticky mode,
+    /// then the PTY. A mode sits below chords so it can't brick ⌘T or pane nav for as long as it
+    /// is up, and above the PTY so it can claim the bare keys no chord is allowed to hold.
+    func route(_ event: NSEvent) -> NSEvent? {
+        if let captureHandler {
+            captureHandler(event)  // keyDown AND flagsChanged (live modifier preview) are diverted
+            return nil  // consumed — never routes or reaches the PTY while capturing
+        }
+        // Outside capture, flagsChanged passes straight through; only keyDown routes to a chord.
+        guard event.type == .keyDown else { return event }
+        // A reserved chord always carries a modifier (`Chord.parse` rejects modifier-less
+        // binds), so a bare keystroke can never match the keymap. Skip the Chord + its
+        // lowercased string on the hot per-keystroke path rather than allocating to miss.
+        let reservableModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
+        if !event.modifierFlags.intersection(reservableModifiers).isEmpty {
+            if case .consume(let action) = resolve(Chord(event: event)) {
+                onReservedChord?(action)
                 return nil
             }
         }
+        // Nothing reserved wanted it. A sticky mode gets the refusal before the PTY does.
+        if modeHandler?(event) == true { return nil }
+        return event
     }
 
     /// What to do with a resolved keyDown, factored out of the live monitor so it's
@@ -117,3 +146,4 @@ final class KeyInterceptor {
 }
 
 extension KeyInterceptor: KeybindCapturing {}
+extension KeyInterceptor: KeyModeHosting {}

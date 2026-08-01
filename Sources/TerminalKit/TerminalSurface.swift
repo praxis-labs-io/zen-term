@@ -61,6 +61,43 @@ public struct TerminalCommandResult: Equatable {
     }
 }
 
+/// A move through the scrollback, expressed in the terminal's own units rather than pixels.
+///
+/// Lines and page fractions both take a signed amount where **positive scrolls down**, toward
+/// newer output. One vocabulary rather than a `scrollUp`/`scrollDown` pair because the caller
+/// is a vim-style keymap, where `j` and `k` differ only in that sign.
+public enum TerminalScroll: Equatable {
+    /// Whole lines. A backend clamps at the ends of the buffer.
+    case lines(Int)
+    /// A fraction of the visible grid's height, so a half page follows the pane's size
+    /// rather than a fixed count.
+    case pageFraction(Double)
+    case top, bottom
+    /// Hop to a shell-integration prompt marker, signed the same way. Requires the shell
+    /// integration a backend injects; without markers it is a no-op rather than an error.
+    case prompt(Int)
+}
+
+/// Where the viewport sits in the buffer, in lines: `total` rows exist, the viewport starts at
+/// `offset` and shows `viewport` of them. `offset + viewport == total` means resting at the
+/// bottom. Reported rather than polled, because the numbers move with output as well as with
+/// scrolling.
+public struct TerminalScrollPosition: Equatable {
+    public var total: Int
+    public var offset: Int
+    public var viewport: Int
+
+    public init(total: Int, offset: Int, viewport: Int) {
+        self.total = total
+        self.offset = offset
+        self.viewport = viewport
+    }
+
+    /// Rows of scrollback below the viewport's last line. Zero when resting at the bottom,
+    /// which is the distinction a reader needs and neither raw field states on its own.
+    public var linesBelow: Int { max(0, total - offset - viewport) }
+}
+
 /// Events flowing OUT of a surface, up into the chrome. Each backend translates
 /// its native callbacks into these.
 public protocol TerminalSurfaceDelegate: AnyObject {
@@ -103,6 +140,10 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     /// asynchronously (never synchronously inside `start`), so a consumer that dispatches
     /// on surface identity can rely on having finished wiring the surface into its state.
     func surfaceDidFailToStart(_ s: TerminalSurface)
+    /// The viewport moved within the buffer, or the buffer grew under it. Fires on output as
+    /// well as on `scroll(_:)`, so a chrome surface reading it stays right while a pane keeps
+    /// printing. A backend with no notion of a scrollback viewport never sends it.
+    func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition)
 }
 
 /// Default no-ops so a consumer implements only the events it cares about.
@@ -118,6 +159,7 @@ public extension TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, hoveredLinkDidChange url: String?) {}
     func surfaceWantsFocus(_ s: TerminalSurface) {}
     func surfaceDidFailToStart(_ s: TerminalSurface) {}
+    func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {}
 }
 
 /// The leaf contract. A backend is anything that can BE a terminal in our chrome.
@@ -197,7 +239,10 @@ public protocol TerminalSurface: AnyObject {
 
     func paste(_ text: String)
     func copySelection() -> String?
-    func scrollToBottom()
+
+    /// Move the viewport through the scrollback. The chrome's scroll mode is the caller: it owns
+    /// the keymap, and this is the whole of what it needs a terminal to do.
+    func scroll(_ command: TerminalScroll)
 
     /// Deliver a Return **keypress** to the shell — a real Enter, not a pasted `"\r"`. A pasted
     /// carriage return arrives inside bracketed paste, where a TUI (Claude Code, an editor) reads it

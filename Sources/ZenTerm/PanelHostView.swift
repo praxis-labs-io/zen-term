@@ -27,8 +27,8 @@ final class PanelHostView: NSView {
     private let headerView: PanelHeader?
     /// The header content for the resting vs zoomed state. A pane has only `zoomMeta` (header hidden
     /// until zoomed); a drawer has both (its base header ⇄ the zoom variant). `updateHeader` picks
-    /// the meta for the current zoom state — `(isZoomed ? zoomMeta : nil) ?? baseMeta`, nil meta
-    /// hides — which covers both cases in one rule.
+    /// the meta for the current state, `modeMeta ?? (isZoomed ? zoomMeta : nil) ?? baseMeta`, where a
+    /// nil result hides the header. One rule covers all three cases.
     private let baseMeta: PanelMeta?
     private let zoomMeta: PanelMeta?
     private var headerTopConstraints: [NSLayoutConstraint] = []
@@ -43,6 +43,19 @@ final class PanelHostView: NSView {
     var isZoomed: Bool = false {
         didSet {
             guard oldValue != isZoomed else { return }
+            updateHeader()
+        }
+    }
+
+    /// A transient header this panel is wearing for as long as a mode is up over it (scroll
+    /// mode, ZEN-330), outranking both the zoom and base metas. Set to nil to give the header
+    /// back to whichever of those the panel's state calls for.
+    ///
+    /// It carries live text, so it is assigned on every scroll report, which is why
+    /// `PanelHeader.apply` rebuilds the keycap only when the action actually moves.
+    var modeMeta: PanelMeta? {
+        didSet {
+            guard oldValue?.title != modeMeta?.title || oldValue?.action != modeMeta?.action else { return }
             updateHeader()
         }
     }
@@ -223,7 +236,7 @@ final class PanelHostView: NSView {
     /// drawer shows its base header and swaps to the zoom variant while zoomed.
     private func updateHeader() {
         guard let headerView else { return }
-        if let meta = (isZoomed ? zoomMeta : nil) ?? baseMeta {
+        if let meta = modeMeta ?? (isZoomed ? zoomMeta : nil) ?? baseMeta {
             headerView.apply(meta)
             setHeaderShown(true)
         } else {
@@ -335,11 +348,16 @@ final class PanelHostView: NSView {
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
         /// Swap the header to a new title + keybind (a drawer's resting → zoomed transition).
+        ///
+        /// The keycap is rebuilt only when the action moves. A mode header re-applies on every
+        /// scroll report to update its count, and tearing down and re-adding a view per keystroke
+        /// to redraw an unchanged ⌘⇧S is churn for nothing.
         func apply(_ meta: PanelMeta) {
+            let actionMoved = action != meta.action
             title = meta.title
             action = meta.action
             applyTitle()
-            rebuildKeycap()
+            if actionMoved { rebuildKeycap() }
         }
 
         /// Re-apply the live title ink and rebuild the keybind chip — its shortcut is fixed at

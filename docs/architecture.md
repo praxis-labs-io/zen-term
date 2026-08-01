@@ -13,7 +13,7 @@ contract, and it is deliberately small. A surface is anything that can *be* a te
 chrome: it vends an `NSView`, a title, a cwd, a busy flag, and the background its
 program last reported, and it takes
 `start`, `focus`, `terminate`, `paste`, `copySelection`, `applyAppearance`,
-`setFontSize`.
+`setFontSize`, `scroll`.
 
 **`setFontSize` is separate from `applyAppearance` on purpose.** Appearance travels
 as a whole theme through the app-global config, which on a file-configured backend
@@ -663,10 +663,19 @@ not from the near-invisible scale overshoot. Tying the fade to the spring's
 is the single most important thing to know when testing: a control's own `keyDown`
 test can be green while the key never reaches it in the running app.
 
-Order: capture mode (Settings recording) diverts and consumes everything, including
-bound chords. Otherwise `flagsChanged` passes through, and `keyDown` bails
-immediately if it carries no modifier (a reserved chord always has one) before
-allocating a `Chord`.
+Order, all of it in `KeyInterceptor.route(_:)` (factored out of the live monitor so
+it is unit-testable, the same reason `resolve(_:)` is): capture mode (Settings
+recording) diverts and consumes everything, including bound chords. Otherwise
+`flagsChanged` passes through; a `keyDown` carrying no modifier skips chord
+resolution without allocating a `Chord`, because a reserved chord always has one.
+Whatever no chord claimed is offered to `modeHandler`, and only then to the PTY.
+
+**`modeHandler` is the sticky-mode hook, and it sits *below* chord routing.** That
+placement is the design: a mode installed above it would swallow ⌘T, ⌘P and pane
+nav for as long as it was up. Below it, a mode still gets every un-reserved key,
+including the bare `j`/`k`/`g` that no chord is allowed to hold, while the user's
+own binds keep working inside the mode. It is installed only while a mode is live,
+so an idle app pays one nil check per keystroke.
 
 **`Chord` canonicalization** is the sharpest rule in the codebase. A shifted glyph
 folds onto its base key **only when Shift is set**, because
@@ -678,8 +687,9 @@ mislabel a chord, never invent one.**
 
 Defaults (`KeymapDefaults.map`): ⌘⇧\ and ⌘⇧- split, ⌘HJKL nav, ⌘⇧HJKL resize, ⌘W
 close pane, ⌘T new tab, ⌘N new window, ⌘[ ⌘] tabs, ⌘1-9 select, ⌘B bottom drawer,
-⌘\ right drawer, ⌘F Focus Mode, ⌘⇧F Fill Screen, ⌘P command palette, ⌘⇧P workspace
-picker, ⌘, settings, ⌘⌥R reload, ⌘= and ⌘+ and ⌘- font size, ⌘0 reset it.
+⌘\ right drawer, ⌘F Focus Mode, ⌘⇧F Fill Screen, ⌘⇧S scroll mode, ⌘P command
+palette, ⌘⇧P workspace picker, ⌘, settings, ⌘⌥R reload, ⌘= and ⌘+ and ⌘- font size,
+⌘0 reset it.
 **No tool float is built in**; a float's chord comes from its own `key:` field.
 
 **Increase ships two chords, and the second is load-bearing.** ⌘+ on a US layout is
@@ -740,6 +750,39 @@ is how Ctrl-hjkl died inside an nvim float (ZEN-270). The float path needs no vi
 check and no socket at all. A float mints no nav token and gets no `$ZEN_PANE`, so the
 plugin inside one degrades to plain `wincmd`, which is the right behavior for a modal
 surface with nowhere to hand off to.
+
+### Scroll mode
+
+⌘⇧S reads back through the focused panel's scrollback from the keyboard.
+`ScrollModeController` owns it, one per window, and it targets whichever panel held
+unified focus when it opened. It does not follow focus afterward.
+
+**It exists because the keys that should scroll a buffer are the shell's.** `j`,
+`k`, `⌃d` and `⌃u` cannot be reserved chords without taking them from every program
+in every pane, and libghostty's own ⌘Home/⌘PageUp defaults (live in ZenTerm, since
+the chrome never claims those chords) are fn-chords on a laptop that nothing in the
+UI mentions. A mode borrows the keys while it is up and gives them back on exit.
+
+`command(for:afterG:)` is a pure static over `NSEvent`, the same testable seam as
+`DiffPaneTable.vimKey(for:)`, and it reads shiftedness from the modifier flags
+rather than character case for the same Caps Lock reason. j/k move a line, ⌃d/⌃u a
+half page, ⌃f/⌃b and space a page, gg/G the ends, [ and ] hop prompts, and Esc/q/i
+leave. **Every key is consumed, mapped or not**: passing misses through would drop a
+stray keystroke into the shell behind the mode, which is worse than one that does
+nothing.
+
+Below the seam each command is one `ghostty_surface_binding_action` string, and the
+signs match (`TerminalScroll.lines(1)` is down, as `scroll_page_lines:1` is).
+`GHOSTTY_ACTION_SCROLLBAR` feeds `scrollPositionDidChange` back up, which is what
+puts a live count in the pane header. It fires on output too, so the count stays
+right while a pane keeps printing.
+
+**The retractions are the load-bearing half.** The mode holds an app-global key
+handler, so one left up deafens whatever you switched to. It ends when pane focus
+moves (which covers pane close, split and tab switch, since all of them route
+through `restoreUnifiedFocus`), when a tool float or modal card takes the keyboard
+(neither moves pane focus, so neither fires the focus relay), and when the window
+resigns key. `end()` is idempotent, so overlapping triggers are free.
 
 ## Config
 

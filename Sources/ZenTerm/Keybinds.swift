@@ -39,6 +39,7 @@ extension KeyInterceptor.ReservedChord {
         case .increaseFontSize: return "increase_font_size"
         case .decreaseFontSize: return "decrease_font_size"
         case .resetFontSize: return "reset_font_size"
+        case .toggleScrollMode: return "toggle_scroll_mode"
         }
     }
 
@@ -82,6 +83,7 @@ extension KeyInterceptor.ReservedChord {
         case "increase_font_size": self = .increaseFontSize
         case "decrease_font_size": self = .decreaseFontSize
         case "reset_font_size": self = .resetFontSize
+        case "toggle_scroll_mode": self = .toggleScrollMode
         default:
             if let rest = token.dropPrefixIfPresent("select_tab_"), let n = Int(rest), (1...9).contains(n) {
                 self = .selectTab(n)
@@ -115,6 +117,7 @@ enum KeymapDefaults {
         map[Chord(command: true, shift: true, key: "j")] = .resizeDown
         map[Chord(command: true, shift: true, key: "p")] = .toggleRepoPicker
         map[Chord(command: true, shift: true, key: "f")] = .fillScreen
+        map[Chord(command: true, shift: true, key: "s")] = .toggleScrollMode
 
         // bare ⌘.
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer

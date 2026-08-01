@@ -241,6 +241,7 @@
 #   resize_left  resize_right  resize_up  resize_down
 #   new_tab  new_window  prev_tab  next_tab  select_tab_1 … select_tab_9
 #   toggle_bottom_drawer  toggle_right_drawer  toggle_focus_mode  fill_screen
+#   toggle_scroll_mode
 #   toggle_workspace_picker  toggle_command_palette  diff_viewer
 #   open_settings  reload_config
 #   increase_font_size  decrease_font_size  reset_font_size
@@ -269,6 +270,7 @@
 # keybind = toggle_right_drawer=cmd+\
 # keybind = toggle_focus_mode=cmd+f              # one pane/drawer fills the window
 # keybind = fill_screen=cmd+shift+f              # the window fills the desktop
+# keybind = toggle_scroll_mode=cmd+shift+s       # vim keys move the focused pane's scrollback
 # keybind = toggle_workspace_picker=cmd+shift+p
 # keybind = toggle_command_palette=cmd+p
 # keybind = diff_viewer=cmd+d                    # diff of the focused repo
@@ -277,3 +279,19 @@
 # keybind = increase_font_size=cmd+=             # ⌘+ (cmd+shift+=) does this too
 # keybind = decrease_font_size=cmd+-
 # keybind = reset_font_size=cmd+0                # back to font-size above
+#
+# ─── Scroll mode ─────────────────────────────────────────────────────────────
+#
+# `toggle_scroll_mode` (⌘⇧S) reads back through the focused pane's scrollback with
+# the keyboard. While it's up the pane header says SCROLL and how far below the
+# viewport the buffer runs, these keys move the view, and nothing reaches the shell:
+#
+#   j / k            one line down / up            [ / ]   previous / next prompt
+#   ctrl+d / ctrl+u  half a page                   gg / G  top / bottom
+#   ctrl+f / ctrl+b  a full page (space = ctrl+f)  esc, q  leave
+#
+# Your own chords still work inside it, so ⌘T and pane nav are never swallowed.
+# Prompt jumps need the shell integration ZenTerm injects, which covers bash, elvish,
+# fish, nushell and zsh.
+# The mode ends on its own when focus moves, the pane closes, you change tab, or a
+# tool float or palette opens.

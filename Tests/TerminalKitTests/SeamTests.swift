@@ -21,7 +21,7 @@ private final class SpySurface: TerminalSurface {
     func terminate() {}
     func paste(_ text: String) {}
     func copySelection() -> String? { nil }
-    func scrollToBottom() {}
+    func scroll(_ command: TerminalScroll) {}
 }
 
 private final class RecordingDelegate: TerminalSurfaceDelegate {

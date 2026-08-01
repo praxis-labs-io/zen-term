@@ -389,10 +389,18 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// the *only* thing that moves a surface's size once it has been called, and the chrome has to
     /// re-push after an `applyAppearance` rather than expect the theme's size to land.
     public func setFontSize(_ points: CGFloat) {
-        guard let surfacePtr else { return }
         lastFontSize = points
-        // libghostty parses the same action text a `keybind =` line carries.
-        let action = "set_font_size:\(points)"
+        performBindingAction("set_font_size:\(points)")
+    }
+
+    /// Perform one libghostty binding action on this surface by name.
+    ///
+    /// The action text is exactly what a `keybind =` line carries, and libghostty parses it the
+    /// same way, so anything in its surface-scope action list is reachable from here. A rejected
+    /// action is logged rather than thrown: every caller is a keystroke, and a keystroke that
+    /// does nothing is the right failure.
+    private func performBindingAction(_ action: String) {
+        guard let surfacePtr else { return }
         let performed = action.withCString {
             ghostty_surface_binding_action(surfacePtr, $0, UInt(action.utf8.count))
         }
@@ -666,10 +674,16 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         return String(cString: ptr)
     }
 
-    public func scrollToBottom() {
-        guard let surfacePtr else { return }
-        let action = "scroll_to_bottom"
-        _ = ghostty_surface_binding_action(surfacePtr, action, UInt(action.utf8.count))
+    /// Positive `lines`/`pageFraction` scroll down in libghostty too (`Binding.zig`: "Positive
+    /// values scroll downwards"), so the seam's sign convention passes straight through.
+    public func scroll(_ command: TerminalScroll) {
+        switch command {
+        case .lines(let n): performBindingAction("scroll_page_lines:\(n)")
+        case .pageFraction(let f): performBindingAction("scroll_page_fractional:\(f)")
+        case .top: performBindingAction("scroll_to_top")
+        case .bottom: performBindingAction("scroll_to_bottom")
+        case .prompt(let n): performBindingAction("jump_to_prompt:\(n)")
+        }
     }
 
     public func setSizeSyncSuspended(_ suspended: Bool) {
@@ -757,6 +771,16 @@ public final class GhosttySurface: NSObject, TerminalSurface {
                     "GhosttySurface: renderer unhealthy, pane may render black",
                     category: .surface)
             }
+            return true
+        case GHOSTTY_ACTION_SCROLLBAR:
+            // libghostty emits this whenever the viewport moves OR the buffer grows, so it
+            // arrives on ordinary output too, not only on a scroll. The chrome reads it to say
+            // where in the buffer scroll mode is sitting.
+            let bar = action.action.scrollbar
+            delegate?.surface(
+                self,
+                scrollPositionDidChange: TerminalScrollPosition(
+                    total: Int(bar.total), offset: Int(bar.offset), viewport: Int(bar.len)))
             return true
         default:
             return false

@@ -106,6 +106,24 @@ final class TabController: NSObject {
         }
     }
 
+    /// The panel holding unified focus, as the pair scroll mode needs: the terminal to drive,
+    /// and the panel to hang its indicator on. Nil while the focused panel has no live surface
+    /// (a drawer that has never been opened).
+    /// Any surface in this tab moved its scroll position, panes and drawers alike (ZEN-330).
+    var onScrollPosition: ((TerminalSurface, TerminalScrollPosition) -> Void)?
+
+    var focusedScrollTarget: (surface: TerminalSurface, panel: PanelHostView)? {
+        switch focusedPanel {
+        case .pane: return paneCanvas.focusedScrollTarget
+        case .bottomDrawer:
+            guard let surface = bottomDrawerSurface, let panel = bottomDrawerPanel else { return nil }
+            return (surface, panel)
+        case .rightDrawer:
+            guard let surface = rightDrawerSurface, let panel = rightDrawerPanel else { return nil }
+            return (surface, panel)
+        }
+    }
+
     /// The currently active tile constraints (canvas + open drawer panels), rebuilt
     /// from scratch on every `relayoutPanels()` call so repeated toggles never
     /// accumulate constraints.
@@ -274,6 +292,9 @@ final class TabController: NSObject {
         paneCanvas.onZoomEnded = { [weak self] in self?.paneZoomEndedInternally() }
         paneCanvas.onNotification = { [weak self] n in self?.onNotification?(n) }
         paneCanvas.onCommandFinished = { [weak self] result in self?.onCommandFinished?(result) }
+        paneCanvas.onScrollPosition = { [weak self] surface, position in
+            self?.onScrollPosition?(surface, position)
+        }
         paneCanvas.onSurfaceStartFailed = { [weak self] retry, close in self?.onPaneStartFailed?(retry, close) }
     }
 
@@ -1345,6 +1366,12 @@ final class TabController: NSObject {
 }
 
 extension TabController: TerminalSurfaceDelegate {
+    /// A drawer's viewport moved in its buffer. Panes relay the same event through
+    /// `PaneCanvasController`; both land on `onScrollPosition`.
+    func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {
+        guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
+        onScrollPosition?(s, position)
+    }
     /// A click landed in one of the tab's drawer surfaces — give that drawer unified
     /// focus. A tool float is modal and already holds focus, so it's ignored.
     func surfaceWantsFocus(_ s: TerminalSurface) {

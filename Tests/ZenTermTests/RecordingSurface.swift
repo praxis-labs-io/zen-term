@@ -78,7 +78,10 @@ final class RecordingSurface: NSObject, TerminalSurface {
     private(set) var pastes: [String] = []
     func paste(_ text: String) { pastes.append(text) }
     func copySelection() -> String? { nil }
-    func scrollToBottom() {}
+    /// Records scroll commands so a test can assert which key produced which move, and that a
+    /// key outside scroll mode produced none.
+    private(set) var scrolls: [TerminalScroll] = []
+    func scroll(_ command: TerminalScroll) { scrolls.append(command) }
     /// Records a real Return keypress separately from pastes, so a test can assert submit went through
     /// the key path (a real Enter) rather than a bracketed `"\r"` paste that a TUI wouldn't act on.
     private(set) var submitCount = 0

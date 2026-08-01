@@ -174,7 +174,12 @@ final class WindowController: NSObject {
         let controller = ToolFloatController(
             presentOverlay: { [weak self] overlay in self?.presentWindowFloat(overlay) },
             focusedCWD: { [weak self] in self?.activeController?.focusedCWD },
-            yieldFocus: { [weak self] in self?.activeController?.yieldFocusToFloat() },
+            yieldFocus: { [weak self] in
+                // A float takes the keyboard without moving pane focus, so the focus relay never
+                // fires and scroll mode would stay up swallowing the keys meant for the float.
+                self?.scrollMode.end()
+                self?.activeController?.yieldFocusToFloat()
+            },
             restoreFocus: { [weak self] in self?.activeController?.restoreUnifiedFocus() })
         controller.onStateChanged = { [weak self] in self?.renderDock() }
         controller.onRequestToast = { [weak self] content in self?.toasts.show(content) }
@@ -230,6 +235,15 @@ final class WindowController: NSObject {
 
     /// The app's key interceptor, injected so the Settings Keybinds section can capture chords.
     weak var keybindCapturer: KeybindCapturing?
+
+    /// The same interceptor, injected under the narrower capability scroll mode needs. The
+    /// handler is installed only while the mode is up, so an idle app pays one nil check per
+    /// keystroke rather than a chain of lookups into every window.
+    weak var keyModeHost: KeyModeHosting?
+
+    /// Scroll mode over this window's focused panel (ZEN-330). Per window because it targets one
+    /// panel, and the key handler it installs is app-global, so only the key window's can be up.
+    let scrollMode = ScrollModeController()
 
     /// Hand an app-global chord back to `AppDelegate.route`. The keyboard path routes these before
     /// `handle(_:)`, but a palette pick reaches `handle` directly — where they'd otherwise be a
@@ -380,6 +394,7 @@ final class WindowController: NSObject {
 
         layoutContainer()
         window.delegate = self  // for windowWillClose teardown (native close button + cascade)
+        wireScrollMode()
 
         // Layout & Motion knobs (backdrop tint, window gutter, pane gap) re-apply live: a
         // Settings-card edit re-tints the backdrop and re-lays-out every built tab, no relaunch.
@@ -527,6 +542,29 @@ final class WindowController: NSObject {
             dock.centerYAnchor.constraint(equalTo: tabBar.centerYAnchor, constant: -6),
             tabBar.trailingAnchor.constraint(equalTo: dock.leadingAnchor, constant: -8),
         ])
+    }
+
+    /// Enter scroll mode over the focused panel, or leave it if it is already up.
+    ///
+    /// A panel with no live surface (a drawer that has never been opened) has nothing to scroll,
+    /// so the chord does nothing rather than putting up a mode over an empty panel.
+    private func toggleScrollMode() {
+        if scrollMode.isActive {
+            scrollMode.end()
+            return
+        }
+        guard let target = activeController?.focusedScrollTarget else { return }
+        scrollMode.begin(surface: target.surface, panel: target.panel)
+    }
+
+    /// Install the mode's key handler for exactly as long as the mode is up, and route scroll
+    /// reports into it. Both halves live here because `ScrollModeController` owns the mode, not
+    /// the window's plumbing.
+    private func wireScrollMode() {
+        scrollMode.onActiveChanged = { [weak self] active in
+            guard let self else { return }
+            keyModeHost?.modeHandler = active ? { [weak self] event in self?.scrollMode.handle(event) ?? false } : nil
+        }
     }
 
     func showAndStart() {
@@ -880,6 +918,7 @@ final class WindowController: NSObject {
     /// input, and spring it in. One path for all three cards. No-op if there's no active tab.
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
         guard let active = activeController else { return }
+        scrollMode.end()  // the card takes the keyboard; see the float's `yieldFocus`
         // Anything else still on its way in would otherwise land on top of this card a moment from
         // now, leaving two modal surfaces stacked and the keyboard aimed at the wrong one: a float
         // still resolving its repo root, or a card still reading the config it renders from. A
@@ -1650,6 +1689,7 @@ final class WindowController: NSObject {
         case .toggleZoom:
             Log.info("zoom toggled", category: .panes)
             active?.toggleZoom()
+        case .toggleScrollMode: toggleScrollMode()
         case .fillScreen: toggleFillScreen()
         case .toggleToolFloat(let id):
             // A float is modal too, so it calls off a card that's still loading — otherwise the card
@@ -1824,7 +1864,15 @@ final class WindowController: NSObject {
             self?.presentSurfaceFailureToast(retry: retry, close: close)
         }
         // A pane click while a close confirm is up moves the confirm's target — void it.
-        c.onFocusChanged = { [weak self] in self?.cancelConfirm() }
+        // Focus moving also ends scroll mode: the mode targets one panel, and a header still up
+        // over the panel you just left points at a buffer you are no longer reading.
+        c.onFocusChanged = { [weak self] in
+            self?.cancelConfirm()
+            self?.scrollMode.end()
+        }
+        c.onScrollPosition = { [weak self] surface, position in
+            self?.scrollMode.report(position: position, from: surface)
+        }
         c.onNotification = { [weak self] n in self?.agentNotified(id: id, notification: n) }
         c.onCommandFinished = { [weak self] result in self?.commandFinished(id: id, result: result) }
     }
@@ -1985,6 +2033,11 @@ final class WindowController: NSObject {
         openWorkspace(ws, replaceCurrentTab: replaceCurrentTab)
     }
 
+    /// Test hooks: the panel and surface scroll mode would target, so a test can assert what the
+    /// header on screen reads rather than only what the mode's own flag says (ZEN-330).
+    var focusedPanelForTesting: PanelHostView? { activeController?.focusedScrollTarget?.panel }
+    var focusedSurfaceForTesting: TerminalSurface? { activeController?.focusedScrollTarget?.surface }
+
     /// Test hook: drive the real surface-failure toast so a test can click its actual buttons.
     func presentSurfaceFailureToastForTesting(retry: @escaping () -> Void, close: @escaping () -> Void) {
         presentSurfaceFailureToast(retry: retry, close: close)
@@ -2138,6 +2191,10 @@ final class WindowController: NSObject {
 
 extension WindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) { tearDown() }
+
+    /// Scroll mode installs an app-global key handler, so it cannot outlive this window holding
+    /// the keyboard: leaving it up would swallow keystrokes meant for whatever you switched to.
+    func windowDidResignKey(_ notification: Notification) { scrollMode.end() }
 
     /// Quit terminates the process without closing windows, so `windowWillClose` never fires
     /// and every shell is orphaned instead of swept (ZEN-269). The app delegate drives this on

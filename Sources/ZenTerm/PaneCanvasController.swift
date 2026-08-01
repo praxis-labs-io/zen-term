@@ -76,6 +76,10 @@ final class PaneCanvasController: NSObject {
     /// routing) onto the pane canvas.
     var onFocusChanged: (() -> Void)?
 
+    /// A pane's scroll position moved. Carries the surface so a consumer can match it against
+    /// the one it cares about (ZEN-330).
+    var onScrollPosition: ((TerminalSurface, TerminalScrollPosition) -> Void)?
+
     /// Fired when a socket `focus` command names one of this canvas's panes (an nvim split
     /// at its edge handing off). `TabController` routes it into its unified `navigate(_:)`.
     var onSocketFocus: ((Direction) -> Void)?
@@ -125,6 +129,15 @@ final class PaneCanvasController: NSObject {
     /// The surface behind a pane id, for a caller that already knows which pane it wants (the diff
     /// viewer's send target). Nil for an id with no live surface.
     func surface(for id: PaneID) -> TerminalSurface? { registry.surface(for: id) }
+
+    /// The focused pane as scroll mode needs it: the terminal to drive, and the panel to hang
+    /// its indicator on.
+    var focusedScrollTarget: (surface: TerminalSurface, panel: PanelHostView)? {
+        guard let surface = registry.surface(for: tree.focusedLeaf),
+            let panel = hostByLeaf[tree.focusedLeaf]
+        else { return nil }
+        return (surface, panel)
+    }
 
     /// Whether the focused pane's shell has live work (busy). False when the
     /// surface hasn't started or the backend can't tell.
@@ -542,6 +555,11 @@ final class PaneCanvasController: NSObject {
 }
 
 extension PaneCanvasController: TerminalSurfaceDelegate {
+    /// A pane's viewport moved in its buffer. Relayed with the surface attached so scroll mode
+    /// can ignore every pane but the one it is driving.
+    func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {
+        onScrollPosition?(s, position)
+    }
     func surface(_ s: TerminalSurface, cwdDidChange url: URL) {
         guard let id = leafID(of: s) else { return }
         cwdByLeaf[id] = url
