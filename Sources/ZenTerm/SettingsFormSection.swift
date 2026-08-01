@@ -14,7 +14,7 @@ extension TextAreaBox: ThemeReapplying {}
 extension Dropdown: ThemeReapplying {}
 extension SegmentedControl: ThemeReapplying {}
 extension AppButton: ThemeReapplying {}
-extension CheckboxList: ThemeReapplying {}
+extension CheckboxDropdown: ThemeReapplying {}
 
 /// Base for settings sections built from live-editing form rows: number-field / segmented / text /
 /// custom editors over the chrome config. Each edit applies live via a `ConfigWriter` scalar write +
@@ -287,8 +287,8 @@ class SettingsFormSection: SettingsSection {
             button.onArrowLeft = { [weak self] in self?.onExitToNav?() }
             button.onTab = { [weak self] in self?.moveTab(1) }
             button.onBacktab = { [weak self] in self?.moveTab(-1) }
-        case let list as CheckboxList:
-            // The list bubbles Up/Down only at its boundary rows; in between they move its highlight.
+        case let list as CheckboxDropdown:
+            // Bubbles only while the list is closed; open, the arrows move its row highlight.
             list.onArrowUp = { [weak self] in self?.moveFocus(-1) }
             list.onArrowDown = { [weak self] in self?.moveFocus(1) }
             list.onArrowLeft = { [weak self] in self?.onExitToNav?() }

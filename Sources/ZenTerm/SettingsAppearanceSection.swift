@@ -70,14 +70,17 @@ final class SettingsAppearanceSection: SettingsFormSection {
         }
     }
 
-    private weak var toolbarList: CheckboxList?
+    private weak var toolbarList: CheckboxDropdown?
 
-    /// The footer-toolbar multi-select: one checkbox per built-in button, checked = shown. A toggle
-    /// recomputes the hidden set from the live config and writes `hide-toolbar-buttons` (or removes
-    /// the key when nothing is hidden, so an all-shown config stays clean).
+    /// The footer-toolbar multi-select: a dropdown of checkboxes, one per built-in button, checked
+    /// = shown. A toggle recomputes the hidden set from the live config and writes
+    /// `hide-toolbar-buttons` (or removes the key when nothing is hidden, so an all-shown config
+    /// stays clean); the list stays open so several buttons can be toggled in one visit.
     private func addToolbarButtonsRow() {
         registerScalarKey("hide-toolbar-buttons")
-        let list = CheckboxList(items: Self.toolbarItems()) { [weak self] index in
+        let list = CheckboxDropdown(
+            title: Self.toolbarSummary(), items: Self.toolbarItems()
+        ) { [weak self] index in
             guard let self else { return }
             var hidden = GeneralConfig.current.hiddenToolbarButtons
             let button = ToolbarButton.allCases[index]
@@ -96,16 +99,24 @@ final class SettingsAppearanceSection: SettingsFormSection {
             key: "hide-toolbar-buttons", caption: "Toolbar buttons",
             description: "Uncheck to hide a button. Shortcuts stay active",
             control: list, focusStop: list, controlNote: nil, width: 220,
-            refresh: { [weak self] in self?.toolbarList?.setItems(Self.toolbarItems()) })
+            refresh: { [weak self] in
+                self?.toolbarList?.setItems(Self.toolbarItems(), title: Self.toolbarSummary())
+            })
     }
 
     /// Checked = shown (the intuitive polarity; the config key stores the inverse). Static so the
     /// closures capture no `self` (the section's retain-cycle rule, see `reduceMotionIndex`).
-    private static func toolbarItems() -> [CheckboxListItem] {
+    private static func toolbarItems() -> [CheckboxDropdownItem] {
         let hidden = GeneralConfig.current.hiddenToolbarButtons
         return ToolbarButton.allCases.map {
-            CheckboxListItem(title: $0.displayName, isChecked: !hidden.contains($0))
+            CheckboxDropdownItem(title: $0.displayName, isChecked: !hidden.contains($0))
         }
+    }
+
+    /// The closed button's summary: the at-a-glance count that says whether anything is hidden.
+    private static func toolbarSummary() -> String {
+        let hidden = GeneralConfig.current.hiddenToolbarButtons.count
+        return hidden == 0 ? "All shown" : "\(hidden) hidden"
     }
 
     private static let diffLayouts: [GeneralConfig.DiffLayout] = [.sideBySide, .inline]

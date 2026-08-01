@@ -33,8 +33,8 @@ final class SettingsToolbarButtonsRowTests: WindowTestCase {
         (try? String(contentsOf: tempRoot.appendingPathComponent("config"), encoding: .utf8)) ?? ""
     }
 
-    /// Mount the Appearance section in a host window and return its toolbar checkbox list.
-    private func mountToolbarList() throws -> CheckboxList {
+    /// Mount the Appearance section in a host window and return its toolbar checkbox dropdown.
+    private func mountToolbarList() throws -> CheckboxDropdown {
         let section = SettingsAppearanceSection()
         self.section = section
         let detail = section.makeDetailView()
@@ -48,13 +48,13 @@ final class SettingsToolbarButtonsRowTests: WindowTestCase {
             view.subviews.flatMap { [$0] + descendants(of: $0) }
         }
         let list = try XCTUnwrap(
-            descendants(of: detail).compactMap { $0 as? CheckboxList }.first,
+            descendants(of: detail).compactMap { $0 as? CheckboxDropdown }.first,
             "the Appearance section should mount the toolbar multi-select")
         window.makeFirstResponder(list)
         return list
     }
 
-    private func pressSpace(_ list: CheckboxList) {
+    private func pressSpace(_ list: CheckboxDropdown) {
         list.keyDown(
             with: NSEvent.keyEvent(
                 with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
@@ -66,7 +66,10 @@ final class SettingsToolbarButtonsRowTests: WindowTestCase {
         let list = try mountToolbarList()
         XCTAssertEqual(list.itemsForTesting.count, ToolbarButton.allCases.count)
         XCTAssertTrue(list.itemsForTesting.allSatisfy(\.isChecked), "everything shows by default")
+        XCTAssertEqual(list.buttonTitleForTesting, "All shown")
 
+        pressSpace(list)  // open the list
+        XCTAssertTrue(list.isPopoverOpen)
         pressSpace(list)  // uncheck New tab (the first, highlighted row)
 
         XCTAssertTrue(
@@ -75,12 +78,15 @@ final class SettingsToolbarButtonsRowTests: WindowTestCase {
         XCTAssertEqual(
             list.itemsForTesting.first?.isChecked, false,
             "the row must re-render from the reloaded config")
+        XCTAssertEqual(list.buttonTitleForTesting, "1 hidden")
         XCTAssertEqual(GeneralConfig.current.hiddenToolbarButtons, [.newTab])
+        XCTAssertTrue(list.isPopoverOpen, "the write's reload must not close the open list")
 
         pressSpace(list)  // re-check it — nothing hidden, so the key must go, not linger empty
 
         XCTAssertFalse(configText().contains("hide-toolbar-buttons"))
         XCTAssertEqual(list.itemsForTesting.first?.isChecked, true)
+        XCTAssertEqual(list.buttonTitleForTesting, "All shown")
         XCTAssertEqual(GeneralConfig.current.hiddenToolbarButtons, [])
     }
 }

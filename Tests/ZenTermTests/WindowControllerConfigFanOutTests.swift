@@ -102,6 +102,9 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
     /// mounted toolbar live. Drives the real notification against the real window tree, so dropping
     /// the `setHiddenButtons` line from the fan-out fails here instead of shipping a stale toolbar.
     func test_toolbarButtonsChange_hidesTheButtonThroughTheFanOut() throws {
+        // Pin the baseline: `current` is the developer's real config on this machine, and a real
+        // `hide-toolbar-buttons` line there would fail the precondition below (it did, live).
+        GeneralConfig.setCurrentForTesting(.builtIn)
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
         self.controller = controller
@@ -110,7 +113,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
             "expected the footer toolbar mounted in the window")
         XCTAssertTrue(dock.visibleLayoutForTesting.contains("Diff viewer"))
 
-        var config = GeneralConfig.current
+        var config = GeneralConfig.builtIn
         config.hiddenToolbarButtons = [.diffViewer]
         GeneralConfig.setCurrentForTesting(config)
         NotificationCenter.default.post(
