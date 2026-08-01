@@ -767,7 +767,7 @@ UI mentions. A mode borrows the keys while it is up and gives them back on exit.
 `command(for:afterG:)` is a pure static over `NSEvent`, the same testable seam as
 `DiffPaneTable.vimKey(for:)`, and it reads shiftedness from the modifier flags
 rather than character case for the same Caps Lock reason. j/k step the cursor, ⌃d/⌃u
-move a half page, ⌃f/⌃b and space a page, gg/G the ends, [ and ] hop prompts, and
+move a half page, ⌃f/⌃b and space a page, gg/G the ends, { and } hop prompts, and
 Esc/q/i leave. **Every key is consumed, mapped or not**: passing misses through would
 drop a stray keystroke into the shell behind the mode, which is worse than one that
 does nothing.
@@ -804,7 +804,7 @@ out into a row.
 **A move that names a destination puts the cursor on it**, rather than bringing it into
 view and leaving the cursor elsewhere. `gg`/`G` carry it to the ends.
 
-`[`/`]` are the awkward case and are handled **after the fact, not on the keystroke**.
+`{`/`}` are the awkward case and are handled **after the fact, not on the keystroke**.
 libghostty scrolls to a prompt by setting the viewport pin to it
 (`PageList.scrollPrompt`), and that pin is the viewport's top row, so a jump that scrolls
 puts the prompt on row 0. But `scrollPrompt` returns without moving when there is no
@@ -819,12 +819,14 @@ alone beats moving it somewhere known to be wrong.
 A page move is the other case: it carries the cursor with the viewport, so your place on
 screen is kept.
 
-**A prompt jump with nowhere to go stays silent**, which is the one place scroll mode
-deliberately parts from "no silent no-op, every dead nav attempt speaks" (`toastNoNeighbor`).
-`scrollPrompt` searches from one row above the viewport, so `[` in a pane with no scrollback
-above returns without moving, and that is common rather than exceptional. Vim does nothing
-when a motion has nowhere to go, and scroll mode is a reading surface where a toast lands on
-the text being read. The header still shows the position did not change.
+**A prompt jump with nowhere to go says so**, following the same rule as pane nav
+(`toastNoNeighbor`: no silent no-op, every dead nav attempt speaks). The condition is read
+off the last reported scroll position and is exactly the one libghostty checks:
+`scrollPrompt` searches from one row above the viewport and returns when there is no such
+row, so a viewport already at the top of the buffer can never find a prompt above it, and the
+mirror holds at the bottom. In between, whether a prompt exists in that direction is not
+knowable from the chrome, so those jumps go through and stay quiet. Throttled like the nav
+toast, because a held key would otherwise stack one per repeat over the pane being read.
 
 Below the seam each command is one `ghostty_surface_binding_action` string, and the
 signs match (`TerminalScroll.lines(1)` is down, as `scroll_page_lines:1` is).

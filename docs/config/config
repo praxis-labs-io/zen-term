@@ -287,7 +287,7 @@
 # viewport the buffer runs, a band marks the row you're on, and nothing reaches the
 # shell:
 #
-#   j / k            move the cursor a row          [ / ]   jump to a prompt
+#   j / k            move the cursor a row          { / }   jump to a prompt
 #   ctrl+d / ctrl+u  half a page                   gg / G  top / bottom
 #   ctrl+f / ctrl+b  a full page (space = ctrl+f)  esc, q  leave
 #

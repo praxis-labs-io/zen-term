@@ -50,6 +50,15 @@ final class ScrollModeController {
     /// hook without this type reaching back into `KeyInterceptor`.
     var onActiveChanged: ((Bool) -> Void)?
 
+    /// Say a prompt jump had nowhere to go, matching pane nav's rule that every dead nav attempt
+    /// speaks rather than silently doing nothing.
+    var onRequestToast: ((ToastContent) -> Void)?
+
+    /// The last position the surface reported, kept so a dead prompt jump can be recognised
+    /// before it is attempted. Nil until the first report arrives.
+    private var lastPosition: TerminalScrollPosition?
+    private var lastDeadJumpAt: Date?
+
     // MARK: lifecycle
 
     /// Enter the mode over `target`, or do nothing if it is already up over the same panel.
@@ -83,6 +92,8 @@ final class ScrollModeController {
         isActive = false
         sawG = false
         awaitingPromptLanding = false
+        lastPosition = nil
+        lastDeadJumpAt = nil
         panel?.modeMeta = nil
         panel?.setScrollCursor(row: nil) { nil }
         panel = nil
@@ -134,7 +145,9 @@ final class ScrollModeController {
             // finds no prompt in that direction and returns, and moving the cursor anyway makes
             // the band jump to the top of a screen that never scrolled. Wait to be told the
             // viewport actually moved.
-            case .prompt: awaitingPromptLanding = true
+            case .prompt(let delta):
+                guard !reportDeadPromptJump(delta) else { return true }
+                awaitingPromptLanding = true
             default: break
             }
             surface?.scroll(move)
@@ -192,6 +205,14 @@ final class ScrollModeController {
         // Everything else is bare or shifted. ⌘ and ⌥ belong to another handler.
         guard held.isSubset(of: .shift) else { return nil }
         if event.keyCode == Self.escapeKeyCode { return .exit }
+        // Prompt jumps are vim's paragraph motion, and a prompt-delimited block of output is
+        // exactly a paragraph. Same keys the diff viewer jumps changes with. Matched on the typed
+        // character first, so a layout that doesn't put braces on shift-bracket still works.
+        switch event.characters {
+        case "{": return .scroll(.prompt(-1))
+        case "}": return .scroll(.prompt(1))
+        default: break
+        }
         let shift = held.contains(.shift)
         switch (event.charactersIgnoringModifiers?.lowercased() ?? "", shift) {
         case ("j", false), (Self.downArrow, false): return .step(1)
@@ -199,8 +220,8 @@ final class ScrollModeController {
         case (" ", false): return .scroll(.pageFraction(1))
         case ("g", false): return afterG ? .scroll(.top) : .pendingTop
         case ("g", true): return .scroll(.bottom)
-        case ("[", false): return .scroll(.prompt(-1))
-        case ("]", false): return .scroll(.prompt(1))
+        case ("[", true): return .scroll(.prompt(-1))  // shift-bracket on a US layout
+        case ("]", true): return .scroll(.prompt(1))
         case ("q", false), ("i", false): return .exit
         default: return nil
         }
@@ -218,6 +239,7 @@ final class ScrollModeController {
     /// the driven surface, so the count tracks output as well as keys.
     func report(position: TerminalScrollPosition, from s: AnyObject) {
         guard isActive, isDriving(s) else { return }
+        lastPosition = position
         updateHeader(position: position)
         landPromptJump(position)
     }
@@ -233,6 +255,43 @@ final class ScrollModeController {
     /// prompt is then wherever it sits there. Prompt marks are OSC 133 state rather than text, so
     /// the chrome cannot find that row, and leaving the cursor alone beats moving it somewhere
     /// known to be wrong.
+    /// Whether a prompt jump has nowhere to go, and say so if it doesn't. Returns true when the
+    /// jump was refused, so the caller skips it.
+    ///
+    /// Both ends are read off the last reported position, which is exactly the condition
+    /// libghostty checks: `scrollPrompt` searches from one row above the viewport and returns
+    /// when there is no such row, so a viewport already at the top of the buffer can never find a
+    /// prompt above it. The mirror at the bottom is the viewport already resting on the newest
+    /// line. In between, whether a prompt exists in that direction is not knowable from the
+    /// chrome (prompt marks are OSC 133 state rather than text), so those jumps go through and
+    /// stay quiet.
+    private func reportDeadPromptJump(_ delta: Int) -> Bool {
+        guard let position = lastPosition else { return false }  // nothing known yet, let it try
+        let word: String
+        if delta < 0 {
+            guard position.offset == 0 else { return false }
+            word = "above"
+        } else {
+            guard position.linesBelow == 0 else { return false }
+            word = "below"
+        }
+        // Throttled the way pane nav throttles its own: a held key would otherwise stack a toast
+        // per repeat over the pane being read.
+        let now = Date()
+        if let last = lastDeadJumpAt, now.timeIntervalSince(last) < Self.deadJumpToastThrottle {
+            return true
+        }
+        lastDeadJumpAt = now
+        onRequestToast?(
+            ToastContent(
+                variant: .info,
+                title: CommandCatalog.spec(for: .toggleScrollMode).title,
+                message: "No prompt \(word) to jump to"))
+        return true
+    }
+
+    private static let deadJumpToastThrottle: TimeInterval = 3
+
     private func landPromptJump(_ position: TerminalScrollPosition) {
         guard awaitingPromptLanding else { return }
         awaitingPromptLanding = false
