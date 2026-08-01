@@ -160,6 +160,7 @@ enum ConfigWriter {
         }
         if float.requiresGitRepo { tokens.append("git:true") }
         if float.persist != ToolFloatParser.defaultPersist { tokens.append("persist:\(float.persist.rawValue)") }
+        if !float.showsInToolbar { tokens.append("toolbar:false") }
         return "float = " + tokens.joined(separator: " ")
     }
 

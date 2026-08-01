@@ -139,7 +139,7 @@ Never leave the reader with advice they can't follow.
 
 **Empty states: state, imperative, payoff.**
 
-> "No tool floats yet. Add one to get a dock button and a shortcut."
+> "No tool floats yet. Add one to get a toolbar button and a shortcut."
 > "No workspaces yet. Add one to launch a folder with its own layout from ⌘⇧P."
 
 **Brevity is measured, not felt.** The toast copy fits a 236pt budget, and
@@ -206,6 +206,7 @@ One word per concept. The audit found four concepts with two or three words each
 | One pane or drawer filling the window | **Focus Mode**                                       | zoom, full screen                                          |
 | The whole window filling the desktop  | **Fill Screen**                                      | full screen, fullscreen, maximize                          |
 | Version control                       | **Git repository**, or **Git repo**                  | repo, git repository (lowercase)                           |
+| The footer button row                 | **toolbar**                                          | dock (that's macOS's; the type name `ToggleDock` is code)  |
 
 Apostrophes: straight (`'`), matching the bulk of the codebase. Two form overlays
 use curly (`’`) and should be reconciled.

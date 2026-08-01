@@ -61,4 +61,10 @@ enum LayoutFormat {
 
     /// The config token for a boolean knob (`cursor-style-blink`, `macos-option-as-alt`).
     static func boolToken(_ on: Bool) -> String { on ? "true" : "false" }
+
+    /// The `hide-toolbar-buttons` value: hidden slugs comma-joined in toolbar order, so the file
+    /// reads left-to-right like the toolbar and a given set always serializes the same way.
+    static func hideToolbarButtonsToken(_ hidden: Set<ToolbarButton>) -> String {
+        ToolbarButton.allCases.filter(hidden.contains).map(\.rawValue).joined(separator: ",")
+    }
 }

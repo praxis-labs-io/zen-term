@@ -14,6 +14,7 @@ extension TextAreaBox: ThemeReapplying {}
 extension Dropdown: ThemeReapplying {}
 extension SegmentedControl: ThemeReapplying {}
 extension AppButton: ThemeReapplying {}
+extension CheckboxDropdown: ThemeReapplying {}
 
 /// Base for settings sections built from live-editing form rows: number-field / segmented / text /
 /// custom editors over the chrome config. Each edit applies live via a `ConfigWriter` scalar write +
@@ -217,6 +218,14 @@ class SettingsFormSection: SettingsSection {
             })
     }
 
+    /// Register a custom row's config key with the shared key services: Reset-all removes it, and
+    /// `refreshRows()` surfaces its file diagnostics on the row. `addCustomRow` deliberately doesn't
+    /// do this itself — theme/accent rows resolve their keys through their own catalogs and opting
+    /// them in would change what Reset-all touches — so a scalar-backed custom row opts in here.
+    func registerScalarKey(_ key: String) {
+        scalarKeys.append(key)
+    }
+
     /// A caller-owned control (e.g. the Theme dropdown): the caller supplies the control, its focus
     /// stop, and a `refresh` closure to re-sync it on reload; the base just registers it.
     func addCustomRow(
@@ -278,6 +287,13 @@ class SettingsFormSection: SettingsSection {
             button.onArrowLeft = { [weak self] in self?.onExitToNav?() }
             button.onTab = { [weak self] in self?.moveTab(1) }
             button.onBacktab = { [weak self] in self?.moveTab(-1) }
+        case let list as CheckboxDropdown:
+            // Bubbles only while the list is closed; open, the arrows move its row highlight.
+            list.onArrowUp = { [weak self] in self?.moveFocus(-1) }
+            list.onArrowDown = { [weak self] in self?.moveFocus(1) }
+            list.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+            list.onTab = { [weak self] in self?.moveTab(1) }
+            list.onBacktab = { [weak self] in self?.moveTab(-1) }
         default:
             break
         }

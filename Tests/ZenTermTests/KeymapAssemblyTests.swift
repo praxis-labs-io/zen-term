@@ -17,6 +17,15 @@ final class KeymapAssemblyTests: XCTestCase {
         KeymapAssembler.assemble(floats: floats, keybinds: keybinds).map
     }
 
+    /// `toolbar:false` only hides the toolbar button — the chord must still bind, or hiding a
+    /// button would quietly cost the tool its shortcut (the ZEN-327 liveness contract).
+    func test_floatHiddenFromToolbar_stillBindsItsChord() {
+        var spec = float(id: "dev", key: "cmd+shift+j")
+        spec.showsInToolbar = false
+        let map = assemble(floats: [spec])
+        XCTAssertEqual(map[Chord.parse("cmd+shift+j")!], .toggleToolFloat("dev"))
+    }
+
     func test_defaultsPresent() {
         let map = assemble()
         XCTAssertEqual(map[Chord(command: true, key: "f")], .toggleZoom)

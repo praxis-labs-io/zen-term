@@ -51,6 +51,9 @@ struct GeneralConfig: Equatable {
     var rightDrawerFraction: CGFloat
     var drawerResizeStep: CGFloat
     var maxDrawerFraction: CGFloat
+    /// The built-in footer-toolbar buttons hidden by `hide-toolbar-buttons`. Visual only: a hidden
+    /// button's chord and palette entry stay live.
+    var hiddenToolbarButtons: Set<ToolbarButton> = []
 
     // Motion.
     var reduceMotion: ReduceMotion

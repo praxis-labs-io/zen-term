@@ -27,6 +27,9 @@ final class SettingsAppearanceSection: SettingsFormSection {
                 read: { $0.windowChrome ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
         }
+        addGroup("Toolbar") {
+            self.addToolbarButtonsRow()
+        }
         addGroup("Layout") {
             self.addNumericRow(
                 key: "backdrop-alpha", caption: "Backdrop alpha", blurb: "Tint strength over the window blur",
@@ -65,6 +68,55 @@ final class SettingsAppearanceSection: SettingsFormSection {
                 options: ["Side by side", "Inline"], read: { Self.diffLayoutIndex($0) },
                 token: { LayoutFormat.diffLayoutToken(Self.diffLayouts[$0]) }, notifiesOnReselect: false)
         }
+    }
+
+    private weak var toolbarList: CheckboxDropdown?
+
+    /// The footer-toolbar multi-select: a dropdown of checkboxes, one per built-in button, checked
+    /// = shown. A toggle recomputes the hidden set from the live config and writes
+    /// `hide-toolbar-buttons` (or removes the key when nothing is hidden, so an all-shown config
+    /// stays clean); the list stays open so several buttons can be toggled in one visit.
+    private func addToolbarButtonsRow() {
+        registerScalarKey("hide-toolbar-buttons")
+        let list = CheckboxDropdown(
+            title: Self.toolbarSummary(), items: Self.toolbarItems()
+        ) { [weak self] index in
+            guard let self else { return }
+            var hidden = GeneralConfig.current.hiddenToolbarButtons
+            let button = ToolbarButton.allCases[index]
+            if hidden.contains(button) {
+                hidden.remove(button)
+            } else {
+                hidden.insert(button)
+            }
+            self.writeOrRemove(
+                "hide-toolbar-buttons",
+                hidden.isEmpty ? nil : LayoutFormat.hideToolbarButtonsToken(hidden),
+                row: "hide-toolbar-buttons")
+        }
+        toolbarList = list
+        addCustomRow(
+            key: "hide-toolbar-buttons", caption: "Toolbar buttons",
+            description: "Uncheck to hide a button. Shortcuts stay active",
+            control: list, focusStop: list, controlNote: nil, width: 220,
+            refresh: { [weak self] in
+                self?.toolbarList?.setItems(Self.toolbarItems(), title: Self.toolbarSummary())
+            })
+    }
+
+    /// Checked = shown (the intuitive polarity; the config key stores the inverse). Static so the
+    /// closures capture no `self` (the section's retain-cycle rule, see `reduceMotionIndex`).
+    private static func toolbarItems() -> [CheckboxDropdownItem] {
+        let hidden = GeneralConfig.current.hiddenToolbarButtons
+        return ToolbarButton.allCases.map {
+            CheckboxDropdownItem(title: $0.displayName, isChecked: !hidden.contains($0))
+        }
+    }
+
+    /// The closed button's summary: the at-a-glance count that says whether anything is hidden.
+    private static func toolbarSummary() -> String {
+        let hidden = GeneralConfig.current.hiddenToolbarButtons.count
+        return hidden == 0 ? "All shown" : "\(hidden) hidden"
     }
 
     private static let diffLayouts: [GeneralConfig.DiffLayout] = [.sideBySide, .inline]

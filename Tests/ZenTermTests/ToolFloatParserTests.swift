@@ -251,6 +251,41 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertEqual(ToolFloatParser.parse("title:x command:c key:cmd+shift+j persist:window")?.persist, .window)
     }
 
+    // MARK: toolbar: (ZEN-327)
+
+    func test_toolbar_defaultsToShown() {
+        XCTAssertEqual(
+            ToolFloatParser.parse("title:x command:c key:cmd+shift+j")?.showsInToolbar, true)
+    }
+
+    func test_toolbar_false_hidesTheButton() {
+        XCTAssertEqual(
+            ToolFloatParser.parse("title:x command:c key:cmd+shift+j toolbar:false")?.showsInToolbar,
+            false)
+    }
+
+    func test_toolbar_caseInsensitive() {
+        XCTAssertEqual(
+            ToolFloatParser.parse("title:x command:c key:cmd+shift+j toolbar:FALSE")?.showsInToolbar,
+            false)
+    }
+
+    /// The default is true, so garbage must keep the button AND surface — a typo'd `toolbar:fales`
+    /// silently hiding the button is the failure a bare `== "true"` comparison (fine for `git:`,
+    /// whose default is false) would allow.
+    func test_toolbar_unknownValue_staysShown_andCollectsDiagnostic() {
+        let (float, diagnostics) = ToolFloatParser.parseLine(
+            "title:x command:c key:cmd+shift+j toolbar:maybe")
+        XCTAssertEqual(float?.showsInToolbar, true)
+        XCTAssertEqual(
+            diagnostics,
+            [
+                ConfigDiagnostic(
+                    scope: .toolFloatField(id: "x", label: "x"),
+                    problem: .floatFieldInvalid(field: "toolbar:", got: "maybe", using: "true"))
+            ])
+    }
+
     func test_dir_defaultsToNil() {
         XCTAssertNil(ToolFloatParser.parse("title:x command:c key:cmd+shift+j")?.dir)
     }

@@ -44,8 +44,12 @@ struct ConfigChange: OptionSet {
     /// The `automatic-update-checks` toggle, driving Sparkle's background check.
     static let updates = ConfigChange(rawValue: 1 << 7)
 
+    /// The `hide-toolbar-buttons` set: which built-in footer-toolbar buttons are hidden.
+    static let toolbarButtons = ConfigChange(rawValue: 1 << 8)
+
     static let all: ConfigChange = [
         .theme, .chromeLayout, .terminalBehavior, .floats, .keymap, .motion, .diagnostics, .updates,
+        .toolbarButtons,
     ]
 
     static let userInfoKey = "ZenTerm.configChange"
@@ -67,6 +71,7 @@ struct ConfigChange: OptionSet {
         if old.reduceMotion != new.reduceMotion { change.insert(.motion) }
         if old.configDiagnostics != new.configDiagnostics { change.insert(.diagnostics) }
         if old.automaticUpdateChecks != new.automaticUpdateChecks { change.insert(.updates) }
+        if old.hiddenToolbarButtons != new.hiddenToolbarButtons { change.insert(.toolbarButtons) }
         return change
     }
 

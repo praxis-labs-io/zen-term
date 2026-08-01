@@ -38,4 +38,13 @@ final class LayoutFormatTests: XCTestCase {
         XCTAssertEqual(LayoutFormat.splitArgs("  -l   --login "), ["-l", "--login"])
         XCTAssertEqual(LayoutFormat.splitArgs(""), [])
     }
+
+    /// The token orders by toolbar position, not set order, so a given hide set always writes the
+    /// same file text.
+    func test_hideToolbarButtons_token_ordersByToolbarPosition() {
+        XCTAssertEqual(
+            LayoutFormat.hideToolbarButtonsToken([.diffViewer, .newTab, .bottomDrawer]),
+            "new-tab,bottom-drawer,diff-viewer")
+        XCTAssertEqual(LayoutFormat.hideToolbarButtonsToken([]), "")
+    }
 }

@@ -76,6 +76,18 @@ final class SettingsConfigDiagnosticRenderTests: WindowTestCase {
         XCTAssertEqual(messages, ["reduce-motion = maybe isn't valid (system, on, or off). Using the default."])
     }
 
+    /// The toolbar row is an `addCustomRow` + `registerScalarKey` pairing — without the registration
+    /// the unknown-slug diagnostic would never reach the row, so this guards that seam specifically.
+    func test_unknownToolbarButtonSlug_showsOnTheAppearanceRow() {
+        loadConfig("hide-toolbar-buttons = split-h,zoom\n")
+        let expected = ToolbarButton.allCases.map(\.rawValue).joined(separator: ", ")
+        let messages = rowMessages(mount(SettingsAppearanceSection()))
+        // Must NOT say "Using the default." — split-h on the same line is genuinely hidden.
+        XCTAssertEqual(
+            messages,
+            ["hide-toolbar-buttons: zoom isn't valid (\(expected)). Ignoring it; the rest still applies."])
+    }
+
     func test_diffLayout_showsOnTheAppearanceRow() {
         loadConfig("diff-layout = sideways\n")
         let messages = rowMessages(mount(SettingsAppearanceSection()))
