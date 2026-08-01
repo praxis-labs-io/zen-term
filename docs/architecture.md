@@ -819,6 +819,13 @@ alone beats moving it somewhere known to be wrong.
 A page move is the other case: it carries the cursor with the viewport, so your place on
 screen is kept.
 
+**A prompt jump with nowhere to go stays silent**, which is the one place scroll mode
+deliberately parts from "no silent no-op, every dead nav attempt speaks" (`toastNoNeighbor`).
+`scrollPrompt` searches from one row above the viewport, so `[` in a pane with no scrollback
+above returns without moving, and that is common rather than exceptional. Vim does nothing
+when a motion has nowhere to go, and scroll mode is a reading surface where a toast lands on
+the text being read. The header still shows the position did not change.
+
 Below the seam each command is one `ghostty_surface_binding_action` string, and the
 signs match (`TerminalScroll.lines(1)` is down, as `scroll_page_lines:1` is).
 `GHOSTTY_ACTION_SCROLLBAR` feeds `scrollPositionDidChange` back up, which is what
