@@ -35,12 +35,19 @@ final class ScrollCursorView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let metrics = metrics?(), metrics.rows > 0 else { return }
+        let row = bounds.intersection(metrics.rowFrame(self.row, width: bounds.width))
+        guard !row.isEmpty else { return }
         Theme.current.chrome.accent.nsColor.withAlphaComponent(Self.fillAlpha).setFill()
-        bounds.intersection(metrics.rowFrame(row, width: bounds.width)).fill()
+        NSBezierPath(
+            roundedRect: row.insetBy(dx: 0, dy: Self.verticalInset),
+            xRadius: Self.cornerRadius, yRadius: Self.cornerRadius
+        ).fill()
     }
 
-    /// Low enough that the text under the band stays readable, high enough to find at a glance on
-    /// a busy screen. The band marks a row; it does not select it, so it must not read as
-    /// strongly as a selection would.
-    private static let fillAlpha: CGFloat = 0.16
+    // The diff viewer's cursor row, matched value for value (`DiffLineRowView`): same accent role,
+    // same alpha, same radius and inset. Two cursor lines in the same app that read differently
+    // are two features as far as the eye is concerned, and this one is the same idea.
+    private static let fillAlpha: CGFloat = 0.28
+    private static let cornerRadius: CGFloat = 3
+    private static let verticalInset: CGFloat = 1.5
 }
