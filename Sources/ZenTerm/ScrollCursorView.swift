@@ -71,7 +71,7 @@ final class ScrollCursorView: NSView {
 
         let band = bounds.intersection(metrics.rowFrame(state.cursor.row, width: bounds.width))
         if !band.isEmpty {
-            accent.withAlphaComponent(Self.bandAlpha).setFill()
+            Theme.current.chrome.ink(alpha: Self.bandAlpha).setFill()
             NSBezierPath(roundedRect: band, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius)
                 .fill()
         }
@@ -148,15 +148,22 @@ final class ScrollCursorView: NSView {
         return low...high
     }
 
-    // The diff viewer's cursor row (`DiffLineRowView`): same accent role, same alphas, same radius.
-    // Two cursor lines in one app that read differently are two features as far as the eye is
-    // concerned. `selectionAlpha` is its non-cursor selected row and `flashPeakAlpha` its yank
-    // pulse, which are the same two objects here.
+    // `selectionAlpha` and `flashPeakAlpha` are the diff viewer's (`DiffLineRowView`) selected row
+    // and yank pulse: same accent role, same values, because they are the same two objects here.
+    // Two selections in one app that read differently are two features as far as the eye is
+    // concerned.
     //
-    // Its 1.5pt vertical inset is the one value not carried over. Diff rows are spaced, so the
-    // inset reads as a pill; terminal rows are contiguous, so it reads as a band that fails to
-    // cover its own line.
-    private static let bandAlpha: CGFloat = 0.28
+    // The band is the one that does NOT match, in role or in value. The diff viewer's cursor row is
+    // accent at 0.28, which sat too close to a 0.16 accent selection to tell apart over terminal
+    // text. So the band is `ink` instead, at the app's standard subtle fill: separated from the
+    // selection by tone rather than by a few points of alpha, which is what vim's `cursorline`
+    // actually is. Accent is left to mean "this is what a `y` takes", and exact position is the
+    // stroked cell's job rather than the band's.
+    //
+    // The diff's 1.5pt vertical inset is not carried over either. Its rows are spaced, so the inset
+    // reads as a pill; terminal rows are contiguous, so it reads as a band that fails to cover its
+    // own line.
+    private static let bandAlpha: CGFloat = 0.08
     private static let selectionAlpha: CGFloat = 0.16
     private static let flashPeakAlpha: CGFloat = 0.5
     private static let cornerRadius: CGFloat = 3
