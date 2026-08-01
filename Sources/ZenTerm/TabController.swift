@@ -106,12 +106,12 @@ final class TabController: NSObject {
         }
     }
 
-    /// The panel holding unified focus, as the pair scroll mode needs: the terminal to drive,
-    /// and the panel to hang its indicator on. Nil while the focused panel has no live surface
-    /// (a drawer that has never been opened).
     /// Any surface in this tab moved its scroll position, panes and drawers alike (ZEN-330).
     var onScrollPosition: ((TerminalSurface, TerminalScrollPosition) -> Void)?
 
+    /// The panel holding unified focus, as the pair scroll mode needs: the terminal to drive,
+    /// and the panel to hang its indicator on. Nil while the focused panel has no live surface
+    /// (a drawer that has never been opened).
     var focusedScrollTarget: (surface: TerminalSurface, panel: PanelHostView)? {
         switch focusedPanel {
         case .pane: return paneCanvas.focusedScrollTarget

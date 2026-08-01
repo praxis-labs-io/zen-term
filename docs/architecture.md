@@ -678,6 +678,19 @@ including the bare `j`/`k`/`g` that no chord is allowed to hold, while the user'
 own binds keep working inside the mode. It is installed only while a mode is live,
 so an idle app pays one nil check per keystroke.
 
+**`Route` distinguishes two ways of not consuming**, and collapsing them is a real
+bug rather than a tidiness question. `passThrough` means nothing claimed the key, so
+a mode may still take it. `deferToTerminal` means a chord *did* match and
+`passThroughGuard` handed it to the program on purpose (`Ctrl`-nav over an nvim
+pane), so nothing else may touch it. With one case, scroll mode ate the `⌃j` that was
+being handed to nvim, and the key did nothing at all.
+
+**A mode declines what the menu owns.** The monitor is local, so it runs before
+`NSApp.sendEvent` resolves menu key equivalents, and ⌘C/⌘V/⌘Q are menu items rather
+than reserved chords. A mode that consumed every unmapped key killed Copy and Quit
+for as long as it was up. A mode consumes an unmapped key only when it carries no
+⌘ or ⌥, which is exactly the set that would otherwise reach the shell as input.
+
 **`Chord` canonicalization** is the sharpest rule in the codebase. A shifted glyph
 folds onto its base key **only when Shift is set**, because
 `charactersIgnoringModifiers` applies Shift: a live ⌘⇧- arrives as `_` while the
@@ -794,12 +807,17 @@ the cursor moves for the height of the viewport and the buffer only moves once t
 cursor is pinned at an edge. Scrolling on every `j` would drag the whole screen to
 track a marker that never moved.
 
-**The mode opens on the terminal's cursor, not the bottom of the pane.** Those are the
-same row only on a full screen; on a half-filled one the bottom of the viewport is empty
-space below everything there is to read. `ghostty_surface_ime_point` is the only place
-the C API reports the cursor, and it reports it as geometry (the cursor cell's bottom
-edge, in points, including the grid inset), so `GhosttySurface.cursorRow` divides it back
-out into a row.
+**The mode opens on the last written row of the viewport**, found by reading rows from
+the bottom up. Not the bottom of the pane, which on a half-filled screen is empty space
+below everything there is to read, and not the shell's cursor: `ghostty_surface_ime_point`
+reports that against the *live* screen with no account of scrolling, so a viewport the
+reader had already scrolled with the wheel put the band on an unrelated row.
+
+**The header goes up before the grid is measured.** A pane's header is hidden until a
+mode shows it, and showing it moves the content's top constraint down by its height, so
+the terminal loses a row or two and reflows. Measuring first put the band a row off the
+prompt, which is subtle enough to look like a rounding error in the cell math and is not
+one.
 
 **A move that names a destination puts the cursor on it**, rather than bringing it into
 view and leaving the cursor elsewhere. `gg`/`G` carry it to the ends.

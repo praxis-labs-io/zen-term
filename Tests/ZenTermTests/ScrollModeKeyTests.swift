@@ -56,10 +56,13 @@ final class ScrollModeKeyTests: XCTestCase {
         XCTAssertEqual(decode(try keyDown("}", unshifted: "]", flags: .shift)), .paragraph(1))
     }
 
-    func test_shiftBracketIsTheSameMotionOnALayoutThatTypesItDifferently() throws {
-        // No brace in `characters`, so this falls through to the unshifted-key switch.
-        XCTAssertEqual(decode(try keyDown("[", unshifted: "[", flags: .shift)), .paragraph(-1))
-        XCTAssertEqual(decode(try keyDown("]", unshifted: "]", flags: .shift)), .paragraph(1))
+    func test_aShiftBracketThatReportsNoBraceIsNotAMotion() throws {
+        // `charactersIgnoringModifiers` applies Shift, so a real US shift+[ reports "{" in both
+        // fields and is matched on the typed character. An event reporting "[" with Shift held is
+        // one macOS never sends, and the decoder is not built to honour it: keeping a branch for
+        // it meant maintaining code no keystroke could execute.
+        XCTAssertNil(decode(try keyDown("[", unshifted: "[", flags: .shift)))
+        XCTAssertNil(decode(try keyDown("]", unshifted: "]", flags: .shift)))
     }
 
     func test_bareBracketsAreNotBound() throws {
@@ -127,8 +130,13 @@ final class ScrollModeHeaderTests: XCTestCase {
     }
 
     func test_countsTheLinesBelowTheViewportWithASeparator() {
+        // The count is grouped for the reader's locale, so the expectation is built the same way
+        // rather than hardcoding US separators. Asserting "3,760" reddens bin/check on a machine
+        // set to German ("3.760") or Swedish ("3 760") for a reason unrelated to the change.
         let scrolledUp = TerminalScrollPosition(total: 5000, offset: 1200, viewport: 40)
         XCTAssertEqual(scrolledUp.linesBelow, 3760)
-        XCTAssertEqual(ScrollModeController.headerTitle(scrolledUp), "Scroll: 3,760 below")
+        let grouped = ScrollModeController.groupedCount(3760)
+        XCTAssertTrue(grouped.contains("760"), "expected a grouped count, got \(grouped)")
+        XCTAssertEqual(ScrollModeController.headerTitle(scrolledUp), "Scroll: \(grouped) below")
     }
 }

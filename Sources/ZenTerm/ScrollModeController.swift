@@ -43,6 +43,10 @@ final class ScrollModeController {
     /// on screen is the row you are looking at.
     private(set) var cursorRow = 0
 
+    /// Blankness per viewport row, read lazily and dropped whenever the screen can have moved.
+    /// See `isBlankRow`.
+    private var blankRows: [Int: Bool] = [:]
+
     /// Fires whenever the mode opens or closes, so the window can install and remove its key
     /// hook without this type reaching back into `KeyInterceptor`.
     var onActiveChanged: ((Bool) -> Void)?
@@ -59,12 +63,16 @@ final class ScrollModeController {
         self.panel = panel
         sawG = false
         isActive = true
-        // Open on the terminal's own cursor, which is the last written line. The bottom of the
-        // viewport is the bottom of the pane, and on a half-filled screen that is empty space
-        // below everything there is to read.
-        cursorRow = surface.cursorRow ?? max((surface.cellMetrics?.rows ?? 1) - 1, 0)
+        invalidateRows()
         Log.info("scroll mode entered", category: .panes)
+        // The header goes up FIRST, and the grid is measured only after it has. A pane's header is
+        // hidden until a mode shows it, and showing it moves the content's top constraint down by
+        // its height: the terminal loses a row or two and reflows. Reading the cursor row before
+        // that landed measured a grid that was about to change out from under it, which is what
+        // put the band a row off the prompt.
         updateHeader(position: nil)
+        panel.layoutSubtreeIfNeeded()
+        cursorRow = Self.entryRow(of: surface)
         refreshCursor()
         onActiveChanged?(true)
     }
@@ -79,12 +87,41 @@ final class ScrollModeController {
         guard isActive else { return }
         isActive = false
         sawG = false
+        invalidateRows()
         panel?.modeMeta = nil
         panel?.setScrollCursor(row: nil) { nil }
         panel = nil
         surface = nil
         Log.info("scroll mode left", category: .panes)
         onActiveChanged?(false)
+    }
+
+    /// The row the mode opens on: the last row of the viewport with anything written on it.
+    ///
+    /// Read off the screen rather than from the terminal's cursor. The cursor is the shell's, and
+    /// `imePoint` reports it against the *live* screen with no account of scrolling, so a viewport
+    /// the reader had already scrolled with the trackpad put the band on an unrelated row. What
+    /// the reader means by "where I am" is the last line they can see text on, and the viewport
+    /// is the only thing that answers that in every case.
+    ///
+    /// Falls back to the bottom row when nothing is readable, which is where an empty pane's
+    /// prompt sits anyway.
+    static func entryRow(of surface: TerminalSurface) -> Int {
+        let last = max((surface.cellMetrics?.rows ?? 1) - 1, 0)
+        for row in stride(from: last, through: 0, by: -1)
+        where !isBlank(surface.text(viewportRow: row)) {
+            return row
+        }
+        return last
+    }
+
+    /// Re-place the band against the grid's current geometry. For a change that moves the cell
+    /// size without moving a view's frame, which is what a font step is: no layout pass runs, so
+    /// the band never hears about it on its own.
+    func refreshGeometry() {
+        guard isActive else { return }
+        invalidateRows()  // a different cell size means different rows
+        refreshCursor()
     }
 
     /// Whether `s` is the surface the mode is currently driving, so a caller holding a surface
@@ -95,14 +132,19 @@ final class ScrollModeController {
 
     /// Handle one `keyDown` while the mode is up. Returns whether it was consumed.
     ///
-    /// Every key is consumed while the mode is live, mapped or not. A mode that passed its
-    /// misses through would drop a stray `x` into the shell behind it, which is a worse failure
-    /// than a keystroke that does nothing.
+    /// An unmapped key is consumed only when it would otherwise reach the shell as input. A mode
+    /// that passed those through would drop a stray `x` into the buffer behind it.
+    ///
+    /// A `⌘` or `⌥` chord is the exception, and getting this wrong is worse than the stray `x`.
+    /// `KeyInterceptor` is a local monitor, so it runs *before* `NSApp.sendEvent` resolves menu
+    /// key equivalents: swallowing an unmapped `⌘` chord kills ⌘C, ⌘V and ⌘Q for as long as the
+    /// mode is up. Those are menu items rather than reserved chords, so nothing above here claims
+    /// them, and the mode has to decline them explicitly.
     func handle(_ event: NSEvent) -> Bool {
         guard isActive else { return false }
         guard let command = Self.command(for: event, afterG: sawG) else {
             sawG = false
-            return true
+            return event.modifierFlags.intersection([.command, .option]).isEmpty
         }
         switch command {
         case .pendingTop:
@@ -127,6 +169,7 @@ final class ScrollModeController {
             case .bottom: cursorRow = lastRow
             default: break
             }
+            invalidateRows()  // the viewport is about to move
             surface?.scroll(move)
             refreshCursor()
         }
@@ -142,6 +185,7 @@ final class ScrollModeController {
         if next >= 0 && next <= lastRow {
             cursorRow = next
         } else {
+            invalidateRows()  // the viewport is about to move
             surface?.scroll(.lines(delta))  // pinned at an edge: the buffer moves under the cursor
         }
         refreshCursor()
@@ -165,17 +209,32 @@ final class ScrollModeController {
     /// Clamped to the viewport. A paragraph beyond the visible rows needs the buffer moved first,
     /// which is what the page keys are for.
     private func paragraphRow(from row: Int, delta: Int) -> Int {
-        guard let surface, delta != 0 else { return row }
+        guard surface != nil, delta != 0 else { return row }
         let limit = lastRow
         var next = row + delta
-        while next >= 0 && next <= limit && Self.isBlank(surface.text(viewportRow: next)) {
-            next += delta
-        }
-        while next >= 0 && next <= limit && !Self.isBlank(surface.text(viewportRow: next)) {
-            next += delta
-        }
+        while next >= 0 && next <= limit && isBlankRow(next) { next += delta }
+        while next >= 0 && next <= limit && !isBlankRow(next) { next += delta }
         return min(max(next, 0), limit)
     }
+
+    /// Whether a viewport row is blank, reading it at most once per viewport state.
+    ///
+    /// Each miss is a renderer-mutex-locked read. Crossing a blank-line-free block (a build log,
+    /// `ls -l`) is one per row, and a held `}` at key-repeat would multiply that by the repeat
+    /// rate against the thread the chrome's responsiveness depends on. Held keys re-walk mostly
+    /// the same rows, so caching per viewport state is what takes the repeat rate out of it.
+    ///
+    /// Every path that can move the viewport or resize the grid clears this, so a hit only ever
+    /// describes the screen as it is now.
+    private func isBlankRow(_ row: Int) -> Bool {
+        if let known = blankRows[row] { return known }
+        let blank = Self.isBlank(surface?.text(viewportRow: row))
+        blankRows[row] = blank
+        return blank
+    }
+
+    /// Drop the read-row cache. Called wherever the visible rows can have changed underneath it.
+    private func invalidateRows() { blankRows.removeAll(keepingCapacity: true) }
 
     /// A row counts as blank when it holds no non-whitespace. A row the backend cannot read is
     /// treated as blank so a motion terminates rather than running to the edge of the grid.
@@ -215,9 +274,10 @@ final class ScrollModeController {
         // Everything else is bare or shifted. ⌘ and ⌥ belong to another handler.
         guard held.isSubset(of: .shift) else { return nil }
         if event.keyCode == Self.escapeKeyCode { return .exit }
-        // Prompt jumps are vim's paragraph motion, and a prompt-delimited block of output is
-        // exactly a paragraph. Same keys the diff viewer jumps changes with. Matched on the typed
-        // character first, so a layout that doesn't put braces on shift-bracket still works.
+        // Vim's paragraph motion, and the same keys the diff viewer jumps changes with. Matched
+        // on the typed character, which is the only form that arrives: `charactersIgnoringModifiers`
+        // applies Shift, so a US shift+[ reports "{" in both fields. A layout that puts braces
+        // somewhere else reports them here too.
         switch event.characters {
         case "{": return .paragraph(-1)
         case "}": return .paragraph(1)
@@ -230,8 +290,6 @@ final class ScrollModeController {
         case (" ", false): return .scroll(.pageFraction(1))
         case ("g", false): return afterG ? .scroll(.top) : .pendingTop
         case ("g", true): return .scroll(.bottom)
-        case ("[", true): return .paragraph(-1)  // shift-bracket on a US layout
-        case ("]", true): return .paragraph(1)
         case ("q", false), ("i", false): return .exit
         default: return nil
         }
@@ -249,6 +307,7 @@ final class ScrollModeController {
     /// the driven surface, so the count tracks output as well as keys.
     func report(position: TerminalScrollPosition, from s: AnyObject) {
         guard isActive, isDriving(s) else { return }
+        invalidateRows()  // output arrived, or a scroll landed
         updateHeader(position: position)
     }
 
@@ -262,7 +321,13 @@ final class ScrollModeController {
         guard let position else { return "Scroll" }
         let below = position.linesBelow
         if below == 0 { return "Scroll: at bottom" }
-        return "Scroll: \(Self.lineCount.string(from: NSNumber(value: below)) ?? "\(below)") below"
+        return "Scroll: \(groupedCount(below)) below"
+    }
+
+    /// A row count grouped for the reader's locale. Exposed so a test can build the expected
+    /// string the same way instead of hardcoding one locale's separator.
+    static func groupedCount(_ value: Int) -> String {
+        lineCount.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 
     private static let lineCount: NumberFormatter = {

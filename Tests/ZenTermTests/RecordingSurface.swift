@@ -89,11 +89,6 @@ final class RecordingSurface: NSObject, TerminalSurface {
     var cellMetrics: TerminalCellMetrics? = TerminalCellMetrics(
         columns: 80, rows: 24, cellWidth: 8, cellHeight: 16, gridInset: 2)
 
-    /// Where this surface claims its cursor is. Defaults to a half-filled screen, which is the
-    /// case that exposed the entry bug: the last written line and the bottom of the viewport are
-    /// the same row on a full screen, so a full one hides the difference.
-    var cursorRow: Int? = 11
-
     /// The screen this surface claims to show, one entry per viewport row. Defaults to two
     /// command blocks separated by a blank row, which is what paragraph motion moves between.
     var rows: [String] = {

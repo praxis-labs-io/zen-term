@@ -279,15 +279,6 @@ public protocol TerminalSurface: AnyObject {
     /// and with every resize.
     var cellMetrics: TerminalCellMetrics? { get }
 
-    /// The viewport row the terminal's own cursor sits on, which is the last written line: the
-    /// prompt. Scroll mode opens here, because the bottom of the viewport is the bottom of the
-    /// *pane*, and on a half-filled screen that is empty space below everything you can read.
-    ///
-    /// Only meaningful while the viewport is at the bottom, which is where a surface rests. A
-    /// backend reports the row against the live screen, so a viewport already scrolled up puts
-    /// the cursor somewhere else entirely.
-    var cursorRow: Int? { get }
-
     /// The text on one viewport row, or nil for a row outside the grid or a backend that cannot
     /// read its own screen. One row at a time on purpose: a backend that unwraps soft-wrapped
     /// rows (libghostty does) collapses a multi-row read into fewer lines, and the row a caller
@@ -317,9 +308,6 @@ public extension TerminalSurface {
 
     /// Default nil: a backend that can't report its grid geometry gets no chrome drawn on it.
     var cellMetrics: TerminalCellMetrics? { nil }
-
-    /// Default nil: a backend that can't locate its cursor leaves the caller to pick a row.
-    var cursorRow: Int? { nil }
 
     /// Default nil: a backend that can't read its own screen supports no motion over its content.
     func text(viewportRow row: Int) -> String? { nil }

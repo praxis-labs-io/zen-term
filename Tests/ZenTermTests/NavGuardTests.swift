@@ -105,8 +105,11 @@ final class KeyInterceptorResolveTests: XCTestCase {
             NavGuard.shouldPassThrough(
                 chord: chord, action: action, focusedPaneIsVim: true, toolFloatIsOpen: false)
         }
-        // Ctrl-nav vetoed → passes through; ⌘-nav still consumed.
-        XCTAssertEqual(interceptor.resolve(Chord(control: true, key: "h")), .passThrough)
+        // Ctrl-nav vetoed → handed to the program; ⌘-nav still consumed. `deferToTerminal` rather
+        // than `passThrough`: the veto means the program is meant to receive this key, so nothing
+        // below chord routing may claim it either. A sticky mode ate it while the two were one
+        // case (ZEN-330).
+        XCTAssertEqual(interceptor.resolve(Chord(control: true, key: "h")), .deferToTerminal)
         XCTAssertEqual(interceptor.resolve(Chord(command: true, key: "h")), .consume(.navLeft))
     }
 }

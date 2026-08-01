@@ -108,9 +108,14 @@ final class KeyInterceptor {
         // lowercased string on the hot per-keystroke path rather than allocating to miss.
         let reservableModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
         if !event.modifierFlags.intersection(reservableModifiers).isEmpty {
-            if case .consume(let action) = resolve(Chord(event: event)) {
+            switch resolve(Chord(event: event)) {
+            case .consume(let action):
                 onReservedChord?(action)
                 return nil
+            case .deferToTerminal:
+                return event  // the guard gave this one to the program; nothing else may take it
+            case .passThrough:
+                break
             }
         }
         // Nothing reserved wanted it. A sticky mode gets the refusal before the PTY does.
@@ -126,14 +131,20 @@ final class KeyInterceptor {
     /// `init` — the event and the bind fold onto the same key — so this stays a pure lookup.
     func resolve(_ chord: Chord?) -> Route {
         guard let chord, let action = keymap[chord] else { return .passThrough }
-        if passThroughGuard?(chord, action) == true { return .passThrough }
+        if passThroughGuard?(chord, action) == true { return .deferToTerminal }
         return .consume(action)
     }
 
-    /// The outcome of `resolve(_:)`: pass the event to the terminal, or consume it and fire
-    /// the reserved action.
+    /// The outcome of `resolve(_:)`.
+    ///
+    /// `passThrough` and `deferToTerminal` both end up at the PTY, and the distinction between
+    /// them is load-bearing anyway: `passThrough` means nothing claimed the key, so a sticky mode
+    /// may still take it. `deferToTerminal` means a chord *did* match and the guard handed it to
+    /// the program on purpose, so nothing else may touch it. Collapsing the two let scroll mode
+    /// eat the `Ctrl`-nav that was being handed to nvim.
     enum Route: Equatable {
         case passThrough
+        case deferToTerminal
         case consume(ReservedChord)
     }
 

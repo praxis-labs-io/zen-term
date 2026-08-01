@@ -108,6 +108,10 @@ final class WindowController: NSObject {
     /// font, so the theme's size would no longer land on a stepped surface anyway.
     func applySessionFontSize() {
         for surface in allTerminalSurfaces { surface.setFontSize(SessionFontSize.points) }
+        // A font step changes the cell height without moving any view's frame, so nothing lays
+        // out and the cursor band would keep drawing at the old row height over text that just
+        // re-flowed at the new one.
+        scrollMode.refreshGeometry()
     }
 
     /// Every terminal surface under this window: the pane trees of all tabs plus the tool floats.
@@ -1505,6 +1509,11 @@ final class WindowController: NSObject {
     ) {
         cancelConfirm()  // supersede any confirm already up (e.g. ⌘Q over a ⌘W confirm)
         closeModal()  // never stack over an open palette
+        // A confirm answers with Return and Esc, and both are dispatched after the local key
+        // monitor. Left up, scroll mode swallows the Return and reads the Esc as its own exit,
+        // so the confirm could only be answered with the mouse. `closeModal` above does not
+        // cover this: it returns early when no card is open, which is the ⌘W case exactly.
+        scrollMode.end()
         confirmOnCancel = onCancel
         let content = ToastContent(variant: variant, title: title, message: message)
         let actions = [
@@ -2178,6 +2187,10 @@ final class WindowController: NSObject {
         // is armed (a native red-button close is a mouse event the capture can't intercept) would
         // otherwise strand it in capture mode — swallowing every keystroke in every other window.
         keybindCapturer?.endCapture()
+        // Same shared-handler hazard, same unconditional fix: a window closed while still key
+        // never resigns key, and a scroll mode left up keeps swallowing keys in every other
+        // window. `windowDidResignKey` covers the ordinary path; this covers close.
+        scrollMode.end()
         titlePoll?.invalidate()
         titlePoll = nil
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }

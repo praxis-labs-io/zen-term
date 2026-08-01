@@ -133,17 +133,31 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
     func test_theModeOpensOnTheLastWrittenLineNotTheBottomOfThePane() throws {
         // On a half-filled screen the bottom of the viewport is empty space below everything
-        // there is to read. The terminal's own cursor is the last written line.
+        // there is to read. Row 11 is the fixture's prompt and its last written row.
         let controller = makeWindow()
         controller.handle(.toggleScrollMode)
-        XCTAssertEqual(controller.scrollMode.cursorRow, 11, "the surface reports its cursor on row 11")
+        XCTAssertEqual(controller.scrollMode.cursorRow, 11)
     }
 
-    func test_theModeFallsBackToTheBottomRowWhenTheCursorIsUnknown() throws {
-        // A backend that can't locate its cursor still has to open somewhere sensible.
+    func test_theEntryRowIsReadFromTheScreenNotTheShellCursor() throws {
+        // The shell's cursor is reported against the LIVE screen with no account of scrolling, so
+        // a viewport the reader already scrolled with the trackpad put the band on an unrelated
+        // row. The last written row of the viewport is right in every case.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
-        surface.cursorRow = nil
+        var rows = Array(repeating: "", count: 24)
+        rows[3] = "scrolled-back output"  // history, nowhere near the live prompt
+        surface.rows = rows
+        controller.handle(.toggleScrollMode)
+        XCTAssertEqual(controller.scrollMode.cursorRow, 3)
+    }
+
+    func test_theModeFallsBackToTheBottomRowOnAnEmptyScreen() throws {
+        // Nothing written anywhere still has to open somewhere sensible, and an empty pane's
+        // prompt is at the bottom.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows = Array(repeating: "", count: 24)
         controller.handle(.toggleScrollMode)
         XCTAssertEqual(controller.scrollMode.cursorRow, 23)
     }
@@ -341,6 +355,66 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.scrolls, [])
     }
 
+    func test_theModeDeclinesMenuKeyEquivalents() throws {
+        // KeyInterceptor is a local monitor, so it runs before NSApp resolves menu equivalents.
+        // ⌘C, ⌘V and ⌘Q are menu items rather than reserved chords, so nothing above the mode
+        // claims them and swallowing them kills Copy and Quit for as long as the mode is up.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertFalse(handler(try keyDown("c", flags: .command)), "⌘C must reach the menu")
+        XCTAssertFalse(handler(try keyDown("q", flags: .command)), "⌘Q must reach the menu")
+        XCTAssertFalse(handler(try keyDown("f", flags: [.command, .option])), "⌘⌥F is not ours")
+        XCTAssertTrue(controller.scrollMode.isActive, "declining a key must not end the mode")
+    }
+
+    func test_theModeStillSwallowsKeysThatWouldReachTheShell() throws {
+        // The other half: a bare or Control key would land in the buffer behind the mode.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("x")))
+        XCTAssertTrue(handler(try keyDown("a", flags: .control)))
+    }
+
+    func test_aCloseConfirmEndsTheMode() throws {
+        // A confirm answers with Return and Esc, both dispatched after the local monitor. Left
+        // up, the mode eats the Return and reads the Esc as its own exit.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        XCTAssertTrue(controller.scrollMode.isActive)
+
+        controller.presentConfirm(
+            variant: .destructive, title: "Close Pane", message: "Running work will stop.",
+            confirmLabel: "Close", onConfirm: {})
+
+        XCTAssertFalse(controller.scrollMode.isActive)
+        XCTAssertFalse(host.isInstalled)
+    }
+
+    func test_closingTheWindowEndsTheMode() throws {
+        // A window closed while still key never resigns key, so the app-global handler would
+        // outlive it and swallow keys in every other window.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        XCTAssertTrue(controller.scrollMode.isActive)
+
+        controller.windowWillClose(Notification(name: NSWindow.willCloseNotification))
+
+        XCTAssertFalse(controller.scrollMode.isActive)
+        XCTAssertFalse(host.isInstalled)
+    }
+
     func test_escapeLeavesTheMode() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
@@ -456,7 +530,9 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
         surface.delegate?.surface(
             surface, scrollPositionDidChange: TerminalScrollPosition(total: 5000, offset: 1200, viewport: 40))
-        XCTAssertEqual(panel.headerContentForTesting?.title, "SCROLL: 3,760 BELOW")
+        XCTAssertEqual(
+            panel.headerContentForTesting?.title,
+            "SCROLL: \(ScrollModeController.groupedCount(3760)) BELOW")
 
         surface.delegate?.surface(
             surface, scrollPositionDidChange: TerminalScrollPosition(total: 5000, offset: 4960, viewport: 40))

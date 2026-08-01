@@ -16,6 +16,11 @@ enum GhosttyConfigWriter {
         case always
     }
 
+    /// Blank space libghostty leaves between the surface's edge and the first cell, in points.
+    /// `TerminalCellMetrics.gridInset` reports this up to the chrome, which positions the
+    /// scroll-mode cursor with it. Kept here because this is where it is written.
+    static let gridInset: CGFloat = 2
+
     /// The full generated config: theme-derived colors and font, plus the terminal
     /// behavior (cursor shape/thickness, Option semantics) the chrome dials from user config.
     /// A nil `behavior` uses the shipped `TerminalBehavior.default`.
@@ -27,11 +32,6 @@ enum GhosttyConfigWriter {
     /// Passing the size the surface is actually running keeps the pushed config truthful, which is
     /// cheaper than repairing the size afterwards and avoids marking the surface adjusted as a
     /// side effect. Nil for the app-global config, whose size is the theme's by definition.
-    /// Blank space libghostty leaves between the surface's edge and the first cell, in points.
-    /// `TerminalCellMetrics.gridInset` reports this up to the chrome, which positions the
-    /// scroll-mode cursor with it. Kept here because this is where it is written.
-    static let gridInset: CGFloat = 2
-
     static func configText(
         for theme: TerminalTheme?, behavior: TerminalBehavior? = nil,
         shaderAnimation: ShaderAnimation = .whileFocused,

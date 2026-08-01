@@ -75,6 +75,42 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertTrue(seen)
     }
 
+    func test_aChordTheGuardVetoedGoesToTheTerminalNotTheMode() throws {
+        // The veto's contract is that the PROGRAM receives the real key (⌃j inside nvim). Letting
+        // a vetoed chord fall to a sticky mode means neither the chrome nor the program acts on
+        // it, so the key does nothing at all over an nvim pane while doing something over any
+        // other pane.
+        let keys = KeyInterceptor()
+        keys.setKeymap([Chord(control: true, key: "j"): .navDown])
+        keys.passThroughGuard = { _, _ in true }
+        var fired: [KeyInterceptor.ReservedChord] = []
+        var reachedMode = false
+        keys.onReservedChord = { fired.append($0) }
+        keys.modeHandler = { _ in
+            reachedMode = true
+            return true
+        }
+
+        let event = try keyDown("j", flags: .control)
+        XCTAssertIdentical(keys.route(event), event)
+        XCTAssertEqual(fired, [], "the guard vetoed it, so the chrome must not act either")
+        XCTAssertFalse(reachedMode, "and the mode must not eat what was handed to the program")
+    }
+
+    func test_anUnvetoedMissStillReachesTheMode() throws {
+        // The mirror of the case above: nothing claimed the chord, so the mode may have it.
+        let keys = interceptor()
+        keys.passThroughGuard = { _, _ in true }  // never consulted; ⌃d hits no keymap entry
+        var reachedMode = false
+        keys.modeHandler = { _ in
+            reachedMode = true
+            return true
+        }
+
+        XCTAssertNil(keys.route(try keyDown("d", flags: .control)))
+        XCTAssertTrue(reachedMode)
+    }
+
     func test_captureBeatsTheModeEntirely() throws {
         // Recording a keybind in Settings must capture the literal keystroke, mode or not.
         let keys = interceptor()
