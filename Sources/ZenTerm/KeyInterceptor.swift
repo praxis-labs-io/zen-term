@@ -111,7 +111,10 @@ final class KeyInterceptor {
         if !event.modifierFlags.intersection(reservableModifiers).isEmpty {
             switch resolve(Chord(event: event)) {
             case .consume(let action):
-                onReservedChord?(action)
+                // A repeat the action declines is still consumed, not passed on: the chord is
+                // ours for as long as it is held, and handing the raw keystroke to the program
+                // mid-hold would put a ⌘N into the shell after the first window opened.
+                if !event.isARepeat || action.shouldRepeat { onReservedChord?(action) }
                 return nil
             case .deferToTerminal:
                 return event  // the guard gave this one to the program; nothing else may take it

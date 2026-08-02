@@ -328,7 +328,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// (ZEN-307).
     ///
     /// Derived from the background rather than `NSApplication.effectiveAppearance`, which is what
-    /// Ghostty.app reads. The chrome is theme-driven, not appearance-driven (ZEN-27), so
+    /// Ghostty.app reads. The chrome is theme-driven, not appearance-driven (ZEN-91), so
     /// `effectiveAppearance` would answer "light" for a dark theme under a light system
     /// appearance. The source is the same `backgroundOverride ?? theme` that `applyLayerBacking`
     /// paints from, so a program that repaints its own background with OSC 11 also moves what the
@@ -507,6 +507,11 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     private func syncFocus() {
         let focused = paneFocused && isAppActive
         if let surfacePtr { ghostty_surface_set_focus(surfacePtr, focused) }
+        // Both halves have to clear the held-key ledger, which is why it hangs off the effective
+        // value rather than off `resignFirstResponder`. A pane keeps first responder across a
+        // ⌘-Tab, so the app half alone used to leave libghostty's release and our record disagreeing
+        // on every switch away.
+        if !focused { hostView.forgetHeldKeys() }
         guard focused != lastFocused else { return }
         lastFocused = focused
         if focused { restoreShader() } else { startShaderSettle() }
@@ -907,7 +912,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// `terminal.colors` before it sends this, and its renderer draws from there, so the grid
     /// already follows the program whether we handle this or not. The action exists so the app
     /// around the terminal can match — which is where the decision is (ZEN-23): the pane's own
-    /// fill matches, and nothing else does. Every chrome role stays `Theme.current` (ZEN-27), so
+    /// fill matches, and nothing else does. Every chrome role stays `Theme.current` (ZEN-91), so
     /// a program can recolor its own pane but never the frame around it.
     ///
     /// Only the background reaches anything. The foreground, the cursor and the 256 palette slots

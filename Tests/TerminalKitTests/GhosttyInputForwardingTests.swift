@@ -259,6 +259,59 @@ final class GhosttyInputForwardingTests: XCTestCase {
             "libghostty is holding that press; the composition does not retire it")
     }
 
+    // MARK: Pairing a release to the key press that earned it
+
+    /// The same rule as the modifier ledger, for ordinary keys. `KeyInterceptor` resolves a chord
+    /// at its event monitor, ahead of the responder chain, and matches no `keyUp` at all, so the
+    /// release for a consumed `ctrl+h` arrives here for a press libghostty was never told about.
+    func test_aKeyReleaseWithNoMatchingPressIsNotForwarded() throws {
+        XCTAssertFalse(
+            view.retireKeyPress(for: try key(.keyUp, "h", keyCode: 0x04)),
+            "nothing pressed h on this surface, so libghostty must not be told it came up")
+    }
+
+    /// And the release the surface *does* owe is forwarded, once. `keyUp` is driven for real here:
+    /// the ledger is what proves the override consulted it rather than sending unconditionally.
+    func test_aKeyReleaseRetiresThePressItPairsWith() throws {
+        view.recordKeyPress(for: try key(.keyDown, "h", keyCode: 0x04))
+        view.keyUp(with: try key(.keyUp, "h", keyCode: 0x04))
+
+        XCTAssertFalse(
+            view.retireKeyPress(for: try key(.keyUp, "h", keyCode: 0x04)),
+            "that release settled the press; a second one is unpaired like any other")
+    }
+
+    /// An auto-repeat re-reports the same key going down. One release still has to settle the
+    /// whole hold, or every held key leaves a press stranded in libghostty.
+    func test_aHeldKeyIsSettledByOneRelease() throws {
+        for _ in 0..<3 { view.recordKeyPress(for: try key(.keyDown, "j", keyCode: 0x26)) }
+
+        XCTAssertTrue(view.retireKeyPress(for: try key(.keyUp, "j", keyCode: 0x26)))
+        XCTAssertFalse(view.retireKeyPress(for: try key(.keyUp, "j", keyCode: 0x26)))
+    }
+
+    /// Losing focus retires the ledger, because libghostty retires its own held keys in
+    /// `focusCallback` and the releases are not coming back anyway: ⌘-Tab away with a key down
+    /// and the `keyUp` lands in the other app.
+    func test_losingFocusForgetsWhatWasHeld() throws {
+        view.recordKeyPress(for: try key(.keyDown, "h", keyCode: 0x04))
+        XCTAssertEqual(
+            view.modifierActionToForward(
+                for: try flagsChanged(keyCode: 0x38, named: .shift, held: [UInt(NX_DEVICELSHIFTKEYMASK)])),
+            GHOSTTY_ACTION_PRESS)
+
+        view.forgetHeldKeys()
+
+        XCTAssertFalse(
+            view.retireKeyPress(for: try key(.keyUp, "h", keyCode: 0x04)),
+            "libghostty already released that key")
+        XCTAssertEqual(
+            view.modifierActionToForward(
+                for: try flagsChanged(keyCode: 0x38, named: .shift, held: [UInt(NX_DEVICELSHIFTKEYMASK)])),
+            GHOSTTY_ACTION_PRESS,
+            "and the next real shift press must not be suppressed as a duplicate")
+    }
+
     // MARK: Translation — sided modifier bits
 
     /// The key event has to carry the side: the kitty protocol encodes left and right as
@@ -348,6 +401,16 @@ final class GhosttyInputForwardingTests: XCTestCase {
                 modifierFlags: NSEvent.ModifierFlags(rawValue: raw), timestamp: 0,
                 windowNumber: window.windowNumber, context: nil, characters: "",
                 charactersIgnoringModifiers: "", isARepeat: false, keyCode: keyCode))
+    }
+
+    private func key(
+        _ type: NSEvent.EventType, _ characters: String, keyCode: UInt16
+    ) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: type, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode))
     }
 
     /// `NSEvent.mouseEvent` has no `buttonNumber` parameter and every event it builds reports 0,

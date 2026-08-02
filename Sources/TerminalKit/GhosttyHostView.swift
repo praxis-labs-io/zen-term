@@ -284,10 +284,6 @@ final class GhosttyHostView: NSView {
 
     override func resignFirstResponder() -> Bool {
         let ok = super.resignFirstResponder()
-        // libghostty releases both sides of every held modifier when a surface loses focus
-        // (`Surface.zig`, `focusCallback`), so the presses this surface reported are already
-        // retired. Holding on to them would suppress the next real press as a duplicate.
-        reportedModifiers = 0
         owner?.focusDidChange(false)
         return ok
     }
@@ -354,6 +350,10 @@ final class GhosttyHostView: NSView {
         // composition just ended.
         syncPreedit(clearIfNeeded: markedTextBefore)
 
+        // Every path above returns without sending, so the press is recorded here rather than in
+        // `keyAction`, which also carries the release and must not record that as a press.
+        recordKeyPress(for: event)
+
         if let accumulated = keyTextAccumulator, !accumulated.isEmpty {
             // Composition produced final text — send it as ordinary key input (never
             // "composing", since it's the committed result).
@@ -372,10 +372,38 @@ final class GhosttyHostView: NSView {
     }
 
     override func keyUp(with event: NSEvent) {
-        // Swallow the release for the soft-newline chord we consumed in keyDown; a bare
-        // RELEASE for a PRESS the terminal never saw confuses key-protocol-aware TUIs.
-        if event.isSoftNewline { return }
+        guard retireKeyPress(for: event) else { return }
         _ = keyAction(GHOSTTY_ACTION_RELEASE, event: event)
+    }
+
+    /// The keys this surface has told libghostty are down, by keyCode. `reportedModifiers` for
+    /// ordinary keys, and it exists for the same reason: a bare RELEASE for a PRESS the terminal
+    /// never saw is a key event a program under the kitty keyboard protocol cannot reconcile.
+    ///
+    /// Three paths swallow a `keyDown` and cannot swallow the `keyUp` behind it. `KeyInterceptor`
+    /// resolves a chord at its event monitor, ahead of the responder chain, and its monitor
+    /// matches no `keyUp` at all. The soft-newline chord sends its own text and returns. An input
+    /// method takes the key and switches layout. Pairing here covers all three, and any fourth.
+    ///
+    /// Held ⌘ chords hid this: macOS withholds `keyUp` while Command is down, so the release for
+    /// a consumed ⌘ chord never arrives to be mispaired. A user-bound `ctrl+h` is where it shows.
+    private var reportedKeys: Set<UInt16> = []
+
+    /// libghostty is about to be told this key went down, so it is owed the release.
+    func recordKeyPress(for event: NSEvent) { reportedKeys.insert(event.keyCode) }
+
+    /// Whether libghostty is owed a release for this key, retiring the press if it is. An
+    /// auto-repeat re-records the same keyCode, so one release still settles the whole hold.
+    func retireKeyPress(for event: NSEvent) -> Bool { reportedKeys.remove(event.keyCode) != nil }
+
+    /// Forget every press and modifier this surface reported, because libghostty has already
+    /// retired them itself. Called when effective focus drops (`GhosttySurface.syncFocus`):
+    /// libghostty releases both sides of everything held in `focusCallback`, and holding on here
+    /// would suppress the next real press as a duplicate. The releases for those keys are also
+    /// never coming: ⌘-Tab away with a key down and the `keyUp` lands in the other app.
+    func forgetHeldKeys() {
+        reportedKeys.removeAll()
+        reportedModifiers = 0
     }
 
     /// Modifier presses and releases. AppKit delivers these as `flagsChanged` rather than

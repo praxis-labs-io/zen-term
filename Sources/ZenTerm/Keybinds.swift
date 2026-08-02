@@ -44,6 +44,29 @@ extension KeyInterceptor.ReservedChord {
         }
     }
 
+    /// Whether holding the chord down should fire the action again at the key-repeat rate.
+    ///
+    /// Only the actions whose effect accumulates toward something the eye tracks, and where the
+    /// hold runs out of room on its own: nav stops at the edge pane, resize at the pane's minimum,
+    /// font size at the scale limit. Everything else is a discrete act, and a held ⌘N spawning
+    /// windows at 30 a second is the bug this answers. Tab cycling is deliberately not here: it
+    /// wraps, so a hold never lands anywhere the user aimed.
+    ///
+    /// A `switch` so a new `ReservedChord` case has to answer, the same as `actionToken`.
+    var shouldRepeat: Bool {
+        switch self {
+        case .navLeft, .navRight, .navUp, .navDown: return true
+        case .resizeLeft, .resizeRight, .resizeUp, .resizeDown: return true
+        case .increaseFontSize, .decreaseFontSize: return true
+        case .splitVertical, .splitHorizontal, .closePane, .newTab, .newWindow, .selectTab,
+            .prevTab, .nextTab, .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
+            .toggleToolFloat, .toggleRepoPicker, .toggleCommandPalette, .openSettings,
+            .reloadConfig, .checkForUpdates, .reportIssue, .openDiffViewer, .resetFontSize,
+            .toggleScrollMode, .toggleSearch:
+            return false
+        }
+    }
+
     /// Inverse of `actionToken`: parse a config action name back to a chord, or `nil` for an
     /// unknown token (caller warns + skips). The two parameterized families resolve by prefix.
     init?(token: String) {
@@ -112,7 +135,7 @@ enum KeymapDefaults {
         // ⌘⇧ family — the splits, pane/drawer resize on HJKL, repo picker. Both splits are spelled
         // with the *unshifted* key: `Chord` canonicalizes, so a live ⌘⇧\ event (which arrives as
         // "|") and a live ⌘⇧- event (which arrives as "_") already fold onto these entries. ⌘⇧-
-        // rather than bare ⌘- dates from ZEN-142, which left bare ⌘- to libghostty's own text
+        // rather than bare ⌘- dates from ZEN-121, which left bare ⌘- to libghostty's own text
         // magnification; ZEN-224 took that chord over, and ⌘⇧- stays split on its own merits.
         map[Chord(command: true, shift: true, key: "\\")] = .splitVertical
         map[Chord(command: true, shift: true, key: "-")] = .splitHorizontal
@@ -185,7 +208,7 @@ enum KeybindParser {
 /// is skipped with a warning.
 ///
 /// Also reports the displacements that cost an action its *last* chord, so the Keybinds card can
-/// say why a row has no shortcut rather than rendering a bare empty chip (ZEN-142).
+/// say why a row has no shortcut rather than rendering a bare empty chip (ZEN-121).
 enum KeymapAssembler {
     /// `canType` is injected so tests state the layout instead of inheriting the test machine's.
     /// Its type is `@MainActor` deliberately: a plain `(Chord) -> Bool` parameter erases the leaf's

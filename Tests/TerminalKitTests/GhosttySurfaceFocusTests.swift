@@ -1,4 +1,5 @@
 import AppKit
+import GhosttyKit
 import XCTest
 
 @testable import TerminalKit
@@ -72,6 +73,35 @@ final class GhosttySurfaceFocusTests: XCTestCase {
 
         postAppActive(true)
         XCTAssertTrue(surface.lastFocused, "and it takes effect once the app is frontmost")
+    }
+
+    /// The held-key ledger hangs off the *effective* focus, not off `resignFirstResponder`. A pane
+    /// keeps first responder across a ⌘-Tab, so the app half alone used to leave libghostty's own
+    /// release (it retires everything held in `focusCallback`) disagreeing with our record, and
+    /// the next real press of that modifier was then dropped as a duplicate. Every switch away,
+    /// not a race.
+    func test_appDeactivationForgetsWhatTheSurfaceSaidWasHeld() throws {
+        let surface = GhosttySurface()
+        surface.setFocused(true)
+        let host = try XCTUnwrap(surface.view as? GhosttyHostView)
+        XCTAssertEqual(host.modifierActionToForward(for: try leftShiftPress()), GHOSTTY_ACTION_PRESS)
+
+        postAppActive(false)
+        postAppActive(true)
+
+        XCTAssertEqual(
+            host.modifierActionToForward(for: try leftShiftPress()), GHOSTTY_ACTION_PRESS,
+            "libghostty released that shift when the app went away, so pressing it again is a press")
+    }
+
+    private func leftShiftPress() throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .flagsChanged, location: .zero,
+                modifierFlags: NSEvent.ModifierFlags(
+                    rawValue: NSEvent.ModifierFlags.shift.rawValue | UInt(NX_DEVICELSHIFTKEYMASK)),
+                timestamp: 0, windowNumber: 0, context: nil, characters: "",
+                charactersIgnoringModifiers: "", isARepeat: false, keyCode: 0x38))
     }
 
     /// A surface torn down mid-session must stop hearing about activation — a late callback
