@@ -163,6 +163,90 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.searchSteps, [.next])
     }
 
+    func test_aMatchOnlyInHistoryIsPreviewedWhileTyping() throws {
+        // Otherwise the bar counts matches over a screen showing none of them, and Return is
+        // pressed on faith.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows = Array(repeating: "", count: 24)  // nothing on screen matches
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+
+        controller.search.report(total: 3, from: surface)
+
+        XCTAssertEqual(surface.searchSteps, [.next], "one step brings the match into view")
+    }
+
+    func test_aMatchAlreadyOnScreenIsNotChasedWhileTyping() throws {
+        // The part of vim's incsearch worth leaving out: stepping here pulls the screen off the
+        // answer already in front of the reader.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows[5] = "an error happened"
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+
+        controller.search.report(total: 3, from: surface)
+
+        XCTAssertEqual(surface.searchSteps, [], "the viewport already holds one")
+    }
+
+    func test_theCountClimbingDoesNotStepOncePerReport() throws {
+        // SEARCH_TOTAL fires repeatedly as the engine works back through the buffer.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows = Array(repeating: "", count: 24)
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+
+        controller.search.report(total: 1, from: surface)
+        controller.search.report(total: 2, from: surface)
+        controller.search.report(total: 9, from: surface)
+
+        XCTAssertEqual(surface.searchSteps, [.next], "once per needle, not once per report")
+    }
+
+    func test_committingAfterAPreviewStaysOnTheMatchItShowed() throws {
+        // A second step here would walk straight past the match the reader is looking at.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows = Array(repeating: "", count: 24)
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        controller.search.report(total: 3, from: surface)
+        controller.search.report(selected: 0, from: surface)
+
+        controller.search.commit()
+
+        XCTAssertEqual(surface.searchSteps, [.next], "the preview's step is the only one")
+    }
+
+    // MARK: leaving
+
+    func test_escapeLeavesTheScrollModeThatCommittingStarted() throws {
+        // One keystroke to find something, one to be done with it. Being dropped into a mode you
+        // never asked for, needing a second Esc, is the surprise this asserts against.
+        let controller = makeWindow()
+        controller.handle(.toggleSearch)
+        controller.search.commit()
+        XCTAssertTrue(controller.scrollMode.isActive, "commit brings it up")
+
+        controller.search.end()
+
+        XCTAssertFalse(controller.scrollMode.isActive)
+    }
+
+    func test_aScrollModeTheReaderStartedThemselvesSurvivesTheSearch() throws {
+        let controller = makeWindow()
+        controller.handle(.toggleScrollMode)
+        controller.handle(.toggleSearch)
+        controller.search.commit()
+
+        controller.search.end()
+
+        XCTAssertTrue(controller.scrollMode.isActive, "they put themselves there and keep it")
+    }
+
     func test_everyRetractionTakesTheBarDownAndStopsTheEngine() throws {
         // Both halves matter. A bar that vanishes while the engine keeps painting highlights is
         // the bug this asserts against.

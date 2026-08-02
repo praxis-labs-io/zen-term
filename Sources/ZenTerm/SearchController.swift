@@ -68,6 +68,13 @@ final class SearchController {
     private var selected: Int?
     private var debounce: DispatchWorkItem?
 
+    /// Whether this needle has already been previewed. See `previewIfNothingVisible`.
+    private var hasPreviewed = false
+
+    /// Whether the commit is what brought scroll mode up. Search leaves behind only what it
+    /// started: a reader already in scroll mode when the bar opened stays there on the way out.
+    private var didStartScrollMode = false
+
     /// Fires when the bar goes up or comes down, so the window can install and remove its key hook
     /// without this type reaching into `KeyInterceptor`.
     var onActiveChanged: ((Bool) -> Void)?
@@ -112,20 +119,22 @@ final class SearchController {
         if !seed.isEmpty { surface.search(seed) }
     }
 
-    /// Hand the keyboard back to the pane and step onto the first match.
+    /// Hand the keyboard back to the pane and settle on a match.
     ///
-    /// The step is not a courtesy: libghostty matches eagerly but selects nothing on its own, so
-    /// without it phase two would open on no match at all.
+    /// Stepping is not a courtesy: libghostty matches eagerly but selects nothing on its own, so
+    /// without it phase two would open on no match at all. It is skipped when a preview already
+    /// picked one, or committing would walk straight past the match the reader is looking at.
     func commit() {
         guard isActive, isEditing else { return }
         isEditing = false
         surface?.focus()
         if let surface, let panel, !scrollMode.isActive {
             scrollMode.begin(surface: surface, panel: panel)
+            didStartScrollMode = true
         }
         showCount()
         guard !needle.isEmpty else { return }
-        navigate(.next)
+        if selected == nil { navigate(.next) } else { land(after: .next) }
     }
 
     /// Step to another match. The cursor follows once the backend reports which one it landed on.
@@ -159,6 +168,15 @@ final class SearchController {
         total = nil
         selected = nil
         pendingStep = nil
+        hasPreviewed = false
+        // Search leaves behind only what it started. Committing brings scroll mode up on the
+        // reader's behalf, so Esc has to take it back down again: one keystroke to find something,
+        // one to be done with it. A reader who was already in scroll mode when the bar opened put
+        // themselves there and keeps it.
+        if didStartScrollMode {
+            didStartScrollMode = false
+            scrollMode.end()  // before the bar, so both constraint changes ride one layout pass
+        }
         panel?.setFindBarShown(false)
         // The terminal takes its rows back, so the grid reflows again and scroll mode's cursor has
         // to be re-placed against it. Same order as raising the bar.
@@ -189,6 +207,7 @@ final class SearchController {
     /// it for every keystroke. The delay is the same shape libghostty's own app uses.
     private func needleDidChange(_ text: String) {
         needle = text
+        hasPreviewed = false
         debounce?.cancel()
         // A cleared needle stops the engine and must not wait: the highlights are still painted
         // until it does.
@@ -223,6 +242,34 @@ final class SearchController {
         guard isActive, isDriving(s) else { return }
         self.total = total
         showCount()
+        previewIfNothingVisible()
+    }
+
+    /// Bring a match into view while the reader is still typing, but only when there is nothing to
+    /// see without it.
+    ///
+    /// A needle whose only matches are in history counts up in the bar over a screen showing none
+    /// of them, which asks the reader to press Return on faith. One step fixes that, and libghostty
+    /// scrolls the match into view itself.
+    ///
+    /// It deliberately does **not** run when the viewport already holds a match. Stepping then would
+    /// pull the screen off the answer that was already in front of them, which is the part of vim's
+    /// `incsearch` worth leaving out.
+    private func previewIfNothingVisible() {
+        // Once per needle. `SEARCH_TOTAL` fires repeatedly as the engine works back through the
+        // buffer, and a step on each report would drag the viewport through a match per report.
+        guard isEditing, !hasPreviewed, (total ?? 0) > 0, !needle.isEmpty else { return }
+        guard !viewportHoldsNeedle() else { return }
+        hasPreviewed = true
+        navigate(.next)
+    }
+
+    private func viewportHoldsNeedle() -> Bool {
+        guard let surface else { return false }
+        let rows = 0..<(surface.cellMetrics?.rows ?? 0)
+        return rows.contains {
+            !Self.occurrenceColumns(of: needle, in: surface.text(viewportRow: $0) ?? "").isEmpty
+        }
     }
 
     func report(selected: Int?, from s: AnyObject) {

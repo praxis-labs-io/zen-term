@@ -905,6 +905,20 @@ these legitimately return false, meaning "there was nothing to do" rather than
 "rejected". `START_SEARCH` is handled even though the chrome never sends it: libghostty's
 own search-the-selection keybind is live in every surface and would otherwise do nothing.
 
+**A match only in history is previewed while you type**, by stepping once when the
+viewport holds no occurrence and the total is above zero. Without it the bar counts
+matches over a screen showing none of them and Return is pressed on faith. It does not
+run when a match is already visible: stepping then pulls the screen off the answer
+already in front of the reader, which is the part of vim's `incsearch` worth leaving
+out. Once per needle, because `SEARCH_TOTAL` fires repeatedly as the engine works back
+through the buffer. `commit` then skips its own step when a preview already selected
+something, or ⏎ would walk straight past the match being looked at.
+
+**Search leaves behind only what it started.** Committing brings scroll mode up on the
+reader's behalf, so Esc takes it back down: one keystroke to find something, one to be
+done with it. A reader already in scroll mode when the bar opened put themselves there
+and keeps it, which is what `didStartScrollMode` tracks.
+
 **The keyboard runs in two phases, and the gate between them is load-bearing.** While
 the field holds first responder, `updateModeHandler`'s closure returns false for
 everything. `KeyInterceptor` is a local monitor running ahead of the field editor, so a

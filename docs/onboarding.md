@@ -133,9 +133,10 @@ took. `q` leaves. Nothing you type reaches the shell while the mode is up, but y
 shortcuts still work, so ⌘T and pane movement are never swallowed.
 
 **⌘/** searches the pane's whole scrollback rather than only what is on screen. Every
-match lights up as you type and the bar counts them. `⏎` hands the keys back and drops
-you on the match in scroll mode, where `n` and `N` step through the rest and `y` copies
-what you came for. `Esc` closes the bar.
+match lights up as you type, the bar counts them, and if the only matches are further
+back the pane scrolls so you can see one while you type. `⏎` hands the keys back and
+drops you on the match in scroll mode, where `n` and `N` step through the rest and `y`
+copies what you came for. `Esc` closes the bar and hands the pane back.
 
 A selection stays on the screen you can see. Scroll to the block you want first, then
 select it: you get the selection back whenever the buffer moves under it, whether you
