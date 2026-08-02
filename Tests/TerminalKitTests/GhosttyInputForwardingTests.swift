@@ -292,7 +292,9 @@ final class GhosttyInputForwardingTests: XCTestCase {
     /// The same rule as the modifier ledger, for ordinary keys. `KeyInterceptor` resolves a chord
     /// at its event monitor, ahead of the responder chain, and matches no `keyUp` at all, so the
     /// release for a consumed `ctrl+h` arrives here for a press libghostty was never told about.
-    func test_aKeyReleaseWithNoMatchingPressIsNotForwarded() throws {
+    ///
+    /// This one states the ledger's own answer; the test below it drives `keyUp` for real.
+    func test_theLedgerOwesNoReleaseForAKeyItNeverSaw() throws {
         XCTAssertFalse(
             view.retireKeyPress(for: try key(.keyUp, "h", keyCode: 0x04)),
             "nothing pressed h on this surface, so libghostty must not be told it came up")
@@ -318,26 +320,74 @@ final class GhosttyInputForwardingTests: XCTestCase {
         XCTAssertFalse(view.retireKeyPress(for: try key(.keyUp, "j", keyCode: 0x26)))
     }
 
-    /// Losing focus retires the ledger, because libghostty retires its own held keys in
-    /// `focusCallback` and the releases are not coming back anyway: ⌘-Tab away with a key down
-    /// and the `keyUp` lands in the other app.
-    func test_losingFocusForgetsWhatWasHeld() throws {
+    /// Losing focus retires the *modifier* ledger, because `focusCallback` releases both sides of
+    /// every modifier its `pressed_key` carries.
+    ///
+    /// An ordinary key must survive it. libghostty releases only that one `pressed_key`, so a
+    /// second key held at the same moment is still down as far as the program is concerned, and
+    /// dropping our record would swallow the release it is still owed.
+    func test_losingFocusForgetsModifiersAndKeepsOrdinaryKeys() throws {
         view.recordKeyPress(for: try key(.keyDown, "h", keyCode: 0x04))
         XCTAssertEqual(
             view.modifierActionToForward(
                 for: try flagsChanged(keyCode: 0x38, named: .shift, held: [UInt(NX_DEVICELSHIFTKEYMASK)])),
             GHOSTTY_ACTION_PRESS)
 
-        view.forgetHeldKeys()
+        view.forgetHeldModifiers()
 
-        XCTAssertFalse(
+        XCTAssertTrue(
             view.retireKeyPress(for: try key(.keyUp, "h", keyCode: 0x04)),
-            "libghostty already released that key")
+            "libghostty only released its one pressed_key, so h is still owed its release")
         XCTAssertEqual(
             view.modifierActionToForward(
                 for: try flagsChanged(keyCode: 0x38, named: .shift, held: [UInt(NX_DEVICELSHIFTKEYMASK)])),
             GHOSTTY_ACTION_PRESS,
             "and the next real shift press must not be suppressed as a duplicate")
+    }
+
+    /// Where `recordKeyPress` sits in `keyDown` is the whole of the ledger's correctness, and the
+    /// tests above cannot see it: `keyDown` returns at its `surfacePtr` guard on the pointer-less
+    /// surfaces they use, so moving the call above the soft-newline return would leave every one
+    /// of them green while Shift+Enter went back to emitting a bare release.
+    ///
+    /// So this one starts a real surface. Shift+Enter sends its own text and returns early, and
+    /// has to leave the ledger owing nothing; a plain key has to leave it owing a release.
+    func test_aLiveSurfaceRecordsOnlyTheKeysItActuallySent() throws {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+
+        let surface = GhosttySurface()
+        surface.view.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+        window.contentView?.addSubview(surface.view)
+        surface.start(TerminalSurfaceConfig(command: "/bin/sh", args: ["-c", "sleep 100"]))
+        defer {
+            surface.view.removeFromSuperview()
+            surface.terminate()
+        }
+        try XCTSkipIf(surface.surfacePtr == nil, "ghostty_surface_new failed")
+        let host = try XCTUnwrap(surface.view as? GhosttyHostView)
+
+        host.keyDown(with: try key(.keyDown, "\r", keyCode: 36, flags: .shift))
+        XCTAssertFalse(
+            host.retireKeyPress(for: try key(.keyUp, "\r", keyCode: 36, flags: .shift)),
+            "the soft-newline chord sends its own text and returns, so it owes no release")
+
+        host.keyDown(with: try key(.keyDown, "h", keyCode: 0x04))
+        XCTAssertTrue(
+            host.retireKeyPress(for: try key(.keyUp, "h", keyCode: 0x04)),
+            "an ordinary key did reach libghostty, so its release is owed")
+
+        // A composing non-modifier encodes nothing at all (`key_encode.zig`), so it owes no
+        // release either. The same hole `modifierActionToForward` closes with `!hasMarkedText()`.
+        host.markedText.mutableString.setString("か")
+        host.keyDown(with: try key(.keyDown, "e", keyCode: 0x0E))
+        XCTAssertFalse(
+            host.retireKeyPress(for: try key(.keyUp, "e", keyCode: 0x0E)),
+            "libghostty drops a composing key without encoding it, so no press was ever sent")
+        host.markedText.mutableString.setString("")
     }
 
     // MARK: Translation — sided modifier bits
@@ -432,11 +482,12 @@ final class GhosttyInputForwardingTests: XCTestCase {
     }
 
     private func key(
-        _ type: NSEvent.EventType, _ characters: String, keyCode: UInt16
+        _ type: NSEvent.EventType, _ characters: String, keyCode: UInt16,
+        flags: NSEvent.ModifierFlags = []
     ) throws -> NSEvent {
         try XCTUnwrap(
             NSEvent.keyEvent(
-                with: type, location: .zero, modifierFlags: [], timestamp: 0,
+                with: type, location: .zero, modifierFlags: flags, timestamp: 0,
                 windowNumber: window.windowNumber, context: nil, characters: characters,
                 charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode))
     }

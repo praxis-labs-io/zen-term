@@ -507,13 +507,18 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     private func syncFocus() {
         let focused = paneFocused && isAppActive
         if let surfacePtr { ghostty_surface_set_focus(surfacePtr, focused) }
-        // Both halves have to clear the held-key ledger, which is why it hangs off the effective
-        // value rather than off `resignFirstResponder`. A pane keeps first responder across a
-        // ⌘-Tab, so the app half alone used to leave libghostty's release and our record disagreeing
-        // on every switch away.
-        if !focused { hostView.forgetHeldKeys() }
         guard focused != lastFocused else { return }
         lastFocused = focused
+        // Both halves have to retire the modifier ledger, which is why it hangs off the effective
+        // value rather than off `resignFirstResponder`. A pane keeps first responder across a
+        // ⌘-Tab, so the app half alone used to leave libghostty's release and our record
+        // disagreeing on every switch away.
+        //
+        // Below the dedupe on purpose. libghostty's `focusCallback` returns early when focus has
+        // not moved and releases nothing, and a pane can be re-synced unfocused while it still
+        // has first responder (scroll mode renders it blurred), so clearing on a repeat would
+        // strand a modifier libghostty is still holding.
+        if !focused { hostView.forgetHeldModifiers() }
         if focused { restoreShader() } else { startShaderSettle() }
     }
 

@@ -350,13 +350,14 @@ final class GhosttyHostView: NSView {
         // composition just ended.
         syncPreedit(clearIfNeeded: markedTextBefore)
 
-        // Every path above returns without sending, so the press is recorded here rather than in
-        // `keyAction`, which also carries the release and must not record that as a press.
-        recordKeyPress(for: event)
-
         if let accumulated = keyTextAccumulator, !accumulated.isEmpty {
             // Composition produced final text — send it as ordinary key input (never
             // "composing", since it's the committed result).
+            //
+            // Recorded here rather than in `keyAction`, which also carries the release and must
+            // not record that as a press, and rather than higher up, where every early return
+            // above would record a press nothing sent.
+            recordKeyPress(for: event)
             for text in accumulated {
                 _ = keyAction(action, event: event, translationEvent: translationEvent, text: text)
             }
@@ -364,10 +365,15 @@ final class GhosttyHostView: NSView {
             // No composed text: an ordinary key. We ARE composing if a preedit is live, or
             // if one existed before this event — the latter catches a Backspace that only
             // cancels the composition and must NOT also delete a real char in the shell.
+            let composing = markedText.length > 0 || markedTextBefore
+            // A composing non-modifier encodes nothing (`key_encode.zig`, "when composing, the
+            // only keys sent are plain modifiers"), so recording it would owe a release for a
+            // press the program never saw. The mirror of `modifierActionToForward`'s
+            // `!hasMarkedText()` guard.
+            if !composing { recordKeyPress(for: event) }
             _ = keyAction(
                 action, event: event, translationEvent: translationEvent,
-                text: translationEvent.ghosttyCharacters,
-                composing: markedText.length > 0 || markedTextBefore)
+                text: translationEvent.ghosttyCharacters, composing: composing)
         }
     }
 
@@ -376,7 +382,7 @@ final class GhosttyHostView: NSView {
         _ = keyAction(GHOSTTY_ACTION_RELEASE, event: event)
     }
 
-    /// The keys this surface has told libghostty are down, by keyCode. `reportedModifiers` for
+    /// The keys this surface has told libghostty are down, by keyCode. `reportedModifierKeys` for
     /// ordinary keys, and it exists for the same reason: a bare RELEASE for a PRESS the terminal
     /// never saw is a key event a program under the kitty keyboard protocol cannot reconcile.
     ///
@@ -396,15 +402,17 @@ final class GhosttyHostView: NSView {
     /// auto-repeat re-records the same keyCode, so one release still settles the whole hold.
     func retireKeyPress(for event: NSEvent) -> Bool { reportedKeys.remove(event.keyCode) != nil }
 
-    /// Forget every press and modifier this surface reported, because libghostty has already
-    /// retired them itself. Called when effective focus drops (`GhosttySurface.syncFocus`):
-    /// libghostty releases both sides of everything held in `focusCallback`, and holding on here
-    /// would suppress the next real press as a duplicate. The releases for those keys are also
-    /// never coming: ⌘-Tab away with a key down and the `keyUp` lands in the other app.
-    func forgetHeldKeys() {
-        reportedKeys.removeAll()
-        reportedModifierKeys.removeAll()
-    }
+    /// Forget the modifiers this surface reported, because libghostty has already retired them.
+    /// Called on the transition to unfocused (`GhosttySurface.syncFocus`): `focusCallback`
+    /// releases both sides of every modifier its `pressed_key` carries, so holding on here would
+    /// suppress the next real press as a duplicate.
+    ///
+    /// Deliberately does NOT touch `reportedKeys`. libghostty releases only its single
+    /// `pressed_key` (`Surface.zig`), so a second key held at the same moment is still down as
+    /// far as the program is concerned, and dropping our record would swallow the release it is
+    /// still owed. A record left standing for a key released while we were away costs nothing:
+    /// the next press of that key re-records it, and the release after that retires it.
+    func forgetHeldModifiers() { reportedModifierKeys.removeAll() }
 
     /// Modifier presses and releases. AppKit delivers these as `flagsChanged` rather than
     /// `keyDown`/`keyUp`, and nothing upstream forwards them (`KeyInterceptor`'s monitor passes
