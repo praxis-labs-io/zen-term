@@ -108,6 +108,7 @@ final class TabController: NSObject {
 
     /// Any surface in this tab moved its scroll position, panes and drawers alike (ZEN-330).
     var onScrollPosition: ((TerminalSurface, TerminalScrollPosition) -> Void)?
+    var onSearchEvent: ((TerminalSurface, SearchController.Event) -> Void)?
 
     /// The panel holding unified focus, as the pair scroll mode needs: the terminal to drive,
     /// and the panel to hang its indicator on. Nil while the focused panel has no live surface
@@ -294,6 +295,9 @@ final class TabController: NSObject {
         paneCanvas.onCommandFinished = { [weak self] result in self?.onCommandFinished?(result) }
         paneCanvas.onScrollPosition = { [weak self] surface, position in
             self?.onScrollPosition?(surface, position)
+        }
+        paneCanvas.onSearchEvent = { [weak self] surface, event in
+            self?.onSearchEvent?(surface, event)
         }
         paneCanvas.onSurfaceStartFailed = { [weak self] retry, close in self?.onPaneStartFailed?(retry, close) }
     }
@@ -1381,6 +1385,24 @@ extension TabController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {
         guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
         onScrollPosition?(s, position)
+    }
+    /// The same relay for a drawer's search, on the same guard: panes go through
+    /// `PaneCanvasController` and both land on `onSearchEvent`.
+    func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
+        guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
+        onSearchEvent?(s, .total(total))
+    }
+    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?) {
+        guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
+        onSearchEvent?(s, .selected(index))
+    }
+    func surfaceDidEndSearch(_ s: TerminalSurface) {
+        guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
+        onSearchEvent?(s, .ended)
+    }
+    func surface(_ s: TerminalSurface, wantsSearchWithNeedle needle: String) {
+        guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
+        onSearchEvent?(s, .wanted(needle: needle))
     }
     /// A click landed in one of the tab's drawer surfaces — give that drawer unified
     /// focus. A tool float is modal and already holds focus, so it's ignored.

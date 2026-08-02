@@ -15,6 +15,12 @@ enum GhosttyThemeParser {
         var cursor = fallback.cursor
         var selectionBackground = fallback.selectionBackground
         var ansi = fallback.ansi
+        // Left nil unless the file names them, so a theme that says nothing gets the accent-derived
+        // pair from `ChromeThemeDeriver.withSearchColors` rather than the fallback's copy of it.
+        var searchForeground: TerminalColor?
+        var searchBackground: TerminalColor?
+        var searchSelectedForeground: TerminalColor?
+        var searchSelectedBackground: TerminalColor?
 
         for rawLine in text.split(whereSeparator: \.isNewline) {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
@@ -29,6 +35,14 @@ enum GhosttyThemeParser {
             case "cursor-color": if let color = TerminalColor(hex: value) { cursor = color }
             case "selection-background":
                 if let color = TerminalColor(hex: value) { selectionBackground = color }
+            case "search-foreground":
+                if let color = TerminalColor(hex: value) { searchForeground = color }
+            case "search-background":
+                if let color = TerminalColor(hex: value) { searchBackground = color }
+            case "search-selected-foreground":
+                if let color = TerminalColor(hex: value) { searchSelectedForeground = color }
+            case "search-selected-background":
+                if let color = TerminalColor(hex: value) { searchSelectedBackground = color }
             case "palette":
                 // value form: "N=#rrggbb"
                 guard let separator = value.firstIndex(of: "="),
@@ -46,6 +60,9 @@ enum GhosttyThemeParser {
         return TerminalTheme(
             fontName: fontName, fontSize: fontSize,
             background: background, foreground: foreground,
-            cursor: cursor, selectionBackground: selectionBackground, ansi: ansi)
+            cursor: cursor, selectionBackground: selectionBackground, ansi: ansi,
+            searchForeground: searchForeground, searchBackground: searchBackground,
+            searchSelectedForeground: searchSelectedForeground,
+            searchSelectedBackground: searchSelectedBackground)
     }
 }

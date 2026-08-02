@@ -12,6 +12,19 @@ public struct TerminalTheme: Sendable, Equatable {
     /// The 16 ANSI colors in order: 0–7 normal, 8–15 bright.
     public var ansi: [TerminalColor]
 
+    /// How a backend paints scrollback search matches: every match in the first pair, the one
+    /// currently selected in the second.
+    ///
+    /// Optional because a theme file names them or does not, and the chrome fills the gaps: by the
+    /// time one of these reaches a surface, `AppTheme` has derived whatever the file left out, so
+    /// nil here means "not resolved yet" rather than "the backend keeps its defaults".
+    ///
+    /// Opaque colors, no alpha: these reach the grid as flat RGB, so a blend is pre-computed.
+    public var searchForeground: TerminalColor?
+    public var searchBackground: TerminalColor?
+    public var searchSelectedForeground: TerminalColor?
+    public var searchSelectedBackground: TerminalColor?
+
     public init(
         fontName: String,
         fontSize: CGFloat,
@@ -19,7 +32,11 @@ public struct TerminalTheme: Sendable, Equatable {
         foreground: TerminalColor,
         cursor: TerminalColor,
         selectionBackground: TerminalColor,
-        ansi: [TerminalColor]
+        ansi: [TerminalColor],
+        searchForeground: TerminalColor? = nil,
+        searchBackground: TerminalColor? = nil,
+        searchSelectedForeground: TerminalColor? = nil,
+        searchSelectedBackground: TerminalColor? = nil
     ) {
         self.fontName = fontName
         self.fontSize = fontSize
@@ -28,5 +45,9 @@ public struct TerminalTheme: Sendable, Equatable {
         self.cursor = cursor
         self.selectionBackground = selectionBackground
         self.ansi = ansi
+        self.searchForeground = searchForeground
+        self.searchBackground = searchBackground
+        self.searchSelectedForeground = searchSelectedForeground
+        self.searchSelectedBackground = searchSelectedBackground
     }
 }

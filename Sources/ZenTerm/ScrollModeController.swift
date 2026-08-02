@@ -191,6 +191,19 @@ final class ScrollModeController {
     /// (a pane that just exited) can end only its own mode.
     func isDriving(_ s: AnyObject) -> Bool { surface === (s as AnyObject) }
 
+    /// Put the cursor on `cell`. For search, which finds a row the mode's own motions cannot
+    /// reach: the reader names a match rather than walking to it.
+    ///
+    /// It closes any selection first. A selection is anchored to a row the reader picked, and
+    /// dragging its far end across the screen to a match they were only looking for selects
+    /// everything in between.
+    func land(on cell: ScrollCell) {
+        guard isActive else { return }
+        releaseSelection()
+        pendingAnchorLine = nil
+        move(to: cell)
+    }
+
     // MARK: keys
 
     /// Handle one `keyDown` while the mode is up. Returns whether it was consumed.
@@ -388,6 +401,17 @@ final class ScrollModeController {
         guard selection != nil else { return }
         selection = nil
         updateHeader()
+    }
+
+    /// What a visual selection currently covers, or nil when there is none.
+    ///
+    /// Search reads this to seed its bar. It cannot use libghostty's own search-the-selection for
+    /// it: that reads `Screen.selection`, which the mouse drives, and scroll mode's selection is
+    /// the chrome's own overlay that the backend knows nothing about.
+    var selectedText: String? {
+        guard let surface, let selection, let columns = surface.cellMetrics?.columns else { return nil }
+        let text = surface.text(in: selection.range(to: cursor, columns: columns))
+        return (text?.isEmpty ?? true) ? nil : text
     }
 
     /// The pulse comes after the write, not on the keystroke: a yank leaves nothing on screen, so a

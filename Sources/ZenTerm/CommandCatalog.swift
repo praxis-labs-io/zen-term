@@ -59,6 +59,7 @@ enum CommandCatalog {
         case .decreaseFontSize: return window("Decrease Font Size", glyph, chord)
         case .resetFontSize: return window("Reset Font Size", glyph, chord)
         case .toggleScrollMode: return pane("Scroll Mode", glyph, chord)
+        case .toggleSearch: return pane("Find in Scrollback", glyph, chord)
         // Present for exhaustiveness; all are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
@@ -91,7 +92,7 @@ enum CommandCatalog {
             .splitHorizontal, .splitVertical,
             .navLeft, .navDown, .navUp, .navRight,
             .resizeLeft, .resizeDown, .resizeUp, .resizeRight,
-            .toggleZoom, .toggleScrollMode, .closePane,
+            .toggleZoom, .toggleScrollMode, .toggleSearch, .closePane,
         ]
         chords += [.fillScreen, .increaseFontSize, .decreaseFontSize, .resetFontSize]
         return chords.map(spec(for:))

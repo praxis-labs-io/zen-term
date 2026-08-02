@@ -44,6 +44,7 @@ final class KeyInterceptor {
         // chords itself but applies each to the one focused surface.
         case increaseFontSize, decreaseFontSize, resetFontSize
         case toggleScrollMode  // enter/leave scroll mode over the focused pane (ZEN-330)
+        case toggleSearch  // open the find bar over the focused pane's scrollback (ZEN-324)
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?

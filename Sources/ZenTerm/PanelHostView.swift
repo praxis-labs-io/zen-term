@@ -22,6 +22,7 @@ final class PanelHostView: NSView {
     private let onFocusRequest: () -> Void
     private let pane = NSView()  // the bordered card; the glow is cast by `halo`, not by a shadow
     private let clip = NSView()  // inner clip so terminal content stays inside the radius
+    private let content: NSView  // the terminal surface's own view
     private let ring = RingFillView()  // paints the padding ring once the clip stops filling it
     private let cursor = ScrollCursorView()  // scroll mode's row band, hidden until the mode is up
     private let halo = OutsideShadowView()  // the focus glow, cast around the card from beneath it
@@ -35,6 +36,12 @@ final class PanelHostView: NSView {
     private var headerTopConstraints: [NSLayoutConstraint] = []
     private var contentTopToHeader: NSLayoutConstraint?
     private var contentTopToClip: NSLayoutConstraint?
+    /// Built on the first search over this panel and kept for its life. A panel that never searches
+    /// pays nothing; one that searches twice does not rebuild.
+    private var findBar: FindBarView?
+    private var findBarConstraints: [NSLayoutConstraint] = []
+    private var contentBottomToFindBar: NSLayoutConstraint?
+    private var contentBottomToClip: NSLayoutConstraint?
 
     var isFocused: Bool = false { didSet { if oldValue != isFocused { updateHalo() } } }
 
@@ -110,6 +117,7 @@ final class PanelHostView: NSView {
         onFocusRequest: @escaping () -> Void
     ) {
         self.onFocusRequest = onFocusRequest
+        self.content = content
         self.baseMeta = meta
         self.zoomMeta = zoomMeta
         // Construct with whichever meta exists; `updateHeader()` below sets the state-correct one.
@@ -171,12 +179,15 @@ final class PanelHostView: NSView {
             ring.bottomAnchor.constraint(equalTo: clip.bottomAnchor),
             content.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
             content.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
-            content.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -padding),
             cursor.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             cursor.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             cursor.topAnchor.constraint(equalTo: content.topAnchor),
             cursor.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
+
+        contentBottomToClip = content.bottomAnchor.constraint(
+            equalTo: clip.bottomAnchor, constant: -padding)
+        contentBottomToClip?.isActive = true
 
         contentTopToClip = content.topAnchor.constraint(equalTo: clip.topAnchor, constant: padding)
         if let headerView {
@@ -275,6 +286,43 @@ final class PanelHostView: NSView {
         }
     }
 
+    /// Raise or lower the find bar, returning it while it is up so the caller can wire and drive it.
+    ///
+    /// The bar **displaces** the terminal rather than floating over it, exactly as the header does
+    /// at the other end, so the grid loses a row or two and reflows. The caller has to lay out and
+    /// re-measure after this: see `SearchController.settleLayout()`.
+    @discardableResult
+    func setFindBarShown(_ shown: Bool) -> FindBarView? {
+        guard shown else {
+            findBar?.isHidden = true
+            NSLayoutConstraint.deactivate(findBarConstraints + [contentBottomToFindBar].compactMap { $0 })
+            contentBottomToClip?.isActive = true
+            return nil
+        }
+        let bar = findBar ?? makeFindBar()
+        bar.isHidden = false
+        contentBottomToClip?.isActive = false
+        NSLayoutConstraint.activate(findBarConstraints + [contentBottomToFindBar].compactMap { $0 })
+        return bar
+    }
+
+    private func makeFindBar() -> FindBarView {
+        let bar = FindBarView()
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        clip.addSubview(bar)
+        findBarConstraints = [
+            bar.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
+            bar.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
+            bar.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -8),
+        ]
+        contentBottomToFindBar = content.bottomAnchor.constraint(
+            equalTo: bar.topAnchor, constant: -padding)
+        findBar = bar
+        return bar
+    }
+
+    var findBarForTesting: FindBarView? { findBar?.isHidden == false ? findBar : nil }
+
     /// Swap between header-above-content and content-at-top, and hide/show the header.
     private func setHeaderShown(_ shown: Bool) {
         guard let headerView, let contentTopToHeader, let contentTopToClip else { return }
@@ -300,6 +348,7 @@ final class PanelHostView: NSView {
         halo.color = Theme.current.chrome.accent.nsColor
         applyBackground()
         headerView?.reapplyTheme()
+        findBar?.reapplyTheme()
         updateHalo()
     }
 

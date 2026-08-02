@@ -241,7 +241,7 @@
 #   resize_left  resize_right  resize_up  resize_down
 #   new_tab  new_window  prev_tab  next_tab  select_tab_1 … select_tab_9
 #   toggle_bottom_drawer  toggle_right_drawer  toggle_focus_mode  fill_screen
-#   toggle_scroll_mode
+#   toggle_scroll_mode  toggle_search
 #   toggle_workspace_picker  toggle_command_palette  diff_viewer
 #   open_settings  reload_config
 #   increase_font_size  decrease_font_size  reset_font_size
@@ -271,6 +271,7 @@
 # keybind = toggle_focus_mode=cmd+f              # one pane/drawer fills the window
 # keybind = fill_screen=cmd+shift+f              # the window fills the desktop
 # keybind = toggle_scroll_mode=cmd+shift+s       # vim keys move the focused pane's scrollback
+# keybind = toggle_search=cmd+/                  # find in the focused pane's scrollback
 # keybind = toggle_workspace_picker=cmd+shift+p
 # keybind = toggle_command_palette=cmd+p
 # keybind = diff_viewer=cmd+d                    # diff of the focused repo
@@ -305,3 +306,35 @@
 # A selection stays on screen: the terminal core can only read text you can see, so
 # you get the anchor back whenever the buffer moves under it, whether you scrolled or
 # a running command printed. Scroll to the block you want first, then select it.
+#
+# ─── Find ────────────────────────────────────────────────────────────────────
+#
+# `toggle_search` (⌘/) opens a find bar along the bottom of the focused pane and
+# searches its whole scrollback, not just what's on screen. Every match is
+# highlighted as you type and the bar counts them. If what you typed is only in
+# history, the pane scrolls to it so you can see it while you type; if a match is
+# already on screen, nothing moves.
+#
+# ⌘/ opens on whatever you have selected, so searching a word you can see never
+# means retyping it. Either kind counts: a mouse selection, or a `v` selection made
+# in scroll mode. With nothing selected the bar opens empty.
+#
+# Enter hands the keys back to the pane and puts you in scroll mode on the match,
+# where `n` and `N` step forward and back (Enter and shift+Enter do the same), and
+# `v` / `V` / `y` select and copy what you found. Esc closes the bar and leaves
+# scroll mode with it, unless you were already in scroll mode when you opened it.
+#
+# If the search scrolled you back through the buffer, closing it returns you to
+# where you were when you opened it, and so does typing past the last match. That is
+# the bottom when you searched from a live prompt, and the place you were reading if
+# you had already scrolled. You are never left parked on something that no longer
+# matches what you typed.
+#
+# The match colors follow your theme. A theme file can set them itself with
+# `search-background`, `search-foreground`, `search-selected-background` and
+# `search-selected-foreground`; unset, they're derived from the chrome accent.
+#
+# The cursor lands on the match by reading the screen back, because the terminal
+# core reports which match is selected but never where it is. With several matches
+# on one screen it can land on the wrong one. The selected match is highlighted
+# differently, so you'll see it, and one `j` or `k` fixes it.

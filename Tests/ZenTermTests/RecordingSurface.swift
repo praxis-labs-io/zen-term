@@ -82,11 +82,29 @@ final class RecordingSurface: NSObject, TerminalSurface {
     /// discriminator for "did the modal card swallow paste, or did it fall through to the terminal".
     private(set) var pastes: [String] = []
     func paste(_ text: String) { pastes.append(text) }
-    func copySelection() -> String? { nil }
+    /// What a mouse drag has selected, which the find bar seeds itself from. Nil by default:
+    /// most tests have no selection, and an accidental one would seed every search.
+    var selectionText: String?
+    func copySelection() -> String? { selectionText }
     /// Records scroll commands so a test can assert which key produced which move, and that a
     /// key outside scroll mode produced none.
     private(set) var scrolls: [TerminalScroll] = []
     func scroll(_ command: TerminalScroll) { scrolls.append(command) }
+
+    private(set) var searches: [String] = []
+    private(set) var searchSteps: [TerminalSearchStep] = []
+    private(set) var endSearchCount = 0
+    func search(_ needle: String) { searches.append(needle) }
+    func stepSearch(_ step: TerminalSearchStep) { searchSteps.append(step) }
+
+    /// Whether `endSearch` reports END_SEARCH straight back, synchronously, the way libghostty
+    /// does: it answers the binding action by calling the apprt from inside it. Off by default so
+    /// the ordinary tests read plainly, and on for the one that covers the re-entrancy.
+    var echoesEndSearch = false
+    func endSearch() {
+        endSearchCount += 1
+        if echoesEndSearch { delegate?.surfaceDidEndSearch(self) }
+    }
 
     /// The grid this surface claims to have. Defaults to a 24-row viewport rather than nil, so a
     /// test drives scroll mode's real cursor behavior: with no metrics the cursor is pinned to a

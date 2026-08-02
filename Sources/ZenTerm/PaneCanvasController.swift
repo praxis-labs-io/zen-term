@@ -79,6 +79,7 @@ final class PaneCanvasController: NSObject {
     /// A pane's scroll position moved. Carries the surface so a consumer can match it against
     /// the one it cares about (ZEN-330).
     var onScrollPosition: ((TerminalSurface, TerminalScrollPosition) -> Void)?
+    var onSearchEvent: ((TerminalSurface, SearchController.Event) -> Void)?
 
     /// Fired when a socket `focus` command names one of this canvas's panes (an nvim split
     /// at its edge handing off). `TabController` routes it into its unified `navigate(_:)`.
@@ -571,6 +572,18 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     /// can ignore every pane but the one it is driving.
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {
         onScrollPosition?(s, position)
+    }
+    func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
+        onSearchEvent?(s, .total(total))
+    }
+    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?) {
+        onSearchEvent?(s, .selected(index))
+    }
+    func surfaceDidEndSearch(_ s: TerminalSurface) {
+        onSearchEvent?(s, .ended)
+    }
+    func surface(_ s: TerminalSurface, wantsSearchWithNeedle needle: String) {
+        onSearchEvent?(s, .wanted(needle: needle))
     }
     func surface(_ s: TerminalSurface, cwdDidChange url: URL) {
         guard let id = leafID(of: s) else { return }
