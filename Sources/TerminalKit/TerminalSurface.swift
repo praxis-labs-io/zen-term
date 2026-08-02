@@ -167,6 +167,9 @@ public struct TerminalViewportRange: Equatable {
     public var rowCount: Int { endRow - startRow + 1 }
 }
 
+/// One step through a live search's matches.
+public enum TerminalSearchStep: Equatable { case next, previous }
+
 /// Events flowing OUT of a surface, up into the chrome. Each backend translates
 /// its native callbacks into these.
 public protocol TerminalSurfaceDelegate: AnyObject {
@@ -213,6 +216,19 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     /// well as on `scroll(_:)`, so a chrome surface reading it stays right while a pane keeps
     /// printing. A backend with no notion of a scrollback viewport never sends it.
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition)
+    /// How many matches the live needle has, or nil when the backend has none to report. Fires
+    /// repeatedly as the engine works back through the buffer, so the count climbs rather than
+    /// arriving once.
+    func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?)
+    /// Which match is selected, **zero-based**, or nil when none is. A fresh needle sits at nil
+    /// until the first `stepSearch`: the backend matches eagerly but selects nothing on its own.
+    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?)
+    /// The backend tore its search down on its own, through a keybind it owns or its own teardown.
+    /// The chrome takes its find bar down and must NOT call `endSearch()` back.
+    func surfaceDidEndSearch(_ s: TerminalSurface)
+    /// The backend asks for a find bar, seeded with `needle` when it has one to offer (libghostty's
+    /// search-the-selection binding). A request rather than a state change: the chrome owns the bar.
+    func surface(_ s: TerminalSurface, wantsSearchWithNeedle needle: String)
 }
 
 /// Default no-ops so a consumer implements only the events it cares about.
@@ -229,6 +245,10 @@ public extension TerminalSurfaceDelegate {
     func surfaceWantsFocus(_ s: TerminalSurface) {}
     func surfaceDidFailToStart(_ s: TerminalSurface) {}
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {}
+    func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {}
+    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?) {}
+    func surfaceDidEndSearch(_ s: TerminalSurface) {}
+    func surface(_ s: TerminalSurface, wantsSearchWithNeedle needle: String) {}
 }
 
 /// The leaf contract. A backend is anything that can BE a terminal in our chrome.
@@ -330,6 +350,17 @@ public protocol TerminalSurface: AnyObject {
     /// line that wrapped over three rows belongs on the pasteboard as the one line it was typed as.
     func text(in range: TerminalViewportRange) -> String?
 
+    /// Run, or re-run, a scrollback search for `needle`. An empty needle stops the engine and
+    /// nothing else: the chrome owns the find bar's lifetime, so stopping the search never takes
+    /// the bar down.
+    func search(_ needle: String)
+
+    /// Step to the next or previous match. Does nothing when no search is running.
+    func stepSearch(_ step: TerminalSearchStep)
+
+    /// Tear the search engine down. Idempotent.
+    func endSearch()
+
     /// Deliver a Return **keypress** to the shell — a real Enter, not a pasted `"\r"`. A pasted
     /// carriage return arrives inside bracketed paste, where a TUI (Claude Code, an editor) reads it
     /// as a literal newline in its input rather than a submit. This is the chrome's way to submit a
@@ -359,6 +390,12 @@ public extension TerminalSurface {
 
     /// Default nil for the same reason: nothing to read means nothing to yank.
     func text(in range: TerminalViewportRange) -> String? { nil }
+
+    /// Default no-ops: a backend with no search engine supports none of it, and the chrome's find
+    /// bar then reports no matches rather than misbehaving.
+    func search(_ needle: String) {}
+    func stepSearch(_ step: TerminalSearchStep) {}
+    func endSearch() {}
 
     /// Default no-op: a backend that can't reconfigure live needs nothing here.
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {}

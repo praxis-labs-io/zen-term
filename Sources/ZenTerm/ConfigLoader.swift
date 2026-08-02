@@ -59,9 +59,7 @@ enum ConfigLoader {
         terminal.fontName = general.fontName
         terminal.fontSize = general.fontSize
 
-        return AppTheme(
-            terminal: terminal,
-            chrome: ChromeThemeDeriver.derive(from: terminal, accent: general.accentColor))
+        return AppTheme(terminal: terminal, accent: general.accentColor)
     }
 
     /// Locate the active theme file, or nil to use the built-in default. A `theme = <name>`

@@ -399,14 +399,34 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// same way, so anything in its surface-scope action list is reachable from here. A rejected
     /// action is logged rather than thrown: every caller is a keystroke, and a keystroke that
     /// does nothing is the right failure.
-    private func performBindingAction(_ action: String) {
+    ///
+    /// `logsFailure` is for the actions that answer "was there anything to do": navigating or
+    /// ending a search that is not running both report false, and so does an empty needle with no
+    /// search behind it. Those are answers, not rejections.
+    private func performBindingAction(_ action: String, logsFailure: Bool = true) {
         guard let surfacePtr else { return }
         let performed = action.withCString {
             ghostty_surface_binding_action(surfacePtr, $0, UInt(action.utf8.count))
         }
-        if !performed {
+        if !performed && logsFailure {
             Log.error("GhosttySurface: libghostty rejected \(action)", category: .surface)
         }
+    }
+
+    /// The needle goes over the same binding-action channel as everything else, and needs no
+    /// escaping: libghostty splits on the *first* colon and takes the rest verbatim, so a needle
+    /// holding colons, spaces or unicode arrives intact.
+    public func search(_ needle: String) {
+        performBindingAction("search:\(needle)", logsFailure: false)
+    }
+
+    public func stepSearch(_ step: TerminalSearchStep) {
+        let direction = step == .next ? "next" : "previous"
+        performBindingAction("navigate_search:\(direction)", logsFailure: false)
+    }
+
+    public func endSearch() {
+        performBindingAction("end_search", logsFailure: false)
     }
 
     /// How the surface's layer composites against the window behind it. Three entry points run
@@ -729,6 +749,13 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         return String(cString: ptr)
     }
 
+    /// libghostty carries both search counts as optionals, marshalled to `-1` when empty. The
+    /// selected index is **zero-based**, whatever the header comment above it says: the engine
+    /// pushes its raw index and ghostty's own UI renders `selected + 1`.
+    private static func searchCount(_ value: ssize_t) -> Int? {
+        value < 0 ? nil : Int(value)
+    }
+
     private static func viewportPoint(x: UInt32, y: Int) -> ghostty_point_s {
         var point = ghostty_point_s()
         point.tag = GHOSTTY_POINT_VIEWPORT
@@ -844,6 +871,24 @@ public final class GhosttySurface: NSObject, TerminalSurface {
                 self,
                 scrollPositionDidChange: TerminalScrollPosition(
                     total: Int(bar.total), offset: Int(bar.offset), viewport: Int(bar.len)))
+            return true
+        case GHOSTTY_ACTION_START_SEARCH:
+            // libghostty's own start-search and search-the-selection binds. Neither starts a
+            // search: they ask the apprt to put a find bar up, seeded with the selection when
+            // there is one. We never send them ourselves, but they are live keybinds in every
+            // surface, so without this case they do nothing at all.
+            let needle = action.action.start_search.needle.map { String(cString: $0) } ?? ""
+            delegate?.surface(self, wantsSearchWithNeedle: needle)
+            return true
+        case GHOSTTY_ACTION_SEARCH_TOTAL:
+            delegate?.surface(self, searchTotalDidChange: Self.searchCount(action.action.search_total.total))
+            return true
+        case GHOSTTY_ACTION_SEARCH_SELECTED:
+            delegate?.surface(
+                self, searchSelectionDidChange: Self.searchCount(action.action.search_selected.selected))
+            return true
+        case GHOSTTY_ACTION_END_SEARCH:
+            delegate?.surfaceDidEndSearch(self)
             return true
         default:
             return false

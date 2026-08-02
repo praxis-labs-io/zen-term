@@ -88,6 +88,13 @@ final class RecordingSurface: NSObject, TerminalSurface {
     private(set) var scrolls: [TerminalScroll] = []
     func scroll(_ command: TerminalScroll) { scrolls.append(command) }
 
+    private(set) var searches: [String] = []
+    private(set) var searchSteps: [TerminalSearchStep] = []
+    private(set) var endSearchCount = 0
+    func search(_ needle: String) { searches.append(needle) }
+    func stepSearch(_ step: TerminalSearchStep) { searchSteps.append(step) }
+    func endSearch() { endSearchCount += 1 }
+
     /// The grid this surface claims to have. Defaults to a 24-row viewport rather than nil, so a
     /// test drives scroll mode's real cursor behavior: with no metrics the cursor is pinned to a
     /// one-row grid and every step scrolls, which passes while proving nothing.

@@ -180,8 +180,8 @@ final class WindowController: NSObject {
             focusedCWD: { [weak self] in self?.activeController?.focusedCWD },
             yieldFocus: { [weak self] in
                 // A float takes the keyboard without moving pane focus, so the focus relay never
-                // fires and scroll mode would stay up swallowing the keys meant for the float.
-                self?.scrollMode.end()
+                // fires and a mode would stay up swallowing the keys meant for the float.
+                self?.endModes()
                 self?.activeController?.yieldFocusToFloat()
             },
             restoreFocus: { [weak self] in self?.activeController?.restoreUnifiedFocus() })
@@ -248,6 +248,10 @@ final class WindowController: NSObject {
     /// Scroll mode over this window's focused panel (ZEN-330). Per window because it targets one
     /// panel, and the key handler it installs is app-global, so only the key window's can be up.
     let scrollMode = ScrollModeController()
+
+    /// Scrollback search over the same panel (ZEN-324). Per window for the same reasons, and it
+    /// drives scroll mode on commit, so it holds the one above.
+    lazy var search = SearchController(scrollMode: scrollMode)
 
     /// Hand an app-global chord back to `AppDelegate.route`. The keyboard path routes these before
     /// `handle(_:)`, but a palette pick reaches `handle` directly — where they'd otherwise be a
@@ -398,7 +402,7 @@ final class WindowController: NSObject {
 
         layoutContainer()
         window.delegate = self  // for windowWillClose teardown (native close button + cascade)
-        wireScrollMode()
+        wireModes()
 
         // Layout & Motion knobs (backdrop tint, window gutter, pane gap) re-apply live: a
         // Settings-card edit re-tints the backdrop and re-lays-out every built tab, no relaunch.
@@ -561,20 +565,53 @@ final class WindowController: NSObject {
         scrollMode.begin(surface: target.surface, panel: target.panel)
     }
 
-    /// Install the mode's key handler for exactly as long as the mode is up, and route scroll
-    /// reports into it. Both halves live here because `ScrollModeController` owns the mode, not
-    /// the window's plumbing.
-    private func wireScrollMode() {
-        scrollMode.onActiveChanged = { [weak self] active in
-            guard let self else { return }
-            keyModeHost?.modeHandler = active ? { [weak self] event in self?.scrollMode.handle(event) ?? false } : nil
-            // The shell is not taking keys while the mode is up, and its blinking cursor competes
-            // with the mode's own for the reader's eye. The unfocused render (hollow, still) says
-            // exactly that. It changes how the surface DRAWS, never who holds focus, so a mode that
-            // ends because focus moved re-asserts the render on whichever panel holds it now.
-            activeController?.setFocusedSurfaceRendersFocused(!active)
+    /// Open the find bar over the focused panel, or put the caret back in it if it is already up.
+    ///
+    /// A panel with no live surface has nothing to search, so the chord does nothing rather than
+    /// putting a bar over an empty panel.
+    private func toggleSearch() {
+        guard let target = activeController?.focusedScrollTarget else { return }
+        search.begin(surface: target.surface, panel: target.panel)
+    }
 
-        }
+    /// End both modes, in the order their layout changes have to unwind: the bar comes down first,
+    /// because taking it down reflows the grid that scroll mode is still measuring against.
+    ///
+    /// One call for every retraction path. Search can be up without scroll mode, so ending scroll
+    /// mode alone is not the choke point it looks like.
+    private func endModes() {
+        search.end()
+        scrollMode.end()
+    }
+
+    /// Install the key handler for exactly as long as a mode is up, and route scroll reports into
+    /// it. Both halves live here because the controllers own their modes, not the window's
+    /// plumbing.
+    private func wireModes() {
+        scrollMode.onActiveChanged = { [weak self] _ in self?.updateModeHandler() }
+        search.onActiveChanged = { [weak self] _ in self?.updateModeHandler() }
+    }
+
+    /// One handler for both modes, because `KeyInterceptor` has one slot.
+    ///
+    /// The order inside it is the two-phase handoff. While the find field holds first responder the
+    /// handler stands down entirely: the interceptor is a local monitor running ahead of the field
+    /// editor, so a mode that kept claiming keys would eat the typing and leave the bar untypeable.
+    private func updateModeHandler() {
+        let active = scrollMode.isActive || search.isActive
+        keyModeHost?.modeHandler =
+            active
+            ? { [weak self] event in
+                guard let self else { return false }
+                if self.search.isEditing { return false }
+                if self.search.handle(event) { return true }
+                return self.scrollMode.handle(event)
+            } : nil
+        // The shell is not taking keys while a mode is up, and its blinking cursor competes with
+        // the mode's own for the reader's eye. The unfocused render (hollow, still) says exactly
+        // that. It changes how the surface DRAWS, never who holds focus, so a mode that ends
+        // because focus moved re-asserts the render on whichever panel holds it now.
+        activeController?.setFocusedSurfaceRendersFocused(!active)
     }
 
     func showAndStart() {
@@ -928,7 +965,7 @@ final class WindowController: NSObject {
     /// input, and spring it in. One path for all three cards. No-op if there's no active tab.
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
         guard let active = activeController else { return }
-        scrollMode.end()  // the card takes the keyboard; see the float's `yieldFocus`
+        endModes()  // the card takes the keyboard; see the float's `yieldFocus`
         // Anything else still on its way in would otherwise land on top of this card a moment from
         // now, leaving two modal surfaces stacked and the keyboard aimed at the wrong one: a float
         // still resolving its repo root, or a card still reading the config it renders from. A
@@ -1516,10 +1553,10 @@ final class WindowController: NSObject {
         cancelConfirm()  // supersede any confirm already up (e.g. ⌘Q over a ⌘W confirm)
         closeModal()  // never stack over an open palette
         // A confirm answers with Return and Esc, and both are dispatched after the local key
-        // monitor. Left up, scroll mode swallows the Return and reads the Esc as its own exit,
-        // so the confirm could only be answered with the mouse. `closeModal` above does not
-        // cover this: it returns early when no card is open, which is the ⌘W case exactly.
-        scrollMode.end()
+        // monitor. Left up, a mode swallows the Return and reads the Esc as its own exit, so the
+        // confirm could only be answered with the mouse. `closeModal` above does not cover this:
+        // it returns early when no card is open, which is the ⌘W case exactly.
+        endModes()
         confirmOnCancel = onCancel
         let content = ToastContent(variant: variant, title: title, message: message)
         let actions = [
@@ -1705,6 +1742,7 @@ final class WindowController: NSObject {
             Log.info("zoom toggled", category: .panes)
             active?.toggleZoom()
         case .toggleScrollMode: toggleScrollMode()
+        case .toggleSearch: toggleSearch()
         case .fillScreen: toggleFillScreen()
         case .toggleToolFloat(let id):
             // A float is modal too, so it calls off a card that's still loading — otherwise the card
@@ -1879,14 +1917,20 @@ final class WindowController: NSObject {
             self?.presentSurfaceFailureToast(retry: retry, close: close)
         }
         // A pane click while a close confirm is up moves the confirm's target — void it.
-        // Focus moving also ends scroll mode: the mode targets one panel, and a header still up
-        // over the panel you just left points at a buffer you are no longer reading.
+        // Focus moving also ends both modes: they target one panel, and a header or a find bar
+        // still up over the panel you just left points at a buffer you are no longer reading.
         c.onFocusChanged = { [weak self] in
             self?.cancelConfirm()
-            self?.scrollMode.end()
+            self?.endModes()
         }
         c.onScrollPosition = { [weak self] surface, position in
             self?.scrollMode.report(position: position, from: surface)
+        }
+        c.onSearchEvent = { [weak self] surface, event in
+            guard let self else { return }
+            // The panel is resolved lazily: only the backend's own open-a-bar request needs one,
+            // and every other event is for a bar that is already up.
+            search.handle(event, from: surface, panel: activeController?.focusedScrollTarget?.panel)
         }
         c.onNotification = { [weak self] n in self?.agentNotified(id: id, notification: n) }
         c.onCommandFinished = { [weak self] result in self?.commandFinished(id: id, result: result) }
@@ -2051,6 +2095,9 @@ final class WindowController: NSObject {
     /// Test hooks: the panel and surface scroll mode would target, so a test can assert what the
     /// header on screen reads rather than only what the mode's own flag says (ZEN-330).
     var focusedPanelForTesting: PanelHostView? { activeController?.focusedScrollTarget?.panel }
+    var focusedScrollTargetForTesting: (surface: TerminalSurface, panel: PanelHostView)? {
+        activeController?.focusedScrollTarget
+    }
     var focusedSurfaceForTesting: TerminalSurface? { activeController?.focusedScrollTarget?.surface }
 
     /// Test hook: drive the real surface-failure toast so a test can click its actual buttons.
@@ -2194,9 +2241,9 @@ final class WindowController: NSObject {
         // otherwise strand it in capture mode — swallowing every keystroke in every other window.
         keybindCapturer?.endCapture()
         // Same shared-handler hazard, same unconditional fix: a window closed while still key
-        // never resigns key, and a scroll mode left up keeps swallowing keys in every other
-        // window. `windowDidResignKey` covers the ordinary path; this covers close.
-        scrollMode.end()
+        // never resigns key, and a mode left up keeps swallowing keys in every other window.
+        // `windowDidResignKey` covers the ordinary path; this covers close.
+        endModes()
         titlePoll?.invalidate()
         titlePoll = nil
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
@@ -2213,7 +2260,7 @@ extension WindowController: NSWindowDelegate {
 
     /// Scroll mode installs an app-global key handler, so it cannot outlive this window holding
     /// the keyboard: leaving it up would swallow keystrokes meant for whatever you switched to.
-    func windowDidResignKey(_ notification: Notification) { scrollMode.end() }
+    func windowDidResignKey(_ notification: Notification) { endModes() }
 
     /// Quit terminates the process without closing windows, so `windowWillClose` never fires
     /// and every shell is orphaned instead of swept (ZEN-269). The app delegate drives this on

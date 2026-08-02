@@ -191,6 +191,19 @@ final class ScrollModeController {
     /// (a pane that just exited) can end only its own mode.
     func isDriving(_ s: AnyObject) -> Bool { surface === (s as AnyObject) }
 
+    /// Put the cursor on `cell`. For search, which finds a row the mode's own motions cannot
+    /// reach: the reader names a match rather than walking to it.
+    ///
+    /// It closes any selection first. A selection is anchored to a row the reader picked, and
+    /// dragging its far end across the screen to a match they were only looking for selects
+    /// everything in between.
+    func land(on cell: ScrollCell) {
+        guard isActive else { return }
+        releaseSelection()
+        pendingAnchorLine = nil
+        move(to: cell)
+    }
+
     // MARK: keys
 
     /// Handle one `keyDown` while the mode is up. Returns whether it was consumed.

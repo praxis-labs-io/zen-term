@@ -64,6 +64,7 @@ Pane movement is vim's arrow keys. **H** is left, **L** is right, **J** is down,
 | Focus Mode (pane fills the window) | `⌘F`                      |
 | Fill Screen (window fills the desktop) | `⌘⇧F`                 |
 | Scroll mode (read the buffer with the keyboard) | `⌘⇧S`       |
+| Find in the pane's scrollback    | `⌘/`                        |
 | Bottom drawer                    | `⌘B`                        |
 | Right drawer                     | `⌘\`                        |
 | New window                       | `⌘N`                        |
@@ -130,6 +131,11 @@ marks the row you are reading.
 `v` starts a selection and `V` takes whole lines. `y` copies it and flashes what it
 took. `q` leaves. Nothing you type reaches the shell while the mode is up, but your own
 shortcuts still work, so ⌘T and pane movement are never swallowed.
+
+**⌘/** searches the pane's whole scrollback rather than only what is on screen. Every
+match lights up as you type and the bar counts them. `⏎` hands the keys back and drops
+you on the match in scroll mode, where `n` and `N` step through the rest and `y` copies
+what you came for. `Esc` closes the bar.
 
 A selection stays on the screen you can see. Scroll to the block you want first, then
 select it: you get the selection back whenever the buffer moves under it, whether you

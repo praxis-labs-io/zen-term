@@ -40,6 +40,7 @@ extension KeyInterceptor.ReservedChord {
         case .decreaseFontSize: return "decrease_font_size"
         case .resetFontSize: return "reset_font_size"
         case .toggleScrollMode: return "toggle_scroll_mode"
+        case .toggleSearch: return "toggle_search"
         }
     }
 
@@ -84,6 +85,10 @@ extension KeyInterceptor.ReservedChord {
         case "decrease_font_size": self = .decreaseFontSize
         case "reset_font_size": self = .resetFontSize
         case "toggle_scroll_mode": self = .toggleScrollMode
+        case "toggle_search": self = .toggleSearch
+        // ghostty's own spelling, so a config carried over from it binds our find bar rather than
+        // failing to parse.
+        case "start_search": self = .toggleSearch
         default:
             if let rest = token.dropPrefixIfPresent("select_tab_"), let n = Int(rest), (1...9).contains(n) {
                 self = .selectTab(n)
@@ -118,6 +123,9 @@ enum KeymapDefaults {
         map[Chord(command: true, shift: true, key: "p")] = .toggleRepoPicker
         map[Chord(command: true, shift: true, key: "f")] = .fillScreen
         map[Chord(command: true, shift: true, key: "s")] = .toggleScrollMode
+        // vim's search key. ⌘F is Focus Mode and stays there; ⌘? folds to "/" carrying shift, so it
+        // is a separate chord and this does not claim it.
+        map[Chord(command: true, key: "/")] = .toggleSearch
 
         // bare ⌘.
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer

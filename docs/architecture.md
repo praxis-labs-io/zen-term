@@ -888,6 +888,61 @@ reads with `.trim = false` and the formatter keeps every cell a program actually
 row filled edge to edge (a prompt with a right segment, a status bar) arrives padded to the grid
 width. Left on, `$` parks the cursor out in the padding and `v$y` copies a run of spaces.
 
+### Scrollback search (ZEN-324)
+
+⌘/ opens a find bar along the bottom of the focused panel. **The searching is
+libghostty's**: it matches, counts, tracks which match is selected, and its renderer
+paints every highlight. `SearchController` owns the bar, the needle, and the keys, and
+that is all the chrome does here.
+
+Three binding actions go down (`search:<needle>`, `navigate_search:next|previous`,
+`end_search`) and four actions come back up (`START_SEARCH`, `SEARCH_TOTAL`,
+`SEARCH_SELECTED`, `END_SEARCH`), relayed through one `onSearchEvent` closure rather
+than four so the walk through the pane and tab controllers stays one line. The needle
+needs no escaping: libghostty splits a binding action on its **first** colon and takes
+the rest verbatim. `performBindingAction` grew a `logsFailure` flag because three of
+these legitimately return false, meaning "there was nothing to do" rather than
+"rejected". `START_SEARCH` is handled even though the chrome never sends it: libghostty's
+own search-the-selection keybind is live in every surface and would otherwise do nothing.
+
+**The keyboard runs in two phases, and the gate between them is load-bearing.** While
+the field holds first responder, `updateModeHandler`'s closure returns false for
+everything. `KeyInterceptor` is a local monitor running ahead of the field editor, so a
+mode that kept claiming keys would eat the typing and leave the bar untypeable while
+looking exactly right. ⏎ hands first responder back, brings scroll mode up, and phase two
+claims `n`/`N`/⏎/⇧⏎/Esc through `SearchController.key(for:)` rather than through
+`ScrollModeController.Command`, which keeps that enum closed and lets search work whether
+or not scroll mode was ever entered. Both modes share the one `modeHandler` slot.
+
+The bar **displaces** the terminal the way the header does at the other end, so opening
+and closing it reflows the grid. Both paths run the same order: change the constraint,
+`layoutSubtreeIfNeeded`, then `refreshGeometry`. Measuring first reads the grid that is
+about to change out from under it.
+
+**Why the cursor cell is inferred rather than read.** `SEARCH_SELECTED` carries an index
+and nothing else (`vendor/ghostty/src/Surface.zig`): the match's geometry goes to the
+renderer thread's mailbox and never crosses the C API, and `Screen.selection` is untouched,
+so reading the selection back gets the mouse drag. There is no API for the position. So
+`matchCell` reads the viewport back and looks for the needle, using direction alone:
+libghostty walks matches newest to oldest (`search/screen.zig`, `Select.next`), so `next`
+moves **up** the screen and the nearest occurrence that way is the one it selected. Nothing
+that way means it had to scroll to reach the match, and a scroll parks the match's own row
+at the viewport top (`search/Thread.zig` scrolls to `flattened.startPin()` only when no
+viewport chunk already overlaps), so the topmost occurrence is the answer. Case folding is
+ASCII-only, matching the engine's `std.ascii.indexOfIgnoreCase`.
+
+That is inference, and it can pick the wrong occurrence when one screen holds several. It
+is worth it here only because **the failure is visible**: libghostty is painting the match
+it selected at the same time, so a disagreement is two markers on one screen and one `j`
+fixes it. A soft-wrapped match is not found by a per-row scan and the cursor stays put.
+Do not try to close this by tracking viewport offsets or forcing a scroll before every
+navigate; both were considered and neither makes the answer knowable.
+
+The four `search-*` colors are emitted from `Theme.current` by `AppTheme`'s init, so a
+terminal theme cannot reach a surface without them (ZEN-91). Candidates sit back toward the
+terminal background so a screenful of them is not a wall; the selected one takes the accent
+at full strength and inverts its text. A theme file naming its own keeps them.
+
 `TerminalSurface.text(in:)` is the yank's read and the deliberate opposite of
 `text(viewportRow:)`: it *wants* `read_text`'s unwrapping, so a command line that soft-wrapped
 over three rows reaches the pasteboard as the one line it was typed as.
@@ -1211,7 +1266,7 @@ Do not describe these as features, and do not assume them when reading:
   cost, which is a non-issue.
 - **No smooth scroll.** The viewport moves in whole cells and nothing below the
   seam can change that. See "What the backend will and won't do".
-- **No tab drag-to-reorder**, no config file watcher, no scrollback search.
+- **No tab drag-to-reorder**, no config file watcher.
 - **Two seam events are emitted with zero consumers**: `surfaceDidRingBell` and
   `progressDidChange`. The backend translates both, but nothing in the chrome
   implements them. Pane exit runs entirely through `surfaceDidExit`.

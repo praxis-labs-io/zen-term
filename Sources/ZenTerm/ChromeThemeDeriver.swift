@@ -32,6 +32,24 @@ enum ChromeThemeDeriver {
             synPunctuation: slot(1))
     }
 
+    /// Paint the search highlight colors onto a terminal theme from the chrome roles derived off it.
+    ///
+    /// Search matches are chrome telling you where something is, so they read in the accent the
+    /// focus halo and every selected palette row already use. The pair splits by weight rather than
+    /// by hue: candidates sit back toward the terminal's own background so a screenful of them is
+    /// not a wall, and the selected one takes the accent at full strength and inverts its text.
+    ///
+    /// Skipped for a theme that names its own, so a hand-written `search-background` wins.
+    static func withSearchColors(_ terminal: TerminalTheme, chrome: ChromeTheme) -> TerminalTheme {
+        var theme = terminal
+        theme.searchForeground = terminal.searchForeground ?? terminal.foreground
+        theme.searchBackground =
+            terminal.searchBackground ?? blend(chrome.accent, terminal.background, 0.35)
+        theme.searchSelectedForeground = terminal.searchSelectedForeground ?? terminal.background
+        theme.searchSelectedBackground = terminal.searchSelectedBackground ?? chrome.accent
+        return theme
+    }
+
     /// A per-channel weighted average of `a` and `b` at `t` (`t` = 1 keeps `a`, `t` = 0 keeps
     /// `b`), rounded to the nearest 8-bit value. Used to derive `muted` from the foreground/
     /// background pair rather than reproducing a palette color that has no ANSI slot.
