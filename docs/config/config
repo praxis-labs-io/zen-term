@@ -241,7 +241,7 @@
 #   resize_left  resize_right  resize_up  resize_down
 #   new_tab  new_window  prev_tab  next_tab  select_tab_1 … select_tab_9
 #   toggle_bottom_drawer  toggle_right_drawer  toggle_focus_mode  fill_screen
-#   toggle_scroll_mode  toggle_search  search_selection
+#   toggle_scroll_mode  toggle_search
 #   toggle_workspace_picker  toggle_command_palette  diff_viewer
 #   open_settings  reload_config
 #   increase_font_size  decrease_font_size  reset_font_size
@@ -272,7 +272,6 @@
 # keybind = fill_screen=cmd+shift+f              # the window fills the desktop
 # keybind = toggle_scroll_mode=cmd+shift+s       # vim keys move the focused pane's scrollback
 # keybind = toggle_search=cmd+/                  # find in the focused pane's scrollback
-# keybind = search_selection=cmd+e               # find whatever is selected
 # keybind = toggle_workspace_picker=cmd+shift+p
 # keybind = toggle_command_palette=cmd+p
 # keybind = diff_viewer=cmd+d                    # diff of the focused repo
@@ -316,9 +315,9 @@
 # history, the pane scrolls to it so you can see it while you type; if a match is
 # already on screen, nothing moves.
 #
-# `search_selection` (⌘E) searches what you have selected without typing it: a
-# mouse selection, or a `v` selection made in scroll mode. ⌘/ does the same when a
-# scroll-mode selection is up, so you can highlight a word and search it in place.
+# ⌘/ opens on whatever you have selected, so searching a word you can see never
+# means retyping it. Either kind counts: a mouse selection, or a `v` selection made
+# in scroll mode. With nothing selected the bar opens empty.
 #
 # Enter hands the keys back to the pane and puts you in scroll mode on the match,
 # where `n` and `N` step forward and back (Enter and shift+Enter do the same), and

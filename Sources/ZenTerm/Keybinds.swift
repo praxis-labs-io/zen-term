@@ -41,7 +41,6 @@ extension KeyInterceptor.ReservedChord {
         case .resetFontSize: return "reset_font_size"
         case .toggleScrollMode: return "toggle_scroll_mode"
         case .toggleSearch: return "toggle_search"
-        case .searchSelection: return "search_selection"
         }
     }
 
@@ -87,7 +86,6 @@ extension KeyInterceptor.ReservedChord {
         case "reset_font_size": self = .resetFontSize
         case "toggle_scroll_mode": self = .toggleScrollMode
         case "toggle_search": self = .toggleSearch
-        case "search_selection": self = .searchSelection
         // ghostty's own spelling, so a config carried over from it binds our find bar rather than
         // failing to parse.
         case "start_search": self = .toggleSearch
@@ -128,9 +126,6 @@ enum KeymapDefaults {
         // vim's search key. ⌘F is Focus Mode and stays there; ⌘? folds to "/" carrying shift, so it
         // is a separate chord and this does not claim it.
         map[Chord(command: true, key: "/")] = .toggleSearch
-        // ghostty binds the same action to the same chord, so a reader coming from it keeps the
-        // muscle memory. Ours reaches the chrome's own selection too, which ghostty's cannot see.
-        map[Chord(command: true, key: "e")] = .searchSelection
 
         // bare ⌘.
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer

@@ -117,35 +117,42 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertIdentical(panel.findBarForTesting, first, "a second bar would stack on the first")
     }
 
-    func test_theSelectionChordSeedsTheBarFromScrollModesOwnSelection() throws {
-        // Two selection models. A `v` selection is the chrome's overlay and is read directly;
-        // libghostty's search-the-selection reads the mouse selection and cannot see it.
+    func test_theChordSeedsTheBarFromScrollModesOwnSelection() throws {
+        // Two selection models, one chord. A `v` selection is the chrome's overlay, which the
+        // backend cannot see, so it is read directly.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows[5] = "an error happened"
-        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         controller.handle(.toggleScrollMode)
         controller.scrollMode.land(on: ScrollCell(row: 5, column: 3))
         _ = controller.scrollMode.handle(try keyDown("v"))
         // Read before the chord: raising the bar reflows the pane, which releases the selection.
         let selected = try XCTUnwrap(controller.scrollMode.selectedText)
 
-        controller.handle(.searchSelection)
+        controller.handle(.toggleSearch)
 
-        XCTAssertEqual(surface.searchSelectionCount, 0, "the backend cannot see this selection")
-        XCTAssertNotNil(panel.findBarForTesting)
         XCTAssertEqual(surface.searches.last, selected)
     }
 
-    func test_theSelectionChordFallsToTheBackendWithNoScrollModeSelection() throws {
-        // A mouse selection is libghostty's, so the needle has to come back through START_SEARCH.
+    func test_theChordSeedsTheBarFromAMouseSelectionToo() throws {
+        // The other model: a drag is libghostty's own selection, read back through the seam.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.selectionText = "needle"
+
+        controller.handle(.toggleSearch)
+
+        XCTAssertEqual(surface.searches.last, "needle")
+    }
+
+    func test_theChordOpensEmptyWithNothingSelected() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
 
-        controller.handle(.searchSelection)
+        controller.handle(.toggleSearch)
 
-        XCTAssertEqual(surface.searchSelectionCount, 1)
-        XCTAssertFalse(controller.search.isActive, "the bar waits for the backend to answer")
+        XCTAssertTrue(controller.search.isActive)
+        XCTAssertEqual(surface.searches, [], "an empty needle is not a search")
     }
 
     func test_aSeedArrivingOverAnOpenBarReplacesTheNeedle() throws {

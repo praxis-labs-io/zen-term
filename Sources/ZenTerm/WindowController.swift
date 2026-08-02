@@ -579,25 +579,13 @@ final class WindowController: NSObject {
     /// putting a bar over an empty panel.
     private func toggleSearch() {
         guard let target = activeController?.focusedScrollTarget else { return }
-        // A visual selection in scroll mode is what the reader has just pointed at, so the bar opens
-        // on it rather than empty. Read here rather than through libghostty's own
-        // search-the-selection: that reads the mouse selection, and scroll mode's is the chrome's
-        // own overlay the backend knows nothing about.
-        search.begin(surface: target.surface, panel: target.panel, seed: scrollMode.selectedText ?? "")
-    }
-
-    /// Search whatever is selected, from either selection model.
-    ///
-    /// Scroll mode's `v` selection is the chrome's and is read directly. A mouse selection is
-    /// libghostty's, so that one goes down and comes back as `START_SEARCH` carrying the text.
-    /// Neither does anything when there is no selection to search.
-    private func searchSelection() {
-        guard let target = activeController?.focusedScrollTarget else { return }
-        if let selected = scrollMode.selectedText {
-            search.begin(surface: target.surface, panel: target.panel, seed: selected)
-            return
-        }
-        target.surface.searchSelection()
+        // Seeded from whatever is selected, so searching a word you can see never means retyping
+        // it. There are two selection models and one chord covers both: scroll mode's `v` is the
+        // chrome's own overlay, which the backend cannot see, and a mouse drag is libghostty's,
+        // which the chrome reads back through the seam. `copySelection` is a pure read despite the
+        // name, so peeking at it costs nothing and touches no pasteboard.
+        let selected = scrollMode.selectedText ?? target.surface.copySelection()
+        search.begin(surface: target.surface, panel: target.panel, seed: selected ?? "")
     }
 
     /// End both modes, in the order their layout changes have to unwind: the bar comes down first,
@@ -1769,7 +1757,6 @@ final class WindowController: NSObject {
             active?.toggleZoom()
         case .toggleScrollMode: toggleScrollMode()
         case .toggleSearch: toggleSearch()
-        case .searchSelection: searchSelection()
         case .fillScreen: toggleFillScreen()
         case .toggleToolFloat(let id):
             // A float is modal too, so it calls off a card that's still loading — otherwise the card
