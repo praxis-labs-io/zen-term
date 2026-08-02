@@ -9,7 +9,7 @@ import AppKit
 /// The bar owns no search state. It reports what the user typed and what they pressed;
 /// `SearchController` decides what any of it means.
 final class FindBarView: NSView {
-    private let glyph = NSTextField(labelWithString: "⌕")
+    private let glyph = NSImageView()
     private let field = NSTextField()
     private let count = NSTextField(labelWithString: "")
 
@@ -17,13 +17,21 @@ final class FindBarView: NSView {
     var onCommit: (() -> Void)?
     var onCancel: (() -> Void)?
 
-    /// What the field holds. Setting it does not fire `onChange`: the seed comes from the backend
-    /// (search-the-selection), and echoing it back as a user edit would re-run the search it came
-    /// from.
+    /// The needle, with real line breaks in it. Setting it does not fire `onChange`: a seed comes
+    /// from a selection, and echoing it back as a user edit would re-run the search it came from.
+    ///
+    /// A selection dragged across rows is a legitimate multi-line needle: libghostty writes a
+    /// newline between rows that are not soft-wrapped, so a needle spanning a line break matches.
+    /// It cannot be *shown* as one though, because a field that wraps grows the bar and reflows the
+    /// grid under it. So the field displays each break as `⏎` and this translates back, which keeps
+    /// the search exact while the reader can see what they are searching for.
     var needle: String {
-        get { field.stringValue }
-        set { field.stringValue = newValue }
+        get { field.stringValue.replacingOccurrences(of: Self.breakGlyph, with: "\n") }
+        set { field.stringValue = newValue.replacingOccurrences(of: "\n", with: Self.breakGlyph) }
     }
+
+    /// U+23CE, which no keyboard produces, so nothing typed can be mistaken for a line break.
+    private static let breakGlyph = "⏎"
 
     init() {
         super.init(frame: .zero)
@@ -31,7 +39,9 @@ final class FindBarView: NSView {
         wantsLayer = true
         layer?.cornerRadius = Self.cornerRadius
 
-        glyph.font = .systemFont(ofSize: 13)
+        glyph.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Find")
+        glyph.symbolConfiguration = .init(pointSize: 12, weight: .regular)
+        glyph.setContentHuggingPriority(.required, for: .horizontal)
         field.font = .systemFont(ofSize: 13)
         field.isBordered = false
         field.drawsBackground = false
@@ -97,6 +107,10 @@ final class FindBarView: NSView {
     /// an index that reads one-based off a zero-based report are both only visible here.
     var countTextForTesting: String { count.stringValue }
 
+    /// What the field literally shows, before the line breaks are translated back. A real newline
+    /// in here is what grows the bar, and only the rendered string can prove it is absent.
+    var displayedNeedleForTesting: String { field.stringValue }
+
     var isFieldFirstResponder: Bool {
         guard let editor = window?.firstResponder as? NSTextView else { return false }
         return editor.delegate === field
@@ -105,7 +119,7 @@ final class FindBarView: NSView {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         layer?.backgroundColor = chrome.accent.nsColor.withAlphaComponent(Self.fillAlpha).cgColor
-        glyph.textColor = chrome.ink(alpha: 0.4)
+        glyph.contentTintColor = chrome.ink(alpha: 0.4)
         field.textColor = chrome.foreground.nsColor
         count.textColor = chrome.ink(alpha: 0.5)
         applyPlaceholder()
@@ -134,7 +148,7 @@ final class FindBarView: NSView {
 
 extension FindBarView: NSTextFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
-        onChange?(field.stringValue)
+        onChange?(needle)  // the real one, with line breaks restored
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy sel: Selector) -> Bool {

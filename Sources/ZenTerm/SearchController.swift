@@ -97,20 +97,20 @@ final class SearchController {
 
     // MARK: lifecycle
 
-    /// Raise the bar over `panel` and take the keyboard, seeded with `seed` when the caller has a
-    /// needle to offer. Already up: put the caret back in the field rather than mounting a second.
-    /// The one line of a selection worth searching for.
+    /// A selection as a needle: whole, with only its edges cleaned up.
     ///
-    /// A drag across rows comes back with newlines in it, and a needle spanning a line break cannot
-    /// match anything the renderer highlights on a row. Trailing blanks come along too, because a
-    /// selection to the end of a row includes the cells the program never painted.
-    private static func singleLine(_ seed: String) -> String {
-        seed.split(whereSeparator: \.isNewline).first.map(String.init)?
-            .trimmingCharacters(in: .whitespaces) ?? ""
+    /// The line breaks inside it stay. libghostty writes a newline between rows that are not
+    /// soft-wrapped, so a multi-line needle matches, and cutting one to its first line would throw
+    /// that away. Only the outer whitespace goes, because a selection reaching a row's end drags in
+    /// the blank cells the program never painted and the newline that follows them.
+    private static func cleaned(_ seed: String) -> String {
+        seed.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Raise the bar over `panel` and take the keyboard, seeded with `seed` when the caller has a
+    /// needle to offer. Already up: put the caret back in the field rather than mounting a second.
     func begin(surface: AnyObject & TerminalSurface, panel: PanelHostView, seed rawSeed: String = "") {
-        let seed = Self.singleLine(rawSeed)
+        let seed = Self.cleaned(rawSeed)
         guard !isActive else {
             isEditing = true
             bar?.focusField()

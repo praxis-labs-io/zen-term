@@ -952,6 +952,16 @@ at the viewport top (`search/Thread.zig` scrolls to `flattened.startPin()` only 
 viewport chunk already overlaps), so the topmost occurrence is the answer. Case folding is
 ASCII-only, matching the engine's `std.ascii.indexOfIgnoreCase`.
 
+**A multi-line needle is real, and the cursor cannot follow one.** libghostty writes a
+`\n` between rows that are not soft-wrapped (`search/sliding_window.zig`), so a needle
+carrying a line break matches and counts like any other, which is why a selection
+dragged across rows is kept whole rather than cut to its first line. The field cannot
+show it as one, though: a wrapping field grows the bar and reflows the grid under it. So
+`FindBarView` renders each break as `⏎` and translates back on the way out, keeping the
+search exact while the reader can see what they are searching for. The per-row scan below
+finds no such match, so the highlights and the count are right while the scroll cursor
+stays where it is.
+
 That is inference, and it can pick the wrong occurrence when one screen holds several. It
 is worth it here only because **the failure is visible**: libghostty is painting the match
 it selected at the same time, so a disagreement is two markers on one screen and one `j`
