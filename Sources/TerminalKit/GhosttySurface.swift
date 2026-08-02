@@ -701,10 +701,26 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// lines, so the caller's row index stops matching what it gets. A single-row selection has
     /// nothing to unwrap into.
     public func text(viewportRow row: Int) -> String? {
-        guard let surfacePtr, let metrics = cellMetrics, row >= 0, row < metrics.rows else { return nil }
+        guard let metrics = cellMetrics, row >= 0, row < metrics.rows else { return nil }
+        return text(
+            in: TerminalViewportRange(
+                startRow: row, startColumn: 0, endRow: row,
+                endColumn: max(metrics.columns - 1, 0)))
+    }
+
+    /// A span of viewport cells, read in one call.
+    ///
+    /// The span cannot leave the grid and no argument here can make it: `Point.pin` clamps x to the
+    /// column count and y to the grid height, in the same two lines, whichever tag it carries.
+    public func text(in range: TerminalViewportRange) -> String? {
+        guard let surfacePtr, let metrics = cellMetrics else { return nil }
+        let lastRow = max(metrics.rows - 1, 0)
+        guard range.startRow >= 0, range.startRow <= lastRow, range.endRow <= lastRow else {
+            return nil
+        }
         var selection = ghostty_selection_s()
-        selection.top_left = Self.viewportPoint(x: 0, y: row)
-        selection.bottom_right = Self.viewportPoint(x: UInt32(max(metrics.columns - 1, 0)), y: row)
+        selection.top_left = Self.viewportPoint(x: UInt32(max(range.startColumn, 0)), y: range.startRow)
+        selection.bottom_right = Self.viewportPoint(x: UInt32(max(range.endColumn, 0)), y: range.endRow)
         selection.rectangle = false
         var text = ghostty_text_s()
         guard ghostty_surface_read_text(surfacePtr, selection, &text) else { return nil }

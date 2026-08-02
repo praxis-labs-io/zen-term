@@ -269,4 +269,18 @@ final class PaneCanvasControllerTests: WindowTestCase {
         XCTAssertTrue(
             lastPaneClosed, "closing the only (dead) pane routes through the normal last-pane path")
     }
+
+    func test_aHaloRefreshDoesNotUndoTheUnfocusedRender() throws {
+        // `updateHalo` writes the same surface state on every restructure and focus toggle. A mode
+        // that only pushed its unfocused render once would have the shell's blinking cursor come
+        // back underneath it at the next reconcile, with no path back until the mode ended.
+        let surface = try XCTUnwrap(controller.surface(for: controller.focusedLeafID) as? RecordingSurface)
+
+        controller.setFocusedSurfaceRendersFocused(false)
+        XCTAssertEqual(surface.focusRenders.last, false)
+
+        controller.setPanesFocused(true)
+
+        XCTAssertEqual(surface.focusRenders.last, false, "the mode still holds the keyboard")
+    }
 }

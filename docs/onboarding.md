@@ -119,6 +119,22 @@ reading as code.
 `y` yanks the selected code. `Y` yanks a `path:42-44` reference instead, so you can
 hand an agent the exact lines you mean, and `⏎` opens a comment on them.
 
+## Read back through a pane
+
+**⌘⇧S** puts the focused pane into scroll mode, and the keys are vim's again. `j` and
+`k` move a row, `h` and `l` a column, `w` `b` `e` a word, `0` and `$` reach the ends of
+a line, `{` and `}` jump between blocks of output, `⌃d` and `⌃u` move a half page, and
+`gg` and `G` go to the ends. The header tells you how far below you are, and a band
+marks the row you are reading.
+
+`v` starts a selection and `V` takes whole lines. `y` copies it and flashes what it
+took. `q` leaves. Nothing you type reaches the shell while the mode is up, but your own
+shortcuts still work, so ⌘T and pane movement are never swallowed.
+
+A selection stays on the screen you can see. Scroll to the block you want first, then
+select it: you get the selection back whenever the buffer moves under it, whether you
+scrolled or a running command printed.
+
 ## Neovim: one motion across splits and panes
 
 Out of the box these are two separate motions. `⌘H` `⌘J` `⌘K` `⌘L` moves between

@@ -316,8 +316,20 @@ final class PaneCanvasController: NSObject {
             host.isZoomed = (id == zoomedLeaf)
             // Drive the surface's cursor focus explicitly — the AppKit responder chain alone
             // leaves stale blinking cursors on background panes after rapid splits.
-            registry.surface(for: id)?.setFocused(focused)
+            registry.surface(for: id)?.setFocused(focused && focusedSurfaceRendersFocused)
         }
+    }
+
+    /// Whether the focused pane's surface renders focused. Stored rather than pushed once, because
+    /// `updateHalo` is the other writer of that same state and runs on every restructure: a mode
+    /// that only pushed would have its unfocused render undone by the next reconcile.
+    private var focusedSurfaceRendersFocused = true
+
+    /// Render the focused pane's surface as focused or not, **without moving focus**. For a mode
+    /// that holds the keyboard over a pane the chrome still considers focused.
+    func setFocusedSurfaceRendersFocused(_ focused: Bool) {
+        focusedSurfaceRendersFocused = focused
+        updateHalo()
     }
 
     /// Re-apply the live pane border / focus-halo colors to every built pane after a config

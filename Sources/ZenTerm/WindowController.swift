@@ -568,6 +568,12 @@ final class WindowController: NSObject {
         scrollMode.onActiveChanged = { [weak self] active in
             guard let self else { return }
             keyModeHost?.modeHandler = active ? { [weak self] event in self?.scrollMode.handle(event) ?? false } : nil
+            // The shell is not taking keys while the mode is up, and its blinking cursor competes
+            // with the mode's own for the reader's eye. The unfocused render (hollow, still) says
+            // exactly that. It changes how the surface DRAWS, never who holds focus, so a mode that
+            // ends because focus moved re-asserts the render on whichever panel holds it now.
+            activeController?.setFocusedSurfaceRendersFocused(!active)
+
         }
     }
 

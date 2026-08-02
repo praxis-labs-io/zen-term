@@ -91,10 +91,56 @@ final class ScrollModeKeyTests: XCTestCase {
         XCTAssertEqual(decode(try keyDown("J", unshifted: "J")), .step(1))
     }
 
+    // MARK: the column (ZEN-331)
+
+    func test_hAndLMoveOneCellSideways() throws {
+        XCTAssertEqual(decode(try keyDown("h")), .column(-1))
+        XCTAssertEqual(decode(try keyDown("l")), .column(1))
+    }
+
+    func test_sideArrowsMirrorHAndL() throws {
+        let left = String(UnicodeScalar(NSLeftArrowFunctionKey)!)
+        let right = String(UnicodeScalar(NSRightArrowFunctionKey)!)
+        // Real arrow events, with the flags AppKit actually puts on one. A synthesized bare arrow
+        // is a keystroke macOS never sends.
+        XCTAssertEqual(decode(try keyDown(left, flags: [.function, .numericPad])), .column(-1))
+        XCTAssertEqual(decode(try keyDown(right, flags: [.function, .numericPad])), .column(1))
+    }
+
+    func test_wbeAreTheWordMotions() throws {
+        XCTAssertEqual(decode(try keyDown("w")), .word(.next))
+        XCTAssertEqual(decode(try keyDown("b")), .word(.back))
+        XCTAssertEqual(decode(try keyDown("e")), .word(.end))
+    }
+
+    func test_controlBStillPagesUpRatherThanMovingAWord() throws {
+        // `b` is a word motion bare and a page up with Control. The Control branch runs first.
+        XCTAssertEqual(decode(try keyDown("b", flags: .control)), .scroll(.pageFraction(-1)))
+    }
+
+    func test_zeroAndDollarAreTheEndsOfTheRow() throws {
+        XCTAssertEqual(decode(try keyDown("0")), .lineStart)
+        // `$` is shift+4, so `charactersIgnoringModifiers` reports "4" and only the typed character
+        // names it. A layout that puts `$` elsewhere reports it here too.
+        XCTAssertEqual(decode(try keyDown("$", unshifted: "4", flags: .shift)), .lineEnd)
+    }
+
+    // MARK: selection (ZEN-331)
+
+    func test_vAndShiftVOpenTheTwoKindsOfSelection() throws {
+        XCTAssertEqual(decode(try keyDown("v")), .visual(.character))
+        XCTAssertEqual(decode(try keyDown("V", unshifted: "v", flags: .shift)), .visual(.line))
+    }
+
+    func test_yYanks() throws {
+        XCTAssertEqual(decode(try keyDown("y")), .yank)
+    }
+
     // MARK: leaving
 
-    func test_escapeAndQAndILeaveTheMode() throws {
-        XCTAssertEqual(decode(try keyDown("\u{1b}", keyCode: 53)), .exit)
+    func test_escapeCancelsAndQAndILeaveTheMode() throws {
+        // Esc is `.cancel`, not `.exit`: only an Esc with nothing to give back closes the mode.
+        XCTAssertEqual(decode(try keyDown("\u{1b}", keyCode: 53)), .cancel)
         XCTAssertEqual(decode(try keyDown("q")), .exit)
         XCTAssertEqual(decode(try keyDown("i")), .exit)
     }
@@ -138,5 +184,14 @@ final class ScrollModeHeaderTests: XCTestCase {
         let grouped = ScrollModeController.groupedCount(3760)
         XCTAssertTrue(grouped.contains("760"), "expected a grouped count, got \(grouped)")
         XCTAssertEqual(ScrollModeController.headerTitle(scrolledUp), "Scroll: \(grouped) below")
+    }
+
+    func test_aLineSelectionCountsItsRowsAndAgreesWithItself() {
+        XCTAssertEqual(ScrollModeController.visualTitle(kind: .line, rows: 1), "Visual: 1 line")
+        XCTAssertEqual(ScrollModeController.visualTitle(kind: .line, rows: 4), "Visual: 4 lines")
+    }
+
+    func test_aCharacterSelectionGetsNoCount() {
+        XCTAssertEqual(ScrollModeController.visualTitle(kind: .character, rows: 3), "Visual")
     }
 }

@@ -288,11 +288,20 @@
 # shell:
 #
 #   j / k (or ↑ ↓)   move the cursor a row         { / }      move by paragraph
-#   ctrl+d / ctrl+u  half a page                   gg / G     top / bottom
-#   ctrl+f / ctrl+b  a full page (space = ctrl+f)  esc, q, i  leave
+#   h / l (or ← →)   move a column                 0 / $      ends of the row
+#   w / b / e        move by word                  gg / G     top / bottom
+#   ctrl+d / ctrl+u  half a page                   v / V      select, by cell or row
+#   ctrl+f / ctrl+b  a full page (space = ctrl+f)  y          copy the selection
+#                                                  esc, q, i  leave
 #
 # Your own chords still work inside it, so ⌘T and pane nav are never swallowed.
 # `{` and `}` are vim's paragraph motion: they move the cursor to the next blank
 # line, which in a terminal is what separates one command's output from the next.
 # The mode ends on its own when focus moves, the pane closes, you change tab, or a
 # tool float or palette opens.
+#
+# `v` starts a selection at the cursor and `V` takes whole rows; motions grow it, `y`
+# copies it and pulses what it took, and Esc hands it back without leaving the mode.
+# A selection stays on screen: the terminal core can only read text you can see, so
+# you get the anchor back whenever the buffer moves under it, whether you scrolled or
+# a running command printed. Scroll to the block you want first, then select it.

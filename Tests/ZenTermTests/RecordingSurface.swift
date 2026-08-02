@@ -73,6 +73,11 @@ final class RecordingSurface: NSObject, TerminalSurface {
         focusCount += 1
     }
     func terminate() { terminated = true }
+    /// Every `setFocused` push, in order. Distinct from `isFocused`, which `focus()` drives and
+    /// nothing clears: this is how the surface was told to *render*, which is what a mode holding
+    /// the keyboard over a still-focused pane changes.
+    private(set) var focusRenders: [Bool] = []
+    func setFocused(_ focused: Bool) { focusRenders.append(focused) }
     /// Records paste text so a test can assert a ⌘V was (or was not) routed into a surface — the
     /// discriminator for "did the modal card swallow paste, or did it fall through to the terminal".
     private(set) var pastes: [String] = []
@@ -106,9 +111,32 @@ final class RecordingSurface: NSObject, TerminalSurface {
         return rows
     }()
 
+    /// Bounded by `cellMetrics` as well as by `rows`, the way the real backend is: `GhosttySurface`
+    /// refuses a row at or past the grid height, so a fixture that answered one anyway would hide
+    /// what a caller does with a row the grid has shrunk out from under.
     func text(viewportRow row: Int) -> String? {
-        guard rows.indices.contains(row) else { return nil }
+        guard row < (cellMetrics?.rows ?? rows.count), rows.indices.contains(row) else { return nil }
         return rows[row]
+    }
+
+    /// Slices `rows`: first and last cut at their columns, everything between them whole.
+    ///
+    /// It does **not** model the backend's soft-wrap unwrapping. A fake that joined rows would make
+    /// a test's expected string depend on where the fixture wrapped.
+    func text(in range: TerminalViewportRange) -> String? {
+        guard rows.indices.contains(range.startRow), rows.indices.contains(range.endRow) else {
+            return nil
+        }
+        let sliced = (range.startRow...range.endRow).map { row -> String in
+            let text = rows[row]
+            let from = row == range.startRow ? range.startColumn : 0
+            let through = row == range.endRow ? range.endColumn : text.count - 1
+            guard from <= through, from < text.count else { return "" }
+            let start = text.index(text.startIndex, offsetBy: from)
+            let end = text.index(text.startIndex, offsetBy: min(through + 1, text.count))
+            return String(text[start..<end])
+        }
+        return sliced.joined(separator: "\n")
     }
     /// Records a real Return keypress separately from pastes, so a test can assert submit went through
     /// the key path (a real Enter) rather than a bracketed `"\r"` paste that a TUI wouldn't act on.

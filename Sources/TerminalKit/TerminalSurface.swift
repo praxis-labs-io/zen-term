@@ -126,6 +126,45 @@ public struct TerminalCellMetrics: Equatable {
         return CGRect(
             x: 0, y: gridInset + CGFloat(clamped) * cellHeight, width: width, height: cellHeight)
     }
+
+    /// The frame of an inclusive run of cells on one row.
+    ///
+    /// Stops at the last cell rather than the view's edge: leftover width that does not divide into
+    /// a cell collects past the last column, where there are no characters to paint over.
+    public func cellFrame(row: Int, columns range: ClosedRange<Int>) -> CGRect {
+        let last = max(columns - 1, 0)
+        let first = min(max(range.lowerBound, 0), last)
+        let final = min(max(range.upperBound, first), last)
+        let frame = rowFrame(row, width: 0)
+        return CGRect(
+            x: gridInset + CGFloat(first) * cellWidth, y: frame.origin.y,
+            width: CGFloat(final - first + 1) * cellWidth, height: cellHeight)
+    }
+}
+
+/// An inclusive span of cells on the **viewport**, start ordered before end.
+///
+/// It cannot extend past the viewport, and that is a backend limit rather than a choice: libghostty
+/// resolves an exact coordinate through `Point.pin`, which clamps y to the grid height for every
+/// point tag, so no coordinate names a scrollback row.
+public struct TerminalViewportRange: Equatable {
+    public var startRow: Int
+    public var startColumn: Int
+    public var endRow: Int
+    public var endColumn: Int
+
+    /// Orders the two ends: a reversed span reads back as nothing.
+    public init(startRow: Int, startColumn: Int, endRow: Int, endColumn: Int) {
+        let startsFirst =
+            startRow < endRow || (startRow == endRow && startColumn <= endColumn)
+        self.startRow = startsFirst ? startRow : endRow
+        self.startColumn = startsFirst ? startColumn : endColumn
+        self.endRow = startsFirst ? endRow : startRow
+        self.endColumn = startsFirst ? endColumn : startColumn
+    }
+
+    /// How many rows the span touches, counting the partial ones at each end.
+    public var rowCount: Int { endRow - startRow + 1 }
 }
 
 /// Events flowing OUT of a surface, up into the chrome. Each backend translates
@@ -285,6 +324,12 @@ public protocol TerminalSurface: AnyObject {
     /// asked about stops being the line it gets back.
     func text(viewportRow row: Int) -> String?
 
+    /// The text a span of viewport cells holds, or nil from a backend that cannot read its screen.
+    ///
+    /// Unlike `text(viewportRow:)`, this one *wants* a backend's soft-wrap unwrapping: a command
+    /// line that wrapped over three rows belongs on the pasteboard as the one line it was typed as.
+    func text(in range: TerminalViewportRange) -> String?
+
     /// Deliver a Return **keypress** to the shell — a real Enter, not a pasted `"\r"`. A pasted
     /// carriage return arrives inside bracketed paste, where a TUI (Claude Code, an editor) reads it
     /// as a literal newline in its input rather than a submit. This is the chrome's way to submit a
@@ -311,6 +356,9 @@ public extension TerminalSurface {
 
     /// Default nil: a backend that can't read its own screen supports no motion over its content.
     func text(viewportRow row: Int) -> String? { nil }
+
+    /// Default nil for the same reason: nothing to read means nothing to yank.
+    func text(in range: TerminalViewportRange) -> String? { nil }
 
     /// Default no-op: a backend that can't reconfigure live needs nothing here.
     func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {}

@@ -16,6 +16,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     private var originalConfig: GeneralConfig!
     private var controllers: [WindowController] = []
     private var spawned: [RecordingSurface] = []
+    private var hosts: [ModeHostSpy] = []
     private var root = FileManager.default.temporaryDirectory
 
     /// A float to open in the "a float takes the keyboard" case. There are no built-in floats,
@@ -51,6 +52,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         }
         controllers = []
         spawned = []
+        hosts = []
         Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
@@ -555,7 +557,394 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             "a busy sibling pane must not rewrite the header of the pane being read")
     }
 
+    // MARK: selection and yank (ZEN-331)
+
+    /// A key handler and a pasteboard of its own, so a yank in the suite never clobbers the
+    /// developer's clipboard.
+    private func enterModeForYanking(_ controller: WindowController) throws -> (
+        handler: (NSEvent) -> Bool, board: NSPasteboard
+    ) {
+        let host = ModeHostSpy()
+        hosts.append(host)  // `keyModeHost` is weak, so the spy needs an owner outlasting this call
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let board = NSPasteboard(name: NSPasteboard.Name("zenterm-yank-\(UUID().uuidString)"))
+        controller.scrollMode.yankPasteboard = board
+        return (try XCTUnwrap(host.modeHandler), board)
+    }
+
+    func test_aCharacterSelectionYanksExactlyWhatItCovers() throws {
+        let controller = makeWindow()
+        let (handler, board) = try enterModeForYanking(controller)
+
+        // Row 11 is the prompt the mode opens on; nine k's put the cursor on the `seq` command.
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+        _ = handler(try keyDown("v"))
+        _ = handler(try keyDown("$", unshifted: "4", flags: .shift))
+        _ = handler(try keyDown("y"))
+
+        XCTAssertEqual(board.string(forType: .string), "❯ seq 1 3")
+    }
+
+    func test_aLineSelectionYanksWholeRowsWhicheverWayItWasDragged() throws {
+        let controller = makeWindow()
+        let (handler, board) = try enterModeForYanking(controller)
+
+        // `V` on row 11, then up to row 10: the anchor is the LOWER end, which is the ordering an
+        // unsorted span reads backwards and reads back as nothing.
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        _ = handler(try keyDown("k"))
+        _ = handler(try keyDown("y"))
+
+        XCTAssertEqual(board.string(forType: .string), "~/bin\n❯")
+    }
+
+    func test_aYankWithNothingSelectedLeavesThePasteboardAlone() throws {
+        let controller = makeWindow()
+        let (handler, board) = try enterModeForYanking(controller)
+        board.clearContents()
+        board.setString("what Drew had copied", forType: .string)
+
+        _ = handler(try keyDown("y"))
+
+        XCTAssertEqual(
+            board.string(forType: .string), "what Drew had copied",
+            "a bare y is a no-op, not an empty clipboard")
+    }
+
+    func test_theYankPulsesOnceTheCopyHasLanded() throws {
+        let controller = makeWindow()
+        let (handler, _) = try enterModeForYanking(controller)
+
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        XCTAssertFalse(controller.scrollMode.isFlashingForTesting, "nothing to confirm yet")
+        _ = handler(try keyDown("y"))
+
+        XCTAssertTrue(
+            controller.scrollMode.isFlashingForTesting,
+            "a yank leaves nothing on screen, so the pulse is the whole confirmation")
+    }
+
+    func test_theYankDropsBackToNormalModeRatherThanLeaving() throws {
+        let controller = makeWindow()
+        let (handler, board) = try enterModeForYanking(controller)
+
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        _ = handler(try keyDown("y"))
+        XCTAssertTrue(controller.scrollMode.isActive, "the mode stays up for a second yank")
+
+        board.clearContents()
+        _ = handler(try keyDown("y"))
+        XCTAssertNil(board.string(forType: .string), "the selection was collapsed by the first yank")
+    }
+
+    func test_aScrollThatLandsGivesTheAnchorBack() throws {
+        // `Point.pin` clamps an exact coordinate to the grid height for every tag, so a selection
+        // that survived a page move would cover rows it no longer names.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let (handler, board) = try enterModeForYanking(controller)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 100))
+
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        _ = handler(try keyDown("d", flags: .control))
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 112))
+        _ = handler(try keyDown("y"))
+
+        XCTAssertNil(board.string(forType: .string))
+    }
+
+    func test_outputThatScrollsThePaneGivesTheAnchorBack() throws {
+        // No key is involved: a running build moves the viewport on its own, and a selection left
+        // anchored to rows that slid up highlights output the reader never chose and yanks it.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let (handler, board) = try enterModeForYanking(controller)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 100))
+
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 101))
+        _ = handler(try keyDown("y"))
+
+        XCTAssertNil(board.string(forType: .string))
+    }
+
+    func test_aScrollKeyThatMovesNothingKeepsTheSelection() throws {
+        // `j` at the end of the buffer asks for a scroll that cannot happen. Releasing on the
+        // keystroke took the selection away with nothing on screen having moved.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let (handler, board) = try enterModeForYanking(controller)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        for _ in 0..<14 { _ = handler(try keyDown("j")) }  // to the bottom row, then past it
+        _ = handler(try keyDown("y"))
+
+        XCTAssertNotNil(
+            board.string(forType: .string),
+            "nothing scrolled, so nothing reported, so the selection is still the reader's")
+    }
+
+    func test_aScrollDoesNotLeaveThePreviousScreenInTheRowCache() throws {
+        // The row read that clamps the cursor happens between asking for the scroll and the frame
+        // that serves it, so it describes the old viewport. Cached under the new one, the next
+        // motion walks text that is no longer on screen.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<13 { _ = handler(try keyDown("j")) }  // to the bottom row, then one past it
+        XCTAssertEqual(surface.scrolls, [.lines(1)], "precondition: the last j asked for a scroll")
+
+        surface.rows[23] = "❯ what the scroll brought up"
+        _ = handler(try keyDown("$", unshifted: "4", flags: .shift))
+
+        XCTAssertEqual(
+            controller.scrollMode.cursor.column, 27, "the row was re-read, not served from before the scroll")
+    }
+
+    func test_aFontStepGivesTheAnchorBack() throws {
+        // The cursor can be found again by the line it was reading. The anchor is a bare row index
+        // with no content behind it, so a reflow leaves it naming something else.
+        let controller = makeWindow()
+        let (handler, board) = try enterModeForYanking(controller)
+
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        controller.applySessionFontSize()
+        _ = handler(try keyDown("y"))
+
+        XCTAssertNil(board.string(forType: .string))
+    }
+
+    func test_aKeyBeforeTheReflowReportCallsOffTheReanchor() throws {
+        // libghostty emits a scrollbar only from a draw and only when it differs, so a font step in
+        // a short buffer produces no report at all. Left armed, the re-anchor fires on whatever
+        // report comes next and drags the cursor off the row the reader has since chosen.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the seq command")
+        controller.applySessionFontSize()
+
+        _ = handler(try keyDown("k"))  // the reader moves on, before any report arrives
+        var reflowed = Array(repeating: "", count: 24)
+        for (offset, text) in surface.rows.enumerated() where offset + 3 < 24 {
+            reflowed[offset + 3] = text
+        }
+        surface.rows = reflowed
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertEqual(
+            controller.scrollMode.cursorRow, 1, "the row the reader chose, not the line they left")
+    }
+
+    func test_aGridThatLosesRowsKeepsTheCursorsColumn() throws {
+        // The row is clamped and the column bounded against it. Bounded against the pre-clamp row
+        // instead, the backend refuses the read, the empty text reads as a zero-length row, and the
+        // cursor snaps to the left margin with the selection's moving end behind it.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "❯ tail -f /var/log/system.log"
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        _ = handler(try keyDown("$", unshifted: "4", flags: .shift))
+        XCTAssertEqual(controller.scrollMode.cursor.column, 28, "precondition: at the end of the line")
+
+        surface.cellMetrics = TerminalCellMetrics(
+            columns: 80, rows: 8, cellWidth: 8, cellHeight: 16, gridInset: 2)
+        controller.applySessionFontSize()  // any refresh re-clamps against the new grid
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 7)
+        XCTAssertEqual(
+            controller.scrollMode.cursor.column, 8, "the last column of row 7, not the left margin")
+    }
+
+    func test_theEndOfLineStopsAtTheLastCharacterThePaneShows() throws {
+        // `read_text` reads with `trim = false`, so a row a program painted edge to edge comes back
+        // padded to the grid width. `$` on the padding parks the cursor out past the text and a
+        // `v$y` copies a run of spaces.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "❯ ls" + String(repeating: " ", count: 76)
+        let (handler, board) = try enterModeForYanking(controller)
+
+        _ = handler(try keyDown("v"))
+        _ = handler(try keyDown("$", unshifted: "4", flags: .shift))
+
+        XCTAssertEqual(controller.scrollMode.cursor.column, 3, "the s of ls, not column 79")
+        _ = handler(try keyDown("y"))
+        XCTAssertEqual(board.string(forType: .string), "❯ ls")
+    }
+
+    func test_aYankOfABlankRowStillConfirms() throws {
+        // The pulse is the only evidence a yank happened. Dropping out on an empty read left the
+        // screen identical to before the keystroke, which is exactly what a failed copy looks like.
+        let controller = makeWindow()
+        let (handler, board) = try enterModeForYanking(controller)
+
+        _ = handler(try keyDown("G", unshifted: "g", flags: .shift))  // the blank bottom row
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        _ = handler(try keyDown("y"))
+
+        XCTAssertEqual(board.string(forType: .string), "")
+        XCTAssertTrue(controller.scrollMode.isFlashingForTesting)
+        XCTAssertNil(controller.scrollMode.selection, "the gesture completed, so the selection is spent")
+    }
+
+    func test_escapeGivesTheSelectionBackBeforeItClosesTheMode() throws {
+        let controller = makeWindow()
+        let (handler, board) = try enterModeForYanking(controller)
+
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        _ = handler(try keyDown("\u{1b}", keyCode: 53))
+        XCTAssertTrue(controller.scrollMode.isActive, "the first Esc gives back the selection only")
+        _ = handler(try keyDown("y"))
+        XCTAssertNil(board.string(forType: .string), "and the selection really is gone")
+
+        _ = handler(try keyDown("\u{1b}", keyCode: 53))
+        XCTAssertFalse(controller.scrollMode.isActive, "the second one closes the mode")
+    }
+
+    func test_theSameVisualKeyTwiceClosesTheSelection() throws {
+        let controller = makeWindow()
+        let (handler, board) = try enterModeForYanking(controller)
+
+        _ = handler(try keyDown("v"))
+        _ = handler(try keyDown("v"))
+        _ = handler(try keyDown("y"))
+
+        XCTAssertNil(board.string(forType: .string))
+        XCTAssertTrue(controller.scrollMode.isActive)
+    }
+
+    func test_theHeaderNamesTheSelectionAndItsSize() throws {
+        let controller = makeWindow()
+        let (handler, _) = try enterModeForYanking(controller)
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        XCTAssertEqual(panel.headerContentForTesting?.title, "VISUAL: 1 LINE")
+        _ = handler(try keyDown("k"))
+        XCTAssertEqual(panel.headerContentForTesting?.title, "VISUAL: 2 LINES")
+        _ = handler(try keyDown("\u{1b}", keyCode: 53))
+        XCTAssertEqual(panel.headerContentForTesting?.title, "SCROLL")
+    }
+
+    func test_endingTheModeDropsTheSelectionWithIt() throws {
+        let controller = makeWindow()
+        let (handler, board) = try enterModeForYanking(controller)
+
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        controller.handle(.toggleScrollMode)  // out
+        controller.handle(.toggleScrollMode)  // and back in
+        let reopened = try XCTUnwrap((controller.keyModeHost as? ModeHostSpy)?.modeHandler)
+        controller.scrollMode.yankPasteboard = board
+        _ = reopened(try keyDown("y"))
+
+        XCTAssertNil(board.string(forType: .string), "a reopened mode starts in normal mode")
+    }
+
+    func test_aFontStepRedrawsTheBandThoughNothingAboutItMoved() throws {
+        // No layout pass runs and the overlay's state is identical either way, so a redraw keyed
+        // off that state leaves the band at the old row height.
+        let controller = makeWindow()
+        controller.handle(.toggleScrollMode)
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let overlay = panel.scrollCursorForTesting
+        let before = overlay.redrawRequestsForTesting
+
+        controller.applySessionFontSize()
+
+        XCTAssertGreaterThan(
+            overlay.redrawRequestsForTesting, before,
+            "the band has to be redrawn against the new cell size")
+    }
+
+    func test_aFontStepKeepsTheBandOnTheLineItWasReading() throws {
+        // A font step resizes the grid in both directions and the text rewraps into it, so the row
+        // INDEX the band held names a different line afterward.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the seq command")
+
+        controller.applySessionFontSize()
+        // The reflow: a smaller font fits three more rows, so everything on screen slid down.
+        var reflowed = Array(repeating: "", count: 24)
+        for (offset, text) in surface.rows.enumerated() where offset + 3 < 24 {
+            reflowed[offset + 3] = text
+        }
+        surface.rows = reflowed
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 200, offset: 176, viewport: 24))
+
+        XCTAssertEqual(
+            controller.scrollMode.cursorRow, 5, "the band follows the line, not the row number")
+    }
+
+    func test_aReflowThatLosesTheLineLeavesTheBandWhereItIs() throws {
+        // Nothing to re-find is not a reason to jump.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+
+        controller.applySessionFontSize()
+        surface.rows = Array(repeating: "", count: 24)
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 200, offset: 176, viewport: 24))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2)
+    }
+
+    func test_theModeRendersTheTerminalUnfocusedAndGivesItBackOnExit() throws {
+        // The shell takes no keys while the mode is up, so its blinking cursor competes with the
+        // mode's own. Left focused it blinks through the whole session; left unfocused after the
+        // mode ends, the pane you are typing into has a dead cursor and nothing says why.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+
+        controller.handle(.toggleScrollMode)
+        XCTAssertEqual(surface.focusRenders.last, false)
+
+        controller.handle(.toggleScrollMode)
+        XCTAssertEqual(surface.focusRenders.last, true)
+    }
+
     // MARK: helpers
+
+    /// A report against a 200-line buffer. Only `offset` matters to these tests: it is what says
+    /// the rows on screen moved.
+    private static func position(offset: Int) -> TerminalScrollPosition {
+        TerminalScrollPosition(total: 200, offset: offset, viewport: 24)
+    }
 
     private func keyDown(
         _ characters: String, unshifted: String? = nil, flags: NSEvent.ModifierFlags = [],

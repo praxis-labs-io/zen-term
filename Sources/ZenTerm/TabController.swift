@@ -654,6 +654,16 @@ final class TabController: NSObject {
         onFocusChanged?()  // a drawer click also steals focus from a confirm — void it
     }
 
+    /// Render whichever panel holds focus as focused or not, **without moving focus**. The counter
+    /// half of `syncDrawerFocus`, for a mode that holds the keyboard over a panel that still owns it.
+    func setFocusedSurfaceRendersFocused(_ focused: Bool) {
+        switch focusedPanel {
+        case .pane: paneCanvas.setFocusedSurfaceRendersFocused(focused)
+        case .bottomDrawer: bottomDrawerSurface?.setFocused(focused)
+        case .rightDrawer: rightDrawerSurface?.setFocused(focused)
+        }
+    }
+
     /// Push each drawer surface's cursor-focus to match `focusedPanel` — the explicit
     /// counterpart to `PaneCanvasController.updateHalo`, so a drawer never keeps a blinking
     /// cursor once focus moves off it.
