@@ -145,7 +145,7 @@ final class GhosttyInputForwardingTests: XCTestCase {
         for item in cases {
             let event = try flagsChanged(keyCode: item.keyCode, named: item.named, held: [item.side])
             XCTAssertEqual(
-                GhosttyHostView.modifierTransition(for: event)?.action, GHOSTTY_ACTION_PRESS,
+                GhosttyHostView.modifierTransition(for: event), GHOSTTY_ACTION_PRESS,
                 "\(item.name) going down is a press")
         }
     }
@@ -153,7 +153,7 @@ final class GhosttyInputForwardingTests: XCTestCase {
     func test_releasingTheLastHeldModifierReportsARelease() throws {
         // Nothing held: AppKit reports the resulting state, which is a bare flag set.
         let event = try flagsChanged(keyCode: 0x38)
-        XCTAssertEqual(GhosttyHostView.modifierTransition(for: event)?.action, GHOSTTY_ACTION_RELEASE)
+        XCTAssertEqual(GhosttyHostView.modifierTransition(for: event), GHOSTTY_ACTION_RELEASE)
     }
 
     /// The case the whole side-discrimination exists for, in both directions. With both shifts
@@ -164,13 +164,13 @@ final class GhosttyInputForwardingTests: XCTestCase {
         let leftReleased = try flagsChanged(
             keyCode: 0x38, named: .shift, held: [UInt(NX_DEVICERSHIFTKEYMASK)])
         XCTAssertEqual(
-            GhosttyHostView.modifierTransition(for: leftReleased)?.action, GHOSTTY_ACTION_RELEASE,
+            GhosttyHostView.modifierTransition(for: leftReleased), GHOSTTY_ACTION_RELEASE,
             "left shift came up; right is what is still holding .shift set")
 
         let rightReleased = try flagsChanged(
             keyCode: 0x3C, named: .shift, held: [UInt(NX_DEVICELSHIFTKEYMASK)])
         XCTAssertEqual(
-            GhosttyHostView.modifierTransition(for: rightReleased)?.action, GHOSTTY_ACTION_RELEASE,
+            GhosttyHostView.modifierTransition(for: rightReleased), GHOSTTY_ACTION_RELEASE,
             "right shift came up; left is what is still holding .shift set")
     }
 
@@ -181,7 +181,7 @@ final class GhosttyInputForwardingTests: XCTestCase {
     func test_aModifierWithNoSideInformationReadsAsAPress() throws {
         let event = try flagsChanged(keyCode: 0x38, named: .shift)
         XCTAssertEqual(
-            GhosttyHostView.modifierTransition(for: event)?.action, GHOSTTY_ACTION_PRESS,
+            GhosttyHostView.modifierTransition(for: event), GHOSTTY_ACTION_PRESS,
             "the named flag is the only evidence there is, and it says shift is down")
     }
 
@@ -189,10 +189,10 @@ final class GhosttyInputForwardingTests: XCTestCase {
     /// the named flag is the whole story.
     func test_capsLockUsesTheNamedFlagAlone() throws {
         XCTAssertEqual(
-            GhosttyHostView.modifierTransition(for: try flagsChanged(keyCode: 0x39, named: .capsLock))?
-                .action, GHOSTTY_ACTION_PRESS)
+            GhosttyHostView.modifierTransition(for: try flagsChanged(keyCode: 0x39, named: .capsLock)),
+            GHOSTTY_ACTION_PRESS)
         XCTAssertEqual(
-            GhosttyHostView.modifierTransition(for: try flagsChanged(keyCode: 0x39))?.action,
+            GhosttyHostView.modifierTransition(for: try flagsChanged(keyCode: 0x39)),
             GHOSTTY_ACTION_RELEASE)
     }
 
@@ -257,6 +257,34 @@ final class GhosttyInputForwardingTests: XCTestCase {
         XCTAssertEqual(
             view.modifierActionToForward(for: release), GHOSTTY_ACTION_RELEASE,
             "libghostty is holding that press; the composition does not retire it")
+    }
+
+    /// Left and right are different keys under the kitty protocol (57444 and 57450 for ⌘), so the
+    /// ledger has to pair them by keyCode. Keyed by the named modifier, holding left ⌘ swallowed
+    /// right ⌘'s press as a duplicate, and then releasing left first reported a release for the
+    /// right key that no press had earned. `modifierTransition` sides every event carefully and
+    /// the ledger threw that away.
+    func test_bothSidesOfOneModifierPairIndependently() throws {
+        let left = UInt(NX_DEVICELCMDKEYMASK)
+        let right = UInt(NX_DEVICERCMDKEYMASK)
+
+        XCTAssertEqual(
+            view.modifierActionToForward(
+                for: try flagsChanged(keyCode: 0x37, named: .command, held: [left])),
+            GHOSTTY_ACTION_PRESS)
+        XCTAssertEqual(
+            view.modifierActionToForward(
+                for: try flagsChanged(keyCode: 0x36, named: .command, held: [left, right])),
+            GHOSTTY_ACTION_PRESS,
+            "right ⌘ is its own key; left being down does not make its press a duplicate")
+        XCTAssertEqual(
+            view.modifierActionToForward(
+                for: try flagsChanged(keyCode: 0x37, named: .command, held: [right])),
+            GHOSTTY_ACTION_RELEASE)
+        XCTAssertEqual(
+            view.modifierActionToForward(for: try flagsChanged(keyCode: 0x36)),
+            GHOSTTY_ACTION_RELEASE,
+            "and right still owes its own release after left's")
     }
 
     // MARK: Pairing a release to the key press that earned it

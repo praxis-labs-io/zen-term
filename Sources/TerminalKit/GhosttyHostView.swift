@@ -403,7 +403,7 @@ final class GhosttyHostView: NSView {
     /// never coming: ⌘-Tab away with a key down and the `keyUp` lands in the other app.
     func forgetHeldKeys() {
         reportedKeys.removeAll()
-        reportedModifiers = 0
+        reportedModifierKeys.removeAll()
     }
 
     /// Modifier presses and releases. AppKit delivers these as `flagsChanged` rather than
@@ -439,20 +439,26 @@ final class GhosttyHostView: NSView {
     ///
     /// A release is forwarded even mid-composition, because libghostty is holding that press and
     /// suppressing it would strand the modifier down.
+    ///
+    /// Keyed by keyCode, so the two sides of one modifier pair independently. Keying it by the
+    /// named modifier instead cost a real bug: left ⌘ down then right ⌘ down reported one press,
+    /// because `GHOSTTY_MODS_SUPER` was already set, and releasing left first then reported a
+    /// release for the *right* key that no press had earned. Under the kitty keyboard protocol
+    /// the two sides are different keys, so a program sees a key it never saw go down.
     func modifierActionToForward(for event: NSEvent) -> ghostty_input_action_e? {
-        guard let transition = Self.modifierTransition(for: event) else { return nil }
-        if transition.action == GHOSTTY_ACTION_PRESS {
-            guard !hasMarkedText(), reportedModifiers & transition.mod == 0 else { return nil }
-            reportedModifiers |= transition.mod
+        guard let action = Self.modifierTransition(for: event) else { return nil }
+        if action == GHOSTTY_ACTION_PRESS {
+            guard !hasMarkedText(), !reportedModifierKeys.contains(event.keyCode) else { return nil }
+            reportedModifierKeys.insert(event.keyCode)
         } else {
-            guard reportedModifiers & transition.mod != 0 else { return nil }
-            reportedModifiers &= ~transition.mod
+            guard reportedModifierKeys.remove(event.keyCode) != nil else { return nil }
         }
-        return transition.action
+        return action
     }
 
-    /// The modifiers this surface has told libghostty are down. See `modifierActionToForward`.
-    private var reportedModifiers: UInt32 = 0
+    /// The modifier keys this surface has told libghostty are down, by keyCode. See
+    /// `modifierActionToForward`.
+    private var reportedModifierKeys: Set<UInt16> = []
 
     /// The modifier each `flagsChanged` keyCode moves: the ghostty bit it sets, the device flag
     /// for the side it sits on, and the flag for the opposite side. Caps lock is unsided and has
@@ -485,19 +491,15 @@ final class GhosttyHostView: NSView {
     /// the named flag is then the only evidence there is. Synthesized input (`CGEvent` from
     /// automation or accessibility tooling) arrives that way, and reading it as a release would
     /// tell the terminal a held modifier had come up.
-    static func modifierTransition(for event: NSEvent) -> (action: ghostty_input_action_e, mod: UInt32)? {
+    static func modifierTransition(for event: NSEvent) -> ghostty_input_action_e? {
         guard let modifier = modifierKeyCodes[event.keyCode] else { return nil }
         // The named flag is clear, so that modifier is fully up whichever side was let go.
-        guard event.ghosttyMods.rawValue & modifier.named != 0 else {
-            return (GHOSTTY_ACTION_RELEASE, modifier.named)
-        }
+        guard event.ghosttyMods.rawValue & modifier.named != 0 else { return GHOSTTY_ACTION_RELEASE }
         let raw = event.modifierFlags.rawValue
-        if let side = modifier.side, raw & side != 0 { return (GHOSTTY_ACTION_PRESS, modifier.named) }
+        if let side = modifier.side, raw & side != 0 { return GHOSTTY_ACTION_PRESS }
         // This side is up, and the other one is what is still holding the named flag set.
-        if let other = modifier.otherSide, raw & other != 0 {
-            return (GHOSTTY_ACTION_RELEASE, modifier.named)
-        }
-        return (GHOSTTY_ACTION_PRESS, modifier.named)
+        if let other = modifier.otherSide, raw & other != 0 { return GHOSTTY_ACTION_RELEASE }
+        return GHOSTTY_ACTION_PRESS
     }
 
     /// Encode one key event to libghostty. `translationEvent` carries the mod-translated
