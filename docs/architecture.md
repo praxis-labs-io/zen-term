@@ -30,6 +30,28 @@ Four types travel with it: `TerminalSurfaceConfig` (spawn params),
 `TerminalSurfaceDelegate` (ten events out, all defaulted to no-ops),
 `TerminalTheme`, and `TerminalBehavior`.
 
+**`disposition(of:)` asks the backend what it would do with a keystroke.** The
+chrome resolves its keymap before the responder chain and passes on everything it
+does not claim, so the backend's own keymap is live underneath ours the whole time.
+This is how the chrome finds out what is down there, rather than reading it out of
+the backend's source. It takes a `TerminalKey` (keyCode, modifiers, unshifted
+codepoint) rather than an `NSEvent`, because only the live path has an event: the
+diagnostic and the pin-bump baseline ask about a chord nobody pressed, and
+fabricating an event for those is the trap in `swift-conventions.md`. Defaulted to
+`.ignores`, so a backend with no keymap needs no code.
+
+`ChordDisposition` has four cases and the fourth is the one that matters.
+`mayClaim` means the bind is conditional: the backend runs it only when the action
+would do something and otherwise lets the key through. libghostty's
+`keyEventIsBinding` is a pure set lookup that does **not** evaluate that, which its
+own doc comment says outright, so a probe cannot resolve it and must not round it up
+to `claims`. Bare Escape is the proof: bound to end a search, and reaching vim every
+time no search is running. `⌘K` and `⌘F` are the same shape.
+
+`BackendBindingBaselineTests` pins what libghostty binds under each of our defaults,
+measured against a live surface rather than transcribed. Re-run it on a ghostty pin
+bump: a change there is not automatically a bug, but it must never be silent.
+
 **The rule:** if only one backend can do a thing, it stays below the seam. The
 protocol grows only to hold what the chrome needs from *any* terminal.
 
