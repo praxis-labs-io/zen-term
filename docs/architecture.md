@@ -919,6 +919,13 @@ reader's behalf, so Esc takes it back down: one keystroke to find something, one
 done with it. A reader already in scroll mode when the bar opened put themselves there
 and keeps it, which is what `didStartScrollMode` tracks.
 
+The viewport is put back the same way. Stepping is the only thing here that moves it, so
+`didMoveViewport` gates a `scroll(.bottom)` on the way out and again whenever a needle
+stops matching: one character past the last match leaves the pane parked on the previous
+needle's answer with nothing on screen matching what is now typed. Neither fires for a
+search that never moved the viewport, and neither fires while the reader is being left in
+a scroll mode of their own, where the match is what they asked to be shown.
+
 **The keyboard runs in two phases, and the gate between them is load-bearing.** While
 the field holds first responder, `updateModeHandler`'s closure returns false for
 everything. `KeyInterceptor` is a local monitor running ahead of the field editor, so a

@@ -75,6 +75,10 @@ final class SearchController {
     /// started: a reader already in scroll mode when the bar opened stays there on the way out.
     private var didStartScrollMode = false
 
+    /// Whether a step has carried the viewport off where it was. Stepping is the only thing here
+    /// that moves it, and it is what has to be undone rather than left stranded.
+    private var didMoveViewport = false
+
     /// Fires when the bar goes up or comes down, so the window can install and remove its key hook
     /// without this type reaching into `KeyInterceptor`.
     var onActiveChanged: ((Bool) -> Void)?
@@ -141,7 +145,20 @@ final class SearchController {
     func navigate(_ step: TerminalSearchStep) {
         guard isActive, !needle.isEmpty else { return }
         pendingStep = step
+        didMoveViewport = true
         surface?.stepSearch(step)
+    }
+
+    /// Put the viewport back at the live end of the buffer.
+    ///
+    /// Only when a step took it away, and only when the reader is not being left in a scroll mode
+    /// of their own: they are still reading, and the match is what they asked to be shown.
+    private func restoreViewport() {
+        guard didMoveViewport else { return }
+        let readerOwnsScrollMode = scrollMode.isActive && !didStartScrollMode
+        guard !readerOwnsScrollMode else { return }
+        didMoveViewport = false
+        surface?.scroll(.bottom)
     }
 
     /// Take the bar down and stop the engine. Idempotent, and called unconditionally from every
@@ -169,6 +186,9 @@ final class SearchController {
         selected = nil
         pendingStep = nil
         hasPreviewed = false
+        // Before the surface goes, and before scroll mode does: `restoreViewport` reads whether the
+        // reader owns the mode to decide, and ending it first would make every case look owned.
+        restoreViewport()
         // Search leaves behind only what it started. Committing brings scroll mode up on the
         // reader's behalf, so Esc has to take it back down again: one keystroke to find something,
         // one to be done with it. A reader who was already in scroll mode when the bar opened put
@@ -242,6 +262,14 @@ final class SearchController {
         guard isActive, isDriving(s) else { return }
         self.total = total
         showCount()
+        // A needle typed one character past its last match leaves the viewport parked on something
+        // that no longer matches anything. Nothing to show means going back to where the reader
+        // was, not hanging on the previous needle's answer.
+        guard (total ?? 0) > 0 else {
+            hasPreviewed = false
+            restoreViewport()
+            return
+        }
         previewIfNothingVisible()
     }
 

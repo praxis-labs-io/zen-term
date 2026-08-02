@@ -223,6 +223,69 @@ final class SearchLifecycleTests: WindowTestCase {
 
     // MARK: leaving
 
+    func test_leavingPutsTheViewportBackAtTheBottom() throws {
+        // A search that scrolled you into history and then closed should not leave you reading
+        // something you were only looking for.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows = Array(repeating: "", count: 24)
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        controller.search.report(total: 3, from: surface)
+        XCTAssertEqual(surface.scrolls, [], "precondition: the step moved it, not a scroll")
+
+        controller.search.end()
+
+        XCTAssertEqual(surface.scrolls, [.bottom])
+    }
+
+    func test_aNeedleThatStopsMatchingGivesTheViewportBack() throws {
+        // One character past the last match, the viewport is parked on the previous needle's
+        // answer with nothing on screen matching what is now typed.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows = Array(repeating: "", count: 24)
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        controller.search.report(total: 3, from: surface)
+
+        controller.search.beginNeedleForTesting("errorx")
+        controller.search.report(total: 0, from: surface)
+
+        XCTAssertEqual(surface.scrolls, [.bottom])
+    }
+
+    func test_aSearchThatNeverMovedTheViewportDoesNotScrollOnTheWayOut() throws {
+        // The match was on screen the whole time. Scrolling here would move a pane the reader
+        // never asked to move.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows[5] = "an error happened"
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        controller.search.report(total: 1, from: surface)
+
+        controller.search.end()
+
+        XCTAssertEqual(surface.scrolls, [])
+    }
+
+    func test_aReaderInTheirOwnScrollModeIsLeftWhereTheSearchTookThem() throws {
+        // They are still in scroll mode reading, and the match is what they asked to be shown.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows = Array(repeating: "", count: 24)
+        controller.handle(.toggleScrollMode)
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        controller.search.report(total: 3, from: surface)
+
+        controller.search.end()
+
+        XCTAssertEqual(surface.scrolls, [], "yanking them to the bottom would undo what they found")
+        XCTAssertTrue(controller.scrollMode.isActive)
+    }
+
     func test_escapeLeavesTheScrollModeThatCommittingStarted() throws {
         // One keystroke to find something, one to be done with it. Being dropped into a mode you
         // never asked for, needing a second Esc, is the surprise this asserts against.
