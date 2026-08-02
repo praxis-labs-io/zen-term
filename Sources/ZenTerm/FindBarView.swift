@@ -94,7 +94,7 @@ final class FindBarView: NSView {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = chrome.elevated.nsColor.cgColor
+        layer?.backgroundColor = chrome.accent.nsColor.withAlphaComponent(Self.fillAlpha).cgColor
         glyph.textColor = chrome.ink(alpha: 0.4)
         field.textColor = chrome.foreground.nsColor
         count.textColor = chrome.ink(alpha: 0.5)
@@ -116,6 +116,10 @@ final class FindBarView: NSView {
 
     static let height: CGFloat = 26
     private static let cornerRadius: CGFloat = 6
+    /// The faintest accent fill the chrome uses, shared with `KeybindChip`'s resting state. Accent
+    /// rather than ink so the bar reads as chrome tinted over the pane rather than as a grey panel
+    /// laid on it.
+    private static let fillAlpha: CGFloat = 0.14
 }
 
 extension FindBarView: NSTextFieldDelegate {
