@@ -19,6 +19,16 @@ foreground = #e0def4
 cursor-color = #6b6790
 selection-background = #403d52
 
+# Scrollback search highlights (⌘/). Optional, and the only keys here that are:
+# left out, they're derived from the accent, which is what the values below are.
+# Set any of them to take that one over. The first pair is every match, the
+# second is the one you're currently on.
+#
+#   search-foreground = #e0def4
+#   search-background = #554968
+#   search-selected-foreground = #191724
+#   search-selected-background = #c4a7e7
+
 # The 16 ANSI colors, `palette = N=#rrggbb` (N = 0…15).
 # 0–7 normal:
 palette = 0=#393552
