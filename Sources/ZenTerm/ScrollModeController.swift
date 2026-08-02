@@ -164,6 +164,10 @@ final class ScrollModeController {
         guard isActive else { return }
         let line = rowText(cursor.row)
         pendingAnchorLine = Self.isBlank(line) ? nil : line
+        // Only the cursor can be found again afterwards. The anchor is a fixed row index with no
+        // content behind it, so a selection kept across the reflow would run from a row that now
+        // holds something else.
+        releaseSelection()
         invalidateRows()  // a different cell size means different rows
         refreshCursor()
     }
@@ -206,6 +210,10 @@ final class ScrollModeController {
             return event.modifierFlags.intersection([.command, .option]).isEmpty
         }
         if command != .pendingTop { sawG = false }
+        // The reader moved on their own, so a re-anchor still waiting on a report is moot. Left
+        // armed it fires on whatever report comes next, minutes later, and drags the cursor off
+        // the row they chose.
+        pendingAnchorLine = nil
         switch command {
         case .pendingTop:
             sawG = true
@@ -238,15 +246,17 @@ final class ScrollModeController {
             // The moves that name a destination put the cursor ON it instead, because landing the
             // thing you asked for somewhere in view and leaving the cursor elsewhere makes the
             // cursor a decoration.
-            releaseForScrolling()
             switch move {
             case .top: cursor = ScrollCell(row: 0, column: cursor.column)
             case .bottom: cursor = ScrollCell(row: lastRow, column: cursor.column)
             default: break
             }
-            invalidateRows()  // the viewport is about to move
             surface?.scroll(move)
             refreshCursor()
+            // After the read, not before it: a row read between the request and the frame that
+            // serves it describes the old viewport, and cached under the new one it would send a
+            // later `}` or `w` walking text that is no longer there.
+            invalidateRows()
         }
         return true
     }
@@ -260,10 +270,9 @@ final class ScrollModeController {
         if next >= 0 && next <= lastRow {
             move(to: ScrollCell(row: next, column: cursor.column))
         } else {
-            releaseForScrolling()
-            invalidateRows()  // the viewport is about to move
             surface?.scroll(.lines(delta))  // pinned at an edge: the buffer moves under the cursor
             refreshCursor()
+            invalidateRows()
         }
     }
 
@@ -319,9 +328,15 @@ final class ScrollModeController {
     ///
     /// A row the backend declines caches as empty; nothing downstream tells that from a blank row.
     /// Every path that can move the viewport or resize the grid clears this.
+    ///
+    /// Trailing blanks come off here. `read_text` reads with `trim = false` (`Surface.dumpTextLocked`)
+    /// and the formatter keeps every cell a program actually painted, so a row filled edge to edge
+    /// (a prompt with a right segment, a status bar) arrives padded to the grid width. Left on, `$`
+    /// parks the cursor out in the padding and `v$y` copies a run of spaces.
     private func rowText(_ row: Int) -> String {
         if let known = rowCache[row] { return known }
-        let text = surface?.text(viewportRow: row) ?? ""
+        var text = surface?.text(viewportRow: row) ?? ""
+        while let last = text.last, last.isWhitespace { text.removeLast() }
         rowCache[row] = text
         return text
     }
@@ -359,12 +374,17 @@ final class ScrollModeController {
         refreshCursor()
     }
 
-    /// Give the anchor back before the viewport moves.
+    /// Give the anchor back once the rows under it have moved.
     ///
     /// A selection is viewport-bounded because `Point.pin` clamps an exact coordinate's y to the
     /// grid height for every point tag, so no coordinate names a scrollback row. One that outlived a
     /// scroll would highlight rows it no longer covers and yank text the reader never saw.
-    private func releaseForScrolling() {
+    ///
+    /// A scroll is driven by the report rather than by the key that asked, because the two do not
+    /// line up in either direction: output moves the viewport with no key at all, and a `j` at the
+    /// end of the buffer moves nothing while looking exactly like one that does. A reflow calls it
+    /// straight, since the cursor can be found again by its line and a fixed anchor cannot.
+    private func releaseSelection() {
         guard selection != nil else { return }
         selection = nil
         updateHeader()
@@ -375,7 +395,13 @@ final class ScrollModeController {
     private func yank() {
         guard let surface, let selection, let columns = surface.cellMetrics?.columns else { return }
         let range = selection.range(to: cursor, columns: columns)
-        guard let text = surface.text(in: range), !text.isEmpty else { return }
+        // An empty span still completes the gesture, blank row and all: dropping out here would
+        // leave the screen identical to before the keystroke, which is the confirmation gap the
+        // pulse exists to close. Only a read the backend refuses has nothing to confirm.
+        guard let text = surface.text(in: range) else {
+            Log.warning("scroll mode: the surface declined a yank read", category: .panes)
+            return
+        }
         yankPasteboard.clearContents()
         yankPasteboard.setString(text, forType: .string)
         self.selection = nil
@@ -427,8 +453,10 @@ final class ScrollModeController {
     private func refreshCursor() {
         guard isActive, let surface else { return }
         let columns = surface.cellMetrics?.columns ?? 0
-        cursor = ScrollCell(
-            row: min(cursor.row, lastRow), column: min(cursor.column, lastColumn(of: cursor.row)))
+        // The row first, then the column against THAT row: a grid that lost rows leaves the cursor
+        // naming one the backend will not read, and its empty text would collapse the column to 0.
+        let row = min(cursor.row, lastRow)
+        cursor = ScrollCell(row: row, column: min(cursor.column, lastColumn(of: row)))
         panel?.setScrollCursor(
             ScrollCursorView.State(
                 cursor: cursor,
@@ -507,6 +535,7 @@ final class ScrollModeController {
     func report(position: TerminalScrollPosition, from s: AnyObject) {
         guard isActive, isDriving(s) else { return }
         invalidateRows()  // output arrived, or a scroll landed
+        if let last = lastPosition, position.offset != last.offset { releaseSelection() }
         lastPosition = position
         // The first report after a geometry change is the reflowed grid: libghostty emits the
         // scrollbar only from a draw, and only when it differs from the last one sent.

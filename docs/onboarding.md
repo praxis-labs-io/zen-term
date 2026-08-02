@@ -132,7 +132,8 @@ took. `q` leaves. Nothing you type reaches the shell while the mode is up, but y
 shortcuts still work, so ⌘T and pane movement are never swallowed.
 
 A selection stays on the screen you can see. Scroll to the block you want first, then
-select it: a page key hands the selection back before it moves the buffer.
+select it: you get the selection back whenever the buffer moves under it, whether you
+scrolled or a running command printed.
 
 ## Neovim: one motion across splits and panes
 

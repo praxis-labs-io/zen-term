@@ -303,5 +303,5 @@
 # `v` starts a selection at the cursor and `V` takes whole rows; motions grow it, `y`
 # copies it and pulses what it took, and Esc hands it back without leaving the mode.
 # A selection stays on screen: the terminal core can only read text you can see, so
-# a page key gives the anchor back before it moves the buffer. Scroll to the block
-# you want first, then select it.
+# you get the anchor back whenever the buffer moves under it, whether you scrolled or
+# a running command printed. Scroll to the block you want first, then select it.

@@ -111,8 +111,11 @@ final class RecordingSurface: NSObject, TerminalSurface {
         return rows
     }()
 
+    /// Bounded by `cellMetrics` as well as by `rows`, the way the real backend is: `GhosttySurface`
+    /// refuses a row at or past the grid height, so a fixture that answered one anyway would hide
+    /// what a caller does with a row the grid has shrunk out from under.
     func text(viewportRow row: Int) -> String? {
-        guard rows.indices.contains(row) else { return nil }
+        guard row < (cellMetrics?.rows ?? rows.count), rows.indices.contains(row) else { return nil }
         return rows[row]
     }
 

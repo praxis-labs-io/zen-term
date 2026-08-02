@@ -1,8 +1,9 @@
 /// Vim's `w`, `b` and `e` over a terminal viewport.
 ///
-/// A row's text ends where its characters do: `read_text` trims a row's trailing blanks, so the
-/// columns past the last character are not cells to land on and stepping off the end of a row lands
-/// on the start of the next.
+/// A row's text ends where its characters do, which is `ScrollModeController.rowText`'s doing rather
+/// than the backend's: `read_text` keeps any trailing blanks a program painted. So the columns past
+/// the last character are not cells to land on, and stepping off the end of a row lands on the start
+/// of the next.
 ///
 /// **A word never spans a row break**, even where the classes line up, or a `w` from `two` in
 /// `one two` runs clean past `three` on the row below.

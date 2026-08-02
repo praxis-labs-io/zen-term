@@ -55,7 +55,7 @@ final class ScrollSelectionTests: XCTestCase {
 
     // MARK: linewise
 
-    func test_alineSelectionOpensBothEndsToTheWholeRow() {
+    func test_aLineSelectionOpensBothEndsToTheWholeRow() {
         let selection = ScrollSelection(kind: .line, anchor: cell(2, 40))
         let range = selection.range(to: cell(4, 7), columns: 80)
 
@@ -64,7 +64,7 @@ final class ScrollSelectionTests: XCTestCase {
         XCTAssertEqual(range.rowCount, 3)
     }
 
-    func test_alineSelectionDraggedUpwardsStillStartsAtColumnZero() {
+    func test_aLineSelectionDraggedUpwardsStillStartsAtColumnZero() {
         // A column-aware swap pairs each column with the row it arrived on, so this comes back
         // starting at the last column of row 5.
         let selection = ScrollSelection(kind: .line, anchor: cell(10, 3))

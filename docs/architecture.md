@@ -870,13 +870,23 @@ libghostty resolves an exact coordinate through `Point.pin`
 (`vendor/ghostty/src/apprt/embedded.zig`), which does `@min(self.y, screen.pages.rows -| 1)`
 for **every** point tag, `screen` included, and `pages.rows` is the grid height rather than
 the scrollback total. So no coordinate names a scrollback row, and text off screen cannot be
-read. A key that would move the viewport releases the anchor first, because a selection that
-outlived a scroll would highlight rows it no longer covers and yank text the reader never saw.
+read. A selection that outlived a scroll would highlight rows it no longer covers and yank text the
+reader never saw, so the anchor comes back the moment the rows move. That is driven by the scrollbar
+report rather than by the key that asked, because the two do not line up in either direction: output
+moves the viewport with no key at all, and a `j` at the end of the buffer moves nothing while looking
+exactly like one that does. A reflow releases it directly, since the cursor can be found again by its
+line and a fixed anchor cannot.
 
 The other limit is columns. `read_text` hands back a string with no per-character cell
 mapping, so a column is a character offset into the row's text. A wide character (CJK, an
-emoji) fills two cells while counting as one offset, and the cursor cell sits one to the left
-of true for each one earlier in the row.
+emoji) fills two cells while counting as one offset, so the cursor cell sits one to the left
+of true for each one earlier in the row and a yank ending past one stops short of what was
+highlighted. ZEN-349 carries the width-aware model that closes both.
+
+A row's trailing blanks come off in `rowText`, not in the backend. `Surface.dumpTextLocked`
+reads with `.trim = false` and the formatter keeps every cell a program actually painted, so a
+row filled edge to edge (a prompt with a right segment, a status bar) arrives padded to the grid
+width. Left on, `$` parks the cursor out in the padding and `v$y` copies a run of spaces.
 
 `TerminalSurface.text(in:)` is the yank's read and the deliberate opposite of
 `text(viewportRow:)`: it *wants* `read_text`'s unwrapping, so a command line that soft-wrapped
