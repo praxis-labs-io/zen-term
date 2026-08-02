@@ -185,6 +185,7 @@ final class SearchController {
         pendingStep = step
         didMoveViewport = true
         didRequestSelection = true
+        offsetAtStep = lastPosition?.offset
         surface?.stepSearch(step)
     }
 
@@ -430,12 +431,22 @@ final class SearchController {
     private func land(after step: TerminalSearchStep) {
         guard scrollMode.isActive, let surface else { return }
         let rows = (0..<(surface.cellMetrics?.rows ?? 0)).map { surface.text(viewportRow: $0) ?? "" }
+        // Whether the step had to scroll to reach the match. The cursor names a row in the viewport
+        // it was standing in, so once that viewport moves the coordinate is meaningless and a
+        // direction scan from it walks to whichever match happens to sit near the stale row. The
+        // error compounds over a run of steps, and a row holding several matches gives it more
+        // wrong answers to choose from.
+        let scrolled = lastPosition?.offset != offsetAtStep
         guard
             let cell = Self.matchCell(
-                needle: needle, rows: rows, from: scrollMode.cursor, step: step)
+                needle: needle, rows: rows, from: scrollMode.cursor, step: step, scrolled: scrolled)
         else { return }
         scrollMode.land(on: cell)
     }
+
+    /// Where the viewport sat when the outstanding step was sent, so the answer can tell whether it
+    /// moved. Nil before any report has arrived, which reads as "no movement to detect".
+    private var offsetAtStep: Int?
 
     /// Where the selected match is, read off the viewport.
     ///
@@ -448,27 +459,35 @@ final class SearchController {
     /// Case folding is ASCII-only, matching the engine's `std.ascii.indexOfIgnoreCase`. A match
     /// that soft-wraps across two rows is not found, and the cursor stays where it is.
     static func matchCell(
-        needle: String, rows: [String], from cursor: ScrollCell, step: TerminalSearchStep
+        needle: String, rows: [String], from cursor: ScrollCell, step: TerminalSearchStep,
+        scrolled: Bool
     ) -> ScrollCell? {
         guard !needle.isEmpty else { return nil }
         let occurrences = rows.enumerated().flatMap { row, text in
             occurrenceColumns(of: needle, in: text).map { ScrollCell(row: row, column: $0) }
         }
         guard !occurrences.isEmpty else { return nil }
-        let ahead = occurrences.filter {
-            let isBefore = $0.row < cursor.row || ($0.row == cursor.row && $0.column < cursor.column)
-            return step == .next ? isBefore : !isBefore && $0 != cursor
+        // A step that scrolled parks the match's own row at the top of the viewport, which is the
+        // one case the backend tells us exactly. The cursor is a coordinate in the viewport that
+        // just went away, so a direction scan from it is worse than no scan at all.
+        if scrolled {
+            let onTopRow = occurrences.filter { $0.row == 0 }
+            // `next` walks newest to oldest, so within the parked row the match it stopped on is
+            // the last one when stepping backwards through the buffer and the first going forwards.
+            return step == .next ? onTopRow.last ?? occurrences.first : onTopRow.first ?? occurrences.first
         }
-        let nearest = ahead.min {
-            distance($0, from: cursor) < distance($1, from: cursor)
+        // `occurrences` is already in buffer order, rows down and columns across, and the engine
+        // steps in exactly that order. So the answer is the immediate neighbour: the last match
+        // before the cursor going back, the first after it going forward. Nearest-by-distance was
+        // wrong the moment a row held two matches, because it would take the closer column on the
+        // row above rather than the one the engine actually stopped on.
+        let before = occurrences.filter {
+            $0.row < cursor.row || ($0.row == cursor.row && $0.column < cursor.column)
         }
-        return nearest ?? occurrences.first
-    }
-
-    /// Rows first, then columns: a match two rows away is further than one at the other end of
-    /// this row, however many characters lie between them.
-    private static func distance(_ cell: ScrollCell, from cursor: ScrollCell) -> (Int, Int) {
-        (abs(cell.row - cursor.row), abs(cell.column - cursor.column))
+        let after = occurrences.filter {
+            $0.row > cursor.row || ($0.row == cursor.row && $0.column > cursor.column)
+        }
+        return (step == .next ? before.last : after.first) ?? occurrences.first
     }
 
     /// Every column `needle` starts at in `text`, folding case the way the engine does.

@@ -80,9 +80,11 @@ final class SearchMatchCellTests: XCTestCase {
     ]
 
     private func cell(
-        _ needle: String, from cursor: ScrollCell, _ step: TerminalSearchStep, rows: [String]? = nil
+        _ needle: String, from cursor: ScrollCell, _ step: TerminalSearchStep, rows: [String]? = nil,
+        scrolled: Bool = false
     ) -> ScrollCell? {
-        SearchController.matchCell(needle: needle, rows: rows ?? self.rows, from: cursor, step: step)
+        SearchController.matchCell(
+            needle: needle, rows: rows ?? self.rows, from: cursor, step: step, scrolled: scrolled)
     }
 
     func test_nextTakesTheNearestMatchAboveTheCursor() {
@@ -118,6 +120,32 @@ final class SearchMatchCellTests: XCTestCase {
         XCTAssertEqual(
             cell("error", from: ScrollCell(row: 0, column: 20), .next, rows: repeated),
             ScrollCell(row: 0, column: 10))
+    }
+
+    func test_aRowHoldingTwoMatchesStepsThroughBothBeforeLeavingIt() {
+        // Found at the machine. Nearest-by-distance took the closer column on the row above rather
+        // than the one the engine stopped on, and the cursor drifted off the selected line. The
+        // engine steps in strict buffer order, so the answer is the immediate neighbour in it.
+        let twoPerRow = ["error one error two", "quiet", "error three error four"]
+        // Starting at the last match on the bottom row, `next` walks back through that row first.
+        XCTAssertEqual(
+            cell("error", from: ScrollCell(row: 2, column: 12), .next, rows: twoPerRow),
+            ScrollCell(row: 2, column: 0))
+        // Only then up, and onto the *rightmost* match of the row above, which is the newer of the
+        // two and therefore the one the engine reaches next.
+        XCTAssertEqual(
+            cell("error", from: ScrollCell(row: 2, column: 0), .next, rows: twoPerRow),
+            ScrollCell(row: 0, column: 10))
+    }
+
+    func test_aStepThatScrolledTakesTheParkedRowNotTheStaleCursor() {
+        // Once the viewport moves, the cursor names a row that no longer exists. A direction scan
+        // from it walks to whatever sits near the stale row, and the error compounds over a run.
+        let scrolledRows = ["error at top", "", "error lower down"]
+        XCTAssertEqual(
+            cell("error", from: ScrollCell(row: 2, column: 0), .next, rows: scrolledRows, scrolled: true),
+            ScrollCell(row: 0, column: 0),
+            "a scroll parks the match's own row at the top")
     }
 
     func test_noOccurrenceLeavesTheCursorAlone() {
