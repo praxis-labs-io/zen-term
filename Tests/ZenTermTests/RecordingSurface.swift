@@ -93,7 +93,15 @@ final class RecordingSurface: NSObject, TerminalSurface {
     private(set) var endSearchCount = 0
     func search(_ needle: String) { searches.append(needle) }
     func stepSearch(_ step: TerminalSearchStep) { searchSteps.append(step) }
-    func endSearch() { endSearchCount += 1 }
+
+    /// Whether `endSearch` reports END_SEARCH straight back, synchronously, the way libghostty
+    /// does: it answers the binding action by calling the apprt from inside it. Off by default so
+    /// the ordinary tests read plainly, and on for the one that covers the re-entrancy.
+    var echoesEndSearch = false
+    func endSearch() {
+        endSearchCount += 1
+        if echoesEndSearch { delegate?.surfaceDidEndSearch(self) }
+    }
 
     /// The grid this surface claims to have. Defaults to a 24-row viewport rather than nil, so a
     /// test drives scroll mode's real cursor behavior: with no metrics the cursor is pinned to a

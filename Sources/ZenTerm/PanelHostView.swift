@@ -290,7 +290,7 @@ final class PanelHostView: NSView {
     ///
     /// The bar **displaces** the terminal rather than floating over it, exactly as the header does
     /// at the other end, so the grid loses a row or two and reflows. The caller has to lay out and
-    /// re-measure after this: see `SearchController.setBar(shown:)`.
+    /// re-measure after this: see `SearchController.settleLayout()`.
     @discardableResult
     func setFindBarShown(_ shown: Bool) -> FindBarView? {
         guard shown else {

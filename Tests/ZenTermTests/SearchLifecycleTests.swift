@@ -310,6 +310,105 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertTrue(controller.scrollMode.isActive, "they put themselves there and keep it")
     }
 
+    func test_escapeHandsTheKeyboardBackToThePane() throws {
+        // The bar took first responder on the way in. Left holding it, the pane draws a live
+        // cursor while every keystroke goes to a hidden field, and only a click fixes it.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        controller.handle(.toggleSearch)
+        let before = surface.focusCount
+
+        controller.search.end()
+
+        XCTAssertEqual(surface.focusCount, before + 1)
+    }
+
+    func test_committingSendsAShortNeedleBeforeSteppingIt() throws {
+        // A 1-2 character needle is still sitting in the debounce. Stepping before it is sent
+        // navigates a search that does not exist, and the backend answers false in silence.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        controller.handle(.toggleSearch)
+        controller.search.typeForTesting("ls")
+        XCTAssertEqual(surface.searches, [], "precondition: the debounce is holding it")
+
+        controller.search.commit()
+
+        XCTAssertEqual(surface.searches, ["ls"], "the needle goes down first")
+        XCTAssertEqual(surface.searchSteps, [.next], "and only then does it step")
+    }
+
+    func test_endingTheSearchTearsDownOnlyOnce() throws {
+        // libghostty answers end_search by calling END_SEARCH straight back, synchronously.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.echoesEndSearch = true
+        controller.handle(.toggleSearch)
+        var closures = 0
+        let previous = controller.search.onActiveChanged
+        controller.search.onActiveChanged = { active in
+            if !active { closures += 1 }
+            previous?(active)
+        }
+
+        controller.search.end()
+
+        XCTAssertEqual(closures, 1, "the re-entrant pass must not run the teardown again")
+        XCTAssertEqual(surface.scrolls, [], "nor scroll a second time")
+    }
+
+    func test_theScrollChordDuringTypingCommitsRatherThanStartingADeadMode() throws {
+        // A reserved chord routes ahead of the mode handler, so this fires while the field owns
+        // the keyboard. Starting the mode there puts a header up over a mode that takes no keys.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.toggleSearch)
+
+        controller.handle(.toggleScrollMode)
+
+        XCTAssertFalse(controller.search.isEditing, "the chord commits")
+        XCTAssertTrue(controller.scrollMode.isActive)
+        let handler = try XCTUnwrap(host.modeHandler)
+        XCTAssertTrue(handler(try keyDown("j")), "and the mode it left up actually takes keys")
+    }
+
+    func test_escapeGivesASelectionBackBeforeItClosesTheBar() throws {
+        // Scroll mode's own `.cancel` exists so a mis-anchored `v` can be undone without leaving.
+        // Claiming Esc here would take the selection, the mode and the bar in one keystroke.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.toggleSearch)
+        controller.search.commit()
+        let handler = try XCTUnwrap(host.modeHandler)
+        _ = handler(try keyDown("v"))
+        XCTAssertNotNil(controller.scrollMode.selection, "precondition")
+
+        _ = handler(try keyDown("\u{1b}", keyCode: 53))
+
+        XCTAssertNil(controller.scrollMode.selection, "the selection goes")
+        XCTAssertTrue(controller.search.isActive, "the bar stays")
+    }
+
+    func test_theViewportGoesBackWhereTheReaderHadItNotToTheBottom() throws {
+        // A reader who had scrolled into a build log before searching gets that place back.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows = Array(repeating: "", count: 24)
+        controller.handle(.toggleSearch)
+        controller.search.report(
+            position: TerminalScrollPosition(total: 5000, offset: 500, viewport: 24), from: surface)
+        controller.search.typeForTesting("error")
+        controller.search.report(total: 3, from: surface)
+        controller.search.report(
+            position: TerminalScrollPosition(total: 5000, offset: 120, viewport: 24), from: surface)
+
+        controller.search.end()
+
+        XCTAssertEqual(surface.scrolls, [.lines(380)], "back by exactly what the search moved")
+    }
+
     func test_everyRetractionTakesTheBarDownAndStopsTheEngine() throws {
         // Both halves matter. A bar that vanishes while the engine keeps painting highlights is
         // the bug this asserts against.

@@ -72,8 +72,12 @@ final class FindBarView: NSView {
         switch (total, selected) {
         case (nil, _):
             count.stringValue = ""
+        case (0, nil):
+            count.stringValue = "No matches"
+        case (1, nil):
+            count.stringValue = "1 match"
         case (let total?, nil):
-            count.stringValue = total == 0 ? "No matches" : "\(total) matches"
+            count.stringValue = "\(total) matches"
         case (let total?, let selected?):
             count.stringValue = "\(selected + 1) / \(total)"
         }

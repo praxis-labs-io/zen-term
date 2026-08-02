@@ -138,7 +138,20 @@ final class SearchController {
         }
         showCount()
         guard !needle.isEmpty else { return }
+        // A short needle is still sitting in the debounce, and the engine has not been told about
+        // it. Stepping now navigates a search that does not exist yet, the backend answers false,
+        // and by the time the timer fires nothing is left to move the cursor. Send it first.
+        flushPendingNeedle()
         if selected == nil { navigate(.next) } else { land(after: .next) }
+    }
+
+    /// Deliver a debounced needle now rather than on its timer.
+    private func flushPendingNeedle() {
+        guard debounce != nil else { return }
+        debounce?.cancel()
+        debounce = nil
+        selected = nil
+        surface?.search(needle)
     }
 
     /// Step to another match. The cursor follows once the backend reports which one it landed on.
@@ -149,16 +162,40 @@ final class SearchController {
         surface?.stepSearch(step)
     }
 
-    /// Put the viewport back at the live end of the buffer.
+    /// Put the viewport back where the reader had it before the search moved it.
     ///
-    /// Only when a step took it away, and only when the reader is not being left in a scroll mode
-    /// of their own: they are still reading, and the match is what they asked to be shown.
+    /// Back to the bottom is what this usually means, because a search usually starts at a live
+    /// prompt. It is not the same rule, though: a reader who had already scrolled into a build log
+    /// before opening the bar gets that place back rather than being dumped at the live end.
+    ///
+    /// Only when a step took the viewport away, and only when the reader is not being left in a
+    /// scroll mode of their own: they are still reading, and the match is what they asked to be
+    /// shown.
     private func restoreViewport() {
         guard didMoveViewport else { return }
         let readerOwnsScrollMode = scrollMode.isActive && !didStartScrollMode
-        guard !readerOwnsScrollMode else { return }
+        // Cleared either way. Left set on this branch it survives into the next search, which then
+        // scrolls on the way out having never moved anything.
         didMoveViewport = false
-        surface?.scroll(.bottom)
+        guard !readerOwnsScrollMode else { return }
+        guard let entryOffset, let position = lastPosition else {
+            surface?.scroll(.bottom)  // no report to measure against; the live end is the best guess
+            return
+        }
+        let delta = entryOffset - position.offset
+        if delta == 0 { return }
+        surface?.scroll(.lines(delta))
+    }
+
+    /// Where the viewport sat when the bar went up, and where it sits now. Both come from the
+    /// backend's own scroll reports, which fire on output as well as on a scroll.
+    private var entryOffset: Int?
+    private var lastPosition: TerminalScrollPosition?
+
+    func report(position: TerminalScrollPosition, from s: AnyObject) {
+        guard isActive, isDriving(s) else { return }
+        lastPosition = position
+        if entryOffset == nil { entryOffset = position.offset }
     }
 
     /// Take the bar down and stop the engine. Idempotent, and called unconditionally from every
@@ -177,9 +214,18 @@ final class SearchController {
     }
 
     private func teardown() {
+        // libghostty answers `end_search` by calling END_SEARCH straight back, synchronously, from
+        // inside the binding action. So `end()` re-enters here through `backendEnded` and finishes
+        // the whole teardown before its own call to this runs. Without the guard the second pass
+        // re-fires `onActiveChanged` and scrolls the viewport a second time.
+        guard isActive else { return }
         debounce?.cancel()
         debounce = nil
         isActive = false
+        // The bar took first responder on the way in and has to give it back, or the pane draws a
+        // live cursor while every keystroke goes to a hidden field. Only when the field still holds
+        // it: a teardown caused by a modal card opening must not steal focus back from the card.
+        if bar?.isFieldFirstResponder == true { surface?.focus() }
         isEditing = false
         needle = ""
         total = nil
@@ -204,6 +250,8 @@ final class SearchController {
         bar = nil
         panel = nil
         surface = nil
+        entryOffset = nil
+        lastPosition = nil
         Log.info("search closed", category: .panes)
         onActiveChanged?(false)
     }
@@ -254,6 +302,13 @@ final class SearchController {
             bar?.needle = text
             surface?.search(text)
         }
+
+        /// Type a needle down the real path, debounce included, for the cases where the debounce
+        /// is the thing under test.
+        func typeForTesting(_ text: String) {
+            bar?.needle = text
+            needleDidChange(text)
+        }
     #endif
 
     // MARK: reports from the backend
@@ -287,8 +342,12 @@ final class SearchController {
         // Once per needle. `SEARCH_TOTAL` fires repeatedly as the engine works back through the
         // buffer, and a step on each report would drag the viewport through a match per report.
         guard isEditing, !hasPreviewed, (total ?? 0) > 0, !needle.isEmpty else { return }
-        guard !viewportHoldsNeedle() else { return }
+        // Latched before the viewport check, not after. `SEARCH_TOTAL` fires repeatedly as the
+        // engine works back through the buffer, and latching only on the branch that steps means a
+        // needle already on screen re-reads every viewport row on every report: one `read_text` per
+        // row, each taking the renderer mutex, on the main thread.
         hasPreviewed = true
+        guard !viewportHoldsNeedle() else { return }
         navigate(.next)
     }
 
@@ -381,12 +440,24 @@ final class SearchController {
     /// means by one too. See `ScrollCell` for where that parts company with a cell on a wide
     /// character.
     private static func occurrenceColumns(of needle: String, in text: String) -> [Int] {
-        let haystack = Array(text.lowercased())
-        let pattern = Array(needle.lowercased())
+        let haystack = text.map(asciiFolded)
+        let pattern = needle.map(asciiFolded)
         guard !pattern.isEmpty, haystack.count >= pattern.count else { return [] }
         return (0...(haystack.count - pattern.count)).filter { start in
             Array(haystack[start..<(start + pattern.count)]) == pattern
         }
+    }
+
+    /// Lowercase A through Z and nothing else, which is what `std.ascii.indexOfIgnoreCase` does.
+    ///
+    /// `lowercased()` is the wrong tool twice over. It folds the whole of Unicode, so `ÉCOLE` would
+    /// match a needle the engine never matched and the cursor would land on text carrying no
+    /// highlight. And it can change a string's character count, which would make every column after
+    /// it an offset into the folded string rather than into the row the cursor is placed on.
+    private static func asciiFolded(_ character: Character) -> Character {
+        guard let ascii = character.asciiValue, ascii >= UInt8(ascii: "A"), ascii <= UInt8(ascii: "Z")
+        else { return character }
+        return Character(UnicodeScalar(ascii + 32))
     }
 
     // MARK: keys
@@ -396,7 +467,12 @@ final class SearchController {
         guard isActive, !isEditing, let key = Self.key(for: event) else { return false }
         switch key {
         case .step(let step): navigate(step)
-        case .end: end()
+        case .end:
+            // A visual selection owns Esc first. Scroll mode's `.cancel` hands the selection back
+            // without leaving the mode, and claiming Esc here would take the selection, the mode
+            // and the bar in one keystroke, with nothing left to undo a mis-anchored `v`.
+            guard scrollMode.selection == nil else { return false }
+            end()
         }
         return true
     }

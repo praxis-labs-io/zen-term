@@ -557,6 +557,14 @@ final class WindowController: NSObject {
     /// A panel with no live surface (a drawer that has never been opened) has nothing to scroll,
     /// so the chord does nothing rather than putting up a mode over an empty panel.
     private func toggleScrollMode() {
+        // A reserved chord routes ahead of the mode handler, so this fires while the find field
+        // holds the keyboard. Starting the mode there would put its header and cursor up over a
+        // mode that cannot receive a single key, because the phase-one gate stands the handler
+        // down. Committing hands the keys back and brings scroll mode up as a matter of course.
+        if search.isEditing {
+            search.commit()
+            return
+        }
         if scrollMode.isActive {
             scrollMode.end()
             return
@@ -1925,6 +1933,9 @@ final class WindowController: NSObject {
         }
         c.onScrollPosition = { [weak self] surface, position in
             self?.scrollMode.report(position: position, from: surface)
+            // Search reads the same report for a different reason: to know where the viewport sat
+            // when the bar went up, so it can put it back there rather than at the live end.
+            self?.search.report(position: position, from: surface)
         }
         c.onSearchEvent = { [weak self] surface, event in
             guard let self else { return }

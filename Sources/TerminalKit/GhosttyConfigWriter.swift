@@ -71,8 +71,9 @@ enum GhosttyConfigWriter {
             lines.append("foreground = \(theme.foreground.hex)")
             lines.append("cursor-color = \(theme.cursor.hex)")
             lines.append("selection-background = \(theme.selectionBackground.hex)")
-            // Emitted only when the theme names them, so a theme that sets none reads exactly as
-            // it did before search existed and libghostty keeps its own defaults.
+            // A theme the chrome resolved carries all four, since `AppTheme` derives whatever the
+            // file left out. The optionality is for a caller below that seam holding a theme
+            // nobody has resolved: emitting an empty value would be worse than saying nothing.
             if let color = theme.searchForeground { lines.append("search-foreground = \(color.hex)") }
             if let color = theme.searchBackground { lines.append("search-background = \(color.hex)") }
             if let color = theme.searchSelectedForeground {
