@@ -17,21 +17,13 @@ final class FindBarView: NSView {
     var onCommit: (() -> Void)?
     var onCancel: (() -> Void)?
 
-    /// The needle, with real line breaks in it. Setting it does not fire `onChange`: a seed comes
-    /// from a selection, and echoing it back as a user edit would re-run the search it came from.
-    ///
-    /// A selection dragged across rows is a legitimate multi-line needle: libghostty writes a
-    /// newline between rows that are not soft-wrapped, so a needle spanning a line break matches.
-    /// It cannot be *shown* as one though, because a field that wraps grows the bar and reflows the
-    /// grid under it. So the field displays each break as `⏎` and this translates back, which keeps
-    /// the search exact while the reader can see what they are searching for.
+    /// What the field holds, which is always exactly what gets searched. Setting it does not fire
+    /// `onChange`: a seed comes from a selection, and echoing it back as a user edit would re-run
+    /// the search it came from.
     var needle: String {
-        get { field.stringValue.replacingOccurrences(of: Self.breakGlyph, with: "\n") }
-        set { field.stringValue = newValue.replacingOccurrences(of: "\n", with: Self.breakGlyph) }
+        get { field.stringValue }
+        set { field.stringValue = newValue }
     }
-
-    /// U+23CE, which no keyboard produces, so nothing typed can be mistaken for a line break.
-    private static let breakGlyph = "⏎"
 
     init() {
         super.init(frame: .zero)
@@ -107,10 +99,6 @@ final class FindBarView: NSView {
     /// an index that reads one-based off a zero-based report are both only visible here.
     var countTextForTesting: String { count.stringValue }
 
-    /// What the field literally shows, before the line breaks are translated back. A real newline
-    /// in here is what grows the bar, and only the rendered string can prove it is absent.
-    var displayedNeedleForTesting: String { field.stringValue }
-
     var isFieldFirstResponder: Bool {
         guard let editor = window?.firstResponder as? NSTextView else { return false }
         return editor.delegate === field
@@ -148,7 +136,7 @@ final class FindBarView: NSView {
 
 extension FindBarView: NSTextFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
-        onChange?(needle)  // the real one, with line breaks restored
+        onChange?(field.stringValue)
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy sel: Selector) -> Bool {

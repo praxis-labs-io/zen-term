@@ -145,10 +145,10 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.searches.last, "needle")
     }
 
-    func test_aSelectionSpanningRowsStaysWholeAndReadsAsOneLine() throws {
-        // libghostty writes a newline between rows that are not soft-wrapped, so a multi-line
-        // needle matches and cutting one to its first line would throw that away. The bar still
-        // cannot wrap, so the field shows each break as a glyph while the needle keeps the real one.
+    func test_aSelectionSpanningRowsSeedsItsFirstLine() throws {
+        // A needle is one line because everything downstream of it is: the scan, the cursor and the
+        // landing are all per-row. The engine would match across a break, but the count and
+        // highlights it produced would point at matches nothing could navigate to.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
@@ -156,11 +156,9 @@ final class SearchLifecycleTests: WindowTestCase {
 
         controller.handle(.toggleSearch)
 
-        XCTAssertEqual(surface.searches.last, "first line   \nsecond line", "the break survives")
-        let bar = try XCTUnwrap(panel.findBarForTesting)
-        XCTAssertFalse(
-            bar.displayedNeedleForTesting.contains("\n"), "a real newline in the field wraps the bar")
-        XCTAssertTrue(bar.displayedNeedleForTesting.contains("⏎"), "and the reader can see it is there")
+        XCTAssertEqual(surface.searches.last, "first line")
+        // The field shows exactly what is searched, which is how the reader sees this happened.
+        XCTAssertEqual(try XCTUnwrap(panel.findBarForTesting).needle, "first line")
     }
 
     func test_theChordOpensEmptyWithNothingSelected() throws {

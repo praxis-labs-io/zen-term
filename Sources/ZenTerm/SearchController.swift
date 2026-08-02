@@ -97,14 +97,19 @@ final class SearchController {
 
     // MARK: lifecycle
 
-    /// A selection as a needle: whole, with only its edges cleaned up.
+    /// A selection as a needle: its first line, trimmed.
     ///
-    /// The line breaks inside it stay. libghostty writes a newline between rows that are not
-    /// soft-wrapped, so a multi-line needle matches, and cutting one to its first line would throw
-    /// that away. Only the outer whitespace goes, because a selection reaching a row's end drags in
-    /// the blank cells the program never painted and the newline that follows them.
+    /// **A needle is one line because everything downstream of it is.** The engine would match
+    /// across a line break, but the scan, the cursor and the landing are all per-row, so a
+    /// multi-line needle produced a count and highlights for matches nothing could navigate to.
+    /// Enforcing it here rather than pretending is the honest end of that.
+    ///
+    /// The field then shows exactly what will be searched, which is the whole of how a reader sees
+    /// this happened: a two-row drag puts one row in the bar. Trailing blanks go too, because a
+    /// selection reaching a row's end drags in the cells the program never painted.
     private static func cleaned(_ seed: String) -> String {
-        seed.trimmingCharacters(in: .whitespacesAndNewlines)
+        seed.split(whereSeparator: \.isNewline).first.map(String.init)?
+            .trimmingCharacters(in: .whitespaces) ?? ""
     }
 
     /// Raise the bar over `panel` and take the keyboard, seeded with `seed` when the caller has a
