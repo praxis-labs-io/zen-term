@@ -41,6 +41,31 @@ Present from a control's action instead (an `NSButton`/`AppButton` fires on `mou
 `sendAction`), or defer to the next runloop turn. This is why the directory picker moved from a
 click-on-the-empty-field affordance to an explicit Choose button (ZEN-235).
 
+**A consumed `keyDown` leaves its `keyUp` behind, so the surface pairs them itself.**
+`KeyInterceptor` is a local `NSEvent` monitor that resolves a chord *before* the responder chain,
+and it matches only `[.keyDown, .flagsChanged]`. Consuming a chord therefore consumes half a
+keystroke: the `keyUp` still runs the chain into `GhosttyHostView`, which used to hand libghostty a
+RELEASE for a PRESS it was never told about. Three other paths do the same, and all of them swallow
+a press they cannot swallow the release of: the soft-newline chord, an input method taking the key,
+and a composing key, which `key_encode.zig` drops without encoding. The fix is not to widen the
+monitor's mask, which would cover only the first case. `GhosttyHostView` keeps a ledger of what it
+actually sent (`reportedKeys`, `reportedModifierKeys`) and forwards a release only for a press it
+made. Record at the point of sending, never earlier: every early return above it would owe a
+release nothing sent.
+
+**⌘ chords hide any `keyUp` bug, because macOS withholds `keyUp` entirely while Command is held.**
+This one went unnoticed for the life of the app: every default chord is a ⌘ chord, so the unpaired
+release never arrived to be seen. A user-bound `ctrl+h` is what exposed it. Never conclude a key
+path is sound from ⌘ chords alone, and never conclude it from a *default* keymap either: a user
+keybind moves its action, so which chords the chrome claims is a function of the user's config.
+
+**Focus-loss cleanup has to match what libghostty actually retires, and only on the transition.**
+`focusCallback` returns early when focus has not moved, so a repeated unfocused sync releases
+nothing. A pane can be re-synced unfocused while it still holds first responder (scroll mode renders
+it blurred), so a clear above `GhosttySurface.syncFocus`'s dedupe strands a modifier libghostty is
+still holding. And it releases only its single `pressed_key` plus that key's modifiers, so clearing
+every held ordinary key over-clears and swallows a release still owed.
+
 **Synthesized `NSEvent`s must match what AppKit actually delivers.** Every arrow `keyDown` carries
 `.function` *and* `.numericPad` on top of the modifier you care about, so comparing against
 `.deviceIndependentFlagsMask` (which keeps those bits) never equals a bare modifier. Match against
