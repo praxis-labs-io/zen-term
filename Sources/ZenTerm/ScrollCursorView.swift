@@ -91,22 +91,43 @@ final class ScrollCursorView: NSView {
     /// mode's cursor and the shell's are the same object to the eye: a reader who steps into scroll
     /// mode sees the cursor they were already looking at, moving under different keys.
     ///
-    /// Translucent, and that is a ceiling rather than a preference.
+    /// Outlined rather than filled, at full strength.
     ///
     /// **An overlay cannot invert.** A real terminal cursor gets its strength by inverting its cell,
     /// which keeps the glyph legible as the background color. This view sits above libghostty's
     /// Metal layer, so its own graphics context holds nothing to blend against: a `.difference` fill
     /// composites over transparent black and returns the cursor color, an opaque block that buries
     /// the character. No blend mode reaches the terminal's pixels, and nothing here can read a glyph
-    /// to redraw it. So the alpha is a straight trade of the cursor's presence against the
-    /// legibility of the character it names, and this is where the two were judged even.
+    /// to redraw it, so any fill trades the cursor's presence against the legibility of the
+    /// character it names. An outline is the way out of that trade: it carries the full color and
+    /// touches no part of the cell the glyph occupies. It is also what ghostty itself draws for an
+    /// unfocused cursor, which is the state the surface is in while the mode holds the keyboard.
     private func drawCursorCell(metrics: TerminalCellMetrics, cursor: ScrollCell) {
         let cell = bounds.intersection(
             metrics.cellFrame(
                 row: cursor.row, columns: Self.columns(cursor.column, cursor.column, metrics)))
         guard !cell.isEmpty else { return }
-        Theme.current.terminal.cursor.nsColor.withAlphaComponent(Self.cursorAlpha).setFill()
-        NSBezierPath(roundedRect: cell, xRadius: Self.cursorRadius, yRadius: Self.cursorRadius).fill()
+        Self.lifted(Theme.current.terminal.cursor.nsColor).setStroke()
+        let path = NSBezierPath(
+            roundedRect: cell.insetBy(dx: Self.cursorStroke / 2, dy: Self.cursorStroke / 2),
+            xRadius: Self.cursorRadius, yRadius: Self.cursorRadius)
+        path.lineWidth = Self.cursorStroke
+        path.stroke()
+    }
+
+    /// The cursor color raised to a brightness floor, keeping its hue.
+    ///
+    /// A 1.5pt outline is a small amount of color, and a theme whose cursor sits dark leaves it
+    /// reading as a smudge. Widening is not the way up: a cell is about 8pt across, so each extra
+    /// point takes a quarter of the glyph from either side. Brightness is the axis with room in it.
+    ///
+    /// Derived from the theme rather than blended toward a literal, so it still follows a
+    /// bring-your-own theme instead of drifting toward white on every one of them.
+    private static func lifted(_ color: NSColor) -> NSColor {
+        guard let rgb = color.usingColorSpace(.sRGB) else { return color }
+        return NSColor(
+            hue: rgb.hueComponent, saturation: rgb.saturationComponent,
+            brightness: max(rgb.brightnessComponent, cursorBrightnessFloor), alpha: 1)
     }
 
     /// Fill a span's rows so only its outer corners are round.
@@ -170,12 +191,12 @@ final class ScrollCursorView: NSView {
     // `selectionAlpha` and `flashPeakAlpha` match `DiffLineRowView`: same objects, same values.
     // The band deliberately does not: accent means "this is what a `y` takes", so the band is `ink`.
     //
-    // `cursorAlpha` is the one value here with no right answer: an overlay cannot invert a cell, so
-    // it trades the cursor's presence against the legibility of the character under it. See
-    // `drawCursorCell`.
+    // The cursor cell carries no alpha: an overlay cannot invert a cell, so it is outlined at full
+    // strength rather than washed over. See `drawCursorCell`.
     private static let bandAlpha: CGFloat = 0.08
-    private static let selectionAlpha: CGFloat = 0.16
-    private static let cursorAlpha: CGFloat = 0.45
+    private static let selectionAlpha: CGFloat = 0.28
+    private static let cursorStroke: CGFloat = 1.5
+    private static let cursorBrightnessFloor: CGFloat = 0.92
     private static let flashPeakAlpha: CGFloat = 0.5
     private static let cornerRadius: CGFloat = 3
     private static let cursorRadius: CGFloat = 2
