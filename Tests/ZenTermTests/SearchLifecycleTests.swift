@@ -358,6 +358,24 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.focusCount, before + 1)
     }
 
+    func test_committingBeforeThePreviewsAnswerArrivesDoesNotStepTwice() throws {
+        // Found at the machine. The preview steps, libghostty paints the match, and the reader
+        // presses Return before the selection report gets back. Branching on our copy of the
+        // backend's state lands them one match past the one they were looking at.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows = Array(repeating: "", count: 24)
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        controller.search.report(total: 3, from: surface)
+        XCTAssertEqual(surface.searchSteps, [.next], "the preview asked for a match")
+
+        // No report(selected:) — the answer is still in flight, exactly as it is on a fast Return.
+        controller.search.commit()
+
+        XCTAssertEqual(surface.searchSteps, [.next], "committing must not ask for another")
+    }
+
     func test_committingSendsAShortNeedleBeforeSteppingIt() throws {
         // A 1-2 character needle is still sitting in the debounce. Stepping before it is sent
         // navigates a search that does not exist, and the backend answers false in silence.

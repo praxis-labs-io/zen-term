@@ -71,6 +71,14 @@ final class SearchController {
     /// Whether this needle has already been previewed. See `previewIfNothingVisible`.
     private var hasPreviewed = false
 
+    /// Whether a step has been asked for on this needle, answered or not.
+    ///
+    /// `selected` cannot stand in for this. It is a mirror of the backend's state and it lags: a
+    /// preview steps, libghostty paints the match, and the reader presses Return before the report
+    /// gets back. Branching on the mirror there steps a second time and lands them one match past
+    /// the one they were looking at.
+    private var didRequestSelection = false
+
     /// Whether the commit is what brought scroll mode up. Search leaves behind only what it
     /// started: a reader already in scroll mode when the bar opened stays there on the way out.
     private var didStartScrollMode = false
@@ -152,7 +160,13 @@ final class SearchController {
         // it. Stepping now navigates a search that does not exist yet, the backend answers false,
         // and by the time the timer fires nothing is left to move the cursor. Send it first.
         flushPendingNeedle()
-        if selected == nil { navigate(.next) } else { land(after: .next) }
+        guard didRequestSelection else {
+            navigate(.next)
+            return
+        }
+        // A step is already out. If its answer has landed, put the cursor on it now; if it has not,
+        // `report(selected:)` still holds the pending step and will do it when it arrives.
+        if selected != nil { land(after: .next) }
     }
 
     /// Deliver a debounced needle now rather than on its timer.
@@ -161,6 +175,7 @@ final class SearchController {
         debounce?.cancel()
         debounce = nil
         selected = nil
+        didRequestSelection = false  // the needle is only now reaching the engine
         surface?.search(needle)
     }
 
@@ -169,6 +184,7 @@ final class SearchController {
         guard isActive, !needle.isEmpty else { return }
         pendingStep = step
         didMoveViewport = true
+        didRequestSelection = true
         surface?.stepSearch(step)
     }
 
@@ -242,6 +258,7 @@ final class SearchController {
         selected = nil
         pendingStep = nil
         hasPreviewed = false
+        didRequestSelection = false
         // Before the surface goes, and before scroll mode does: `restoreViewport` reads whether the
         // reader owns the mode to decide, and ending it first would make every case look owned.
         restoreViewport()
@@ -289,6 +306,8 @@ final class SearchController {
     private func needleDidChange(_ text: String) {
         needle = text
         hasPreviewed = false
+        // A new needle drops the backend's selection, so any step asked for on the old one is moot.
+        didRequestSelection = false
         debounce?.cancel()
         // A cleared needle stops the engine and must not wait: the highlights are still painted
         // until it does.
