@@ -376,6 +376,29 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.searchSteps, [.next], "committing must not ask for another")
     }
 
+    func test_typingPastTheDebounceLeavesNothingPendingBehindIt() throws {
+        // Found at the machine, and only under a real keystroke sequence: `l` schedules a debounce,
+        // typing on to `line` cancels it and sends immediately. Leaving the cancelled item in place
+        // tells the commit a needle is still waiting, so it re-sends one the engine already has and
+        // clears the state that said not to step again. The reader lands one match past the one
+        // they were watching.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows = Array(repeating: "", count: 24)
+        controller.handle(.toggleSearch)
+        controller.search.typeForTesting("l")
+        controller.search.typeForTesting("line")
+        XCTAssertEqual(surface.searches, ["line"], "precondition: one send, the immediate one")
+        controller.search.report(total: 3, from: surface)
+        controller.search.report(selected: 0, from: surface)
+        XCTAssertEqual(surface.searchSteps, [.next], "the preview stepped onto match 0")
+
+        controller.search.commit()
+
+        XCTAssertEqual(surface.searches, ["line"], "committing must not re-send the needle")
+        XCTAssertEqual(surface.searchSteps, [.next], "nor step past the match already selected")
+    }
+
     func test_committingSendsAShortNeedleBeforeSteppingIt() throws {
         // A 1-2 character needle is still sitting in the debounce. Stepping before it is sent
         // navigates a search that does not exist, and the backend answers false in silence.

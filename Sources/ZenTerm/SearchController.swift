@@ -308,7 +308,12 @@ final class SearchController {
         hasPreviewed = false
         // A new needle drops the backend's selection, so any step asked for on the old one is moot.
         didRequestSelection = false
+        // Nilled, not just cancelled. `flushPendingNeedle` reads this to mean "a needle is still
+        // waiting on its timer", and a cancelled item left in place says that falsely for the rest
+        // of the search: committing then re-sends a needle the engine already has, which it ignores
+        // as unchanged, and clears the selection state that told the commit not to step again.
         debounce?.cancel()
+        debounce = nil
         // A cleared needle stops the engine and must not wait: the highlights are still painted
         // until it does.
         guard !text.isEmpty, text.count < Self.debounceBelowLength else {
