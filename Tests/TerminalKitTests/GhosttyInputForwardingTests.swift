@@ -145,7 +145,7 @@ final class GhosttyInputForwardingTests: XCTestCase {
         for item in cases {
             let event = try flagsChanged(keyCode: item.keyCode, named: item.named, held: [item.side])
             XCTAssertEqual(
-                GhosttyHostView.modifierTransition(for: event)?.action, GHOSTTY_ACTION_PRESS,
+                GhosttyHostView.modifierTransition(for: event), GHOSTTY_ACTION_PRESS,
                 "\(item.name) going down is a press")
         }
     }
@@ -153,7 +153,7 @@ final class GhosttyInputForwardingTests: XCTestCase {
     func test_releasingTheLastHeldModifierReportsARelease() throws {
         // Nothing held: AppKit reports the resulting state, which is a bare flag set.
         let event = try flagsChanged(keyCode: 0x38)
-        XCTAssertEqual(GhosttyHostView.modifierTransition(for: event)?.action, GHOSTTY_ACTION_RELEASE)
+        XCTAssertEqual(GhosttyHostView.modifierTransition(for: event), GHOSTTY_ACTION_RELEASE)
     }
 
     /// The case the whole side-discrimination exists for, in both directions. With both shifts
@@ -164,13 +164,13 @@ final class GhosttyInputForwardingTests: XCTestCase {
         let leftReleased = try flagsChanged(
             keyCode: 0x38, named: .shift, held: [UInt(NX_DEVICERSHIFTKEYMASK)])
         XCTAssertEqual(
-            GhosttyHostView.modifierTransition(for: leftReleased)?.action, GHOSTTY_ACTION_RELEASE,
+            GhosttyHostView.modifierTransition(for: leftReleased), GHOSTTY_ACTION_RELEASE,
             "left shift came up; right is what is still holding .shift set")
 
         let rightReleased = try flagsChanged(
             keyCode: 0x3C, named: .shift, held: [UInt(NX_DEVICELSHIFTKEYMASK)])
         XCTAssertEqual(
-            GhosttyHostView.modifierTransition(for: rightReleased)?.action, GHOSTTY_ACTION_RELEASE,
+            GhosttyHostView.modifierTransition(for: rightReleased), GHOSTTY_ACTION_RELEASE,
             "right shift came up; left is what is still holding .shift set")
     }
 
@@ -181,7 +181,7 @@ final class GhosttyInputForwardingTests: XCTestCase {
     func test_aModifierWithNoSideInformationReadsAsAPress() throws {
         let event = try flagsChanged(keyCode: 0x38, named: .shift)
         XCTAssertEqual(
-            GhosttyHostView.modifierTransition(for: event)?.action, GHOSTTY_ACTION_PRESS,
+            GhosttyHostView.modifierTransition(for: event), GHOSTTY_ACTION_PRESS,
             "the named flag is the only evidence there is, and it says shift is down")
     }
 
@@ -189,10 +189,10 @@ final class GhosttyInputForwardingTests: XCTestCase {
     /// the named flag is the whole story.
     func test_capsLockUsesTheNamedFlagAlone() throws {
         XCTAssertEqual(
-            GhosttyHostView.modifierTransition(for: try flagsChanged(keyCode: 0x39, named: .capsLock))?
-                .action, GHOSTTY_ACTION_PRESS)
+            GhosttyHostView.modifierTransition(for: try flagsChanged(keyCode: 0x39, named: .capsLock)),
+            GHOSTTY_ACTION_PRESS)
         XCTAssertEqual(
-            GhosttyHostView.modifierTransition(for: try flagsChanged(keyCode: 0x39))?.action,
+            GhosttyHostView.modifierTransition(for: try flagsChanged(keyCode: 0x39)),
             GHOSTTY_ACTION_RELEASE)
     }
 
@@ -257,6 +257,137 @@ final class GhosttyInputForwardingTests: XCTestCase {
         XCTAssertEqual(
             view.modifierActionToForward(for: release), GHOSTTY_ACTION_RELEASE,
             "libghostty is holding that press; the composition does not retire it")
+    }
+
+    /// Left and right are different keys under the kitty protocol (57444 and 57450 for ⌘), so the
+    /// ledger has to pair them by keyCode. Keyed by the named modifier, holding left ⌘ swallowed
+    /// right ⌘'s press as a duplicate, and then releasing left first reported a release for the
+    /// right key that no press had earned. `modifierTransition` sides every event carefully and
+    /// the ledger threw that away.
+    func test_bothSidesOfOneModifierPairIndependently() throws {
+        let left = UInt(NX_DEVICELCMDKEYMASK)
+        let right = UInt(NX_DEVICERCMDKEYMASK)
+
+        XCTAssertEqual(
+            view.modifierActionToForward(
+                for: try flagsChanged(keyCode: 0x37, named: .command, held: [left])),
+            GHOSTTY_ACTION_PRESS)
+        XCTAssertEqual(
+            view.modifierActionToForward(
+                for: try flagsChanged(keyCode: 0x36, named: .command, held: [left, right])),
+            GHOSTTY_ACTION_PRESS,
+            "right ⌘ is its own key; left being down does not make its press a duplicate")
+        XCTAssertEqual(
+            view.modifierActionToForward(
+                for: try flagsChanged(keyCode: 0x37, named: .command, held: [right])),
+            GHOSTTY_ACTION_RELEASE)
+        XCTAssertEqual(
+            view.modifierActionToForward(for: try flagsChanged(keyCode: 0x36)),
+            GHOSTTY_ACTION_RELEASE,
+            "and right still owes its own release after left's")
+    }
+
+    // MARK: Pairing a release to the key press that earned it
+
+    /// The same rule as the modifier ledger, for ordinary keys. `KeyInterceptor` resolves a chord
+    /// at its event monitor, ahead of the responder chain, and matches no `keyUp` at all, so the
+    /// release for a consumed `ctrl+h` arrives here for a press libghostty was never told about.
+    ///
+    /// This one states the ledger's own answer; the test below it drives `keyUp` for real.
+    func test_theLedgerOwesNoReleaseForAKeyItNeverSaw() throws {
+        XCTAssertFalse(
+            view.retireKeyPress(for: try key(.keyUp, "h", keyCode: 0x04)),
+            "nothing pressed h on this surface, so libghostty must not be told it came up")
+    }
+
+    /// And the release the surface *does* owe is forwarded, once. `keyUp` is driven for real here:
+    /// the ledger is what proves the override consulted it rather than sending unconditionally.
+    func test_aKeyReleaseRetiresThePressItPairsWith() throws {
+        view.recordKeyPress(for: try key(.keyDown, "h", keyCode: 0x04))
+        view.keyUp(with: try key(.keyUp, "h", keyCode: 0x04))
+
+        XCTAssertFalse(
+            view.retireKeyPress(for: try key(.keyUp, "h", keyCode: 0x04)),
+            "that release settled the press; a second one is unpaired like any other")
+    }
+
+    /// An auto-repeat re-reports the same key going down. One release still has to settle the
+    /// whole hold, or every held key leaves a press stranded in libghostty.
+    func test_aHeldKeyIsSettledByOneRelease() throws {
+        for _ in 0..<3 { view.recordKeyPress(for: try key(.keyDown, "j", keyCode: 0x26)) }
+
+        XCTAssertTrue(view.retireKeyPress(for: try key(.keyUp, "j", keyCode: 0x26)))
+        XCTAssertFalse(view.retireKeyPress(for: try key(.keyUp, "j", keyCode: 0x26)))
+    }
+
+    /// Losing focus retires the *modifier* ledger, because `focusCallback` releases both sides of
+    /// every modifier its `pressed_key` carries.
+    ///
+    /// An ordinary key must survive it. libghostty releases only that one `pressed_key`, so a
+    /// second key held at the same moment is still down as far as the program is concerned, and
+    /// dropping our record would swallow the release it is still owed.
+    func test_losingFocusForgetsModifiersAndKeepsOrdinaryKeys() throws {
+        view.recordKeyPress(for: try key(.keyDown, "h", keyCode: 0x04))
+        XCTAssertEqual(
+            view.modifierActionToForward(
+                for: try flagsChanged(keyCode: 0x38, named: .shift, held: [UInt(NX_DEVICELSHIFTKEYMASK)])),
+            GHOSTTY_ACTION_PRESS)
+
+        view.forgetHeldModifiers()
+
+        XCTAssertTrue(
+            view.retireKeyPress(for: try key(.keyUp, "h", keyCode: 0x04)),
+            "libghostty only released its one pressed_key, so h is still owed its release")
+        XCTAssertEqual(
+            view.modifierActionToForward(
+                for: try flagsChanged(keyCode: 0x38, named: .shift, held: [UInt(NX_DEVICELSHIFTKEYMASK)])),
+            GHOSTTY_ACTION_PRESS,
+            "and the next real shift press must not be suppressed as a duplicate")
+    }
+
+    /// Where `recordKeyPress` sits in `keyDown` is the whole of the ledger's correctness, and the
+    /// tests above cannot see it: `keyDown` returns at its `surfacePtr` guard on the pointer-less
+    /// surfaces they use, so moving the call above the soft-newline return would leave every one
+    /// of them green while Shift+Enter went back to emitting a bare release.
+    ///
+    /// So this one starts a real surface. Shift+Enter sends its own text and returns early, and
+    /// has to leave the ledger owing nothing; a plain key has to leave it owing a release.
+    func test_aLiveSurfaceRecordsOnlyTheKeysItActuallySent() throws {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+
+        let surface = GhosttySurface()
+        surface.view.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+        window.contentView?.addSubview(surface.view)
+        surface.start(TerminalSurfaceConfig(command: "/bin/sh", args: ["-c", "sleep 100"]))
+        defer {
+            surface.view.removeFromSuperview()
+            surface.terminate()
+        }
+        try XCTSkipIf(surface.surfacePtr == nil, "ghostty_surface_new failed")
+        let host = try XCTUnwrap(surface.view as? GhosttyHostView)
+
+        host.keyDown(with: try key(.keyDown, "\r", keyCode: 36, flags: .shift))
+        XCTAssertFalse(
+            host.retireKeyPress(for: try key(.keyUp, "\r", keyCode: 36, flags: .shift)),
+            "the soft-newline chord sends its own text and returns, so it owes no release")
+
+        host.keyDown(with: try key(.keyDown, "h", keyCode: 0x04))
+        XCTAssertTrue(
+            host.retireKeyPress(for: try key(.keyUp, "h", keyCode: 0x04)),
+            "an ordinary key did reach libghostty, so its release is owed")
+
+        // A composing non-modifier encodes nothing at all (`key_encode.zig`), so it owes no
+        // release either. The same hole `modifierActionToForward` closes with `!hasMarkedText()`.
+        host.markedText.mutableString.setString("か")
+        host.keyDown(with: try key(.keyDown, "e", keyCode: 0x0E))
+        XCTAssertFalse(
+            host.retireKeyPress(for: try key(.keyUp, "e", keyCode: 0x0E)),
+            "libghostty drops a composing key without encoding it, so no press was ever sent")
+        host.markedText.mutableString.setString("")
     }
 
     // MARK: Translation — sided modifier bits
@@ -348,6 +479,17 @@ final class GhosttyInputForwardingTests: XCTestCase {
                 modifierFlags: NSEvent.ModifierFlags(rawValue: raw), timestamp: 0,
                 windowNumber: window.windowNumber, context: nil, characters: "",
                 charactersIgnoringModifiers: "", isARepeat: false, keyCode: keyCode))
+    }
+
+    private func key(
+        _ type: NSEvent.EventType, _ characters: String, keyCode: UInt16,
+        flags: NSEvent.ModifierFlags = []
+    ) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: type, location: .zero, modifierFlags: flags, timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode))
     }
 
     /// `NSEvent.mouseEvent` has no `buttonNumber` parameter and every event it builds reports 0,

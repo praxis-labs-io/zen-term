@@ -328,7 +328,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// (ZEN-307).
     ///
     /// Derived from the background rather than `NSApplication.effectiveAppearance`, which is what
-    /// Ghostty.app reads. The chrome is theme-driven, not appearance-driven (ZEN-27), so
+    /// Ghostty.app reads. The chrome is theme-driven, not appearance-driven (ZEN-91), so
     /// `effectiveAppearance` would answer "light" for a dark theme under a light system
     /// appearance. The source is the same `backgroundOverride ?? theme` that `applyLayerBacking`
     /// paints from, so a program that repaints its own background with OSC 11 also moves what the
@@ -509,6 +509,16 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         if let surfacePtr { ghostty_surface_set_focus(surfacePtr, focused) }
         guard focused != lastFocused else { return }
         lastFocused = focused
+        // Both halves have to retire the modifier ledger, which is why it hangs off the effective
+        // value rather than off `resignFirstResponder`. A pane keeps first responder across a
+        // ⌘-Tab, so the app half alone used to leave libghostty's release and our record
+        // disagreeing on every switch away.
+        //
+        // Below the dedupe on purpose. libghostty's `focusCallback` returns early when focus has
+        // not moved and releases nothing, and a pane can be re-synced unfocused while it still
+        // has first responder (scroll mode renders it blurred), so clearing on a repeat would
+        // strand a modifier libghostty is still holding.
+        if !focused { hostView.forgetHeldModifiers() }
         if focused { restoreShader() } else { startShaderSettle() }
     }
 
@@ -907,7 +917,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     /// `terminal.colors` before it sends this, and its renderer draws from there, so the grid
     /// already follows the program whether we handle this or not. The action exists so the app
     /// around the terminal can match — which is where the decision is (ZEN-23): the pane's own
-    /// fill matches, and nothing else does. Every chrome role stays `Theme.current` (ZEN-27), so
+    /// fill matches, and nothing else does. Every chrome role stays `Theme.current` (ZEN-91), so
     /// a program can recolor its own pane but never the frame around it.
     ///
     /// Only the background reaches anything. The foreground, the cursor and the 256 palette slots

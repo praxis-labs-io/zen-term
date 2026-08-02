@@ -8,12 +8,14 @@ import XCTest
 /// long as it's up, and one placed below the modifier fast-bail never sees a bare `j` at all,
 /// which is every key scroll mode exists to claim.
 final class KeyInterceptorRouteTests: XCTestCase {
-    private func keyDown(_ characters: String, flags: NSEvent.ModifierFlags = []) throws -> NSEvent {
+    private func keyDown(
+        _ characters: String, flags: NSEvent.ModifierFlags = [], isARepeat: Bool = false
+    ) throws -> NSEvent {
         try XCTUnwrap(
             NSEvent.keyEvent(
                 with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0,
                 context: nil, characters: characters, charactersIgnoringModifiers: characters,
-                isARepeat: false, keyCode: 0))
+                isARepeat: isARepeat, keyCode: 0))
     }
 
     /// An interceptor with one bound chord (⌘T), so a test can tell a reserved hit from a miss.
@@ -124,6 +126,51 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertNil(keys.route(try keyDown("j")))
         XCTAssertEqual(captured, 1)
         XCTAssertFalse(reachedMode)
+    }
+
+    // MARK: Auto-repeat
+
+    /// Auto-repeat is the silently-destructive kind: nothing looks wrong, the app just does the
+    /// thing thirty times. `route` read no `isARepeat` at all, so leaning on ⌘N opened windows
+    /// until the key came up.
+    func test_aHeldChordWhoseActionDoesNotRepeatFiresOnce() throws {
+        let keys = interceptor()
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        XCTAssertNil(keys.route(try keyDown("t", flags: .command)))
+        XCTAssertNil(
+            keys.route(try keyDown("t", flags: .command, isARepeat: true)),
+            "the chord is still ours while it is held, so the raw ⌘T must not fall to the program")
+        XCTAssertNil(keys.route(try keyDown("t", flags: .command, isARepeat: true)))
+
+        XCTAssertEqual(fired, [.newTab], "a held ⌘T opens one tab, not one per repeat")
+    }
+
+    /// The other half. Nav, resize and font size accumulate toward something the eye tracks, and
+    /// each runs out of room on its own, so a hold is the point rather than the bug.
+    func test_aHeldChordWhoseActionRepeatsFiresOnEveryRepeat() throws {
+        let keys = KeyInterceptor()
+        keys.setKeymap([Chord(command: true, key: "h"): .navLeft])
+        var fired = 0
+        keys.onReservedChord = { _ in fired += 1 }
+
+        _ = keys.route(try keyDown("h", flags: .command))
+        _ = keys.route(try keyDown("h", flags: .command, isARepeat: true))
+        _ = keys.route(try keyDown("h", flags: .command, isARepeat: true))
+
+        XCTAssertEqual(fired, 3, "holding pane-nav keeps walking; it stops at the edge pane")
+    }
+
+    /// A repeat the guard handed to the program is the program's, repeat or not. Holding `ctrl+h`
+    /// in nvim is how you walk a buffer.
+    func test_aVetoedChordStillRepeatsIntoTheProgram() throws {
+        let keys = KeyInterceptor()
+        keys.setKeymap([Chord(control: true, key: "h"): .navLeft])
+        keys.passThroughGuard = { _, _ in true }
+
+        let event = try keyDown("h", flags: .control, isARepeat: true)
+        XCTAssertIdentical(keys.route(event), event)
     }
 
     func test_flagsChangedNeverReachesTheMode() throws {

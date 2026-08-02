@@ -284,10 +284,6 @@ final class GhosttyHostView: NSView {
 
     override func resignFirstResponder() -> Bool {
         let ok = super.resignFirstResponder()
-        // libghostty releases both sides of every held modifier when a surface loses focus
-        // (`Surface.zig`, `focusCallback`), so the presses this surface reported are already
-        // retired. Holding on to them would suppress the next real press as a duplicate.
-        reportedModifiers = 0
         owner?.focusDidChange(false)
         return ok
     }
@@ -357,6 +353,11 @@ final class GhosttyHostView: NSView {
         if let accumulated = keyTextAccumulator, !accumulated.isEmpty {
             // Composition produced final text — send it as ordinary key input (never
             // "composing", since it's the committed result).
+            //
+            // Recorded here rather than in `keyAction`, which also carries the release and must
+            // not record that as a press, and rather than higher up, where every early return
+            // above would record a press nothing sent.
+            recordKeyPress(for: event)
             for text in accumulated {
                 _ = keyAction(action, event: event, translationEvent: translationEvent, text: text)
             }
@@ -364,19 +365,54 @@ final class GhosttyHostView: NSView {
             // No composed text: an ordinary key. We ARE composing if a preedit is live, or
             // if one existed before this event — the latter catches a Backspace that only
             // cancels the composition and must NOT also delete a real char in the shell.
+            let composing = markedText.length > 0 || markedTextBefore
+            // A composing non-modifier encodes nothing (`key_encode.zig`, "when composing, the
+            // only keys sent are plain modifiers"), so recording it would owe a release for a
+            // press the program never saw. The mirror of `modifierActionToForward`'s
+            // `!hasMarkedText()` guard.
+            if !composing { recordKeyPress(for: event) }
             _ = keyAction(
                 action, event: event, translationEvent: translationEvent,
-                text: translationEvent.ghosttyCharacters,
-                composing: markedText.length > 0 || markedTextBefore)
+                text: translationEvent.ghosttyCharacters, composing: composing)
         }
     }
 
     override func keyUp(with event: NSEvent) {
-        // Swallow the release for the soft-newline chord we consumed in keyDown; a bare
-        // RELEASE for a PRESS the terminal never saw confuses key-protocol-aware TUIs.
-        if event.isSoftNewline { return }
+        guard retireKeyPress(for: event) else { return }
         _ = keyAction(GHOSTTY_ACTION_RELEASE, event: event)
     }
+
+    /// The keys this surface has told libghostty are down, by keyCode. `reportedModifierKeys` for
+    /// ordinary keys, and it exists for the same reason: a bare RELEASE for a PRESS the terminal
+    /// never saw is a key event a program under the kitty keyboard protocol cannot reconcile.
+    ///
+    /// Three paths swallow a `keyDown` and cannot swallow the `keyUp` behind it. `KeyInterceptor`
+    /// resolves a chord at its event monitor, ahead of the responder chain, and its monitor
+    /// matches no `keyUp` at all. The soft-newline chord sends its own text and returns. An input
+    /// method takes the key and switches layout. Pairing here covers all three, and any fourth.
+    ///
+    /// Held ⌘ chords hid this: macOS withholds `keyUp` while Command is down, so the release for
+    /// a consumed ⌘ chord never arrives to be mispaired. A user-bound `ctrl+h` is where it shows.
+    private var reportedKeys: Set<UInt16> = []
+
+    /// libghostty is about to be told this key went down, so it is owed the release.
+    func recordKeyPress(for event: NSEvent) { reportedKeys.insert(event.keyCode) }
+
+    /// Whether libghostty is owed a release for this key, retiring the press if it is. An
+    /// auto-repeat re-records the same keyCode, so one release still settles the whole hold.
+    func retireKeyPress(for event: NSEvent) -> Bool { reportedKeys.remove(event.keyCode) != nil }
+
+    /// Forget the modifiers this surface reported, because libghostty has already retired them.
+    /// Called on the transition to unfocused (`GhosttySurface.syncFocus`): `focusCallback`
+    /// releases both sides of every modifier its `pressed_key` carries, so holding on here would
+    /// suppress the next real press as a duplicate.
+    ///
+    /// Deliberately does NOT touch `reportedKeys`. libghostty releases only its single
+    /// `pressed_key` (`Surface.zig`), so a second key held at the same moment is still down as
+    /// far as the program is concerned, and dropping our record would swallow the release it is
+    /// still owed. A record left standing for a key released while we were away costs nothing:
+    /// the next press of that key re-records it, and the release after that retires it.
+    func forgetHeldModifiers() { reportedModifierKeys.removeAll() }
 
     /// Modifier presses and releases. AppKit delivers these as `flagsChanged` rather than
     /// `keyDown`/`keyUp`, and nothing upstream forwards them (`KeyInterceptor`'s monitor passes
@@ -411,20 +447,26 @@ final class GhosttyHostView: NSView {
     ///
     /// A release is forwarded even mid-composition, because libghostty is holding that press and
     /// suppressing it would strand the modifier down.
+    ///
+    /// Keyed by keyCode, so the two sides of one modifier pair independently. Keying it by the
+    /// named modifier instead cost a real bug: left ⌘ down then right ⌘ down reported one press,
+    /// because `GHOSTTY_MODS_SUPER` was already set, and releasing left first then reported a
+    /// release for the *right* key that no press had earned. Under the kitty keyboard protocol
+    /// the two sides are different keys, so a program sees a key it never saw go down.
     func modifierActionToForward(for event: NSEvent) -> ghostty_input_action_e? {
-        guard let transition = Self.modifierTransition(for: event) else { return nil }
-        if transition.action == GHOSTTY_ACTION_PRESS {
-            guard !hasMarkedText(), reportedModifiers & transition.mod == 0 else { return nil }
-            reportedModifiers |= transition.mod
+        guard let action = Self.modifierTransition(for: event) else { return nil }
+        if action == GHOSTTY_ACTION_PRESS {
+            guard !hasMarkedText(), !reportedModifierKeys.contains(event.keyCode) else { return nil }
+            reportedModifierKeys.insert(event.keyCode)
         } else {
-            guard reportedModifiers & transition.mod != 0 else { return nil }
-            reportedModifiers &= ~transition.mod
+            guard reportedModifierKeys.remove(event.keyCode) != nil else { return nil }
         }
-        return transition.action
+        return action
     }
 
-    /// The modifiers this surface has told libghostty are down. See `modifierActionToForward`.
-    private var reportedModifiers: UInt32 = 0
+    /// The modifier keys this surface has told libghostty are down, by keyCode. See
+    /// `modifierActionToForward`.
+    private var reportedModifierKeys: Set<UInt16> = []
 
     /// The modifier each `flagsChanged` keyCode moves: the ghostty bit it sets, the device flag
     /// for the side it sits on, and the flag for the opposite side. Caps lock is unsided and has
@@ -457,19 +499,15 @@ final class GhosttyHostView: NSView {
     /// the named flag is then the only evidence there is. Synthesized input (`CGEvent` from
     /// automation or accessibility tooling) arrives that way, and reading it as a release would
     /// tell the terminal a held modifier had come up.
-    static func modifierTransition(for event: NSEvent) -> (action: ghostty_input_action_e, mod: UInt32)? {
+    static func modifierTransition(for event: NSEvent) -> ghostty_input_action_e? {
         guard let modifier = modifierKeyCodes[event.keyCode] else { return nil }
         // The named flag is clear, so that modifier is fully up whichever side was let go.
-        guard event.ghosttyMods.rawValue & modifier.named != 0 else {
-            return (GHOSTTY_ACTION_RELEASE, modifier.named)
-        }
+        guard event.ghosttyMods.rawValue & modifier.named != 0 else { return GHOSTTY_ACTION_RELEASE }
         let raw = event.modifierFlags.rawValue
-        if let side = modifier.side, raw & side != 0 { return (GHOSTTY_ACTION_PRESS, modifier.named) }
+        if let side = modifier.side, raw & side != 0 { return GHOSTTY_ACTION_PRESS }
         // This side is up, and the other one is what is still holding the named flag set.
-        if let other = modifier.otherSide, raw & other != 0 {
-            return (GHOSTTY_ACTION_RELEASE, modifier.named)
-        }
-        return (GHOSTTY_ACTION_PRESS, modifier.named)
+        if let other = modifier.otherSide, raw & other != 0 { return GHOSTTY_ACTION_RELEASE }
+        return GHOSTTY_ACTION_PRESS
     }
 
     /// Encode one key event to libghostty. `translationEvent` carries the mod-translated
