@@ -117,6 +117,49 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertIdentical(panel.findBarForTesting, first, "a second bar would stack on the first")
     }
 
+    func test_theSelectionChordSeedsTheBarFromScrollModesOwnSelection() throws {
+        // Two selection models. A `v` selection is the chrome's overlay and is read directly;
+        // libghostty's search-the-selection reads the mouse selection and cannot see it.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows[5] = "an error happened"
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        controller.handle(.toggleScrollMode)
+        controller.scrollMode.land(on: ScrollCell(row: 5, column: 3))
+        _ = controller.scrollMode.handle(try keyDown("v"))
+        // Read before the chord: raising the bar reflows the pane, which releases the selection.
+        let selected = try XCTUnwrap(controller.scrollMode.selectedText)
+
+        controller.handle(.searchSelection)
+
+        XCTAssertEqual(surface.searchSelectionCount, 0, "the backend cannot see this selection")
+        XCTAssertNotNil(panel.findBarForTesting)
+        XCTAssertEqual(surface.searches.last, selected)
+    }
+
+    func test_theSelectionChordFallsToTheBackendWithNoScrollModeSelection() throws {
+        // A mouse selection is libghostty's, so the needle has to come back through START_SEARCH.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+
+        controller.handle(.searchSelection)
+
+        XCTAssertEqual(surface.searchSelectionCount, 1)
+        XCTAssertFalse(controller.search.isActive, "the bar waits for the backend to answer")
+    }
+
+    func test_aSeedArrivingOverAnOpenBarReplacesTheNeedle() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        controller.handle(.toggleSearch)
+        controller.search.typeForTesting("old")
+
+        controller.search.handle(.wanted(needle: "fresh"), from: surface, panel: panel)
+
+        XCTAssertEqual(surface.searches.last, "fresh", "a stale needle under the caret looks broken")
+    }
+
     // MARK: the phase-one gate
 
     func test_whileTheFieldIsFocusedTheModeHandlerStandsDown() throws {

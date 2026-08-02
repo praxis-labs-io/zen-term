@@ -65,6 +65,7 @@ Pane movement is vim's arrow keys. **H** is left, **L** is right, **J** is down,
 | Fill Screen (window fills the desktop) | `⌘⇧F`                 |
 | Scroll mode (read the buffer with the keyboard) | `⌘⇧S`       |
 | Find in the pane's scrollback    | `⌘/`                        |
+| Find what's selected             | `⌘E`                        |
 | Bottom drawer                    | `⌘B`                        |
 | Right drawer                     | `⌘\`                        |
 | New window                       | `⌘N`                        |

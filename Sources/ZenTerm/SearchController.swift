@@ -103,6 +103,12 @@ final class SearchController {
         guard !isActive else {
             isEditing = true
             bar?.focusField()
+            // A seed arriving over an open bar replaces what is in it. Searching the selection with
+            // the bar already up otherwise puts the caret back in a stale needle and looks broken.
+            if !seed.isEmpty {
+                bar?.needle = seed
+                needleDidChange(seed)
+            }
             return
         }
         self.surface = surface

@@ -92,6 +92,8 @@ final class RecordingSurface: NSObject, TerminalSurface {
     private(set) var searchSteps: [TerminalSearchStep] = []
     private(set) var endSearchCount = 0
     func search(_ needle: String) { searches.append(needle) }
+    private(set) var searchSelectionCount = 0
+    func searchSelection() { searchSelectionCount += 1 }
     func stepSearch(_ step: TerminalSearchStep) { searchSteps.append(step) }
 
     /// Whether `endSearch` reports END_SEARCH straight back, synchronously, the way libghostty

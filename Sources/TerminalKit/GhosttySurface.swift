@@ -420,6 +420,12 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         performBindingAction("search:\(needle)", logsFailure: false)
     }
 
+    /// Answers with `GHOSTTY_ACTION_START_SEARCH` carrying the selected text, and reports false
+    /// when nothing is selected, which is an answer rather than a rejection.
+    public func searchSelection() {
+        performBindingAction("search_selection", logsFailure: false)
+    }
+
     public func stepSearch(_ step: TerminalSearchStep) {
         let direction = step == .next ? "next" : "previous"
         performBindingAction("navigate_search:\(direction)", logsFailure: false)

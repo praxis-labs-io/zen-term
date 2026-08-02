@@ -355,6 +355,12 @@ public protocol TerminalSurface: AnyObject {
     /// the bar down.
     func search(_ needle: String)
 
+    /// Search for whatever the surface currently has selected, and ask the chrome for a bar to show
+    /// it in. Does nothing when there is no selection. The needle comes back through
+    /// `surface(_:wantsSearchWithNeedle:)` rather than being returned, because the backend is the
+    /// one that knows what is selected and the chrome is the one that owns the bar.
+    func searchSelection()
+
     /// Step to the next or previous match. Does nothing when no search is running.
     func stepSearch(_ step: TerminalSearchStep)
 
@@ -394,6 +400,7 @@ public extension TerminalSurface {
     /// Default no-ops: a backend with no search engine supports none of it, and the chrome's find
     /// bar then reports no matches rather than misbehaving.
     func search(_ needle: String) {}
+    func searchSelection() {}
     func stepSearch(_ step: TerminalSearchStep) {}
     func endSearch() {}
 
