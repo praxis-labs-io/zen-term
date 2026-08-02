@@ -154,6 +154,11 @@ final class SearchController {
             scrollMode.begin(surface: surface, panel: panel)
             didStartScrollMode = true
         }
+        // Taking first responder back drives the surface's focus through the responder chain, and
+        // a mode still holds the keyboard, so the unfocused render has to be re-asserted over it.
+        // Starting scroll mode above happens to do that through its own callback, which is why
+        // this was invisible until a search opened over a scroll mode that was already up.
+        onActiveChanged?(isActive)
         showCount()
         guard !needle.isEmpty else { return }
         // A short needle is still sitting in the debounce, and the engine has not been told about

@@ -345,6 +345,25 @@ final class SearchLifecycleTests: WindowTestCase {
             "stripping the indicator off a live mode would leave it running unmarked")
     }
 
+    func test_committingOverAnOpenScrollModeStillReassertsTheUnfocusedRender() throws {
+        // While a mode holds the keyboard the surface renders unfocused, hollow and still, because
+        // the shell is not taking keys. Committing takes first responder back, which drives the
+        // surface focused through the responder chain, so the render has to be pushed over it
+        // again. Starting scroll mode does that through its own callback, which is why this was
+        // invisible until a search opened over a scroll mode that was already up.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        controller.handle(.toggleScrollMode)
+        controller.handle(.toggleSearch)
+        let before = surface.focusRenders.count
+
+        controller.search.commit()
+
+        XCTAssertGreaterThan(
+            surface.focusRenders.count, before, "no push at all means nothing reconciled the render")
+        XCTAssertEqual(surface.focusRenders.last, false)
+    }
+
     func test_escapeHandsTheKeyboardBackToThePane() throws {
         // The bar took first responder on the way in. Left holding it, the pane draws a live
         // cursor while every keystroke goes to a hidden field, and only a click fixes it.
