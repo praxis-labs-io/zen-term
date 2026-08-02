@@ -99,7 +99,18 @@ final class SearchController {
 
     /// Raise the bar over `panel` and take the keyboard, seeded with `seed` when the caller has a
     /// needle to offer. Already up: put the caret back in the field rather than mounting a second.
-    func begin(surface: AnyObject & TerminalSurface, panel: PanelHostView, seed: String = "") {
+    /// The one line of a selection worth searching for.
+    ///
+    /// A drag across rows comes back with newlines in it, and a needle spanning a line break cannot
+    /// match anything the renderer highlights on a row. Trailing blanks come along too, because a
+    /// selection to the end of a row includes the cells the program never painted.
+    private static func singleLine(_ seed: String) -> String {
+        seed.split(whereSeparator: \.isNewline).first.map(String.init)?
+            .trimmingCharacters(in: .whitespaces) ?? ""
+    }
+
+    func begin(surface: AnyObject & TerminalSurface, panel: PanelHostView, seed rawSeed: String = "") {
+        let seed = Self.singleLine(rawSeed)
         guard !isActive else {
             isEditing = true
             bar?.focusField()

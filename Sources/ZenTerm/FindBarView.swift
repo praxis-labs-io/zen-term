@@ -36,6 +36,12 @@ final class FindBarView: NSView {
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
+        // One line, always. A needle seeded from a selection can carry a newline, and a field that
+        // wraps grows the bar, which displaces the terminal and reflows the grid underneath it. A
+        // long needle scrolls inside the field instead.
+        field.usesSingleLineMode = true
+        field.cell?.wraps = false
+        field.cell?.isScrollable = true
         field.delegate = self
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
 

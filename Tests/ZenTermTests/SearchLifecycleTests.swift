@@ -145,6 +145,19 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.searches.last, "needle")
     }
 
+    func test_aSelectionSpanningRowsSeedsOneLine() throws {
+        // A drag across rows comes back with newlines in it. Left in, the field wraps and the bar
+        // grows, which displaces the terminal and reflows the grid; and a needle spanning a line
+        // break cannot match anything the renderer highlights on a row anyway.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.selectionText = "first line   \nsecond line\n"
+
+        controller.handle(.toggleSearch)
+
+        XCTAssertEqual(surface.searches.last, "first line")
+    }
+
     func test_theChordOpensEmptyWithNothingSelected() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
