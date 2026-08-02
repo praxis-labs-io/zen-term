@@ -310,6 +310,41 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertTrue(controller.scrollMode.isActive, "they put themselves there and keep it")
     }
 
+    func test_theHeaderIsUpBeforeCommitSoCommittingReflowsNothing() throws {
+        // The bug this pins: committing used to raise the header, which displaces content and
+        // resizes the grid a second time, and libghostty's reflow snaps the viewport toward the
+        // bottom. The match the reader was looking at goes off the top and they have to press `n`
+        // to get it back. Raising the header with the bar means the commit moves no geometry.
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+
+        controller.handle(.toggleSearch)
+
+        XCTAssertTrue(panel.isHeaderVisibleForTesting, "the header goes up with the bar")
+        XCTAssertEqual(
+            panel.headerContentForTesting?.title, "FIND",
+            "and names the phase whose keys are actually live")
+
+        controller.search.commit()
+
+        XCTAssertTrue(panel.isHeaderVisibleForTesting, "still up, so the grid never changed height")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "SCROLL")
+    }
+
+    func test_aReaderOwnedScrollModeKeepsItsHeaderWhenTheBarCloses() throws {
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        controller.handle(.toggleScrollMode)
+        controller.handle(.toggleSearch)
+
+        controller.search.end()
+
+        XCTAssertTrue(controller.scrollMode.isActive)
+        XCTAssertEqual(
+            panel.headerContentForTesting?.title, "SCROLL",
+            "stripping the indicator off a live mode would leave it running unmarked")
+    }
+
     func test_escapeHandsTheKeyboardBackToThePane() throws {
         // The bar took first responder on the way in. Left holding it, the pane draws a live
         // cursor while every keystroke goes to a hidden field, and only a click fixes it.

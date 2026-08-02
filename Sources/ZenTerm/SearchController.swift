@@ -110,6 +110,16 @@ final class SearchController {
         bar?.needle = seed
         showCount()
 
+        // The header goes up with the bar, and this is the reason the pane reflows once for the
+        // whole search rather than twice. Scroll mode raises the same header when a commit brings
+        // it up, and a second reflow there snaps the viewport toward the bottom, which throws away
+        // the match the reader was looking at. Raised here, the commit changes no geometry at all.
+        //
+        // It reads FIND rather than SCROLL because that is what is true: the bar owns the keyboard
+        // through phase one and none of scroll mode's keys are live yet. Saying SCROLL over a mode
+        // that takes no keys is the state the ⌘⇧S path was fixed to avoid.
+        if !scrollMode.isActive { panel.modeMeta = PanelMeta(title: "Find", action: .toggleSearch) }
+
         // The bar displaces the terminal, so the grid loses a row or two and reflows. Lay out
         // before anything measures it, for the reason `ScrollModeController.begin` spells out at
         // the other end of the pane.
@@ -243,6 +253,9 @@ final class SearchController {
             didStartScrollMode = false
             scrollMode.end()  // before the bar, so both constraint changes ride one layout pass
         }
+        // Only ours to take down. A scroll mode the reader opened themselves is still up and owns
+        // the header, and clearing it here would strip the indicator off a live mode.
+        if !scrollMode.isActive { panel?.modeMeta = nil }
         panel?.setFindBarShown(false)
         // The terminal takes its rows back, so the grid reflows again and scroll mode's cursor has
         // to be re-placed against it. Same order as raising the bar.
