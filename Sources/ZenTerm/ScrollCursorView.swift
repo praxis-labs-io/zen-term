@@ -91,14 +91,21 @@ final class ScrollCursorView: NSView {
     /// mode's cursor and the shell's are the same object to the eye: a reader who steps into scroll
     /// mode sees the cursor they were already looking at, moving under different keys.
     ///
-    /// Filled, not fully opaque. A real terminal cursor inverts its cell and keeps the glyph
-    /// legible, which an overlay cannot do; a solid block would erase the character it is naming.
+    /// Translucent, and that is a ceiling rather than a preference.
+    ///
+    /// **An overlay cannot invert.** A real terminal cursor gets its strength by inverting its cell,
+    /// which keeps the glyph legible as the background color. This view sits above libghostty's
+    /// Metal layer, so its own graphics context holds nothing to blend against: a `.difference` fill
+    /// composites over transparent black and returns the cursor color, an opaque block that buries
+    /// the character. No blend mode reaches the terminal's pixels, and nothing here can read a glyph
+    /// to redraw it. So the alpha is a straight trade of the cursor's presence against the
+    /// legibility of the character it names, and this is where the two were judged even.
     private func drawCursorCell(metrics: TerminalCellMetrics, cursor: ScrollCell) {
         let cell = bounds.intersection(
             metrics.cellFrame(
                 row: cursor.row, columns: Self.columns(cursor.column, cursor.column, metrics)))
         guard !cell.isEmpty else { return }
-        Theme.current.terminal.cursor.nsColor.withAlphaComponent(Self.cursorFillAlpha).setFill()
+        Theme.current.terminal.cursor.nsColor.withAlphaComponent(Self.cursorAlpha).setFill()
         NSBezierPath(roundedRect: cell, xRadius: Self.cursorRadius, yRadius: Self.cursorRadius).fill()
     }
 
@@ -163,12 +170,12 @@ final class ScrollCursorView: NSView {
     // `selectionAlpha` and `flashPeakAlpha` match `DiffLineRowView`: same objects, same values.
     // The band deliberately does not: accent means "this is what a `y` takes", so the band is `ink`.
     //
-    // The cursor cell is the terminal's own cursor color, not an accent role, so it reads as the
-    // same cursor in both modes. High enough to be unmistakable over a selection, short of opaque
-    // so the character it sits on still reads.
+    // `cursorAlpha` is the one value here with no right answer: an overlay cannot invert a cell, so
+    // it trades the cursor's presence against the legibility of the character under it. See
+    // `drawCursorCell`.
     private static let bandAlpha: CGFloat = 0.08
     private static let selectionAlpha: CGFloat = 0.16
-    private static let cursorFillAlpha: CGFloat = 0.8
+    private static let cursorAlpha: CGFloat = 0.45
     private static let flashPeakAlpha: CGFloat = 0.5
     private static let cornerRadius: CGFloat = 3
     private static let cursorRadius: CGFloat = 2
