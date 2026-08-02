@@ -15,6 +15,10 @@ enum ChromeThemeDeriver {
         }
         return ChromeTheme(
             background: terminal.background,
+            // Chosen against a palette rather than by eye: on Rosé Pine Moon this lands on
+            // #272533, which is the palette's own `overlay` (#26233a), the step it defines for a
+            // surface raised off the base. Any theme gets the equivalent step for its own pair.
+            elevated: blend(terminal.foreground, terminal.background, 0.07),
             foreground: terminal.foreground,
             info: slot(4),
             warning: slot(3),

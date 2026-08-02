@@ -94,7 +94,7 @@ final class FindBarView: NSView {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = chrome.ink(alpha: Self.fillAlpha).cgColor
+        layer?.backgroundColor = chrome.elevated.nsColor.cgColor
         glyph.textColor = chrome.ink(alpha: 0.4)
         field.textColor = chrome.foreground.nsColor
         count.textColor = chrome.ink(alpha: 0.5)
@@ -116,7 +116,6 @@ final class FindBarView: NSView {
 
     static let height: CGFloat = 26
     private static let cornerRadius: CGFloat = 6
-    private static let fillAlpha: CGFloat = 0.08
 }
 
 extension FindBarView: NSTextFieldDelegate {

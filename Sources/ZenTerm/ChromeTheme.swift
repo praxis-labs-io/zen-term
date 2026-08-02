@@ -8,6 +8,14 @@ import TerminalKit
 /// needs a new role.
 struct ChromeTheme: Equatable {
     let background: TerminalColor
+    /// A chrome surface sitting **on** the background, one step up from it (ZEN-324).
+    ///
+    /// A card or a toast floats over a terminal, so `background` is enough to separate it. A
+    /// surface inside a pane does not have that luxury: the pane's own fill is already
+    /// `background`, so anything painted at it disappears. This is the opaque step above, near
+    /// enough to read as the same surface and far enough to have an edge. `ink(alpha:)` is the
+    /// wrong tool for it, being translucent, so the terminal's own text shows through.
+    let elevated: TerminalColor
     let foreground: TerminalColor
     let info: TerminalColor
     let warning: TerminalColor
