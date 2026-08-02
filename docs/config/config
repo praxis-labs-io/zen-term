@@ -324,9 +324,11 @@
 # `v` / `V` / `y` select and copy what you found. Esc closes the bar and leaves
 # scroll mode with it, unless you were already in scroll mode when you opened it.
 #
-# If the search scrolled you back through the buffer, closing it puts you back at
-# the bottom, and so does typing past the last match. You are never left parked on
-# something that no longer matches what you typed.
+# If the search scrolled you back through the buffer, closing it returns you to
+# where you were when you opened it, and so does typing past the last match. That is
+# the bottom when you searched from a live prompt, and the place you were reading if
+# you had already scrolled. You are never left parked on something that no longer
+# matches what you typed.
 #
 # The match colors follow your theme. A theme file can set them itself with
 # `search-background`, `search-foreground`, `search-selected-background` and

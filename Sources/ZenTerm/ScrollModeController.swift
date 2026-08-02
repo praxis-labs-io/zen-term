@@ -403,8 +403,6 @@ final class ScrollModeController {
         updateHeader()
     }
 
-    /// The pulse comes after the write, not on the keystroke: a yank leaves nothing on screen, so a
-    /// copy that silently didn't take would look exactly like one that did.
     /// What a visual selection currently covers, or nil when there is none.
     ///
     /// Search reads this to seed its bar. It cannot use libghostty's own search-the-selection for
@@ -416,6 +414,8 @@ final class ScrollModeController {
         return (text?.isEmpty ?? true) ? nil : text
     }
 
+    /// The pulse comes after the write, not on the keystroke: a yank leaves nothing on screen, so a
+    /// copy that silently didn't take would look exactly like one that did.
     private func yank() {
         guard let surface, let selection, let columns = surface.cellMetrics?.columns else { return }
         let range = selection.range(to: cursor, columns: columns)

@@ -68,6 +68,16 @@ final class SearchController {
     private var selected: Int?
     private var debounce: DispatchWorkItem?
 
+    /// A needle the engine has not been told about yet, or nil once it has.
+    ///
+    /// The work item used to stand in for this, and it was wrong in both directions: cancelled but
+    /// left in place it claimed a needle was pending forever, and fired naturally it claimed the
+    /// same because nothing cleared it. Either way a commit re-sent a needle libghostty already had
+    /// (which it drops as unchanged) and cleared the state saying not to step again, so the reader
+    /// landed one match past the one they were watching. Holding the needle itself cannot desync
+    /// from whether the needle was sent.
+    private var unsent: String?
+
     /// Whether this needle has already been previewed. See `previewIfNothingVisible`.
     private var hasPreviewed = false
 
@@ -87,8 +97,12 @@ final class SearchController {
     /// that moves it, and it is what has to be undone rather than left stranded.
     private var didMoveViewport = false
 
-    /// Fires when the bar goes up or comes down, so the window can install and remove its key hook
-    /// without this type reaching into `KeyInterceptor`.
+    /// Fires when the bar goes up or comes down, and again on a commit, so the window can install
+    /// and remove its key hook without this type reaching into `KeyInterceptor`.
+    ///
+    /// The commit is not an open or a close: it is a phase change that takes first responder back,
+    /// and the unfocused render has to be re-asserted over what the responder chain just did. Read
+    /// this as "reconcile the mode state now" rather than as an active-only signal.
     var onActiveChanged: ((Bool) -> Void)?
 
     init(scrollMode: ScrollModeController) {
@@ -147,7 +161,8 @@ final class SearchController {
         //
         // It reads FIND rather than SCROLL because that is what is true: the bar owns the keyboard
         // through phase one and none of scroll mode's keys are live yet. Saying SCROLL over a mode
-        // that takes no keys is the state the ⌘⇧S path was fixed to avoid.
+        // that takes no keys is the state the ⌘⇧S path was fixed to avoid. Only when scroll mode is
+        // not already up, because then the header is its own and says so correctly.
         if !scrollMode.isActive { panel.modeMeta = PanelMeta(title: "Find", action: .toggleSearch) }
 
         // The bar displaces the terminal, so the grid loses a row or two and reflows. Lay out
@@ -198,12 +213,13 @@ final class SearchController {
 
     /// Deliver a debounced needle now rather than on its timer.
     private func flushPendingNeedle() {
-        guard debounce != nil else { return }
+        guard let text = unsent else { return }
         debounce?.cancel()
         debounce = nil
+        unsent = nil
         selected = nil
         didRequestSelection = false  // the needle is only now reaching the engine
-        surface?.search(needle)
+        surface?.search(text)
     }
 
     /// Step to another match. The cursor follows once the backend reports which one it landed on.
@@ -287,6 +303,7 @@ final class SearchController {
         pendingStep = nil
         hasPreviewed = false
         didRequestSelection = false
+        unsent = nil
         // Before the surface goes, and before scroll mode does: `restoreViewport` reads whether the
         // reader owns the mode to decide, and ending it first would make every case look owned.
         restoreViewport()
@@ -336,22 +353,21 @@ final class SearchController {
         hasPreviewed = false
         // A new needle drops the backend's selection, so any step asked for on the old one is moot.
         didRequestSelection = false
-        // Nilled, not just cancelled. `flushPendingNeedle` reads this to mean "a needle is still
-        // waiting on its timer", and a cancelled item left in place says that falsely for the rest
-        // of the search: committing then re-sends a needle the engine already has, which it ignores
-        // as unchanged, and clears the selection state that told the commit not to step again.
         debounce?.cancel()
         debounce = nil
         // A cleared needle stops the engine and must not wait: the highlights are still painted
         // until it does.
         guard !text.isEmpty, text.count < Self.debounceBelowLength else {
+            unsent = nil
             selected = nil
             showCount()
             surface?.search(text)
             return
         }
+        unsent = text
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.isActive else { return }
+            self.unsent = nil
             self.selected = nil
             self.surface?.search(text)
         }

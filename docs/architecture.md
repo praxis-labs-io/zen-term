@@ -920,11 +920,16 @@ done with it. A reader already in scroll mode when the bar opened put themselves
 and keeps it, which is what `didStartScrollMode` tracks.
 
 The viewport is put back the same way. Stepping is the only thing here that moves it, so
-`didMoveViewport` gates a `scroll(.bottom)` on the way out and again whenever a needle
-stops matching: one character past the last match leaves the pane parked on the previous
-needle's answer with nothing on screen matching what is now typed. Neither fires for a
-search that never moved the viewport, and neither fires while the reader is being left in
-a scroll mode of their own, where the match is what they asked to be shown.
+`didMoveViewport` gates the restore, which scrolls back by the delta between where the
+viewport sat when the bar opened and where it sits now. Back to the bottom is what that
+usually means, because a search usually starts at a live prompt, but a reader already
+scrolled into a build log gets that place back rather than the live end; `.bottom` is only
+the fallback when no scroll report exists to measure against. It runs on the way out and
+again whenever a needle stops matching: one character past the last match leaves the pane
+parked on the previous needle's answer with nothing on screen matching what is now typed.
+Neither fires for a search that never moved the viewport, and neither fires while the
+reader is being left in a scroll mode of their own, where the match is what they asked to
+be shown.
 
 **The keyboard runs in two phases, and the gate between them is load-bearing.** While
 the field holds first responder, `updateModeHandler`'s closure returns false for

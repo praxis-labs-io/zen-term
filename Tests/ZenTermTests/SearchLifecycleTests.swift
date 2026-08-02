@@ -484,6 +484,34 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.searchSteps, [.next], "nor step past the match already selected")
     }
 
+    func test_aDebounceThatFiresOnItsOwnLeavesNothingPendingBehindIt() throws {
+        // The other half of the same bug, and the half that survived the first fix. Type a short
+        // needle, wait for the count, press Return: the work item had fired and sent the needle,
+        // but nothing cleared the reference standing in for "a needle is pending", so committing
+        // re-sent one the engine already had and stepped past the match being watched.
+        //
+        // The only test here that waits on a real timer, because the natural firing is the subject.
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        surface.rows = Array(repeating: "", count: 24)
+        controller.handle(.toggleSearch)
+        controller.search.typeForTesting("ls")
+
+        let sent = expectation(description: "the debounce fires on its own")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { sent.fulfill() }
+        wait(for: [sent], timeout: 2)
+        XCTAssertEqual(surface.searches, ["ls"], "precondition: the timer sent it")
+
+        controller.search.report(total: 3, from: surface)
+        controller.search.report(selected: 0, from: surface)
+        XCTAssertEqual(surface.searchSteps, [.next], "the preview stepped onto match 0")
+
+        controller.search.commit()
+
+        XCTAssertEqual(surface.searches, ["ls"], "committing must not re-send it")
+        XCTAssertEqual(surface.searchSteps, [.next], "nor step past the match already selected")
+    }
+
     func test_committingSendsAShortNeedleBeforeSteppingIt() throws {
         // A 1-2 character needle is still sitting in the debounce. Stepping before it is sent
         // navigates a search that does not exist, and the backend answers false in silence.
