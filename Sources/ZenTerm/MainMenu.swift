@@ -1,8 +1,12 @@
 import AppKit
 
-/// Builds zen-term's main menu. Critically, Hide is bound to ⌘⇧H (NOT ⌘H), so ⌘H
-/// stays free for pane-nav-left. Copy/Paste route to the `copyPaste` target's
+/// Builds zen-term's main menu. Copy/Paste route to the `copyPaste` target's
 /// `copyFromSurface:` / `pasteToSurface:` actions (the focused pane's surface).
+///
+/// **Every key equivalent here is off limits to the keymap.** `MenuShortcuts` reads this menu at
+/// keymap-assembly time and refuses any bind that lands on one, so adding a shortcut here protects
+/// it with no list to update. It also means a shortcut added here silently takes that chord away
+/// from a keybind, which is the trade: the menu is the smaller, more visible surface.
 enum MainMenu {
     static func install(copyPaste target: AnyObject?) {
         let main = NSMenu()
@@ -23,12 +27,14 @@ enum MainMenu {
             action: #selector(AppDelegate.showAcknowledgements(_:)),
             keyEquivalent: "")
         appMenu.addItem(.separator())
-        let hide = NSMenuItem(
-            title: "Hide ZenTerm",
+        // Hide has no shortcut, and this is its second concession. It moved off ⌘H first, to free
+        // pane-nav-left, onto ⌘⇧H. That collided with `resize_left`, and the keymap wins every
+        // time because `KeyInterceptor` resolves ahead of `NSApp.sendEvent`, so Hide was dead
+        // while the menu went on drawing ⌘⇧H beside it. ⌘⇧HJKL is one set and stays whole.
+        appMenu.addItem(
+            withTitle: "Hide ZenTerm",
             action: #selector(NSApplication.hide(_:)),
-            keyEquivalent: "h")
-        hide.keyEquivalentModifierMask = [.command, .shift]  // ⌘⇧H — frees ⌘H for nav-left
-        appMenu.addItem(hide)
+            keyEquivalent: "")
         appMenu.addItem(.separator())
         appMenu.addItem(
             withTitle: "Quit ZenTerm",

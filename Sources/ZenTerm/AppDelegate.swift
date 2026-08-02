@@ -53,6 +53,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // so a held key auto-repeats. Must be registered before the first surface exists.
         UserDefaults.standard.register(defaults: ["ApplePressAndHoldEnabled": false])
 
+        // The menu goes up BEFORE the config load, and that order is load-bearing. Assembling the
+        // keymap reads `NSApp.mainMenu` for the chords the menu owns, so a keybind can be refused
+        // rather than silently beating a menu item (`MenuShortcuts`). With the old order the menu
+        // was still nil at assembly time and the protected set came back empty, which is the guard
+        // quietly not existing. Building the menu reads no config, so nothing is lost by moving it.
+        MainMenu.install(copyPaste: nil)  // Copy/Paste route via the responder chain
+
         // Resolve the config and theme before any window builds, so the first window's font,
         // drawer sizes, and dock floats are already settled rather than built-in defaults. This is
         // the one place the load happens: both statics hold the built-in default until now
@@ -66,7 +73,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if GeneralConfig.current.debug { Log.isVerbose = true }
         Log.info("ZenTerm launched v\(AppVersion.current)", category: .app)
 
-        MainMenu.install(copyPaste: nil)  // Copy/Paste route via the responder chain
         newWindow(initialCWD: nil, centered: true)
         // Announce a config that's already broken at launch, not just one broken later. Someone who
         // hand-edited their config and quit has no reason to open Settings — they're exactly who this

@@ -217,24 +217,44 @@ enum KeymapAssembler {
     @MainActor
     static func assemble(
         floats: [ToolFloat], keybinds: [(Chord, KeyInterceptor.ReservedChord)],
-        canType: @MainActor (Chord) -> Bool = KeyboardLayout.canType
+        canType: @MainActor (Chord) -> Bool = KeyboardLayout.canType,
+        protected: @MainActor () -> Set<Chord> = MenuShortcuts.protected,
+        menuOwner: @MainActor (Chord) -> String? = MenuShortcuts.owner
     ) -> (map: [Chord: KeyInterceptor.ReservedChord], diagnostics: [ConfigDiagnostic]) {
         var map = KeymapDefaults.map
         let floatIDs = Set(floats.map(\.id))
         var displacements: [Displacement] = []
+        let menuChords = protected()
 
         // Drop binds no keypress on this keyboard could ever produce (`cmd+|` on a US layout — `|`
-        // needs Shift there). Dropped BEFORE `reboundActions`, so an unusable line doesn't also cost
-        // the action its default: the old behavior left it with no shortcut at all, and the dead
-        // chord in the map made it look bound. `untypeable` carries them to the diagnostics.
-        let (typeable, untypeable) = keybinds.reduce(
-            into: ([(Chord, KeyInterceptor.ReservedChord)](), [(Chord, KeyInterceptor.ReservedChord)]())
-        ) { split, bind in
-            canType(bind.0) ? split.0.append(bind) : split.1.append(bind)
+        // needs Shift there), and binds on a chord the menu bar owns. Both dropped BEFORE
+        // `reboundActions`, so a refused line doesn't also cost the action its default: the old
+        // behavior left it with no shortcut at all, and the dead chord in the map made it look
+        // bound. Both lists carry to the diagnostics.
+        //
+        // The menu case is not a preference. `KeyInterceptor` resolves before `NSApp.sendEvent`, so
+        // a bind on ⌘Q would win and Quit would stop working with the menu still drawing ⌘Q beside
+        // it. Refusing is the only outcome the user can see.
+        var typeable: [(Chord, KeyInterceptor.ReservedChord)] = []
+        var untypeable: [(Chord, KeyInterceptor.ReservedChord)] = []
+        var menuOwned: [(Chord, KeyInterceptor.ReservedChord)] = []
+        for bind in keybinds {
+            if menuChords.contains(bind.0) {
+                menuOwned.append(bind)
+            } else if canType(bind.0) {
+                typeable.append(bind)
+            } else {
+                untypeable.append(bind)
+            }
         }
         for (chord, action) in untypeable {
             Log.warning(
                 "GeneralConfig: keybind \(action.actionToken)=\(chord.configToken) can't be typed — ignored",
+                category: .keybinds)
+        }
+        for (chord, action) in menuOwned {
+            Log.warning(
+                "GeneralConfig: keybind \(action.actionToken)=\(chord.configToken) is a menu shortcut — ignored",
                 category: .keybinds)
         }
 
@@ -253,7 +273,20 @@ enum KeymapAssembler {
             map[chord] = action
         }
 
-        for float in floats { set(float.toggle, .toggleToolFloat(float.id)) }
+        // A float's own `key:` is refused on the same grounds, and reported as the float's problem
+        // rather than a keybind's: the user wrote it on the `float =` line, which is where they
+        // have to go to fix it.
+        var menuOwnedFloats: [ToolFloat] = []
+        for float in floats {
+            if menuChords.contains(float.toggle) {
+                menuOwnedFloats.append(float)
+                Log.warning(
+                    "GeneralConfig: float \(float.id) key \(float.toggle.configToken) is a menu shortcut — ignored",
+                    category: .keybinds)
+                continue
+            }
+            set(float.toggle, .toggleToolFloat(float.id))
+        }
         for (chord, action) in typeable {
             if case .toggleToolFloat(let id) = action, !floatIDs.contains(id) {
                 Log.warning(
@@ -263,7 +296,31 @@ enum KeymapAssembler {
             }
             set(chord, action)
         }
-        return (map, diagnostics(for: displacements, in: map) + untypeableDiagnostics(untypeable))
+        return (
+            map,
+            diagnostics(for: displacements, in: map) + untypeableDiagnostics(untypeable)
+                + menuDiagnostics(menuOwned, floats: menuOwnedFloats, owner: menuOwner)
+        )
+    }
+
+    /// A config line naming a chord the menu bar owns. Its own headline rather than the untypeable
+    /// one: the chord is perfectly typeable, and the reason it was refused is a thing the user can
+    /// see for themselves in the menu.
+    @MainActor
+    private static func menuDiagnostics(
+        _ binds: [(Chord, KeyInterceptor.ReservedChord)], floats: [ToolFloat],
+        owner: @MainActor (Chord) -> String?
+    ) -> [ConfigDiagnostic] {
+        binds.map { chord, action in
+            ConfigDiagnostic(
+                scope: .keybind(action),
+                problem: .menuBind(chord, menuItem: owner(chord) ?? "a"))
+        }
+            + floats.map { float in
+                ConfigDiagnostic(
+                    scope: .toolFloat(label: float.title),
+                    problem: .menuBind(float.toggle, menuItem: owner(float.toggle) ?? "a"))
+            }
     }
 
     /// A config line naming a chord this keyboard can't produce. Distinct from an action left with

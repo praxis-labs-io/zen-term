@@ -41,6 +41,10 @@ struct ConfigDiagnostic: Hashable {
     enum Problem: Hashable {
         /// Something took the action's last chord, and here's what holds it now.
         case chordTaken(Chord, by: KeyInterceptor.ReservedChord)
+        /// A config line names a chord the menu bar owns. Taking it would kill the menu item in
+        /// silence, because the keymap resolves ahead of `NSApp.sendEvent`, so the bind is dropped
+        /// and the action keeps its default.
+        case menuBind(Chord, menuItem: String)
         /// A config line names a chord this keyboard can't produce. The line is dead; the action
         /// still has its default.
         case unusableBind(Chord)
@@ -91,6 +95,7 @@ struct ConfigDiagnostic: Hashable {
     var headline: String {
         switch problem {
         case .chordTaken: return "\(title) has no shortcut"
+        case .menuBind: return "\(title) can't use a menu shortcut"
         case .unusableBind: return "\(title) has an unusable shortcut"
         case .invalidValue: return "\(title) has an invalid value"
         case .ignoredListItem: return "\(title) has an invalid item"
@@ -109,6 +114,8 @@ struct ConfigDiagnostic: Hashable {
         switch problem {
         case .chordTaken(let chord, let winner):
             return "\(chord.displayGlyph) went to \(winner.actionToken) in your config."
+        case .menuBind(let chord, let menuItem):
+            return "\(keybindActionToken)=\(chord.configToken) is the \(menuItem) menu shortcut. Ignoring it."
         case .unusableBind(let chord):
             return "\(keybindActionToken)=\(chord.configToken) can't be typed on your keyboard. Ignoring it."
         case .invalidValue(let got, let expected):
@@ -138,6 +145,8 @@ struct ConfigDiagnostic: Hashable {
         switch problem {
         case .chordTaken(let chord, let winner):
             return "\(chord.displayGlyph) → \(winner.actionToken)"
+        case .menuBind(let chord, let menuItem):
+            return "\(chord.configToken) is \(menuItem)"
         case .unusableBind(let chord):
             return "\(chord.configToken) can't be typed"
         case .invalidValue(let got, _):

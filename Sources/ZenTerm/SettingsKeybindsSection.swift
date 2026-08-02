@@ -234,6 +234,14 @@ final class SettingsKeybindsSection: SettingsSection {
             positionBubble(for: row)
             return  // stay armed
         }
+        // Refused here rather than accepted and dropped later by the assembler. The chord is
+        // typeable and unbound, so nothing else would stop it, and the key monitor resolves ahead
+        // of `NSApp.sendEvent`: recording ⌘Q would kill Quit with the menu still drawing ⌘Q.
+        if let menuItem = MenuShortcuts.owner(of: chord) {
+            hintBubble?.showError("\(chord.displayGlyph) is the \(menuItem) menu shortcut.")
+            positionBubble(for: row)
+            return  // stay armed
+        }
         if let owner = GeneralConfig.current.keymap[chord], owner != row.action {
             hintBubble?.showError(
                 "\(chord.displayGlyph) is already bound to \(CommandCatalog.spec(for: owner).title).")
