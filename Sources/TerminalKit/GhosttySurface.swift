@@ -662,6 +662,52 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         handleFocusChange(focused)
     }
 
+    /// Ask libghostty's own keymap what it would do with this keystroke.
+    ///
+    /// `ghostty_surface_key_is_binding` answers against the surface's live config and fills a
+    /// `ghostty_binding_flags_e` bitfield for the bind it matched. Two of those flags decide the
+    /// case, and the second one is a trap:
+    ///
+    /// * **`CONSUMED`** defaults set. An `unconsumed` bind runs its action *and* still hands the
+    ///   key to the program, so reading the return alone would report that chord as taken.
+    /// * **`PERFORMABLE`** does NOT make the call answer false. It is a pure set lookup:
+    ///   `Surface.keyEventIsBinding` returns the entry's flags and never evaluates whether the
+    ///   action would do anything, which upstream's own comment on it says outright. The
+    ///   evaluation happens later, in `keyCallback`, which falls through to encoding the key when
+    ///   a performable action was not performed. So the flag has to reach the caller as its own
+    ///   answer rather than being folded into `claims`.
+    ///
+    /// The two never appear together in the shipped keybinds, and if that ever changes,
+    /// `unconsumed` is the safer report: the program receives the key either way.
+    ///
+    /// Inert without a surface, which is the honest answer: no surface, no keymap to ask.
+    public func disposition(of key: TerminalKey) -> ChordDisposition {
+        guard let surfacePtr else { return .ignores }
+        var flags = ghostty_binding_flags_e(0)
+        guard ghostty_surface_key_is_binding(surfacePtr, Self.ghosttyKey(key), &flags) else {
+            return .ignores
+        }
+        if flags.rawValue & GHOSTTY_BINDING_FLAGS_CONSUMED.rawValue == 0 { return .claimsButPasses }
+        if flags.rawValue & GHOSTTY_BINDING_FLAGS_PERFORMABLE.rawValue != 0 { return .mayClaim }
+        return .claims
+    }
+
+    /// A seam key as libghostty's key event. Only the fields the keymap matches on are set: this
+    /// is a question, never something to encode, so there is no text and no action worth sending.
+    private static func ghosttyKey(_ key: TerminalKey) -> ghostty_input_key_s {
+        var event = ghostty_input_key_s()
+        event.action = GHOSTTY_ACTION_PRESS
+        event.keycode = UInt32(key.keyCode)
+        event.mods = NSEvent.ghosttyMods(key.modifiers)
+        // Control and command never contribute to text translation, the same heuristic
+        // `ghosttyKeyEvent` uses; everything else may.
+        event.consumed_mods = NSEvent.ghosttyMods(key.modifiers.subtracting([.control, .command]))
+        event.unshifted_codepoint = key.unshiftedCodepoint
+        event.text = nil
+        event.composing = false
+        return event
+    }
+
     public func paste(_ text: String) {
         guard let surfacePtr else { return }
         // utf8.count, not strlen: the text may contain an interior NUL and strlen

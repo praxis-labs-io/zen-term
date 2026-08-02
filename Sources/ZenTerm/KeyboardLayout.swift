@@ -10,9 +10,10 @@ import Carbon.HIToolbox
 /// the dead bind or slander a working one, so ask the layout.
 enum KeyboardLayout {
     /// Stubs the layout so tests don't depend on whatever keyboard the machine happens to have.
-    /// DEBUG-only, mirroring `ConfigLoader.defaultRootOverrideForTesting`.
+    /// DEBUG-only, mirroring `ConfigLoader.defaultRootOverrideForTesting`. Keyed by keyCode
+    /// because the reverse lookup needs the physical key, not only the glyph.
     #if DEBUG
-        static var producibleGlyphsOverrideForTesting: ((Bool) -> Set<String>)?
+        static var layoutOverrideForTesting: ((Bool) -> [UInt16: String])?
     #endif
 
     /// Whether some keypress on the current layout can produce `chord`.
@@ -33,11 +34,41 @@ enum KeyboardLayout {
             .contains { Chord(shift: chord.shift, key: $0).key == chord.key }
     }
 
+    /// The physical key that types `chord` on this layout, or nil when no key can.
+    ///
+    /// The reverse of `canType`, and it exists because a keyCode is what a backend keymap matches
+    /// on: asking one what it does with `cmd+k` means naming the key, not the letter. Special keys
+    /// resolve straight from `Chord`'s own table, since they never appear in a character table.
+    ///
+    /// Returns the lowest matching keyCode. A layout can put one glyph on two keys (the numeric
+    /// keypad), and a keymap bind written as a glyph means the main-row key.
+    @MainActor
+    static func keyCode(for chord: Chord) -> UInt16? {
+        if let special = Chord.keyCodeForSpecialGlyph(chord.key) { return special }
+        return glyphsByKeyCode(shift: chord.shift)
+            .filter { Chord(shift: chord.shift, key: $0.value).key == chord.key }
+            .keys.min()
+    }
+
+    /// The character a key types with nothing held, as a Unicode scalar value, or 0 when it types
+    /// none. Backend keymaps that resolve a bind by glyph rather than by physical key read this.
+    @MainActor
+    static func unshiftedCodepoint(forKeyCode keyCode: UInt16) -> UInt32 {
+        glyphsByKeyCode(shift: false)[keyCode]?.unicodeScalars.first?.value ?? 0
+    }
+
     /// Every single-character glyph the current layout produces, at the given Shift state.
     @MainActor
     private static func producibleGlyphs(shift: Bool) -> Set<String> {
+        Set(glyphsByKeyCode(shift: shift).values)
+    }
+
+    /// Each keyCode the current layout maps to a single-character glyph, at the given Shift state.
+    /// The one walk behind every question here, so a lookup and its reverse cannot drift apart.
+    @MainActor
+    private static func glyphsByKeyCode(shift: Bool) -> [UInt16: String] {
         #if DEBUG
-            if let override = producibleGlyphsOverrideForTesting { return override(shift) }
+            if let override = layoutOverrideForTesting { return override(shift) }
         #endif
         // The compile-time guard has one hole it structurally cannot close: a closure formed in a
         // main-actor context and handed to `DispatchQueue.async(execute:)` as a `DispatchWorkItem`
@@ -49,14 +80,14 @@ enum KeyboardLayout {
         guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
             let raw = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
         else {
-            return []
+            return [:]
         }
         let data = Unmanaged<CFData>.fromOpaque(raw).takeUnretainedValue() as Data
-        return data.withUnsafeBytes { buffer -> Set<String> in
-            guard let layout = buffer.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else { return [] }
+        return data.withUnsafeBytes { buffer -> [UInt16: String] in
+            guard let layout = buffer.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else { return [:] }
             // UCKeyTranslate wants the modifier byte from the old Carbon event record, not NSEvent's.
             let modifiers = shift ? UInt32((shiftKey >> 8) & 0xFF) : 0
-            var glyphs: Set<String> = []
+            var glyphs: [UInt16: String] = [:]
             for keyCode in UInt16(0)..<128 {
                 var deadKeyState: UInt32 = 0  // reset per key: a dead key must not colour the next one
                 var characters = [UniChar](repeating: 0, count: 4)
@@ -66,7 +97,7 @@ enum KeyboardLayout {
                     UInt32(kUCKeyTranslateNoDeadKeysBit), &deadKeyState, characters.count, &length, &characters)
                 guard status == noErr, length == 1 else { continue }
                 let glyph = String(utf16CodeUnits: characters, count: length).lowercased()
-                if glyph.count == 1 { glyphs.insert(glyph) }
+                if glyph.count == 1 { glyphs[keyCode] = glyph }
             }
             return glyphs
         }
