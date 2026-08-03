@@ -477,9 +477,13 @@ passed under `--filter`, failed 2 runs in 5 in a full suite, and failed on CI (Z
 
 The `currentEvent` half of that generalizes past the key path. Anything reading it for live
 modifiers is reading state an earlier case can leave behind: `PaletteOverlay`'s Return hook passes
-it into `activate`, where `RepoPickerOverlay` reads `.shift` as replace-the-tab, and a test asserting
-the unmodified path pins the event (`PaletteInteractionTests.sendReturn`) rather than assuming nil.
-Assume nil and the assertion belongs to the order the suite ran in.
+it into `activate`, where `RepoPickerOverlay` reads `.shift` as replace-the-tab, so every Return in
+`PaletteInteractionTests` goes through `sendReturn`, which pins the event first (with or without ⇧)
+instead of assuming nil. Assume nil and the assertion belongs to the order the suite ran in.
+
+The pin is one-way. AppKit exposes no way to clear `currentEvent`, and SwiftPM runs every target in
+one process, so once a case dequeues an event, nothing after it in the run sees nil. Write the key
+tests to hold on either branch rather than to nil, which is what the escape key buys above.
 
 **Tests must not mutate real OS state.** They run on the developer's machine. Do not clobber
 `NSPasteboard.general` (snapshot it in `setUp`, restore in `tearDown`), and do not present a real
