@@ -464,6 +464,17 @@ Drive the control's `mouseDown` / `mouseUp` handlers directly with real `NSEvent
 exercises the control's own logic, not its backing state); leave "a real click at that point reaches
 the control through the view tree" to a runbook step. Corollary to ZEN-145 (ZEN-235).
 
+**A synthesized `keyDown` reaches the real input system, and what it commits is not the event's
+`characters`.** `interpretKeyEvents` translates from the keyCode and the active layout, so an event
+built with `characters: ""` still commits a letter. Whether it commits at all turns on
+`NSApp.currentEvent`: `insertText` returns early while that is nil. A test running alone gets nil, a
+test in a full suite cannot count on it, and which earlier case sets it was never pinned down. So a
+test that drives `GhosttyHostView.keyDown` and rests on the no-text branch (the one where a composing
+key goes unrecorded) has to use a key the layout produces no text for. Escape is the one that needs
+no modifiers; an arrow or a function key works too, and has to carry the bits above or it is a
+keystroke macOS never sends. With a letter there, the branch taken was the machine's choice: the test
+passed under `--filter`, failed 2 runs in 5 in a full suite, and failed on CI (ZEN-363).
+
 **Tests must not mutate real OS state.** They run on the developer's machine. Do not clobber
 `NSPasteboard.general` (snapshot it in `setUp`, restore in `tearDown`), and do not present a real
 `NSOpenPanel` (inject a present-panel seam so the test asserts the wiring without a sheet). Both leak
