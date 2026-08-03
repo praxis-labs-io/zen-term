@@ -54,15 +54,20 @@ A live request shows `Copilot`. It reviews as `copilot-pull-request-reviewer[bot
 
 It runs async; continue and re-check later.
 
-## 5. Run /code-review
+## 5. Run /code-review, which I type, not you
 
-Run `/code-review` against the branch diff and capture its findings. Effort follows the global rule: low or medium by default, high only for a large or risky diff. Don't hand this back to me; it is yours to run.
+**Stop here and ask me.** `/code-review` is marked `disable-model-invocation`. The Skill tool refuses it with "cannot be used with Skill tool", and no other route works either. The same holds for `/code-review ultra`. Don't try, and don't treat the refusal as a bug to route around.
 
-**Use `/code-review`, not a PR-review variant.** The PR from step 3 is a draft, and the plugin `/code-review:code-review` checks draft state first and declines without reviewing. The working diff covers the same code, because step 2 pushed the branch the PR was opened from.
+Say plainly that you're blocked and what to type:
 
-**`/code-review ultra` is the one I have to run.** It launches a multi-agent cloud review and is billed, so a session cannot start it. Don't stop and ask for it by default. Note it as an option when the diff is genuinely large or risky, then carry on without it unless I say to wait.
+- `/code-review` for the working diff, effort per the global rule
+- `/code-review ultra`, or `/code-review ultra <PR#>`, for the cloud multi-agent pass on a large or risky diff
 
-Never run your own review pass and present it as `/code-review`'s findings. Name which review produced each finding.
+**The plugin `/code-review:code-review` is not a substitute.** It checks draft state first and declines without reviewing, and the PR from step 3 is a draft by design.
+
+**Do not substitute your own agent pass.** Fanning out finder agents over the diff and presenting the result is the exact failure this step exists to prevent.
+
+Step 6 proceeds while you wait; Copilot runs on its own clock. Steps 7 to 10 block, because the triage in step 8 needs both sources. If I decline or say skip, continue with Copilot as the only source and **say so in the step 7 output**. Name which review produced each finding.
 
 ## 6. Pull down Copilot's review
 
