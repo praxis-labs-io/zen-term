@@ -179,7 +179,7 @@ final class MenuShortcutsTests: XCTestCase {
 
         let diagnostic = try XCTUnwrap(result.diagnostics.first)
         XCTAssertEqual(diagnostic.message, "key:cmd+q is the Quit ZenTerm menu shortcut. Ignoring it.")
-        XCTAssertEqual(diagnostic.headline, "Notes can't use a menu shortcut")
+        XCTAssertEqual(diagnostic.headline, "Notes")
     }
 
     /// The float itself survives; only its chord is refused. Dropping the float would lose a tool

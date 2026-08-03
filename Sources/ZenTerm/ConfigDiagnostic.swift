@@ -108,7 +108,9 @@ struct ConfigDiagnostic: Hashable {
     var headline: String {
         switch problem {
         case .chordTaken: return "\(title) has no shortcut"
-        case .menuBind, .floatMenuKey: return "\(title) can't use a menu shortcut"
+        // Subject alone, the way every toast outside this type titles itself. The claim rides in
+        // `message`: a title is one truncating line, and the whole sentence never fits.
+        case .menuBind, .floatMenuKey: return title
         case .unusableBind: return "\(title) has an unusable shortcut"
         case .invalidValue: return "\(title) has an invalid value"
         case .ignoredListItem: return "\(title) has an invalid item"
