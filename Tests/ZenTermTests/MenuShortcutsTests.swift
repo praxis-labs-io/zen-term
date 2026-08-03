@@ -117,6 +117,48 @@ final class MenuShortcutsTests: XCTestCase {
             "new_tab keeps ⌘T; only the refused line is dropped")
     }
 
+    /// A float's `key:` is refused on the same grounds and reported against the float, not a
+    /// keybind: the user wrote it on the `float =` line, which is where they have to go to fix it.
+    func test_aFloatKeyOnAMenuChordIsDroppedAndReportedAgainstTheFloat() {
+        let float = ToolFloat(
+            id: "notes", order: 0, title: "Notes", icon: ToolFloatParser.defaultIcon, command: "ls",
+            dir: nil, widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+            persist: .ephemeral, toggle: Chord(command: true, key: "q"))
+
+        let result = KeymapAssembler.assemble(
+            floats: [float], keybinds: [], canType: { _ in true },
+            protected: { [Chord(command: true, key: "q")] },
+            menuOwner: { _ in "Quit ZenTerm" })
+
+        XCTAssertNil(result.map[Chord(command: true, key: "q")], "⌘Q must stay with the menu")
+        XCTAssertEqual(
+            result.diagnostics,
+            [
+                ConfigDiagnostic(
+                    scope: .toolFloat(label: "Notes"),
+                    problem: .menuBind(Chord(command: true, key: "q"), menuItem: "Quit ZenTerm"))
+            ])
+    }
+
+    /// The float itself survives; only its chord is refused. Dropping the float would lose a tool
+    /// over a shortcut, and it is still reachable from the palette and the toolbar.
+    func test_aFloatWithARefusedKeyIsStillConfigured() {
+        let float = ToolFloat(
+            id: "notes", order: 0, title: "Notes", icon: ToolFloatParser.defaultIcon, command: "ls",
+            dir: nil, widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+            persist: .ephemeral, toggle: Chord(command: true, key: "q"))
+
+        let result = KeymapAssembler.assemble(
+            floats: [float], keybinds: [(Chord(command: true, option: true, key: "n"), .toggleToolFloat("notes"))],
+            canType: { _ in true },
+            protected: { [Chord(command: true, key: "q")] },
+            menuOwner: { _ in "Quit ZenTerm" })
+
+        XCTAssertEqual(
+            result.map[Chord(command: true, option: true, key: "n")], .toggleToolFloat("notes"),
+            "a keybind naming the float still resolves, so the float is still configured")
+    }
+
     func test_aBindOnAFreeChordIsUnaffected() {
         let result = KeymapAssembler.assemble(
             floats: [], keybinds: [(Chord(command: true, option: true, key: "n"), .newTab)],
