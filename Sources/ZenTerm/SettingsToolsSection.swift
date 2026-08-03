@@ -229,7 +229,11 @@ final class ToolFloatRow: NSView {
         self.float = float
         titleLabel = NSTextField(labelWithString: float.title)
         subtitleLabel = NSTextField(labelWithString: float.command)
-        keycap = KeycapView(shortcut: float.shortcut)
+        // Resolved from the live keymap, not from `float.toggle`, which is the raw config value.
+        // A `key:` the assembler refused (a menu chord) is still on the float, so drawing it here
+        // would advertise a shortcut that does something else entirely. The dock and the palette
+        // already resolve this way.
+        keycap = KeycapView(shortcut: CommandCatalog.spec(for: .toggleToolFloat(float.id)).shortcut)
 
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false

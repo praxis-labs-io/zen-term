@@ -382,6 +382,14 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             positionHint()
             return  // stay armed
         }
+        // Menu chords are refused here, not by `chordConflict`. That check asks the live keymap,
+        // and the keymap is exactly where a menu chord never appears, so it would pass every one
+        // of them straight through to a `key:` the next config load refuses.
+        if let menuItem = MenuShortcuts.owner(of: chord) {
+            hintBubble?.showError("\(chord.displayGlyph) is the \(menuItem) menu shortcut.")
+            positionHint()
+            return  // stay armed
+        }
         if let conflict = chordConflict(chord) {
             hintBubble?.showError(conflict)
             positionHint()

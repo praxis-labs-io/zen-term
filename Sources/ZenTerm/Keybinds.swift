@@ -249,12 +249,12 @@ enum KeymapAssembler {
         }
         for (chord, action) in untypeable {
             Log.warning(
-                "GeneralConfig: keybind \(action.actionToken)=\(chord.configToken) can't be typed — ignored",
+                "GeneralConfig: keybind \(action.actionToken)=\(chord.configToken) can't be typed: ignored",
                 category: .keybinds)
         }
         for (chord, action) in menuOwned {
             Log.warning(
-                "GeneralConfig: keybind \(action.actionToken)=\(chord.configToken) is a menu shortcut — ignored",
+                "GeneralConfig: keybind \(action.actionToken)=\(chord.configToken) is a menu shortcut: ignored",
                 category: .keybinds)
         }
 
@@ -281,7 +281,7 @@ enum KeymapAssembler {
             if menuChords.contains(float.toggle) {
                 menuOwnedFloats.append(float)
                 Log.warning(
-                    "GeneralConfig: float \(float.id) key \(float.toggle.configToken) is a menu shortcut — ignored",
+                    "GeneralConfig: float \(float.id) key \(float.toggle.configToken) is a menu shortcut: ignored",
                     category: .keybinds)
                 continue
             }
@@ -290,7 +290,7 @@ enum KeymapAssembler {
         for (chord, action) in typeable {
             if case .toggleToolFloat(let id) = action, !floatIDs.contains(id) {
                 Log.warning(
-                    "GeneralConfig: keybind action toggle_float:\(id) names no configured float — ignored",
+                    "GeneralConfig: keybind action toggle_float:\(id) names no configured float: ignored",
                     category: .keybinds)
                 continue
             }
@@ -317,9 +317,12 @@ enum KeymapAssembler {
                 problem: .menuBind(chord, menuItem: owner(chord)))
         }
             + floats.map { float in
+                // `.toolFloatField`, not `.toolFloat`: the latter is for a `float =` line that
+                // never became a float, and Settings renders it as a section-level "ignored"
+                // notice. This float still works and still has a row, so the row carries it.
                 ConfigDiagnostic(
-                    scope: .toolFloat(label: float.title),
-                    problem: .menuBind(float.toggle, menuItem: owner(float.toggle)))
+                    scope: .toolFloatField(id: float.id, label: float.title),
+                    problem: .floatMenuKey(float.toggle, menuItem: owner(float.toggle)))
             }
     }
 

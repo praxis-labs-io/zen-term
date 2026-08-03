@@ -66,16 +66,21 @@ enum MenuShortcuts {
     /// A modifier-less key equivalent is skipped rather than protected. `Chord.parse` rejects those
     /// for the keymap already, so no bind can collide with one, and protecting them would be a set
     /// of entries nothing can ever match.
+    /// An uppercase key equivalent carries Shift on its own. AppKit's convention is that
+    /// `keyEquivalent: "S"` with a bare `.command` mask means ⇧⌘S, and macOS both draws and
+    /// matches it that way, so reading Shift from the mask alone would protect ⌘S and leave the
+    /// item's real ⌘⇧S open. That is this guard failing at precisely the job it exists for, and it
+    /// would go unnoticed: a test comparing the menu against the keymap compares the same wrong
+    /// chord on both sides.
     static func chord(for item: NSMenuItem) -> Chord? {
         let key = item.keyEquivalent
         guard key.count == 1 else { return nil }
         let mask = item.keyEquivalentModifierMask
-        guard
-            mask.contains(.command) || mask.contains(.shift)
-                || mask.contains(.option) || mask.contains(.control)
+        let shift = mask.contains(.shift) || key != key.lowercased()
+        guard mask.contains(.command) || shift || mask.contains(.option) || mask.contains(.control)
         else { return nil }
         return Chord(
-            command: mask.contains(.command), shift: mask.contains(.shift),
+            command: mask.contains(.command), shift: shift,
             option: mask.contains(.option), control: mask.contains(.control), key: key)
     }
 }

@@ -128,6 +128,18 @@ final class MenuShortcutsTests: XCTestCase {
             "new_tab keeps ⌘T; only the refused line is dropped")
     }
 
+    /// AppKit's own spelling for a shifted menu shortcut is an uppercase key equivalent with a
+    /// bare ⌘ mask, and macOS draws and matches that as ⇧⌘S. Reading Shift from the mask alone
+    /// protected the wrong chord and left the item's real one open, which is this guard failing at
+    /// the job it exists for.
+    func test_anUppercaseKeyEquivalentCarriesShiftOnItsOwn() {
+        let item = NSMenuItem(title: "Save As…", action: nil, keyEquivalent: "S")
+        item.keyEquivalentModifierMask = [.command]
+        XCTAssertEqual(
+            MenuShortcuts.chord(for: item), Chord(command: true, shift: true, key: "s"),
+            "⌘⇧S is what macOS matches, so ⌘⇧S is what has to be protected")
+    }
+
     /// A float's `key:` is refused on the same grounds and reported against the float, not a
     /// keybind: the user wrote it on the `float =` line, which is where they have to go to fix it.
     func test_aFloatKeyOnAMenuChordIsDroppedAndReportedAgainstTheFloat() {
@@ -146,9 +158,28 @@ final class MenuShortcutsTests: XCTestCase {
             result.diagnostics,
             [
                 ConfigDiagnostic(
-                    scope: .toolFloat(label: "Notes"),
-                    problem: .menuBind(Chord(command: true, key: "q"), menuItem: "Quit ZenTerm"))
-            ])
+                    scope: .toolFloatField(id: "notes", label: "Notes"),
+                    problem: .floatMenuKey(Chord(command: true, key: "q"), menuItem: "Quit ZenTerm"))
+            ],
+            "the float survives, so this belongs on its row and not in the dropped-float notice")
+    }
+
+    /// The rendered sentence, not just the diagnostic's identity. A float has no action token to
+    /// lean on, so reusing the keybind case left the message starting with a bare `=`.
+    func test_aRefusedFloatKeyReadsAsASentence() throws {
+        let float = ToolFloat(
+            id: "notes", order: 0, title: "Notes", icon: ToolFloatParser.defaultIcon, command: "ls",
+            dir: nil, widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+            persist: .ephemeral, toggle: Chord(command: true, key: "q"))
+
+        let result = KeymapAssembler.assemble(
+            floats: [float], keybinds: [], canType: { _ in true },
+            protected: { [Chord(command: true, key: "q")] },
+            menuOwner: { _ in "Quit ZenTerm" })
+
+        let diagnostic = try XCTUnwrap(result.diagnostics.first)
+        XCTAssertEqual(diagnostic.message, "key:cmd+q is the Quit ZenTerm menu shortcut. Ignoring it.")
+        XCTAssertEqual(diagnostic.headline, "Notes can't use a menu shortcut")
     }
 
     /// The float itself survives; only its chord is refused. Dropping the float would lose a tool
