@@ -8,8 +8,10 @@ import XCTest
 /// seams (`controlTextDidChange`, `control(_:textView:doCommandBy:)`) and asserts the activation
 /// payload, exactly the Dropdown lesson: state plumbing exists, the choose path was unverified.
 ///
-/// `NSApp.currentEvent` is nil in a test, so the Return handler can't read live modifiers —
-/// the Shift+Enter (replace) path is driven through the `activate(index:modifiers:)` seam directly.
+/// The Return handler reads live modifiers off `NSApp.currentEvent`, which a test does not control
+/// by default: it holds whatever AppKit last dequeued. `sendReturn` pins it to a plain ⏎ so an
+/// assertion about the unmodified path means what it says. The Shift+Enter (replace) path is driven
+/// through the `activate(index:modifiers:)` seam directly.
 final class PaletteInteractionTests: WindowTestCase {
     /// Retained so a mounted overlay's window outlives the mount call (Esc is dispatched through it).
     private var window: NSWindow?
@@ -58,6 +60,29 @@ final class PaletteInteractionTests: WindowTestCase {
     @discardableResult
     private func send(_ selector: Selector, to overlay: PaletteOverlay) -> Bool {
         overlay.control(searchField(in: overlay), textView: NSTextView(), doCommandBy: selector)
+    }
+
+    /// Return, with `NSApp.currentEvent` pinned to a plain ⏎ first.
+    ///
+    /// The Return hook reads live modifiers off `NSApp.currentEvent`, which holds whatever AppKit
+    /// last dequeued for this process. A test that rests on it being nil rests on the order the
+    /// suite happened to run in (ZEN-363). Dequeuing the keystroke is also what production does:
+    /// the Return the user pressed is the current event when the hook runs.
+    private func sendReturn(to overlay: PaletteOverlay) throws {
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false,
+                keyCode: 36))
+        NSApp.postEvent(event, atStart: true)
+        _ = NSApp.nextEvent(matching: .keyDown, until: nil, inMode: .default, dequeue: true)
+        // Checked by value, because the queue hands back a copy rather than the posted object. An
+        // empty queue dequeues nothing and leaves the hook reading whatever an earlier case left,
+        // which is the failure this helper exists to prevent.
+        let pinned = try XCTUnwrap(NSApp.currentEvent, "nothing dequeued, so the pin did not take")
+        XCTAssertEqual(pinned.keyCode, 36)
+        XCTAssertFalse(pinned.modifierFlags.contains(.shift), "the pinned Return must be unmodified")
+        send(Self.insertNewline, to: overlay)
     }
 
     @discardableResult
@@ -257,7 +282,7 @@ final class PaletteInteractionTests: WindowTestCase {
             onChoose: onChoose, onAddWorkspace: onAddWorkspace, onDismiss: onDismiss)
     }
 
-    func test_repoPicker_returnOpensFirstWorkspaceNotTheAddRow() {
+    func test_repoPicker_returnOpensFirstWorkspaceNotTheAddRow() throws {
         var chosen: (Workspace, Bool)?
         var addOpened = false
         let overlay = makeRepoPicker(
@@ -265,7 +290,7 @@ final class PaletteInteractionTests: WindowTestCase {
             onChoose: { chosen = ($0, $1) }, onAddWorkspace: { addOpened = true })
         mount(overlay)
         // Default selection is the first workspace (index 1), not the pinned ＋ row (index 0).
-        send(Self.insertNewline, to: overlay)
+        try sendReturn(to: overlay)
         XCTAssertEqual(chosen?.0.title, "alpha")
         XCTAssertEqual(chosen?.1, false)
         XCTAssertFalse(addOpened)
