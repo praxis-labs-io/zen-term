@@ -80,6 +80,9 @@ final class MenuShortcutsTests: XCTestCase {
     func test_noShippedDefaultTakesAMenuShortcut() {
         MainMenu.install(copyPaste: nil)
         let protected = MenuShortcuts.protected()
+        // An empty protected set intersects nothing, so the guard below would pass with the menu
+        // read dead. Anchor on a chord the menu bar always holds before trusting the emptiness.
+        XCTAssertTrue(protected.contains(Chord(command: true, key: "q")), "⌘Q must read as protected")
         let collisions = KeymapDefaults.map.keys.filter { protected.contains($0) }
         XCTAssertEqual(
             collisions.map(\.displayGlyph).sorted(), [],
@@ -91,7 +94,9 @@ final class MenuShortcutsTests: XCTestCase {
     /// the keymap holds. Same set, but asserting it from the menu's side names the real failure.
     func test_theMenuClaimsNothingTheKeymapAlreadyHolds() {
         MainMenu.install(copyPaste: nil)
-        let taken = MenuShortcuts.protected().filter { KeymapDefaults.map[$0] != nil }
+        let protected = MenuShortcuts.protected()
+        XCTAssertTrue(protected.contains(Chord(command: true, key: "q")), "⌘Q must read as protected")
+        let taken = protected.filter { KeymapDefaults.map[$0] != nil }
         XCTAssertEqual(taken.map(\.displayGlyph).sorted(), [])
     }
 
@@ -213,7 +218,7 @@ final class MenuShortcutsTests: XCTestCase {
 
         let diagnostic = try? XCTUnwrap(result.diagnostics.first)
         XCTAssertEqual(diagnostic?.message, "new_tab=cmd+q is a menu shortcut. Ignoring it.")
-        XCTAssertEqual(diagnostic?.detail, "cmd+q is a menu shortcut")
+        XCTAssertEqual(diagnostic?.detail, "cmd+q → the menu")
     }
 
     func test_aBindOnAFreeChordIsUnaffected() {

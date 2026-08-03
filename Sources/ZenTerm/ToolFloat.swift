@@ -50,9 +50,6 @@ struct ToolFloat: Equatable {
     /// The config `toolbar:` — false hides the float's toolbar button. Visual only: the chord,
     /// palette entry, and persistence behave exactly as if the button were shown.
     var showsInToolbar: Bool = true
-
-    /// Palette glyph string, e.g. "⌘⇧G" — derived from `toggle`, never authored separately.
-    var shortcut: String { toggle.displayGlyph }
 }
 
 /// The active tool floats — the ones the user declared in their config. There are no

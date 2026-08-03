@@ -329,9 +329,10 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         chordChip.render(shortcut: "")
         guard let float = editingFloat else { return }
         titleField.setText(float.title)
-        // A key the menu owns was refused at load, so the float has no shortcut. Seeding it anyway
-        // would re-offer a chord the recorder rejects, and Save would write it back to `key:`.
-        if MenuShortcuts.owner(of: float.toggle) == nil {
+        // Seed only what capture would accept. A `key:` the menu owns, or one another bind took,
+        // was already refused at load, so re-offering it hands back a chord the recorder rejects
+        // and Save writes it straight to `key:` — the config can never be fixed from here.
+        if MenuShortcuts.owner(of: float.toggle) == nil, chordConflict(float.toggle) == nil {
             capturedChord = float.toggle
             chordChip.render(shortcut: float.toggle.displayGlyph)
         }

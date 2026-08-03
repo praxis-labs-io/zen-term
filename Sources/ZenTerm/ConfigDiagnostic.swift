@@ -163,7 +163,7 @@ struct ConfigDiagnostic: Hashable {
         case .chordTaken(let chord, let winner):
             return "\(chord.displayGlyph) → \(winner.actionToken)"
         case .menuBind(let chord, let menuItem), .floatMenuKey(let chord, let menuItem):
-            return "\(chord.configToken) is \(menuItem ?? "a menu shortcut")"
+            return "\(chord.configToken) → \(menuItem ?? "the menu")"
         case .unusableBind(let chord):
             return "\(chord.configToken) can't be typed"
         case .invalidValue(let got, _):
