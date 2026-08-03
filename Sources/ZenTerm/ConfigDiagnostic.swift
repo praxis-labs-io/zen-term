@@ -44,7 +44,7 @@ struct ConfigDiagnostic: Hashable {
         /// A config line names a chord the menu bar owns. Taking it would kill the menu item in
         /// silence, because the keymap resolves ahead of `NSApp.sendEvent`, so the bind is dropped
         /// and the action keeps its default.
-        case menuBind(Chord, menuItem: String)
+        case menuBind(Chord, menuItem: String?)
         /// A config line names a chord this keyboard can't produce. The line is dead; the action
         /// still has its default.
         case unusableBind(Chord)
@@ -115,7 +115,8 @@ struct ConfigDiagnostic: Hashable {
         case .chordTaken(let chord, let winner):
             return "\(chord.displayGlyph) went to \(winner.actionToken) in your config."
         case .menuBind(let chord, let menuItem):
-            return "\(keybindActionToken)=\(chord.configToken) is the \(menuItem) menu shortcut. Ignoring it."
+            let owner = menuItem.map { "the \($0)" } ?? "a"
+            return "\(keybindActionToken)=\(chord.configToken) is \(owner) menu shortcut. Ignoring it."
         case .unusableBind(let chord):
             return "\(keybindActionToken)=\(chord.configToken) can't be typed on your keyboard. Ignoring it."
         case .invalidValue(let got, let expected):
@@ -146,7 +147,7 @@ struct ConfigDiagnostic: Hashable {
         case .chordTaken(let chord, let winner):
             return "\(chord.displayGlyph) → \(winner.actionToken)"
         case .menuBind(let chord, let menuItem):
-            return "\(chord.configToken) is \(menuItem)"
+            return "\(chord.configToken) is \(menuItem ?? "a menu shortcut")"
         case .unusableBind(let chord):
             return "\(chord.configToken) can't be typed"
         case .invalidValue(let got, _):

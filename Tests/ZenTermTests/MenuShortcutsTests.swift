@@ -9,9 +9,20 @@ import XCTest
 /// `resize_left`. The menu still drew ⌘⇧H beside a dead item the whole time.
 @MainActor
 final class MenuShortcutsTests: XCTestCase {
+    /// `MainMenu.install` writes `NSApp.mainMenu`, which is process-global and outlives the test
+    /// that set it. Restored per case so a later test in the same run sees whatever menu it
+    /// expected rather than ours, the same save/restore `MainMenuTests` does.
+    private var savedMenu: NSMenu?
+
     override func setUp() {
         super.setUp()
         _ = NSApplication.shared
+        savedMenu = NSApp.mainMenu
+    }
+
+    override func tearDown() {
+        NSApp.mainMenu = savedMenu
+        super.tearDown()
     }
 
     // MARK: Reading the menu
@@ -157,6 +168,21 @@ final class MenuShortcutsTests: XCTestCase {
         XCTAssertEqual(
             result.map[Chord(command: true, option: true, key: "n")], .toggleToolFloat("notes"),
             "a keybind naming the float still resolves, so the float is still configured")
+    }
+
+    /// The owner is optional because the menu can answer "protected" without the lookup finding a
+    /// title. Both renderings have to stay grammatical, which a placeholder word did not: the
+    /// message read "is the a menu shortcut".
+    func test_aRefusedBindWithNoNamedOwnerStillReadsAsASentence() {
+        let result = KeymapAssembler.assemble(
+            floats: [], keybinds: [(Chord(command: true, key: "q"), .newTab)],
+            canType: { _ in true },
+            protected: { [Chord(command: true, key: "q")] },
+            menuOwner: { _ in nil })
+
+        let diagnostic = try? XCTUnwrap(result.diagnostics.first)
+        XCTAssertEqual(diagnostic?.message, "new_tab=cmd+q is a menu shortcut. Ignoring it.")
+        XCTAssertEqual(diagnostic?.detail, "cmd+q is a menu shortcut")
     }
 
     func test_aBindOnAFreeChordIsUnaffected() {

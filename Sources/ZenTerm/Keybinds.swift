@@ -314,12 +314,12 @@ enum KeymapAssembler {
         binds.map { chord, action in
             ConfigDiagnostic(
                 scope: .keybind(action),
-                problem: .menuBind(chord, menuItem: owner(chord) ?? "a"))
+                problem: .menuBind(chord, menuItem: owner(chord)))
         }
             + floats.map { float in
                 ConfigDiagnostic(
                     scope: .toolFloat(label: float.title),
-                    problem: .menuBind(float.toggle, menuItem: owner(float.toggle) ?? "a"))
+                    problem: .menuBind(float.toggle, menuItem: owner(float.toggle)))
             }
     }
 
