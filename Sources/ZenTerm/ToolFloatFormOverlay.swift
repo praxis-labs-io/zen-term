@@ -329,8 +329,13 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         chordChip.render(shortcut: "")
         guard let float = editingFloat else { return }
         titleField.setText(float.title)
-        capturedChord = float.toggle
-        chordChip.render(shortcut: float.toggle.displayGlyph)
+        // Seed only what capture would accept. A `key:` the menu owns, or one another bind took,
+        // was already refused at load, so re-offering it hands back a chord the recorder rejects
+        // and Save writes it straight to `key:` — the config can never be fixed from here.
+        if MenuShortcuts.owner(of: float.toggle) == nil, chordConflict(float.toggle) == nil {
+            capturedChord = float.toggle
+            chordChip.render(shortcut: float.toggle.displayGlyph)
+        }
         commandField.setText(float.command)
         if float.widthFraction != ToolFloatParser.defaultFraction {
             widthField.setText(ToolFloatParser.fractionText(float.widthFraction))
@@ -379,6 +384,14 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         hintBubble?.clearError()
         guard chord.command || chord.shift || chord.option || chord.control else {
             hintBubble?.showError("Add at least one modifier (⌘ ⇧ ⌥ ⌃).")
+            positionHint()
+            return  // stay armed
+        }
+        // Menu chords are refused here, not by `chordConflict`. That check asks the live keymap,
+        // and the keymap is exactly where a menu chord never appears, so it would pass every one
+        // of them straight through to a `key:` the next config load refuses.
+        if let menuItem = MenuShortcuts.owner(of: chord) {
+            hintBubble?.showError("\(chord.displayGlyph) is the \(menuItem) menu shortcut.")
             positionHint()
             return  // stay armed
         }

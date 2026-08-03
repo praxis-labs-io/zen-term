@@ -41,6 +41,15 @@ struct ConfigDiagnostic: Hashable {
     enum Problem: Hashable {
         /// Something took the action's last chord, and here's what holds it now.
         case chordTaken(Chord, by: KeyInterceptor.ReservedChord)
+        /// A `keybind =` line names a chord the menu bar owns. Taking it would kill the menu item
+        /// in silence, because the keymap resolves ahead of `NSApp.sendEvent`, so the bind is
+        /// dropped and the action keeps its default. The menu item's name is optional: the set
+        /// says a chord is protected, and finding a title for it is a separate question.
+        case menuBind(Chord, menuItem: String?)
+        /// A surviving float's `key:` names a chord the menu bar owns. The float's twin of
+        /// `menuBind`, for the same reason `floatUnusableKey` is `unusableBind`'s: a float message
+        /// has no action token to lean on. The float still works; only its chord was refused.
+        case floatMenuKey(Chord, menuItem: String?)
         /// A config line names a chord this keyboard can't produce. The line is dead; the action
         /// still has its default.
         case unusableBind(Chord)
@@ -68,8 +77,16 @@ struct ConfigDiagnostic: Hashable {
     var scope: Scope
     var problem: Problem
 
-    /// The action token for a `.keybind` scope, else empty — `.unusableBind` only ever pairs with
-    /// `.keybind`, so this reads the subject its message needs without a scope switch inside `message`.
+    /// Names the menu item that owns a chord, or says "a" when the lookup found no title. The
+    /// protected set and the title lookup are separate questions, so the second can come back
+    /// empty, and "is the a menu shortcut" is not a sentence.
+    private static func owner(_ menuItem: String?) -> String {
+        menuItem.map { "the \($0)" } ?? "a"
+    }
+
+    /// The action token for a `.keybind` scope, else empty. `.unusableBind` and `.menuBind` only
+    /// ever pair with `.keybind`, so this reads the subject its message needs without a scope
+    /// switch inside `message`. A float's twin of each carries its own case for that reason.
     private var keybindActionToken: String {
         if case .keybind(let action) = scope { return action.actionToken }
         return ""
@@ -91,6 +108,9 @@ struct ConfigDiagnostic: Hashable {
     var headline: String {
         switch problem {
         case .chordTaken: return "\(title) has no shortcut"
+        // Subject alone, the way every toast outside this type titles itself. The claim rides in
+        // `message`: a title is one truncating line, and the whole sentence never fits.
+        case .menuBind, .floatMenuKey: return title
         case .unusableBind: return "\(title) has an unusable shortcut"
         case .invalidValue: return "\(title) has an invalid value"
         case .ignoredListItem: return "\(title) has an invalid item"
@@ -109,6 +129,10 @@ struct ConfigDiagnostic: Hashable {
         switch problem {
         case .chordTaken(let chord, let winner):
             return "\(chord.displayGlyph) went to \(winner.actionToken) in your config."
+        case .menuBind(let chord, let menuItem):
+            return "\(keybindActionToken)=\(chord.configToken) is \(Self.owner(menuItem)) menu shortcut. Ignoring it."
+        case .floatMenuKey(let chord, let menuItem):
+            return "key:\(chord.configToken) is \(Self.owner(menuItem)) menu shortcut. Ignoring it."
         case .unusableBind(let chord):
             return "\(keybindActionToken)=\(chord.configToken) can't be typed on your keyboard. Ignoring it."
         case .invalidValue(let got, let expected):
@@ -138,6 +162,8 @@ struct ConfigDiagnostic: Hashable {
         switch problem {
         case .chordTaken(let chord, let winner):
             return "\(chord.displayGlyph) → \(winner.actionToken)"
+        case .menuBind(let chord, let menuItem), .floatMenuKey(let chord, let menuItem):
+            return "\(chord.configToken) → \(menuItem ?? "the menu")"
         case .unusableBind(let chord):
             return "\(chord.configToken) can't be typed"
         case .invalidValue(let got, _):

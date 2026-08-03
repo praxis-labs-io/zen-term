@@ -219,7 +219,9 @@ final class ToolFloatRow: NSView {
     private let iconView = NSImageView()
     private let titleLabel: NSTextField
     private let subtitleLabel: NSTextField
-    private let keycap: KeycapView
+    /// The trailing shortcut cell: a keycap, or a muted "Not set" when the float has none. Reads
+    /// like the Keybinds section's unbound chip rather than drawing an empty cap.
+    private let shortcutView: NSView
     /// A surviving float's sub-field diagnostic (ZEN-7): a bad `width:`/`order:`/`persist:` shows here,
     /// in warning tone, since the float still works and has this row.
     private let messageLabel = NSTextField(labelWithString: "")
@@ -229,7 +231,12 @@ final class ToolFloatRow: NSView {
         self.float = float
         titleLabel = NSTextField(labelWithString: float.title)
         subtitleLabel = NSTextField(labelWithString: float.command)
-        keycap = KeycapView(shortcut: float.shortcut)
+        // Resolved from the live keymap, not from `float.toggle`, which is the raw config value.
+        // A `key:` the assembler refused (a menu chord) is still on the float, so drawing it here
+        // would advertise a shortcut that does something else entirely. The dock and the palette
+        // already resolve this way.
+        let shortcut = CommandCatalog.spec(for: .toggleToolFloat(float.id)).shortcut
+        shortcutView = shortcut.isEmpty ? Self.unsetLabel() : KeycapView(shortcut: shortcut)
 
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -253,7 +260,7 @@ final class ToolFloatRow: NSView {
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let controls = NSStackView(views: [iconView, labels, spacer, keycap])
+        let controls = NSStackView(views: [iconView, labels, spacer, shortcutView])
         controls.orientation = .horizontal
         controls.alignment = .centerY
         controls.spacing = 10
@@ -290,8 +297,18 @@ final class ToolFloatRow: NSView {
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         subtitleLabel.textColor = Theme.current.chrome.ink(alpha: 0.5)
         messageLabel.textColor = Theme.current.chrome.warning.nsColor
-        keycap.reapplyTheme()
+        (shortcutView as? KeycapView)?.reapplyTheme()
+        (shortcutView as? NSTextField)?.textColor = Self.unsetInk
         restyle()
+    }
+
+    private static var unsetInk: NSColor { Theme.current.chrome.ink(alpha: 0.4) }
+
+    private static func unsetLabel() -> NSTextField {
+        let label = NSTextField(labelWithString: "Not set")
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = unsetInk
+        return label
     }
 
     /// Show (or clear, with nil) the row's inline sub-field diagnostic.
@@ -304,6 +321,12 @@ final class ToolFloatRow: NSView {
     /// can't pass while the row shows nothing.
     var renderedMessageForTesting: String? {
         messageLabel.isHidden ? nil : messageLabel.stringValue
+    }
+
+    /// Test hook: what the trailing cell draws — the keycap's glyph, or the unset placeholder's
+    /// text. Reads the mounted view, so a test can't pass while the row draws an empty cap.
+    var renderedShortcutForTesting: String {
+        (shortcutView as? KeycapView)?.shortcut ?? (shortcutView as? NSTextField)?.stringValue ?? ""
     }
 
     // MARK: focus + keyboard

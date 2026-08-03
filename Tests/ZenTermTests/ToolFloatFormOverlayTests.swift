@@ -392,6 +392,65 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.submitted.first?.toggle, Chord(command: true, shift: true, key: "d"))
     }
 
+    /// A `key:` the menu owns was already refused at load, so the float has no shortcut and the
+    /// form has to say so. Seeding the chip from `float.toggle` regardless re-offered a chord the
+    /// recorder rejects, and Save wrote it straight back to `key:` — the config could never be
+    /// fixed from Settings, only by hand.
+    func test_edit_aMenuOwnedKey_prefillsUnset_andBlocksSubmit() {
+        _ = NSApplication.shared
+        let previous = NSApp.mainMenu
+        defer { NSApp.mainMenu = previous }
+        let main = NSMenu()
+        let top = NSMenuItem()
+        let sub = NSMenu()
+        let quit = NSMenuItem(title: "Quit ZenTerm", action: nil, keyEquivalent: "q")
+        quit.keyEquivalentModifierMask = [.command]
+        sub.addItem(quit)
+        top.submenu = sub
+        main.addItem(top)
+        NSApp.mainMenu = main
+
+        let existing = existingFloat(title: "dev", toggle: Chord(command: true, key: "q"))
+        let (overlay, _, sink) = mount(editing: existing)
+
+        XCTAssertNil(
+            chip(in: overlay).renderedShortcutForTesting,
+            "a refused key reads as unset, not as the chord the menu owns")
+
+        submit(in: overlay)
+
+        XCTAssertTrue(sink.submitted.isEmpty, "no shortcut → Save blocks until a live chord is set")
+    }
+
+    /// The menu is one of two ways a float loses its chord; a `keybind =` line taking it is the
+    /// other, and the form treated them differently. Capture refuses both, so prefill has to as
+    /// well, or Save writes the dead chord back for the one cause nobody thought about.
+    func test_edit_aDisplacedKey_prefillsUnset_andBlocksSubmit() throws {
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-floatdisplaced-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        ConfigLoader.defaultRootOverrideForTesting = tempRoot
+        defer {
+            ConfigLoader.defaultRootOverrideForTesting = nil
+            AppConfig.reload()
+            try? FileManager.default.removeItem(at: tempRoot)
+        }
+        try "keybind = new_tab=cmd+shift+d\n".write(
+            to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+        AppConfig.reload()
+
+        let existing = existingFloat(title: "dev")  // toggle is ⌘⇧D, which new_tab just took
+        let (overlay, _, sink) = mount(editing: existing)
+
+        XCTAssertNil(
+            chip(in: overlay).renderedShortcutForTesting,
+            "a chord another bind holds reads as unset, the same as a menu-owned one")
+
+        submit(in: overlay)
+
+        XCTAssertTrue(sink.submitted.isEmpty, "no shortcut → Save blocks until a live chord is set")
+    }
+
     /// Renaming is the one path that changes a float's id — the host turns that into a remove of the
     /// old line plus an upsert of the new one. An edit that keeps the title keeps the id, so an
     /// untouched float's keybind and live instance are never disturbed.

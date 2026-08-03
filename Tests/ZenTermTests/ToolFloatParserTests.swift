@@ -12,7 +12,6 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertEqual(float?.widthFraction, 0.85)
         XCTAssertEqual(float?.heightFraction, 0.85)
         XCTAssertEqual(float?.requiresGitRepo, false)
-        XCTAssertEqual(float?.shortcut, "⌘⇧J")
         XCTAssertEqual(float?.toggle, Chord(command: true, shift: true, key: "j"))
     }
 

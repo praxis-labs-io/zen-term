@@ -226,6 +226,11 @@
 # first. Your lines override the defaults; if two lines claim the same chord, the
 # last one wins (and a warning is logged). An unknown action is skipped with a warning.
 #
+# A chord the menu bar owns is refused, and so is a tool float's `key:` on one.
+# ZenTerm resolves shortcuts before macOS matches menu items, so a keybind on ⌘Q
+# would win and Quit would stop working with the menu still showing ⌘Q beside it.
+# The refused line is reported on reload and the action keeps its default.
+#
 # Chord syntax: `+`-joined modifiers then one key, e.g. cmd+shift+g.
 #   modifiers: cmd (command/super), shift, opt (option/alt), ctrl (control)
 #   key:       a single character (letter, digit, or symbol like - \ [ ])

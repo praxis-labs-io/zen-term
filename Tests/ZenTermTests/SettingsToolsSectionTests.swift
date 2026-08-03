@@ -110,6 +110,32 @@ final class SettingsToolsSectionTests: WindowTestCase {
         XCTAssertEqual(rows(in: detail).map(\.float.id), ["dev", "top"])
     }
 
+    func test_row_drawsTheLiveShortcut() throws {
+        try seed(twoFloats)
+        let detail = mount(SettingsToolsSection())
+        XCTAssertEqual(rows(in: detail).map(\.renderedShortcutForTesting), ["⌘⇧D", "⌘⇧T"])
+    }
+
+    /// The float survives a `key:` the menu owns; only its chord is refused. The row used to build a
+    /// keycap regardless, so an empty glyph drew an empty pill: a shortcut cell that says nothing at
+    /// all. Settings is where you go to fix the config, so the absence has to be stated.
+    func test_row_aMenuOwnedKey_readsAsUnset() throws {
+        _ = NSApplication.shared
+        let previous = NSApp.mainMenu
+        defer {
+            NSApp.mainMenu = previous
+            AppConfig.reload()
+        }
+        MainMenu.install(copyPaste: nil)
+
+        try seed("float = title:dev key:cmd+q command:vim")
+        let detail = mount(SettingsToolsSection())
+
+        let row = try XCTUnwrap(rows(in: detail).first)
+        XCTAssertEqual(row.float.toggle, Chord(command: true, key: "q"), "the raw config value survives")
+        XCTAssertEqual(row.renderedShortcutForTesting, "Not set")
+    }
+
     func test_emptyConfig_showsOnlyAddButtonStop() throws {
         try seed("")
         let section = SettingsToolsSection()
