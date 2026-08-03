@@ -478,8 +478,8 @@ passed under `--filter`, failed 2 runs in 5 in a full suite, and failed on CI (Z
 The `currentEvent` half of that generalizes past the key path. Anything reading it for live
 modifiers is reading state an earlier case can leave behind: `PaletteOverlay`'s Return hook passes
 it into `activate`, where `RepoPickerOverlay` reads `.shift` as replace-the-tab, and a test asserting
-the unmodified path pins the event (`PaletteInteractionTests.sendReturn`) rather than assuming nil. Assume nil and the assertion
-belongs to the order the suite ran in.
+the unmodified path pins the event (`PaletteInteractionTests.sendReturn`) rather than assuming nil.
+Assume nil and the assertion belongs to the order the suite ran in.
 
 **Tests must not mutate real OS state.** They run on the developer's machine. Do not clobber
 `NSPasteboard.general` (snapshot it in `setUp`, restore in `tearDown`), and do not present a real
