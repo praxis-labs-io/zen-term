@@ -170,6 +170,64 @@ public struct TerminalViewportRange: Equatable {
 /// One step through a live search's matches.
 public enum TerminalSearchStep: Equatable { case next, previous }
 
+/// One keystroke, in the terms a backend keymap needs, and nothing more.
+///
+/// A value type rather than an `NSEvent`, because the caller has no event: the pin-bump baseline
+/// asks about a chord nobody pressed. Fabricating an `NSEvent` for that is the trap in
+/// `docs/swift-conventions.md`, where a synthesized keystroke is one macOS never sends and the
+/// check then passes against the fake.
+///
+/// `NSEvent.ModifierFlags` rather than a parallel modifier enum: AppKit is not a backend, the seam
+/// already hands back an `NSView`, and a second spelling of the same four bits would need
+/// converting at both ends for no reader that wants it.
+public struct TerminalKey: Equatable {
+    /// The macOS virtual keycode. What a backend keymap matches on, because it is the physical
+    /// key rather than the glyph a layout happens to put there.
+    public var keyCode: UInt16
+    public var modifiers: NSEvent.ModifierFlags
+    /// The character this key produces with no modifiers held, or 0 for a key that produces none
+    /// (the arrows, Return). Some keymaps resolve a bind by glyph and need it.
+    public var unshiftedCodepoint: UInt32
+    /// The character the keystroke actually types, Shift applied, or nil for a key that types
+    /// none. Separate from `unshiftedCodepoint` because a keymap may hold a bind under either
+    /// spelling: `⇧-` reaches a bind written `_` only through this, and one written `-` only
+    /// through the other, so a probe that sends one of the two is blind to half the keymap.
+    public var text: String?
+
+    public init(
+        keyCode: UInt16, modifiers: NSEvent.ModifierFlags, unshiftedCodepoint: UInt32 = 0,
+        text: String? = nil
+    ) {
+        self.keyCode = keyCode
+        self.modifiers = modifiers
+        self.unshiftedCodepoint = unshiftedCodepoint
+        self.text = text
+    }
+}
+
+/// What a backend does with a keystroke the chrome did not claim.
+///
+/// Four cases and not a `Bool`, because "is this bound" and "will this be swallowed" are different
+/// questions, and the gap between them is the whole point of asking. A bind can run its action and
+/// still hand the key on. A bind can be conditional, so whether it takes the key depends on state
+/// no static probe can see. Collapsing any of that over-reports what the backend takes from us,
+/// and an audit built on an over-report takes back chords that were never lost.
+public enum ChordDisposition: Equatable {
+    /// Nothing in the backend claims it, so it reaches the program unchanged.
+    case ignores
+    /// The backend runs an action and swallows the key. The chord is genuinely gone.
+    case claims
+    /// The backend runs an action AND passes the key on, so the program sees it too.
+    case claimsButPasses
+    /// Bound, but conditionally: the backend runs the action only when it would do something, and
+    /// otherwise behaves as though the bind does not exist and lets the key through.
+    ///
+    /// A probe cannot resolve this, and must not round it to `claims`. Bare Escape is the case
+    /// that matters: it is bound to end a search, so a probe sees a binding, yet Escape reaches
+    /// vim every time no search is running. Rounding up would have listed it as taken.
+    case mayClaim
+}
+
 /// Events flowing OUT of a surface, up into the chrome. Each backend translates
 /// its native callbacks into these.
 public protocol TerminalSurfaceDelegate: AnyObject {
@@ -366,12 +424,26 @@ public protocol TerminalSurface: AnyObject {
     /// as a literal newline in its input rather than a submit. This is the chrome's way to submit a
     /// line it just pasted (ZEN-257): paste the text, then `submitLine()`.
     func submitLine()
+
+    /// What this backend would do with `key` if the chrome passed it through.
+    ///
+    /// The chrome resolves its own keymap ahead of the responder chain, so every chord it does not
+    /// claim reaches the backend and does whatever the backend's own keymap says. This is how the
+    /// chrome finds out what that is, rather than reading it out of the backend's source and
+    /// hoping the reading survives the next pin bump.
+    ///
+    /// Answers about the backend's keymap as configured right now, so a chord's disposition can
+    /// change under a config reload and is worth re-asking rather than caching.
+    func disposition(of key: TerminalKey) -> ChordDisposition
 }
 
 public extension TerminalSurface {
     /// Default no-op: a backend whose cursor already follows the AppKit first responder
     /// needs nothing here.
     func setFocused(_ focused: Bool) {}
+
+    /// A backend with no keymap of its own takes nothing, so it needs no code for this.
+    func disposition(of key: TerminalKey) -> ChordDisposition { .ignores }
 
     /// Backends that can't resolve a cwd get nil for free.
     var currentDirectory: URL? { nil }

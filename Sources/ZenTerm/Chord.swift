@@ -172,10 +172,9 @@ struct Chord: Hashable {
         123: "←", 124: "→", 125: "↓", 126: "↑", 36: "⏎",
     ]
 
-    /// Whether a key token is one of the non-printing keys `Chord(event:)` names by keyCode. These
-    /// never come from the keyboard layout's character tables, so anything asking the layout what it
-    /// can produce has to let them through — see `KeyboardLayout.canType`.
-    static func isSpecialKeyGlyph(_ key: String) -> Bool {
-        specialKeyGlyphs.values.contains(key)
+    /// The keyCode behind a special glyph, for a caller that needs the physical key back: a
+    /// backend keymap matches on the keyCode, and these keys have no character table to look up.
+    static func keyCodeForSpecialGlyph(_ key: String) -> UInt16? {
+        specialKeyGlyphs.first { $0.value == key }?.key
     }
 }

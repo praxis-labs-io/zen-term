@@ -390,7 +390,7 @@ in a main-actor context and handed to `DispatchQueue.async(execute:)` as a `Disp
 type-erased at construction: the compiler sees nothing crossing, and the whole isolated chain runs
 off-main. That is not hypothetical, it is the debounce idiom the Settings sections already use. So
 the two TIS call sites each call `MainActor.preconditionIsolated()` immediately before the Carbon
-call: `KeyboardLayout.producibleGlyphs` in the chrome, and `TerminalKit.KeyboardLayout.id`, which
+call: `KeyboardLayout.glyphsByKeyCode` in the chrome, and `TerminalKit.KeyboardLayout.id`, which
 `GhosttyHostView.keyDown` uses to spot an input method claiming a key. That converts the untrappable
 failure (exit 6, no crash report, empty stderr) into a crash report that names the line. The 6.2 tools-version exists to carry it, and every target
 pins `.swiftLanguageMode(.v5)` so the bump doesn't turn into an unplanned Swift 6 migration.
