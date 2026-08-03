@@ -44,7 +44,7 @@ enum KeyboardLayout {
     ///
     /// One entry point because the answers come from the same walk: splitting them made the
     /// unshifted case walk 128 keys through Carbon twice to answer one question. A shifted chord
-    /// genuinely needs both states — the bind may be written either way round — so it still walks
+    /// genuinely needs both states, because the bind may be written either way round, so it still walks
     /// twice, and only then.
     ///
     /// `text` is the glyph the keystroke types with Shift applied, and it is nil rather than the
@@ -57,7 +57,7 @@ enum KeyboardLayout {
             return (special, 0, nil)
         }
         // Canonicalize each producible glyph the same way a live event would be, then look for this
-        // chord's key among the results — so the lookup can't drift from the fold it's checking.
+        // chord's key among the results, so the lookup can't drift from the fold it's checking.
         let typed = glyphsByKeyCode(shift: chord.shift)
             .filter { Chord(shift: chord.shift, key: $0.value).key == chord.key }
         guard let keyCode = typed.keys.min() else { return nil }

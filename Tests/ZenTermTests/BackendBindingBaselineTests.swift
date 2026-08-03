@@ -81,7 +81,7 @@ final class BackendBindingBaselineTests: XCTestCase {
         }
 
         // A chord this keyboard cannot type has no keyCode to ask about. On a US layout that set is
-        // empty, and a non-empty one here means the machine's layout, not a regression — but only
+        // empty, and a non-empty one here means the machine's layout, not a regression, but only
         // if the layout answered at all. A walk that resolved nothing puts every chord in
         // `unreachable`, and skipping on that would retire the check below without saying so.
         XCTAssertLessThan(

@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// `KeyboardLayout` asks the real keyboard what it can type (ZEN-121) — the one thing `Chord`'s
+/// `KeyboardLayout` asks the real keyboard what it can type (ZEN-121): the one thing `Chord`'s
 /// US-only fold table can't answer. Everything else stubs this seam, so these are the only tests
 /// that exercise the Carbon query itself; without them the whole mechanism could be inert and every
 /// other test would still pass.
@@ -102,8 +102,8 @@ final class KeyboardLayoutTests: XCTestCase {
         XCTAssertNil(key.text)
     }
 
-    /// Arrows and Return type no character. `UCKeyTranslate` disagrees — it answers U+001C..U+001F
-    /// and CR for them, all length 1 — so reading their codepoint from the layout would hand a
+    /// Arrows and Return type no character. `UCKeyTranslate` disagrees and answers U+001C..U+001F
+    /// and CR for them, all length 1, so reading their codepoint from the layout would hand a
     /// keymap a control character where it is promised the glyph a key types or nothing, and a
     /// bind registered on that control codepoint would look like it claimed the arrow.
     func test_resolve_reportsNoCodepointForKeysThatTypeNothing() throws {
