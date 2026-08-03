@@ -82,12 +82,44 @@ final class KeyboardLayoutTests: XCTestCase {
         XCTAssertEqual(KeyboardLayout.keyCode(for: Chord(command: true, key: "⏎")), 36)
     }
 
-    /// Read at the unshifted state whatever the chord's Shift is, because that is what the field
-    /// means: a keymap resolving `cmd+shift+-` by glyph still wants `-`.
-    func test_unshiftedCodepoint_readsTheKeysBareGlyph() {
+    // MARK: what a backend keymap is handed
+
+    /// A shifted chord carries both spellings, because a keymap may hold the bind under either:
+    /// ⌘⇧- is the `-` key unshifted and types `_`, and a probe sending one of the two is blind to
+    /// a bind written the other way.
+    func test_resolve_carriesBothSpellingsOfAShiftedChord() throws {
         KeyboardLayout.layoutOverrideForTesting = { shift in shift ? [27: "_"] : [27: "-"] }
-        XCTAssertEqual(KeyboardLayout.unshiftedCodepoint(forKeyCode: 27), UInt32(("-" as Unicode.Scalar).value))
-        XCTAssertEqual(KeyboardLayout.unshiftedCodepoint(forKeyCode: 99), 0, "a key that types nothing")
+        let key = try XCTUnwrap(KeyboardLayout.resolve(Chord(command: true, shift: true, key: "-")))
+        XCTAssertEqual(key.unshiftedCodepoint, UInt32(("-" as Unicode.Scalar).value))
+        XCTAssertEqual(key.text, "_")
+    }
+
+    /// An unshifted chord types the bare glyph, so there is no second spelling to send.
+    func test_resolve_hasNoSeparateTextForAnUnshiftedChord() throws {
+        KeyboardLayout.layoutOverrideForTesting = { shift in shift ? [42: "|"] : [42: "\\"] }
+        let key = try XCTUnwrap(KeyboardLayout.resolve(Chord(command: true, key: "\\")))
+        XCTAssertEqual(key.unshiftedCodepoint, UInt32(("\\" as Unicode.Scalar).value))
+        XCTAssertNil(key.text)
+    }
+
+    /// Arrows and Return type no character. `UCKeyTranslate` disagrees — it answers U+001C..U+001F
+    /// and CR for them, all length 1 — so reading their codepoint from the layout would hand a
+    /// keymap a control character where it is promised the glyph a key types or nothing, and a
+    /// bind registered on that control codepoint would look like it claimed the arrow.
+    func test_resolve_reportsNoCodepointForKeysThatTypeNothing() throws {
+        KeyboardLayout.layoutOverrideForTesting = { _ in [123: "\u{1C}", 36: "\r"] }
+        for glyph in ["←", "⏎"] {
+            let key = try XCTUnwrap(KeyboardLayout.resolve(Chord(command: true, key: glyph)), glyph)
+            XCTAssertEqual(key.unshiftedCodepoint, 0, glyph)
+            XCTAssertNil(key.text, glyph)
+        }
+    }
+
+    /// The walk's contract is the glyph a key types, and a control character is not one. Reported
+    /// by the real layout for the arrows and Return, so the filter has something to do.
+    func test_resolve_doesNotTreatAControlCharacterAsATypeableGlyph() {
+        KeyboardLayout.layoutOverrideForTesting = { _ in [42: "\u{1C}"] }
+        XCTAssertNil(KeyboardLayout.keyCode(for: Chord(command: true, key: "\u{1C}")))
     }
 
     // MARK: the real Carbon query
@@ -101,8 +133,8 @@ final class KeyboardLayoutTests: XCTestCase {
     }
 
     func test_realLayout_reportsSomethingRatherThanNothing() throws {
-        // The failure this guards: TIS returns nil / the data doesn't map, `producibleGlyphs` yields
-        // an empty set, and EVERY keybind is judged un-typeable and silently dropped. An empty
+        // The failure this guards: TIS returns nil / the data doesn't map, `glyphsByKeyCode` yields
+        // an empty map, and EVERY keybind is judged un-typeable and silently dropped. An empty
         // layout must never quietly disable the whole keymap.
         try XCTSkipUnless(KeyboardLayout.canType(Chord(command: true, key: "a")), "non-Latin layout")
         let typeableDefaults = KeymapDefaults.map.keys.filter { KeyboardLayout.canType($0) }

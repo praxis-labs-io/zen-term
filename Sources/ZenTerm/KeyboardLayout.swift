@@ -19,54 +19,71 @@ enum KeyboardLayout {
     /// Whether some keypress on the current layout can produce `chord`.
     ///
     /// **Main-thread-only, and this is where that constraint actually comes from:**
-    /// `producibleGlyphs` calls `TISCopyCurrentKeyboardLayoutInputSource`, which off-main takes the
+    /// `glyphsByKeyCode` calls `TISCopyCurrentKeyboardLayoutInputSource`, which off-main takes the
     /// whole process down with no crash report (ZEN-17). Everything above this — `KeymapAssembler`,
     /// `GeneralConfigParser`, `ConfigLoader` — is main-thread-only because it reaches here.
     ///
     /// Only Shift matters: `charactersIgnoringModifiers` — the reading `Chord(event:)` is built on —
     /// applies Shift and ignores ⌘/⌥/⌃, so those never change which glyph arrives.
     @MainActor
-    static func canType(_ chord: Chord) -> Bool {
-        guard !Chord.isSpecialKeyGlyph(chord.key) else { return true }  // arrows/return come from the keyCode
-        // Canonicalize each producible glyph the same way a live event would be, then look for this
-        // chord's key among the results — so the check can't drift from the fold it's checking.
-        return producibleGlyphs(shift: chord.shift)
-            .contains { Chord(shift: chord.shift, key: $0).key == chord.key }
-    }
+    static func canType(_ chord: Chord) -> Bool { keyCode(for: chord) != nil }
 
     /// The physical key that types `chord` on this layout, or nil when no key can.
     ///
-    /// The reverse of `canType`, and it exists because a keyCode is what a backend keymap matches
-    /// on: asking one what it does with `cmd+k` means naming the key, not the letter. Special keys
-    /// resolve straight from `Chord`'s own table, since they never appear in a character table.
+    /// A keyCode is what a backend keymap matches on: asking one what it does with `cmd+k` means
+    /// naming the key, not the letter. Special keys resolve straight from `Chord`'s own table,
+    /// since they never appear in a character table.
     ///
     /// Returns the lowest matching keyCode. A layout can put one glyph on two keys (the numeric
     /// keypad), and a keymap bind written as a glyph means the main-row key.
     @MainActor
-    static func keyCode(for chord: Chord) -> UInt16? {
-        if let special = Chord.keyCodeForSpecialGlyph(chord.key) { return special }
-        return glyphsByKeyCode(shift: chord.shift)
+    static func keyCode(for chord: Chord) -> UInt16? { resolve(chord)?.keyCode }
+
+    /// Everything a backend keymap needs in order to be asked about `chord`, or nil when no key on
+    /// this layout types it.
+    ///
+    /// One entry point because the answers come from the same walk: splitting them made the
+    /// unshifted case walk 128 keys through Carbon twice to answer one question. A shifted chord
+    /// genuinely needs both states — the bind may be written either way round — so it still walks
+    /// twice, and only then.
+    ///
+    /// `text` is the glyph the keystroke types with Shift applied, and it is nil rather than the
+    /// bare glyph for an unshifted chord: the two are the same character there, and sending it
+    /// twice would tell a keymap the key was typed when the question is only what it is bound to.
+    @MainActor
+    static func resolve(_ chord: Chord) -> (keyCode: UInt16, unshiftedCodepoint: UInt32, text: String?)? {
+        if let special = Chord.keyCodeForSpecialGlyph(chord.key) {
+            // Arrows and Return type no character, so there is no glyph for a keymap to match on.
+            return (special, 0, nil)
+        }
+        // Canonicalize each producible glyph the same way a live event would be, then look for this
+        // chord's key among the results — so the lookup can't drift from the fold it's checking.
+        let typed = glyphsByKeyCode(shift: chord.shift)
             .filter { Chord(shift: chord.shift, key: $0.value).key == chord.key }
-            .keys.min()
+        guard let keyCode = typed.keys.min() else { return nil }
+        guard chord.shift else {
+            return (keyCode, typed[keyCode]?.unicodeScalars.first?.value ?? 0, nil)
+        }
+        let bare = glyphsByKeyCode(shift: false)[keyCode]?.unicodeScalars.first?.value ?? 0
+        return (keyCode, bare, typed[keyCode])
     }
 
-    /// The character a key types with nothing held, as a Unicode scalar value, or 0 when it types
-    /// none. Backend keymaps that resolve a bind by glyph rather than by physical key read this.
-    @MainActor
-    static func unshiftedCodepoint(forKeyCode keyCode: UInt16) -> UInt32 {
-        glyphsByKeyCode(shift: false)[keyCode]?.unicodeScalars.first?.value ?? 0
-    }
-
-    /// Every single-character glyph the current layout produces, at the given Shift state.
-    @MainActor
-    private static func producibleGlyphs(shift: Bool) -> Set<String> {
-        Set(glyphsByKeyCode(shift: shift).values)
-    }
-
-    /// Each keyCode the current layout maps to a single-character glyph, at the given Shift state.
+    /// Each keyCode the current layout maps to a single typed character, at the given Shift state.
     /// The one walk behind every question here, so a lookup and its reverse cannot drift apart.
+    ///
+    /// Control characters are not typed characters and are excluded. `UCKeyTranslate` answers for
+    /// the arrows and Return too (U+001C..U+001F and CR), all length 1, and letting those through
+    /// would put a control codepoint where callers are promised the glyph a key types or nothing.
     @MainActor
     private static func glyphsByKeyCode(shift: Bool) -> [UInt16: String] {
+        rawGlyphsByKeyCode(shift: shift).filter { _, glyph in
+            guard let scalar = glyph.unicodeScalars.first else { return false }
+            return scalar.value >= 0x20 && scalar.value != 0x7F
+        }
+    }
+
+    @MainActor
+    private static func rawGlyphsByKeyCode(shift: Bool) -> [UInt16: String] {
         #if DEBUG
             if let override = layoutOverrideForTesting { return override(shift) }
         #endif

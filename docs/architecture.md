@@ -34,11 +34,17 @@ Four types travel with it: `TerminalSurfaceConfig` (spawn params),
 chrome resolves its keymap before the responder chain and passes on everything it
 does not claim, so the backend's own keymap is live underneath ours the whole time.
 This is how the chrome finds out what is down there, rather than reading it out of
-the backend's source. It takes a `TerminalKey` (keyCode, modifiers, unshifted
-codepoint) rather than an `NSEvent`, because only the live path has an event: the
-diagnostic and the pin-bump baseline ask about a chord nobody pressed, and
-fabricating an event for those is the trap in `swift-conventions.md`. Defaulted to
-`.ignores`, so a backend with no keymap needs no code.
+the backend's source. Its one caller today is the pin-bump baseline test, which
+asks about a chord nobody pressed, so it takes a `TerminalKey` (keyCode, modifiers,
+unshifted codepoint, typed text) rather than an `NSEvent`: fabricating an event is
+the trap in `swift-conventions.md`. Defaulted to `.ignores`, so a backend with no
+keymap needs no code.
+
+Both spellings of the key travel because libghostty tries both. `Binding.Set.getEvent`
+looks up the physical key, then the typed text, then the unshifted codepoint, so a
+bind written `cmd+shift+|` is reachable only through the text and one written
+`cmd+shift+\` only through the codepoint. Sending one of the two would leave the
+baseline blind to half the keymap, which is the one thing it exists not to be.
 
 `ChordDisposition` has four cases and the fourth is the one that matters.
 `mayClaim` means the bind is conditional: the backend runs it only when the action

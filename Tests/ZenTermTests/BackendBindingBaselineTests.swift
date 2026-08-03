@@ -81,7 +81,12 @@ final class BackendBindingBaselineTests: XCTestCase {
         }
 
         // A chord this keyboard cannot type has no keyCode to ask about. On a US layout that set is
-        // empty, and a non-empty one here means the machine's layout, not a regression.
+        // empty, and a non-empty one here means the machine's layout, not a regression — but only
+        // if the layout answered at all. A walk that resolved nothing puts every chord in
+        // `unreachable`, and skipping on that would retire the check below without saying so.
+        XCTAssertLessThan(
+            unreachable.count, KeymapDefaults.map.count,
+            "no chord resolved: the layout walk is broken, which is not a layout difference")
         try XCTSkipUnless(
             unreachable.isEmpty, "layout cannot type \(unreachable.sorted()); not a US-style layout")
 
@@ -114,33 +119,10 @@ final class BackendBindingBaselineTests: XCTestCase {
     }
 
     /// A backend with no keymap of its own answers through the protocol extension, so a future
-    /// one needs no code for this.
+    /// one needs no code for this. `RecordingSurface` declares no `disposition`, which is the
+    /// point: it reaches the extension's default the same way a new backend would.
     func test_aBackendWithNoKeymapIgnoresEverything() {
         XCTAssertEqual(
-            StubSurface().disposition(of: TerminalKey(keyCode: 40, modifiers: .command)), .ignores)
+            RecordingSurface().disposition(of: TerminalKey(keyCode: 40, modifiers: .command)), .ignores)
     }
-}
-
-/// Bare enough to prove the seam's default, and nothing else.
-private final class StubSurface: TerminalSurface {
-    var view: NSView { NSView() }
-    var delegate: TerminalSurfaceDelegate?
-    var title: String { "" }
-    var isFocused: Bool { false }
-    var cellMetrics: TerminalCellMetrics? { nil }
-    func start(_ config: TerminalSurfaceConfig) {}
-    func focus() {}
-    func applyAppearance(theme: TerminalTheme, behavior: TerminalBehavior) {}
-    func setFontSize(_ points: CGFloat) {}
-    func terminate() {}
-    func setSizeSyncSuspended(_ suspended: Bool) {}
-    func paste(_ text: String) {}
-    func copySelection() -> String? { nil }
-    func scroll(_ command: TerminalScroll) {}
-    func text(viewportRow row: Int) -> String? { nil }
-    func text(in range: TerminalViewportRange) -> String? { nil }
-    func search(_ needle: String) {}
-    func stepSearch(_ step: TerminalSearchStep) {}
-    func endSearch() {}
-    func submitLine() {}
 }

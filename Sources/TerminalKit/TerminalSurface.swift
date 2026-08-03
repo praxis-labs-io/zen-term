@@ -172,10 +172,10 @@ public enum TerminalSearchStep: Equatable { case next, previous }
 
 /// One keystroke, in the terms a backend keymap needs, and nothing more.
 ///
-/// A value type rather than an `NSEvent` because only one of the two callers has an event. The
-/// live path does; the load-time diagnostic and the pin-bump baseline ask about a chord nobody
-/// pressed. Fabricating an `NSEvent` for those is the trap in `docs/swift-conventions.md`, where a
-/// synthesized keystroke is one macOS never sends and the check then passes against the fake.
+/// A value type rather than an `NSEvent`, because the caller has no event: the pin-bump baseline
+/// asks about a chord nobody pressed. Fabricating an `NSEvent` for that is the trap in
+/// `docs/swift-conventions.md`, where a synthesized keystroke is one macOS never sends and the
+/// check then passes against the fake.
 ///
 /// `NSEvent.ModifierFlags` rather than a parallel modifier enum: AppKit is not a backend, the seam
 /// already hands back an `NSView`, and a second spelling of the same four bits would need
@@ -188,11 +188,20 @@ public struct TerminalKey: Equatable {
     /// The character this key produces with no modifiers held, or 0 for a key that produces none
     /// (the arrows, Return). Some keymaps resolve a bind by glyph and need it.
     public var unshiftedCodepoint: UInt32
+    /// The character the keystroke actually types, Shift applied, or nil for a key that types
+    /// none. Separate from `unshiftedCodepoint` because a keymap may hold a bind under either
+    /// spelling: `⇧-` reaches a bind written `_` only through this, and one written `-` only
+    /// through the other, so a probe that sends one of the two is blind to half the keymap.
+    public var text: String?
 
-    public init(keyCode: UInt16, modifiers: NSEvent.ModifierFlags, unshiftedCodepoint: UInt32 = 0) {
+    public init(
+        keyCode: UInt16, modifiers: NSEvent.ModifierFlags, unshiftedCodepoint: UInt32 = 0,
+        text: String? = nil
+    ) {
         self.keyCode = keyCode
         self.modifiers = modifiers
         self.unshiftedCodepoint = unshiftedCodepoint
+        self.text = text
     }
 }
 

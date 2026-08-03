@@ -684,26 +684,31 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public func disposition(of key: TerminalKey) -> ChordDisposition {
         guard let surfacePtr else { return .ignores }
         var flags = ghostty_binding_flags_e(0)
-        guard ghostty_surface_key_is_binding(surfacePtr, Self.ghosttyKey(key), &flags) else {
-            return .ignores
+        var event = Self.ghosttyKey(key)
+        // `text` has to outlive the call, so the pointer is formed here rather than inside the
+        // builder, where it would dangle the moment the struct was returned.
+        let matched = { (text: UnsafePointer<CChar>?) -> Bool in
+            event.text = text
+            return ghostty_surface_key_is_binding(surfacePtr, event, &flags)
         }
+        guard key.text.map({ $0.withCString(matched) }) ?? matched(nil) else { return .ignores }
         if flags.rawValue & GHOSTTY_BINDING_FLAGS_CONSUMED.rawValue == 0 { return .claimsButPasses }
         if flags.rawValue & GHOSTTY_BINDING_FLAGS_PERFORMABLE.rawValue != 0 { return .mayClaim }
         return .claims
     }
 
-    /// A seam key as libghostty's key event. Only the fields the keymap matches on are set: this
-    /// is a question, never something to encode, so there is no text and no action worth sending.
+    /// A seam key as libghostty's key event, minus the text the caller attaches.
+    ///
+    /// Only the fields the keymap matches on are set. `consumed_mods` is deliberately not among
+    /// them: `Binding.Set.getEvent` matches on the mods, the text and the unshifted codepoint and
+    /// never reads it, so setting it here would be a second copy of `ghosttyKeyEvent`'s
+    /// translation heuristic that nothing exercises.
     private static func ghosttyKey(_ key: TerminalKey) -> ghostty_input_key_s {
         var event = ghostty_input_key_s()
         event.action = GHOSTTY_ACTION_PRESS
         event.keycode = UInt32(key.keyCode)
         event.mods = NSEvent.ghosttyMods(key.modifiers)
-        // Control and command never contribute to text translation, the same heuristic
-        // `ghosttyKeyEvent` uses; everything else may.
-        event.consumed_mods = NSEvent.ghosttyMods(key.modifiers.subtracting([.control, .command]))
         event.unshifted_codepoint = key.unshiftedCodepoint
-        event.text = nil
         event.composing = false
         return event
     }
