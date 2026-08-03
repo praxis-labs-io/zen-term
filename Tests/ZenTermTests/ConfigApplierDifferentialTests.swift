@@ -50,6 +50,9 @@ final class ConfigApplierDifferentialTests: XCTestCase {
     /// would only ever prove the model right.
     private final class SinkDoubles {
         var keymap: [Chord: KeyInterceptor.ReservedChord]
+        /// The keymap the shadow report last read. That sink returns nothing (it logs), so the state
+        /// it lands on is *which* keymap it was asked about.
+        var shadowKeymap: [Chord: KeyInterceptor.ReservedChord]
         var motion: GeneralConfig.ReduceMotion
         var autoChecks: Bool
         var announced: [ToastContent] = []
@@ -65,6 +68,7 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         /// old keycap and every field starts where the running app would have it.
         init(old: GeneralConfig) {
             keymap = old.keymap
+            shadowKeymap = old.keymap
             motion = old.reduceMotion
             autoChecks = old.automaticUpdateChecks
             card = UpdateCardView(
@@ -75,6 +79,8 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         var sinks: ConfigApplier.Sinks {
             ConfigApplier.Sinks(
                 setKeymap: { [unowned self] in self.keymap = $0 },
+                // The real sink takes no value either; it reads the live keymap when it runs.
+                reportBackendShadow: { [unowned self] in self.shadowKeymap = GeneralConfig.current.keymap },
                 applyMotion: { [unowned self] in self.motion = $0 },
                 announceDiagnostics: { [unowned self] content, _ in
                     guard self.canDeliver else { return false }
@@ -98,6 +104,8 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         /// than held as the dictionary because a failure prints the whole thing, and two raw
         /// 33-entry maps is a wall nobody reads.
         var keymap: [String]
+        /// The keymap the shadow report ran against, same flattening as above.
+        var shadowKeymap: [String]
         var motion: GeneralConfig.ReduceMotion
         var autoChecks: Bool
         /// The glyph the card's keycap was **built** with — empty when the chord is unbound.
@@ -118,6 +126,9 @@ final class ConfigApplierDifferentialTests: XCTestCase {
                 let onlyHere = Set(keymap).subtracting(other.keymap).sorted()
                 let onlyThere = Set(other.keymap).subtracting(keymap).sorted()
                 diffs.append("keymap (gated-only: \(onlyHere), ungated-only: \(onlyThere))")
+            }
+            if shadowKeymap != other.shadowKeymap {
+                diffs.append("backend shadow report ran against a different keymap")
             }
             if motion != other.motion { diffs.append("motion (\(motion) vs \(other.motion))") }
             if autoChecks != other.autoChecks {
@@ -149,6 +160,7 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         let views = descendants(of: doubles.card)
         return AppFingerprint(
             keymap: doubles.keymap.map { "\($0.key.configToken) = \($0.value)" }.sorted(),
+            shadowKeymap: doubles.shadowKeymap.map { "\($0.key.configToken) = \($0.value)" }.sorted(),
             motion: doubles.motion, autoChecks: doubles.autoChecks,
             cardKeycap: views.compactMap { ($0 as? KeycapView)?.shortcut }.joined(separator: "+"),
             cardText: views.compactMap { ($0 as? NSTextField)?.stringValue },

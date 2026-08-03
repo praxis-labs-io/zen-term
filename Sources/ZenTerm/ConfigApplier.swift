@@ -24,6 +24,8 @@ final class ConfigApplier {
     struct Sinks {
         /// Rebuild the key interceptor's chord → action map.
         var setKeymap: @MainActor ([Chord: KeyInterceptor.ReservedChord]) -> Void
+        /// Log the chords the new keymap just handed to the backend.
+        var reportBackendShadow: @MainActor () -> Void
         /// Re-install the reduce-motion override.
         var applyMotion: @MainActor (GeneralConfig.ReduceMotion) -> Void
         /// Show the config-problems notice, returning whether a window actually took it. `false`
@@ -52,7 +54,13 @@ final class ConfigApplier {
     /// **Two entries deliberately do not gate on the kind sharing their name. Don't "tidy" them** —
     /// each comment says why, and both were shipped regressions before they said it.
     func apply(_ change: ConfigChange) {
-        if change.contains(.keymap) { sinks.setKeymap(GeneralConfig.current.keymap) }
+        if change.contains(.keymap) {
+            sinks.setKeymap(GeneralConfig.current.keymap)
+            // A rebind frees the action's old chord, and what libghostty does with it is a question
+            // only a live surface can answer. Re-asked on every keymap change rather than cached:
+            // the backend answers against its config as it stands now.
+            sinks.reportBackendShadow()
+        }
         if change.contains(.motion) { sinks.applyMotion(GeneralConfig.current.reduceMotion) }
         // Deliberately ungated. This one already has a finer gate than the change set: it tracks
         // what was *delivered*, and leaves `lastAnnouncedDiagnostics` untouched when no window was
