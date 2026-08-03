@@ -382,10 +382,15 @@ final class GhosttyInputForwardingTests: XCTestCase {
 
         // A composing non-modifier encodes nothing at all (`key_encode.zig`), so it owes no
         // release either. The same hole `modifierActionToForward` closes with `!hasMarkedText()`.
+        //
+        // Escape, because the key has to be one the layout produces no text for. Setting
+        // `markedText` writes our own storage, which the input system knows nothing about, so
+        // with a letter `interpretKeyEvents` is free to commit it and take the branch that
+        // records the press unconditionally (ZEN-363).
         host.markedText.mutableString.setString("か")
-        host.keyDown(with: try key(.keyDown, "e", keyCode: 0x0E))
+        host.keyDown(with: try key(.keyDown, "\u{1b}", keyCode: 53))
         XCTAssertFalse(
-            host.retireKeyPress(for: try key(.keyUp, "e", keyCode: 0x0E)),
+            host.retireKeyPress(for: try key(.keyUp, "\u{1b}", keyCode: 53)),
             "libghostty drops a composing key without encoding it, so no press was ever sent")
         host.markedText.mutableString.setString("")
     }

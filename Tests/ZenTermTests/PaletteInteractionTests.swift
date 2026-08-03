@@ -8,8 +8,10 @@ import XCTest
 /// seams (`controlTextDidChange`, `control(_:textView:doCommandBy:)`) and asserts the activation
 /// payload, exactly the Dropdown lesson: state plumbing exists, the choose path was unverified.
 ///
-/// `NSApp.currentEvent` is nil in a test, so the Return handler can't read live modifiers —
-/// the Shift+Enter (replace) path is driven through the `activate(index:modifiers:)` seam directly.
+/// The Return handler reads live modifiers off `NSApp.currentEvent`, which a test does not control
+/// by default: it holds whatever AppKit last dequeued. Every Return goes through `sendReturn`,
+/// which pins the event first, so both the plain ⏎ and the ⇧⏎ replace path assert what they say
+/// they do.
 final class PaletteInteractionTests: WindowTestCase {
     /// Retained so a mounted overlay's window outlives the mount call (Esc is dispatched through it).
     private var window: NSWindow?
@@ -58,6 +60,33 @@ final class PaletteInteractionTests: WindowTestCase {
     @discardableResult
     private func send(_ selector: Selector, to overlay: PaletteOverlay) -> Bool {
         overlay.control(searchField(in: overlay), textView: NSTextView(), doCommandBy: selector)
+    }
+
+    /// Return, with `NSApp.currentEvent` pinned to the ⏎ the hook is about to read.
+    ///
+    /// The Return hook reads live modifiers off `NSApp.currentEvent`, which holds whatever AppKit
+    /// last dequeued for this process. A test that rests on it being nil rests on the order the
+    /// suite happened to run in (ZEN-363). Dequeuing the keystroke is also what production does:
+    /// the Return the user pressed is the current event when the hook runs.
+    private func sendReturn(
+        to overlay: PaletteOverlay, modifiers: NSEvent.ModifierFlags = []
+    ) throws {
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0,
+                windowNumber: 0, context: nil, characters: "\r", charactersIgnoringModifiers: "\r",
+                isARepeat: false, keyCode: 36))
+        NSApp.postEvent(event, atStart: true)
+        _ = NSApp.nextEvent(matching: .keyDown, until: nil, inMode: .default, dequeue: true)
+        // Checked by value, because the queue hands back a copy rather than the posted object. An
+        // empty queue dequeues nothing and leaves the hook reading whatever an earlier case left,
+        // which is the failure this helper exists to prevent.
+        let pinned = try XCTUnwrap(NSApp.currentEvent, "nothing dequeued, so the pin did not take")
+        XCTAssertEqual(pinned.keyCode, 36)
+        XCTAssertEqual(
+            pinned.modifierFlags.intersection([.command, .shift, .option, .control]), modifiers,
+            "the dequeued Return carries modifiers this test did not ask for")
+        send(Self.insertNewline, to: overlay)
     }
 
     @discardableResult
@@ -257,7 +286,7 @@ final class PaletteInteractionTests: WindowTestCase {
             onChoose: onChoose, onAddWorkspace: onAddWorkspace, onDismiss: onDismiss)
     }
 
-    func test_repoPicker_returnOpensFirstWorkspaceNotTheAddRow() {
+    func test_repoPicker_returnOpensFirstWorkspaceNotTheAddRow() throws {
         var chosen: (Workspace, Bool)?
         var addOpened = false
         let overlay = makeRepoPicker(
@@ -265,24 +294,23 @@ final class PaletteInteractionTests: WindowTestCase {
             onChoose: { chosen = ($0, $1) }, onAddWorkspace: { addOpened = true })
         mount(overlay)
         // Default selection is the first workspace (index 1), not the pinned ＋ row (index 0).
-        send(Self.insertNewline, to: overlay)
+        try sendReturn(to: overlay)
         XCTAssertEqual(chosen?.0.title, "alpha")
         XCTAssertEqual(chosen?.1, false)
         XCTAssertFalse(addOpened)
     }
 
-    func test_repoPicker_shiftEnterReplacesCurrentTab() {
+    func test_repoPicker_shiftEnterReplacesCurrentTab() throws {
         var chosen: (Workspace, Bool)?
         let overlay = makeRepoPicker(entries: [workspace("alpha")], onChoose: { chosen = ($0, $1) })
         mount(overlay)
-        // Shift is a live modifier the Return field-editor hook can't see in a test — drive the
-        // activation seam it routes to, index 1 = the first workspace.
-        overlay.activate(index: 1, modifiers: .shift)
+        // Through the field-editor hook, so the ⇧ the hook lifts off the current event is covered.
+        try sendReturn(to: overlay, modifiers: .shift)
         XCTAssertEqual(chosen?.0.title, "alpha")
         XCTAssertEqual(chosen?.1, true)
     }
 
-    func test_repoPicker_upArrowReachesAddRowAndActivatesIt() {
+    func test_repoPicker_upArrowReachesAddRowAndActivatesIt() throws {
         var chosen: (Workspace, Bool)?
         var addOpened = false
         let overlay = makeRepoPicker(
@@ -291,7 +319,7 @@ final class PaletteInteractionTests: WindowTestCase {
         mount(overlay)
         // From the first workspace (index 1), up → the ＋ row (index 0). Return opens the form.
         send(Self.moveUp, to: overlay)
-        send(Self.insertNewline, to: overlay)
+        try sendReturn(to: overlay)
         XCTAssertTrue(addOpened)
         XCTAssertNil(chosen)
     }
@@ -415,7 +443,7 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertNotNil(badge?.image, "and renders the bundled git logo")
     }
 
-    func test_repoPicker_filterNarrowsWorkspacesKeepingAddRowPinned() {
+    func test_repoPicker_filterNarrowsWorkspacesKeepingAddRowPinned() throws {
         var chosen: (Workspace, Bool)?
         let overlay = makeRepoPicker(
             entries: [workspace("alpha"), workspace("beta")], onChoose: { chosen = ($0, $1) })
@@ -423,7 +451,8 @@ final class PaletteInteractionTests: WindowTestCase {
         type("bet", into: overlay)
         // ＋ row (0) stays pinned; only "beta" matches → 2 rows. Return opens the sole match.
         XCTAssertEqual(overlay.numberOfRows(), 2)
-        send(Self.insertNewline, to: overlay)
+        try sendReturn(to: overlay)
         XCTAssertEqual(chosen?.0.title, "beta")
+        XCTAssertEqual(chosen?.1, false)
     }
 }
