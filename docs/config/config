@@ -308,9 +308,11 @@
 #   ⌥←  ⌥→        move a word at a time
 #   ⇧ and an arrow, Home, End, Page Up or Page Down, extends a selection
 #
-# A few more are the terminal's for now and will become ZenTerm actions: ⌘K clears
-# the screen, ⌘A selects it, ⌘↑ and ⌘↓ jump between prompts, ⌘⇧V pastes your last
-# selection, and ⌘⇧J writes the screen to a file.
+# A few more are the terminal's for now and will become ZenTerm actions: ⌘A selects
+# the whole screen, ⌘↑ and ⌘↓ jump between prompts, ⌘⇧V pastes your last selection,
+# and ⌘⇧⌃J writes the screen to a file. Three sit under chords ZenTerm binds, so you
+# only meet them after moving ours off: ⌘K clears the screen, ⌘J scrolls to the
+# selection, ⌘⇧J writes the screen to a file and pastes the path.
 #
 # ─── Scroll mode ─────────────────────────────────────────────────────────────
 #

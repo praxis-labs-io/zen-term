@@ -206,8 +206,9 @@ enum KeymapDefaults {
         // one was live under a pane and answered by the backend rather than by us, so keeping the
         // chord is what makes naming the action invisible to anyone already pressing it.
         //
-        // The four scroll keys travel as `Chord`'s glyph tokens: Home, End, Page Up and Page Down
-        // type no character, so there is nothing else to spell them with.
+        // The four scroll keys are `Chord`'s glyph tokens, which is what a live event resolves to:
+        // Home, End, Page Up and Page Down type no character, so the keyCode table is the only way
+        // to name them. A config file spells the same four as words.
         map[Chord(command: true, key: "↖")] = .scrollToTop
         map[Chord(command: true, key: "↘")] = .scrollToBottom
         map[Chord(command: true, key: "⇞")] = .scrollPageUp

@@ -121,7 +121,8 @@ struct Chord: Hashable {
     /// repo's order (cmd, shift, opt, ctrl) then the key. A *projection* of `parse`, not its
     /// inverse: with Shift held, several spellings fold to one chord (`cmd+shift+_` and
     /// `cmd+shift+-` both emit `cmd+shift+-`), so a re-parse of the output is stable from here on.
-    /// Mirrors `displayGlyph`'s glyph form.
+    /// It follows `displayGlyph` except on the keys that type nothing, where the screen gets the
+    /// glyph and the file gets the word: nobody can type ↖ into a config.
     var configToken: String {
         var token = ""
         if command { token += "cmd+" }
