@@ -37,12 +37,24 @@ final class KeyboardLayoutTests: XCTestCase {
     }
 
     func test_specialKeyGlyphs_bypassTheLayout() {
-        // Arrows and Return are named by keyCode, never by the character tables — a layout query
-        // would report them un-typeable and silently drop every arrow bind.
+        // Arrows, Return, Home, End and the page keys are named by keyCode, never by the character
+        // tables — a layout query would report them un-typeable and silently drop every bind on
+        // one, the shipped ⌘Home and ⌘Page Up defaults included.
         KeyboardLayout.layoutOverrideForTesting = { _ in [:] }
-        for glyph in ["←", "→", "↑", "↓", "⏎"] {
+        for glyph in ["←", "→", "↑", "↓", "⏎", "↖", "↘", "⇞", "⇟"] {
             XCTAssertTrue(KeyboardLayout.canType(Chord(command: true, key: glyph)), glyph)
         }
+    }
+
+    /// The reverse of the above, and the half that matters to a backend: the probe asks libghostty
+    /// about a chord by naming the physical key, so a glyph with no keyCode behind it is a chord
+    /// `BackendShadow` can never ask about.
+    func test_specialKeyGlyphs_resolveToTheirPhysicalKey() {
+        KeyboardLayout.layoutOverrideForTesting = { _ in [:] }
+        XCTAssertEqual(KeyboardLayout.keyCode(for: Chord(command: true, key: "↖")), 115)
+        XCTAssertEqual(KeyboardLayout.keyCode(for: Chord(command: true, key: "↘")), 119)
+        XCTAssertEqual(KeyboardLayout.keyCode(for: Chord(command: true, key: "⇞")), 116)
+        XCTAssertEqual(KeyboardLayout.keyCode(for: Chord(command: true, key: "⇟")), 121)
     }
 
     // MARK: the reverse lookup

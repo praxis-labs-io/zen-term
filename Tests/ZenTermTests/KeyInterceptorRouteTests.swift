@@ -64,6 +64,49 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertFalse(reachedMode, "chord routing must win, so ⌘T still opens a tab in scroll mode")
     }
 
+    /// ZEN-367's defaults sit on keys that type no character, and that is the shape of a keymap
+    /// entry that looks right and never fires: `Chord.init`'s own comment names the trap. The
+    /// event has to be the one macOS really sends, `.function` bit included, or the test proves
+    /// nothing about ⌘Home. This drives `route`, which is the monitor's whole decision.
+    func test_aKeyThatTypesNoCharacterStillFiresItsShippedDefault() throws {
+        let keys = KeyInterceptor()  // the shipped defaults, not the one-chord stub
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        XCTAssertNil(keys.route(try functionKeyDown(keyCode: 115, character: "\u{F729}")))
+        XCTAssertNil(keys.route(try functionKeyDown(keyCode: 119, character: "\u{F72B}")))
+        XCTAssertNil(keys.route(try functionKeyDown(keyCode: 116, character: "\u{F72C}")))
+        XCTAssertNil(keys.route(try functionKeyDown(keyCode: 121, character: "\u{F72D}")))
+
+        XCTAssertEqual(fired, [.scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown])
+    }
+
+    /// Holding a page key keeps scrolling, and holding Home does not keep jumping to a top it is
+    /// already at. A repeat the action declines is still consumed either way, so the difference is
+    /// invisible except in what fires.
+    func test_aHeldPageKeyRepeatsAndAHeldHomeKeyDoesNot() throws {
+        let keys = KeyInterceptor()
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        XCTAssertNil(keys.route(try functionKeyDown(keyCode: 121, character: "\u{F72D}", isARepeat: true)))
+        XCTAssertNil(keys.route(try functionKeyDown(keyCode: 115, character: "\u{F729}", isARepeat: true)))
+
+        XCTAssertEqual(fired, [.scrollPageDown])
+    }
+
+    /// ⌘Home as AppKit delivers it: the private-use character, and `.function` alongside `.command`.
+    /// A synthesized `.command`-only event is a keystroke macOS never sends.
+    private func functionKeyDown(keyCode: UInt16, character: String, isARepeat: Bool = false) throws
+        -> NSEvent
+    {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command, .function], timestamp: 0,
+                windowNumber: 0, context: nil, characters: character,
+                charactersIgnoringModifiers: character, isARepeat: isARepeat, keyCode: keyCode))
+    }
+
     func test_anUnboundModifiedKeyFallsToTheMode() throws {
         // ⌃d is not a chord anyone can reserve (it's terminal EOF), so it reaches the mode only
         // because the fast-bail hands misses on rather than returning early.

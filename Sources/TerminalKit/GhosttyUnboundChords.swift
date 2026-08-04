@@ -16,7 +16,8 @@ enum GhosttyUnboundChords {
     /// Some actions are bound twice under different spellings and both have to go:
     /// `increase_font_size` sits on `=` and on `+`, and `goto_tab` on both the physical `digit_N`
     /// key and the `unicode` one, so an AZERTY layout reaches it too.
-    static let triggers: [String] = tabs + splitsAndPanes + windowsAndTabs + appLevel + unimplemented
+    static let triggers: [String] =
+        tabs + splitsAndPanes + windowsAndTabs + appLevel + unimplemented + scrollingAndFinding
 
     /// `goto_tab` and `last_tab`, which ZenTerm holds as select_tab_1…9.
     ///
@@ -65,6 +66,14 @@ enum GhosttyUnboundChords {
         "cmd+z", "cmd+shift+z", "cmd+shift+t",
     ]
 
+    /// Scrolling the viewport and stepping a search, which ZenTerm named in ZEN-367 and kept on
+    /// ghostty's own chords. Nothing a user presses changes, and the behavior is ours to describe
+    /// in Settings and to rebind.
+    private static let scrollingAndFinding: [String] = [
+        "cmd+home", "cmd+end", "cmd+page_up", "cmd+page_down",
+        "cmd+g", "cmd+shift+g", "cmd+e",
+    ]
+
     /// What libghostty is left holding, and what the sweep asserts survives.
     ///
     /// Two kinds. The first is behavior ZenTerm has no action for yet, kept bound so nothing is
@@ -74,9 +83,7 @@ enum GhosttyUnboundChords {
     static let kept: [String] = [
         // Not yet named by ZenTerm.
         "cmd+k", "cmd+j", "cmd+a",
-        "cmd+home", "cmd+end", "cmd+page_up", "cmd+page_down",
         "cmd+arrow_up", "cmd+arrow_down", "cmd+shift+arrow_up", "cmd+shift+arrow_down",
-        "cmd+g", "cmd+shift+g", "cmd+e",
         "cmd+shift+ctrl+j", "cmd+shift+opt+j", "cmd+shift+j",
         "cmd+shift+v",
         // Encodings, kept for good. ⌘⌫ is `backspace`: ghostty's `delete` is the forward-delete

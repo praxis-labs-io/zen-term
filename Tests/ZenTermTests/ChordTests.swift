@@ -127,6 +127,33 @@ final class ChordTests: XCTestCase {
         }
     }
 
+    func test_aKeyThatTypesNothing_readsAsAWordAndWritesBackAsOne() {
+        // The glyph is canonical everywhere inside the app, and it is the one form nobody can put
+        // in a text file from the keyboard. So the file spells it as a word both ways: parse a
+        // word, and write the same word back out.
+        XCTAssertEqual(Chord.parse("cmd+home"), Chord(command: true, key: "↖"))
+        XCTAssertEqual(Chord.parse("cmd+page_down"), Chord(command: true, key: "⇟"))
+        XCTAssertEqual(Chord(command: true, key: "↖").configToken, "cmd+home")
+        XCTAssertEqual(Chord(command: true, key: "⇞").configToken, "cmd+page_up")
+        // The display is the glyph, which is what a keycap draws.
+        XCTAssertEqual(Chord(command: true, key: "↖").displayGlyph, "⌘↖")
+    }
+
+    func test_ghosttysArrowSpelling_resolvesToTheSameChord() {
+        // The same courtesy the modifier aliases get: a keybind line pasted from a ghostty config
+        // should resolve rather than being dropped as an unparseable chord.
+        XCTAssertEqual(Chord.parse("cmd+arrow_up"), Chord.parse("cmd+up"))
+        XCTAssertEqual(Chord.parse("cmd+arrow_left"), Chord(command: true, key: "←"))
+    }
+
+    func test_everyShippedDefaultRoundTripsThroughItsConfigToken() {
+        // The defaults are the lines the config reference tells people to copy. One that does not
+        // parse back is a documented line that silently does nothing.
+        for (chord, _) in KeymapDefaults.map {
+            XCTAssertEqual(Chord.parse(chord.configToken), chord, chord.configToken)
+        }
+    }
+
     func test_plusKey_roundTrips_shiftedAndUnshifted() {
         // Shifted, `+` folds onto ⇧= — on US that's the only way to type it, so ⌘⇧+ and ⌘⇧= are one
         // chord and the `plus` escape isn't needed on the way out.
@@ -199,11 +226,14 @@ final class ChordTests: XCTestCase {
 
     func test_configToken_arrowGlyph_roundTrips() {
         // Arrow keys carry a non-printing character from the event; `Chord(event:)` maps them to a
-        // glyph so they display and round-trip as a single character.
+        // glyph so they display and match as a single character. The file gets the word instead,
+        // because ↑ is not something anyone types into a config. A line already written the old
+        // way still parses, so nobody's config breaks; only what we write back moved.
         let up = Chord(command: true, key: "↑")
-        XCTAssertEqual(up.configToken, "cmd+↑")
+        XCTAssertEqual(up.configToken, "cmd+up")
         XCTAssertEqual(up.displayGlyph, "⌘↑")
         XCTAssertEqual(Chord.parse(up.configToken), up)
+        XCTAssertEqual(Chord.parse("cmd+↑"), up)
     }
 
     private func expectedToken(_ c: Chord) -> String {

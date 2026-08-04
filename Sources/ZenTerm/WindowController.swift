@@ -588,6 +588,23 @@ final class WindowController: NSObject {
         search.begin(surface: target.surface, panel: target.panel, seed: selected ?? "")
     }
 
+    /// Open the find bar on the selection, and do nothing when there is none. That last clause is
+    /// the whole difference from `toggle_search`, which reads the same two selection models but
+    /// opens on an empty needle rather than declining (ZEN-367).
+    private func searchSelection() {
+        guard let target = activeController?.focusedScrollTarget else { return }
+        guard let selected = scrollMode.selectedText ?? target.surface.copySelection(),
+            !selected.isEmpty
+        else { return }
+        search.begin(surface: target.surface, panel: target.panel, seed: selected)
+    }
+
+    /// Move the focused pane or drawer's viewport, leaving the keyboard where it is. Scroll mode is
+    /// the other way to read back through a buffer; this is one press and no mode.
+    private func scrollFocusedPane(_ command: TerminalScroll) {
+        activeController?.focusedScrollTarget?.surface.scroll(command)
+    }
+
     /// End both modes, in the order their layout changes have to unwind: the bar comes down first,
     /// because taking it down reflows the grid that scroll mode is still measuring against.
     ///
@@ -1757,6 +1774,13 @@ final class WindowController: NSObject {
             active?.toggleZoom()
         case .toggleScrollMode: toggleScrollMode()
         case .toggleSearch: toggleSearch()
+        case .searchSelection: searchSelection()
+        case .findNext: search.navigate(.next)
+        case .findPrevious: search.navigate(.previous)
+        case .scrollToTop: scrollFocusedPane(.top)
+        case .scrollToBottom: scrollFocusedPane(.bottom)
+        case .scrollPageUp: scrollFocusedPane(.pageFraction(-1))
+        case .scrollPageDown: scrollFocusedPane(.pageFraction(1))
         case .fillScreen: toggleFillScreen()
         case .toggleToolFloat(let id):
             // A float is modal too, so it calls off a card that's still loading — otherwise the card

@@ -41,6 +41,16 @@ extension KeyInterceptor.ReservedChord {
         case .resetFontSize: return "reset_font_size"
         case .toggleScrollMode: return "toggle_scroll_mode"
         case .toggleSearch: return "toggle_search"
+        // ghostty's own spelling again, for the same reason as the font sizes.
+        case .scrollToTop: return "scroll_to_top"
+        case .scrollToBottom: return "scroll_to_bottom"
+        case .scrollPageUp: return "scroll_page_up"
+        case .scrollPageDown: return "scroll_page_down"
+        // Ours: ghostty spells these `navigate_search:next` and `navigate_search:previous`, and no
+        // token here carries an argument.
+        case .findNext: return "find_next"
+        case .findPrevious: return "find_previous"
+        case .searchSelection: return "search_selection"
         }
     }
 
@@ -48,9 +58,10 @@ extension KeyInterceptor.ReservedChord {
     ///
     /// Only the actions whose effect accumulates toward something the eye tracks, and where the
     /// hold runs out of room on its own: nav stops at the edge pane, resize at the pane's minimum,
-    /// font size at the scale limit. Everything else is a discrete act, and a held ⌘N spawning
-    /// windows at 30 a second is the bug this answers. Tab cycling is deliberately not here: it
-    /// wraps, so a hold never lands anywhere the user aimed.
+    /// font size at the scale limit, a page scroll at the end of the buffer. Everything else is a
+    /// discrete act, and a held ⌘N spawning windows at 30 a second is the bug this answers. Tab
+    /// cycling and search stepping are deliberately not here: both wrap, so a hold never lands
+    /// anywhere the user aimed.
     ///
     /// A `switch` so a new `ReservedChord` case has to answer, the same as `actionToken`.
     var shouldRepeat: Bool {
@@ -58,11 +69,13 @@ extension KeyInterceptor.ReservedChord {
         case .navLeft, .navRight, .navUp, .navDown: return true
         case .resizeLeft, .resizeRight, .resizeUp, .resizeDown: return true
         case .increaseFontSize, .decreaseFontSize: return true
+        case .scrollPageUp, .scrollPageDown: return true
         case .splitVertical, .splitHorizontal, .closePane, .newTab, .newWindow, .selectTab,
             .prevTab, .nextTab, .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
             .toggleToolFloat, .toggleRepoPicker, .toggleCommandPalette, .openSettings,
             .reloadConfig, .checkForUpdates, .reportIssue, .openDiffViewer, .resetFontSize,
-            .toggleScrollMode, .toggleSearch:
+            .toggleScrollMode, .toggleSearch, .scrollToTop, .scrollToBottom,
+            .findNext, .findPrevious, .searchSelection:
             return false
         }
     }
@@ -109,6 +122,13 @@ extension KeyInterceptor.ReservedChord {
         case "reset_font_size": self = .resetFontSize
         case "toggle_scroll_mode": self = .toggleScrollMode
         case "toggle_search": self = .toggleSearch
+        case "scroll_to_top": self = .scrollToTop
+        case "scroll_to_bottom": self = .scrollToBottom
+        case "scroll_page_up": self = .scrollPageUp
+        case "scroll_page_down": self = .scrollPageDown
+        case "find_next": self = .findNext
+        case "find_previous": self = .findPrevious
+        case "search_selection": self = .searchSelection
         // ghostty's own spelling, so a config carried over from it binds our find bar rather than
         // failing to parse.
         case "start_search": self = .toggleSearch
@@ -181,6 +201,20 @@ enum KeymapDefaults {
         map[Chord(command: true, shift: true, key: "=")] = .increaseFontSize
         map[Chord(command: true, key: "-")] = .decreaseFontSize
         map[Chord(command: true, key: "0")] = .resetFontSize
+
+        // Scrolling and finding (ZEN-367), on the chords libghostty already used for them. Every
+        // one was live under a pane and answered by the backend rather than by us, so keeping the
+        // chord is what makes naming the action invisible to anyone already pressing it.
+        //
+        // The four scroll keys travel as `Chord`'s glyph tokens: Home, End, Page Up and Page Down
+        // type no character, so there is nothing else to spell them with.
+        map[Chord(command: true, key: "↖")] = .scrollToTop
+        map[Chord(command: true, key: "↘")] = .scrollToBottom
+        map[Chord(command: true, key: "⇞")] = .scrollPageUp
+        map[Chord(command: true, key: "⇟")] = .scrollPageDown
+        map[Chord(command: true, key: "g")] = .findNext
+        map[Chord(command: true, shift: true, key: "g")] = .findPrevious
+        map[Chord(command: true, key: "e")] = .searchSelection
 
         return map
     }()

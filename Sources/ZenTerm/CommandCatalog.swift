@@ -60,6 +60,13 @@ enum CommandCatalog {
         case .resetFontSize: return window("Reset Font Size", glyph, chord)
         case .toggleScrollMode: return pane("Scroll Mode", glyph, chord)
         case .toggleSearch: return pane("Find in Scrollback", glyph, chord)
+        case .scrollToTop: return pane("Scroll to Top", glyph, chord)
+        case .scrollToBottom: return pane("Scroll to Bottom", glyph, chord)
+        case .scrollPageUp: return pane("Scroll Page Up", glyph, chord)
+        case .scrollPageDown: return pane("Scroll Page Down", glyph, chord)
+        case .findNext: return pane("Find Next", glyph, chord)
+        case .findPrevious: return pane("Find Previous", glyph, chord)
+        case .searchSelection: return pane("Find Selection", glyph, chord)
         // Present for exhaustiveness; all are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
@@ -92,7 +99,10 @@ enum CommandCatalog {
             .splitHorizontal, .splitVertical,
             .navLeft, .navDown, .navUp, .navRight,
             .resizeLeft, .resizeDown, .resizeUp, .resizeRight,
-            .toggleZoom, .toggleScrollMode, .toggleSearch, .closePane,
+            .toggleZoom, .toggleScrollMode, .toggleSearch,
+            .searchSelection, .findNext, .findPrevious,
+            .scrollPageUp, .scrollPageDown, .scrollToTop, .scrollToBottom,
+            .closePane,
         ]
         chords += [.fillScreen, .increaseFontSize, .decreaseFontSize, .resetFontSize]
         return chords.map(spec(for:))
