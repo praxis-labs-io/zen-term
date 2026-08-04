@@ -2117,6 +2117,12 @@ final class WindowController: NSObject {
     }
     var focusedSurfaceForTesting: TerminalSurface? { activeController?.focusedScrollTarget?.surface }
 
+    /// Any live surface in this window. For a caller that needs the *backend's* answer rather than a
+    /// particular pane's: `disposition(of:)` reads the surface's own config and every surface shares
+    /// the app's. Deliberately not the focused scroll target, which is nil whenever something other
+    /// than a pane holds focus.
+    var anyTerminalSurface: TerminalSurface? { activeController?.allSurfaces.first }
+
     /// Test hook: drive the real surface-failure toast so a test can click its actual buttons.
     func presentSurfaceFailureToastForTesting(retry: @escaping () -> Void, close: @escaping () -> Void) {
         presentSurfaceFailureToast(retry: retry, close: close)

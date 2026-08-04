@@ -34,11 +34,10 @@ Four types travel with it: `TerminalSurfaceConfig` (spawn params),
 chrome resolves its keymap before the responder chain and passes on everything it
 does not claim, so the backend's own keymap is live underneath ours the whole time.
 This is how the chrome finds out what is down there, rather than reading it out of
-the backend's source. Its one caller today is the pin-bump baseline test, which
-asks about a chord nobody pressed, so it takes a `TerminalKey` (keyCode, modifiers,
-unshifted codepoint, typed text) rather than an `NSEvent`: fabricating an event is
-the trap in `swift-conventions.md`. Defaulted to `.ignores`, so a backend with no
-keymap needs no code.
+the backend's source. Both its callers ask about a chord nobody pressed, so it
+takes a `TerminalKey` (keyCode, modifiers, unshifted codepoint, typed text) rather
+than an `NSEvent`: fabricating an event is the trap in `swift-conventions.md`.
+Defaulted to `.ignores`, so a backend with no keymap needs no code.
 
 Both spellings of the key travel because libghostty tries both. `Binding.Set.getEvent`
 looks up the physical key, then the typed text, then the unshifted codepoint, so a
@@ -57,6 +56,23 @@ time no search is running. `⌘K` and `⌘F` are the same shape.
 `BackendBindingBaselineTests` pins what libghostty binds under each of our defaults,
 measured against a live surface rather than transcribed. Re-run it on a ghostty pin
 bump: a change there is not automatically a bug, but it must never be silent.
+
+**`BackendShadow` is the same question asked at load time, and it is the half a
+build-time test cannot reach.** A user keybind moves its action, `KeymapAssembler`
+drops that action's defaults, and the freed chord goes to the backend. Rebinding
+nav to `ctrl+hjkl` is what makes ⌘K clear the scrollback, and on a default install
+⌘K is nav-up so the backend never sees it. The shadow surface is a function of the
+user's config, not a constant. `AppDelegate` runs the report once the first window
+has a surface to ask through, and `ConfigApplier` re-runs it whenever the keymap
+changes, because the backend answers against its config as it stands now. It logs
+and shows nothing: the probe answers a disposition, not an action name, so the line
+can say the backend takes ⌘K but not what it does with it.
+
+It confirms the backend is answering before trusting an empty result, on ⌘T, which
+libghostty binds unconditionally. A `TerminalSurface` exists before its backend
+surface does (`ghostty_surface_new` fails on a locked screen and leaves the object
+alive), and every chord then reads `.ignores`. Without the check, a dead probe and a
+clean config are the same answer, and an empty result is this check's all-clear.
 
 **The rule:** if only one backend can do a thing, it stays below the seam. The
 protocol grows only to hold what the chrome needs from *any* terminal.

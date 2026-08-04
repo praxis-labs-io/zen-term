@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var configApplier = ConfigApplier(
         sinks: ConfigApplier.Sinks(
             setKeymap: { [weak self] map in self?.keys.setKeymap(map) },
+            reportBackendShadow: { [weak self] in self?.reportBackendShadow() },
             applyMotion: { MotionConfig.apply($0) },
             announceDiagnostics: { [weak self] content, scope in
                 guard let self else { return false }
@@ -72,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Log.info("ZenTerm launched v\(AppVersion.current)", category: .app)
 
         newWindow(initialCWD: nil, centered: true)
+        reportBackendShadow()
         // Announce a config that's already broken at launch, not just one broken later. Someone who
         // hand-edited their config and quit has no reason to open Settings — they're exactly who this
         // is for. It also seeds the change-gate, so a pre-existing problem can't ambush them later,
@@ -225,6 +227,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func keyController() -> WindowController? {
         guard let key = NSApp.keyWindow else { return windows.first }
         return windows.first { $0.window === key }
+    }
+
+    /// Log what the config just handed to libghostty. Lives here rather than in the config load
+    /// because it needs a live surface to ask through, which is why it is a load-time check and not
+    /// a build-time one. Quiet when no window has a surface yet: the next reload asks again.
+    private func reportBackendShadow() {
+        guard let surface = windows.lazy.compactMap({ $0.anyTerminalSurface }).first else { return }
+        BackendShadow.report(assembled: GeneralConfig.current.keymap, probe: surface.disposition)
     }
 
     private func newWindow(initialCWD: URL?, centered: Bool) {
