@@ -80,6 +80,34 @@ extension KeyInterceptor.ReservedChord {
         }
     }
 
+    /// Whether the Shortcuts settings card offers a row for this action (ZEN-367).
+    ///
+    /// A `switch` for the reason the two above are, and this one earned it the hard way: the card's
+    /// group list is hand-ordered, so seven actions shipped with no row and nothing anywhere went
+    /// red. An action missing from that list is invisible rather than broken, which is the failure
+    /// a test cannot find on its own. Answering here is what `SettingsKeybindGroupsTests` measures
+    /// the list against.
+    ///
+    /// The ones that say no are file-only, and each for its own reason: the font sizes belong to
+    /// the Terminal card's own control, Reload Config is what you press when the file is the thing
+    /// you are editing, a float's toggle chord lives on the float, and the last two ship unbound.
+    var isEditableInSettings: Bool {
+        switch self {
+        case .increaseFontSize, .decreaseFontSize, .resetFontSize: return false
+        case .reloadConfig, .toggleToolFloat: return false
+        case .checkForUpdates, .reportIssue: return false
+        case .splitVertical, .splitHorizontal, .closePane, .toggleZoom,
+            .toggleScrollMode, .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown,
+            .toggleSearch, .searchSelection, .findNext, .findPrevious,
+            .navLeft, .navRight, .navUp, .navDown,
+            .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
+            .newTab, .newWindow, .prevTab, .nextTab, .selectTab,
+            .fillScreen, .toggleBottomDrawer, .toggleRightDrawer,
+            .toggleRepoPicker, .toggleCommandPalette, .openDiffViewer, .openSettings:
+            return true
+        }
+    }
+
     /// Inverse of `actionToken`: parse a config action name back to a chord, or `nil` for an
     /// unknown token (caller warns + skips). The two parameterized families resolve by prefix.
     init?(token: String) {
