@@ -147,9 +147,13 @@ final class ScrollAndFindChordTests: WindowTestCase {
         XCTAssertEqual(surface.searchSteps.suffix(2), [.next, .previous])
     }
 
-    /// With no bar up there is no search to step, and libghostty declined these the same way: its
-    /// `navigate_search` bind is performable, so the key went to the program instead. Stepping a
-    /// search that does not exist would move the viewport for no reason a reader could explain.
+    /// With no bar up there is no search to step. Stepping one that does not exist would move the
+    /// viewport for no reason a reader could explain.
+    ///
+    /// The chord is still consumed, which is where this parts company with libghostty: its
+    /// `navigate_search` bind is performable, so a declined ⌘G went on to the program. A ZenTerm
+    /// chord is ours whether or not the action has anything to do, the same as ⌘T over a window
+    /// that cannot open a tab. `docs/config/config` says so where a user would look.
     func test_findNextWithNoBarUpStepsNothing() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)

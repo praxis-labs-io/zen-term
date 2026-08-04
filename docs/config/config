@@ -359,8 +359,10 @@
 # is the same thing except that with nothing selected it does nothing at all.
 #
 # `find_next` (⌘G) and `find_previous` (⌘⇧G) step through matches from anywhere,
-# so you can search, hit Enter, and keep stepping while you read. They only act
-# while the bar is up: close it and ⌘G goes to the program like any other chord.
+# so you can search, hit Enter, and keep stepping while you read. With no bar up
+# they do nothing. Like every shortcut, they stay ZenTerm's whether or not there is
+# anything to do, so ⌘G with no search running reaches nothing rather than reaching
+# the program. Move it with a keybind line if you want it back.
 #
 # Enter hands the keys back to the pane and puts you in scroll mode on the match,
 # where `n` and `N` step forward and back (Enter and shift+Enter do the same), and

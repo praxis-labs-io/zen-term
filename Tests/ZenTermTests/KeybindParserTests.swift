@@ -17,6 +17,8 @@ final class KeybindParserTests: XCTestCase {
             .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
             .toggleRepoPicker, .toggleCommandPalette, .openSettings, .reloadConfig, .checkForUpdates,
             .reportIssue, .openDiffViewer, .toggleScrollMode, .toggleSearch,
+            .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown,
+            .findNext, .findPrevious, .searchSelection,
             .increaseFontSize, .decreaseFontSize, .resetFontSize,
             .selectTab(1), .selectTab(9), .toggleToolFloat("gitdash"),
         ]
