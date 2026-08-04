@@ -234,6 +234,8 @@
 # Chord syntax: `+`-joined modifiers then one key, e.g. cmd+shift+g.
 #   modifiers: cmd (command/super), shift, opt (option/alt), ctrl (control)
 #   key:       a single character (letter, digit, or symbol like - \ [ ])
+#              or one of: up down left right enter home end page_up page_down
+#              (ghostty's arrow_up and friends work too)
 #
 # Write the key as it's printed *unshifted*, and add `shift` yourself: cmd+shift+-
 # rather than cmd+shift+_. Both spellings work: a shifted glyph folds onto its base
@@ -247,6 +249,8 @@
 #   new_tab  new_window  prev_tab  next_tab  select_tab_1 … select_tab_9
 #   toggle_bottom_drawer  toggle_right_drawer  toggle_focus_mode  fill_screen
 #   toggle_scroll_mode  toggle_search
+#   scroll_to_top  scroll_to_bottom  scroll_page_up  scroll_page_down
+#   find_next  find_previous  search_selection
 #   toggle_workspace_picker  toggle_command_palette  diff_viewer
 #   open_settings  reload_config
 #   increase_font_size  decrease_font_size  reset_font_size
@@ -277,6 +281,13 @@
 # keybind = fill_screen=cmd+shift+f              # the window fills the desktop
 # keybind = toggle_scroll_mode=cmd+shift+s       # vim keys move the focused pane's scrollback
 # keybind = toggle_search=cmd+/                  # find in the focused pane's scrollback
+# keybind = scroll_to_top=cmd+home
+# keybind = scroll_to_bottom=cmd+end
+# keybind = scroll_page_up=cmd+page_up
+# keybind = scroll_page_down=cmd+page_down
+# keybind = find_next=cmd+g                      # only while the find bar is up
+# keybind = find_previous=cmd+shift+g
+# keybind = search_selection=cmd+e               # find what you have selected
 # keybind = toggle_workspace_picker=cmd+shift+p
 # keybind = toggle_command_palette=cmd+p
 # keybind = diff_viewer=cmd+d                    # diff of the focused repo
@@ -297,9 +308,11 @@
 #   ⌥←  ⌥→        move a word at a time
 #   ⇧ and an arrow, Home, End, Page Up or Page Down, extends a selection
 #
-# A few more are the terminal's for now and will become ZenTerm actions: ⌘K clears
-# the screen, ⌘A selects it, ⌘Home and ⌘End and ⌘Page Up/Down scroll, ⌘↑ and ⌘↓ jump
-# between prompts, ⌘G and ⌘⇧G step through matches, ⌘E searches your selection.
+# A few more are the terminal's for now and will become ZenTerm actions: ⌘A selects
+# the whole screen, ⌘↑ and ⌘↓ jump between prompts, ⌘⇧V pastes your last selection,
+# and ⌘⇧⌃J writes the screen to a file. Three sit under chords ZenTerm binds, so you
+# only meet them after moving ours off: ⌘K clears the screen, ⌘J scrolls to the
+# selection, ⌘⇧J writes the screen to a file and pastes the path.
 #
 # ─── Scroll mode ─────────────────────────────────────────────────────────────
 #
@@ -327,6 +340,11 @@
 # you get the anchor back whenever the buffer moves under it, whether you scrolled or
 # a running command printed. Scroll to the block you want first, then select it.
 #
+# Four chords move the viewport without the mode, for when you want a look rather
+# than a read: ⌘Home and ⌘End go to the ends of the buffer, ⌘Page Up and ⌘Page Down
+# move a screen at a time and repeat if you hold them. They work on the focused
+# drawer too.
+#
 # ─── Find ────────────────────────────────────────────────────────────────────
 #
 # `toggle_search` (⌘/) opens a find bar along the bottom of the focused pane and
@@ -337,7 +355,14 @@
 #
 # ⌘/ opens on whatever you have selected, so searching a word you can see never
 # means retyping it. Either kind counts: a mouse selection, or a `v` selection made
-# in scroll mode. With nothing selected the bar opens empty.
+# in scroll mode. With nothing selected the bar opens empty. `search_selection` (⌘E)
+# is the same thing except that with nothing selected it does nothing at all.
+#
+# `find_next` (⌘G) and `find_previous` (⌘⇧G) step through matches from anywhere,
+# so you can search, hit Enter, and keep stepping while you read. With no bar up
+# they do nothing. Like every shortcut, they stay ZenTerm's whether or not there is
+# anything to do, so ⌘G with no search running reaches nothing rather than reaching
+# the program. Move it with a keybind line if you want it back.
 #
 # Enter hands the keys back to the pane and puts you in scroll mode on the match,
 # where `n` and `N` step forward and back (Enter and shift+Enter do the same), and

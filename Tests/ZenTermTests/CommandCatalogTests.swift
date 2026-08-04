@@ -36,9 +36,24 @@ final class CommandCatalogTests: XCTestCase {
                 "Split Horizontally", "Split Vertically",
                 "Focus Pane Left", "Focus Pane Down", "Focus Pane Up", "Focus Pane Right",
                 "Resize Pane Left", "Resize Pane Down", "Resize Pane Up", "Resize Pane Right",
-                "Focus Mode", "Scroll Mode", "Find in Scrollback", "Close Pane",
+                "Focus Mode", "Scroll Mode", "Find in Scrollback", "Find Selection",
+                "Scroll Page Up", "Scroll Page Down", "Scroll to Top", "Scroll to Bottom",
+                "Close Pane",
                 "Fill Screen", "Increase Font Size", "Decrease Font Size", "Reset Font Size",
             ])
+    }
+
+    /// Opening the palette runs `endModes`, which takes the find bar down, so a Find Next picked
+    /// from it reaches `SearchController.navigate` with no search running and does nothing. Every
+    /// time, not sometimes. A row that can never fire is worse than no row: it reads as a feature
+    /// and answers with silence (ZEN-367).
+    func test_findNextAndPreviousAreNotInThePalette() {
+        let titles = CommandCatalog.commands(tabCount: 3).map(\.title)
+        XCTAssertFalse(titles.contains("Find Next"))
+        XCTAssertFalse(titles.contains("Find Previous"))
+        // Find Selection stays: a mouse selection is libghostty's and survives `endModes`, so the
+        // action still has something to search for when the palette hands it over.
+        XCTAssertTrue(titles.contains("Find Selection"))
     }
 
     func test_addWorkspace_isNotInThePalette() {

@@ -25,8 +25,21 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
     }
 
     private var window: NSWindow?
+    private var originalConfig = GeneralConfig.current
+
+    /// The form asks `GeneralConfig.current.keymap` whether a chord is taken, and this suite never
+    /// pinned it, so every case here ran against whatever the previous suite left behind. It passed
+    /// for years on the order this machine happens to produce and failed on CI's the first time a
+    /// fixture chord became a shipped default (ZEN-367). Pin it, and the answer stops depending on
+    /// who ran before.
+    override func setUp() {
+        super.setUp()
+        originalConfig = GeneralConfig.current
+        GeneralConfig.setCurrentForTesting(.builtIn)
+    }
 
     override func tearDown() {
+        GeneralConfig.setCurrentForTesting(originalConfig)
         window = nil
         super.tearDown()
     }
@@ -80,6 +93,12 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
 
     /// An existing float as the config would produce one: the id is always `slug(title)`, never set
     /// beside it, so an edit-mode test can't start from a float that could never have been loaded.
+    ///
+    /// **A fixture chord has to be one no default holds.** `prefill` declines to re-offer a chord
+    /// another action owns, so a float built on a defaulted chord loses its chip and blocks submit,
+    /// and the case then fails on something it was not testing. Production does not hit this: a
+    /// float's `key:` is applied after the defaults in `assemble` and wins the chord, so the float
+    /// owns it by the time the form asks.
     private func existingFloat(
         title: String, command: String = "vim", icon: String = ToolFloatParser.defaultIcon,
         dir: URL? = nil, height: CGFloat = 0.85, git: Bool = false, order: Int = 1,
@@ -628,7 +647,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         let realDir = FileManager.default.temporaryDirectory
         let existing = existingFloat(
             title: "Open Lazygit", command: "lazygit", icon: "git", dir: realDir, height: 0.78,
-            git: true, persist: .directory, toggle: Chord(command: true, key: "g"))
+            git: true, persist: .directory)
         let (overlay, _, sink) = mount(editing: existing)
 
         submit(in: overlay)
@@ -652,7 +671,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         let tilde = PathDisplay.abbreviatingHome(home.path)
         let existing = existingFloat(
             title: "Open Lazygit", command: "lazygit", icon: "git", dir: home, height: 0.78,
-            git: true, persist: .directory, toggle: Chord(command: true, key: "g"))
+            git: true, persist: .directory)
         let (overlay, _, sink) = mount(editing: existing)
 
         XCTAssertEqual(

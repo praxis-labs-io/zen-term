@@ -579,3 +579,16 @@ single-flight and retain one pending request. Rejecting stale completions only p
 it does not recover the CPU, disk work, or subprocesses already spent producing them. The watcher
 must also follow any root the reader retargets to and stop on both card and window teardown
 (ZEN-256).
+
+### An exhaustive switch does not cover the data table beside it
+
+Adding a `ReservedChord` case fails to compile until four switches answer for it, which reads like
+full coverage and is not. The Shortcuts card's row list is a hand-ordered array, so seven actions
+shipped with a chord, a palette entry, a config token and no Settings row, and the whole suite
+stayed green. An action missing from that array does not render wrong, it does not render, and a
+test written against the array cannot notice an absence the array is the only record of.
+
+The fix is a switch the table can be measured against: `isEditableInSettings` makes a new case
+declare itself, and `SettingsKeybindGroupsTests` asserts the two agree in both directions. Any
+hand-ordered list keyed off an enum needs the same pairing. Ordering and grouping are editorial and
+belong in the array; membership is not, and belongs in a switch (ZEN-367).

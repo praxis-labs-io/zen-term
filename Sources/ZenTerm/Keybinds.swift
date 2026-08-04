@@ -41,6 +41,16 @@ extension KeyInterceptor.ReservedChord {
         case .resetFontSize: return "reset_font_size"
         case .toggleScrollMode: return "toggle_scroll_mode"
         case .toggleSearch: return "toggle_search"
+        // ghostty's own spelling again, for the same reason as the font sizes.
+        case .scrollToTop: return "scroll_to_top"
+        case .scrollToBottom: return "scroll_to_bottom"
+        case .scrollPageUp: return "scroll_page_up"
+        case .scrollPageDown: return "scroll_page_down"
+        // Ours: ghostty spells these `navigate_search:next` and `navigate_search:previous`, and no
+        // token here carries an argument.
+        case .findNext: return "find_next"
+        case .findPrevious: return "find_previous"
+        case .searchSelection: return "search_selection"
         }
     }
 
@@ -48,9 +58,10 @@ extension KeyInterceptor.ReservedChord {
     ///
     /// Only the actions whose effect accumulates toward something the eye tracks, and where the
     /// hold runs out of room on its own: nav stops at the edge pane, resize at the pane's minimum,
-    /// font size at the scale limit. Everything else is a discrete act, and a held ⌘N spawning
-    /// windows at 30 a second is the bug this answers. Tab cycling is deliberately not here: it
-    /// wraps, so a hold never lands anywhere the user aimed.
+    /// font size at the scale limit, a page scroll at the end of the buffer. Everything else is a
+    /// discrete act, and a held ⌘N spawning windows at 30 a second is the bug this answers. Tab
+    /// cycling and search stepping are deliberately not here: both wrap, so a hold never lands
+    /// anywhere the user aimed.
     ///
     /// A `switch` so a new `ReservedChord` case has to answer, the same as `actionToken`.
     var shouldRepeat: Bool {
@@ -58,12 +69,42 @@ extension KeyInterceptor.ReservedChord {
         case .navLeft, .navRight, .navUp, .navDown: return true
         case .resizeLeft, .resizeRight, .resizeUp, .resizeDown: return true
         case .increaseFontSize, .decreaseFontSize: return true
+        case .scrollPageUp, .scrollPageDown: return true
         case .splitVertical, .splitHorizontal, .closePane, .newTab, .newWindow, .selectTab,
             .prevTab, .nextTab, .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
             .toggleToolFloat, .toggleRepoPicker, .toggleCommandPalette, .openSettings,
             .reloadConfig, .checkForUpdates, .reportIssue, .openDiffViewer, .resetFontSize,
-            .toggleScrollMode, .toggleSearch:
+            .toggleScrollMode, .toggleSearch, .scrollToTop, .scrollToBottom,
+            .findNext, .findPrevious, .searchSelection:
             return false
+        }
+    }
+
+    /// Whether the Shortcuts settings card offers a row for this action (ZEN-367).
+    ///
+    /// A `switch` for the reason the two above are, and this one earned it the hard way: the card's
+    /// group list is hand-ordered, so seven actions shipped with no row and nothing anywhere went
+    /// red. An action missing from that list is invisible rather than broken, which is the failure
+    /// a test cannot find on its own. Answering here is what `SettingsKeybindGroupsTests` measures
+    /// the list against.
+    ///
+    /// The ones that say no are file-only, and each for its own reason: the font sizes belong to
+    /// the Terminal card's own control, Reload Config is what you press when the file is the thing
+    /// you are editing, a float's toggle chord lives on the float, and the last two ship unbound.
+    var isEditableInSettings: Bool {
+        switch self {
+        case .increaseFontSize, .decreaseFontSize, .resetFontSize: return false
+        case .reloadConfig, .toggleToolFloat: return false
+        case .checkForUpdates, .reportIssue: return false
+        case .splitVertical, .splitHorizontal, .closePane, .toggleZoom,
+            .toggleScrollMode, .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown,
+            .toggleSearch, .searchSelection, .findNext, .findPrevious,
+            .navLeft, .navRight, .navUp, .navDown,
+            .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
+            .newTab, .newWindow, .prevTab, .nextTab, .selectTab,
+            .fillScreen, .toggleBottomDrawer, .toggleRightDrawer,
+            .toggleRepoPicker, .toggleCommandPalette, .openDiffViewer, .openSettings:
+            return true
         }
     }
 
@@ -109,6 +150,13 @@ extension KeyInterceptor.ReservedChord {
         case "reset_font_size": self = .resetFontSize
         case "toggle_scroll_mode": self = .toggleScrollMode
         case "toggle_search": self = .toggleSearch
+        case "scroll_to_top": self = .scrollToTop
+        case "scroll_to_bottom": self = .scrollToBottom
+        case "scroll_page_up": self = .scrollPageUp
+        case "scroll_page_down": self = .scrollPageDown
+        case "find_next": self = .findNext
+        case "find_previous": self = .findPrevious
+        case "search_selection": self = .searchSelection
         // ghostty's own spelling, so a config carried over from it binds our find bar rather than
         // failing to parse.
         case "start_search": self = .toggleSearch
@@ -181,6 +229,21 @@ enum KeymapDefaults {
         map[Chord(command: true, shift: true, key: "=")] = .increaseFontSize
         map[Chord(command: true, key: "-")] = .decreaseFontSize
         map[Chord(command: true, key: "0")] = .resetFontSize
+
+        // Scrolling and finding (ZEN-367), on the chords libghostty already used for them. Every
+        // one was live under a pane and answered by the backend rather than by us, so keeping the
+        // chord is what makes naming the action invisible to anyone already pressing it.
+        //
+        // The four scroll keys are `Chord`'s glyph tokens, which is what a live event resolves to:
+        // Home, End, Page Up and Page Down type no character, so the keyCode table is the only way
+        // to name them. A config file spells the same four as words.
+        map[Chord(command: true, key: "↖")] = .scrollToTop
+        map[Chord(command: true, key: "↘")] = .scrollToBottom
+        map[Chord(command: true, key: "⇞")] = .scrollPageUp
+        map[Chord(command: true, key: "⇟")] = .scrollPageDown
+        map[Chord(command: true, key: "g")] = .findNext
+        map[Chord(command: true, shift: true, key: "g")] = .findPrevious
+        map[Chord(command: true, key: "e")] = .searchSelection
 
         return map
     }()

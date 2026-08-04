@@ -26,6 +26,21 @@ final class KeycapViewTests: XCTestCase {
             "the key itself stays text")
     }
 
+    /// The keys ZEN-367 bound draw as glyphs no font is guaranteed to carry, so each needs a
+    /// symbol name that resolves. A name that does not leaves an image view with no image, which
+    /// is a keycap with a gap in it and nothing else to notice it by.
+    func test_theKeysThatTypeNothing_renderAsSymbols() {
+        for shortcut in ["⌘↖", "⌘↘", "⌘⇞", "⌘⇟"] {
+            let keycap = KeycapView(shortcut: shortcut)
+            let images = glyphs(in: keycap)
+            XCTAssertEqual(images.count, 2, shortcut)
+            XCTAssertTrue(images.allSatisfy { $0.image != nil }, "\(shortcut) has a blank token")
+            XCTAssertEqual(
+                descendants(of: keycap).compactMap { ($0 as? NSTextField)?.stringValue }, [],
+                "\(shortcut) fell back to text, which is the tofu this avoids")
+        }
+    }
+
     /// Keys with no clean symbol stay text rather than resolving to nothing.
     func test_punctuationKey_staysText() {
         let keycap = KeycapView(shortcut: "⌘[")

@@ -9,10 +9,20 @@ final class SettingsKeybindsSection: SettingsSection {
     var navTitle: String { "Shortcuts" }
     var onExitToNav: (() -> Void)?
 
-    /// Editable actions grouped by category (float toggles are excluded — they're file-only).
-    private static let groups: [(String, [KeyInterceptor.ReservedChord])] = [
+    /// Editable actions grouped by category.
+    ///
+    /// A hand-ordered list rather than a derived one, because the grouping and the order inside each
+    /// group are editorial. What it must not be is *silently* partial: an action absent from here has
+    /// no row, and nothing else in the app changes, so it reads as an action nobody can rebind and
+    /// looks like nothing at all. `isEditableInSettings` is the exhaustive half, and
+    /// `SettingsKeybindGroupsTests` holds the two together (ZEN-367).
+    static let groups: [(String, [KeyInterceptor.ReservedChord])] = [
         ("Panes", [.splitHorizontal, .splitVertical, .closePane, .toggleZoom]),
-        ("Scrollback", [.toggleScrollMode, .toggleSearch]),
+        (
+            "Scrollback",
+            [.toggleScrollMode, .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown]
+        ),
+        ("Find", [.toggleSearch, .searchSelection, .findNext, .findPrevious]),
         ("Navigation", [.navLeft, .navDown, .navUp, .navRight]),
         ("Resize", [.resizeLeft, .resizeDown, .resizeUp, .resizeRight]),
         ("Tabs", [.newTab, .newWindow, .prevTab, .nextTab] + (1...9).map { .selectTab($0) }),

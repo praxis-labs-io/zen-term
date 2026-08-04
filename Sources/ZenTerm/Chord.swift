@@ -50,7 +50,8 @@ struct Chord: Hashable {
 
     /// Parse `cmd+shift+g` → a `Chord`, or `nil` if the spec is malformed (no key, two keys,
     /// or an unknown modifier word). Accepts ghostty-style aliases so a pasted ghostty
-    /// keybind mostly works: `cmd`/`command`, `shift`, `opt`/`option`/`alt`, `ctrl`/`control`.
+    /// keybind mostly works: `cmd`/`command`, `shift`, `opt`/`option`/`alt`, `ctrl`/`control`,
+    /// and `arrow_up` beside `up`.
     static func parse(_ spec: String) -> Chord? {
         var command = false
         var shift = false
@@ -71,12 +72,15 @@ struct Chord: Hashable {
                 if key != nil { return nil }  // two non-modifier tokens → ambiguous
                 // `+` is the token separator, so the plus key travels as the word `plus`
                 // (ghostty's spelling too) — translate it back here. See `configToken`.
-                key = (token == "plus") ? "+" : token
+                // A key that types no character travels as a word for the same reason it needs
+                // one at all: nobody can put ↖ in a text file from the keyboard.
+                key = Chord.specialKeyWords[token] ?? ((token == "plus") ? "+" : token)
             }
         }
         guard let key else { return nil }
         // A live event's key is a single `charactersIgnoringModifiers` character, so a
-        // multi-char token (e.g. "space") could never match — reject it as a dead bind.
+        // multi-char token (e.g. "space") could never match — reject it as a dead bind. The
+        // special keys are already glyphs by here, one character each.
         guard key.count == 1 else { return nil }
         // A modifier-less chord would swallow that plain keystroke from the terminal for
         // every keypress — reserved chords must carry at least one modifier. This reads the
@@ -117,7 +121,8 @@ struct Chord: Hashable {
     /// repo's order (cmd, shift, opt, ctrl) then the key. A *projection* of `parse`, not its
     /// inverse: with Shift held, several spellings fold to one chord (`cmd+shift+_` and
     /// `cmd+shift+-` both emit `cmd+shift+-`), so a re-parse of the output is stable from here on.
-    /// Mirrors `displayGlyph`'s glyph form.
+    /// It follows `displayGlyph` except on the keys that type nothing, where the screen gets the
+    /// glyph and the file gets the word: nobody can type ↖ into a config.
     var configToken: String {
         var token = ""
         if command { token += "cmd+" }
@@ -127,7 +132,8 @@ struct Chord: Hashable {
         // The plus key can't travel literally — `+` is the token separator, so `cmd++` would parse
         // as a stray empty token. Emit the word `plus`; `parse` maps it back. Only reachable
         // unshifted (⇧+ folds to ⇧=): a layout where `+` needs no Shift, or an explicit `cmd+plus`.
-        return token + (key == "+" ? "plus" : key)
+        if key == "+" { return token + "plus" }
+        return token + (Chord.wordForSpecialKey[key] ?? key)
     }
 
     /// Build the chord an `NSEvent` represents, for keymap lookup. Mirrors the modifier +
@@ -170,6 +176,25 @@ struct Chord: Hashable {
 
     private static let specialKeyGlyphs: [UInt16: String] = [
         123: "←", 124: "→", 125: "↓", 126: "↑", 36: "⏎",
+        115: "↖", 119: "↘", 116: "⇞", 121: "⇟",
+    ]
+
+    /// How a config file spells each of those. The glyph is the canonical form everywhere inside
+    /// the app, and it is the one form nobody can type into a text editor, so the file gets a word.
+    /// ghostty's own spellings are accepted alongside the short ones for the reason `parse`'s
+    /// modifier aliases exist: a keybind line pasted from a ghostty config should resolve.
+    private static let specialKeyWords: [String: String] = [
+        "left": "←", "right": "→", "down": "↓", "up": "↑",
+        "arrow_left": "←", "arrow_right": "→", "arrow_down": "↓", "arrow_up": "↑",
+        "enter": "⏎", "return": "⏎",
+        "home": "↖", "end": "↘", "page_up": "⇞", "page_down": "⇟",
+    ]
+
+    /// The word `configToken` writes back for a glyph. One per key, so a chord round-trips to the
+    /// same line it was read from rather than alternating between two accepted spellings.
+    private static let wordForSpecialKey: [String: String] = [
+        "←": "left", "→": "right", "↓": "down", "↑": "up", "⏎": "enter",
+        "↖": "home", "↘": "end", "⇞": "page_up", "⇟": "page_down",
     ]
 
     /// The keyCode behind a special glyph, for a caller that needs the physical key back: a
