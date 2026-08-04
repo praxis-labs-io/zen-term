@@ -36,7 +36,7 @@ final class BackendShadowSweepTests: XCTestCase {
     /// them. Bound in its defaults all the same, and three of the survivors live here.
     private static let namedKeys: [(String, UInt16)] = [
         ("arrow_left", 123), ("arrow_right", 124), ("arrow_down", 125), ("arrow_up", 126),
-        ("enter", 36), ("escape", 53), ("tab", 48), ("delete", 51), ("space", 49),
+        ("enter", 36), ("escape", 53), ("tab", 48), ("backspace", 51), ("space", 49),
         ("home", 115), ("end", 119), ("page_up", 116), ("page_down", 121),
     ]
 
@@ -84,8 +84,12 @@ final class BackendShadowSweepTests: XCTestCase {
 
         // A chord this keyboard cannot type has no keyCode to ask about. On a US layout that set is
         // empty, and a non-empty one means the machine's layout rather than a regression — but only
-        // if the layout answered at all. A walk that resolved nothing would report an empty shadow
-        // and read as a clean pass.
+        // if the layout answered at all. Assert before skipping: a walk that resolved nothing is a
+        // broken `KeyboardLayout.resolve`, and skipping on it would retire the only check over the
+        // whole unbind list while reporting green.
+        XCTAssertLessThan(
+            unreachable, Self.typedKeys.count * Self.modifierSets.count,
+            "no chord resolved: the layout walk is broken, which is not a layout difference")
         try XCTSkipUnless(unreachable == 0, "layout cannot type every probed key; not a US layout")
 
         let kept = Set(GhosttyUnboundChords.kept)

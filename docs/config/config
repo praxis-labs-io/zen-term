@@ -286,8 +286,9 @@
 # keybind = decrease_font_size=cmd+-
 # keybind = reset_font_size=cmd+0                # back to font-size above
 #
-# Every other chord reaches the program in your pane. Rebind an action away and its
-# old chord goes there too, so ⌘K in vim is vim's ⌘K, not a screen wipe.
+# Every other chord reaches the program in your pane, with the exceptions below.
+# Rebind an action away and its old chord goes there too, so ⌘⇧S in vim is vim's ⌘⇧S
+# once you have moved toggle_scroll_mode off it.
 #
 # A handful stay with the terminal on purpose, because they turn into bytes for the
 # program rather than doing anything to the app:

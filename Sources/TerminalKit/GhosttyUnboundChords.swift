@@ -13,14 +13,18 @@
 enum GhosttyUnboundChords {
     /// Emitted as `keybind = <trigger>=unbind` into the generated config.
     ///
-    /// Some actions are bound twice under different spellings and both have to go: the digits
-    /// carry a physical `digit_N` bind alongside the `unicode` one, and `increase_font_size` is
-    /// bound on both `=` and `+`.
+    /// Some actions are bound twice under different spellings and both have to go:
+    /// `increase_font_size` sits on `=` and on `+`, and `goto_tab` on both the physical `digit_N`
+    /// key and the `unicode` one, so an AZERTY layout reaches it too.
     static let triggers: [String] = tabs + splitsAndPanes + windowsAndTabs + appLevel + unimplemented
 
     /// `goto_tab` and `last_tab`, which ZenTerm holds as select_tab_1…9.
+    ///
+    /// ⌘9 is `last_tab` rather than the ninth `goto_tab`, and it carries only the `unicode`
+    /// spelling: ghostty's loop stops at 8. A `cmd+digit_9` line here would match nothing, and a
+    /// dead unbind is invisible to the sweep.
     private static let tabs: [String] =
-        (1...9).flatMap { ["cmd+\($0)", "cmd+digit_\($0)"] }
+        (1...8).flatMap { ["cmd+\($0)", "cmd+digit_\($0)"] } + ["cmd+9"]
 
     /// ghostty's split model, which ZenTerm holds as panes: nav, resize, and the two splits.
     private static let splitsAndPanes: [String] = [
@@ -75,8 +79,9 @@ enum GhosttyUnboundChords {
         "cmd+g", "cmd+shift+g", "cmd+e",
         "cmd+shift+ctrl+j", "cmd+shift+opt+j", "cmd+shift+j",
         "cmd+shift+v",
-        // Encodings, kept for good.
-        "cmd+arrow_left", "cmd+arrow_right", "cmd+delete",
+        // Encodings, kept for good. ⌘⌫ is `backspace`: ghostty's `delete` is the forward-delete
+        // key, so spelling it that way would emit an unbind matching nothing the day this moves.
+        "cmd+arrow_left", "cmd+arrow_right", "cmd+backspace",
         "opt+arrow_left", "opt+arrow_right",
         "shift+arrow_left", "shift+arrow_right", "shift+arrow_up", "shift+arrow_down",
         "shift+home", "shift+end", "shift+page_up", "shift+page_down",

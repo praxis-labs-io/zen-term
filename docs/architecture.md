@@ -43,15 +43,18 @@ Both spellings of the key travel because libghostty tries both. `Binding.Set.get
 looks up the physical key, then the typed text, then the unshifted codepoint, so a
 bind written `cmd+shift+|` is reachable only through the text and one written
 `cmd+shift+\` only through the codepoint. Sending one of the two would leave the
-baseline blind to half the keymap, which is the one thing it exists not to be.
+sweep blind to half the keymap, which is the one thing it exists not to be.
 
 `ChordDisposition` has four cases and the fourth is the one that matters.
 `mayClaim` means the bind is conditional: the backend runs it only when the action
 would do something and otherwise lets the key through. libghostty's
 `keyEventIsBinding` is a pure set lookup that does **not** evaluate that, which its
 own doc comment says outright, so a probe cannot resolve it and must not round it up
-to `claims`. `⌘K` is the proof: bound to `clear_screen`, and reaching vim every time
-the screen is already clear. The `⇧`-arrow selection binds are the same shape.
+to `claims`. `⌘K` is the proof: bound to `clear_screen`, and reaching vim because vim
+runs on the alternate screen, where clearing does nothing. On the primary screen it
+claims whether or not there is anything to clear, so the condition is the screen it
+is on rather than the work being done. The `⇧`-arrow selection binds are the same
+shape, on whether a selection exists.
 
 **ZenTerm unbinds most of libghostty's keymap, and `GhosttyUnboundChords` holds the
 decision (ZEN-365).** A bind is taken back when ZenTerm already has an action for it,
