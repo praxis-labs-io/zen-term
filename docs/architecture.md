@@ -65,8 +65,9 @@ per chord, which is the only channel there is: libghostty takes configuration fr
 files and has no setter API.
 
 What survives is `GhosttyUnboundChords.kept`, and it is two different things. Some is
-behavior ZenTerm has not named yet, held so nothing is lost before it is (⌘K, ⌘A,
-scroll, jump-to-prompt, find next). The rest is terminal encoding rather than chrome
+behavior ZenTerm has not named yet, held so nothing is lost before it is (⌘K clear,
+⌘A select all, ⌘J scroll to selection, jump-to-prompt, paste from selection, write
+screen file). The rest is terminal encoding rather than chrome
 action: `⌘←`/`⌘→` send `^A`/`^E`, `⌥←`/`⌥→` send `ESC b`/`ESC f`, `⇧`-arrows adjust a
 selection. A keystroke that turns into bytes for the program is not a shortcut, and
 those stay with the backend for good.
@@ -767,11 +768,22 @@ fold table is US-only, and `_` is unshifted on AZERTY. Folding on glyph alone wo
 give a keypress a Shift its user never held. **A non-US layout can at worst
 mislabel a chord, never invent one.**
 
+**A key that types no character is a glyph in the app and a word in the file.** The
+arrows, Return, Home, End and the page keys carry a private-use character no fold
+table knows, so `Chord` names them by keyCode (`specialKeyGlyphs`) and everything
+inside the app matches on `↖`. A config cannot: nobody types ↖ into a text editor. So
+`parse` reads `home` and `configToken` writes it back, and the screen still draws the
+glyph. `KeyboardLayout.resolve` consults the keyCode table **before** the character
+walk, which is what keeps `canType` from calling these untypeable and dropping a
+rebind onto one.
+
 Defaults (`KeymapDefaults.map`): ⌘⇧\ and ⌘⇧- split, ⌘HJKL nav, ⌘⇧HJKL resize, ⌘W
 close pane, ⌘T new tab, ⌘N new window, ⌘[ ⌘] tabs, ⌘1-9 select, ⌘B bottom drawer,
-⌘\ right drawer, ⌘F Focus Mode, ⌘⇧F Fill Screen, ⌘⇧S scroll mode, ⌘P command
+⌘\ right drawer, ⌘F Focus Mode, ⌘⇧F Fill Screen, ⌘⇧S scroll mode, ⌘/ find, ⌘P command
 palette, ⌘⇧P workspace picker, ⌘, settings, ⌘⌥R reload, ⌘= and ⌘+ and ⌘- font size,
-⌘0 reset it.
+⌘0 reset it. ZEN-367 added seven more on the chords libghostty already used for them:
+⌘Home, ⌘End, ⌘PageUp, ⌘PageDown scroll the viewport, ⌘G and ⌘⇧G step a running
+search, ⌘E finds the selection.
 **No tool float is built in**; a float's chord comes from its own `key:` field.
 
 **Increase ships two chords, and the second is load-bearing.** ⌘+ on a US layout is
