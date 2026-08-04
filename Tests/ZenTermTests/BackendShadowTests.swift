@@ -6,11 +6,15 @@ import XCTest
 
 /// The load-time half of ZEN-10's three checks (ZEN-364).
 ///
-/// `BackendBindingBaselineTests` asks what libghostty binds under our *defaults*, and that is a
-/// constant. This asks what it binds under whatever the user's config assembled to, which is not:
-/// a keybind moves its action, `KeymapAssembler` drops that action's defaults, and the freed chord
-/// goes to the backend. Nothing could see that before, because on a default install the chord in
-/// question is still ours.
+/// `BackendShadowSweepTests` asks what libghostty is left holding at all, and that is a constant.
+/// This asks what reaches it under whatever the user's config assembled to, which is not: a keybind
+/// moves its action, `KeymapAssembler` drops that action's defaults, and the freed chord goes to
+/// the backend. Nothing could see that before, because on a default install the chord in question
+/// is still ours.
+///
+/// ZEN-365 emptied most of what this can find. The report is quiet on a default config now, and it
+/// still has work: the binds kept until ZenTerm names them are exactly the ones a rebind can
+/// expose, ⌘K among them.
 @MainActor
 final class BackendShadowTests: XCTestCase {
     override func tearDown() {
@@ -28,11 +32,11 @@ final class BackendShadowTests: XCTestCase {
         ).map
     }
 
-    /// A probe that answers `d` to everything except the ⌘T canary, which it always claims.
+    /// A probe that answers `d` to everything except the ⌥← canary, which it always claims.
     /// Every case below needs a live-looking backend, or `check` short-circuits to `.backendSilent`
     /// and the assertion under test never runs.
     private func probe(_ d: ChordDisposition) -> @MainActor (TerminalKey) -> ChordDisposition {
-        let canary = TerminalKey(chord: Chord(command: true, key: "t"))
+        let canary = BackendShadow.canary
         return { $0 == canary ? .claims : d }
     }
 
@@ -49,21 +53,37 @@ final class BackendShadowTests: XCTestCase {
             .backendSilent)
     }
 
-    /// The canary is the only chord that decides this, so it has to be one the backend really holds.
-    /// A layout that cannot type it can't confirm the backend either.
-    func test_aLayoutThatCannotTypeTheCanaryCannotConfirmTheBackend() {
-        KeyboardLayout.layoutOverrideForTesting = { _ in [40: "k"] }
+    /// The canary is the only chord that decides this, so it has to be one the running backend
+    /// really holds. It was ⌘T until ZEN-365 unbound that, and the failure a canary we unbind
+    /// produces is silent: every check reports a dead backend and nothing else changes. So this
+    /// asks a real surface rather than a stub, and the next unbind that swallows it fails here.
+    func test_theCanaryIsAChordTheRunningBackendStillHolds() throws {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
 
-        XCTAssertEqual(
-            BackendShadow.check(assembled: keymapRebindingNavUp(), probe: { _ in .claims }),
-            .backendSilent)
+        let surface = GhosttySurface()
+        surface.view.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+        window.contentView?.addSubview(surface.view)
+        surface.start(TerminalSurfaceConfig(command: "/bin/sh", args: ["-c", "sleep 100"]))
+        defer {
+            surface.view.removeFromSuperview()
+            surface.terminate()
+        }
+        try XCTSkipIf(surface.surfacePtr == nil, "ghostty_surface_new failed (a locked screen does this)")
+
+        XCTAssertNotEqual(
+            surface.disposition(of: BackendShadow.canary), .ignores,
+            "the liveness canary is unbound, so every shadow check now reports a dead backend")
     }
 
     // MARK: the freed set
 
     /// `t` is pinned alongside `k` so the assertion covers the set difference and not just the
     /// layout: ⌘T is a default the config left alone, and a check that skipped the difference would
-    /// report it too. (It is also the canary's key, which every case here needs.)
+    /// report it too.
     func test_aRebindHandsTheActionsOldChordToTheBackend() {
         KeyboardLayout.layoutOverrideForTesting = { _ in [40: "k", 17: "t"] }
 
@@ -102,7 +122,7 @@ final class BackendShadowTests: XCTestCase {
     /// A chord no key on this layout produces can't be handed to a backend as a keystroke, and
     /// nobody can press it either. The probe is never asked.
     func test_aFreedChordThisLayoutCannotTypeIsNotReported() {
-        // Only the canary's key, so ⌘T confirms the backend and ⌘K has nowhere to resolve to.
+        // No `k`, so ⌘K has nowhere to resolve to. The canary is an arrow and needs no layout.
         KeyboardLayout.layoutOverrideForTesting = { _ in [17: "t"] }
 
         XCTAssertEqual(

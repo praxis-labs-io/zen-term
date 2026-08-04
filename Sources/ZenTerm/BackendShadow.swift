@@ -46,14 +46,19 @@ enum BackendShadow {
     /// does: `ghostty_surface_new` fails on a locked screen and leaves the object alive and
     /// registered, and every chord then reports `.ignores`.
     ///
-    /// ⌘T is `new_tab` in libghostty and unconditional, and we send the backend no `keybind` lines,
-    /// so its keymap is its compiled defaults whatever the user's config says. A pin bump moving
-    /// `new_tab` off ⌘T would make this read false wrongly, and would turn
-    /// `BackendBindingBaselineTests` red in the same breath.
+    /// ⌥← sends `ESC b` to the program, which is a terminal encoding rather than a chrome action, so
+    /// it is one of the binds ZEN-365 keeps for good. **The canary has to come from that permanent
+    /// set.** It was ⌘T until ZEN-365 unbound it, and a canary we later unbind reads as a dead
+    /// backend forever. `BackendShadowTests` asks a live surface, so the next one to go turns red.
     @MainActor
     private static func answers(_ probe: @MainActor (TerminalKey) -> ChordDisposition) -> Bool {
-        guard let canary = TerminalKey(chord: Chord(command: true, key: "t")) else { return false }
         return probe(canary) != .ignores
+    }
+
+    /// Every keyboard types an arrow, so this resolves without consulting the layout.
+    @MainActor
+    static var canary: TerminalKey {
+        TerminalKey(keyCode: 123, modifiers: .option)
     }
 
     @MainActor
