@@ -43,19 +43,39 @@ Both spellings of the key travel because libghostty tries both. `Binding.Set.get
 looks up the physical key, then the typed text, then the unshifted codepoint, so a
 bind written `cmd+shift+|` is reachable only through the text and one written
 `cmd+shift+\` only through the codepoint. Sending one of the two would leave the
-baseline blind to half the keymap, which is the one thing it exists not to be.
+sweep blind to half the keymap, which is the one thing it exists not to be.
 
 `ChordDisposition` has four cases and the fourth is the one that matters.
 `mayClaim` means the bind is conditional: the backend runs it only when the action
 would do something and otherwise lets the key through. libghostty's
 `keyEventIsBinding` is a pure set lookup that does **not** evaluate that, which its
 own doc comment says outright, so a probe cannot resolve it and must not round it up
-to `claims`. Bare Escape is the proof: bound to end a search, and reaching vim every
-time no search is running. `⌘K` and `⌘F` are the same shape.
+to `claims`. `⌘K` is the proof: bound to `clear_screen`, and reaching vim because vim
+runs on the alternate screen, where clearing does nothing. On the primary screen it
+claims whether or not there is anything to clear, so the condition is the screen it
+is on rather than the work being done. The `⇧`-arrow selection binds are the same
+shape, on whether a selection exists.
 
-`BackendBindingBaselineTests` pins what libghostty binds under each of our defaults,
-measured against a live surface rather than transcribed. Re-run it on a ghostty pin
-bump: a change there is not automatically a bug, but it must never be silent.
+**ZenTerm unbinds most of libghostty's keymap, and `GhosttyUnboundChords` holds the
+decision (ZEN-365).** A bind is taken back when ZenTerm already has an action for it,
+so the backend's copy only duplicates the chrome in ghostty's vocabulary, or when its
+action reaches an apprt callback we never implement, so the key is swallowed and
+nothing happens. `GhosttyConfigWriter` emits one `keybind = <trigger>=unbind` line
+per chord, which is the only channel there is: libghostty takes configuration from
+files and has no setter API.
+
+What survives is `GhosttyUnboundChords.kept`, and it is two different things. Some is
+behavior ZenTerm has not named yet, held so nothing is lost before it is (⌘K, ⌘A,
+scroll, jump-to-prompt, find next). The rest is terminal encoding rather than chrome
+action: `⌘←`/`⌘→` send `^A`/`^E`, `⌥←`/`⌥→` send `ESC b`/`ESC f`, `⇧`-arrows adjust a
+selection. A keystroke that turns into bytes for the program is not a shortcut, and
+those stay with the backend for good.
+
+`BackendShadowSweepTests` walks the whole typeable chord space against a live surface
+and fails unless the surviving shadow is exactly `kept`. It replaced a baseline that
+pinned only the chords under our own defaults, which could not see an unbind that
+stopped matching. Re-run it on a ghostty pin bump: a change there is not
+automatically a bug, but it must never be silent.
 
 **`BackendShadow` is the same question asked at load time, and it is the half a
 build-time test cannot reach.** A user keybind moves its action, `KeymapAssembler`
@@ -68,11 +88,13 @@ changes, because the backend answers against its config as it stands now. It log
 and shows nothing: the probe answers a disposition, not an action name, so the line
 can say the backend takes ⌘K but not what it does with it.
 
-It confirms the backend is answering before trusting an empty result, on ⌘T, which
-libghostty binds unconditionally. A `TerminalSurface` exists before its backend
-surface does (`ghostty_surface_new` fails on a locked screen and leaves the object
-alive), and every chord then reads `.ignores`. Without the check, a dead probe and a
-clean config are the same answer, and an empty result is this check's all-clear.
+It confirms the backend is answering before trusting an empty result, on ⌥←. A
+`TerminalSurface` exists before its backend surface does (`ghostty_surface_new` fails
+on a locked screen and leaves the object alive), and every chord then reads
+`.ignores`. Without the check, a dead probe and a clean config are the same answer,
+and an empty result is this check's all-clear. **The canary has to come from the
+permanently-kept set:** it was ⌘T until ZEN-365 unbound that, and a canary we later
+unbind reports a dead backend forever without changing anything else.
 
 **The rule:** if only one backend can do a thing, it stays below the seam. The
 protocol grows only to hold what the chrome needs from *any* terminal.

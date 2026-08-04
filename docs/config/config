@@ -286,6 +286,21 @@
 # keybind = decrease_font_size=cmd+-
 # keybind = reset_font_size=cmd+0                # back to font-size above
 #
+# Every other chord reaches the program in your pane, with the exceptions below.
+# Rebind an action away and its old chord goes there too, so ⌘⇧S in vim is vim's ⌘⇧S
+# once you have moved toggle_scroll_mode off it.
+#
+# A handful stay with the terminal on purpose, because they turn into bytes for the
+# program rather than doing anything to the app:
+#   ⌘←  ⌘→        jump to the start and end of the line
+#   ⌘⌫             delete to the start of the line
+#   ⌥←  ⌥→        move a word at a time
+#   ⇧ and an arrow, Home, End, Page Up or Page Down, extends a selection
+#
+# A few more are the terminal's for now and will become ZenTerm actions: ⌘K clears
+# the screen, ⌘A selects it, ⌘Home and ⌘End and ⌘Page Up/Down scroll, ⌘↑ and ⌘↓ jump
+# between prompts, ⌘G and ⌘⇧G step through matches, ⌘E searches your selection.
+#
 # ─── Scroll mode ─────────────────────────────────────────────────────────────
 #
 # `toggle_scroll_mode` (⌘⇧S) reads back through the focused pane's scrollback with

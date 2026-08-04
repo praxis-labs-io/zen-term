@@ -4,8 +4,8 @@ import TerminalKit
 /// What the user's own config handed to the backend (ZEN-364).
 ///
 /// The chrome resolves its keymap ahead of the responder chain and passes on everything it does not
-/// claim, so libghostty's keymap is live underneath ours the whole time. `BackendBindingBaselineTests`
-/// pins what sits under our *defaults*, and that is only half the picture: a user keybind moves its
+/// claim, so libghostty's keymap is live underneath ours the whole time. `BackendShadowSweepTests`
+/// pins what libghostty is left holding at all, and that is only half the picture: a user keybind moves its
 /// action, `KeymapAssembler` then drops that action's defaults, and the freed chord goes to the
 /// backend. Rebinding nav to `ctrl+hjkl` is what makes ⌘K clear the scrollback, and no build-time
 /// test can see it, because on a default install ⌘K is nav-up and the backend never gets it.
@@ -46,14 +46,19 @@ enum BackendShadow {
     /// does: `ghostty_surface_new` fails on a locked screen and leaves the object alive and
     /// registered, and every chord then reports `.ignores`.
     ///
-    /// ⌘T is `new_tab` in libghostty and unconditional, and we send the backend no `keybind` lines,
-    /// so its keymap is its compiled defaults whatever the user's config says. A pin bump moving
-    /// `new_tab` off ⌘T would make this read false wrongly, and would turn
-    /// `BackendBindingBaselineTests` red in the same breath.
+    /// ⌥← sends `ESC b` to the program, which is a terminal encoding rather than a chrome action, so
+    /// it is one of the binds ZEN-365 keeps for good. **The canary has to come from that permanent
+    /// set.** It was ⌘T until ZEN-365 unbound it, and a canary we later unbind reads as a dead
+    /// backend forever. `BackendShadowTests` asks a live surface, so the next one to go turns red.
     @MainActor
     private static func answers(_ probe: @MainActor (TerminalKey) -> ChordDisposition) -> Bool {
-        guard let canary = TerminalKey(chord: Chord(command: true, key: "t")) else { return false }
         return probe(canary) != .ignores
+    }
+
+    /// Every keyboard types an arrow, so this resolves without consulting the layout.
+    @MainActor
+    static var canary: TerminalKey {
+        TerminalKey(keyCode: 123, modifiers: .option)
     }
 
     @MainActor

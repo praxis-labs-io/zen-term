@@ -102,6 +102,9 @@ enum GhosttyConfigWriter {
         if let opacity = behavior.ghosttyBackgroundOpacity {
             lines.append("background-opacity = \(opacity)")
         }
+        // Take back the chords ZenTerm already answers, and the ones libghostty binds to an action
+        // our apprt never implements. Both are keys the pane's program should be getting (ZEN-365).
+        lines += GhosttyUnboundChords.triggers.map { "keybind = \($0)=unbind" }
         return lines.joined(separator: "\n") + "\n"
     }
 

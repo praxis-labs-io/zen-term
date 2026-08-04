@@ -132,6 +132,22 @@ final class GhosttyConfigWriterTests: XCTestCase {
         XCTAssertFalse(text.contains("background-opacity"))
     }
 
+    /// `BackendShadowSweepTests` covers this end to end, but it skips when `ghostty_surface_new`
+    /// fails, which a locked screen does. On that run nothing else would notice the one line that
+    /// writes all of these going missing.
+    func test_configTextEmitsAnUnbindLineForEveryTakenBackChord() {
+        let text = GhosttyConfigWriter.configText(for: nil)
+
+        for trigger in GhosttyUnboundChords.triggers {
+            XCTAssertTrue(
+                text.contains("keybind = \(trigger)=unbind\n"), "no unbind line for \(trigger)")
+        }
+        for trigger in GhosttyUnboundChords.kept {
+            XCTAssertFalse(
+                text.contains("keybind = \(trigger)=unbind"), "\(trigger) is kept, not unbound")
+        }
+    }
+
     func test_defaultBehavior() {
         let behavior = TerminalBehavior()
         XCTAssertEqual(behavior.cursorStyle, .block)
