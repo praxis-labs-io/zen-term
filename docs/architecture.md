@@ -68,6 +68,12 @@ changes, because the backend answers against its config as it stands now. It log
 and shows nothing: the probe answers a disposition, not an action name, so the line
 can say the backend takes ⌘K but not what it does with it.
 
+It confirms the backend is answering before trusting an empty result, on ⌘T, which
+libghostty binds unconditionally. A `TerminalSurface` exists before its backend
+surface does (`ghostty_surface_new` fails on a locked screen and leaves the object
+alive), and every chord then reads `.ignores`. Without the check, a dead probe and a
+clean config are the same answer, and an empty result is this check's all-clear.
+
 **The rule:** if only one backend can do a thing, it stays below the seam. The
 protocol grows only to hold what the chrome needs from *any* terminal.
 

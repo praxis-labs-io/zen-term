@@ -28,23 +28,54 @@ final class BackendShadowTests: XCTestCase {
         ).map
     }
 
+    /// A probe that answers `d` to everything except the ⌘T canary, which it always claims.
+    /// Every case below needs a live-looking backend, or `check` short-circuits to `.backendSilent`
+    /// and the assertion under test never runs.
+    private func probe(_ d: ChordDisposition) -> @MainActor (TerminalKey) -> ChordDisposition {
+        let canary = TerminalKey(chord: Chord(command: true, key: "t"))
+        return { $0 == canary ? .claims : d }
+    }
+
+    // MARK: the backend has to be answering first
+
+    /// The finding this whole gate exists for. `ghostty_surface_new` fails on a locked screen and
+    /// leaves the surface object alive, so every chord reads `.ignores` and the check would report a
+    /// clean config while never having asked anything.
+    func test_aBackendThatAnswersNothingIsNotACleanConfig() {
+        KeyboardLayout.layoutOverrideForTesting = { _ in [40: "k", 17: "t"] }
+
+        XCTAssertEqual(
+            BackendShadow.check(assembled: keymapRebindingNavUp(), probe: { _ in .ignores }),
+            .backendSilent)
+    }
+
+    /// The canary is the only chord that decides this, so it has to be one the backend really holds.
+    /// A layout that cannot type it can't confirm the backend either.
+    func test_aLayoutThatCannotTypeTheCanaryCannotConfirmTheBackend() {
+        KeyboardLayout.layoutOverrideForTesting = { _ in [40: "k"] }
+
+        XCTAssertEqual(
+            BackendShadow.check(assembled: keymapRebindingNavUp(), probe: { _ in .claims }),
+            .backendSilent)
+    }
+
     // MARK: the freed set
 
     /// `t` is pinned alongside `k` so the assertion covers the set difference and not just the
     /// layout: ⌘T is a default the config left alone, and a check that skipped the difference would
-    /// report it too.
+    /// report it too. (It is also the canary's key, which every case here needs.)
     func test_aRebindHandsTheActionsOldChordToTheBackend() {
         KeyboardLayout.layoutOverrideForTesting = { _ in [40: "k", 17: "t"] }
 
-        let freed = BackendShadow.freedChords(
-            assembled: keymapRebindingNavUp(), probe: { _ in .claims })
+        let finding = BackendShadow.check(
+            assembled: keymapRebindingNavUp(), probe: probe(.claims))
 
         XCTAssertEqual(
-            freed,
-            [
+            finding,
+            .freed([
                 BackendShadow.FreedChord(
                     chord: Chord(command: true, key: "k"), action: .navUp, disposition: .claims)
-            ])
+            ]))
     }
 
     /// The strong form: a probe that claims *everything* still finds nothing, because a config that
@@ -55,27 +86,28 @@ final class BackendShadowTests: XCTestCase {
             menuOwner: { _ in nil }
         ).map
 
-        XCTAssertEqual(BackendShadow.freedChords(assembled: assembled, probe: { _ in .claims }), [])
+        XCTAssertEqual(BackendShadow.check(assembled: assembled, probe: probe(.claims)), .freed([]))
     }
 
     /// A freed chord is only news if something down there takes it. Most are not: ⌘B is freed on a
     /// config that rebinds `toggle_bottom_drawer`, and nothing in libghostty binds it.
     func test_aFreedChordTheBackendIgnoresIsNotReported() {
-        KeyboardLayout.layoutOverrideForTesting = { _ in [40: "k"] }
+        KeyboardLayout.layoutOverrideForTesting = { _ in [40: "k", 17: "t"] }
 
         XCTAssertEqual(
-            BackendShadow.freedChords(assembled: keymapRebindingNavUp(), probe: { _ in .ignores }),
-            [])
+            BackendShadow.check(assembled: keymapRebindingNavUp(), probe: probe(.ignores)),
+            .freed([]))
     }
 
     /// A chord no key on this layout produces can't be handed to a backend as a keystroke, and
     /// nobody can press it either. The probe is never asked.
     func test_aFreedChordThisLayoutCannotTypeIsNotReported() {
-        KeyboardLayout.layoutOverrideForTesting = { _ in [:] }
+        // Only the canary's key, so ⌘T confirms the backend and ⌘K has nowhere to resolve to.
+        KeyboardLayout.layoutOverrideForTesting = { _ in [17: "t"] }
 
         XCTAssertEqual(
-            BackendShadow.freedChords(assembled: keymapRebindingNavUp(), probe: { _ in .claims }),
-            [])
+            BackendShadow.check(assembled: keymapRebindingNavUp(), probe: probe(.claims)),
+            .freed([]))
     }
 
     // MARK: the line
@@ -133,8 +165,10 @@ final class BackendShadowTests: XCTestCase {
         }
         try XCTSkipIf(surface.surfacePtr == nil, "ghostty_surface_new failed (a locked screen does this)")
 
-        let freed = BackendShadow.freedChords(
-            assembled: keymapRebindingNavUp(), probe: surface.disposition)
+        guard
+            case .freed(let freed) = BackendShadow.check(
+                assembled: keymapRebindingNavUp(), probe: surface.disposition)
+        else { return XCTFail("the running backend answered nothing") }
 
         XCTAssertEqual(freed.map(\.chord.configToken), ["cmd+k"])
         XCTAssertEqual(

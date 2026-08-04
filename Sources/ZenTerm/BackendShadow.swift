@@ -21,11 +21,43 @@ enum BackendShadow {
         let disposition: ChordDisposition
     }
 
+    /// What the check found, or that it could not ask. Two cases rather than an array, because an
+    /// empty array would be the answer to both "your config freed nothing" and "the backend never
+    /// answered", and those must not look alike: an empty result is this check's all-clear.
+    enum Finding: Equatable {
+        /// Nothing down there is answering, so nothing was checked.
+        case backendSilent
+        case freed([FreedChord])
+    }
+
     /// `probe` is injected the way `KeymapAssembler` injects `canType`, and is `@MainActor` for the
     /// same reason: a plain closure parameter erases the isolation of whatever it was built from,
     /// so an off-main probe would compile clean straight through here (ZEN-31).
     @MainActor
-    static func freedChords(
+    static func check(
+        assembled: [Chord: KeyInterceptor.ReservedChord],
+        probe: @MainActor (TerminalKey) -> ChordDisposition
+    ) -> Finding {
+        guard answers(probe) else { return .backendSilent }
+        return .freed(freedChords(assembled: assembled, probe: probe))
+    }
+
+    /// Whether the backend is answering at all. A `TerminalSurface` exists before its backend surface
+    /// does: `ghostty_surface_new` fails on a locked screen and leaves the object alive and
+    /// registered, and every chord then reports `.ignores`.
+    ///
+    /// ⌘T is `new_tab` in libghostty and unconditional, and we send the backend no `keybind` lines,
+    /// so its keymap is its compiled defaults whatever the user's config says. A pin bump moving
+    /// `new_tab` off ⌘T would make this read false wrongly, and would turn
+    /// `BackendBindingBaselineTests` red in the same breath.
+    @MainActor
+    private static func answers(_ probe: @MainActor (TerminalKey) -> ChordDisposition) -> Bool {
+        guard let canary = TerminalKey(chord: Chord(command: true, key: "t")) else { return false }
+        return probe(canary) != .ignores
+    }
+
+    @MainActor
+    private static func freedChords(
         assembled: [Chord: KeyInterceptor.ReservedChord],
         probe: @MainActor (TerminalKey) -> ChordDisposition
     ) -> [FreedChord] {
@@ -46,8 +78,13 @@ enum BackendShadow {
         assembled: [Chord: KeyInterceptor.ReservedChord],
         probe: @MainActor (TerminalKey) -> ChordDisposition
     ) {
-        for freed in freedChords(assembled: assembled, probe: probe) {
-            Log.warning(line(for: freed, in: assembled), category: .keybinds)
+        switch check(assembled: assembled, probe: probe) {
+        case .backendSilent:
+            Log.warning(
+                "Keymap: the terminal backend isn't answering, so nothing was checked for chords "
+                    + "the config freed.", category: .keybinds)
+        case .freed(let freed):
+            for chord in freed { Log.warning(line(for: chord, in: assembled), category: .keybinds) }
         }
     }
 
