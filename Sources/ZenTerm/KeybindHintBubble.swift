@@ -3,18 +3,20 @@ import AppKit
 /// The chord-capture popover — built on the toast card chrome (`FloatShadow` background + hairline
 /// edge + drop shadow). A header row (tinted keyboard badge + title), a full-width muted preview box
 /// that shows the chord live (centered) with a small red validation line tucked beneath it, and a
-/// status block (a reset button over the command keys, replaced by a success message on save),
-/// shown by the section
-/// beside a capturing keybind chip.
+/// status line (the command keys, replaced by a success message on save). The input carries the
+/// accent ring while it listens, with a reset icon beside it. Shown by the section next to a
+/// capturing keybind chip.
 final class KeybindHintBubble: ShadowCardView {
     private static let width: CGFloat = 220
 
     private let previewHost = NSView()
     private let statusHost = NSView()
     private let errorLabel = NSTextField(wrappingLabelWithString: "")
-    /// Reset the row to its built-in chord. Retained rather than rebuilt so `showInstructions`
-    /// re-shown after an error keeps the same control the section wired.
-    private let resetButton = AppButton(title: "Reset to default", variant: .muted)
+    /// Reset the row to its built-in chord, beside the input it acts on. Hidden on a row already at
+    /// its default, where it would be a control that does nothing.
+    private lazy var resetButton = IconButton(
+        symbol: "arrow.uturn.backward", accessibilityLabel: "Reset to default"
+    ) { [weak self] in self?.onResetToDefault?() }
     var onResetToDefault: (() -> Void)?
 
     init() {
@@ -55,6 +57,9 @@ final class KeybindHintBubble: ShadowCardView {
         previewBox.wantsLayer = true
         previewBox.layer?.cornerRadius = 6
         previewBox.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.06).cgColor
+        // The accent ring says the input is listening, the same signal a focused chip carries.
+        previewBox.layer?.borderWidth = 1.5
+        previewBox.layer?.borderColor = Theme.current.chrome.accent.nsColor.cgColor
         previewBox.translatesAutoresizingMaskIntoConstraints = false
         previewHost.translatesAutoresizingMaskIntoConstraints = false
         previewBox.addSubview(previewHost)
@@ -65,7 +70,14 @@ final class KeybindHintBubble: ShadowCardView {
         errorLabel.preferredMaxLayoutWidth = Self.width - 28
         errorLabel.isHidden = true
 
-        let previewGroup = NSStackView(views: [previewBox, errorLabel])
+        // The reset sits beside the input rather than under it: it acts on the same thing the input
+        // is showing, and a row of its own would read as a third command next to esc and del.
+        let inputRow = NSStackView(views: [previewBox, resetButton])
+        inputRow.orientation = .horizontal
+        inputRow.alignment = .centerY
+        inputRow.spacing = 8
+
+        let previewGroup = NSStackView(views: [inputRow, errorLabel])
         previewGroup.orientation = .vertical
         previewGroup.alignment = .leading
         previewGroup.spacing = 4
@@ -86,8 +98,8 @@ final class KeybindHintBubble: ShadowCardView {
             icon.centerXAnchor.constraint(equalTo: badge.centerXAnchor),
             icon.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
             previewGroup.widthAnchor.constraint(equalTo: col.widthAnchor),
+            inputRow.widthAnchor.constraint(equalTo: previewGroup.widthAnchor),
             previewBox.heightAnchor.constraint(equalToConstant: 34),
-            previewBox.widthAnchor.constraint(equalTo: previewGroup.widthAnchor),  // full width of the card
             previewHost.centerXAnchor.constraint(equalTo: previewBox.centerXAnchor),
             previewHost.centerYAnchor.constraint(equalTo: previewBox.centerYAnchor),
             previewHost.leadingAnchor.constraint(greaterThanOrEqualTo: previewBox.leadingAnchor, constant: 10),
@@ -127,6 +139,13 @@ final class KeybindHintBubble: ShadowCardView {
         ])
     }
 
+    /// Test hook: the chord the input is drawing, or nil when it shows the listening placeholder.
+    /// Reads the rendered subview rather than a stored string, so a test can't pass while the box
+    /// actually shows something else.
+    var previewedChordForTesting: String? {
+        (previewHost.subviews.first as? KeycapView)?.shortcut
+    }
+
     /// A small red validation line under the preview; the status controls below stay put.
     func showError(_ text: String) {
         errorLabel.stringValue = text
@@ -134,12 +153,12 @@ final class KeybindHintBubble: ShadowCardView {
     }
     func clearError() { errorLabel.isHidden = true }
 
-    /// The default status block: the two command keys, and reset-to-default as a button.
-    ///
-    /// Reset is a button rather than a third key because it is the rarer act and the one that needs
-    /// naming. `del` used to mean it, which reads as doing nothing on the rows most likely to be
-    /// pressed: an action whose default is a chord something else already holds gets it back and
-    /// loses it again on the reload (ZEN-368).
+    /// Whether the row this popover is over can be put back. The reset is hidden on a row already
+    /// at its default, where it would be a control that does nothing.
+    func setCanResetToDefault(_ canReset: Bool) { resetButton.isHidden = !canReset }
+
+    /// The default status line: the two command keys. Reset is the icon beside the input, not a
+    /// third key here, because it acts on what the input is showing rather than on the recording.
     func showInstructions() {
         let cancel = Self.muted("to cancel")
         let keys = NSStackView(views: [
@@ -149,13 +168,7 @@ final class KeybindHintBubble: ShadowCardView {
         keys.alignment = .centerY
         keys.spacing = 5
         keys.setCustomSpacing(12, after: cancel)  // gap between the two groups, no dot separator
-
-        resetButton.onTap = { [weak self] in self?.onResetToDefault?() }
-        let column = NSStackView(views: [resetButton, keys])
-        column.orientation = .vertical
-        column.alignment = .leading
-        column.spacing = 10
-        setStatus(column)
+        setStatus(keys)
     }
 
     /// Replace the status line with a success message before the popover closes.

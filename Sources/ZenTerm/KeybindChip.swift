@@ -22,6 +22,10 @@ final class KeybindChip: NSView {
     private let host = NSView()
     private var isFocused = false { didSet { restyle() } }
     private(set) var isCapturing = false { didSet { restyle() } }
+    /// A mouse over the chip. Without it the only sign this is a target was the pointing-hand
+    /// cursor, which is a lot to ask of a row in a list of forty (ZEN-368).
+    private var isHovered = false { didSet { restyle() } }
+    private var trackingAreaRef: NSTrackingArea?
 
     init() {
         super.init(frame: .zero)
@@ -113,12 +117,25 @@ final class KeybindChip: NSView {
 
     override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
 
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingAreaRef { removeTrackingArea(trackingAreaRef) }
+        let area = NSTrackingArea(
+            rect: bounds, options: [.mouseEnteredAndExited, .activeInKeyWindow], owner: self)
+        addTrackingArea(area)
+        trackingAreaRef = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { isHovered = true }
+    override func mouseExited(with event: NSEvent) { isHovered = false }
+
     private func restyle() {
         let chrome = Theme.current.chrome
         let fill: NSColor
         if isCapturing {
             fill = chrome.accent.nsColor.withAlphaComponent(0.14)
-        } else if isFocused {
+        } else if isFocused || isHovered {
+            // Hover and focus share a fill; the accent ring below is what still tells them apart.
             fill = chrome.ink(alpha: 0.10)
         } else {
             fill = chrome.ink(alpha: 0.06)

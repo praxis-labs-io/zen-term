@@ -234,13 +234,17 @@
 # too, since that's ghostty's word. (ghostty writes the trigger first, so its own
 # `cmd+g=unbind` still reads here as an unknown action.)
 #
-# In Settings, Delete on a shortcut does the same thing, and the popover has a
-# button to put the default back.
+# In Settings, Delete on a shortcut does the same thing, and the capture popover has
+# a reset icon beside the input that puts the default back.
 #
-# Giving a default's chord to a float is not a problem and is never reported. Your
-# `key:cmd+g` line already says ⌘G opens that float, so Find Next having no shortcut
-# is the same statement read from the other end. The Shortcuts row says which line
-# took the chord, and nothing warns you about it at launch.
+# When a line here takes a chord off one of the defaults, the action that lost it
+# gets a notice of its own at launch, with two answers. Accept writes the `=none`
+# line for you. Revert drops the line that took the chord, so both actions go back
+# to their defaults. The same two sit on the Settings row, and the notice returns
+# every launch until you use one of them or fix the file yourself.
+#
+# A float is Accept only. Its chord is the `key:` on its own `float =` line and
+# `key:` is required, so there is nothing to back the chord out to.
 #
 # A chord the menu bar owns is refused, and so is a tool float's `key:` on one.
 # ZenTerm resolves shortcuts before macOS matches menu items, so a keybind on ⌘Q

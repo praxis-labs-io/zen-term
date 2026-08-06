@@ -241,25 +241,42 @@ final class SettingsKeybindsSection: SettingsSection {
         hintBubble?.setPreview(chord.displayGlyph)
         hintBubble?.clearError()
         guard chord.command || chord.shift || chord.option || chord.control else {
-            hintBubble?.showError("Add at least one modifier (⌘ ⇧ ⌥ ⌃).")
-            positionBubble(for: row)
+            refuse("Add at least one modifier (⌘ ⇧ ⌥ ⌃).", for: row)
             return  // stay armed
         }
         // Refused here rather than accepted and dropped later by the assembler. The chord is
         // typeable and unbound, so nothing else would stop it, and the key monitor resolves ahead
         // of `NSApp.sendEvent`: recording ⌘Q would kill Quit with the menu still drawing ⌘Q.
         if let menuItem = MenuShortcuts.owner(of: chord) {
-            hintBubble?.showError("\(chord.displayGlyph) is the \(menuItem) menu shortcut.")
-            positionBubble(for: row)
+            refuse("\(chord.displayGlyph) is the \(menuItem) menu shortcut.", for: row)
             return  // stay armed
         }
         if let owner = GeneralConfig.current.keymap[chord], owner != row.action {
-            hintBubble?.showError(
-                "\(chord.displayGlyph) is already bound to \(CommandCatalog.spec(for: owner).title).")
-            positionBubble(for: row)
+            refuse(
+                "\(chord.displayGlyph) is already bound to \(CommandCatalog.spec(for: owner).title).",
+                for: row)
             return  // stay armed
         }
         commitRebind(row, to: chord)  // valid — apply, show success, close after a beat
+    }
+
+    /// Say why a chord was refused, and put the input back to listening.
+    ///
+    /// Leaving the rejected chord in the preview box read as though it had been taken: the box is
+    /// where the recorded chord appears, so a chord sitting in it beside a red line is two claims at
+    /// once. Nothing is stolen and nothing changes, so the input returns to where it started and the
+    /// capture stays armed for another try (ZEN-368).
+    private func refuse(_ reason: String, for row: KeybindRow) {
+        hintBubble?.setPreview("")
+        hintBubble?.showError(reason)
+        positionBubble(for: row)
+    }
+
+    /// Whether the action still holds exactly the chords it ships with, which is when reset has
+    /// nothing to do.
+    private func isAtDefault(_ action: KeyInterceptor.ReservedChord) -> Bool {
+        !desired.unbound.contains(action)
+            && desired.chords(of: action) == Set(KeymapDefaults.map.filter { $0.value == action }.keys)
     }
 
     /// Apply a validated rebind, flash a success line, and close the popover after a short delay.
@@ -393,15 +410,32 @@ final class SettingsKeybindsSection: SettingsSection {
     /// window) silently retract "couldn't write config" while the edit is still not on disk.
     private func refreshRows() {
         let diagnostics = GeneralConfig.current.configDiagnostics
+        let conflicts = KeybindConflict.all(in: GeneralConfig.current)
         for row in rows {
             row.render(currentShortcut: displayedChord(for: row.action)?.displayGlyph ?? "")
+            let conflict = conflicts.first { $0.loser == row.action }
+            // The same two answers the launch card carries, so a conflict can be settled wherever
+            // the user meets it. Cleared on every refresh: resolving one elsewhere has to take the
+            // buttons away here too.
+            row.showConflict(
+                conflict,
+                onAccept: { [weak self] in self?.resolve(conflict, with: KeybindConflictResolver.accept) },
+                onRevert: { [weak self] in self?.resolve(conflict, with: KeybindConflictResolver.revert) })
             guard row.messageKind != .failure else { continue }
             let diagnostic = diagnostics.first { $0.scope == .keybind(row.action) }
-            // A conflict is neutral: the config did what it says, and the row offers the two ways to
-            // answer it. A real problem (a menu chord, an untypeable one) stays warning-toned.
+            // A conflict is neutral: the config did what it says, and the answer is right there. A
+            // real problem (a menu chord, an untypeable one) stays warning-toned.
             row.showMessage(
                 diagnostic?.message, kind: (diagnostic?.isChordConflict ?? false) ? .explanation : .diagnostic)
         }
+    }
+
+    /// Answer a conflict from its row, then re-read: the write reloads, so `desired` and every row
+    /// have to come off the new config rather than the one the button was built against.
+    private func resolve(_ conflict: KeybindConflict?, with answer: (KeybindConflict) -> Bool) {
+        guard let conflict, answer(conflict) else { return }
+        desired = KeymapOverrides(config: .current)
+        refreshRows()
     }
 
     // MARK: hint bubble
@@ -419,6 +453,7 @@ final class SettingsKeybindsSection: SettingsSection {
         host.addSubview(backdrop)
         hintBackdrop = backdrop
         let bubble = KeybindHintBubble()
+        bubble.setCanResetToDefault(!isAtDefault(row.action))
         // Reset ends the capture the way Delete does: it is an answer, not a step toward one.
         bubble.onResetToDefault = { [weak self, weak row] in
             guard let self, let row else { return }

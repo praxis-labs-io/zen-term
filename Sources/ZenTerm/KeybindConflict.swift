@@ -44,12 +44,16 @@ struct KeybindConflict: Equatable {
         return result
     }
 
-    /// Put both actions back where they ship. The winner's line then matches its defaults, so the
-    /// writer stops emitting it and the chord returns to the loser on the next load.
+    /// Put the winner back where it ships. Its line then matches the defaults, so the writer stops
+    /// emitting it, and the chord returns to the loser on the next load because no line names the
+    /// loser at all and the assembler hands every unmentioned action its defaults.
+    ///
+    /// Only the winner is touched, deliberately. Binding the loser back too reads as the symmetric
+    /// thing to do and is unreachable: a loser already carrying `= none` is not in conflict, because
+    /// the unbind frees its default before anything can take it.
     func reverting(_ overrides: KeymapOverrides) -> KeymapOverrides {
         var result = overrides
         result.bind(winner, to: KeymapDefaults.map.filter { $0.value == winner }.keys)
-        result.bind(loser, to: KeymapDefaults.map.filter { $0.value == loser }.keys)
         return result
     }
 

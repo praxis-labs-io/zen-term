@@ -28,6 +28,11 @@ final class KeybindRow: NSView {
     private let titleLabel: NSTextField
     private let messageLabel = NSTextField(labelWithString: "")
     private(set) var messageKind: MessageKind?
+    /// The two answers to a chord conflict, shown beside the message and hidden otherwise. The same
+    /// pair the launch card carries, so a conflict can be settled wherever the user meets it.
+    private let acceptButton = AppButton(title: "Accept", variant: .muted)
+    private let revertButton = AppButton(title: "Revert", variant: .muted)
+    private let conflictRow = NSStackView()
     /// The last shortcut string handed to `render` — kept so `reapplyTheme()` can re-render the
     /// chip (rebuilding its `KeycapView` glyphs against the new theme) without the section having
     /// to resupply it.
@@ -56,7 +61,13 @@ final class KeybindRow: NSView {
         messageLabel.textColor = Theme.current.chrome.destructive.nsColor
         messageLabel.isHidden = true
 
-        let stack = NSStackView(views: [controls, messageLabel])
+        conflictRow.orientation = .horizontal
+        conflictRow.alignment = .centerY
+        conflictRow.spacing = 6
+        conflictRow.setViews([revertButton, acceptButton], in: .leading)
+        conflictRow.isHidden = true
+
+        let stack = NSStackView(views: [controls, messageLabel, conflictRow])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 3
@@ -76,6 +87,16 @@ final class KeybindRow: NSView {
     func render(currentShortcut: String) {
         lastShortcut = currentShortcut
         chip.render(shortcut: currentShortcut)
+    }
+
+    /// Offer the two answers to `conflict`, or clear them with nil. Revert is hidden when a float
+    /// took the chord: its `key:` is required, so there is nothing to back out to.
+    func showConflict(_ conflict: KeybindConflict?, onAccept: @escaping () -> Void, onRevert: @escaping () -> Void) {
+        conflictRow.isHidden = (conflict == nil)
+        guard let conflict else { return }
+        revertButton.isHidden = !conflict.isRevertable
+        acceptButton.onTap = onAccept
+        revertButton.onTap = onRevert
     }
     func setCapturing(_ capturing: Bool) { chip.setCapturing(capturing) }
 
@@ -107,6 +128,8 @@ final class KeybindRow: NSView {
     func reapplyTheme() {
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         messageLabel.textColor = KeybindRow.ink(for: messageKind)
+        acceptButton.reapplyTheme()
+        revertButton.reapplyTheme()
         chip.render(shortcut: lastShortcut)
         chip.reapplyTheme()
     }
@@ -115,5 +138,13 @@ final class KeybindRow: NSView {
     /// label rather than a backing property, so a test can't pass while the row shows nothing.
     var renderedMessageForTesting: String? {
         messageLabel.isHidden ? nil : messageLabel.stringValue
+    }
+
+    /// Test hook: the conflict answers this row is actually offering, by title. Reads the rendered
+    /// buttons rather than a stored flag, so a test can't pass while the row shows neither.
+    var conflictButtonsForTesting: [String] {
+        conflictRow.isHidden
+            ? []
+            : conflictRow.arrangedSubviews.compactMap { ($0 as? AppButton).flatMap { $0.isHidden ? nil : $0.title } }
     }
 }

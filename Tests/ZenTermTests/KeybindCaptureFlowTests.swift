@@ -232,7 +232,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertEqual(liveKeymap[cmdT], .closePane)
 
         row(for: .newTab).chip.onActivate?()  // Reset New Tab → its default ⌘T is taken
-        try resetButton().onTap()
+        try resetIcon().onClick()
 
         XCTAssertEqual(liveKeymap[cmdT], .newTab, "the default is restored")
         XCTAssertEqual(liveKeymap[Chord(command: true, key: "w")], .closePane, "the displaced action falls back")
@@ -263,7 +263,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertEqual(liveKeymap[cmdL], .navLeft)
 
         row(for: .navLeft).chip.onActivate?()  // Reset Nav Left → wants ⌘H, held by Nav Right
-        try resetButton().onTap()
+        try resetIcon().onClick()
 
         XCTAssertEqual(liveKeymap[cmdH], .navLeft, "Nav Left is back on its default")
         // Nav Right falls back to its own default — which the reset just freed, so the swap unwinds.
@@ -290,13 +290,6 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         keyDown("\u{7f}", code: 51, flags: option ? [.option] : [])
     }
 
-    /// The reset button in the capture popover, found the way a click finds it.
-    private func resetButton() throws -> AppButton {
-        try XCTUnwrap(
-            descendants(of: hostWindow!.contentView!).compactMap { $0 as? AppButton }
-                .first { $0.title == "Reset to default" })
-    }
-
     func test_delete_onAFocusedChip_leavesTheActionWithNoShortcut() throws {
         _ = mountSection(FakeCapturer())
         let newTab = row(for: .newTab)
@@ -319,7 +312,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertFalse(liveKeymap.values.contains(.newTab))
 
         row(for: .newTab).chip.onActivate?()  // the popover the button lives in
-        try resetButton().onTap()
+        try resetIcon().onClick()
 
         let defaultChord = KeymapDefaults.map.first { $0.value == .newTab }!.key
         XCTAssertEqual(liveKeymap[defaultChord], .newTab)
@@ -334,7 +327,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         row(for: .newTab).chip.onActivate?()
         XCTAssertTrue(capturer.isArmed)
 
-        try resetButton().onTap()
+        try resetIcon().onClick()
 
         // Reset is an answer, not a step toward one. Left armed, the card keeps diverting every
         // keystroke with no popover on screen to explain why.
@@ -357,6 +350,129 @@ final class KeybindCaptureFlowTests: WindowTestCase {
     private func configText() throws -> String {
         try String(contentsOf: tempRoot.appendingPathComponent("config"), encoding: .utf8)
     }
+
+    // MARK: the capture popover (ZEN-368)
+
+    private func hintBubble() throws -> KeybindHintBubble {
+        try XCTUnwrap(descendants(of: hostWindow!.contentView!).compactMap { $0 as? KeybindHintBubble }.first)
+    }
+
+    private func resetIcon() throws -> IconButton {
+        try XCTUnwrap(descendants(of: try hintBubble()).compactMap { $0 as? IconButton }.first)
+    }
+
+    /// Reset is hidden on a row that already holds exactly its defaults, where it would be a control
+    /// that does nothing, and shown the moment the row moves off them.
+    func test_resetIcon_appearsOnlyWhenTheRowIsOffItsDefault() throws {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+
+        row(for: .newTab).chip.onActivate?()
+        XCTAssertTrue(try resetIcon().isHidden, "a row at its default has nothing to reset to")
+        capturer.feed(event(for: novelChord))
+
+        row(for: .newTab).chip.onActivate?()
+        XCTAssertFalse(try resetIcon().isHidden, "rebound, so there is a default to go back to")
+    }
+
+    func test_resetIcon_isShownForARemovedShortcut() throws {
+        _ = mountSection(FakeCapturer())
+        row(for: .newTab).chip.keyDown(with: deleteKey(option: false))
+
+        row(for: .newTab).chip.onActivate?()
+
+        XCTAssertFalse(try resetIcon().isHidden, "removed is off the default too, so it can come back")
+    }
+
+    /// A refused chord must not sit in the input. The box is where a recorded chord appears, so
+    /// leaving the rejected one there beside a red line makes two claims at once.
+    func test_aRefusedChord_returnsTheInputToListening() throws {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        let newTabChord = liveKeymap.first { $0.value == .newTab }!.key
+
+        row(for: .closePane).chip.onActivate?()
+        capturer.feed(event(for: newTabChord))
+
+        XCTAssertNil(
+            try hintBubble().previewedChordForTesting,
+            "the input is back to Press keys…, not sitting on what was refused")
+        XCTAssertTrue(capturer.isArmed, "and it is still listening")
+    }
+
+    func test_aModifierlessKey_alsoReturnsTheInputToListening() throws {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+
+        row(for: .closePane).chip.onActivate?()
+        capturer.feed(keyDown("k", code: 40))
+
+        XCTAssertNil(try hintBubble().previewedChordForTesting)
+        XCTAssertTrue(capturer.isArmed)
+    }
+
+    // MARK: the row answers a conflict (ZEN-368)
+
+    func test_aRowWithAConflict_offersAcceptAndRevert() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        _ = mountSection(FakeCapturer())
+
+        let row = row(for: .toggleCommandPalette)
+        XCTAssertEqual(row.conflictButtonsForTesting, ["Revert", "Accept"])
+        XCTAssertEqual(row.messageKind, .explanation, "neutral: the config did what it says")
+        XCTAssertNil(row.chip.renderedShortcutForTesting)
+    }
+
+    /// A float's `key:` is required, so there is nothing to back out to.
+    func test_aConflictFromAFloat_offersAcceptAlone() throws {
+        try seed("float = title:lazygit command:lazygit key:cmd+g\n")
+        _ = mountSection(FakeCapturer())
+
+        XCTAssertEqual(row(for: .findNext).conflictButtonsForTesting, ["Accept"])
+    }
+
+    func test_accept_writesTheUnsetAndClearsTheRow() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        _ = mountSection(FakeCapturer())
+
+        try acceptButton(on: row(for: .toggleCommandPalette)).onTap()
+
+        XCTAssertEqual(row(for: .toggleCommandPalette).conflictButtonsForTesting, [])
+        XCTAssertNil(row(for: .toggleCommandPalette).renderedMessageForTesting)
+        XCTAssertEqual(GeneralConfig.current.unboundActions, [.toggleCommandPalette])
+        let text = try configText()
+        XCTAssertTrue(text.contains("keybind = toggle_command_palette=none"), text)
+    }
+
+    /// Revert backs out both halves: the palette gets ⌘P back and Split Vertically returns to its
+    /// own default, because the line that moved it is gone.
+    func test_revert_dropsTheLineAndPutsBothChordsBack() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        _ = mountSection(FakeCapturer())
+
+        try revertButton(on: row(for: .toggleCommandPalette)).onTap()
+
+        XCTAssertEqual(row(for: .toggleCommandPalette).chip.renderedShortcutForTesting, "⌘P")
+        XCTAssertEqual(row(for: .splitVertical).chip.renderedShortcutForTesting, "⌘⇧\\")
+        XCTAssertEqual(row(for: .toggleCommandPalette).conflictButtonsForTesting, [])
+        let text = try configText()
+        XCTAssertFalse(text.contains("split_vertical"), text)
+    }
+
+    /// A row with nothing unresolved carries no buttons and no message at all. Journey one's whole
+    /// point: a clean config shows a plain list.
+    func test_aCleanRow_showsNoConflictAffordance() {
+        _ = mountSection(FakeCapturer())
+
+        XCTAssertEqual(row(for: .toggleCommandPalette).conflictButtonsForTesting, [])
+        XCTAssertNil(row(for: .toggleCommandPalette).renderedMessageForTesting)
+    }
+
+    private func button(_ title: String, on row: KeybindRow) throws -> AppButton {
+        try XCTUnwrap(descendants(of: row).compactMap { $0 as? AppButton }.first { $0.title == title })
+    }
+    private func acceptButton(on row: KeybindRow) throws -> AppButton { try button("Accept", on: row) }
+    private func revertButton(on row: KeybindRow) throws -> AppButton { try button("Revert", on: row) }
 
     // MARK: conflict surface (ZEN-142)
 

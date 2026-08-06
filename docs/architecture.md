@@ -813,23 +813,40 @@ exactly the way an action sitting at its defaults is. So `KeymapOverrides` carri
 `GeneralConfig.unboundActions` holds it. Without that, the next Settings write
 deletes the line the user wrote.
 
-**A chord one config line took off another action is not a problem, and is not
-announced.** `ConfigDiagnostic.isProblem` says so, and `ConfigApplier` filters on it
-before the empty check, so a set of nothing-but-explanations still *retracts* an
-outstanding notice. The reasoning: `.chordTaken` fires when an action loses its last
-chord, and the winner is always something the user wrote by hand (a float's `key:`,
-or their own `keybind` line). ZenTerm never takes a chord away by itself, so the
-state is already fully determined by the file and re-derived on every load. A notice
-about it could never be cleared and named nothing to do. The Shortcuts row carries
-the fact instead, in muted ink (`KeybindRow.MessageKind.explanation`) rather than
-warning-toned, because there is nothing there to fix.
+**A chord conflict carries its own answer, so it gets a card of its own.**
+`KeybindConflict` reads them off the `.chordTaken` diagnostics, and
+`ConfigApplier.surfaceConflicts` raises one sticky card each while everything else
+keeps sharing the one notice (`ConfigDiagnostic.isChordConflict` is the split, and it
+sits ahead of the empty check so a conflicts-only set still retracts a stale shared
+notice). One card per conflict rather than a list: each is a separate decision, and
+aggregating three would let one dismissal settle all of them.
 
-**Delete removes; reset is a button.** On a `KeybindChip`, Backspace leaves the
-action with no shortcut and writes `= none`. It used to restore the default, which
-read as doing nothing on exactly the rows most likely to be pressed: an action whose
-default is a chord something else already holds gets it back and loses it again on
-the reload. Reset-to-default moved to a button in the capture popover, which is also
-the only surface that names it.
+Both answers are edits to the config, because the config is what created the
+conflict, and both go through `KeymapOverrides` alone. **Accept** writes `= none` for
+the action that lost the chord. **Revert** puts the winner back on its defaults,
+which makes its line equal to the defaults so `ConfigWriter`'s per-action diff stops
+emitting it; the chord then returns to the loser because no line names the loser and
+the assembler hands every unmentioned action its defaults. Reverting a line is not a
+special delete, it is the writer declining to write what it no longer needs to.
+
+**A float gets Accept alone.** Its chord is the `key:` on its own `float =` line and
+`key:` is required, so there is nothing to back out to. `isRevertable` is what both
+surfaces read to decide whether the button exists at all.
+
+Re-carding is gated on the conflict set changing, because every in-app write reloads
+and a Settings keystroke would otherwise restore a card the user just closed. A
+launch is a fresh process, which is what makes an unanswered conflict come back. The
+card arms no key equivalents (ZEN-143), so Esc keeps reaching the pane and the × is
+the only keyboard-free way out.
+
+**Delete removes; reset is an icon beside the input.** On a `KeybindChip`, Backspace
+leaves the action with no shortcut and writes `= none`. It used to restore the
+default, which read as doing nothing on exactly the rows most likely to be pressed:
+an action whose default is a chord something else already holds gets it back and
+loses it again on the reload. Reset moved into the capture popover, next to the input
+it acts on, and is hidden on a row already at its defaults. A refused chord returns
+the input to its listening placeholder rather than sitting in it, since the box is
+where a *recorded* chord appears.
 
 **The modal gate cascade** in `WindowController.handle(_:)` runs confirm, then
 modal card, then tool float, then dispatch. The app-global chords (⌘N new window,
