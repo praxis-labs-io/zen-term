@@ -12,8 +12,9 @@ final class KeybindHintBubble: ShadowCardView {
     private let previewHost = NSView()
     private let statusHost = NSView()
     private let errorLabel = NSTextField(wrappingLabelWithString: "")
-    /// Reset the row to its built-in chord, beside the input it acts on. Hidden on a row already at
-    /// its default, where it would be a control that does nothing.
+    /// Reset the row to its built-in chord, beside the input it acts on. **Hidden until a host asks
+    /// for it.** The tool-float form shares this popover and has no defaults to go back to, so an
+    /// opt-out default would put a dead control on a card that never mentions it (ZEN-368).
     private lazy var resetButton = IconButton(
         symbol: "arrow.uturn.backward", accessibilityLabel: "Reset to default"
     ) { [weak self] in self?.onResetToDefault?() }
@@ -111,6 +112,7 @@ final class KeybindHintBubble: ShadowCardView {
             col.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -14),
         ])
 
+        resetButton.isHidden = true  // opt-in; see the property's note
         setPreview("")
         showInstructions()
     }

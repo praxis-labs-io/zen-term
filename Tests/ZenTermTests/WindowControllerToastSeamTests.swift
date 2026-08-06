@@ -12,19 +12,43 @@ import XCTest
 final class WindowControllerToastSeamTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var controller: WindowController?
+    private var tempRoot: URL!
 
     override func setUp() {
         super.setUp()
         originalOverride = TerminalSurfaceFactory.makeOverride
         // A real ghostty surface needs a live libghostty app; inject a headless stub instead.
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
+        // Sandboxed: a conflict card's buttons WRITE, so without this they would edit the real config.
+        tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-toast-seam-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        ConfigLoader.defaultRootOverrideForTesting = tempRoot
+        AppConfig.reload()
     }
 
     override func tearDown() {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
+        ConfigLoader.defaultRootOverrideForTesting = nil
+        AppConfig.reload()
+        try? FileManager.default.removeItem(at: tempRoot)
         super.tearDown()
+    }
+
+    /// Write a config into the sandboxed root and reload.
+    private func seed(_ text: String) throws {
+        try text.write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+        AppConfig.reload()
+    }
+
+    private func configText() throws -> String {
+        try String(contentsOf: tempRoot.appendingPathComponent("config"), encoding: .utf8)
+    }
+
+    private func button(_ title: String, on toast: ToastView) throws -> AppButton {
+        try XCTUnwrap(descendants(of: toast).compactMap { $0 as? AppButton }.first { $0.title == title })
     }
 
     private func descendants(of view: NSView) -> [NSView] {
@@ -297,6 +321,46 @@ final class WindowControllerToastSeamTests: WindowTestCase {
 
         let titles = descendants(of: toastViews(in: controller)[0]).compactMap { ($0 as? AppButton)?.title }
         XCTAssertEqual(titles, ["Accept"], "\(titles)")
+    }
+
+    /// The card's buttons, end to end. Everything above asserts which buttons exist; this is the
+    /// only thing checking that pressing one reaches the config. A card whose Accept did nothing
+    /// would look completely correct and be the first surface a user meets (ZEN-368).
+    func test_conflictToast_accept_writesTheUnset() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        let controller = makeController()
+        controller.showConflictToasts(KeybindConflict.all(in: .current))
+
+        try button("Accept", on: toastViews(in: controller)[0]).onTap()
+
+        XCTAssertEqual(GeneralConfig.current.unboundActions, [.toggleCommandPalette])
+        let text = try configText()
+        XCTAssertTrue(text.contains("keybind = toggle_command_palette=none"), text)
+        XCTAssertEqual(KeybindConflict.all(in: .current), [], "and nothing reports it again")
+    }
+
+    func test_conflictToast_revert_dropsTheLineThatTookTheChord() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        let controller = makeController()
+        controller.showConflictToasts(KeybindConflict.all(in: .current))
+
+        try button("Revert", on: toastViews(in: controller)[0]).onTap()
+
+        let text = try configText()
+        XCTAssertFalse(text.contains("split_vertical"), text)
+        XCTAssertEqual(GeneralConfig.current.keymap[Chord(command: true, key: "p")], .toggleCommandPalette)
+        XCTAssertEqual(KeybindConflict.all(in: .current), [])
+    }
+
+    /// Answering takes that card down. Left up, it would describe a config that no longer exists.
+    func test_conflictToast_answering_dismissesTheCard() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        let controller = makeController()
+        controller.showConflictToasts(KeybindConflict.all(in: .current))
+
+        try button("Accept", on: toastViews(in: controller)[0]).onTap()
+
+        waitUntil(toastViews(in: controller).isEmpty, "the answered card comes down")
     }
 
     /// One card each. A list in a single card would let one Accept settle three decisions.
