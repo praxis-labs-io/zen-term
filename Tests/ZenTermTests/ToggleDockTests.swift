@@ -37,7 +37,7 @@ final class ToggleDockTests: XCTestCase {
     }
 
     /// The dock renders the catalog in array order, left to right — it does no sorting of its own, so
-    /// a reorder in Settings reaches the toolbar only if this holds (ZEN-145).
+    /// a reorder in Settings reaches the toolbar only if this holds (ZEN-81).
     func test_setToolFloats_rendersButtonsInCatalogOrder() {
         let dock = makeDock([float("dev", order: 1), float("top", order: 2), float("notes", order: 3)])
         XCTAssertEqual(dock.toolFloatButtonIDsForTesting, ["dev", "top", "notes"])

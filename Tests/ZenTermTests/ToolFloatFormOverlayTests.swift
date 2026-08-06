@@ -248,7 +248,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
     }
 
     /// Two floats whose titles slug alike would collide on id, and the config's last-wins rule would
-    /// silently eat one. The form is what prevents that (ZEN-145).
+    /// silently eat one. The form is what prevents that (ZEN-81).
     func test_duplicateTitle_blocksSubmit() {
         let (overlay, capturer, sink) = mount(existingIDs: ["dev"])
         field(in: overlay, placeholder: "Open GitDash").setText("dev")

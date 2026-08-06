@@ -170,7 +170,7 @@ final class SettingsToolsSectionTests: WindowTestCase {
         XCTAssertEqual(sink.calls.first??.id, "top")
     }
 
-    // MARK: reorder (ZEN-145)
+    // MARK: reorder (ZEN-81)
 
     /// ⌥↓ moves the float itself and persists it. Asserted through the config file, because that's the
     /// thing the dock and ⌘P re-read — a row list that reordered without the write would look right

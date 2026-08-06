@@ -72,7 +72,7 @@ every held ordinary key over-clears and swallows a release still owed.
 the reservable set instead: `flags.intersection([.command, .shift, .option, .control])`. A
 synthesized `modifierFlags: .option` event is a keystroke macOS never sends: it shipped a dead
 ⌥-arrow reorder past four green tests and a mutation check, because both only ever exercised the fake
-event (ZEN-145).
+event (ZEN-81).
 
 **A synthesized mouse event cannot carry a button number.** `NSEvent.mouseEvent` has no
 `buttonNumber` parameter and every event it builds reports 0, whatever the type, so a test cannot
@@ -462,7 +462,7 @@ and making it real and key orders it on screen (flashing UI in the test run, and
 along with it). So a click cannot be routed through the scroll/clip view to a control in a unit test.
 Drive the control's `mouseDown` / `mouseUp` handlers directly with real `NSEvent`s (that still
 exercises the control's own logic, not its backing state); leave "a real click at that point reaches
-the control through the view tree" to a runbook step. Corollary to ZEN-145 (ZEN-235).
+the control through the view tree" to a runbook step. Corollary to ZEN-81 (ZEN-235).
 
 **A synthesized `keyDown` reaches the real input system, and what it commits is not the event's
 `characters`.** `interpretKeyEvents` translates from the keyCode and the active layout, so an event

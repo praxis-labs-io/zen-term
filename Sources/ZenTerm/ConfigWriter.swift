@@ -170,7 +170,7 @@ enum ConfigWriter {
 
     /// Persist `floats` in the order given, stamping `order:` across all of them, 1…N. Stamping every
     /// float (not just the ones that moved) is what lets a config with no `order:` fields at all — the
-    /// only kind that existed before ZEN-145 — become a full contiguous sequence on the first reorder,
+    /// only kind that existed before ZEN-81 — become a full contiguous sequence on the first reorder,
     /// instead of a mix where some floats sort by an explicit number and the rest by line position.
     ///
     /// No line moves: every id is unchanged, so each float's line is rewritten where it already sits
@@ -194,7 +194,7 @@ enum ConfigWriter {
     /// upsert(new) in one call, and since the new id was never in the file there's no line to replace —
     /// so it would otherwise land at the end of the block. That silently moves the float: on reload,
     /// floats with no `order:` of their own take their order from line position, so the ones that were
-    /// below it inherit the slot it left and it slides down the dock (ZEN-145).
+    /// below it inherit the slot it left and it slides down the dock (ZEN-81).
     private static func applyFloats(upserts: [ToolFloat], removals: Set<String>, in lines: inout [String]) {
         var vacated: Int?
         if !removals.isEmpty {

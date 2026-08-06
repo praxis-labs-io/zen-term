@@ -195,7 +195,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.floats.first?.command, "two")
     }
 
-    // MARK: float order (ZEN-145)
+    // MARK: float order (ZEN-81)
 
     /// `config.floats` is the single array the dock, ⌘P, and Settings → Tools all read, so this sort
     /// is what "reorder" actually means end to end.

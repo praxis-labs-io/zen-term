@@ -7,7 +7,7 @@ import AppKit
 /// palettes and `AddWorkspaceOverlay`, which it mirrors.
 ///
 /// There is no id field: a float's id is `slug(title)`, so the title is the only name the user gives
-/// it (ZEN-145). `existingIDs` is therefore a set of slugs — the form rejects a title that collides
+/// it (ZEN-81). `existingIDs` is therefore a set of slugs — the form rejects a title that collides
 /// with one, which is what keeps the config's last-wins rule from ever silently eating a float.
 ///
 /// Fully keyboard-driven: Up/Down move between fields, the shortcut chip captures a chord (Return to

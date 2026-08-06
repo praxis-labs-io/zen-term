@@ -34,7 +34,7 @@ final class ScrollModeKeyTests: XCTestCase {
 
     func test_arrowsMirrorJAndK() throws {
         // Real arrow keys carry .function and .numericPad; a decoder matching the raw modifier
-        // mask would miss every one of them (the ZEN-145 trap).
+        // mask would miss every one of them (the ZEN-81 trap).
         let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
         let up = String(UnicodeScalar(NSUpArrowFunctionKey)!)
         XCTAssertEqual(decode(try keyDown(down, flags: [.function, .numericPad])), .step(1))

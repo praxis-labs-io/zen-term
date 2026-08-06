@@ -770,7 +770,7 @@ final class DiffViewerOverlayTests: WindowTestCase {
     // never run in a state-only test — the exact "control looks fine while dead" gap the project guards.
 
     /// A `keyDown` built the way AppKit delivers one (arrows carry `.function`/`.numericPad`), so the
-    /// event isn't a keystroke macOS never sends (ZEN-145).
+    /// event isn't a keystroke macOS never sends (ZEN-81).
     private func keyDown(_ keyCode: UInt16) -> NSEvent {
         let isArrow = (123...126).contains(keyCode)
         return NSEvent.keyEvent(

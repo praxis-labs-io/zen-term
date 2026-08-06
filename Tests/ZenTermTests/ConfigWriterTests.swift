@@ -297,7 +297,7 @@ final class ConfigWriterTests: XCTestCase {
             "the rename drops the old id, leaving exactly one float — not a duplicate")
     }
 
-    // MARK: float order (ZEN-145)
+    // MARK: float order (ZEN-81)
 
     /// Reordering only renumbers: every float's line stays exactly where it was, and the comments,
     /// blanks, and unrelated keys around it are untouched. That's the payoff of `order:` being a field

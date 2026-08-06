@@ -106,7 +106,7 @@ final class ToggleDock: NSView {
     /// Test hook: the ids of the per-float buttons currently **visible** in the dock, left to right.
     /// Read off the arranged subviews rather than `toolFloatBtns`, so it reports the order the user
     /// actually sees — a dictionary's keys couldn't, and the float order is the thing under test
-    /// (ZEN-145). Visibility-filtered because a `toolbar:false` float's button is mounted hidden.
+    /// (ZEN-81). Visibility-filtered because a `toolbar:false` float's button is mounted hidden.
     var toolFloatButtonIDsForTesting: [String] {
         stack.arrangedSubviews.compactMap { view in
             guard !view.isHidden else { return nil }

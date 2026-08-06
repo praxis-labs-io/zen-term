@@ -416,7 +416,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     /// ⌘C (code) / ⌘⇧C (reference), or nil for anything else. Compares against the reservable set so
-    /// the `.function` bit AppKit stamps on can't stop ⌘C matching a bare Command (ZEN-145).
+    /// the `.function` bit AppKit stamps on can't stop ⌘C matching a bare Command (ZEN-81).
     static func yankShortcut(for event: NSEvent) -> Bool? {
         guard event.charactersIgnoringModifiers?.lowercased() == "c" else { return nil }
         switch event.modifierFlags.intersection(DiffPaneTable.reservableModifiers) {

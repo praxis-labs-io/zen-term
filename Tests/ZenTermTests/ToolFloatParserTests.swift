@@ -166,7 +166,7 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertTrue(result.diagnostics.isEmpty)
     }
 
-    // MARK: identity (ZEN-145)
+    // MARK: identity (ZEN-81)
 
     /// The title is the source of truth; the id is its slug and is never authored. Renaming a float is
     /// therefore the only thing that can change its id.
@@ -193,7 +193,7 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertNil(ToolFloatParser.parse("title:\"---\" command:foo key:cmd+shift+j"))
     }
 
-    /// `id:` is a dead field from before ZEN-145. It must be inert — silently ignored like any unknown
+    /// `id:` is a dead field from before ZEN-81. It must be inert — silently ignored like any unknown
     /// field — never resurrected as an identity that could disagree with the title's slug.
     func test_legacyIDField_isIgnored() {
         let float = ToolFloatParser.parse("id:legacy title:Notes command:foo key:cmd+shift+j")
