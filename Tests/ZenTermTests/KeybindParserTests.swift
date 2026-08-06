@@ -67,9 +67,32 @@ final class KeybindParserTests: XCTestCase {
 
     func test_parse_validKeybindLine() {
         // Action first, then chord.
-        let pair = KeybindParser.parse("toggle_workspace_picker=cmd+shift+p")
-        XCTAssertEqual(pair?.0, Chord(command: true, shift: true, key: "p"))
-        XCTAssertEqual(pair?.1, .toggleRepoPicker)
+        XCTAssertEqual(
+            KeybindParser.parse("toggle_workspace_picker=cmd+shift+p"),
+            .bind(Chord(command: true, shift: true, key: "p"), .toggleRepoPicker))
+    }
+
+    /// Both words for "no shortcut" (ZEN-368). `none` is ours; `unbind` is ghostty's, and a ghostty
+    /// user reaches for it. Case is the user's business.
+    func test_parse_noneAndUnbind_bothMeanNoShortcut() {
+        XCTAssertEqual(KeybindParser.parse("find_next=none"), .unbind(.findNext))
+        XCTAssertEqual(KeybindParser.parse("find_next=unbind"), .unbind(.findNext))
+        XCTAssertEqual(KeybindParser.parse("find_next=NONE"), .unbind(.findNext))
+        XCTAssertEqual(KeybindParser.parse("find_next = none"), .unbind(.findNext))
+    }
+
+    /// A trailing `=` is a typo, and reading it as a deliberate unbind would take a shortcut away
+    /// on the strength of a slip. It stays unparseable, which reports itself.
+    func test_parse_emptyChord_isNotAnUnbind() {
+        XCTAssertNil(KeybindParser.parse("find_next="))
+        XCTAssertNil(KeybindParser.parse("find_next=  "))
+    }
+
+    /// ghostty's own line reads trigger-first, so its `cmd+g=unbind` is still an unknown action
+    /// here. Accepting the word is not accepting the line shape, and claiming otherwise in the
+    /// config doc would send people to write a line that does nothing.
+    func test_parse_ghosttyTriggerFirstUnbind_isStillUnparseable() {
+        XCTAssertNil(KeybindParser.parse("cmd+g=unbind"))
     }
 
     func test_workspacePicker_token_andLegacyRepoAlias() {

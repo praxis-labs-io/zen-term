@@ -104,7 +104,7 @@ final class MenuShortcutsTests: XCTestCase {
 
     func test_aUserBindOnAMenuChordIsDroppedAndReported() {
         let result = KeymapAssembler.assemble(
-            floats: [], keybinds: [(Chord(command: true, key: "q"), .newTab)],
+            floats: [], keybinds: [.bind(Chord(command: true, key: "q"), .newTab)],
             canType: { _ in true },
             protected: { [Chord(command: true, key: "q")] },
             menuOwner: { _ in "Quit ZenTerm" })
@@ -123,7 +123,7 @@ final class MenuShortcutsTests: XCTestCase {
     /// follows. Dropping both would leave the action unreachable and look like it was bound.
     func test_aRefusedBindLeavesTheActionsDefaultAlone() {
         let result = KeymapAssembler.assemble(
-            floats: [], keybinds: [(Chord(command: true, key: "q"), .newTab)],
+            floats: [], keybinds: [.bind(Chord(command: true, key: "q"), .newTab)],
             canType: { _ in true },
             protected: { [Chord(command: true, key: "q")] },
             menuOwner: { _ in "Quit ZenTerm" })
@@ -196,7 +196,7 @@ final class MenuShortcutsTests: XCTestCase {
             persist: .ephemeral, toggle: Chord(command: true, key: "q"))
 
         let result = KeymapAssembler.assemble(
-            floats: [float], keybinds: [(Chord(command: true, option: true, key: "n"), .toggleToolFloat("notes"))],
+            floats: [float], keybinds: [.bind(Chord(command: true, option: true, key: "n"), .toggleToolFloat("notes"))],
             canType: { _ in true },
             protected: { [Chord(command: true, key: "q")] },
             menuOwner: { _ in "Quit ZenTerm" })
@@ -211,7 +211,7 @@ final class MenuShortcutsTests: XCTestCase {
     /// message read "is the a menu shortcut".
     func test_aRefusedBindWithNoNamedOwnerStillReadsAsASentence() {
         let result = KeymapAssembler.assemble(
-            floats: [], keybinds: [(Chord(command: true, key: "q"), .newTab)],
+            floats: [], keybinds: [.bind(Chord(command: true, key: "q"), .newTab)],
             canType: { _ in true },
             protected: { [Chord(command: true, key: "q")] },
             menuOwner: { _ in nil })
@@ -223,7 +223,7 @@ final class MenuShortcutsTests: XCTestCase {
 
     func test_aBindOnAFreeChordIsUnaffected() {
         let result = KeymapAssembler.assemble(
-            floats: [], keybinds: [(Chord(command: true, option: true, key: "n"), .newTab)],
+            floats: [], keybinds: [.bind(Chord(command: true, option: true, key: "n"), .newTab)],
             canType: { _ in true },
             protected: { [Chord(command: true, key: "q")] },
             menuOwner: { _ in nil })

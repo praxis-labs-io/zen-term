@@ -3,7 +3,8 @@ import AppKit
 /// The chord-capture popover — built on the toast card chrome (`FloatShadow` background + hairline
 /// edge + drop shadow). A header row (tinted keyboard badge + title), a full-width muted preview box
 /// that shows the chord live (centered) with a small red validation line tucked beneath it, and a
-/// status line (the cancel/remove keys, replaced by a success message on save). Shown by the section
+/// status block (a reset button over the command keys, replaced by a success message on save),
+/// shown by the section
 /// beside a capturing keybind chip.
 final class KeybindHintBubble: ShadowCardView {
     private static let width: CGFloat = 220
@@ -11,6 +12,10 @@ final class KeybindHintBubble: ShadowCardView {
     private let previewHost = NSView()
     private let statusHost = NSView()
     private let errorLabel = NSTextField(wrappingLabelWithString: "")
+    /// Reset the row to its built-in chord. Retained rather than rebuilt so `showInstructions`
+    /// re-shown after an error keeps the same control the section wired.
+    private let resetButton = AppButton(title: "Reset to default", variant: .muted)
+    var onResetToDefault: (() -> Void)?
 
     init() {
         super.init(frame: .zero)
@@ -129,17 +134,28 @@ final class KeybindHintBubble: ShadowCardView {
     }
     func clearError() { errorLabel.isHidden = true }
 
-    /// The default status line: the cancel / remove keys.
+    /// The default status block: the two command keys, and reset-to-default as a button.
+    ///
+    /// Reset is a button rather than a third key because it is the rarer act and the one that needs
+    /// naming. `del` used to mean it, which reads as doing nothing on the rows most likely to be
+    /// pressed: an action whose default is a chord something else already holds gets it back and
+    /// loses it again on the reload (ZEN-368).
     func showInstructions() {
         let cancel = Self.muted("to cancel")
-        let row = NSStackView(views: [
+        let keys = NSStackView(views: [
             Self.keyCap("esc"), cancel, Self.keyCap("del"), Self.muted("to remove"),
         ])
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 5
-        row.setCustomSpacing(12, after: cancel)  // gap between the two groups, no dot separator
-        setStatus(row)
+        keys.orientation = .horizontal
+        keys.alignment = .centerY
+        keys.spacing = 5
+        keys.setCustomSpacing(12, after: cancel)  // gap between the two groups, no dot separator
+
+        resetButton.onTap = { [weak self] in self?.onResetToDefault?() }
+        let column = NSStackView(views: [resetButton, keys])
+        column.orientation = .vertical
+        column.alignment = .leading
+        column.spacing = 10
+        setStatus(column)
     }
 
     /// Replace the status line with a success message before the popover closes.
@@ -162,7 +178,7 @@ final class KeybindHintBubble: ShadowCardView {
         ])
     }
 
-    /// A small inline key chip (`esc`, `del`) — a faint rounded box with muted monospaced text.
+    /// A small inline key chip (`esc`, `del`): a faint rounded box with muted monospaced text.
     private static func keyCap(_ text: String) -> NSView {
         let label = NSTextField(labelWithString: text)
         label.font = .monospacedSystemFont(ofSize: 10, weight: .medium)

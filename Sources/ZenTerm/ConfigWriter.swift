@@ -13,7 +13,7 @@ enum ConfigWriter {
     static func apply(
         scalars: [String: String] = [:],
         removals: Set<String> = [],
-        keybinds: [Chord: KeyInterceptor.ReservedChord]? = nil,
+        keybinds: KeymapOverrides? = nil,
         floatUpserts: [ToolFloat] = [],
         floatRemovals: Set<String> = [],
         configRoot: URL = ConfigLoader.defaultRoot
@@ -68,7 +68,7 @@ enum ConfigWriter {
         lines.removeAll { activeAssignmentKey($0) == key }
     }
 
-    // MARK: keybinds (implemented in Task 3)
+    // MARK: keybinds
 
     /// Regenerate the reserved `keybind =` block from the desired keymap. Diffs per *action*: an
     /// action whose chord set differs from its `KeymapDefaults` set emits a line for *every* one of
@@ -79,21 +79,24 @@ enum ConfigWriter {
     /// set emits nothing. Preserves existing `keybind = toggle_float:…` lines (float-owned, edited
     /// only via `float =`) and drops every other existing `keybind =` line. The block lands where
     /// the first `keybind =` line was; if there were none, after the `Keybinds` header, else appended.
-    private static func applyKeybinds(
-        _ keybinds: [Chord: KeyInterceptor.ReservedChord], to lines: inout [String]
-    ) {
+    ///
+    /// An unbound action emits `= none` and needs no exclusion from the chord diff above: it holds
+    /// no chord, so it never enters that loop. Emitted even when the action ships with no default
+    /// chord and the line is therefore inert, because the user wrote it and this block is the only
+    /// place it lives (ZEN-368).
+    private static func applyKeybinds(_ keybinds: KeymapOverrides, to lines: inout [String]) {
         let floatBinds = lines.filter(isFloatKeybindLine)
 
         // Per-action diff: emit a chord's line when that action's whole desired set differs from its
         // default set. (`ReservedChord` has associated values so it can't key a dictionary — compare
         // the two sets by filtering. n is tiny.) Iterating every chord of a differing action emits
         // all of them; an action at its defaults emits nothing.
-        let overrides =
-            keybinds
-            .filter { _, action in chords(of: action, in: keybinds) != chords(of: action, in: KeymapDefaults.map) }
+        let rebinds =
+            keybinds.binds
+            .filter { _, action in keybinds.chords(of: action) != chords(of: action, in: KeymapDefaults.map) }
             .map { chord, action in "keybind = \(action.actionToken)=\(chord.configToken)" }
-            .sorted()
-        let block = floatBinds + overrides
+        let unbinds = keybinds.unbound.map { "keybind = \($0.actionToken)=none" }
+        let block = floatBinds + (rebinds + unbinds).sorted()
 
         var result: [String] = []
         var inserted = false
@@ -118,7 +121,8 @@ enum ConfigWriter {
         lines = result
     }
 
-    /// The set of chords bound to `action` in `map` — for the per-action diff in `applyKeybinds`.
+    /// The set of chords bound to `action` in `map`: the `KeymapDefaults` half of the per-action
+    /// diff in `applyKeybinds`. The desired half is `KeymapOverrides.chords(of:)`.
     private static func chords(
         of action: KeyInterceptor.ReservedChord, in map: [Chord: KeyInterceptor.ReservedChord]
     ) -> Set<Chord> {

@@ -7,9 +7,13 @@ import AppKit
 final class KeybindRow: NSView {
     /// Why the row is showing a message, which decides both its ink and who may clear it.
     enum MessageKind: Equatable {
-        /// A problem in the config file — the action has no shortcut and here's what took it. Owned
-        /// by the section's refresh: it's true for as long as the config says so.
+        /// A problem in the config file: a bind on a menu chord, a chord this keyboard can't
+        /// type. Owned by the section's refresh: it's true for as long as the config says so.
         case diagnostic
+        /// Not a problem: the row has no shortcut because a line in the config gave the chord to
+        /// something else, and this says which. Muted rather than warning-toned, because there is
+        /// nothing here to fix and the config is doing what it says (ZEN-368).
+        case explanation
         /// A side effect of an edit the user just made elsewhere in the card — this row's chord was
         /// taken by another action's reset. Transient: the next refresh clears it.
         case notice
@@ -89,6 +93,7 @@ final class KeybindRow: NSView {
     private static func ink(for kind: MessageKind?) -> NSColor {
         switch kind {
         case .diagnostic, .notice: return Theme.current.chrome.warning.nsColor
+        case .explanation: return Theme.current.chrome.ink(alpha: 0.45)
         case .failure, nil: return Theme.current.chrome.destructive.nsColor
         }
     }

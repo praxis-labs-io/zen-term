@@ -202,7 +202,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         self.iconGroup = iconGroup
 
         chordChip.onActivate = { [weak self] in self?.beginCapture() }
-        chordChip.onReset = { [weak self] in self?.clearChord() }
+        chordChip.onRemove = { [weak self] in self?.clearChord() }
         chordChip.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         chordChip.onArrowDown = { [weak self] in self?.moveVertical(1) }
         chordChip.onTab = { [weak self] in self?.moveTab(1) }

@@ -226,6 +226,22 @@
 # first. Your lines override the defaults; if two lines claim the same chord, the
 # last one wins (and a warning is logged). An unknown action is skipped with a warning.
 #
+# Write `none` in place of a chord to take an action's shortcut away entirely:
+#
+#   keybind = find_next=none
+#
+# The chord then reaches the program in your pane like any other. `unbind` works
+# too, since that's ghostty's word. (ghostty writes the trigger first, so its own
+# `cmd+g=unbind` still reads here as an unknown action.)
+#
+# In Settings, Delete on a shortcut does the same thing, and the popover has a
+# button to put the default back.
+#
+# Giving a default's chord to a float is not a problem and is never reported. Your
+# `key:cmd+g` line already says ⌘G opens that float, so Find Next having no shortcut
+# is the same statement read from the other end. The Shortcuts row says which line
+# took the chord, and nothing warns you about it at launch.
+#
 # A chord the menu bar owns is refused, and so is a tool float's `key:` on one.
 # ZenTerm resolves shortcuts before macOS matches menu items, so a keybind on ⌘Q
 # would win and Quit would stop working with the menu still showing ⌘Q beside it.
@@ -256,7 +272,8 @@
 #   increase_font_size  decrease_font_size  reset_font_size
 #   check_for_updates   (no default binding; bind a chord to reach it by keyboard)
 #   report_issue        (no default binding; also in the command palette and Help menu)
-#   toggle_float:<id>   (bind a second chord to one of your floats)
+#   toggle_float:<id>   (bind a second chord to one of your floats; `none` doesn't
+#                        apply here, since a float's chord is its own `key:` field)
 #
 # Defaults (uncomment to change; these are what ships):
 # keybind = split_horizontal=cmd+shift+-
@@ -299,7 +316,8 @@
 #
 # Every other chord reaches the program in your pane, with the exceptions below.
 # Rebind an action away and its old chord goes there too, so ⌘⇧S in vim is vim's ⌘⇧S
-# once you have moved toggle_scroll_mode off it.
+# once you have moved toggle_scroll_mode off it. `=none` is the same thing without
+# having to park the action somewhere first.
 #
 # A handful stay with the terminal on purpose, because they turn into bytes for the
 # program rather than doing anything to the app:

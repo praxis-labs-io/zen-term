@@ -3,8 +3,9 @@ import AppKit
 /// The Keybinds settings section: remap the built-in actions. Each action's chord is a focusable
 /// `KeybindChip` — Return/click begins capture (a hint bubble appears and the next chord is diverted
 /// through the interceptor, so an already-bound chord isn't pre-empted), Backspace reverts to the
-/// default. Rebinds are ≥1-modifier, block-on-conflict, written via `ConfigWriter` and reloaded via
-/// `AppConfig` so they're live — no restart. A section reset returns everything to the defaults.
+/// default, ⌥Backspace leaves the action with none. Rebinds are ≥1-modifier, block-on-conflict,
+/// written via `ConfigWriter` and reloaded via `AppConfig` so they're live — no restart. A section
+/// reset returns everything to the defaults.
 final class SettingsKeybindsSection: SettingsSection {
     var navTitle: String { "Shortcuts" }
     var onExitToNav: (() -> Void)?
@@ -35,7 +36,7 @@ final class SettingsKeybindsSection: SettingsSection {
     ]
 
     private let capturer: KeybindCapturing?
-    private var desired: [Chord: KeyInterceptor.ReservedChord] = [:]
+    private var desired = KeymapOverrides()
     private var rows: [KeybindRow] = []
     /// Retained (not throwaway locals) so `reapplyTheme()` can recolor them in place.
     private var groupCaptions: [NSTextField] = []
@@ -87,11 +88,11 @@ final class SettingsKeybindsSection: SettingsSection {
             // `desired` already equals what it just wrote — flagging that would replay a refresh we
             // did a moment ago, and would blur the flag's meaning from "someone else changed the
             // config" into "a reload happened".
-            hasMissedConfigReload = reservedEntries(of: GeneralConfig.current.keymap) != desired
+            hasMissedConfigReload = KeymapOverrides(config: .current) != desired
             return
         }
         hasMissedConfigReload = false
-        desired = reservedEntries(of: GeneralConfig.current.keymap)
+        desired = KeymapOverrides(config: .current)
         refreshRows()
     }
 
@@ -103,11 +104,11 @@ final class SettingsKeybindsSection: SettingsSection {
     private func rebaseIfReloadDeferred() {
         guard hasMissedConfigReload else { return }
         hasMissedConfigReload = false
-        desired = reservedEntries(of: GeneralConfig.current.keymap)
+        desired = KeymapOverrides(config: .current)
     }
 
     func makeDetailView() -> NSView {
-        desired = reservedEntries(of: GeneralConfig.current.keymap)
+        desired = KeymapOverrides(config: .current)
         rows = []
         groupCaptions = []
 
@@ -131,7 +132,7 @@ final class SettingsKeybindsSection: SettingsSection {
                 // `weak row`: these closures live *on* the row's chip, so capturing it strongly would
                 // be a retain cycle — every row would leak on each Settings open.
                 row.chip.onActivate = { [weak self, weak row] in row.map { self?.beginCapture(for: $0) } }
-                row.chip.onReset = { [weak self, weak row] in row.map { self?.reset($0) } }
+                row.chip.onRemove = { [weak self, weak row] in row.map { self?.remove($0) } }
                 row.chip.onArrowUp = { [weak self, weak row] in row.map { self?.moveFocus(from: $0.chip, delta: -1) } }
                 row.chip.onArrowDown = { [weak self, weak row] in row.map { self?.moveFocus(from: $0.chip, delta: 1) } }
                 row.chip.onTab = { [weak self, weak row] in row.map { self?.moveTab(from: $0.chip, delta: 1) } }
@@ -233,7 +234,7 @@ final class SettingsKeybindsSection: SettingsSection {
         // exactly one place (KeyboardFocus.key). Esc / Delete are commands, not recordable chords.
         switch KeyboardFocus.key(for: event) {
         case .escape: endCapture(row); refreshRows(); return  // Esc → cancel
-        case .delete: endCapture(row); reset(row); return  // Backspace / Forward-Delete → default
+        case .delete: endCapture(row); remove(row); return  // Backspace → no shortcut at all
         default: break
         }
         guard let chord = Chord(event: event) else { return }  // unmappable key — keep waiting
@@ -265,8 +266,7 @@ final class SettingsKeybindsSection: SettingsSection {
     private func commitRebind(_ row: KeybindRow, to chord: Chord) {
         capturer?.endCapture()
         rebaseIfReloadDeferred()  // layer this edit on the reloaded set, never a pre-reload one
-        desired = desired.filter { $0.value != row.action }
-        desired[chord] = row.action
+        desired.bind(row.action, to: [chord])
         guard persist(reportingRow: row) else {  // write failed — persist showed the error; don't claim success
             endCapture(row)
             return
@@ -300,11 +300,22 @@ final class SettingsKeybindsSection: SettingsSection {
     private func reset(_ row: KeybindRow) {
         rebaseIfReloadDeferred()  // layer the reset on the reloaded set, never a pre-reload one
         let displaced = defaultChordConflict(for: row.action)
-        desired = desired.filter { $0.value != row.action }
-        for (chord, action) in KeymapDefaults.map where action == row.action { desired[chord] = action }
+        desired.bind(row.action, to: KeymapDefaults.map.filter { $0.value == row.action }.keys)
         guard persist(reportingRow: row) else { return }  // persist reported the write error
         if let (chord, owner) = displaced { reportDisplacement(of: owner, losing: chord, to: row.action) }
         row.focusChip()  // keep focus on the row after the reload
+    }
+
+    /// ⌥Backspace on a focused chip: leave the action with no shortcut at all, and write that down.
+    ///
+    /// Distinct from Backspace, which restores the default. Both are ways to stop using the chord
+    /// you have; only this one records the intent, so the chord reaches the program in the pane and
+    /// nothing warns about it again (ZEN-368).
+    private func remove(_ row: KeybindRow) {
+        rebaseIfReloadDeferred()
+        desired.unbind(row.action)
+        guard persist(reportingRow: row) else { return }
+        row.focusChip()
     }
 
     /// Tell the displaced action's row it lost its chord, and where it landed — after `persist`, so
@@ -342,7 +353,7 @@ final class SettingsKeybindsSection: SettingsSection {
     }
 
     private func resetAll() {
-        desired = reservedEntries(of: KeymapDefaults.map)
+        desired = KeymapOverrides(binds: reservedEntries(of: KeymapDefaults.map))
         guard persist(reportingRow: rows.last) else { return }  // report a write error near the button
         resetAllMessage.flash("Defaults restored.")
     }
@@ -358,7 +369,7 @@ final class SettingsKeybindsSection: SettingsSection {
             // Roll the failed edit out of the in-memory map, back to what's on disk — otherwise it
             // rides along on the next successful write, silently applying an edit the user was told
             // failed.
-            desired = reservedEntries(of: GeneralConfig.current.keymap)
+            desired = KeymapOverrides(config: .current)
             refreshRows()
             (reportingRow ?? rows.first)?.showMessage(
                 "Couldn't write config: \(error.localizedDescription)", kind: .failure)
@@ -368,7 +379,7 @@ final class SettingsKeybindsSection: SettingsSection {
         // This write landed, so any earlier write failure is resolved — `refreshRows` won't clear it
         // (a failure outlives a refresh by design), so retract it here where we know it's stale.
         rows.filter { $0.messageKind == .failure }.forEach { $0.showMessage(nil) }
-        desired = reservedEntries(of: GeneralConfig.current.keymap)
+        desired = KeymapOverrides(config: .current)
         refreshRows()
         return true
     }
@@ -385,7 +396,9 @@ final class SettingsKeybindsSection: SettingsSection {
         for row in rows {
             row.render(currentShortcut: displayedChord(for: row.action)?.displayGlyph ?? "")
             guard row.messageKind != .failure else { continue }
-            row.showMessage(diagnostics.first { $0.scope == .keybind(row.action) }?.message, kind: .diagnostic)
+            let diagnostic = diagnostics.first { $0.scope == .keybind(row.action) }
+            row.showMessage(
+                diagnostic?.message, kind: (diagnostic?.isProblem ?? true) ? .diagnostic : .explanation)
         }
     }
 
@@ -404,6 +417,12 @@ final class SettingsKeybindsSection: SettingsSection {
         host.addSubview(backdrop)
         hintBackdrop = backdrop
         let bubble = KeybindHintBubble()
+        // Reset ends the capture the way Delete does: it is an answer, not a step toward one.
+        bubble.onResetToDefault = { [weak self, weak row] in
+            guard let self, let row else { return }
+            self.endCapture(row)
+            self.reset(row)
+        }
         bubble.translatesAutoresizingMaskIntoConstraints = true
         host.addSubview(bubble)  // above the backdrop
         hintBubble = bubble
@@ -464,7 +483,7 @@ final class SettingsKeybindsSection: SettingsSection {
     /// The chord shown for an action — from `desired` (the in-progress edit set), not the live
     /// keymap, so an unsaved edit renders. Same pick as the palette's: see `Chord.displayed`.
     private func displayedChord(for action: KeyInterceptor.ReservedChord) -> Chord? {
-        Chord.displayed(action, in: desired)
+        Chord.displayed(action, in: desired.binds)
     }
 
     /// Move keyboard focus between the vertical stops (each row's chip, then "Reset all").

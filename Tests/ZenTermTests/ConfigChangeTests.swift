@@ -45,6 +45,15 @@ final class ConfigChangeTests: XCTestCase {
         XCTAssertEqual(result, .keymap)
     }
 
+    /// An unbind can move on its own, with the map and the diagnostics both unchanged: an action
+    /// that already held no chord gains a `= none` line and nothing else shifts. An open Shortcuts
+    /// card rebuilds the whole keybind block from what it last read, so missing this write means the
+    /// next edit from that card deletes the line (ZEN-368).
+    func test_unboundActionAlone_yieldsKeymap() {
+        let result = change(from: { $0.unboundActions = [.checkForUpdates] })
+        XCTAssertEqual(result, .keymap)
+    }
+
     /// The load-bearing one: a rebind must NOT light up the chrome-layout kind, or the gate saves
     /// nothing on the very write the ticket is about.
     func test_keybindRebind_doesNotYieldChromeLayout() {

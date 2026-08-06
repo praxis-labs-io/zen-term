@@ -12,7 +12,7 @@ final class KeymapAssemblyTests: XCTestCase {
 
     /// The resolved map alone — most tests don't care about diagnostics.
     private func assemble(
-        floats: [ToolFloat] = [], keybinds: [(Chord, KeyInterceptor.ReservedChord)] = []
+        floats: [ToolFloat] = [], keybinds: [KeybindParser.Line] = []
     ) -> [Chord: KeyInterceptor.ReservedChord] {
         KeymapAssembler.assemble(floats: floats, keybinds: keybinds).map
     }
@@ -65,7 +65,7 @@ final class KeymapAssemblyTests: XCTestCase {
     /// Increase is the one action shipping two default chords. A rebind has to free *both*, or the
     /// old ⌘+ keeps firing alongside the new chord.
     func test_rebindingIncrease_freesBothDefaultChords() {
-        let map = assemble(keybinds: [(Chord(command: true, option: true, key: "="), .increaseFontSize)])
+        let map = assemble(keybinds: [.bind(Chord(command: true, option: true, key: "="), .increaseFontSize)])
         XCTAssertEqual(map[Chord(command: true, option: true, key: "=")], .increaseFontSize)
         XCTAssertNil(map[Chord(command: true, key: "=")])
         XCTAssertNil(map[Chord(command: true, shift: true, key: "=")])
@@ -90,13 +90,13 @@ final class KeymapAssemblyTests: XCTestCase {
     func test_userKeybind_overridesFloatChord() {
         let map = assemble(
             floats: [float(id: "x", key: "cmd+shift+l")],
-            keybinds: [(Chord(command: true, shift: true, key: "l"), .toggleZoom)])
+            keybinds: [.bind(Chord(command: true, shift: true, key: "l"), .toggleZoom)])
         XCTAssertEqual(map[Chord(command: true, shift: true, key: "l")], .toggleZoom)
     }
 
     func test_rebind_freesActionsDefaultChord() {
         // Rebinding new_tab to ⌘Y must release its default ⌘T, not leave both bound.
-        let map = assemble(keybinds: [(Chord(command: true, key: "y"), .newTab)])
+        let map = assemble(keybinds: [.bind(Chord(command: true, key: "y"), .newTab)])
         XCTAssertEqual(map[Chord(command: true, key: "y")], .newTab)
         XCTAssertNil(map[Chord(command: true, key: "t")])  // old default freed
     }
@@ -113,13 +113,88 @@ final class KeymapAssemblyTests: XCTestCase {
 
     func test_lastKeybindWins() {
         let chord = Chord(command: true, key: "f")
-        let map = assemble(keybinds: [(chord, .toggleBottomDrawer), (chord, .toggleRightDrawer)])
+        let map = assemble(keybinds: [.bind(chord, .toggleBottomDrawer), .bind(chord, .toggleRightDrawer)])
         XCTAssertEqual(map[chord], .toggleRightDrawer)
     }
 
     func test_toggleFloatKeybind_forUnknownID_isDropped() {
-        let map = assemble(keybinds: [(Chord(command: true, key: "y"), .toggleToolFloat("ghost"))])
+        let map = assemble(keybinds: [.bind(Chord(command: true, key: "y"), .toggleToolFloat("ghost"))])
         XCTAssertNil(map[Chord(command: true, key: "y")])  // no such float → not bound
+    }
+
+    // MARK: unbinding (ZEN-368)
+
+    /// The whole point of the feature. A float on ⌘G takes `find_next`'s only chord, which used to
+    /// warn at every launch with no way to say "yes, I meant that". The `= none` line is that way,
+    /// and the silence is the assertion: a config the user wrote on purpose must not tell them off.
+    func test_unbindLine_leavesTheActionChordless_andSaysNothing() {
+        let assembled = KeymapAssembler.assemble(
+            floats: [float(id: "x", key: "cmd+g")], keybinds: [.unbind(.findNext)])
+
+        XCTAssertEqual(assembled.map[Chord(command: true, key: "g")], .toggleToolFloat("x"))
+        XCTAssertFalse(assembled.map.values.contains(.findNext))
+        XCTAssertEqual(assembled.diagnostics, [], "an unbind the user asked for is not a problem")
+        XCTAssertEqual(assembled.unbound, [.findNext])
+    }
+
+    /// The same config without the line, so the silence above is the line's doing and not the
+    /// float's. The assembler records the fact either way, since the Shortcuts row renders it.
+    /// Only the unbind keeps it out of `unbound`, which is what the writer emits from.
+    func test_theSameCollisionWithoutTheLine_stillRecordsTheFact() {
+        let assembled = KeymapAssembler.assemble(floats: [float(id: "x", key: "cmd+g")], keybinds: [])
+
+        XCTAssertEqual(assembled.diagnostics.map(\.scope), [.keybind(.findNext)])
+        XCTAssertEqual(assembled.unbound, [], "a displacement is not an intentional unbind")
+    }
+
+    /// `unbound` feeds the writer, so an action left chordless by a collision must stay out of it.
+    /// In it, the next Settings write would put `= none` on disk and turn a reported conflict into
+    /// a silent one the user never agreed to.
+    func test_displacementLeavingNothing_isNotReportedAsUnbound() {
+        let assembled = KeymapAssembler.assemble(floats: [float(id: "x", key: "cmd+t")], keybinds: [])
+
+        XCTAssertFalse(assembled.map.values.contains(.newTab))
+        XCTAssertEqual(assembled.unbound, [])
+    }
+
+    /// A file holding both a `none` and a real bind for one action is a contradiction, and the bind
+    /// wins. Reporting it as unbound too would have the writer emit both lines back, so the file
+    /// keeps contradicting itself forever.
+    func test_unbindPlusABind_bindsAndIsNotUnbound() {
+        let assembled = KeymapAssembler.assemble(
+            floats: [],
+            keybinds: [.unbind(.findNext), .bind(Chord(command: true, key: "9"), .findNext)])
+
+        XCTAssertEqual(assembled.map[Chord(command: true, key: "9")], .findNext)
+        XCTAssertEqual(assembled.unbound, [])
+    }
+
+    /// A float's chord is the `key:` on its own line, and `key:` is required, so unbinding one this
+    /// way could only ever be a no-op: the float rebinds the chord a few lines later. It is refused
+    /// where the unknown-float-id line is refused, and logged the same way.
+    ///
+    /// The id that names no float is what the refusal is actually load-bearing for. Accepted, it
+    /// would land in `unbound`, and from there the writer emits `toggle_float:ghost=none` forever
+    /// while the Shortcuts card carries a float action in a set that holds none.
+    func test_unbindingAFloat_isRefused() {
+        let live = KeymapAssembler.assemble(
+            floats: [float(id: "x", key: "cmd+shift+j")], keybinds: [.unbind(.toggleToolFloat("x"))])
+        XCTAssertEqual(live.map[Chord(command: true, shift: true, key: "j")], .toggleToolFloat("x"))
+        XCTAssertEqual(live.unbound, [])
+
+        let ghost = KeymapAssembler.assemble(floats: [], keybinds: [.unbind(.toggleToolFloat("ghost"))])
+        XCTAssertEqual(ghost.unbound, [], "a float action must never reach the set the writer emits")
+    }
+
+    /// An unbind of an action nothing else touches: no chord, no complaint, and the rest of the
+    /// defaults untouched.
+    func test_unbindOnItsOwn_dropsOnlyThatActionsDefaults() {
+        let assembled = KeymapAssembler.assemble(floats: [], keybinds: [.unbind(.increaseFontSize)])
+
+        XCTAssertNil(assembled.map[Chord(command: true, key: "=")])
+        XCTAssertNil(assembled.map[Chord(command: true, shift: true, key: "=")], "both defaults go")
+        XCTAssertEqual(assembled.map[Chord(command: true, key: "-")], .decreaseFontSize)
+        XCTAssertEqual(assembled.diagnostics, [])
     }
 
     // MARK: diagnostics
@@ -155,7 +230,7 @@ final class KeymapAssemblyTests: XCTestCase {
             ])
         XCTAssertEqual(assembled.map[Chord(command: true, shift: true, key: "\\")], .newWindow)
         let message = assembled.diagnostics.first { $0.scope == .keybind(.splitVertical) }?.message
-        XCTAssertEqual(message, "⌘⇧\\ went to new_window in your config.")
+        XCTAssertEqual(message, "⌘⇧\\ goes to new_window.")
     }
 
     func test_displacementLeavingAnotherChord_isNotADiagnostic() {

@@ -89,7 +89,10 @@ final class ConfigApplier {
     /// takes it down, and a changed set replaces it rather than stacking a second card beside one
     /// that describes different problems.
     func surfaceConfigDiagnostics() {
-        let diagnostics = GeneralConfig.current.configDiagnostics
+        // Only the problems. A chord one of your own config lines took off an action is not one:
+        // the file already says so, so the notice could never be cleared and never told you
+        // anything you could act on. Its Shortcuts row explains it in place (ZEN-368).
+        let diagnostics = GeneralConfig.current.configDiagnostics.filter(\.isProblem)
         guard !diagnostics.isEmpty else {
             // Nothing is wrong any more. `announcement` returns nil for an empty set, so before
             // this the stale warning simply outlived the fix that made it false.

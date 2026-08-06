@@ -77,6 +77,19 @@ struct ConfigDiagnostic: Hashable {
     var scope: Scope
     var problem: Problem
 
+    /// Whether this is something wrong, or a consequence of the config that a surface explains where
+    /// someone would go looking (ZEN-368).
+    ///
+    /// `.chordTaken` is the second, and it is the only one. It fires when an action loses its last
+    /// chord, and the winner is always something the user wrote by hand: a float's `key:`, or their
+    /// own `keybind` line. ZenTerm never takes a chord away by itself. So the state it describes is
+    /// already fully determined by the file, and re-announcing it at every launch is a warning
+    /// nobody can act on and nothing can clear. The Shortcuts row says why it is empty instead.
+    var isProblem: Bool {
+        if case .chordTaken = problem { return false }
+        return true
+    }
+
     /// Names the menu item that owns a chord, or says "a" when the lookup found no title. The
     /// protected set and the title lookup are separate questions, so the second can come back
     /// empty, and "is the a menu shortcut" is not a sentence.
@@ -128,7 +141,9 @@ struct ConfigDiagnostic: Hashable {
     var message: String {
         switch problem {
         case .chordTaken(let chord, let winner):
-            return "\(chord.displayGlyph) went to \(winner.actionToken) in your config."
+            // Present tense, and no "in your config": this reads on the Shortcuts row now, not in a
+            // launch warning, so it explains a standing state rather than reporting an event.
+            return "\(chord.displayGlyph) goes to \(winner.actionToken)."
         case .menuBind(let chord, let menuItem):
             return "\(keybindActionToken)=\(chord.configToken) is \(Self.owner(menuItem)) menu shortcut. Ignoring it."
         case .floatMenuKey(let chord, let menuItem):

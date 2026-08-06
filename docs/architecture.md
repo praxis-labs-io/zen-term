@@ -799,6 +799,38 @@ libghostty; ZEN-224 took it back, and ⌘⇧- stays split on its own merits.)
 keybinds, later winning. **A user keybind moves its action**: the action's default
 chords are dropped first, so the old key is freed rather than both firing.
 
+**Unbound is a value, not an absence (ZEN-368).** `keybind = find_next=none` drops
+the action's defaults and puts nothing back, so the chord reaches the program. The
+drop happens in the same filter a rebind uses, ahead of every write, and that is the
+whole mechanism behind an unbind being silent: the chord is free by the time a float
+claims it, so no displacement is recorded and there is nothing to report.
+
+The reason it cannot be inferred from the keymap is the writer.
+`ConfigWriter.apply(keybinds:)` regenerates the entire `keybind =` block from what
+it is handed, and an action holding no chord is missing from a `[Chord: Action]` map
+exactly the way an action sitting at its defaults is. So `KeymapOverrides` carries
+`binds` and `unbound` side by side, `assemble` returns the second, and
+`GeneralConfig.unboundActions` holds it. Without that, the next Settings write
+deletes the line the user wrote.
+
+**A chord one config line took off another action is not a problem, and is not
+announced.** `ConfigDiagnostic.isProblem` says so, and `ConfigApplier` filters on it
+before the empty check, so a set of nothing-but-explanations still *retracts* an
+outstanding notice. The reasoning: `.chordTaken` fires when an action loses its last
+chord, and the winner is always something the user wrote by hand (a float's `key:`,
+or their own `keybind` line). ZenTerm never takes a chord away by itself, so the
+state is already fully determined by the file and re-derived on every load. A notice
+about it could never be cleared and named nothing to do. The Shortcuts row carries
+the fact instead, in muted ink (`KeybindRow.MessageKind.explanation`) rather than
+warning-toned, because there is nothing there to fix.
+
+**Delete removes; reset is a button.** On a `KeybindChip`, Backspace leaves the
+action with no shortcut and writes `= none`. It used to restore the default, which
+read as doing nothing on exactly the rows most likely to be pressed: an action whose
+default is a chord something else already holds gets it back and loses it again on
+the reload. Reset-to-default moved to a button in the capture popover, which is also
+the only surface that names it.
+
 **The modal gate cascade** in `WindowController.handle(_:)` runs confirm, then
 modal card, then tool float, then dispatch. The app-global chords (⌘N new window,
 ⌘⌥R reload config, the three font-size chords, and the unbound-by-default Check for
