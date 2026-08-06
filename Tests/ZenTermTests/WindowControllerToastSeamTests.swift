@@ -116,7 +116,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         XCTAssertEqual(keycaps(in: toast), ["⌘1"], "the toast for tab 1 names ⌘1")
     }
 
-    /// Displaying a keycap must not arm a key equivalent — the ZEN-106 guarantee that a toast never
+    /// Displaying a keycap must not arm a key equivalent — the ZEN-143 guarantee that a toast never
     /// steals keys from the terminal. The binding named is the app's, not the toast's.
     func test_waitingToast_withKeycap_stillArmsNoKeyEquivalents() throws {
         let controller = makeController()
@@ -248,7 +248,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         XCTAssertEqual(Set(titles), ["Dismiss", "Open Settings"], "\(titles)")
     }
 
-    /// The ZEN-106 guarantee holds for the new `.primary` button too: a sticky toast never arms a
+    /// The ZEN-143 guarantee holds for the new `.primary` button too: a sticky toast never arms a
     /// Return/Esc equivalent, so it can't steal keys from the terminal.
     func test_configDiagnosticsToast_armsNoKeyEquivalents() {
         let controller = makeController()

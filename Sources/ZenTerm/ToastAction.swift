@@ -9,7 +9,7 @@ struct ToastAction {
     /// The chord this action's key is bound to, shown as a keycap beside the title — resolved
     /// lazily, never baked, so the glyph tracks a rebind or a tab move while the toast is up.
     /// Displaying it arms nothing: the binding it names is the app's own (the waiting toast is
-    /// non-modal, and ZEN-106 guarantees a toast never steals keys from the terminal).
+    /// non-modal, and ZEN-143 guarantees a toast never steals keys from the terminal).
     let shortcut: (() -> String)?
     let run: () -> Void
 

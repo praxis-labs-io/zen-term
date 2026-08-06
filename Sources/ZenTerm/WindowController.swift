@@ -1317,7 +1317,7 @@ final class WindowController: NSObject {
 
     /// Present the config-diagnostics reload notice as a sticky, actionable toast (ZEN-7): a primary
     /// "Open Settings" that lands on the first problem's section, plus a Dismiss. Non-modal — it arms
-    /// no key equivalents, so it never steals input from the terminal (ZEN-106). `landingScope` is the
+    /// no key equivalents, so it never steals input from the terminal (ZEN-143). `landingScope` is the
     /// scope the primary button opens; the caller passes the first diagnostic's.
     func showConfigDiagnosticsToast(_ content: ToastContent, landingScope: ConfigDiagnostic.Scope) {
         // `weak` breaks the retain cycle the strong-capture idiom would form: the toast retains its

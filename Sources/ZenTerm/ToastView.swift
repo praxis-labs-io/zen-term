@@ -104,7 +104,7 @@ final class ToastView: ShadowCardView {
         messageLabel.preferredMaxLayoutWidth = Self.messageMaxWidth
 
         // Title leading, keycaps trailing, with a spacer holding them apart. The keycap names an
-        // app-level binding rather than labelling a button (ZEN-106 — the toast arms nothing), so
+        // app-level binding rather than labelling a button (ZEN-143 — the toast arms nothing), so
         // the card's top-right corner reads as "this toast's chord" instead of implying the button
         // beside it has a key equivalent.
         let headerSpacer = NSView()
