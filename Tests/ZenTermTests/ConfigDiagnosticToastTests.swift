@@ -7,10 +7,10 @@ import XCTest
 /// someone already looking at that row, and a user who broke their config by hand has no reason to
 /// go there, so the reload has to announce itself.
 ///
-/// `.chordTaken` is deliberately not among them any more (ZEN-368). It says an action lost its last
-/// chord, and the winner is always a line the user wrote, so the notice could never be cleared and
-/// never named anything to do. It still renders, because its sentence is what the Shortcuts row
-/// shows; `ConfigApplierDiagnosticFilterTests` holds it out of the toast.
+/// `.chordTaken` is not among them (ZEN-368). A chord conflict carries its own answer, so it gets a
+/// card each with Accept and Revert rather than a line in this shared list. Its sentence still
+/// renders here, because the row and that card both show it; `ConfigApplierDiagnosticFilterTests`
+/// holds it out of the shared notice.
 final class ConfigDiagnosticToastTests: XCTestCase {
     private var tempRoot: URL!
 
@@ -103,14 +103,13 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         XCTAssertEqual(content.message, "new_tab=cmd+| can't be typed on your keyboard. Ignoring it.")
     }
 
-    /// The sentence a Shortcuts row shows for a chord one of your own lines took. Present tense and
-    /// no "in your config": it explains a standing state on the row, rather than reporting an event
-    /// in a notice nobody asked for (ZEN-368).
-    func test_chordTaken_readsAsAnExplanation() {
+    /// The sentence a chord conflict carries. Present tense and no "in your config": the row and
+    /// the card both show it beside the two buttons that answer it (ZEN-368).
+    func test_chordTaken_readsAsAStandingState() {
         XCTAssertEqual(splitVerticalLostBackslash.message, "⌘⇧\\ goes to toggle_focus_mode.")
-        XCTAssertFalse(splitVerticalLostBackslash.isProblem)
-        XCTAssertTrue(newTabUnusableBind.isProblem)
-        XCTAssertTrue(paletteOnAMenuChord.isProblem)
+        XCTAssertTrue(splitVerticalLostBackslash.isChordConflict, "it gets its own card")
+        XCTAssertFalse(newTabUnusableBind.isChordConflict)
+        XCTAssertFalse(paletteOnAMenuChord.isChordConflict)
     }
 
     func test_severalProblems_areOneCompactLineEach() throws {

@@ -1,0 +1,141 @@
+import XCTest
+
+@testable import ZenTerm
+
+/// The two answers to a chord conflict, and what each writes (ZEN-368).
+///
+/// Both are edits to the config, because the config is what created the conflict. Accept records
+/// the loss. Revert puts both actions back on their defaults, which makes the offending line equal
+/// to the defaults so `ConfigWriter`'s per-action diff stops emitting it. Neither needs a new
+/// writer capability, and this is where that claim is checked rather than assumed.
+final class KeybindConflictTests: XCTestCase {
+    private var tempRoot: URL!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-conflict-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        ConfigLoader.defaultRootOverrideForTesting = tempRoot
+    }
+
+    override func tearDownWithError() throws {
+        ConfigLoader.defaultRootOverrideForTesting = nil
+        try? FileManager.default.removeItem(at: tempRoot)
+        try super.tearDownWithError()
+    }
+
+    private func load(_ text: String) throws -> GeneralConfig {
+        try text.write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+        return ConfigLoader.loadGeneralConfig(configRoot: tempRoot)
+    }
+
+    private func write(_ overrides: KeymapOverrides) throws -> String {
+        try ConfigWriter.apply(keybinds: overrides, configRoot: tempRoot)
+        return try String(contentsOf: tempRoot.appendingPathComponent("config"), encoding: .utf8)
+    }
+
+    // MARK: reading them off the config
+
+    func test_aKeybindLineTakingAChord_isOneRevertableConflict() throws {
+        let config = try load("keybind = split_vertical=cmd+p\n")
+
+        let conflicts = KeybindConflict.all(in: config)
+
+        XCTAssertEqual(conflicts.count, 1, "\(conflicts)")
+        XCTAssertEqual(conflicts[0].loser, .toggleCommandPalette)
+        XCTAssertEqual(conflicts[0].winner, .splitVertical)
+        XCTAssertEqual(conflicts[0].chord, Chord(command: true, key: "p"))
+        XCTAssertTrue(conflicts[0].isRevertable)
+    }
+
+    /// A float's chord is the `key:` on its own line and `key:` is required, so there is nothing to
+    /// back out to. The surfaces read this to decide whether to offer Revert at all.
+    func test_aFloatTakingAChord_isNotRevertable() throws {
+        let config = try load("float = title:lazygit command:lazygit key:cmd+g\n")
+
+        let conflicts = KeybindConflict.all(in: config)
+
+        XCTAssertEqual(conflicts.count, 1, "\(conflicts)")
+        XCTAssertEqual(conflicts[0].loser, .findNext)
+        XCTAssertFalse(conflicts[0].isRevertable)
+    }
+
+    /// One card each, so three lines are three decisions rather than one all-or-nothing prompt.
+    func test_threeConflicts_readAsThree() throws {
+        let config = try load(
+            """
+            float = order:1 title:lazygit command:lazygit key:cmd+g
+            float = order:2 title:gitdash command:gd key:cmd+shift+g
+            float = order:3 title:nvim command:nvim key:cmd+e
+            """)
+
+        XCTAssertEqual(
+            Set(KeybindConflict.all(in: config).map(\.loser)),
+            [.findNext, .findPrevious, .searchSelection])
+    }
+
+    /// An action that merely moved is not a conflict. Only losing the last chord is.
+    func test_aPlainRebind_isNoConflict() throws {
+        let config = try load("keybind = new_tab=cmd+shift+opt+ctrl+y\n")
+
+        XCTAssertEqual(KeybindConflict.all(in: config), [])
+    }
+
+    // MARK: what each answer writes
+
+    func test_accept_writesTheUnsetAndLeavesTheLineThatTookIt() throws {
+        let config = try load("keybind = split_vertical=cmd+p\n")
+        let conflict = KeybindConflict.all(in: config)[0]
+
+        let text = try write(conflict.accepting(KeymapOverrides(config: config)))
+
+        XCTAssertTrue(text.contains("keybind = toggle_command_palette=none"), text)
+        XCTAssertTrue(text.contains("keybind = split_vertical=cmd+p"), text)
+        let reloaded = ConfigLoader.loadGeneralConfig(configRoot: tempRoot)
+        XCTAssertEqual(KeybindConflict.all(in: reloaded), [], "and it stops being reported")
+    }
+
+    /// Revert backs out both halves at once, which is the whole point: the line goes, so the chord
+    /// returns to the action that shipped with it and the winner returns to its own default.
+    func test_revert_dropsTheLineAndPutsBothBack() throws {
+        let config = try load("keybind = split_vertical=cmd+p\n")
+        let conflict = KeybindConflict.all(in: config)[0]
+
+        let text = try write(conflict.reverting(KeymapOverrides(config: config)))
+
+        XCTAssertFalse(text.contains("split_vertical"), text)
+        XCTAssertFalse(text.contains("toggle_command_palette"), text)
+        let reloaded = ConfigLoader.loadGeneralConfig(configRoot: tempRoot)
+        XCTAssertEqual(reloaded.keymap[Chord(command: true, key: "p")], .toggleCommandPalette)
+        XCTAssertEqual(reloaded.keymap[Chord(command: true, shift: true, key: "\\")], .splitVertical)
+        XCTAssertEqual(KeybindConflict.all(in: reloaded), [])
+    }
+
+    /// Answering one leaves the others alone, or a three-conflict config would be settled by the
+    /// first card the user happened to press.
+    func test_acceptingOne_leavesTheOthersReported() throws {
+        let config = try load(
+            """
+            float = order:1 title:lazygit command:lazygit key:cmd+g
+            float = order:2 title:nvim command:nvim key:cmd+e
+            """)
+        let findNext = try XCTUnwrap(KeybindConflict.all(in: config).first { $0.loser == .findNext })
+
+        _ = try write(findNext.accepting(KeymapOverrides(config: config)))
+
+        let reloaded = ConfigLoader.loadGeneralConfig(configRoot: tempRoot)
+        XCTAssertEqual(KeybindConflict.all(in: reloaded).map(\.loser), [.searchSelection])
+    }
+
+    /// Reverting a keybind line must not touch a float line, which the writer does not own.
+    func test_revert_leavesFloatLinesAlone() throws {
+        let config = try load(
+            "float = title:lazygit command:lazygit key:cmd+shift+j\nkeybind = split_vertical=cmd+p\n")
+        let conflict = try XCTUnwrap(KeybindConflict.all(in: config).first { $0.isRevertable })
+
+        let text = try write(conflict.reverting(KeymapOverrides(config: config)))
+
+        XCTAssertTrue(text.contains("float = title:lazygit command:lazygit key:cmd+shift+j"), text)
+    }
+}

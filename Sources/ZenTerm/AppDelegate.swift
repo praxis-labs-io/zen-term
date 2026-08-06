@@ -39,6 +39,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             retractDiagnostics: { [weak self] in
                 self?.windows.forEach { $0.dismissConfigDiagnosticsToast() }
             },
+            announceConflicts: { [weak self] conflicts in
+                guard let self else { return false }
+                return WindowController.deliverConflictNotices(
+                    conflicts, to: self.keyController(), replacingAcross: self.windows)
+            },
+            retractConflicts: { [weak self] in
+                self?.windows.forEach { $0.dismissConflictToasts() }
+            },
             reapplyUpdateCardTheme: { [weak self] in self?.updateController?.reapplyTheme() },
             applyAutoCheckSetting: { [weak self] in self?.updateController?.applyAutoCheckSetting() }))
 

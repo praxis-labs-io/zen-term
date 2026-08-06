@@ -77,17 +77,14 @@ struct ConfigDiagnostic: Hashable {
     var scope: Scope
     var problem: Problem
 
-    /// Whether this is something wrong, or a consequence of the config that a surface explains where
-    /// someone would go looking (ZEN-368).
+    /// Whether this is a chord conflict, which carries its own answer and its own card.
     ///
-    /// `.chordTaken` is the second, and it is the only one. It fires when an action loses its last
-    /// chord, and the winner is always something the user wrote by hand: a float's `key:`, or their
-    /// own `keybind` line. ZenTerm never takes a chord away by itself. So the state it describes is
-    /// already fully determined by the file, and re-announcing it at every launch is a warning
-    /// nobody can act on and nothing can clear. The Shortcuts row says why it is empty instead.
-    var isProblem: Bool {
-        if case .chordTaken = problem { return false }
-        return true
+    /// A conflict is the one diagnostic a user can resolve from the notice itself: accept the loss,
+    /// or revert the line that caused it (`KeybindConflict`). So each gets a toast of its own, while
+    /// everything else, having nothing to press, keeps sharing one (ZEN-368).
+    var isChordConflict: Bool {
+        if case .chordTaken = problem { return true }
+        return false
     }
 
     /// Names the menu item that owns a chord, or says "a" when the lookup found no title. The

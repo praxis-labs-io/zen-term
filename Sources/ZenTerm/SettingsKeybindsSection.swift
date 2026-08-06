@@ -397,8 +397,10 @@ final class SettingsKeybindsSection: SettingsSection {
             row.render(currentShortcut: displayedChord(for: row.action)?.displayGlyph ?? "")
             guard row.messageKind != .failure else { continue }
             let diagnostic = diagnostics.first { $0.scope == .keybind(row.action) }
+            // A conflict is neutral: the config did what it says, and the row offers the two ways to
+            // answer it. A real problem (a menu chord, an untypeable one) stays warning-toned.
             row.showMessage(
-                diagnostic?.message, kind: (diagnostic?.isProblem ?? true) ? .diagnostic : .explanation)
+                diagnostic?.message, kind: (diagnostic?.isChordConflict ?? false) ? .explanation : .diagnostic)
         }
     }
 

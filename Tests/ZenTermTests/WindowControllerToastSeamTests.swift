@@ -263,6 +263,85 @@ final class WindowControllerToastSeamTests: WindowTestCase {
     /// The new seam end to end: firing the toast's "Open Settings" action opens the Settings card
     /// (the section it lands on is unit-tested via the scope→section map). A dead button would leave
     /// the toast's whole point unreachable.
+    // MARK: conflict cards (ZEN-368)
+
+    private func conflict(
+        loser: KeyInterceptor.ReservedChord, chord: Chord, winner: KeyInterceptor.ReservedChord
+    ) -> KeybindConflict {
+        KeybindConflict(loser: loser, chord: chord, winner: winner)
+    }
+
+    func test_conflictToast_carriesAcceptAndRevert() throws {
+        let controller = makeController()
+
+        controller.showConflictToasts([
+            conflict(loser: .toggleCommandPalette, chord: Chord(command: true, key: "p"), winner: .splitVertical)
+        ])
+
+        let toasts = toastViews(in: controller)
+        XCTAssertEqual(toasts.count, 1)
+        let titles = descendants(of: toasts[0]).compactMap { ($0 as? AppButton)?.title }
+        XCTAssertEqual(Set(titles), ["Accept", "Revert"], "\(titles)")
+    }
+
+    /// A float's `key:` is required, so there is nothing to back out to and the button must not be
+    /// there. Offering it would promise an edit the app cannot make.
+    func test_conflictToast_fromAFloat_offersAcceptAlone() throws {
+        let controller = makeController()
+
+        controller.showConflictToasts([
+            conflict(
+                loser: .findNext, chord: Chord(command: true, key: "g"),
+                winner: .toggleToolFloat("lazygit"))
+        ])
+
+        let titles = descendants(of: toastViews(in: controller)[0]).compactMap { ($0 as? AppButton)?.title }
+        XCTAssertEqual(titles, ["Accept"], "\(titles)")
+    }
+
+    /// One card each. A list in a single card would let one Accept settle three decisions.
+    func test_threeConflicts_mountThreeCards() {
+        let controller = makeController()
+
+        controller.showConflictToasts([
+            conflict(loser: .findNext, chord: Chord(command: true, key: "g"), winner: .toggleToolFloat("a")),
+            conflict(
+                loser: .findPrevious, chord: Chord(command: true, shift: true, key: "g"),
+                winner: .toggleToolFloat("b")),
+            conflict(loser: .searchSelection, chord: Chord(command: true, key: "e"), winner: .toggleToolFloat("c")),
+        ])
+
+        XCTAssertEqual(toastViews(in: controller).count, 3)
+    }
+
+    /// The ZEN-143 guarantee holds for these too: a sticky card never arms Return/Esc, so Esc keeps
+    /// reaching the pane. It is why the × is the only keyboard-free way out of one.
+    func test_conflictToast_armsNoKeyEquivalents() {
+        let controller = makeController()
+        controller.showConflictToasts([
+            conflict(loser: .findNext, chord: Chord(command: true, key: "g"), winner: .splitVertical)
+        ])
+
+        let toast = toastViews(in: controller)[0]
+        let armed = descendants(of: toast).compactMap { ($0 as? AppButton)?.keyEquivalent }
+        XCTAssertEqual(armed, ["", ""], "neither button arms a key")
+        XCTAssertFalse(toast.acceptsFirstResponder, "and the card never takes focus from the terminal")
+    }
+
+    func test_dismissConflictToasts_takesThemAllDown() {
+        let controller = makeController()
+        controller.showConflictToasts([
+            conflict(loser: .findNext, chord: Chord(command: true, key: "g"), winner: .toggleToolFloat("a")),
+            conflict(loser: .searchSelection, chord: Chord(command: true, key: "e"), winner: .toggleToolFloat("b")),
+        ])
+        XCTAssertEqual(toastViews(in: controller).count, 2)
+
+        controller.dismissConflictToasts()
+
+        // Dismissal springs out, so the cards leave the hierarchy a frame later.
+        waitUntil(toastViews(in: controller).isEmpty, "both cards come down")
+    }
+
     func test_configDiagnosticsToast_openSettingsButton_opensTheSettingsCard() throws {
         let controller = makeController()
         controller.showConfigDiagnosticsToast(

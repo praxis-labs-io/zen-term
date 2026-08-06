@@ -2,22 +2,22 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Which config problems reach a launch notice, and which explain themselves in place (ZEN-368).
+/// Which config problems share the one notice, and which get a card each (ZEN-368).
 ///
-/// A chord one of your own config lines took off an action used to toast at every launch. Nothing
-/// could clear it: the state is re-derived from the file on every load, so the notice was permanent
-/// and named nothing to do. It is not a problem, it is the config working, and the Shortcuts row
-/// says so where someone would go looking.
+/// A chord conflict is the one diagnostic a user can answer from the notice itself, so it gets its
+/// own card with Accept and Revert. Everything else has nothing to press and keeps sharing a list.
+/// Aggregating a conflict into that list would mean one dismissal covering three separate decisions.
 ///
-/// Driven through the real `ConfigApplier` rather than `ConfigDiagnostic.isProblem` alone, because
-/// the filter has to sit ahead of the empty check too: a set of nothing-but-explanations has to
-/// *retract* an outstanding notice, and a naive `filter` inside `announcement` would leave a stale
-/// warning up instead.
+/// Driven through the real `ConfigApplier` rather than `ConfigDiagnostic.isChordConflict` alone,
+/// because the split has to sit ahead of the empty check too: a set of nothing-but-conflicts still
+/// has to *retract* an outstanding shared notice, and a filter inside `announcement` would leave a
+/// stale warning up instead.
 @MainActor
 final class ConfigApplierDiagnosticFilterTests: XCTestCase {
     private var tempRoot: URL!
     private var announced: [ToastContent] = []
     private var showing: ToastContent?
+    private var carded: [KeybindConflict] = []
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -43,6 +43,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
     private func makeApplier() -> ConfigApplier {
         announced = []
         showing = nil
+        carded = []
         return ConfigApplier(
             sinks: ConfigApplier.Sinks(
                 setKeymap: { _ in }, reportBackendShadow: {}, applyMotion: { _ in },
@@ -52,21 +53,80 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
                     return true
                 },
                 retractDiagnostics: { [unowned self] in self.showing = nil },
+                announceConflicts: { [unowned self] in
+                    self.carded = $0
+                    return true
+                },
+                retractConflicts: { [unowned self] in self.carded = [] },
                 reapplyUpdateCardTheme: {}, applyAutoCheckSetting: {}))
     }
 
-    /// Drew's config, in miniature: a float on ⌘G, which ZEN-367 made Find Next's default. Three
-    /// launches in a row used to mean three identical warnings about a line he wrote on purpose.
-    func test_aFloatTakingADefaultChord_announcesNothing() throws {
+    /// A float on ⌘G, which ZEN-367 made Find Next's default. It gets a card of its own, never a
+    /// line in the shared list.
+    func test_aChordConflict_getsACardAndNotTheSharedNotice() throws {
         let applier = makeApplier()
         try seed("float = title:lazygit command:lazygit key:cmd+g\n")
 
         applier.surfaceConfigDiagnostics()
+        applier.surfaceConflicts()
 
-        XCTAssertFalse(
-            GeneralConfig.current.configDiagnostics.isEmpty,
-            "the fact is still collected — the Shortcuts row renders it")
-        XCTAssertEqual(announced, [], "it just never becomes a notice")
+        XCTAssertEqual(announced, [], "nothing joins the shared list")
+        XCTAssertEqual(carded.map(\.loser), [.findNext])
+        XCTAssertFalse(carded[0].isRevertable, "a float's key: has nothing to back out to")
+    }
+
+    /// Three lines, three cards. Aggregating would make one Accept settle decisions the user was
+    /// asked about once.
+    func test_threeConflicts_getThreeCards() throws {
+        let applier = makeApplier()
+        try seed(
+            """
+            float = order:1 title:lazygit command:lazygit key:cmd+g
+            float = order:2 title:gitdash command:gd key:cmd+shift+g
+            float = order:3 title:nvim command:nvim key:cmd+e
+            """)
+
+        applier.surfaceConflicts()
+
+        XCTAssertEqual(carded.count, 3, "\(carded)")
+    }
+
+    /// A `keybind =` line took it, so there is a line to delete and Revert is on offer.
+    func test_aKeybindLineTakingAChord_offersRevert() throws {
+        let applier = makeApplier()
+        try seed("keybind = split_vertical=cmd+p\n")
+
+        applier.surfaceConflicts()
+
+        XCTAssertEqual(carded.map(\.loser), [.toggleCommandPalette])
+        XCTAssertTrue(carded[0].isRevertable)
+    }
+
+    /// Every in-app write reloads, so re-carding an unchanged set would put a card the user just
+    /// closed straight back on the next Settings keystroke. A fresh launch is a fresh process,
+    /// which is what makes an unanswered conflict come back.
+    func test_theSameConflictTwice_isNotReCarded() throws {
+        let applier = makeApplier()
+        try seed("keybind = split_vertical=cmd+p\n")
+        applier.surfaceConflicts()
+        carded = []
+
+        applier.surfaceConflicts()
+
+        XCTAssertEqual(carded, [], "an unchanged set leaves the cards already up alone")
+    }
+
+    /// Answering one has to take its card down, or the card would outlive the config it describes.
+    func test_resolvingAConflict_retractsItsCard() throws {
+        let applier = makeApplier()
+        try seed("keybind = split_vertical=cmd+p\n")
+        applier.surfaceConflicts()
+        XCTAssertEqual(carded.count, 1)
+
+        try seed("keybind = split_vertical=cmd+p\nkeybind = toggle_command_palette=none\n")
+        applier.surfaceConflicts()
+
+        XCTAssertEqual(carded, [], "accepted, so nothing is outstanding")
     }
 
     /// The problems that are problems still speak up, or the filter would have taken the whole

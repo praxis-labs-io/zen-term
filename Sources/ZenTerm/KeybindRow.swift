@@ -10,9 +10,9 @@ final class KeybindRow: NSView {
         /// A problem in the config file: a bind on a menu chord, a chord this keyboard can't
         /// type. Owned by the section's refresh: it's true for as long as the config says so.
         case diagnostic
-        /// Not a problem: the row has no shortcut because a line in the config gave the chord to
-        /// something else, and this says which. Muted rather than warning-toned, because there is
-        /// nothing here to fix and the config is doing what it says (ZEN-368).
+        /// A chord conflict: a line in the config gave this row's chord to something else, and the
+        /// row offers Accept and Revert beside this. Muted rather than warning-toned, because the
+        /// config is doing what it says and the answer is right there (ZEN-368).
         case explanation
         /// A side effect of an edit the user just made elsewhere in the card — this row's chord was
         /// taken by another action's reset. Transient: the next refresh clears it.

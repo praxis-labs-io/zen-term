@@ -33,6 +33,11 @@ final class ConfigApplier {
         var announceDiagnostics: @MainActor (ToastContent, ConfigDiagnostic.Scope) -> Bool
         /// Take down an outstanding config-problems notice. A no-op when none is showing.
         var retractDiagnostics: @MainActor () -> Void
+        /// Show one card per outstanding chord conflict, returning whether a window took them.
+        /// Separate from `announceDiagnostics` because each card carries its own two answers.
+        var announceConflicts: @MainActor ([KeybindConflict]) -> Bool
+        /// Take down every outstanding conflict card. A no-op when none are showing.
+        var retractConflicts: @MainActor () -> Void
         /// Recolor a live update card. Also re-resolves its "Check for Updates" keycap.
         var reapplyUpdateCardTheme: @MainActor () -> Void
         /// Re-point Sparkle's background check schedule at the config.
@@ -43,6 +48,11 @@ final class ConfigApplier {
 
     /// The config problems announced on the last reload — so an unchanged set stays quiet.
     private var lastAnnouncedDiagnostics: [ConfigDiagnostic] = []
+
+    /// The conflicts carded on the last reload, gating re-announcement the same way. Every in-app
+    /// write reloads, so without this a Settings rebind would put three dismissed cards back.
+    /// Across launches it is a fresh process, which is what makes an unanswered conflict return.
+    private var lastAnnouncedConflicts: [KeybindConflict] = []
 
     init(sinks: Sinks) {
         self.sinks = sinks
@@ -68,6 +78,7 @@ final class ConfigApplier {
         // strand an undelivered notice forever — the diagnostics haven't changed, so the retry
         // would never come. The cost is a set comparison that returns nil.
         surfaceConfigDiagnostics()
+        surfaceConflicts()
         // Recolor a live update card — it's outside any window's toast list. Also on `.keymap`:
         // `UpdateCardView.reapplyTheme()` calls `refreshKeycap()`, which re-resolves the
         // "Check for Updates" chord, so a rebind while the card is up has to reach it. Same trap as
@@ -89,10 +100,9 @@ final class ConfigApplier {
     /// takes it down, and a changed set replaces it rather than stacking a second card beside one
     /// that describes different problems.
     func surfaceConfigDiagnostics() {
-        // Only the problems. A chord one of your own config lines took off an action is not one:
-        // the file already says so, so the notice could never be cleared and never told you
-        // anything you could act on. Its Shortcuts row explains it in place (ZEN-368).
-        let diagnostics = GeneralConfig.current.configDiagnostics.filter(\.isProblem)
+        // Chord conflicts are announced one card each, by `surfaceConflicts`. What's left shares a
+        // notice, because none of it has anything to press (ZEN-368).
+        let diagnostics = GeneralConfig.current.configDiagnostics.filter { !$0.isChordConflict }
         guard !diagnostics.isEmpty else {
             // Nothing is wrong any more. `announcement` returns nil for an empty set, so before
             // this the stale warning simply outlived the fix that made it false.
@@ -115,5 +125,21 @@ final class ConfigApplier {
         // announced would let the change-gate swallow it forever.
         guard sinks.announceDiagnostics(content, first.scope) else { return }
         lastAnnouncedDiagnostics = diagnostics
+    }
+
+    /// Card every chord conflict the config is reporting, one each (ZEN-368).
+    ///
+    /// Retracted as well as raised, for the reason the shared notice is: the cards state what is
+    /// true now, so answering one in Settings or fixing the file by hand has to take its card down.
+    func surfaceConflicts() {
+        let conflicts = KeybindConflict.all(in: GeneralConfig.current)
+        guard !conflicts.isEmpty else {
+            if !lastAnnouncedConflicts.isEmpty { sinks.retractConflicts() }
+            lastAnnouncedConflicts = []
+            return
+        }
+        guard conflicts != lastAnnouncedConflicts else { return }  // same set: the cards up are right
+        guard sinks.announceConflicts(conflicts) else { return }
+        lastAnnouncedConflicts = conflicts
     }
 }
