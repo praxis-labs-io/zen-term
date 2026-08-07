@@ -27,10 +27,9 @@ enum MainMenu {
             action: #selector(AppDelegate.showAcknowledgements(_:)),
             keyEquivalent: "")
         appMenu.addItem(.separator())
-        // Hide has no shortcut, and this is its second concession. It moved off ⌘H first, to free
-        // pane-nav-left, onto ⌘⇧H. That collided with `resize_left`, and the keymap wins every
-        // time because `KeyInterceptor` resolves ahead of `NSApp.sendEvent`, so Hide was dead
-        // while the menu went on drawing ⌘⇧H beside it. ⌘⇧HJKL is one set and stays whole.
+        // Hide has no shortcut. A menu key equivalent loses to the keymap every time, because
+        // `KeyInterceptor` resolves ahead of `NSApp.sendEvent`, so a chord both want leaves the
+        // item dead with the menu still drawing the shortcut beside it.
         appMenu.addItem(
             withTitle: "Hide ZenTerm",
             action: #selector(NSApplication.hide(_:)),

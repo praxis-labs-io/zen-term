@@ -56,6 +56,8 @@ extension KeyInterceptor.ReservedChord {
         case .selectAll: return "select_all"
         case .scrollToSelection: return "scroll_to_selection"
         case .writeScreenFile: return "write_screen_file"
+        case .copyScreenFilePath: return "write_screen_file_copy"
+        case .openScreenFile: return "write_screen_file_open"
         // Ours: ghostty spells the prompt jumps `jump_to_prompt:-1` and `jump_to_prompt:1`, and no
         // token here carries an argument. `paste_from_selection` is its name for reading the X11
         // selection clipboard, which macOS has none of, so a separate word for a separate thing.
@@ -88,7 +90,8 @@ extension KeyInterceptor.ReservedChord {
             .reloadConfig, .checkForUpdates, .reportIssue, .openDiffViewer, .resetFontSize,
             .toggleScrollMode, .toggleSearch, .scrollToTop, .scrollToBottom,
             .findNext, .findPrevious, .searchSelection,
-            .clearScreen, .selectAll, .scrollToSelection, .pasteSelection, .writeScreenFile:
+            .clearScreen, .selectAll, .scrollToSelection, .pasteSelection, .writeScreenFile,
+            .copyScreenFilePath, .openScreenFile:
             return false
         }
     }
@@ -106,9 +109,8 @@ extension KeyInterceptor.ReservedChord {
     /// you are editing, a float's toggle chord lives on the float, and the last two are app errands
     /// the menu bar already carries.
     ///
-    /// Shipping unbound is not a reason to say no. Clear Screen, Scroll to Selection and Write
-    /// Screen to File all do, because ZenTerm spends ghostty's chords for them on pane nav and
-    /// resize, and the card is where a user picks the chord they would rather give up.
+    /// Shipping unbound is not a reason to say no. Check for Updates and Report an Issue are the
+    /// two that do, and they say no because the menu bar carries both.
     var isEditableInSettings: Bool {
         switch self {
         case .increaseFontSize, .decreaseFontSize, .resetFontSize: return false
@@ -119,6 +121,7 @@ extension KeyInterceptor.ReservedChord {
             .scrollToSelection, .jumpToPreviousPrompt, .jumpToNextPrompt,
             .toggleSearch, .searchSelection, .findNext, .findPrevious,
             .clearScreen, .selectAll, .pasteSelection, .writeScreenFile,
+            .copyScreenFilePath, .openScreenFile,
             .navLeft, .navRight, .navUp, .navDown,
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
             .newTab, .newWindow, .prevTab, .nextTab, .selectTab,
@@ -181,6 +184,8 @@ extension KeyInterceptor.ReservedChord {
         case "select_all": self = .selectAll
         case "scroll_to_selection": self = .scrollToSelection
         case "write_screen_file": self = .writeScreenFile
+        case "write_screen_file_copy": self = .copyScreenFilePath
+        case "write_screen_file_open": self = .openScreenFile
         case "jump_to_previous_prompt": self = .jumpToPreviousPrompt
         case "jump_to_next_prompt": self = .jumpToNextPrompt
         case "paste_selection": self = .pasteSelection
@@ -199,10 +204,18 @@ extension KeyInterceptor.ReservedChord {
     }
 }
 
-/// The built-in chord → action map, exactly reproducing the pre-ZEN-71 hardcoded
-/// `KeyInterceptor` switch. The user's `keybind` lines and float `key:` chords overlay this.
-/// Note the old `⌘⇧G → gitdash` line is intentionally absent — a float's chord now comes
+/// The built-in chord → action map. The user's `keybind` lines and float `key:` chords overlay
+/// this. Note the old `⌘⇧G → gitdash` line is intentionally absent — a float's chord now comes
 /// from its own `key:` field, so no float is built in.
+///
+/// These are ghostty's chords wherever the two would disagree on something a ghostty user reaches
+/// for first, so a hand arriving from it lands right.
+///
+/// **One chord per action.** A second spelling costs a Shortcuts row that has to pick one of the two
+/// to advertise, a line in the reference config nobody asked for, and a rebind that has to free
+/// both. Increase font size is the only exception and it is a layout artifact, not a second chord.
+/// `KeymapAssemblyTests` holds the rule. Where ghostty binds a chord ZenTerm spends elsewhere, the
+/// reason sits at the point of the conflict rather than collected here.
 enum KeymapDefaults {
     /// The chords `action` ships with. One accessor rather than the same `filter`/`keys` walk written
     /// out at each call site: a row and the writer disagreeing about what an action's default *is*
@@ -214,42 +227,57 @@ enum KeymapDefaults {
     static let map: [Chord: KeyInterceptor.ReservedChord] = {
         var map: [Chord: KeyInterceptor.ReservedChord] = [:]
 
-        // ⌘⇧ family — the splits, pane/drawer resize on HJKL, repo picker. Both splits are spelled
-        // with the *unshifted* key: `Chord` canonicalizes, so a live ⌘⇧\ event (which arrives as
-        // "|") and a live ⌘⇧- event (which arrives as "_") already fold onto these entries. ⌘⇧-
-        // rather than bare ⌘- dates from ZEN-121, which left bare ⌘- to libghostty's own text
-        // magnification; ZEN-224 took that chord over, and ⌘⇧- stays split on its own merits.
-        map[Chord(command: true, shift: true, key: "\\")] = .splitVertical
-        map[Chord(command: true, shift: true, key: "-")] = .splitHorizontal
-        map[Chord(command: true, shift: true, key: "h")] = .resizeLeft
-        map[Chord(command: true, shift: true, key: "l")] = .resizeRight
-        map[Chord(command: true, shift: true, key: "k")] = .resizeUp
-        map[Chord(command: true, shift: true, key: "j")] = .resizeDown
-        map[Chord(command: true, shift: true, key: "p")] = .toggleRepoPicker
-        map[Chord(command: true, shift: true, key: "f")] = .fillScreen
+        // Panes, on ghostty's chords throughout: ⌘D and ⌘⇧D split, ⌘⌥arrows focus one, ⌘⌃arrows
+        // resize one. ⌘D is the most-pressed chord in a ghostty split workflow after ⌘T, so landing
+        // somewhere else is a hard stop rather than a surprise, and the diff viewer gives it up.
+        map[Chord(command: true, key: "d")] = .splitVertical
+        map[Chord(command: true, shift: true, key: "d")] = .splitHorizontal
+        map[Chord(command: true, option: true, key: "←")] = .navLeft
+        map[Chord(command: true, option: true, key: "→")] = .navRight
+        map[Chord(command: true, option: true, key: "↑")] = .navUp
+        map[Chord(command: true, option: true, key: "↓")] = .navDown
+        map[Chord(command: true, control: true, key: "←")] = .resizeLeft
+        map[Chord(command: true, control: true, key: "→")] = .resizeRight
+        map[Chord(command: true, control: true, key: "↑")] = .resizeUp
+        map[Chord(command: true, control: true, key: "↓")] = .resizeDown
+        map[Chord(command: true, key: "w")] = .closePane
         map[Chord(command: true, shift: true, key: "s")] = .toggleScrollMode
-        // vim's search key. ⌘F is Focus Mode and stays there; ⌘? folds to "/" carrying shift, so it
-        // is a separate chord and this does not claim it.
-        map[Chord(command: true, key: "/")] = .toggleSearch
 
-        // bare ⌘.
-        map[Chord(command: true, key: "\\")] = .toggleRightDrawer
+        // Tabs and the window. ⌘[ and ⌘] are tabs and are the only ones: the Safari convention,
+        // and ghostty is the outlier here. `Chord` parses `tab`, so a config binding ghostty's ⌃⇥
+        // resolves.
         map[Chord(command: true, key: "[")] = .prevTab
         map[Chord(command: true, key: "]")] = .nextTab
-        map[Chord(command: true, key: "h")] = .navLeft
-        map[Chord(command: true, key: "l")] = .navRight
-        map[Chord(command: true, key: "k")] = .navUp
-        map[Chord(command: true, key: "j")] = .navDown
-        map[Chord(command: true, key: "w")] = .closePane
         map[Chord(command: true, key: "t")] = .newTab
         map[Chord(command: true, key: "n")] = .newWindow
-        map[Chord(command: true, key: "b")] = .toggleBottomDrawer
-        map[Chord(command: true, key: "f")] = .toggleZoom
-        map[Chord(command: true, key: "p")] = .toggleCommandPalette
-        map[Chord(command: true, key: ",")] = .openSettings
-        map[Chord(command: true, key: "d")] = .openDiffViewer  // open the diff viewer
-        map[Chord(command: true, option: true, key: "r")] = .reloadConfig
         for n in 1...9 { map[Chord(command: true, key: "\(n)")] = .selectTab(n) }
+
+        // Fill Screen and Focus Mode, on ghostty's chords for the same two things
+        // (`toggle_fullscreen` and `toggle_split_zoom`), which is what leaves ⌘F for Find.
+        //
+        // ghostty spells fullscreen ⌃⌘F as well and that one stays unbound: it is macOS's native
+        // fullscreen chord, and this is a maximize, so answering it would promise a space switch.
+        map[Chord(command: true, key: "⏎")] = .fillScreen
+        map[Chord(command: true, shift: true, key: "⏎")] = .toggleZoom
+
+        // Finding, on ⌘F alone. ⌘? folds to "/" carrying shift, so ⌘/ is a separate chord and this
+        // does not claim it either way.
+        map[Chord(command: true, key: "f")] = .toggleSearch
+
+        // The chrome. ⌘⇧P is ghostty's command palette and VS Code's, so the workspace picker (ours
+        // alone, and a chord ghostty leaves free) takes ⌘P.
+        //
+        // The diff viewer wants a D and cannot have one: macOS claims ⌘⌥D for the Dock and ⌃⌘D for
+        // Look Up, and takes both before any app-level monitor runs, so a chord bound there is dead
+        // and every test of it passes. ⌘G is git, and free here because stepping a search is `n`/`N`
+        // in scroll mode rather than a chord.
+        map[Chord(command: true, shift: true, key: "p")] = .toggleCommandPalette
+        map[Chord(command: true, key: "p")] = .toggleRepoPicker
+        map[Chord(command: true, key: "g")] = .openDiffViewer
+        map[Chord(command: true, key: "\\")] = .toggleRightDrawer
+        map[Chord(command: true, key: "b")] = .toggleBottomDrawer
+        map[Chord(command: true, key: ",")] = .openSettings
+        map[Chord(command: true, shift: true, key: ",")] = .reloadConfig
 
         // Font size (ZEN-224), matching what libghostty bound before the chrome took these over.
         //
@@ -257,8 +285,9 @@ enum KeymapDefaults {
         // is physically ⌘⇧=, and `Chord` folds the "+" it arrives as back onto "=" because Shift is
         // set. Bind ⌘= alone and the keypress most people actually make falls through to libghostty,
         // which still has it bound per surface — reproducing this exact ticket. Two defaults for one
-        // action is fine: `assemble` drops all of an action's defaults when the user rebinds it, and
-        // `Chord.displayed` sorts by config token, so a keycap renders the plainer ⌘=.
+        // action is fine here, and it is the only place left: `assemble` drops all of an action's
+        // defaults when the user rebinds it, and `Chord.displayed` sorts by config token, so a
+        // keycap renders the plainer ⌘=.
         map[Chord(command: true, key: "=")] = .increaseFontSize
         map[Chord(command: true, shift: true, key: "=")] = .increaseFontSize
         map[Chord(command: true, key: "-")] = .decreaseFontSize
@@ -275,29 +304,27 @@ enum KeymapDefaults {
         map[Chord(command: true, key: "↘")] = .scrollToBottom
         map[Chord(command: true, key: "⇞")] = .scrollPageUp
         map[Chord(command: true, key: "⇟")] = .scrollPageDown
-        map[Chord(command: true, key: "g")] = .findNext
-        map[Chord(command: true, shift: true, key: "g")] = .findPrevious
         map[Chord(command: true, key: "e")] = .searchSelection
 
         // The screen and the prompt marks (ZEN-369), again on libghostty's own chords, so nobody
         // already pressing these notices the action changed hands.
         //
-        // The prompt jumps take ghostty's shifted spelling and not its bare one, which is the one
-        // place we ship fewer chords than it does. macOS claims ⌘↑ and ⌘↓, so the bare pair never
-        // reaches the app, and a second default nobody can press is not free: `Chord.displayed`
-        // renders the lowest config token, and `cmd+down` sorts under `cmd+shift+down`, so the
-        // keycap for Jump to Next Prompt would have advertised the dead one.
+        // The prompt jumps take ghostty's shifted spelling and not its bare one. macOS claims ⌘↑
+        // and ⌘↓, so the bare pair never reaches the app, and a chord nobody can press is not free:
+        // it would sit in the Shortcuts card and the reference config as advice that does nothing.
         //
-        // Clear Screen, Scroll to Selection and Write Screen to File get none. ghostty's chords for
-        // them are ⌘K, ⌘J and ⌘⇧J, which are pane nav and resize here, and a chord the app leans on
-        // all day is worth more than one of these. They are in the palette and the Shortcuts card,
-        // one line from a chord the user picks.
-        //
-        // Select All gets none either, and ⌘A is free rather than spent: AppKit serves Select All
-        // from an Edit menu item, which ZenTerm has never had, so ⌘A does nothing in any field in
-        // the app. Claiming it here would make the terminal answer a chord every Mac user expects
-        // their caret to answer, and cement the gap. ZEN-370 adds the menu item, and ⌘A belongs to
-        // it rather than to the keymap.
+        // Clear Screen, Scroll to Selection and Write Screen to File, on ghostty's chords.
+        map[Chord(command: true, key: "k")] = .clearScreen
+        map[Chord(command: true, key: "j")] = .scrollToSelection
+        map[Chord(command: true, shift: true, key: "j")] = .writeScreenFile
+        map[Chord(command: true, shift: true, control: true, key: "j")] = .copyScreenFilePath
+        map[Chord(command: true, shift: true, option: true, key: "j")] = .openScreenFile
+
+        // ⌘A selects the buffer, on ghostty's chord and every Mac user's expectation. A text field
+        // holding the keyboard needs it more, and `KeyInterceptor` resolves ahead of the responder
+        // chain, so the field has to be let through explicitly rather than by leaving ⌘A unbound:
+        // ZEN-370 serves it from the Edit menu, over a field and over a pane both.
+        map[Chord(command: true, key: "a")] = .selectAll
         map[Chord(command: true, shift: true, key: "v")] = .pasteSelection
         map[Chord(command: true, shift: true, key: "↑")] = .jumpToPreviousPrompt
         map[Chord(command: true, shift: true, key: "↓")] = .jumpToNextPrompt

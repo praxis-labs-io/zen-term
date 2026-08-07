@@ -1,7 +1,7 @@
 import AppKit
 
 /// The pass-through predicate for a text view holding the keyboard: whether a keymap-bound chord
-/// belongs to macOS text editing rather than to ZenTerm (ZEN-369).
+/// belongs to the box you are typing in rather than to ZenTerm (ZEN-369).
 ///
 /// `KeyInterceptor` is an event monitor that resolves the keymap **ahead of the responder chain**,
 /// so a reserved chord never reaches the focused control. That is right for ⌘T and wrong for the
@@ -20,7 +20,7 @@ import AppKit
 /// inside it: the two answer different questions and share only the seam they return through.
 /// `AppDelegate` supplies the live first responder.
 enum TextEditingChords {
-    /// Keyed on the **chord**, not the action. The question is whether the macOS text system
+    /// Keyed on the **chord**, not the action. The question is whether the box holding the keyboard
     /// already does something with this keystroke, which is a fact about the keys rather than about
     /// whatever ZenTerm happens to have bound to them. Move the prompt jumps elsewhere and these go
     /// back to being the text view's alone, which is the right answer both ways round.
@@ -28,9 +28,16 @@ enum TextEditingChords {
     /// Only the chords a ZenTerm default can actually claim. ⌘← and ⌘⌫ are text editing's too and
     /// are deliberately absent: no default binds them, so they never reach a guard, and listing
     /// them here would suggest this set is the whole of what macOS owns.
+    ///
+    /// The Return pair is here for a different reason from the arrows. AppKit turns every Return
+    /// into `insertNewline(_:)` whatever modifiers ride along, so a box that reads them off the raw
+    /// event is how the diff comment composer tells send from queue from new line. Fill Screen is
+    /// ⌘⏎ and Focus Mode ⌘⇧⏎, which is right for a window and wrong for a caret.
     private static let owned: Set<Chord> = [
         Chord(command: true, shift: true, key: "↑"),
         Chord(command: true, shift: true, key: "↓"),
+        Chord(command: true, key: "⏎"),
+        Chord(command: true, shift: true, key: "⏎"),
     ]
 
     /// A focused `NSTextField` makes the window's **field editor** first responder, which is an

@@ -50,7 +50,7 @@ final class SettingsAppearanceSection: SettingsFormSection {
                 width: 64)
             self.addNumericRow(
                 key: "drawer-resize-step", caption: "Drawer resize step",
-                blurb: "How far each ⌘⇧HJKL nudge resizes", range: 4...400, read: { $0.drawerResizeStep },
+                blurb: "How far each ⌘⌃arrow nudge resizes", range: 4...400, read: { $0.drawerResizeStep },
                 width: 64)
             self.addNumericRow(
                 key: "max-drawer-fraction", caption: "Max drawer width/height",
@@ -219,7 +219,7 @@ final class SettingsAppearanceSection: SettingsFormSection {
     /// recolors controls but does not re-supply row *data* (`refreshRows()` runs only after this
     /// card's own write). The accent row is the only row whose contents are theme-derived, so
     /// without this its swatches and hexes keep the old palette until the section is rebuilt.
-    /// The paths that get here: another window's Settings write, and ⌘⌥R after a hand-edit.
+    /// The paths that get here: another window's Settings write, and ⌘⇧, after a hand-edit.
     override func reapplyTheme() {
         super.reapplyTheme()
         refreshAccentRow()

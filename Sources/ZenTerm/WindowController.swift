@@ -496,7 +496,7 @@ final class WindowController: NSObject {
                 // "simplifies" it away: `modal` is a single slot, so opening Settings in *this* window
                 // has already closed this palette. The live path is a palette open in window A while
                 // window B saves a float, since the reload is unforced and broadcasts `.floats` alone.
-                // (⌘⌥R can't show it either: it forces `.all`, which carries `.theme`.)
+                // (⌘⇧, can't show it either: it forces `.all`, which carries `.theme`.)
                 if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {
                     self.modal?.overlay.reapplyTheme()
                 }
@@ -1897,7 +1897,9 @@ final class WindowController: NSObject {
         case .jumpToNextPrompt: scrollFocusedPane(.prompt(1))
         case .clearScreen: activeController?.focusedScrollTarget?.surface.clearScreen()
         case .selectAll: activeController?.focusedScrollTarget?.surface.selectAll()
-        case .writeScreenFile: activeController?.focusedScrollTarget?.surface.writeScreenToFile()
+        case .writeScreenFile: activeController?.focusedScrollTarget?.surface.writeScreenToFile(.paste)
+        case .copyScreenFilePath: activeController?.focusedScrollTarget?.surface.writeScreenToFile(.copy)
+        case .openScreenFile: activeController?.focusedScrollTarget?.surface.writeScreenToFile(.open)
         case .pasteSelection: pasteSelection()
         case .fillScreen: toggleFillScreen()
         case .toggleToolFloat(let id):
@@ -1913,7 +1915,7 @@ final class WindowController: NSObject {
         }
     }
 
-    /// The window frame before Fill Screen grew it, so a second ⌘⇧F restores the exact size
+    /// The window frame before Fill Screen grew it, so a second ⌘⏎ restores the exact size
     /// and position. Nil means the window is not currently filled.
     private var preFillFrame: NSRect?
 

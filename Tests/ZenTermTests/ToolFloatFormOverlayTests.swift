@@ -103,7 +103,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         title: String, command: String = "vim", icon: String = ToolFloatParser.defaultIcon,
         dir: URL? = nil, height: CGFloat = 0.85, git: Bool = false, order: Int = 1,
         persist: ToolFloat.Persistence = .ephemeral,
-        toggle: Chord = Chord(command: true, shift: true, key: "d")
+        toggle: Chord = Chord(command: true, shift: true, key: "l")
     ) -> ToolFloat {
         ToolFloat(
             id: ToolFloatParser.slug(forTitle: title), order: order, title: title, icon: icon,
@@ -408,7 +408,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.submitted.count, 1)
         XCTAssertEqual(sink.submitted.first?.id, "dev")
         XCTAssertEqual(sink.submitted.first?.command, "nvim")
-        XCTAssertEqual(sink.submitted.first?.toggle, Chord(command: true, shift: true, key: "d"))
+        XCTAssertEqual(sink.submitted.first?.toggle, Chord(command: true, shift: true, key: "l"))
     }
 
     /// A `key:` the menu owns was already refused at load, so the float has no shortcut and the
@@ -454,11 +454,11 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
             AppConfig.reload()
             try? FileManager.default.removeItem(at: tempRoot)
         }
-        try "keybind = new_tab=cmd+shift+d\n".write(
+        try "keybind = new_tab=cmd+shift+l\n".write(
             to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         AppConfig.reload()
 
-        let existing = existingFloat(title: "dev")  // toggle is ⌘⇧D, which new_tab just took
+        let existing = existingFloat(title: "dev")  // toggle is ⌘⇧L, which new_tab just took
         let (overlay, _, sink) = mount(editing: existing)
 
         XCTAssertNil(

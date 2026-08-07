@@ -176,7 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         if case .reloadConfig = chord {
-            // Forced: ⌘⌥R is the "make the app match my config" escape hatch, so it re-applies
+            // Forced: ⌘⇧, is the "make the app match my config" escape hatch, so it re-applies
             // everything rather than only what the diff says moved.
             AppConfig.reload(force: true)
             return

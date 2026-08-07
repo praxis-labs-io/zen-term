@@ -52,12 +52,12 @@ to see.
 ```markdown
 **Run:** `swift run ZenTerm`
 
-Check 1: Split with `⌘⇧\`. The focused pane should carry the halo and the other
+Check 1: Split with `⌘D`. The focused pane should carry the halo and the other
 should not. Tell me what you see.
 
 <wait for Drew's result>
 
-Check 2: Press `⌘H`, then `⌘L`. The halo should follow focus in both directions.
+Check 2: Press `⌘⌥←`, then `⌘⌥→`. The halo should follow focus in both directions.
 Tell me what you see.
 ```
 

@@ -179,6 +179,20 @@ public struct TerminalViewportRange: Equatable {
 /// One step through a live search's matches.
 public enum TerminalSearchStep: Equatable { case next, previous }
 
+/// What to do with the path after the screen is written to a file.
+///
+/// Three separate acts rather than one with a follow-up, because the backend never hands the path
+/// back: the file is written and the path disposed of inside one call, so the choice has to travel
+/// in with it.
+public enum ScreenFileDisposition: Equatable {
+    /// Type the path into the pane, so the next command has something to point at.
+    case paste
+    /// Put the path on the pasteboard.
+    case copy
+    /// Open the file in whatever the system opens it with.
+    case open
+}
+
 /// One keystroke, in the terms a backend keymap needs, and nothing more.
 ///
 /// A value type rather than an `NSEvent`, because the caller has no event: the pin-bump baseline
@@ -410,13 +424,12 @@ public protocol TerminalSurface: AnyObject {
     /// reads it back and the chrome's own scroll-mode overlay is untouched.
     func selectAll()
 
-    /// Write the visible screen to a file and type its path into the pane, so the next command has
-    /// something to point at.
+    /// Write the visible screen to a file, and what to do with the path afterwards.
     ///
-    /// The path arrives as input rather than coming back from this call, and that is the backend's
-    /// shape rather than a choice: libghostty writes the file and feeds the pty in one action, and
-    /// never hands the path out. A backend that cannot do it is a no-op.
-    func writeScreenToFile()
+    /// The path never comes back from this call, and that is the backend's shape rather than a
+    /// choice: libghostty writes the file and disposes of the path in one action, and never hands it
+    /// out. A backend that cannot do it is a no-op.
+    func writeScreenToFile(_ disposition: ScreenFileDisposition)
 
     /// The grid's geometry right now, or nil from a backend that has no cells to report or has
     /// not been laid out yet. Read at draw time rather than cached: it moves with the font size
@@ -512,5 +525,5 @@ public extension TerminalSurface {
     /// chords doing nothing, which is what an unimplemented action should look like.
     func clearScreen() {}
     func selectAll() {}
-    func writeScreenToFile() {}
+    func writeScreenToFile(_ disposition: ScreenFileDisposition) {}
 }

@@ -29,6 +29,9 @@ enum GhosttyUnboundChords {
         (1...8).flatMap { ["cmd+\($0)", "cmd+digit_\($0)"] } + ["cmd+9"]
 
     /// ghostty's split model, which ZenTerm holds as panes: nav, resize, and the two splits.
+    ///
+    /// The chrome answers most of these itself: ⌘D and ⌘⇧D split, ⌘⌥arrows focus a pane, ⌘⌃arrows
+    /// resize one, ⌘⇧⏎ is Focus Mode. ⌘[ and ⌘] are the exception and stay tabs.
     private static let splitsAndPanes: [String] = [
         "cmd+[", "cmd+]",
         "cmd+opt+arrow_left", "cmd+opt+arrow_right", "cmd+opt+arrow_up", "cmd+opt+arrow_down",
@@ -45,7 +48,8 @@ enum GhosttyUnboundChords {
         "cmd+t", "cmd+n",
     ]
 
-    /// App-level chords ZenTerm answers itself, or the menu bar does.
+    /// App-level chords ZenTerm answers itself, or the menu bar does. ⌘F is Find, matching ghostty.
+    /// ⌘⇧F is its `end_search` and stays unbound: our find bar closes on the same ⌘F that opened it.
     private static let appLevel: [String] = [
         "cmd+=", "cmd++", "cmd+-", "cmd+0",
         "cmd+f", "cmd+shift+f",
@@ -58,7 +62,9 @@ enum GhosttyUnboundChords {
     /// Bound in libghostty, and dead: every one of these actions reaches an apprt callback ZenTerm
     /// does not implement, so the key is swallowed and nothing happens. Safe to unbind before the
     /// matching ZenTerm feature exists, because binding our own action to the chord later is a
-    /// separate change.
+    /// separate change. ⌘⏎ is one: it is Fill Screen now. ⌃⌘F is ghostty's second spelling of the
+    /// same action and stays here, because it is macOS's native fullscreen chord and Fill Screen is
+    /// a maximize.
     private static let unimplemented: [String] = [
         "cmd+ctrl+=",
         "cmd+opt+w", "cmd+shift+w", "cmd+shift+opt+w",
@@ -80,8 +86,8 @@ enum GhosttyUnboundChords {
     /// write the screen to a file. Paste-the-selection is the chrome's own, built from the
     /// selection it already reads.
     ///
-    /// Three of these chords are ZenTerm's already — ⌘K and ⌘J are pane nav, ⌘⇧J is resize — so
-    /// their actions ship unbound and the unbind here only frees a chord the backend never saw.
+    /// ⌘K, ⌘J and ⌘⇧J are Clear Screen, Scroll to Selection and Write Screen to File here too, on
+    /// ghostty's own chords, so the unbind hands each to the chrome rather than to the program.
     ///
     /// ghostty binds write-screen-file three times, on ⌘⇧⌃J to copy the path, ⌘⇧J to paste it and
     /// ⌘⇧⌥J to open the file. One behavior, and ZenTerm names it once: the other two go to the

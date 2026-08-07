@@ -27,8 +27,21 @@ final class BackendShadowTests: XCTestCase {
     /// rather than a hand-built dictionary: dropping the rebound action's defaults is the step that
     /// frees the chord, so a stand-in map would test the arithmetic and not the behavior.
     private func keymapRebindingNavUp() -> [Chord: KeyInterceptor.ReservedChord] {
+        keymapRebinding(.navUp, to: Chord(control: true, key: "k"))
+    }
+
+    /// Nav Up's default is ⌘⌥↑, and an arrow resolves off `Chord`'s keyCode table rather than the
+    /// layout, so a case about a layout that cannot type a key needs an action whose default is a
+    /// letter. Close Pane is one.
+    private func keymapRebindingClosePane() -> [Chord: KeyInterceptor.ReservedChord] {
+        keymapRebinding(.closePane, to: Chord(control: true, key: "w"))
+    }
+
+    private func keymapRebinding(
+        _ action: KeyInterceptor.ReservedChord, to chord: Chord
+    ) -> [Chord: KeyInterceptor.ReservedChord] {
         KeymapAssembler.assemble(
-            floats: [], keybinds: [.bind(Chord(control: true, key: "k"), .navUp)],
+            floats: [], keybinds: [.bind(chord, action)],
             canType: { _ in true }, protected: { [] }, menuOwner: { _ in nil }
         ).map
     }
@@ -91,12 +104,9 @@ final class BackendShadowTests: XCTestCase {
         let finding = BackendShadow.check(
             assembled: keymapRebindingNavUp(), probe: probe(.claims))
 
-        XCTAssertEqual(
-            finding,
-            .freed([
-                BackendShadow.FreedChord(
-                    chord: Chord(command: true, key: "k"), action: .navUp, disposition: .claims)
-            ]))
+        guard case .freed(let freed) = finding else { return XCTFail("\(finding)") }
+        XCTAssertEqual(Set(freed.map(\.chord)), [Chord(command: true, option: true, key: "↑")])
+        XCTAssertTrue(freed.allSatisfy { $0.action == .navUp && $0.disposition == .claims })
     }
 
     /// The strong form: a probe that claims *everything* still finds nothing, because a config that
@@ -123,11 +133,11 @@ final class BackendShadowTests: XCTestCase {
     /// A chord no key on this layout produces can't be handed to a backend as a keystroke, and
     /// nobody can press it either. The probe is never asked.
     func test_aFreedChordThisLayoutCannotTypeIsNotReported() {
-        // No `k`, so ⌘K has nowhere to resolve to. The canary is an arrow and needs no layout.
+        // No `w`, so ⌘W has nowhere to resolve to. The canary is an arrow and needs no layout.
         KeyboardLayout.layoutOverrideForTesting = { _ in [17: "t"] }
 
         XCTAssertEqual(
-            BackendShadow.check(assembled: keymapRebindingNavUp(), probe: probe(.claims)),
+            BackendShadow.check(assembled: keymapRebindingClosePane(), probe: probe(.claims)),
             .freed([]))
     }
 

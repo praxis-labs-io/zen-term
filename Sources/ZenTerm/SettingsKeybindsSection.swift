@@ -27,7 +27,13 @@ final class SettingsKeybindsSection: SettingsSection {
             ]
         ),
         ("Find", [.toggleSearch, .searchSelection, .findNext, .findPrevious]),
-        ("Screen", [.clearScreen, .selectAll, .pasteSelection, .writeScreenFile]),
+        (
+            "Screen",
+            [
+                .clearScreen, .selectAll, .pasteSelection, .writeScreenFile, .copyScreenFilePath,
+                .openScreenFile,
+            ]
+        ),
         ("Navigation", [.navLeft, .navDown, .navUp, .navRight]),
         ("Resize", [.resizeLeft, .resizeDown, .resizeUp, .resizeRight]),
         ("Tabs", [.newTab, .newWindow, .prevTab, .nextTab] + (1...9).map { .selectTab($0) }),

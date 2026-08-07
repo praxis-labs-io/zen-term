@@ -174,9 +174,12 @@ struct Chord: Hashable {
         specialKeyGlyphs[keyCode]
     }
 
+    /// Tab is the one entry here that *does* type a character. It still belongs, because the
+    /// character is a horizontal tab: `charactersIgnoringModifiers` hands back "\t", which renders
+    /// as nothing at all on a keycap and reads as a stray blank in a config file.
     private static let specialKeyGlyphs: [UInt16: String] = [
         123: "←", 124: "→", 125: "↓", 126: "↑", 36: "⏎",
-        115: "↖", 119: "↘", 116: "⇞", 121: "⇟",
+        115: "↖", 119: "↘", 116: "⇞", 121: "⇟", 48: "⇥",
     ]
 
     /// How a config file spells each of those. The glyph is the canonical form everywhere inside
@@ -188,13 +191,14 @@ struct Chord: Hashable {
         "arrow_left": "←", "arrow_right": "→", "arrow_down": "↓", "arrow_up": "↑",
         "enter": "⏎", "return": "⏎",
         "home": "↖", "end": "↘", "page_up": "⇞", "page_down": "⇟",
+        "tab": "⇥",
     ]
 
     /// The word `configToken` writes back for a glyph. One per key, so a chord round-trips to the
     /// same line it was read from rather than alternating between two accepted spellings.
     private static let wordForSpecialKey: [String: String] = [
         "←": "left", "→": "right", "↓": "down", "↑": "up", "⏎": "enter",
-        "↖": "home", "↘": "end", "⇞": "page_up", "⇟": "page_down",
+        "↖": "home", "↘": "end", "⇞": "page_up", "⇟": "page_down", "⇥": "tab",
     ]
 
     /// The keyCode behind a special glyph, for a caller that needs the physical key back: a
