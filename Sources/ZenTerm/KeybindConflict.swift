@@ -24,16 +24,31 @@ struct KeybindConflict: Equatable {
         return true
     }
 
+    /// Whether the loss can be written down. A float is the mirror of the case above: floats bind
+    /// before user keybinds, so a `keybind =` line CAN take a float's chord and leave the float as
+    /// the loser. Accepting that would emit `toggle_float:<id>=none`, which the assembler refuses by
+    /// design, so the line would sit inert in the config and the card would return at every launch
+    /// looking like it had been answered.
+    var isAcceptable: Bool {
+        if case .toggleToolFloat = loser { return false }
+        return true
+    }
+
     /// The conflicts `config` is reporting, in the order the diagnostics collected them.
     ///
     /// Read off the diagnostics rather than recomputed, so the toast, the Settings row and the
     /// launch notice can never disagree about what is outstanding.
+    ///
+    /// A conflict with no answer at all is dropped: two floats on one chord leave a loser that
+    /// cannot be accepted and a winner that cannot be reverted, and a card with no buttons is a
+    /// notice that can only be closed forever.
     static func all(in config: GeneralConfig) -> [KeybindConflict] {
         config.configDiagnostics.compactMap { diagnostic in
             guard case .keybind(let loser) = diagnostic.scope,
                 case .chordTaken(let chord, let winner) = diagnostic.problem
             else { return nil }
-            return KeybindConflict(loser: loser, chord: chord, winner: winner)
+            let conflict = KeybindConflict(loser: loser, chord: chord, winner: winner)
+            return (conflict.isAcceptable || conflict.isRevertable) ? conflict : nil
         }
     }
 
@@ -44,16 +59,18 @@ struct KeybindConflict: Equatable {
         return result
     }
 
-    /// Put the winner back where it ships. Its line then matches the defaults, so the writer stops
-    /// emitting it, and the chord returns to the loser on the next load because no line names the
-    /// loser at all and the assembler hands every unmentioned action its defaults.
+    /// Drop the winner's overrides, so the line that took the chord stops being written. On the next
+    /// load nothing names the winner or the loser, and the assembler hands every unmentioned action
+    /// its defaults, which is what puts both back.
     ///
-    /// Only the winner is touched, deliberately. Binding the loser back too reads as the symmetric
-    /// thing to do and is unreachable: a loser already carrying `= none` is not in conflict, because
-    /// the unbind frees its default before anything can take it.
+    /// Dropping rather than binding the winner to its defaults, which is what this did and is a
+    /// quieter way to lose a shortcut: `binds` is keyed by chord and `bind` overwrites, so writing
+    /// the winner's default chord in evicts whatever else the user had bound there. That action then
+    /// holds nothing, is not in `unbound`, and the writer emits no line for it, so the user answers
+    /// one conflict and silently loses a binding they never touched.
     func reverting(_ overrides: KeymapOverrides) -> KeymapOverrides {
         var result = overrides
-        result.bind(winner, to: KeymapDefaults.map.filter { $0.value == winner }.keys)
+        result.clearOverride(winner)
         return result
     }
 
@@ -61,7 +78,9 @@ struct KeybindConflict: Equatable {
     var headline: String { "\(CommandCatalog.spec(for: loser).title) has no shortcut" }
 
     /// The sentence beneath it, in the config file's vocabulary so the token is the one to grep for.
-    var message: String { "\(winner.actionToken) took \(chord.displayGlyph) in your config." }
+    /// Word for word what the Shortcuts row shows (`ConfigDiagnostic.message`): the card and the row
+    /// describe one standing fact, and two phrasings of it read as two different problems.
+    var message: String { "\(chord.displayGlyph) goes to \(winner.actionToken)." }
 }
 
 /// Writing an answer to a conflict and reloading, so the card and the Shortcuts row share one path

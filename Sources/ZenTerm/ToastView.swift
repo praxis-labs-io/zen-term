@@ -61,7 +61,10 @@ final class ToastView: ShadowCardView {
     /// recolor them on a theme swap.
     private var shortcutSlots: [ShortcutSlot] = []
 
-    init(content: ToastContent, actions: [ToastAction], keyEquivalents: Bool = true) {
+    init(
+        content: ToastContent, actions: [ToastAction], keyEquivalents: Bool = true,
+        showsClose: Bool = false
+    ) {
         self.hasActions = !actions.isEmpty
         self.gatesFocus = keyEquivalents && !actions.isEmpty
         self.variant = content.variant
@@ -118,15 +121,6 @@ final class ToastView: ShadowCardView {
         header.orientation = .horizontal
         header.alignment = .centerY
         header.spacing = 6
-        if hasActions {
-            let close = IconButton(
-                symbol: "xmark", size: NSSize(width: 20, height: 20), pointSize: 10,
-                accessibilityLabel: "Dismiss"
-            ) { [weak self] in self?.onClose?() }
-            header.addArrangedSubview(close)
-            closeButton = close
-        }
-
         let col = NSStackView(views: [header, messageLabel])
         col.orientation = .vertical
         col.alignment = .leading
@@ -139,6 +133,21 @@ final class ToastView: ShadowCardView {
             let slot = ShortcutSlot(group: header, resolve: resolve)
             shortcutSlots.append(slot)
             slot.refresh()
+        }
+
+        // Last, so the × takes the trailing corner even on a card that also carries a keycap.
+        //
+        // Opt-in rather than "any card with buttons": the button does nothing unless its host wires
+        // `onClose`, and only the conflict card does. On by default it drew a dead × on the config
+        // notice, both attention toasts, the terminal-failure toast and every confirm, and a confirm
+        // gates keyboard focus, so clicking it left the card up and the terminal deaf (ZEN-368).
+        if showsClose {
+            let close = IconButton(
+                symbol: "xmark", size: NSSize(width: 20, height: 20), pointSize: 10,
+                accessibilityLabel: "Dismiss"
+            ) { [weak self] in self?.onClose?() }
+            header.addArrangedSubview(close)
+            closeButton = close
         }
 
         if !actions.isEmpty {

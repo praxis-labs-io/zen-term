@@ -8,6 +8,16 @@ import AppKit
 /// capturing keybind chip.
 final class KeybindHintBubble: ShadowCardView {
     private static let width: CGFloat = 220
+    /// The card's horizontal insets, and the reset icon's width plus the gap before it.
+    private static let insets: CGFloat = 28
+    private static let resetSlot: CGFloat = 34 + 8
+
+    /// How wide the input box lays out. The reset icon takes its slot out of the same row, so the
+    /// box is narrower whenever one is showing, and anything measured against the box has to use
+    /// this rather than the card's own width.
+    static func inputWidth(withReset: Bool) -> CGFloat {
+        width - insets - (withReset ? resetSlot : 0)
+    }
 
     private let previewHost = NSView()
     private let statusHost = NSView()
@@ -72,7 +82,10 @@ final class KeybindHintBubble: ShadowCardView {
         errorLabel.font = .systemFont(ofSize: 10, weight: .medium)
         errorLabel.textColor = Theme.current.chrome.destructive.nsColor
         errorLabel.alignment = .center
-        errorLabel.preferredMaxLayoutWidth = Self.width - 28
+        // Wraps at the box's width, not the card's. The label is pinned to the box below, and the two
+        // differ by the reset icon whenever it shows: a wider wrap computes one line too few and the
+        // tail of the reason is clipped, which is the half of the message that says why.
+        errorLabel.preferredMaxLayoutWidth = Self.inputWidth(withReset: true)
         errorLabel.isHidden = true
 
         // The reset sits beside the input rather than under it: it acts on the same thing the input

@@ -1,7 +1,7 @@
 import AppKit
 
 /// One Keybinds row: the action label and its chord as a focusable `KeybindChip`. The chip is the
-/// row's single focus stop — Return / Space / click begins capture, Backspace reverts to default,
+/// row's single focus stop — Return / Space / click begins capture, Backspace removes the shortcut,
 /// Up/Down move between rows, Left exits to the nav, Esc closes the card. An inline message under the
 /// row carries validation / conflict text.
 final class KeybindRow: NSView {

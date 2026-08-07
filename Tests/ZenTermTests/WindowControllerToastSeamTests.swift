@@ -47,6 +47,16 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         try String(contentsOf: tempRoot.appendingPathComponent("config"), encoding: .utf8)
     }
 
+    /// Pump the runloop for `seconds` of wall clock, past a spring-out and the stack collapse that
+    /// follows it. `RunLoop.run(mode:before:)` returns immediately when nothing is attached, so a
+    /// single call waits for nothing at all and an "it is still there" assertion holds either way.
+    private func settle(_ seconds: TimeInterval) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        }
+    }
+
     private func button(_ title: String, on toast: ToastView) throws -> AppButton {
         try XCTUnwrap(descendants(of: toast).compactMap { $0 as? AppButton }.first { $0.title == title })
     }
@@ -323,6 +333,26 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         XCTAssertEqual(titles, ["Accept"], "\(titles)")
     }
 
+    /// A card whose write fails must stay up. It used to dismiss first and ignore the result, so an
+    /// unwritable config read as a successful answer: the card slid away, nothing was written, and
+    /// no error appeared anywhere.
+    func test_conflictToast_aFailedWrite_leavesTheCardUp() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        let controller = makeController()
+        controller.showConflictToasts(KeybindConflict.all(in: .current))
+        // Make the config unwritable by putting a directory where the file belongs.
+        let file = tempRoot.appendingPathComponent("config")
+        try FileManager.default.removeItem(at: file)
+        try FileManager.default.createDirectory(at: file, withIntermediateDirectories: true)
+
+        try button("Accept", on: toastViews(in: controller)[0]).onTap()
+
+        // Past the spring-out, or a card that IS dismissing still counts and the assertion holds
+        // whether or not the fix is there.
+        settle(1.0)
+        XCTAssertEqual(toastViews(in: controller).count, 1, "the card stays, so it can be retried")
+    }
+
     /// Answering one card must leave the others alone. Re-showing the reduced set used to spring
     /// every survivor out and a replacement in, which read on screen as the stack dropping a good
     /// way down and settling back (ZEN-368).
@@ -374,6 +404,26 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         XCTAssertEqual(
             KeybindConflict.all(in: .current).map(\.loser), [.toggleCommandPalette],
             "and it is still outstanding, so the next launch raises it again")
+    }
+
+    /// The × is opt-in. It does nothing unless its host wires `onClose`, and only the conflict card
+    /// does, so an actionable card that never asked for one must not draw a dead button. A confirm
+    /// gates keyboard focus, so clicking a dead × there left the terminal deaf until Cancel was
+    /// found (ZEN-368).
+    func test_theDiagnosticsNotice_hasNoCloseAffordance() throws {
+        let controller = makeController()
+        let content = try XCTUnwrap(
+            ConfigDiagnostic.toast(for: [
+                ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .clamped(value: "200", to: "72"))
+            ]))
+
+        controller.showConfigDiagnosticsToast(content, landingScope: .setting(key: "font-size"))
+
+        let toast = toastViews(in: controller)[0]
+        XCTAssertFalse(descendants(of: toast).compactMap { $0 as? AppButton }.isEmpty, "it has buttons")
+        XCTAssertTrue(
+            descendants(of: toast).compactMap { $0 as? IconButton }.isEmpty,
+            "but no ×, because nothing here would answer it")
     }
 
     /// A passive toast has no buttons and dismisses on a body click, so a × there would be a second

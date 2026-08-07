@@ -59,9 +59,12 @@ final class ToastPresenter {
     /// input from the terminal. Returns the view so the caller can dismiss it when the notice
     /// stops being relevant. Call on the main thread.
     @discardableResult
-    func showSticky(_ content: ToastContent, actions: [ToastAction]) -> ToastView {
+    func showSticky(
+        _ content: ToastContent, actions: [ToastAction], showsClose: Bool = false
+    ) -> ToastView {
         dispatchPrecondition(condition: .onQueue(.main))  // fail fast on an accidental off-main call
-        let toast = ToastView(content: content, actions: actions, keyEquivalents: false)
+        let toast = ToastView(
+            content: content, actions: actions, keyEquivalents: false, showsClose: showsClose)
         stack.addArrangedSubview(toast)
         toast.animateIn()
         return toast

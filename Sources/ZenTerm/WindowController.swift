@@ -1383,25 +1383,33 @@ final class WindowController: NSObject {
             // `weak toast` for the reason the diagnostics notice uses it: the toast retains its
             // buttons, each button retains its `onTap`, and these closures reach back to the toast.
             weak var toast: ToastView?
+            // Take the card down only once the write lands. Dismissing first showed the card sliding
+            // away for a write that threw, so an unwritable config read as a successful answer and
+            // the conflict came back at the next launch with nothing having said why.
+            let answer = { [weak self] (resolve: (KeybindConflict) -> Bool) in
+                guard resolve(conflict) else { return }  // the resolver logged; the card stays, so it can be retried
+                toast.map { self?.toasts.dismiss($0) }
+            }
             var actions: [ToastAction] = []
             if conflict.isRevertable {
                 actions.append(
-                    ToastAction(title: "Revert", kind: .cancel) { [weak self] in
-                        toast.map { self?.toasts.dismiss($0) }
-                        KeybindConflictResolver.revert(conflict)
-                    })
+                    ToastAction(title: "Revert", kind: .cancel) { answer(KeybindConflictResolver.revert) })
             }
-            actions.append(
-                ToastAction(title: "Accept", kind: .primary) { [weak self] in
-                    toast.map { self?.toasts.dismiss($0) }
-                    KeybindConflictResolver.accept(conflict)
-                })
+            if conflict.isAcceptable {
+                actions.append(
+                    ToastAction(title: "Accept", kind: .primary) { answer(KeybindConflictResolver.accept) })
+            }
             let content = ToastContent(
                 variant: .warning, title: conflict.headline, message: conflict.message)
-            let shown = toasts.showSticky(content, actions: actions)
+            let shown = toasts.showSticky(content, actions: actions, showsClose: true)
             // The third exit: close it, change nothing, and meet it again next launch. Answering is
             // a write, and putting a card away must not be one (ZEN-368).
-            shown.onClose = { [weak self] in self?.toasts.dismiss(shown) }
+            //
+            // `weak toast`, not `shown`: this closure is stored ON the card, so capturing it strongly
+            // is a cycle. It would leak, and worse, `conflictToasts` holds the card weakly precisely
+            // so a hand-closed one drops out and can be raised again. A leaked card stays non-nil,
+            // is kept by the reconcile, and the conflict never comes back.
+            shown.onClose = { [weak self] in toast.map { self?.toasts.dismiss($0) } }
             toast = shown
             conflictToasts.append((conflict, WeakToast(value: shown)))
         }

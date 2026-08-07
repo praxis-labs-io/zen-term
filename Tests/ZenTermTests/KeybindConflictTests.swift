@@ -128,6 +128,57 @@ final class KeybindConflictTests: XCTestCase {
         XCTAssertEqual(KeybindConflict.all(in: reloaded).map(\.loser), [.searchSelection])
     }
 
+    /// Floats bind before user keybinds, so a `keybind =` line can take a float's chord and leave
+    /// the float as the loser. Accept would emit `toggle_float:<id>=none`, which the assembler
+    /// refuses by design, so the line sat inert and the card came back at every launch looking as
+    /// though it had been answered.
+    func test_aFloatAsTheLoser_cannotBeAccepted() throws {
+        let config = try load("float = title:lazygit command:lazygit key:cmd+y\nkeybind = new_tab=cmd+y\n")
+
+        let conflict = try XCTUnwrap(KeybindConflict.all(in: config).first)
+
+        XCTAssertEqual(conflict.winner, .newTab)
+        XCTAssertFalse(conflict.isAcceptable, "there is no line Accept could write that survives")
+        XCTAssertTrue(conflict.isRevertable, "but the keybind line that took it can go")
+    }
+
+    /// Neither answer applies, so there is nothing to put on a card. Two floats on one chord is a
+    /// config error the shared notice covers, not a question with buttons.
+    func test_aConflictWithNoAnswer_isNotReported() throws {
+        let config = try load(
+            "float = order:1 title:a command:a key:cmd+y\nfloat = order:2 title:b command:b key:cmd+y\n")
+
+        XCTAssertEqual(KeybindConflict.all(in: config), [])
+    }
+
+    /// Revert used to write the winner's default chord in, and `binds` is keyed by chord, so it
+    /// evicted whatever else held it. Here `new_tab` sits on ⌘F, which is `toggle_zoom`'s default;
+    /// reverting the palette's conflict must not cost the user their New Tab line.
+    func test_revert_leavesAnUnrelatedBindingAlone() throws {
+        let config = try load("keybind = toggle_zoom=cmd+p\nkeybind = new_tab=cmd+f\n")
+        let conflict = try XCTUnwrap(KeybindConflict.all(in: config).first)
+        XCTAssertEqual(conflict.loser, .toggleCommandPalette)
+
+        let text = try write(conflict.reverting(KeymapOverrides(config: config)))
+
+        XCTAssertTrue(text.contains("keybind = new_tab=cmd+f"), text)
+        XCTAssertFalse(text.contains("toggle_zoom"), text)
+        let reloaded = ConfigLoader.loadGeneralConfig(configRoot: tempRoot)
+        XCTAssertEqual(reloaded.keymap[Chord(command: true, key: "p")], .toggleCommandPalette)
+        XCTAssertEqual(reloaded.keymap[Chord(command: true, key: "f")], .newTab, "still the user's")
+    }
+
+    /// One standing fact, one sentence. The card and the Shortcuts row describe the same thing, and
+    /// two phrasings of it read as two different problems.
+    func test_theCardAndTheRow_useTheSameSentence() throws {
+        let config = try load("keybind = split_vertical=cmd+p\n")
+        let conflict = try XCTUnwrap(KeybindConflict.all(in: config).first)
+
+        let rowMessage = config.configDiagnostics.first { $0.scope == .keybind(.toggleCommandPalette) }?
+            .message
+        XCTAssertEqual(conflict.message, rowMessage)
+    }
+
     /// Reverting a keybind line must not touch a float line, which the writer does not own.
     func test_revert_leavesFloatLinesAlone() throws {
         let config = try load(

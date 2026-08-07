@@ -2,10 +2,10 @@ import AppKit
 
 /// The Keybinds settings section: remap the built-in actions. Each action's chord is a focusable
 /// `KeybindChip` — Return/click begins capture (a hint bubble appears and the next chord is diverted
-/// through the interceptor, so an already-bound chord isn't pre-empted), Backspace reverts to the
-/// default, ⌥Backspace leaves the action with none. Rebinds are ≥1-modifier, block-on-conflict,
-/// written via `ConfigWriter` and reloaded via `AppConfig` so they're live — no restart. A section
-/// reset returns everything to the defaults.
+/// through the interceptor, so an already-bound chord isn't pre-empted), and Backspace leaves the
+/// action with no shortcut at all. Reset-to-default is an icon in the capture popover. Rebinds are
+/// ≥1-modifier, block-on-conflict, written via `ConfigWriter` and reloaded via `AppConfig` so
+/// they're live — no restart. A section reset returns everything to the defaults.
 final class SettingsKeybindsSection: SettingsSection {
     var navTitle: String { "Shortcuts" }
     var onExitToNav: (() -> Void)?
@@ -276,7 +276,7 @@ final class SettingsKeybindsSection: SettingsSection {
     /// nothing to do.
     private func isAtDefault(_ action: KeyInterceptor.ReservedChord) -> Bool {
         !desired.unbound.contains(action)
-            && desired.chords(of: action) == Set(KeymapDefaults.map.filter { $0.value == action }.keys)
+            && desired.chords(of: action) == Set(KeymapDefaults.chords(of: action))
     }
 
     /// Apply a validated rebind, flash a success line, and close the popover after a short delay.
@@ -317,13 +317,13 @@ final class SettingsKeybindsSection: SettingsSection {
     private func reset(_ row: KeybindRow) {
         rebaseIfReloadDeferred()  // layer the reset on the reloaded set, never a pre-reload one
         let displaced = defaultChordConflict(for: row.action)
-        desired.bind(row.action, to: KeymapDefaults.map.filter { $0.value == row.action }.keys)
+        desired.bind(row.action, to: KeymapDefaults.chords(of: row.action))
         guard persist(reportingRow: row) else { return }  // persist reported the write error
         if let (chord, owner) = displaced { reportDisplacement(of: owner, losing: chord, to: row.action) }
         row.focusChip()  // keep focus on the row after the reload
     }
 
-    /// ⌥Backspace on a focused chip: leave the action with no shortcut at all, and write that down.
+    /// Backspace on a focused chip: leave the action with no shortcut at all, and write that down.
     ///
     /// Distinct from Backspace, which restores the default. Both are ways to stop using the chord
     /// you have; only this one records the intent, so the chord reaches the program in the pane and
@@ -357,9 +357,7 @@ final class SettingsKeybindsSection: SettingsSection {
     private func defaultChordConflict(
         for action: KeyInterceptor.ReservedChord
     ) -> (Chord, KeyInterceptor.ReservedChord)? {
-        KeymapDefaults.map
-            .filter { $0.value == action }
-            .keys
+        KeymapDefaults.chords(of: action)
             .sorted { $0.configToken < $1.configToken }  // deterministic: same chord named every time
             .lazy
             .compactMap { chord -> (Chord, KeyInterceptor.ReservedChord)? in
@@ -370,7 +368,7 @@ final class SettingsKeybindsSection: SettingsSection {
     }
 
     private func resetAll() {
-        desired = KeymapOverrides(binds: reservedEntries(of: KeymapDefaults.map))
+        desired = KeymapOverrides(defaults: KeymapDefaults.map)
         guard persist(reportingRow: rows.last) else { return }  // report a write error near the button
         resetAllMessage.flash("Defaults restored.")
     }
@@ -498,12 +496,6 @@ final class SettingsKeybindsSection: SettingsSection {
     }
 
     // MARK: helpers
-
-    private func reservedEntries(
-        of map: [Chord: KeyInterceptor.ReservedChord]
-    ) -> [Chord: KeyInterceptor.ReservedChord] {
-        map.filter { if case .toggleToolFloat = $0.value { return false } else { return true } }
-    }
 
     /// The chord shown for an action — from `desired` (the in-progress edit set), not the live
     /// keymap, so an unsaved edit renders. Same pick as the palette's: see `Chord.displayed`.

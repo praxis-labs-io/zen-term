@@ -177,6 +177,13 @@ extension KeyInterceptor.ReservedChord {
 /// Note the old `⌘⇧G → gitdash` line is intentionally absent — a float's chord now comes
 /// from its own `key:` field, so no float is built in.
 enum KeymapDefaults {
+    /// The chords `action` ships with. One accessor rather than the same `filter`/`keys` walk written
+    /// out at each call site: a row and the writer disagreeing about what an action's default *is*
+    /// is the shape of every silent bug in this area.
+    static func chords(of action: KeyInterceptor.ReservedChord) -> [Chord] {
+        map.filter { $0.value == action }.map(\.key)
+    }
+
     static let map: [Chord: KeyInterceptor.ReservedChord] = {
         var map: [Chord: KeyInterceptor.ReservedChord] = [:]
 
@@ -281,20 +288,39 @@ struct KeymapOverrides: Equatable {
         unbound.insert(action)
     }
 
+    /// Forget everything this set says about `action`, so the writer emits no line for it and the
+    /// assembler hands it its defaults on the next load.
+    ///
+    /// Distinct from `bind(_:to:)` with the defaults, which reaches the same end state by writing
+    /// chords in, and `binds` is keyed by chord: writing a default chord in evicts whatever else
+    /// held it. Distinct from `unbind` too, which records the absence rather than forgetting it.
+    mutating func clearOverride(_ action: KeyInterceptor.ReservedChord) {
+        binds = binds.filter { $0.value != action }
+        unbound.remove(action)
+    }
+
     /// The chords `action` holds here.
     func chords(of action: KeyInterceptor.ReservedChord) -> Set<Chord> {
         Set(binds.filter { $0.value == action }.map(\.key))
     }
 
-    /// What `config` resolves to, as the set a write regenerates the keybind block from. A float's
-    /// toggle is excluded: its chord lives on its own `float =` line, and emitting it here would
-    /// write a second copy that the two halves could then disagree about.
+    /// What `config` resolves to, as the set a write regenerates the keybind block from.
     init(config: GeneralConfig) {
-        self.init(
-            binds: config.keymap.filter {
-                if case .toggleToolFloat = $0.value { return false } else { return true }
-            },
-            unbound: config.unboundActions)
+        self.init(binds: Self.reserved(in: config.keymap), unbound: config.unboundActions)
+    }
+
+    /// Every action back on the chords it ships with, for "Reset all to defaults".
+    init(defaults: [Chord: KeyInterceptor.ReservedChord]) {
+        self.init(binds: Self.reserved(in: defaults))
+    }
+
+    /// A map without the float toggles. A float's chord lives on its own `float =` line, so emitting
+    /// it here would write a second copy that the two halves could then disagree about. One rule,
+    /// applied wherever a map becomes a set the writer may emit.
+    private static func reserved(
+        in map: [Chord: KeyInterceptor.ReservedChord]
+    ) -> [Chord: KeyInterceptor.ReservedChord] {
+        map.filter { if case .toggleToolFloat = $0.value { return false } else { return true } }
     }
 }
 
