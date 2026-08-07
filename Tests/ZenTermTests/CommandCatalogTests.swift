@@ -115,12 +115,13 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(entry!.shortcut, "", "Check for Updates has no default binding")
     }
 
-    /// The palette is the whole of how these three are reached out of the box, so a row that went
-    /// missing would take the action with it. ghostty puts them on ⌘K, ⌘J and ⌘⇧J, which are pane
-    /// nav and resize here, so they ship with no chord and the glyph column stays empty (ZEN-369).
-    func test_theThreeUnboundScreenActionsArePresentWithNoGlyph() {
+    /// The palette is the whole of how these four are reached out of the box, so a row that went
+    /// missing would take the action with it. ghostty puts three of them on ⌘K, ⌘J and ⌘⇧J, which
+    /// are pane nav and resize here. Select All is the fourth for a different reason: ⌘A is left
+    /// free for the Edit menu item ZEN-370 adds, rather than spent (ZEN-369).
+    func test_theUnboundScreenActionsArePresentWithNoGlyph() {
         let entries = CommandCatalog.commands(tabCount: 3)
-        for title in ["Clear Screen", "Scroll to Selection", "Write Screen to File"] {
+        for title in ["Clear Screen", "Scroll to Selection", "Write Screen to File", "Select All"] {
             let entry = entries.first { $0.title == title }
             XCTAssertNotNil(entry, "\(title) is unreachable without a palette row")
             XCTAssertEqual(entry?.shortcut, "", "\(title) has no default binding")
@@ -129,14 +130,15 @@ final class CommandCatalogTests: XCTestCase {
 
     func test_everyEntry_hasTitle_andShortcut() {
         // Every palette command shows its glyph, except the actions shipped deliberately unbound:
-        // Check for Updates (ZEN-20), Report an Issue (ZEN-212), and the three screen actions whose
-        // ghostty chords ZenTerm already spends elsewhere (ZEN-369).
+        // Check for Updates (ZEN-20), Report an Issue (ZEN-212), and the four screen actions whose
+        // chords ZenTerm either spends elsewhere or leaves to the menu bar (ZEN-369).
         let unbound: Set<String> = [
             KeyInterceptor.ReservedChord.checkForUpdates.actionToken,
             KeyInterceptor.ReservedChord.reportIssue.actionToken,
             KeyInterceptor.ReservedChord.clearScreen.actionToken,
             KeyInterceptor.ReservedChord.scrollToSelection.actionToken,
             KeyInterceptor.ReservedChord.writeScreenFile.actionToken,
+            KeyInterceptor.ReservedChord.selectAll.actionToken,
         ]
         for command in CommandCatalog.commands(tabCount: 9) {
             XCTAssertFalse(command.title.isEmpty)

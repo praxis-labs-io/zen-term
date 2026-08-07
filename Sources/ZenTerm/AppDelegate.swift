@@ -97,6 +97,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // One `keyController()` lookup per keystroke, not one per input: this runs on the hot path
         // and the two readings must come from the same window regardless.
         keys.passThroughGuard = { [weak self] chord, action in
+            // A text view holding the keyboard owns ⌘A and the ⌘⇧ arrows, and it is the only thing
+            // that implements them: the menu bar has no Select All (ZEN-369). Asked first because
+            // it does not depend on the window lookup below.
+            if TextEditingChords.owns(chord, firstResponder: NSApp.keyWindow?.firstResponder) {
+                return true
+            }
             let controller = self?.keyController()
             return NavGuard.shouldPassThrough(
                 chord: chord, action: action,

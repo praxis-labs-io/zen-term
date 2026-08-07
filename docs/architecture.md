@@ -797,17 +797,33 @@ close pane, ⌘T new tab, ⌘N new window, ⌘[ ⌘] tabs, ⌘1-9 select, ⌘B b
 palette, ⌘⇧P workspace picker, ⌘, settings, ⌘⌥R reload, ⌘= and ⌘+ and ⌘- font size,
 ⌘0 reset it. ZEN-367 added seven more on the chords libghostty already used for them:
 ⌘Home, ⌘End, ⌘PageUp, ⌘PageDown scroll the viewport, ⌘G and ⌘⇧G step a running
-search, ⌘E finds the selection. ZEN-369 added ⌘A select all, ⌘⇧V paste the selection,
-and the prompt jumps on ⌘⇧↑ and ⌘⇧↓.
+search, ⌘E finds the selection. ZEN-369 added ⌘⇧V paste the selection and the prompt
+jumps on ⌘⇧↑ and ⌘⇧↓.
 **No tool float is built in**; a float's chord comes from its own `key:` field.
 
-**Three actions ship with no chord**, and ZEN-369's are the first that ship unbound for
+**Four actions ship with no chord**, and ZEN-369's are the first that ship unbound for
 want of a key rather than for want of a use: libghostty puts Clear Screen on ⌘K, Scroll
 to Selection on ⌘J and Write Screen to File on ⌘⇧J, and those are pane nav and resize
 here. A chord the app leans on all day outranks one of these, so they sit in the
 palette and the Shortcuts card and take whatever chord the user would rather give up.
 (Check for Updates and Report an Issue are unbound for the older reason: the menu bar
 already carries them.)
+
+Select All is the fourth and its reason is different again: ⌘A is left **free**, not
+spent. AppKit serves Select All from an Edit menu item, and ZenTerm has never had one,
+so ⌘A does nothing in any field in the app. Claiming it for the keymap would make the
+terminal answer a chord every Mac user expects their caret to answer, and cement the
+gap. ZEN-370 adds the item, and a key equivalent in `MainMenu` is off limits to the
+keymap by construction, so the chord ends up the menu's either way.
+
+**Which chords a text view owns is a measured fact, not a guessed one.** ⌘⇧↑/⌘⇧↓ are
+`NSTextView`'s own bindings (extend selection to start and end of document) and ⌘A is
+not, which is the whole difference between the two cases above and is invisible from
+reading. `TextEditingChords` holds the set, `AppDelegate` consults it through the same
+`passThroughGuard` seam `NavGuard` returns through, and `TextEditingChordsTests` sends
+the keystroke to a real text view and reads its selection back rather than asserting on
+the predicate. A guard that answers "yes, defer" for a chord nothing downstream
+implements hands the keystroke to nobody, which looks identical to working.
 
 **Increase ships two chords, and the second is load-bearing.** ⌘+ on a US layout is
 physically ⌘⇧=, which `Chord` folds onto `=` because Shift is set, making it a

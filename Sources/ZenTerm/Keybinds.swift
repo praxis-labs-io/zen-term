@@ -292,7 +292,12 @@ enum KeymapDefaults {
         // them are ⌘K, ⌘J and ⌘⇧J, which are pane nav and resize here, and a chord the app leans on
         // all day is worth more than one of these. They are in the palette and the Shortcuts card,
         // one line from a chord the user picks.
-        map[Chord(command: true, key: "a")] = .selectAll
+        //
+        // Select All gets none either, and ⌘A is free rather than spent: AppKit serves Select All
+        // from an Edit menu item, which ZenTerm has never had, so ⌘A does nothing in any field in
+        // the app. Claiming it here would make the terminal answer a chord every Mac user expects
+        // their caret to answer, and cement the gap. ZEN-370 adds the menu item, and ⌘A belongs to
+        // it rather than to the keymap.
         map[Chord(command: true, shift: true, key: "v")] = .pasteSelection
         map[Chord(command: true, shift: true, key: "↑")] = .jumpToPreviousPrompt
         map[Chord(command: true, shift: true, key: "↓")] = .jumpToNextPrompt
