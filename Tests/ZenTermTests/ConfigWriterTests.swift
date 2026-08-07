@@ -181,11 +181,11 @@ final class ConfigWriterTests: XCTestCase {
         let loaded = ConfigLoader.loadGeneralConfig(configRoot: dir)
 
         var desired = KeymapOverrides(binds: loaded.keymap, unbound: loaded.unboundActions)
-        desired.bind(.splitVertical, to: [Chord(command: true, shift: true, key: "v")])
+        desired.bind(.splitVertical, to: [Chord(command: true, shift: true, key: "u")])
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
 
         let text = try read(dir)
-        XCTAssertTrue(text.contains("keybind = split_vertical=cmd+shift+v"), text)
+        XCTAssertTrue(text.contains("keybind = split_vertical=cmd+shift+u"), text)
         XCTAssertTrue(text.contains("keybind = find_next=none"), text)
     }
 
@@ -477,19 +477,25 @@ final class ConfigWriterTests: XCTestCase {
         // deleted. (Pre-ZEN-142 splitVertical shipped with two default chords and this guarded
         // that; canonicalization collapsed them to one, so the multi-chord case is now reachable
         // only from config — which is exactly where it still has to hold.)
+        // The extra has to be a chord no default holds, or narrowing back does not leave it nil:
+        // it falls to whichever action ships on it. It was ⌘⇧V until ZEN-369 made that
+        // paste_selection.
+        XCTAssertNil(
+            KeymapDefaults.map[Chord(command: true, shift: true, key: "u")],
+            "a default claimed the fixture's extra chord; move the fixture to a free one")
         var desired = KeymapOverrides(binds: KeymapDefaults.map)
         desired.bind(
             .splitVertical,
             to: [
                 Chord(command: true, shift: true, key: "\\"),  // its default
-                Chord(command: true, shift: true, key: "v"),  // plus an extra
+                Chord(command: true, shift: true, key: "u"),  // plus an extra
             ])
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
         var text = try read(dir)
         XCTAssertTrue(text.contains("keybind = split_vertical=cmd+shift+\\"), text)
-        XCTAssertTrue(text.contains("keybind = split_vertical=cmd+shift+v"), text)
+        XCTAssertTrue(text.contains("keybind = split_vertical=cmd+shift+u"), text)
         XCTAssertEqual(
-            ConfigLoader.loadGeneralConfig(configRoot: dir).keymap[Chord(command: true, shift: true, key: "v")],
+            ConfigLoader.loadGeneralConfig(configRoot: dir).keymap[Chord(command: true, shift: true, key: "u")],
             .splitVertical)
 
         // Narrow back to the default alone: the action's set now equals the defaults, so nothing is
@@ -497,9 +503,9 @@ final class ConfigWriterTests: XCTestCase {
         desired.bind(.splitVertical, to: [Chord(command: true, shift: true, key: "\\")])
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
         text = try read(dir)
-        XCTAssertFalse(text.contains("split_vertical=cmd+shift+v"), text)
+        XCTAssertFalse(text.contains("split_vertical=cmd+shift+u"), text)
         let keymap = ConfigLoader.loadGeneralConfig(configRoot: dir).keymap
         XCTAssertEqual(keymap[Chord(command: true, shift: true, key: "\\")], .splitVertical)
-        XCTAssertNil(keymap[Chord(command: true, shift: true, key: "v")])  // the dropped chord is gone
+        XCTAssertNil(keymap[Chord(command: true, shift: true, key: "u")])  // the dropped chord is gone
     }
 }

@@ -7,11 +7,16 @@ import TerminalKit
 /// claim, so libghostty's keymap is live underneath ours the whole time. `BackendShadowSweepTests`
 /// pins what libghostty is left holding at all, and that is only half the picture: a user keybind moves its
 /// action, `KeymapAssembler` then drops that action's defaults, and the freed chord goes to the
-/// backend. Rebinding nav to `ctrl+hjkl` is what makes ⌘K clear the scrollback, and no build-time
-/// test can see it, because on a default install ⌘K is nav-up and the backend never gets it.
+/// backend. No build-time test can see that, because on a default install the chord is still ours.
 ///
 /// So this runs at load time instead, against a live surface, over whatever the user's config
 /// actually assembled to.
+///
+/// **It finds nothing today, and that is the point it has reached rather than a fault.** Rebinding
+/// nav to `ctrl+hjkl` used to make ⌘K clear the scrollback; ZEN-369 named `clear_screen` and unbound
+/// libghostty's copy, and it was the last chord a ZenTerm default could hand back. What survives in
+/// the backend is terminal encoding, which no default sits on. This stays because a ghostty pin bump
+/// can add a bind, and a freed chord is where that would first show.
 enum BackendShadow {
     /// A chord one of our defaults held that the config freed, and what the backend does with it now.
     struct FreedChord: Equatable {

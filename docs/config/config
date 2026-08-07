@@ -307,6 +307,10 @@
 # keybind = find_next=cmd+g                      # step a running search
 # keybind = find_previous=cmd+shift+g
 # keybind = search_selection=cmd+e               # find what you have selected
+# keybind = select_all=cmd+a
+# keybind = paste_selection=cmd+shift+v          # paste what you have selected
+# keybind = jump_to_previous_prompt=cmd+up       # cmd+shift+up does this too
+# keybind = jump_to_next_prompt=cmd+down         # cmd+shift+down too
 # keybind = toggle_workspace_picker=cmd+shift+p
 # keybind = toggle_command_palette=cmd+p
 # keybind = diff_viewer=cmd+d                    # diff of the focused repo
@@ -328,11 +332,14 @@
 #   ⌥←  ⌥→        move a word at a time
 #   ⇧ and an arrow, Home, End, Page Up or Page Down, extends a selection
 #
-# A few more are the terminal's for now and will become ZenTerm actions: ⌘A selects
-# the whole screen, ⌘↑ and ⌘↓ jump between prompts, ⌘⇧V pastes your last selection,
-# and ⌘⇧⌃J writes the screen to a file. Three sit under chords ZenTerm binds, so you
-# only meet them after moving ours off: ⌘K clears the screen, ⌘J scrolls to the
-# selection, ⌘⇧J writes the screen to a file and pastes the path.
+# Three actions ship with no shortcut, because the ones they would want are spent:
+#   clear_screen         clears the screen and the scrollback with it
+#   scroll_to_selection  moves the viewport to what you have selected
+#   write_screen_file    writes the screen to a file, then types the path for you
+#
+# They are in the command palette and the Shortcuts settings, or give one a chord
+# here. Nothing stops you taking the shortcut back off whatever holds it: put
+# nav_up somewhere else, and `keybind = clear_screen=cmd+k` is yours.
 #
 # ─── Scroll mode ─────────────────────────────────────────────────────────────
 #
@@ -360,10 +367,16 @@
 # you get the anchor back whenever the buffer moves under it, whether you scrolled or
 # a running command printed. Scroll to the block you want first, then select it.
 #
-# Four chords move the viewport without the mode, for when you want a look rather
+# Some chords move the viewport without the mode, for when you want a look rather
 # than a read: ⌘Home and ⌘End go to the ends of the buffer, ⌘Page Up and ⌘Page Down
-# move a screen at a time and repeat if you hold them. They work on the focused
-# drawer too.
+# move a screen at a time, and ⌘↑ and ⌘↓ walk between the prompts your shell marked.
+# All of them repeat if you hold them, and they work on the focused drawer too.
+#
+# ⌘↑ is not scroll mode's `{`, and both are worth having. `{` moves the cursor to a
+# blank line on screen; ⌘↑ moves the buffer, so it reaches a prompt that scrolled off
+# the top and does nothing when your whole session fits on one screen. Prompt marks
+# come from shell integration, so a shell that sets none leaves ⌘↑ with nothing to
+# find. ⌘⇧↑ and ⌘⇧↓ do the same thing, for a hand already holding Shift.
 #
 # ─── Find ────────────────────────────────────────────────────────────────────
 #
@@ -403,3 +416,21 @@
 # core reports which match is selected but never where it is. With several matches
 # on one screen it can land on the wrong one. The selected match is highlighted
 # differently, so you'll see it, and one `j` or `k` fixes it.
+#
+# ─── The screen ──────────────────────────────────────────────────────────────
+#
+# `select_all` (⌘A) selects the whole buffer, ready for ⌘C. It is the terminal's
+# own selection, the same one a mouse drag makes, so `scroll_to_selection` brings
+# the viewport back to where it starts.
+#
+# `paste_selection` (⌘⇧V) types what you have selected back into the pane. Either
+# kind counts, a mouse selection or a `v` selection from scroll mode, and with
+# nothing selected it does nothing. ⌘V is still what pastes the clipboard.
+#
+# `clear_screen` wipes the screen and the scrollback with it, the way `clear` does.
+# It leaves a full-screen program alone: vim and its kind draw on a second screen
+# that has no scrollback to clear.
+#
+# `write_screen_file` writes what is on screen to a file and types the path at your
+# prompt, so the next command has something to point at. Reach for it when a wall of
+# output is easier to grep than to read.

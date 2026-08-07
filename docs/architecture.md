@@ -50,11 +50,11 @@ sweep blind to half the keymap, which is the one thing it exists not to be.
 would do something and otherwise lets the key through. libghostty's
 `keyEventIsBinding` is a pure set lookup that does **not** evaluate that, which its
 own doc comment says outright, so a probe cannot resolve it and must not round it up
-to `claims`. `⌘K` is the proof: bound to `clear_screen`, and reaching vim because vim
-runs on the alternate screen, where clearing does nothing. On the primary screen it
-claims whether or not there is anything to clear, so the condition is the screen it
-is on rather than the work being done. The `⇧`-arrow selection binds are the same
-shape, on whether a selection exists.
+to `claims`. `clear_screen` is the proof: it reaches vim, because vim runs on the
+alternate screen where clearing does nothing, and on the primary screen it claims
+whether or not there is anything to clear. So the condition is the screen it is on
+rather than the work being done. The `⇧`-arrow selection binds are the same shape, on
+whether a selection exists, and they are still in the shadow for the sweep to meet.
 
 **ZenTerm unbinds most of libghostty's keymap, and `GhosttyUnboundChords` holds the
 decision (ZEN-365).** A bind is taken back when ZenTerm already has an action for it,
@@ -64,13 +64,21 @@ nothing happens. `GhosttyConfigWriter` emits one `keybind = <trigger>=unbind` li
 per chord, which is the only channel there is: libghostty takes configuration from
 files and has no setter API.
 
-What survives is `GhosttyUnboundChords.kept`, and it is two different things. Some is
-behavior ZenTerm has not named yet, held so nothing is lost before it is (⌘K clear,
-⌘A select all, ⌘J scroll to selection, jump-to-prompt, paste from selection, write
-screen file). The rest is terminal encoding rather than chrome
-action: `⌘←`/`⌘→` send `^A`/`^E`, `⌥←`/`⌥→` send `ESC b`/`ESC f`, `⇧`-arrows adjust a
-selection. A keystroke that turns into bytes for the program is not a shortcut, and
-those stay with the backend for good.
+What survives is `GhosttyUnboundChords.kept`, and since ZEN-369 it is one thing:
+terminal encoding rather than chrome action. `⌘←`/`⌘→` send `^A`/`^E`, `⌥←`/`⌥→` send
+`ESC b`/`ESC f`, `⇧`-arrows adjust a selection. A keystroke that turns into bytes for
+the program is not a shortcut, and those stay with the backend for good, so the list
+is finished rather than waiting on the next ticket.
+
+The behavior ZenTerm had not named yet is now named. ZEN-367 took the seven that rode
+seam methods the protocol already had; ZEN-369 took the last seven and grew the seam
+for them: `clearScreen`, `selectAll` and `writeScreenToFile` on `TerminalSurface`, and
+`.selection` and `.prompt(Int)` on `TerminalScroll`, since scrolling to a selection and
+jumping a prompt are viewport moves and the sign convention already covers them.
+Paste-the-selection needed nothing new, and could not have used what ghostty means by
+it: `paste_from_selection` reads the X11 selection clipboard, which macOS has none of,
+so with `supports_selection_clipboard` off it pasted what ⌘V pastes. The chrome reads
+the selection you can see, from both selection models, and pastes that.
 
 `BackendShadowSweepTests` walks the whole typeable chord space against a live surface
 and fails unless the surviving shadow is exactly `kept`. It replaced a baseline that
@@ -80,14 +88,20 @@ automatically a bug, but it must never be silent.
 
 **`BackendShadow` is the same question asked at load time, and it is the half a
 build-time test cannot reach.** A user keybind moves its action, `KeymapAssembler`
-drops that action's defaults, and the freed chord goes to the backend. Rebinding
-nav to `ctrl+hjkl` is what makes ⌘K clear the scrollback, and on a default install
-⌘K is nav-up so the backend never sees it. The shadow surface is a function of the
-user's config, not a constant. `AppDelegate` runs the report once the first window
-has a surface to ask through, and `ConfigApplier` re-runs it whenever the keymap
-changes, because the backend answers against its config as it stands now. It logs
-and shows nothing: the probe answers a disposition, not an action name, so the line
-can say the backend takes ⌘K but not what it does with it.
+drops that action's defaults, and the freed chord goes to the backend, which no
+build-time test can see because on a default install the chord is still ours. The
+shadow surface is a function of the user's config, not a constant. `AppDelegate` runs
+the report once the first window has a surface to ask through, and `ConfigApplier`
+re-runs it whenever the keymap changes, because the backend answers against its
+config as it stands now. It logs and shows nothing: the probe answers a disposition,
+not an action name, so a line can say the backend takes a chord but not what it does
+with it.
+
+**Since ZEN-369 it finds nothing, on any config.** Rebinding nav to `ctrl+hjkl` used
+to make ⌘K clear the scrollback; naming `clear_screen` and unbinding libghostty's copy
+was the last chord a ZenTerm default could hand back, and what survives down there is
+encoding no default sits on. The check stays as a regression guard: a pin bump that
+binds something under one of our defaults is invisible otherwise.
 
 It confirms the backend is answering before trusting an empty result, on ⌥←. A
 `TerminalSurface` exists before its backend surface does (`ghostty_surface_new` fails
@@ -783,8 +797,17 @@ close pane, ⌘T new tab, ⌘N new window, ⌘[ ⌘] tabs, ⌘1-9 select, ⌘B b
 palette, ⌘⇧P workspace picker, ⌘, settings, ⌘⌥R reload, ⌘= and ⌘+ and ⌘- font size,
 ⌘0 reset it. ZEN-367 added seven more on the chords libghostty already used for them:
 ⌘Home, ⌘End, ⌘PageUp, ⌘PageDown scroll the viewport, ⌘G and ⌘⇧G step a running
-search, ⌘E finds the selection.
+search, ⌘E finds the selection. ZEN-369 added ⌘A select all, ⌘⇧V paste the selection,
+and the prompt jumps on ⌘↑/⌘⇧↑ and ⌘↓/⌘⇧↓.
 **No tool float is built in**; a float's chord comes from its own `key:` field.
+
+**Three actions ship with no chord**, and ZEN-369's are the first that ship unbound for
+want of a key rather than for want of a use: libghostty puts Clear Screen on ⌘K, Scroll
+to Selection on ⌘J and Write Screen to File on ⌘⇧J, and those are pane nav and resize
+here. A chord the app leans on all day outranks one of these, so they sit in the
+palette and the Shortcuts card and take whatever chord the user would rather give up.
+(Check for Updates and Report an Issue are unbound for the older reason: the menu bar
+already carries them.)
 
 **Increase ships two chords, and the second is load-bearing.** ⌘+ on a US layout is
 physically ⌘⇧=, which `Chord` folds onto `=` because Shift is set, making it a
