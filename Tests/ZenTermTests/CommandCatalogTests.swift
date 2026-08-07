@@ -35,6 +35,7 @@ final class CommandCatalogTests: XCTestCase {
                 "New Tab", "Previous Tab", "Next Tab",
                 "Split Horizontally", "Split Vertically",
                 "Focus Pane Left", "Focus Pane Down", "Focus Pane Up", "Focus Pane Right",
+                "Focus Previous Pane", "Focus Next Pane",
                 "Resize Pane Left", "Resize Pane Down", "Resize Pane Up", "Resize Pane Right",
                 "Focus Mode", "Scroll Mode", "Find in Scrollback", "Find Selection",
                 "Scroll Page Up", "Scroll Page Down", "Scroll to Top", "Scroll to Bottom",

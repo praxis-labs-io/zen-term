@@ -262,7 +262,7 @@
 #
 # Actions (the full set):
 #   split_horizontal   split_vertical   close_pane
-#   nav_left  nav_right  nav_up  nav_down
+#   nav_left  nav_right  nav_up  nav_down  prev_pane  next_pane
 #   resize_left  resize_right  resize_up  resize_down
 #   new_tab  new_window  prev_tab  next_tab  select_tab_1 … select_tab_9
 #   toggle_bottom_drawer  toggle_right_drawer  toggle_focus_mode  fill_screen
@@ -289,6 +289,8 @@
 # keybind = nav_down=cmd+opt+down
 # keybind = nav_up=cmd+opt+up
 # keybind = nav_right=cmd+opt+right
+# keybind = prev_pane=cmd+shift+[               # step through the panes in order, wrapping
+# keybind = next_pane=cmd+shift+]
 # keybind = resize_left=cmd+ctrl+left
 # keybind = resize_down=cmd+ctrl+down
 # keybind = resize_up=cmd+ctrl+up
@@ -338,6 +340,9 @@
 # ⌃⌘F does nothing. Ghostty spells fullscreen that way as well as ⌘⏎, and ⌃⌘F is
 # macOS's own native-fullscreen chord, which this isn't: Fill Screen maximizes the
 # window without taking a space.
+#
+# Pane cycling takes ⌘⇧[ and ⌘⇧], which is Ghostty's tab cycling. Tabs are on the
+# unshifted pair here, so both bracket chords do something different from Ghostty.
 #
 # Every action holds exactly one shortcut, so there is one place to look when you
 # want to change something, and rebinding it moves the whole action.

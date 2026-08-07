@@ -23,6 +23,7 @@ final class KeyInterceptor {
     enum ReservedChord: Hashable {
         case splitVertical, splitHorizontal
         case navLeft, navRight, navUp, navDown
+        case prevPane, nextPane  // step through the tab's panels in order, wrapping (ZEN-372)
         case closePane
         case newTab, newWindow
         case selectTab(Int)  // 1...9

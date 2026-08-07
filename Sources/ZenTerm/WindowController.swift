@@ -1824,7 +1824,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Tool Float",
                         message: "Close \(activeFloatName ?? "the tool") first, then ⌘W."))
                 return
-            case .navLeft, .navRight, .navUp, .navDown,
+            case .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane,
                 .splitVertical, .splitHorizontal,
                 .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
                 .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom:
@@ -1849,6 +1849,8 @@ final class WindowController: NSObject {
         case .splitHorizontal:
             Log.info("pane split (horizontal)", category: .panes)
             active?.split(.horizontal)
+        case .prevPane: active?.cyclePane(-1)
+        case .nextPane: active?.cyclePane(1)
         case .navLeft: active?.navigate(.left)
         case .navRight: active?.navigate(.right)
         case .navUp: active?.navigate(.up)
