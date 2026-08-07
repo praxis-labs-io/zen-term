@@ -4,11 +4,12 @@ import AppKit
 /// chips share one width so the shortcuts read as a uniform column; the chord sits centered inside.
 /// At rest it looks like a plain `KeycapView`; focused it gains an accent ring; capturing it takes an
 /// accent fill (the section shows a branded popover). Return / Space / click begins capture,
-/// Backspace reverts to the default, Up/Down move rows, Left exits to nav; Esc closes the card
-/// (owned by the card root — see `ModalEscape`).
+/// Backspace leaves the action with no shortcut at all, Up/Down move rows, Left exits to nav; Esc
+/// closes the card (owned by the card root — see `ModalEscape`). Reset-to-default is a button in
+/// the capture popover.
 final class KeybindChip: NSView {
     var onActivate: (() -> Void)?  // Return / Space / click → begin capture
-    var onReset: (() -> Void)?  // Backspace → revert to default
+    var onRemove: (() -> Void)?  // Backspace → no shortcut at all
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onTab: (() -> Void)?
@@ -21,6 +22,10 @@ final class KeybindChip: NSView {
     private let host = NSView()
     private var isFocused = false { didSet { restyle() } }
     private(set) var isCapturing = false { didSet { restyle() } }
+    /// A mouse over the chip. Without it the only sign this is a target was the pointing-hand
+    /// cursor, which is a lot to ask of a row in a list of forty (ZEN-368).
+    private var isHovered = false { didSet { restyle() } }
+    private var trackingAreaRef: NSTrackingArea?
 
     init() {
         super.init(frame: .zero)
@@ -91,7 +96,11 @@ final class KeybindChip: NSView {
     override func keyDown(with event: NSEvent) {
         switch KeyboardFocus.key(for: event) {
         case .activate: onActivate?()  // return / enter / space → begin capture
-        case .delete: onReset?()  // backspace / forward-delete → revert (capture diverts keys, so safe)
+        // Delete means delete. It used to restore the default, which reads as doing nothing on the
+        // rows most likely to be pressed: an action whose default is the chord something else
+        // already holds gets it back and loses it again on the reload. Reset lives on a button in
+        // the capture popover now (ZEN-368).
+        case .delete: onRemove?()
         case .up: onArrowUp?()
         case .down: onArrowDown?()
         case .left: onExitToNav?()  // left → nav
@@ -108,12 +117,25 @@ final class KeybindChip: NSView {
 
     override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
 
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingAreaRef { removeTrackingArea(trackingAreaRef) }
+        let area = NSTrackingArea(
+            rect: bounds, options: [.mouseEnteredAndExited, .activeInKeyWindow], owner: self)
+        addTrackingArea(area)
+        trackingAreaRef = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { isHovered = true }
+    override func mouseExited(with event: NSEvent) { isHovered = false }
+
     private func restyle() {
         let chrome = Theme.current.chrome
         let fill: NSColor
         if isCapturing {
             fill = chrome.accent.nsColor.withAlphaComponent(0.14)
-        } else if isFocused {
+        } else if isFocused || isHovered {
+            // Hover and focus share a fill; the accent ring below is what still tells them apart.
             fill = chrome.ink(alpha: 0.10)
         } else {
             fill = chrome.ink(alpha: 0.06)

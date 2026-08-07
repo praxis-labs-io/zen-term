@@ -101,9 +101,8 @@ final class ConfigWriterTests: XCTestCase {
         let dir = try makeTempDir()
         try seed("# ─── Keybinds ───\n", in: dir)
         // Move the command palette to cmd+shift+o; keep everything else at its default.
-        var desired = KeymapDefaults.map
-        desired = desired.filter { $0.value != .toggleCommandPalette }  // drop its default chord
-        desired[Chord(command: true, shift: true, key: "o")] = .toggleCommandPalette
+        var desired = KeymapOverrides(binds: KeymapDefaults.map)
+        desired.bind(.toggleCommandPalette, to: [Chord(command: true, shift: true, key: "o")])
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
         let text = try read(dir)
         XCTAssertTrue(text.contains("keybind = toggle_command_palette=cmd+shift+o"), text)
@@ -114,7 +113,8 @@ final class ConfigWriterTests: XCTestCase {
     func test_keybind_resetAll_removesReservedKeybindLines() throws {
         let dir = try makeTempDir()
         try seed("theme = x\nkeybind = toggle_zoom=cmd+shift+z\n", in: dir)
-        try ConfigWriter.apply(keybinds: KeymapDefaults.map, configRoot: dir)  // all defaults → no overrides
+        try ConfigWriter.apply(
+            keybinds: KeymapOverrides(binds: KeymapDefaults.map), configRoot: dir)  // all defaults → no overrides
         let text = try read(dir)
         XCTAssertFalse(text.contains("keybind = "), text)
         XCTAssertTrue(text.contains("theme = x"), text)
@@ -123,7 +123,8 @@ final class ConfigWriterTests: XCTestCase {
     func test_keybind_preservesFloatKeybindLines() throws {
         let dir = try makeTempDir()
         try seed("keybind = toggle_float:dev=cmd+shift+d\nkeybind = toggle_zoom=cmd+shift+z\n", in: dir)
-        try ConfigWriter.apply(keybinds: KeymapDefaults.map, configRoot: dir)  // reset reserved to defaults
+        try ConfigWriter.apply(
+            keybinds: KeymapOverrides(binds: KeymapDefaults.map), configRoot: dir)  // reset reserved to defaults
         let text = try read(dir)
         XCTAssertTrue(text.contains("keybind = toggle_float:dev=cmd+shift+d"), text)  // float bind kept
         XCTAssertFalse(text.contains("toggle_zoom"), text)  // reserved override dropped
@@ -132,17 +133,84 @@ final class ConfigWriterTests: XCTestCase {
     func test_keybind_leavesFloatDefinitionLinesUntouched() throws {
         let dir = try makeTempDir()
         try seed("float = title:dev command:\"npm run dev\" key:cmd+shift+d\n", in: dir)
-        var desired = KeymapDefaults.map.filter { $0.value != .toggleZoom }
-        desired[Chord(command: true, shift: true, key: "z")] = .toggleZoom
+        var desired = KeymapOverrides(binds: KeymapDefaults.map)
+        desired.bind(.toggleZoom, to: [Chord(command: true, shift: true, key: "z")])
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
         let text = try read(dir)
         XCTAssertTrue(text.contains("float = title:dev command:\"npm run dev\" key:cmd+shift+d"), text)
     }
 
+    // MARK: unbinding (ZEN-368)
+
+    func test_keybind_unboundAction_emitsANoneLine() throws {
+        let dir = try makeTempDir()
+        var desired = KeymapOverrides(binds: KeymapDefaults.map)
+        desired.unbind(.findNext)
+        try ConfigWriter.apply(keybinds: desired, configRoot: dir)
+        let text = try read(dir)
+        XCTAssertTrue(text.contains("keybind = find_next=none"), text)
+        XCTAssertEqual(text.components(separatedBy: "\n").filter { $0.hasPrefix("keybind = ") }.count, 1)
+    }
+
+    /// Write, read, write. The second write regenerates the whole block from what the parser handed
+    /// back, so a line the parser cannot represent is a line the second write deletes. This is the
+    /// reason `KeymapOverrides` exists at all: with `unbound` absent, the action reads as "at its
+    /// defaults" and its line vanishes on the next Settings edit.
+    func test_keybind_unboundAction_survivesAReadAndRewrite() throws {
+        let dir = try makeTempDir()
+        var desired = KeymapOverrides(binds: KeymapDefaults.map)
+        desired.unbind(.findNext)
+        try ConfigWriter.apply(keybinds: desired, configRoot: dir)
+
+        let reloaded = ConfigLoader.loadGeneralConfig(configRoot: dir)
+        XCTAssertEqual(reloaded.unboundActions, [.findNext])
+        XCTAssertFalse(reloaded.keymap.values.contains(.findNext))
+        try ConfigWriter.apply(
+            keybinds: KeymapOverrides(binds: reloaded.keymap, unbound: reloaded.unboundActions),
+            configRoot: dir)
+
+        let rewritten = try read(dir)
+        XCTAssertTrue(rewritten.contains("keybind = find_next=none"), rewritten)
+    }
+
+    /// The ticket's "done when", spelled as the user hits it: Find Next is unbound in the file, then
+    /// an unrelated row is rebound in Settings. The rebind must not carry the unbind away with it.
+    func test_keybind_rebindingOneAction_leavesAnotherActionsUnbindOnDisk() throws {
+        let dir = try makeTempDir()
+        try seed("keybind = find_next=none\n", in: dir)
+        let loaded = ConfigLoader.loadGeneralConfig(configRoot: dir)
+
+        var desired = KeymapOverrides(binds: loaded.keymap, unbound: loaded.unboundActions)
+        desired.bind(.splitVertical, to: [Chord(command: true, shift: true, key: "v")])
+        try ConfigWriter.apply(keybinds: desired, configRoot: dir)
+
+        let text = try read(dir)
+        XCTAssertTrue(text.contains("keybind = split_vertical=cmd+shift+v"), text)
+        XCTAssertTrue(text.contains("keybind = find_next=none"), text)
+    }
+
+    /// Binding an unbound action back has to take the line away, or the file says both things and
+    /// the assembler has to keep picking a winner.
+    func test_keybind_bindingAnUnboundActionBack_dropsTheNoneLine() throws {
+        let dir = try makeTempDir()
+        try seed("keybind = find_next=none\n", in: dir)
+        let loaded = ConfigLoader.loadGeneralConfig(configRoot: dir)
+
+        var desired = KeymapOverrides(binds: loaded.keymap, unbound: loaded.unboundActions)
+        desired.bind(.findNext, to: [Chord(command: true, key: "g")])  // back to its default
+        try ConfigWriter.apply(keybinds: desired, configRoot: dir)
+
+        let text = try read(dir)
+        XCTAssertFalse(text.contains("find_next"), text)
+        XCTAssertEqual(
+            ConfigLoader.loadGeneralConfig(configRoot: dir).keymap[Chord(command: true, key: "g")],
+            .findNext)
+    }
+
     func test_keybind_roundTripsThroughAssembler() throws {
         let dir = try makeTempDir()
-        var desired = KeymapDefaults.map.filter { $0.value != .toggleZoom }
-        desired[Chord(command: true, shift: true, key: "z")] = .toggleZoom
+        var desired = KeymapOverrides(binds: KeymapDefaults.map)
+        desired.bind(.toggleZoom, to: [Chord(command: true, shift: true, key: "z")])
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
         let keymap = ConfigLoader.loadGeneralConfig(configRoot: dir).keymap
         XCTAssertEqual(keymap[Chord(command: true, shift: true, key: "z")], .toggleZoom)
@@ -229,7 +297,7 @@ final class ConfigWriterTests: XCTestCase {
             "the rename drops the old id, leaving exactly one float — not a duplicate")
     }
 
-    // MARK: float order (ZEN-145)
+    // MARK: float order (ZEN-81)
 
     /// Reordering only renumbers: every float's line stays exactly where it was, and the comments,
     /// blanks, and unrelated keys around it are untouched. That's the payoff of `order:` being a field
@@ -409,9 +477,13 @@ final class ConfigWriterTests: XCTestCase {
         // deleted. (Pre-ZEN-142 splitVertical shipped with two default chords and this guarded
         // that; canonicalization collapsed them to one, so the multi-chord case is now reachable
         // only from config — which is exactly where it still has to hold.)
-        var desired = KeymapDefaults.map.filter { $0.value != .splitVertical }
-        desired[Chord(command: true, shift: true, key: "\\")] = .splitVertical  // its default
-        desired[Chord(command: true, shift: true, key: "v")] = .splitVertical  // plus an extra
+        var desired = KeymapOverrides(binds: KeymapDefaults.map)
+        desired.bind(
+            .splitVertical,
+            to: [
+                Chord(command: true, shift: true, key: "\\"),  // its default
+                Chord(command: true, shift: true, key: "v"),  // plus an extra
+            ])
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
         var text = try read(dir)
         XCTAssertTrue(text.contains("keybind = split_vertical=cmd+shift+\\"), text)
@@ -422,7 +494,7 @@ final class ConfigWriterTests: XCTestCase {
 
         // Narrow back to the default alone: the action's set now equals the defaults, so nothing is
         // written — and the assembler's defaults must stand on their own.
-        desired[Chord(command: true, shift: true, key: "v")] = nil
+        desired.bind(.splitVertical, to: [Chord(command: true, shift: true, key: "\\")])
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
         text = try read(dir)
         XCTAssertFalse(text.contains("split_vertical=cmd+shift+v"), text)

@@ -204,7 +204,7 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
     /// `.function` and `.numericPad` are NOT decoration: macOS sets both on every arrow event, and
     /// omitting them is how a reorder that was dead in the app once passed four green tests —
     /// masking with `deviceIndependentFlagsMask` keeps those bits, so the comparison with `.option`
-    /// never matched a real keystroke (ZEN-145).
+    /// never matched a real keystroke (ZEN-81).
     private func arrow(_ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags = []) -> NSEvent {
         NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: modifiers.union([.function, .numericPad]),

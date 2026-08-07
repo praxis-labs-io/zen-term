@@ -9,7 +9,7 @@ struct ToolFloat: Equatable {
     /// authored and never stored in the config. It keys the live-float registry, the toolbar button
     /// map, and `toggle_float:<id>` keybinds, and it's how `ConfigWriter` finds a float's line. Identity
     /// tracks the title rather than `order` because a title is a property of the tool and changes only
-    /// by deliberate rename, while order is a property of the list and changes routinely (ZEN-145).
+    /// by deliberate rename, while order is a property of the list and changes routinely (ZEN-81).
     let id: String
     /// Position in the toolbar, the palette, and Settings — the config `order:`, defaulting to the
     /// float's line order in the file. A `var` because reordering resequences a whole list of

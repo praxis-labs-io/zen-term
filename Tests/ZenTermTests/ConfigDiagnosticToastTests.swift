@@ -3,9 +3,14 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The reload notice for keybind conflicts (ZEN-142). The inline note on a Keybinds row only
-/// reaches someone already looking at that row — a user who broke their config by hand has no
-/// reason to go there, so the reload has to announce itself.
+/// The reload notice for config problems (ZEN-142). The inline note on a Settings row only reaches
+/// someone already looking at that row, and a user who broke their config by hand has no reason to
+/// go there, so the reload has to announce itself.
+///
+/// `.chordTaken` is not among them (ZEN-368). A chord conflict carries its own answer, so it gets a
+/// card each with Accept and Revert rather than a line in this shared list. Its sentence still
+/// renders here, because the row and that card both show it; `ConfigApplierDiagnosticFilterTests`
+/// holds it out of the shared notice.
 final class ConfigDiagnosticToastTests: XCTestCase {
     private var tempRoot: URL!
 
@@ -36,6 +41,18 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         diagnostic(.splitVertical, lost: Chord(command: true, shift: true, key: "\\"), to: .toggleZoom)
     }
 
+    /// A problem that does reach a toast: a keybind line on a chord the menu bar owns. The announce
+    /// gate is about these.
+    private var paletteOnAMenuChord: ConfigDiagnostic {
+        ConfigDiagnostic(
+            scope: .keybind(.toggleCommandPalette),
+            problem: .menuBind(Chord(command: true, key: "q"), menuItem: "Quit"))
+    }
+
+    private var newTabUnusableBind: ConfigDiagnostic {
+        ConfigDiagnostic(scope: .keybind(.newTab), problem: .unusableBind(Chord(command: true, key: "|")))
+    }
+
     private var newTabLostCmdT: ConfigDiagnostic {
         diagnostic(.newTab, lost: Chord(command: true, key: "t"), to: .toggleToolFloat("btop"))
     }
@@ -50,26 +67,26 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     // is the one thing that can silently suppress the whole feature, so it gets a truth table.
 
     func test_announce_newConflict_speaksUp() {
-        let one = [splitVerticalLostBackslash]
+        let one = [paletteOnAMenuChord]
         XCTAssertNotNil(ConfigDiagnostic.announcement(for: one, alreadyAnnounced: []))
     }
 
     func test_announce_sameConflictTwice_staysQuiet() {
         // A Settings rebind reloads the config; re-announcing an unchanged conflict on every edit
         // would nag, and the Keybinds row already says it inline.
-        let one = [splitVerticalLostBackslash]
+        let one = [paletteOnAMenuChord]
         XCTAssertNil(ConfigDiagnostic.announcement(for: one, alreadyAnnounced: one))
     }
 
     func test_announce_aChangedConflictSet_speaksUpAgain() {
-        let before = [splitVerticalLostBackslash]
-        let after = before + [newTabLostCmdT]
+        let before = [paletteOnAMenuChord]
+        let after = before + [newTabUnusableBind]
         XCTAssertNotNil(ConfigDiagnostic.announcement(for: after, alreadyAnnounced: before))
     }
 
     func test_announce_conflictResolved_staysQuiet() {
         // Fixing the config shouldn't toast "all clear" — the chip coming back says it.
-        let before = [splitVerticalLostBackslash]
+        let before = [paletteOnAMenuChord]
         XCTAssertNil(ConfigDiagnostic.announcement(for: [], alreadyAnnounced: before))
     }
 
@@ -80,23 +97,32 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     func test_oneProblem_keepsTheFullSentence() throws {
         // A single problem has no list to be terse for, and its title isn't doing the framing a
         // count does — so it says where this came from.
-        let content = try XCTUnwrap(ConfigDiagnostic.toast(for: [splitVerticalLostBackslash]))
+        let content = try XCTUnwrap(ConfigDiagnostic.toast(for: [newTabUnusableBind]))
         XCTAssertEqual(content.variant, .warning, "a working-but-surprising config is a warning, not a failure")
-        XCTAssertEqual(content.title, "Split Vertically has no shortcut")
-        XCTAssertEqual(content.message, "⌘⇧\\ went to toggle_focus_mode in your config.")
+        XCTAssertEqual(content.title, "New Tab has an unusable shortcut")
+        XCTAssertEqual(content.message, "new_tab=cmd+| can't be typed on your keyboard. Ignoring it.")
+    }
+
+    /// The sentence a chord conflict carries. Present tense and no "in your config": the row and
+    /// the card both show it beside the two buttons that answer it (ZEN-368).
+    func test_chordTaken_readsAsAStandingState() {
+        XCTAssertEqual(splitVerticalLostBackslash.message, "⌘⇧\\ goes to toggle_focus_mode.")
+        XCTAssertTrue(splitVerticalLostBackslash.isChordConflict, "it gets its own card")
+        XCTAssertFalse(newTabUnusableBind.isChordConflict)
+        XCTAssertFalse(paletteOnAMenuChord.isChordConflict)
     }
 
     func test_severalProblems_areOneCompactLineEach() throws {
-        let content = try XCTUnwrap(ConfigDiagnostic.toast(for: [splitVerticalLostBackslash, newTabLostCmdT]))
+        let content = try XCTUnwrap(ConfigDiagnostic.toast(for: [paletteOnAMenuChord, newTabUnusableBind]))
         XCTAssertEqual(content.title, "2 problems in your config")
         XCTAssertEqual(
             content.message,
             """
-            Split Vertically
-              ⌘⇧\\ → toggle_focus_mode
+            Command Palette
+              cmd+q → Quit
 
             New Tab
-              ⌘T → toggle_float:btop
+              cmd+| can't be typed
             """)
         XCTAssertFalse(
             content.message.contains("in your config"),

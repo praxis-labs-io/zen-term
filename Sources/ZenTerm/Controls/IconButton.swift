@@ -31,13 +31,21 @@ final class IconButton: NSView {
     /// hover time so its keybind reflects the live keymap (ZEN-42). Shared with `TabBarView.Chip`.
     private let tooltip: TooltipHost
 
+    /// Whether the button carries a faint fill at rest instead of reading as a bare glyph. Off by
+    /// default, which is every toolbar and tab-bar button: they sit on chrome and earn their box on
+    /// hover. On for a button standing beside an input it has to match the weight of, where a bare
+    /// glyph reads as decoration rather than a control (ZEN-368).
+    private let restsFilled: Bool
+
     init(
         symbol: String, size: NSSize = NSSize(width: 24, height: 24),
         pointSize: CGFloat = 12, weight: NSFont.Weight = .medium,
         accessibilityLabel label: String, shortcut: (() -> String?)? = nil,
+        restsFilled: Bool = false,
         onClick: @escaping () -> Void
     ) {
         self.onClick = onClick
+        self.restsFilled = restsFilled
         tooltip = TooltipHost(label: label, shortcut: shortcut)
         super.init(frame: .zero)
         wantsLayer = true
@@ -129,7 +137,8 @@ final class IconButton: NSView {
         } else if isHovered {
             bg = Theme.current.chrome.ink(alpha: 0.10); tint = Theme.current.chrome.ink(alpha: 0.95)
         } else {
-            bg = .clear; tint = Theme.current.chrome.ink(alpha: 0.55)
+            bg = restsFilled ? Theme.current.chrome.ink(alpha: 0.06) : .clear
+            tint = Theme.current.chrome.ink(alpha: 0.55)
         }
         if let layer { Motion.ease(layer, keyPath: "backgroundColor", to: bg.cgColor) }
         icon.contentTintColor = tint  // NSImageView tint isn't layer-animatable; the shift is barely visible

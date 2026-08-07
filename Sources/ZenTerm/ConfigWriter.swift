@@ -13,7 +13,7 @@ enum ConfigWriter {
     static func apply(
         scalars: [String: String] = [:],
         removals: Set<String> = [],
-        keybinds: [Chord: KeyInterceptor.ReservedChord]? = nil,
+        keybinds: KeymapOverrides? = nil,
         floatUpserts: [ToolFloat] = [],
         floatRemovals: Set<String> = [],
         configRoot: URL = ConfigLoader.defaultRoot
@@ -68,7 +68,7 @@ enum ConfigWriter {
         lines.removeAll { activeAssignmentKey($0) == key }
     }
 
-    // MARK: keybinds (implemented in Task 3)
+    // MARK: keybinds
 
     /// Regenerate the reserved `keybind =` block from the desired keymap. Diffs per *action*: an
     /// action whose chord set differs from its `KeymapDefaults` set emits a line for *every* one of
@@ -79,21 +79,24 @@ enum ConfigWriter {
     /// set emits nothing. Preserves existing `keybind = toggle_float:…` lines (float-owned, edited
     /// only via `float =`) and drops every other existing `keybind =` line. The block lands where
     /// the first `keybind =` line was; if there were none, after the `Keybinds` header, else appended.
-    private static func applyKeybinds(
-        _ keybinds: [Chord: KeyInterceptor.ReservedChord], to lines: inout [String]
-    ) {
+    ///
+    /// An unbound action emits `= none` and needs no exclusion from the chord diff above: it holds
+    /// no chord, so it never enters that loop. Emitted even when the action ships with no default
+    /// chord and the line is therefore inert, because the user wrote it and this block is the only
+    /// place it lives (ZEN-368).
+    private static func applyKeybinds(_ keybinds: KeymapOverrides, to lines: inout [String]) {
         let floatBinds = lines.filter(isFloatKeybindLine)
 
         // Per-action diff: emit a chord's line when that action's whole desired set differs from its
         // default set. (`ReservedChord` has associated values so it can't key a dictionary — compare
         // the two sets by filtering. n is tiny.) Iterating every chord of a differing action emits
         // all of them; an action at its defaults emits nothing.
-        let overrides =
-            keybinds
-            .filter { _, action in chords(of: action, in: keybinds) != chords(of: action, in: KeymapDefaults.map) }
+        let rebinds =
+            keybinds.binds
+            .filter { _, action in keybinds.chords(of: action) != chords(of: action, in: KeymapDefaults.map) }
             .map { chord, action in "keybind = \(action.actionToken)=\(chord.configToken)" }
-            .sorted()
-        let block = floatBinds + overrides
+        let unbinds = keybinds.unbound.map { "keybind = \($0.actionToken)=none" }
+        let block = floatBinds + (rebinds + unbinds).sorted()
 
         var result: [String] = []
         var inserted = false
@@ -118,7 +121,8 @@ enum ConfigWriter {
         lines = result
     }
 
-    /// The set of chords bound to `action` in `map` — for the per-action diff in `applyKeybinds`.
+    /// The set of chords bound to `action` in `map`: the `KeymapDefaults` half of the per-action
+    /// diff in `applyKeybinds`. The desired half is `KeymapOverrides.chords(of:)`.
     private static func chords(
         of action: KeyInterceptor.ReservedChord, in map: [Chord: KeyInterceptor.ReservedChord]
     ) -> Set<Chord> {
@@ -166,7 +170,7 @@ enum ConfigWriter {
 
     /// Persist `floats` in the order given, stamping `order:` across all of them, 1…N. Stamping every
     /// float (not just the ones that moved) is what lets a config with no `order:` fields at all — the
-    /// only kind that existed before ZEN-145 — become a full contiguous sequence on the first reorder,
+    /// only kind that existed before ZEN-81 — become a full contiguous sequence on the first reorder,
     /// instead of a mix where some floats sort by an explicit number and the rest by line position.
     ///
     /// No line moves: every id is unchanged, so each float's line is rewritten where it already sits
@@ -190,7 +194,7 @@ enum ConfigWriter {
     /// upsert(new) in one call, and since the new id was never in the file there's no line to replace —
     /// so it would otherwise land at the end of the block. That silently moves the float: on reload,
     /// floats with no `order:` of their own take their order from line position, so the ones that were
-    /// below it inherit the slot it left and it slides down the dock (ZEN-145).
+    /// below it inherit the slot it left and it slides down the dock (ZEN-81).
     private static func applyFloats(upserts: [ToolFloat], removals: Set<String>, in lines: inout [String]) {
         var vacated: Int?
         if !removals.isEmpty {

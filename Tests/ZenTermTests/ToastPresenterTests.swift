@@ -4,7 +4,7 @@ import XCTest
 @testable import ZenTerm
 
 /// Coverage for `ToastPresenter`'s lifecycle + the "sticky toast never steals input" guarantee
-/// (ZEN-106). The key-equivalent assertions matter: a sticky/passive toast that armed Return/Esc
+/// (ZEN-143). The key-equivalent assertions matter: a sticky/passive toast that armed Return/Esc
 /// would hijack those keys from the focused terminal.
 @MainActor
 final class ToastPresenterTests: WindowTestCase {

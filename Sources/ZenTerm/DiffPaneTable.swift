@@ -459,7 +459,7 @@ final class DiffPaneTable: NSView {
     }
 
     /// The modifiers a chord may claim. Everything else AppKit stamps on an event (`.function`,
-    /// `.numericPad`) is noise that must be masked off before comparing (ZEN-145).
+    /// `.numericPad`) is noise that must be masked off before comparing (ZEN-81).
     static let reservableModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
 
     /// The vim keys the diff pane claims while it holds first responder (ZEN-227). Nothing reaches a

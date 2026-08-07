@@ -1317,7 +1317,7 @@ final class WindowController: NSObject {
 
     /// Present the config-diagnostics reload notice as a sticky, actionable toast (ZEN-7): a primary
     /// "Open Settings" that lands on the first problem's section, plus a Dismiss. Non-modal — it arms
-    /// no key equivalents, so it never steals input from the terminal (ZEN-106). `landingScope` is the
+    /// no key equivalents, so it never steals input from the terminal (ZEN-143). `landingScope` is the
     /// scope the primary button opens; the caller passes the first diagnostic's.
     func showConfigDiagnosticsToast(_ content: ToastContent, landingScope: ConfigDiagnostic.Scope) {
         // `weak` breaks the retain cycle the strong-capture idiom would form: the toast retains its
@@ -1344,6 +1344,99 @@ final class WindowController: NSObject {
     /// The config-problems notice this window is showing, if any. Weak: the presenter's stack owns
     /// it, and a user dismissal must leave nothing to retract.
     private weak var configDiagnosticsToast: ToastView?
+
+    /// A weak handle to a card, so the array below can hold several without owning any. Swift has no
+    /// weak array element, and a strong one here would keep a closed card alive for the window's
+    /// lifetime. Local on purpose: one array needs this, not the app.
+    private struct WeakToast {
+        weak var value: ToastView?
+    }
+
+    /// The conflict cards this window is showing, each paired with what it is about. Held weakly for
+    /// the same reason the single notice above is: the presenter's stack owns them, and a card the
+    /// user closed must leave nothing behind to retract.
+    private var conflictToasts: [(conflict: KeybindConflict, toast: WeakToast)] = []
+
+    /// One sticky card per outstanding chord conflict, each carrying the two answers (ZEN-368).
+    ///
+    /// One per conflict rather than a list in a single card, because each is a separate decision:
+    /// aggregating them would make one Accept settle three lines the user was asked about once.
+    ///
+    /// Revert is offered only when a `keybind =` line took the chord. A float's `key:` is required,
+    /// so there is nothing to back out to, and a card that offered it would be lying.
+    func showConflictToasts(_ conflicts: [KeybindConflict]) {
+        // Reconcile rather than rebuild. Answering a card writes, which reloads, which lands back
+        // here with one fewer conflict: tearing the stack down and re-showing it sprang every
+        // surviving card out and a new one in, so the remaining cards visibly dropped and settled.
+        // A card the user did not touch should not move (ZEN-368).
+        var kept: [(conflict: KeybindConflict, toast: WeakToast)] = []
+        for entry in conflictToasts {
+            guard let toast = entry.toast.value else { continue }  // already closed by hand
+            if conflicts.contains(entry.conflict) {
+                kept.append(entry)
+            } else {
+                toasts.dismiss(toast)
+            }
+        }
+        conflictToasts = kept
+        for conflict in conflicts where !kept.contains(where: { $0.conflict == conflict }) {
+            // `weak toast` for the reason the diagnostics notice uses it: the toast retains its
+            // buttons, each button retains its `onTap`, and these closures reach back to the toast.
+            weak var toast: ToastView?
+            // Take the card down only once the write lands. Dismissing first showed the card sliding
+            // away for a write that threw, so an unwritable config read as a successful answer and
+            // the conflict came back at the next launch with nothing having said why.
+            let answer = { [weak self] (resolve: (KeybindConflict) -> Bool) in
+                guard resolve(conflict) else { return }  // the resolver logged; the card stays, so it can be retried
+                toast.map { self?.toasts.dismiss($0) }
+            }
+            var actions: [ToastAction] = []
+            if conflict.isRevertable {
+                actions.append(
+                    ToastAction(title: "Revert", kind: .cancel) { answer(KeybindConflictResolver.revert) })
+            }
+            if conflict.isAcceptable {
+                actions.append(
+                    ToastAction(title: "Accept", kind: .primary) { answer(KeybindConflictResolver.accept) })
+            }
+            let content = ToastContent(
+                variant: .warning, title: conflict.headline, message: conflict.message)
+            let shown = toasts.showSticky(content, actions: actions, showsClose: true)
+            // The third exit: close it, change nothing, and meet it again next launch. Answering is
+            // a write, and putting a card away must not be one (ZEN-368).
+            //
+            // `weak toast`, not `shown`: this closure is stored ON the card, so capturing it strongly
+            // is a cycle. It would leak, and worse, `conflictToasts` holds the card weakly precisely
+            // so a hand-closed one drops out and can be raised again. A leaked card stays non-nil,
+            // is kept by the reconcile, and the conflict never comes back.
+            shown.onClose = { [weak self] in toast.map { self?.toasts.dismiss($0) } }
+            toast = shown
+            conflictToasts.append((conflict, WeakToast(value: shown)))
+        }
+    }
+
+    /// Take down every conflict card this window is showing. Closing one by hand leaves its box
+    /// empty rather than removed, so the array is swept here rather than kept exact.
+    func dismissConflictToasts() {
+        conflictToasts.compactMap(\.toast.value).forEach { toasts.dismiss($0) }
+        conflictToasts = []
+    }
+
+    /// Deliver a conflict card set to `keyWindow`, replacing any predecessor across every window.
+    /// The static shape and the sweep-then-deliver order mirror `deliverConfigDiagnosticsNotice`,
+    /// and for the same reasons: reachable from a test, and sweeping before the target resolves
+    /// would take accurate cards down and put nothing back.
+    static func deliverConflictNotices(
+        _ conflicts: [KeybindConflict], to keyWindow: WindowController?,
+        replacingAcross windows: [WindowController]
+    ) -> Bool {
+        guard let keyWindow else { return false }
+        // Every window but the target, which reconciles its own rather than being swept: sweeping it
+        // first would rebuild cards that did not change and make the stack jump.
+        windows.filter { $0 !== keyWindow }.forEach { $0.dismissConflictToasts() }
+        keyWindow.showConflictToasts(conflicts)
+        return true
+    }
 
     /// Deliver the config-problems notice to `keyWindow`, replacing any predecessor across every
     /// window. Returns whether a window took it; `false` leaves the notice already up untouched, so

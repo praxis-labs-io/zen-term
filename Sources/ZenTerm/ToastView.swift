@@ -16,8 +16,9 @@ struct ToastContent: Equatable {
     }
 }
 
-/// A transient notification card: a tinted icon badge, a title with a close affordance, a
-/// muted description, and an optional small actions row — on the shared overlay-card chrome
+/// A transient notification card: a tinted icon badge, a title (with a close affordance when the
+/// card has buttons), a muted description, and an optional small actions row — on the shared
+/// overlay-card chrome
 /// (`FloatShadow` bg + hairline edge + drop shadow). Fixed width; springs in/out on `Motion`.
 /// The `ToastPresenter` owns placement (top-right) and lifetime.
 final class ToastView: ShadowCardView {
@@ -37,6 +38,8 @@ final class ToastView: ShadowCardView {
     /// change, since a passive `show()` toast is never rebuilt while an old one lingers.
     private let titleLabel: NSTextField
     private let messageLabel: NSTextField
+    /// Retained so `reapplyTheme()` can recolor it, like every other baked-color control here.
+    private var closeButton: IconButton?
 
     /// Fixed card width — toasts read as a consistent column rather than sizing to their text.
     private static let width: CGFloat = 300
@@ -58,7 +61,10 @@ final class ToastView: ShadowCardView {
     /// recolor them on a theme swap.
     private var shortcutSlots: [ShortcutSlot] = []
 
-    init(content: ToastContent, actions: [ToastAction], keyEquivalents: Bool = true) {
+    init(
+        content: ToastContent, actions: [ToastAction], keyEquivalents: Bool = true,
+        showsClose: Bool = false
+    ) {
         self.hasActions = !actions.isEmpty
         self.gatesFocus = keyEquivalents && !actions.isEmpty
         self.variant = content.variant
@@ -90,8 +96,9 @@ final class ToastView: ShadowCardView {
         iconView.translatesAutoresizingMaskIntoConstraints = false
         badge.addSubview(iconView)
 
-        // No close button — passive toasts dismiss on body-click / timeout; confirms answer
-        // via their buttons (or Esc).
+        // A card with buttons gets a close affordance; a passive one dismisses on body-click or
+        // its timer and needs none. Without it an actionable card could only be answered, and a
+        // conflict card has to be dismissible without writing to the config (ZEN-368).
         titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         titleLabel.textColor = Self.titleColor
         // The title shares its row with the keycap now, and it's a tab title — arbitrary length.
@@ -104,7 +111,7 @@ final class ToastView: ShadowCardView {
         messageLabel.preferredMaxLayoutWidth = Self.messageMaxWidth
 
         // Title leading, keycaps trailing, with a spacer holding them apart. The keycap names an
-        // app-level binding rather than labelling a button (ZEN-106 — the toast arms nothing), so
+        // app-level binding rather than labelling a button (ZEN-143 — the toast arms nothing), so
         // the card's top-right corner reads as "this toast's chord" instead of implying the button
         // beside it has a key equivalent.
         let headerSpacer = NSView()
@@ -114,7 +121,6 @@ final class ToastView: ShadowCardView {
         header.orientation = .horizontal
         header.alignment = .centerY
         header.spacing = 6
-
         let col = NSStackView(views: [header, messageLabel])
         col.orientation = .vertical
         col.alignment = .leading
@@ -127,6 +133,21 @@ final class ToastView: ShadowCardView {
             let slot = ShortcutSlot(group: header, resolve: resolve)
             shortcutSlots.append(slot)
             slot.refresh()
+        }
+
+        // Last, so the × takes the trailing corner even on a card that also carries a keycap.
+        //
+        // Opt-in rather than "any card with buttons": the button does nothing unless its host wires
+        // `onClose`, and only the conflict card does. On by default it drew a dead × on the config
+        // notice, both attention toasts, the terminal-failure toast and every confirm, and a confirm
+        // gates keyboard focus, so clicking it left the card up and the terminal deaf (ZEN-368).
+        if showsClose {
+            let close = IconButton(
+                symbol: "xmark", size: NSSize(width: 20, height: 20), pointSize: 10,
+                accessibilityLabel: "Dismiss"
+            ) { [weak self] in self?.onClose?() }
+            header.addArrangedSubview(close)
+            closeButton = close
         }
 
         if !actions.isEmpty {
@@ -215,7 +236,8 @@ final class ToastView: ShadowCardView {
     /// non-modal sticky toast never does (its buttons are click-only).
     override var acceptsFirstResponder: Bool { gatesFocus }
 
-    /// A body click dismisses a passive toast; a confirm ignores it (only "×"/buttons answer).
+    /// A body click dismisses a passive toast; an actionable one ignores it, so a misclick can't
+    /// answer a question. Its "×" and its buttons are the only ways out.
     override func mouseDown(with event: NSEvent) {
         if !hasActions { onClose?() }
     }
@@ -236,6 +258,7 @@ final class ToastView: ShadowCardView {
         titleLabel.textColor = Self.titleColor
         messageLabel.textColor = Self.messageColor
         shortcutSlots.forEach { $0.reapplyTheme() }  // else the keycap ink goes stale on a theme swap
+        closeButton?.reapplyTheme()
     }
 
     /// Re-resolve every action keycap against the live keymap and tab order. The host calls this

@@ -59,6 +59,8 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         /// The notice **currently on screen**, as opposed to the log of every one ever raised. The
         /// config notice is sticky, so this is the thing a user is actually looking at.
         var showing: ToastContent?
+        /// The chord conflicts carded, one per card (ZEN-368).
+        var conflicts: [KeybindConflict] = []
         /// Whether a window is there to take a notice. The real sink returns false when the key
         /// window isn't one of ours (an open panel).
         var canDeliver = true
@@ -89,6 +91,11 @@ final class ConfigApplierDifferentialTests: XCTestCase {
                     return true
                 },
                 retractDiagnostics: { [unowned self] in self.showing = nil },
+                announceConflicts: { [unowned self] in
+                    self.conflicts = $0
+                    return true
+                },
+                retractConflicts: { [unowned self] in self.conflicts = [] },
                 reapplyUpdateCardTheme: { [unowned self] in self.card.reapplyTheme() },
                 // The real sink re-reads the live config rather than taking a value.
                 applyAutoCheckSetting: { [unowned self] in

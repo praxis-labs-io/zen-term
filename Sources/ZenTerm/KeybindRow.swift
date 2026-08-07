@@ -1,15 +1,19 @@
 import AppKit
 
 /// One Keybinds row: the action label and its chord as a focusable `KeybindChip`. The chip is the
-/// row's single focus stop — Return / Space / click begins capture, Backspace reverts to default,
+/// row's single focus stop — Return / Space / click begins capture, Backspace removes the shortcut,
 /// Up/Down move between rows, Left exits to the nav, Esc closes the card. An inline message under the
 /// row carries validation / conflict text.
 final class KeybindRow: NSView {
     /// Why the row is showing a message, which decides both its ink and who may clear it.
     enum MessageKind: Equatable {
-        /// A problem in the config file — the action has no shortcut and here's what took it. Owned
-        /// by the section's refresh: it's true for as long as the config says so.
+        /// A problem in the config file: a bind on a menu chord, a chord this keyboard can't
+        /// type. Owned by the section's refresh: it's true for as long as the config says so.
         case diagnostic
+        /// A chord conflict: a line in the config gave this row's chord to something else, and the
+        /// row offers Accept and Revert beside this. Muted rather than warning-toned, because the
+        /// config is doing what it says and the answer is right there (ZEN-368).
+        case explanation
         /// A side effect of an edit the user just made elsewhere in the card — this row's chord was
         /// taken by another action's reset. Transient: the next refresh clears it.
         case notice
@@ -73,6 +77,7 @@ final class KeybindRow: NSView {
         lastShortcut = currentShortcut
         chip.render(shortcut: currentShortcut)
     }
+
     func setCapturing(_ capturing: Bool) { chip.setCapturing(capturing) }
 
     /// Show (or clear, with nil) the row's inline message. A `.diagnostic` reads as a warning — the
@@ -89,6 +94,7 @@ final class KeybindRow: NSView {
     private static func ink(for kind: MessageKind?) -> NSColor {
         switch kind {
         case .diagnostic, .notice: return Theme.current.chrome.warning.nsColor
+        case .explanation: return Theme.current.chrome.ink(alpha: 0.45)
         case .failure, nil: return Theme.current.chrome.destructive.nsColor
         }
     }

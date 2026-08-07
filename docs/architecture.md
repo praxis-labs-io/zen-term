@@ -799,6 +799,65 @@ libghostty; ZEN-224 took it back, and ⌘⇧- stays split on its own merits.)
 keybinds, later winning. **A user keybind moves its action**: the action's default
 chords are dropped first, so the old key is freed rather than both firing.
 
+**Unbound is a value, not an absence (ZEN-368).** `keybind = find_next=none` drops
+the action's defaults and puts nothing back, so the chord reaches the program. The
+drop happens in the same filter a rebind uses, ahead of every write, and that is the
+whole mechanism behind an unbind being silent: the chord is free by the time a float
+claims it, so no displacement is recorded and there is nothing to report.
+
+The reason it cannot be inferred from the keymap is the writer.
+`ConfigWriter.apply(keybinds:)` regenerates the entire `keybind =` block from what
+it is handed, and an action holding no chord is missing from a `[Chord: Action]` map
+exactly the way an action sitting at its defaults is. So `KeymapOverrides` carries
+`binds` and `unbound` side by side, `assemble` returns the second, and
+`GeneralConfig.unboundActions` holds it. Without that, the next Settings write
+deletes the line the user wrote.
+
+**A chord conflict carries its own answer, so it gets a card of its own.**
+`KeybindConflict` reads them off the `.chordTaken` diagnostics, and
+`ConfigApplier.surfaceConflicts` raises one sticky card each while everything else
+keeps sharing the one notice (`ConfigDiagnostic.isChordConflict` is the split, and it
+sits ahead of the empty check so a conflicts-only set still retracts a stale shared
+notice). One card per conflict rather than a list: each is a separate decision, and
+aggregating three would let one dismissal settle all of them.
+
+Both answers are edits to the config, because the config is what created the
+conflict, and both go through `KeymapOverrides` alone. **Accept** writes `= none` for
+the action that lost the chord. **Revert** puts the winner back on its defaults,
+which makes its line equal to the defaults so `ConfigWriter`'s per-action diff stops
+emitting it; the chord then returns to the loser because no line names the loser and
+the assembler hands every unmentioned action its defaults. Reverting a line is not a
+special delete, it is the writer declining to write what it no longer needs to.
+
+**A float gets Accept alone.** Its chord is the `key:` on its own `float =` line and
+`key:` is required, so there is nothing to back out to. `isRevertable` is what both
+surfaces read to decide whether the button exists at all.
+
+Re-carding is gated on the conflict set changing, because every in-app write reloads
+and a Settings keystroke would otherwise restore a card the user just closed. A
+launch is a fresh process, which is what makes an unanswered conflict come back. The
+card arms no key equivalents (ZEN-143), so Esc keeps reaching the pane and the × is
+the only keyboard-free way out.
+
+**Delete removes; reset is an icon beside the input.** On a `KeybindChip`, Backspace
+leaves the action with no shortcut and writes `= none`. It used to restore the
+default, which read as doing nothing on exactly the rows most likely to be pressed:
+an action whose default is a chord something else already holds gets it back and
+loses it again on the reload. Reset moved into the capture popover, next to the input
+it acts on, hidden on a row already at its defaults and on one whose chord a float
+took, where binding back to the defaults leaves the chord set unchanged so the writer
+emits nothing and the icon would do nothing. A refused chord returns the input to its
+listening placeholder rather than sitting in it, since the box is where a *recorded*
+chord appears.
+
+**Settings sets shortcuts; the card answers conflicts.** A conflicted row shows its
+chip and a muted line naming the config line that has the chord, and offers nothing
+else. Accept and Revert lived on the row briefly and came off: a forty-row list where
+a handful of rows sprout a button pair has no stable rhythm, and the pair competes
+with the chip for the same job in whichever column it is put. Dismissing a card means
+"not now", and it returns next launch carrying the same answers, so there is no state
+needing a second path here.
+
 **The modal gate cascade** in `WindowController.handle(_:)` runs confirm, then
 modal card, then tool float, then dispatch. The app-global chords (⌘N new window,
 ⌘⌥R reload config, the three font-size chords, and the unbound-by-default Check for

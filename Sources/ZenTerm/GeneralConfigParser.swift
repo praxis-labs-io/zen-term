@@ -15,7 +15,7 @@ enum GeneralConfigParser {
         var config = fallback
         var floats: [ToolFloat] = []
         var floatLineIndex = 0
-        var keybinds: [(Chord, KeyInterceptor.ReservedChord)] = []
+        var keybinds: [KeybindParser.Line] = []
         // The non-keybind diagnostics collected as scalars/enums/floats are read; the keybind ones
         // come from `KeymapAssembler` below and are merged in at the end.
         var diagnostics: [ConfigDiagnostic] = []
@@ -127,8 +127,8 @@ enum GeneralConfigParser {
                 // shifting the floats below it out of file order.
                 floatLineIndex += 1
             case "keybind":
-                if let pair = KeybindParser.parse(value) {
-                    keybinds.append(pair)
+                if let line = KeybindParser.parse(value) {
+                    keybinds.append(line)
                 } else {
                     warnUnparseableKeybind(value, &diagnostics)
                 }
@@ -141,6 +141,7 @@ enum GeneralConfigParser {
         config.floats = ordered
         let assembled = KeymapAssembler.assemble(floats: ordered, keybinds: keybinds)
         config.keymap = assembled.map
+        config.unboundActions = assembled.unbound
         config.configDiagnostics = diagnostics + assembled.diagnostics
         return config
     }

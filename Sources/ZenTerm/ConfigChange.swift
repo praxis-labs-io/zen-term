@@ -31,8 +31,8 @@ struct ConfigChange: OptionSet {
     /// The tool-float catalog: a float added, edited, or removed.
     static let floats = ConfigChange(rawValue: 1 << 3)
 
-    /// The chord → command map. Reaches further than the interceptor: anything that renders a
-    /// keycap resolves its glyph from the live keymap.
+    /// The chord → command map, and the actions deliberately left off it. Reaches further than the
+    /// interceptor: anything that renders a keycap resolves its glyph from the live keymap.
     static let keymap = ConfigChange(rawValue: 1 << 4)
 
     /// The `reduce-motion` preference.
@@ -67,7 +67,12 @@ struct ConfigChange: OptionSet {
         }
         if old.terminalBehavior != new.terminalBehavior { change.insert(.terminalBehavior) }
         if old.floats != new.floats { change.insert(.floats) }
-        if old.keymap != new.keymap { change.insert(.keymap) }
+        // The unbound set rides with the map: an action that ships with no chord anyway can gain a
+        // `= none` line without either the map or the diagnostics moving, and an open Shortcuts card
+        // rebuilds the whole keybind block from what it last read (ZEN-368).
+        if old.keymap != new.keymap || old.unboundActions != new.unboundActions {
+            change.insert(.keymap)
+        }
         if old.reduceMotion != new.reduceMotion { change.insert(.motion) }
         if old.configDiagnostics != new.configDiagnostics { change.insert(.diagnostics) }
         if old.automaticUpdateChecks != new.automaticUpdateChecks { change.insert(.updates) }

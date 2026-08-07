@@ -177,6 +177,13 @@ extension KeyInterceptor.ReservedChord {
 /// Note the old `⌘⇧G → gitdash` line is intentionally absent — a float's chord now comes
 /// from its own `key:` field, so no float is built in.
 enum KeymapDefaults {
+    /// The chords `action` ships with. One accessor rather than the same `filter`/`keys` walk written
+    /// out at each call site: a row and the writer disagreeing about what an action's default *is*
+    /// is the shape of every silent bug in this area.
+    static func chords(of action: KeyInterceptor.ReservedChord) -> [Chord] {
+        map.filter { $0.value == action }.map(\.key)
+    }
+
     static let map: [Chord: KeyInterceptor.ReservedChord] = {
         var map: [Chord: KeyInterceptor.ReservedChord] = [:]
 
@@ -249,19 +256,104 @@ enum KeymapDefaults {
     }()
 }
 
+/// The reserved-action keymap as something that can be written back: the chords each action holds,
+/// plus the actions that hold none on purpose (ZEN-368).
+///
+/// The second half is why this type exists. An unbound action cannot appear in a `[Chord: Action]`
+/// map at all, and its absence there is indistinguishable from "this action is at its defaults",
+/// which is what silently deleted the user's `= none` line on the next Settings write.
+///
+/// Edit through `bind` / `unbind` rather than the two properties. The card has five paths that
+/// change a binding, and each one hand-editing both collections is where the halves drift into
+/// claiming an action is bound *and* deliberately unbound.
+struct KeymapOverrides: Equatable {
+    var binds: [Chord: KeyInterceptor.ReservedChord]
+    var unbound: Set<KeyInterceptor.ReservedChord>
+
+    init(binds: [Chord: KeyInterceptor.ReservedChord] = [:], unbound: Set<KeyInterceptor.ReservedChord> = []) {
+        self.binds = binds
+        self.unbound = unbound
+    }
+
+    /// Give `action` exactly `chords` and nothing else, and stop calling it unbound.
+    mutating func bind(_ action: KeyInterceptor.ReservedChord, to chords: some Sequence<Chord>) {
+        binds = binds.filter { $0.value != action }
+        for chord in chords { binds[chord] = action }
+        unbound.remove(action)
+    }
+
+    /// Take every chord off `action` and record that it is meant to have none.
+    mutating func unbind(_ action: KeyInterceptor.ReservedChord) {
+        binds = binds.filter { $0.value != action }
+        unbound.insert(action)
+    }
+
+    /// Forget everything this set says about `action`, so the writer emits no line for it and the
+    /// assembler hands it its defaults on the next load.
+    ///
+    /// Distinct from `bind(_:to:)` with the defaults, which reaches the same end state by writing
+    /// chords in, and `binds` is keyed by chord: writing a default chord in evicts whatever else
+    /// held it. Distinct from `unbind` too, which records the absence rather than forgetting it.
+    mutating func clearOverride(_ action: KeyInterceptor.ReservedChord) {
+        binds = binds.filter { $0.value != action }
+        unbound.remove(action)
+    }
+
+    /// The chords `action` holds here.
+    func chords(of action: KeyInterceptor.ReservedChord) -> Set<Chord> {
+        Set(binds.filter { $0.value == action }.map(\.key))
+    }
+
+    /// What `config` resolves to, as the set a write regenerates the keybind block from.
+    init(config: GeneralConfig) {
+        self.init(binds: Self.reserved(in: config.keymap), unbound: config.unboundActions)
+    }
+
+    /// Every action back on the chords it ships with, for "Reset all to defaults".
+    init(defaults: [Chord: KeyInterceptor.ReservedChord]) {
+        self.init(binds: Self.reserved(in: defaults))
+    }
+
+    /// A map without the float toggles. A float's chord lives on its own `float =` line, so emitting
+    /// it here would write a second copy that the two halves could then disagree about. One rule,
+    /// applied wherever a map becomes a set the writer may emit.
+    private static func reserved(
+        in map: [Chord: KeyInterceptor.ReservedChord]
+    ) -> [Chord: KeyInterceptor.ReservedChord] {
+        map.filter { if case .toggleToolFloat = $0.value { return false } else { return true } }
+    }
+}
+
 /// Parses a single `keybind =` value, e.g. `toggle_workspace_picker=cmd+shift+p`.
 enum KeybindParser {
+    /// What one line asks for. An unbind is a value rather than the absence of a chord, because
+    /// every stage downstream has to tell "the user wants no shortcut here" apart from "nothing
+    /// was said about this action" (ZEN-368).
+    enum Line: Equatable {
+        case bind(Chord, KeyInterceptor.ReservedChord)
+        case unbind(KeyInterceptor.ReservedChord)
+    }
+
+    /// The words that mean "no chord". `none` is ours; `unbind` is ghostty's, accepted because it
+    /// is the word a ghostty user reaches for. Note that ghostty's own line reads trigger-first
+    /// (`cmd+g=unbind`), so that spelling is still an unknown action here. The word carries over,
+    /// the line shape does not.
+    private static let unbindWords: Set<String> = ["none", "unbind"]
+
     /// Split on the FIRST `=` (action LHS, chord RHS — the action reads first, mirroring the
     /// "behavior, then key" phrasing). Returns `nil` (caller warns + skips) on an unknown
     /// action or an unparseable chord.
-    static func parse(_ value: String) -> (Chord, KeyInterceptor.ReservedChord)? {
+    ///
+    /// An empty RHS stays unparseable rather than meaning `none`: a trailing `=` is something you
+    /// type by accident, and reading it as a deliberate unbind would silently take a shortcut away.
+    static func parse(_ value: String) -> Line? {
         guard let equals = value.firstIndex(of: "=") else { return nil }
         let lhs = value[..<equals].trimmingCharacters(in: .whitespaces)
         let rhs = value[value.index(after: equals)...].trimmingCharacters(in: .whitespaces)
-        guard let action = KeyInterceptor.ReservedChord(token: lhs), let chord = Chord.parse(rhs) else {
-            return nil
-        }
-        return (chord, action)
+        guard let action = KeyInterceptor.ReservedChord(token: lhs) else { return nil }
+        if unbindWords.contains(rhs.lowercased()) { return .unbind(action) }
+        guard let chord = Chord.parse(rhs) else { return nil }
+        return .bind(chord, action)
     }
 }
 
@@ -273,21 +365,54 @@ enum KeybindParser {
 /// Also reports the displacements that cost an action its *last* chord, so the Keybinds card can
 /// say why a row has no shortcut rather than rendering a bare empty chip (ZEN-121).
 enum KeymapAssembler {
+    /// What a config assembled to. A struct rather than a tuple because the third member is not
+    /// derivable from the first two: an action holding no chord in `map` is either something the
+    /// user asked for or something a collision did to them, and only this can tell you which.
+    struct Assembled {
+        let map: [Chord: KeyInterceptor.ReservedChord]
+        /// The actions a `= none` line named that ended with no chord (ZEN-368). Both halves of
+        /// that matter. An action left chordless by a *displacement* stays out, or the writer would
+        /// turn a reported conflict into a silent intentional unbind; an action with both a `= none`
+        /// line and a real bind stays out too, since the bind won and writing the contradiction back
+        /// would round-trip it forever.
+        let unbound: Set<KeyInterceptor.ReservedChord>
+        let diagnostics: [ConfigDiagnostic]
+    }
+
     /// `canType` is injected so tests state the layout instead of inheriting the test machine's.
     /// Its type is `@MainActor` deliberately: a plain `(Chord) -> Bool` parameter erases the leaf's
     /// isolation, so annotating `KeyboardLayout.canType` alone would let an off-main assembly
     /// compile clean straight past it (ZEN-31).
     @MainActor
     static func assemble(
-        floats: [ToolFloat], keybinds: [(Chord, KeyInterceptor.ReservedChord)],
+        floats: [ToolFloat], keybinds: [KeybindParser.Line],
         canType: @MainActor (Chord) -> Bool = KeyboardLayout.canType,
         protected: @MainActor () -> Set<Chord> = MenuShortcuts.protected,
         menuOwner: @MainActor (Chord) -> String? = MenuShortcuts.owner
-    ) -> (map: [Chord: KeyInterceptor.ReservedChord], diagnostics: [ConfigDiagnostic]) {
+    ) -> Assembled {
         var map = KeymapDefaults.map
         let floatIDs = Set(floats.map(\.id))
         var displacements: [Displacement] = []
         let menuChords = protected()
+
+        // A float's chord lives on its `float =` line, whose `key:` is required, so an unbind naming
+        // one would be a no-op that reads as working: the float re-binds the chord a few lines below.
+        // Refused where the unknown-float-id line is refused, and for the same reason.
+        var requestedUnbinds: [KeyInterceptor.ReservedChord] = []
+        var binds: [(Chord, KeyInterceptor.ReservedChord)] = []
+        for line in keybinds {
+            switch line {
+            case .bind(let chord, let action): binds.append((chord, action))
+            case .unbind(let action):
+                if case .toggleToolFloat(let id) = action {
+                    Log.warning(
+                        "GeneralConfig: keybind toggle_float:\(id)=none can't unbind a float. Its "
+                            + "chord is the `key:` on its float line: ignored", category: .keybinds)
+                    continue
+                }
+                requestedUnbinds.append(action)
+            }
+        }
 
         // Drop binds no keypress on this keyboard could ever produce (`cmd+|` on a US layout — `|`
         // needs Shift there), and binds on a chord the menu bar owns. Both dropped BEFORE
@@ -301,7 +426,7 @@ enum KeymapAssembler {
         var typeable: [(Chord, KeyInterceptor.ReservedChord)] = []
         var untypeable: [(Chord, KeyInterceptor.ReservedChord)] = []
         var menuOwned: [(Chord, KeyInterceptor.ReservedChord)] = []
-        for bind in keybinds {
+        for bind in binds {
             if menuChords.contains(bind.0) {
                 menuOwned.append(bind)
             } else if canType(bind.0) {
@@ -322,9 +447,18 @@ enum KeymapAssembler {
         }
 
         // A user keybind MOVES its action: drop the action's default chord(s) first, so the
-        // old key is freed instead of both the default and the new chord firing it.
+        // old key is freed instead of both the default and the new chord firing it. An unbind drops
+        // them the same way and puts nothing back.
+        //
+        // Dropping the unbinds HERE, ahead of every `set()` below, is the whole mechanism behind an
+        // explicit unbind being silent: the chord is already free when a float or a later line
+        // claims it, so no displacement is recorded and there is nothing for `diagnostics` to
+        // report. Move this after the writes and the user gets told off for a config they wrote on
+        // purpose (ZEN-368).
         let reboundActions = typeable.map(\.1)
-        map = map.filter { entry in !reboundActions.contains(entry.value) }
+        map = map.filter { entry in
+            !reboundActions.contains(entry.value) && !requestedUnbinds.contains(entry.value)
+        }
 
         func set(_ chord: Chord, _ action: KeyInterceptor.ReservedChord) {
             if let existing = map[chord], existing != action {
@@ -359,9 +493,10 @@ enum KeymapAssembler {
             }
             set(chord, action)
         }
-        return (
-            map,
-            diagnostics(for: displacements, in: map) + untypeableDiagnostics(untypeable)
+        return Assembled(
+            map: map,
+            unbound: Set(requestedUnbinds.filter { !map.values.contains($0) }),
+            diagnostics: diagnostics(for: displacements, in: map) + untypeableDiagnostics(untypeable)
                 + menuDiagnostics(menuOwned, floats: menuOwnedFloats, owner: menuOwner)
         )
     }

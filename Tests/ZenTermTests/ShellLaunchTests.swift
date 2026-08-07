@@ -4,7 +4,7 @@ import XCTest
 @testable import ZenTerm
 
 /// Unit tests for `ShellLaunch` — the launch-config builder behind ⌘P workspaces and every
-/// pane/drawer (ZEN-106). Covers the custom-shell / shell-args branch, the login+interactive
+/// pane/drawer (ZEN-143). Covers the custom-shell / shell-args branch, the login+interactive
 /// `program` wrapper that keeps a pane alive after the program exits, env merge, and the
 /// home-is-the-default-cwd rule.
 final class ShellLaunchTests: XCTestCase {

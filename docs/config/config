@@ -226,6 +226,26 @@
 # first. Your lines override the defaults; if two lines claim the same chord, the
 # last one wins (and a warning is logged). An unknown action is skipped with a warning.
 #
+# Write `none` in place of a chord to take an action's shortcut away entirely:
+#
+#   keybind = find_next=none
+#
+# The chord then reaches the program in your pane like any other. `unbind` works
+# too, since that's ghostty's word. (ghostty writes the trigger first, so its own
+# `cmd+g=unbind` still reads here as an unknown action.)
+#
+# In Settings, Delete on a shortcut does the same thing, and the capture popover has
+# a reset icon beside the input that puts the default back.
+#
+# When a line here takes a chord off one of the defaults, the action that lost it
+# gets a notice of its own at launch, with two answers. Accept writes the `=none`
+# line for you. Revert drops the line that took the chord, so both actions go back
+# to their defaults. Closing the notice with its × changes nothing, and it returns
+# every launch until you answer it or fix the file yourself.
+#
+# A float is Accept only. Its chord is the `key:` on its own `float =` line and
+# `key:` is required, so there is nothing to back the chord out to.
+#
 # A chord the menu bar owns is refused, and so is a tool float's `key:` on one.
 # ZenTerm resolves shortcuts before macOS matches menu items, so a keybind on ⌘Q
 # would win and Quit would stop working with the menu still showing ⌘Q beside it.
@@ -256,7 +276,8 @@
 #   increase_font_size  decrease_font_size  reset_font_size
 #   check_for_updates   (no default binding; bind a chord to reach it by keyboard)
 #   report_issue        (no default binding; also in the command palette and Help menu)
-#   toggle_float:<id>   (bind a second chord to one of your floats)
+#   toggle_float:<id>   (bind a second chord to one of your floats; `none` doesn't
+#                        apply here, since a float's chord is its own `key:` field)
 #
 # Defaults (uncomment to change; these are what ships):
 # keybind = split_horizontal=cmd+shift+-
@@ -299,7 +320,8 @@
 #
 # Every other chord reaches the program in your pane, with the exceptions below.
 # Rebind an action away and its old chord goes there too, so ⌘⇧S in vim is vim's ⌘⇧S
-# once you have moved toggle_scroll_mode off it.
+# once you have moved toggle_scroll_mode off it. `=none` is the same thing without
+# having to park the action somewhere first.
 #
 # A handful stay with the terminal on purpose, because they turn into bytes for the
 # program rather than doing anything to the app:

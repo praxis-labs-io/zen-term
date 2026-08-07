@@ -27,7 +27,7 @@ final class BackendShadowTests: XCTestCase {
     /// frees the chord, so a stand-in map would test the arithmetic and not the behavior.
     private func keymapRebindingNavUp() -> [Chord: KeyInterceptor.ReservedChord] {
         KeymapAssembler.assemble(
-            floats: [], keybinds: [(Chord(control: true, key: "k"), .navUp)],
+            floats: [], keybinds: [.bind(Chord(control: true, key: "k"), .navUp)],
             canType: { _ in true }, protected: { [] }, menuOwner: { _ in nil }
         ).map
     }

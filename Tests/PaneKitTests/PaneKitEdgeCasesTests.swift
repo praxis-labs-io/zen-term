@@ -3,7 +3,7 @@ import XCTest
 
 @testable import PaneKit
 
-/// Micro-edge coverage for the pure pane layer (ZEN-106): ratio extremes, `paneDiff` order
+/// Micro-edge coverage for the pure pane layer (ZEN-143): ratio extremes, `paneDiff` order
 /// preservation, and spatial nav with partially-overlapping frames.
 final class PaneKitEdgeCasesTests: XCTestCase {
     private func splitTree() -> PaneTree {

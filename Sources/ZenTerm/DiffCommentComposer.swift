@@ -214,7 +214,7 @@ final class DiffCommentComposer: NSView {
     /// sits next to all day.
     ///
     /// Matched against the reservable set, never `deviceIndependentFlagsMask`, which keeps the extra
-    /// bits AppKit stamps on and so never compares equal to a bare modifier (ZEN-145).
+    /// bits AppKit stamps on and so never compares equal to a bare modifier (ZEN-81).
     static func sendShortcut(for event: NSEvent) -> DiffSendAction? {
         guard event.keyCode == 36 || event.keyCode == 76 else { return nil }  // Return, keypad Enter
         switch event.modifierFlags.intersection(DiffPaneTable.reservableModifiers) {

@@ -59,9 +59,12 @@ final class ToastPresenter {
     /// input from the terminal. Returns the view so the caller can dismiss it when the notice
     /// stops being relevant. Call on the main thread.
     @discardableResult
-    func showSticky(_ content: ToastContent, actions: [ToastAction]) -> ToastView {
+    func showSticky(
+        _ content: ToastContent, actions: [ToastAction], showsClose: Bool = false
+    ) -> ToastView {
         dispatchPrecondition(condition: .onQueue(.main))  // fail fast on an accidental off-main call
-        let toast = ToastView(content: content, actions: actions, keyEquivalents: false)
+        let toast = ToastView(
+            content: content, actions: actions, keyEquivalents: false, showsClose: showsClose)
         stack.addArrangedSubview(toast)
         toast.animateIn()
         return toast
@@ -102,8 +105,29 @@ final class ToastPresenter {
         // `animateOut` is idempotent, so a click + the auto-dismiss timer can't double-remove.
         toast.animateOut { [weak self, weak toast] in
             guard let self, let toast else { return }
-            self.stack.removeArrangedSubview(toast)
+            self.removeCollapsing(toast)
+        }
+    }
+
+    /// Take `toast` out of the stack and let whatever sat below it slide up into the gap.
+    ///
+    /// The card springs out on its own, but its slot is only freed when it leaves the stack, so a
+    /// plain removal snapped every card below straight to its new frame. Removing inside an implicit
+    /// animation group and forcing the layout there is what turns that snap into a slide. Reduce
+    /// motion takes the old path, unanimated, per the app's motion policy.
+    private func removeCollapsing(_ toast: ToastView) {
+        guard !Motion.isReduceMotionEnabled() else {
+            stack.removeArrangedSubview(toast)
             toast.removeFromSuperview()
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.16
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            context.allowsImplicitAnimation = true
+            stack.removeArrangedSubview(toast)
+            toast.removeFromSuperview()
+            stack.layoutSubtreeIfNeeded()  // inside the group, so the survivors animate to their new frames
         }
     }
 }

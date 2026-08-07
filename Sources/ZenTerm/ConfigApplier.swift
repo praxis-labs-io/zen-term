@@ -33,6 +33,11 @@ final class ConfigApplier {
         var announceDiagnostics: @MainActor (ToastContent, ConfigDiagnostic.Scope) -> Bool
         /// Take down an outstanding config-problems notice. A no-op when none is showing.
         var retractDiagnostics: @MainActor () -> Void
+        /// Show one card per outstanding chord conflict, returning whether a window took them.
+        /// Separate from `announceDiagnostics` because each card carries its own two answers.
+        var announceConflicts: @MainActor ([KeybindConflict]) -> Bool
+        /// Take down every outstanding conflict card. A no-op when none are showing.
+        var retractConflicts: @MainActor () -> Void
         /// Recolor a live update card. Also re-resolves its "Check for Updates" keycap.
         var reapplyUpdateCardTheme: @MainActor () -> Void
         /// Re-point Sparkle's background check schedule at the config.
@@ -43,6 +48,11 @@ final class ConfigApplier {
 
     /// The config problems announced on the last reload — so an unchanged set stays quiet.
     private var lastAnnouncedDiagnostics: [ConfigDiagnostic] = []
+
+    /// The conflicts carded on the last reload, gating re-announcement the same way. Every in-app
+    /// write reloads, so without this a Settings rebind would put three dismissed cards back.
+    /// Across launches it is a fresh process, which is what makes an unanswered conflict return.
+    private var lastAnnouncedConflicts: [KeybindConflict] = []
 
     init(sinks: Sinks) {
         self.sinks = sinks
@@ -67,7 +77,7 @@ final class ConfigApplier {
         // there to show the notice, so the next reload retries it. Gating on `.diagnostics` would
         // strand an undelivered notice forever — the diagnostics haven't changed, so the retry
         // would never come. The cost is a set comparison that returns nil.
-        surfaceConfigDiagnostics()
+        surfaceConfigNotices()
         // Recolor a live update card — it's outside any window's toast list. Also on `.keymap`:
         // `UpdateCardView.reapplyTheme()` calls `refreshKeycap()`, which re-resolves the
         // "Check for Updates" chord, so a rebind while the card is up has to reach it. Same trap as
@@ -75,6 +85,19 @@ final class ConfigApplier {
         if change.contains(.theme) || change.contains(.keymap) { sinks.reapplyUpdateCardTheme() }
         // Pick up a flipped auto-update toggle with no relaunch.
         if change.contains(.updates) { sinks.applyAutoCheckSetting() }
+    }
+
+    /// Everything the config says out loud: the shared problems notice, and a card per chord
+    /// conflict. **The only entry point, and both halves below are private because of that.**
+    ///
+    /// Launch does not go through `apply(_:)`; it calls this directly, so a second surface added
+    /// beside the first and wired only into `apply` is announced on reload and silent at launch.
+    /// That shipped once: three conflicts, no cards, because launch called the half by name
+    /// (ZEN-368). One public method is what makes calling half of it impossible rather than merely
+    /// unlikely.
+    func surfaceConfigNotices() {
+        surfaceConfigDiagnostics()
+        surfaceConflicts()
     }
 
     /// Toast the config's problems when they change (a stolen keybind, an invalid scalar, a dropped
@@ -88,8 +111,10 @@ final class ConfigApplier {
     /// at some past reload. So it is retracted as well as raised: fixing the config and reloading
     /// takes it down, and a changed set replaces it rather than stacking a second card beside one
     /// that describes different problems.
-    func surfaceConfigDiagnostics() {
-        let diagnostics = GeneralConfig.current.configDiagnostics
+    private func surfaceConfigDiagnostics() {
+        // Chord conflicts are announced one card each, by `surfaceConflicts`. What's left shares a
+        // notice, because none of it has anything to press (ZEN-368).
+        let diagnostics = GeneralConfig.current.configDiagnostics.filter { !$0.isChordConflict }
         guard !diagnostics.isEmpty else {
             // Nothing is wrong any more. `announcement` returns nil for an empty set, so before
             // this the stale warning simply outlived the fix that made it false.
@@ -112,5 +137,21 @@ final class ConfigApplier {
         // announced would let the change-gate swallow it forever.
         guard sinks.announceDiagnostics(content, first.scope) else { return }
         lastAnnouncedDiagnostics = diagnostics
+    }
+
+    /// Card every chord conflict the config is reporting, one each (ZEN-368).
+    ///
+    /// Retracted as well as raised, for the reason the shared notice is: the cards state what is
+    /// true now, so answering one in Settings or fixing the file by hand has to take its card down.
+    private func surfaceConflicts() {
+        let conflicts = KeybindConflict.all(in: GeneralConfig.current)
+        guard !conflicts.isEmpty else {
+            if !lastAnnouncedConflicts.isEmpty { sinks.retractConflicts() }
+            lastAnnouncedConflicts = []
+            return
+        }
+        guard conflicts != lastAnnouncedConflicts else { return }  // same set: the cards up are right
+        guard sinks.announceConflicts(conflicts) else { return }
+        lastAnnouncedConflicts = conflicts
     }
 }

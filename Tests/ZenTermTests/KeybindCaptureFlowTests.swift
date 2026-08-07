@@ -133,27 +133,25 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertEqual(liveKeymap, before, "Esc must not change any binding")
     }
 
-    func test_delete_resetsReboundActionToDefault() {
+    /// Delete means delete. It used to restore the default, which reads as doing nothing on the
+    /// rows most likely to be pressed: an action whose default is a chord something else already
+    /// holds gets it back and loses it again on the reload (ZEN-368).
+    func test_delete_leavesTheActionWithNoShortcut() throws {
         let capturer = FakeCapturer()
         _ = mountSection(capturer)
-
-        // First rebind new-tab to the novel chord…
         row(for: .newTab).chip.onActivate?()
-        capturer.feed(event(for: novelChord))
-        XCTAssertEqual(liveKeymap[novelChord], .newTab)
+        let endCountBefore = capturer.endCount
 
-        // …then capture again and press Delete → back to the built-in default(s).
-        row(for: .newTab).chip.onActivate?()
-        let endCountBeforeDelete = capturer.endCount
-        capturer.feed(keyDown("\u{7f}", code: 51))  // Delete
+        capturer.feed(deleteKey(option: false))
 
-        // Delete must END the capture, not just reset the mapping — leaving it armed is the
+        // Delete must END the capture, not just change the mapping. Leaving it armed is the
         // input-bricking scenario these tests guard against.
-        XCTAssertEqual(capturer.endCount, endCountBeforeDelete + 1, "Delete ends the capture")
+        XCTAssertEqual(capturer.endCount, endCountBefore + 1, "Delete ends the capture")
         XCTAssertFalse(capturer.isArmed)
-        XCTAssertNil(liveKeymap[novelChord], "the reset drops the custom chord")
-        let defaultNewTab = KeymapDefaults.map.first { $0.value == .newTab }!.key
-        XCTAssertEqual(liveKeymap[defaultNewTab], .newTab, "new-tab is back on its default chord")
+        XCTAssertFalse(liveKeymap.values.contains(.newTab))
+        XCTAssertEqual(GeneralConfig.current.unboundActions, [.newTab])
+        let text = try configText()
+        XCTAssertTrue(text.contains("keybind = new_tab=none"), text)
     }
 
     func test_conflictingChord_isBlockedAndStaysArmed() {
@@ -220,7 +218,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertEqual(capturer.endCount, 0, "nothing was committed")
     }
 
-    func test_resetToDefault_takesAnOccupiedChordButSaysWhatItDisplaced() {
+    func test_resetToDefault_takesAnOccupiedChordButSaysWhatItDisplaced() throws {
         // Backspace always restores the default — what it must not do is take the chord silently,
         // which is how a deliberate binding used to vanish with no message anywhere.
         let capturer = FakeCapturer()
@@ -233,8 +231,8 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         capturer.feed(event(for: cmdT))
         XCTAssertEqual(liveKeymap[cmdT], .closePane)
 
-        row(for: .newTab).chip.onActivate?()  // Backspace New Tab → its default ⌘T is taken
-        capturer.feed(keyDown("\u{7f}", code: 51))
+        row(for: .newTab).chip.onActivate?()  // Reset New Tab → its default ⌘T is taken
+        try resetIcon().onClick()
 
         XCTAssertEqual(liveKeymap[cmdT], .newTab, "the default is restored")
         XCTAssertEqual(liveKeymap[Chord(command: true, key: "w")], .closePane, "the displaced action falls back")
@@ -245,7 +243,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertEqual(row(for: .closePane).messageKind, .notice)
     }
 
-    func test_resetToDefault_swappedPair_canBeRevertedOneRowAtATime() {
+    func test_resetToDefault_swappedPair_canBeRevertedOneRowAtATime() throws {
         // The deadlock a block-on-conflict reset would create: each action holds the other's
         // default, so neither row could ever be reverted without nuking every customization.
         let capturer = FakeCapturer()
@@ -264,8 +262,8 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertEqual(liveKeymap[cmdH], .navRight)
         XCTAssertEqual(liveKeymap[cmdL], .navLeft)
 
-        row(for: .navLeft).chip.onActivate?()  // Backspace Nav Left → wants ⌘H, held by Nav Right
-        capturer.feed(keyDown("\u{7f}", code: 51))
+        row(for: .navLeft).chip.onActivate?()  // Reset Nav Left → wants ⌘H, held by Nav Right
+        try resetIcon().onClick()
 
         XCTAssertEqual(liveKeymap[cmdH], .navLeft, "Nav Left is back on its default")
         // Nav Right falls back to its own default — which the reset just freed, so the swap unwinds.
@@ -282,6 +280,238 @@ final class KeybindCaptureFlowTests: WindowTestCase {
 
         XCTAssertEqual(liveKeymap[Chord(command: true, shift: true, key: "-")], .splitHorizontal)
         XCTAssertTrue(capturer.isArmed, "an occupied shifted-symbol chord must block too")
+    }
+
+    // MARK: removing a shortcut (ZEN-368)
+
+    /// The real chip, the real `keyDown`. Calling `onRemove` directly would pass with the key case
+    /// wired to nothing, which is the whole failure a chord test exists to catch.
+    private func deleteKey(option: Bool) -> NSEvent {
+        keyDown("\u{7f}", code: 51, flags: option ? [.option] : [])
+    }
+
+    func test_delete_onAFocusedChip_leavesTheActionWithNoShortcut() throws {
+        _ = mountSection(FakeCapturer())
+        let newTab = row(for: .newTab)
+
+        newTab.chip.keyDown(with: deleteKey(option: false))
+
+        XCTAssertNil(newTab.chip.renderedShortcutForTesting, "the chip reads as unbound")
+        XCTAssertNil(newTab.renderedMessageForTesting, "an unbind the user asked for needs no note")
+        XCTAssertFalse(liveKeymap.values.contains(.newTab))
+        XCTAssertEqual(GeneralConfig.current.unboundActions, [.newTab])
+        let text = try configText()
+        XCTAssertTrue(text.contains("keybind = new_tab=none"), text)
+    }
+
+    /// Reset moved off Delete and onto a button, so the button is the only way back to a default and
+    /// has to work. Dead, an action removed by mistake could never be restored from the card.
+    func test_theResetButton_putsTheDefaultBack() throws {
+        _ = mountSection(FakeCapturer())
+        row(for: .newTab).chip.keyDown(with: deleteKey(option: false))
+        XCTAssertFalse(liveKeymap.values.contains(.newTab))
+
+        row(for: .newTab).chip.onActivate?()  // the popover the button lives in
+        try resetIcon().onClick()
+
+        let defaultChord = KeymapDefaults.map.first { $0.value == .newTab }!.key
+        XCTAssertEqual(liveKeymap[defaultChord], .newTab)
+        XCTAssertEqual(GeneralConfig.current.unboundActions, [])
+        let text = try configText()
+        XCTAssertFalse(text.contains("new_tab"), text)
+    }
+
+    func test_theResetButton_endsTheCapture() throws {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        row(for: .newTab).chip.onActivate?()
+        XCTAssertTrue(capturer.isArmed)
+
+        try resetIcon().onClick()
+
+        // Reset is an answer, not a step toward one. Left armed, the card keeps diverting every
+        // keystroke with no popover on screen to explain why.
+        XCTAssertFalse(capturer.isArmed)
+        XCTAssertEqual(capturer.endCount, 1)
+    }
+
+    func test_removingThenCapturingAChord_bindsItAndDropsTheNoneLine() {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        row(for: .newTab).chip.keyDown(with: deleteKey(option: false))
+
+        row(for: .newTab).chip.onActivate?()
+        capturer.feed(event(for: novelChord))
+
+        XCTAssertEqual(liveKeymap[novelChord], .newTab)
+        XCTAssertEqual(GeneralConfig.current.unboundActions, [])
+    }
+
+    private func configText() throws -> String {
+        try String(contentsOf: tempRoot.appendingPathComponent("config"), encoding: .utf8)
+    }
+
+    // MARK: the capture popover (ZEN-368)
+
+    private func hintBubble() throws -> KeybindHintBubble {
+        try XCTUnwrap(descendants(of: hostWindow!.contentView!).compactMap { $0 as? KeybindHintBubble }.first)
+    }
+
+    private func resetIcon() throws -> IconButton {
+        try XCTUnwrap(descendants(of: try hintBubble()).compactMap { $0 as? IconButton }.first)
+    }
+
+    /// The status text the popover is showing, flattened.
+    private func hintText() throws -> String {
+        descendants(of: try hintBubble()).compactMap { ($0 as? NSTextField)?.stringValue }
+            .joined(separator: " ")
+    }
+
+    /// A float's chord is a required field, so binding the row back to its defaults leaves its chord
+    /// set equal to the defaults, the writer emits nothing, and the file is untouched. The icon
+    /// would be a control that does nothing on exactly the rows it appeared on.
+    func test_resetIcon_isHiddenWhenAFloatTookTheChord() throws {
+        try seed("float = title:lazygit command:lazygit key:cmd+g\n")
+        _ = mountSection(FakeCapturer())
+
+        row(for: .findNext).chip.onActivate?()
+
+        XCTAssertTrue(try resetIcon().isHidden, "nothing to back out of, so nothing to offer")
+    }
+
+    /// The input fills the card, less the insets, and less the reset icon when one is showing.
+    ///
+    /// Asserted rather than eyeballed because it has collapsed twice: the box sizes to the chord
+    /// inside it unless something makes it stretch, and a half-width input floating in a full-width
+    /// card looks like a rendering glitch rather than a missing constraint.
+    func test_theInputFillsTheCard() throws {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        let insets: CGFloat = 28  // 14 each side
+
+        row(for: .newTab).chip.onActivate?()
+        try hintBubble().layoutSubtreeIfNeeded()
+        XCTAssertEqual(
+            try hintBubble().inputWidthForTesting, KeybindHintBubble.widthForTesting - insets,
+            accuracy: 0.5, "no reset icon, so the input takes the whole row")
+
+        capturer.feed(event(for: novelChord))
+        row(for: .newTab).chip.onActivate?()
+        try hintBubble().layoutSubtreeIfNeeded()
+        XCTAssertEqual(
+            try hintBubble().inputWidthForTesting,
+            KeybindHintBubble.widthForTesting - insets - 34 - 8,  // icon width + the row's spacing
+            accuracy: 0.5, "and gives up exactly the icon's width when one appears")
+    }
+
+    /// A `keybind =` line can be backed out, so the icon is real on a row that lost its chord to one.
+    func test_resetIcon_isShownWhenAKeybindLineTookTheChord() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        _ = mountSection(FakeCapturer())
+
+        row(for: .toggleCommandPalette).chip.onActivate?()
+
+        XCTAssertFalse(try resetIcon().isHidden)
+    }
+
+    /// The same two words on every row. A conflict is answered on the card that raises it, so this
+    /// popover has no per-row wording to get wrong.
+    func test_theHint_readsTheSameOnEveryRow() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        _ = mountSection(FakeCapturer())
+
+        row(for: .toggleCommandPalette).chip.onActivate?()
+        let conflicted = try hintText()
+        XCTAssertTrue(conflicted.contains("to cancel"), conflicted)
+        XCTAssertTrue(conflicted.contains("to remove"), conflicted)
+    }
+
+    /// Reset is hidden on a row that already holds exactly its defaults, where it would be a control
+    /// that does nothing, and shown the moment the row moves off them.
+    func test_resetIcon_appearsOnlyWhenTheRowIsOffItsDefault() throws {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+
+        row(for: .newTab).chip.onActivate?()
+        XCTAssertTrue(try resetIcon().isHidden, "a row at its default has nothing to reset to")
+        capturer.feed(event(for: novelChord))
+
+        row(for: .newTab).chip.onActivate?()
+        XCTAssertFalse(try resetIcon().isHidden, "rebound, so there is a default to go back to")
+    }
+
+    func test_resetIcon_isShownForARemovedShortcut() throws {
+        _ = mountSection(FakeCapturer())
+        row(for: .newTab).chip.keyDown(with: deleteKey(option: false))
+
+        row(for: .newTab).chip.onActivate?()
+
+        XCTAssertFalse(try resetIcon().isHidden, "removed is off the default too, so it can come back")
+    }
+
+    /// A refused chord must not sit in the input. The box is where a recorded chord appears, so
+    /// leaving the rejected one there beside a red line makes two claims at once.
+    func test_aRefusedChord_returnsTheInputToListening() throws {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        let newTabChord = liveKeymap.first { $0.value == .newTab }!.key
+
+        row(for: .closePane).chip.onActivate?()
+        capturer.feed(event(for: newTabChord))
+
+        XCTAssertNil(
+            try hintBubble().previewedChordForTesting,
+            "the input is back to Press keys…, not sitting on what was refused")
+        XCTAssertTrue(capturer.isArmed, "and it is still listening")
+    }
+
+    func test_aModifierlessKey_alsoReturnsTheInputToListening() throws {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+
+        row(for: .closePane).chip.onActivate?()
+        capturer.feed(keyDown("k", code: 40))
+
+        XCTAssertNil(try hintBubble().previewedChordForTesting)
+        XCTAssertTrue(capturer.isArmed)
+    }
+
+    // MARK: a conflicted row (ZEN-368)
+
+    /// The row explains itself and offers nothing. Answering lives on the launch card; the row's
+    /// job is to say why the chip is empty when someone comes looking.
+    func test_aConflictedRow_explainsItselfInNeutralInk() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        _ = mountSection(FakeCapturer())
+
+        let row = row(for: .toggleCommandPalette)
+        XCTAssertNil(row.chip.renderedShortcutForTesting)
+        XCTAssertEqual(row.renderedMessageForTesting, "⌘P goes to split_vertical.")
+        XCTAssertEqual(row.messageKind, .explanation, "neutral: the config did what it says")
+    }
+
+    /// Accept's write is reachable from the row after all: `del` writes the same `= none` line the
+    /// card's Accept does. So a conflict deferred with the card's × can still be settled here,
+    /// through the gesture the popover already names.
+    func test_deleteOnAConflictedRow_settlesIt() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        _ = mountSection(FakeCapturer())
+
+        row(for: .toggleCommandPalette).chip.keyDown(with: deleteKey(option: false))
+
+        XCTAssertEqual(GeneralConfig.current.unboundActions, [.toggleCommandPalette])
+        XCTAssertEqual(KeybindConflict.all(in: .current), [], "nothing reports it again")
+        XCTAssertNil(row(for: .toggleCommandPalette).renderedMessageForTesting, "and the row goes quiet")
+        let text = try configText()
+        XCTAssertTrue(text.contains("keybind = toggle_command_palette=none"), text)
+    }
+
+    /// A row with nothing unresolved carries no message at all. Journey one's whole point: a clean
+    /// config shows a plain list.
+    func test_aCleanRow_showsNoMessage() {
+        _ = mountSection(FakeCapturer())
+
+        XCTAssertNil(row(for: .toggleCommandPalette).renderedMessageForTesting)
     }
 
     // MARK: conflict surface (ZEN-142)
@@ -368,12 +598,14 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertEqual(liveKeymap[novelChord], .closePane, "and the rebind itself still lands")
     }
 
-    func test_configDiagnosticMessage_readsAsAWarningNotAFailure() throws {
-        // A config that works but surprises isn't the same as a write that failed; rendering both in
-        // destructive red teaches the user to read a working config as breakage.
+    /// A chord your own float took is not a problem, so the row explains it in muted ink rather
+    /// than warning-toned. It used to read orange and toast at every launch, which taught the user
+    /// to see a working config as breakage (ZEN-368).
+    func test_aChordTakenByAFloat_readsAsAnExplanation() throws {
         try seed("float = title:steal command:btop key:cmd+t\n")
         _ = mountSection(FakeCapturer())
-        XCTAssertEqual(row(for: .newTab).messageKind, .diagnostic)
+        XCTAssertEqual(row(for: .newTab).messageKind, .explanation)
+        XCTAssertEqual(row(for: .newTab).renderedMessageForTesting, "⌘T goes to toggle_float:steal.")
     }
 
     func test_splitRows_showTheBaseKeyGlyph() {

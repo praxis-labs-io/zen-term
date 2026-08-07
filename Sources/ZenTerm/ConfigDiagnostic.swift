@@ -77,6 +77,16 @@ struct ConfigDiagnostic: Hashable {
     var scope: Scope
     var problem: Problem
 
+    /// Whether this is a chord conflict, which carries its own answer and its own card.
+    ///
+    /// A conflict is the one diagnostic a user can resolve from the notice itself: accept the loss,
+    /// or revert the line that caused it (`KeybindConflict`). So each gets a toast of its own, while
+    /// everything else, having nothing to press, keeps sharing one (ZEN-368).
+    var isChordConflict: Bool {
+        if case .chordTaken = problem { return true }
+        return false
+    }
+
     /// Names the menu item that owns a chord, or says "a" when the lookup found no title. The
     /// protected set and the title lookup are separate questions, so the second can come back
     /// empty, and "is the a menu shortcut" is not a sentence.
@@ -128,7 +138,9 @@ struct ConfigDiagnostic: Hashable {
     var message: String {
         switch problem {
         case .chordTaken(let chord, let winner):
-            return "\(chord.displayGlyph) went to \(winner.actionToken) in your config."
+            // Present tense, and no "in your config": this reads on the Shortcuts row now, not in a
+            // launch warning, so it explains a standing state rather than reporting an event.
+            return "\(chord.displayGlyph) goes to \(winner.actionToken)."
         case .menuBind(let chord, let menuItem):
             return "\(keybindActionToken)=\(chord.configToken) is \(Self.owner(menuItem)) menu shortcut. Ignoring it."
         case .floatMenuKey(let chord, let menuItem):

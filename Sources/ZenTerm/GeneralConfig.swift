@@ -87,6 +87,10 @@ struct GeneralConfig: Equatable {
     // Structured.
     var floats: [ToolFloat]
     var keymap: [Chord: KeyInterceptor.ReservedChord]
+    /// The actions a `keybind = <action>=none` line asked to leave with no shortcut (ZEN-368).
+    /// Carried beside `keymap` rather than inferred from it: an action missing from the map is
+    /// either this or a collision, and the Shortcuts card has to write the first one back.
+    var unboundActions: Set<KeyInterceptor.ReservedChord> = []
     /// Problems found loading the config — a keybind conflict, an invalid scalar, an out-of-range
     /// number, a dropped `float =` line. Each surfaces on the Settings row that owns it (or a Tools
     /// notice / the reload toast for the home-less ones); see `ConfigDiagnostic`.

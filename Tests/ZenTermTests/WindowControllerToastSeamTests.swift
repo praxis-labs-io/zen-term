@@ -12,19 +12,53 @@ import XCTest
 final class WindowControllerToastSeamTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var controller: WindowController?
+    private var tempRoot: URL!
 
     override func setUp() {
         super.setUp()
         originalOverride = TerminalSurfaceFactory.makeOverride
         // A real ghostty surface needs a live libghostty app; inject a headless stub instead.
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
+        // Sandboxed: a conflict card's buttons WRITE, so without this they would edit the real config.
+        tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-toast-seam-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        ConfigLoader.defaultRootOverrideForTesting = tempRoot
+        AppConfig.reload()
     }
 
     override func tearDown() {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
+        ConfigLoader.defaultRootOverrideForTesting = nil
+        AppConfig.reload()
+        try? FileManager.default.removeItem(at: tempRoot)
         super.tearDown()
+    }
+
+    /// Write a config into the sandboxed root and reload.
+    private func seed(_ text: String) throws {
+        try text.write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+        AppConfig.reload()
+    }
+
+    private func configText() throws -> String {
+        try String(contentsOf: tempRoot.appendingPathComponent("config"), encoding: .utf8)
+    }
+
+    /// Pump the runloop for `seconds` of wall clock, past a spring-out and the stack collapse that
+    /// follows it. `RunLoop.run(mode:before:)` returns immediately when nothing is attached, so a
+    /// single call waits for nothing at all and an "it is still there" assertion holds either way.
+    private func settle(_ seconds: TimeInterval) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        }
+    }
+
+    private func button(_ title: String, on toast: ToastView) throws -> AppButton {
+        try XCTUnwrap(descendants(of: toast).compactMap { $0 as? AppButton }.first { $0.title == title })
     }
 
     private func descendants(of view: NSView) -> [NSView] {
@@ -116,7 +150,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         XCTAssertEqual(keycaps(in: toast), ["⌘1"], "the toast for tab 1 names ⌘1")
     }
 
-    /// Displaying a keycap must not arm a key equivalent — the ZEN-106 guarantee that a toast never
+    /// Displaying a keycap must not arm a key equivalent — the ZEN-143 guarantee that a toast never
     /// steals keys from the terminal. The binding named is the app's, not the toast's.
     func test_waitingToast_withKeycap_stillArmsNoKeyEquivalents() throws {
         let controller = makeController()
@@ -248,7 +282,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         XCTAssertEqual(Set(titles), ["Dismiss", "Open Settings"], "\(titles)")
     }
 
-    /// The ZEN-106 guarantee holds for the new `.primary` button too: a sticky toast never arms a
+    /// The ZEN-143 guarantee holds for the new `.primary` button too: a sticky toast never arms a
     /// Return/Esc equivalent, so it can't steal keys from the terminal.
     func test_configDiagnosticsToast_armsNoKeyEquivalents() {
         let controller = makeController()
@@ -263,6 +297,228 @@ final class WindowControllerToastSeamTests: WindowTestCase {
     /// The new seam end to end: firing the toast's "Open Settings" action opens the Settings card
     /// (the section it lands on is unit-tested via the scope→section map). A dead button would leave
     /// the toast's whole point unreachable.
+    // MARK: conflict cards (ZEN-368)
+
+    private func conflict(
+        loser: KeyInterceptor.ReservedChord, chord: Chord, winner: KeyInterceptor.ReservedChord
+    ) -> KeybindConflict {
+        KeybindConflict(loser: loser, chord: chord, winner: winner)
+    }
+
+    func test_conflictToast_carriesAcceptAndRevert() throws {
+        let controller = makeController()
+
+        controller.showConflictToasts([
+            conflict(loser: .toggleCommandPalette, chord: Chord(command: true, key: "p"), winner: .splitVertical)
+        ])
+
+        let toasts = toastViews(in: controller)
+        XCTAssertEqual(toasts.count, 1)
+        let titles = descendants(of: toasts[0]).compactMap { ($0 as? AppButton)?.title }
+        XCTAssertEqual(Set(titles), ["Accept", "Revert"], "\(titles)")
+    }
+
+    /// A float's `key:` is required, so there is nothing to back out to and the button must not be
+    /// there. Offering it would promise an edit the app cannot make.
+    func test_conflictToast_fromAFloat_offersAcceptAlone() throws {
+        let controller = makeController()
+
+        controller.showConflictToasts([
+            conflict(
+                loser: .findNext, chord: Chord(command: true, key: "g"),
+                winner: .toggleToolFloat("lazygit"))
+        ])
+
+        let titles = descendants(of: toastViews(in: controller)[0]).compactMap { ($0 as? AppButton)?.title }
+        XCTAssertEqual(titles, ["Accept"], "\(titles)")
+    }
+
+    /// A card whose write fails must stay up. It used to dismiss first and ignore the result, so an
+    /// unwritable config read as a successful answer: the card slid away, nothing was written, and
+    /// no error appeared anywhere.
+    func test_conflictToast_aFailedWrite_leavesTheCardUp() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        let controller = makeController()
+        controller.showConflictToasts(KeybindConflict.all(in: .current))
+        // Make the config unwritable by putting a directory where the file belongs.
+        let file = tempRoot.appendingPathComponent("config")
+        try FileManager.default.removeItem(at: file)
+        try FileManager.default.createDirectory(at: file, withIntermediateDirectories: true)
+
+        try button("Accept", on: toastViews(in: controller)[0]).onTap()
+
+        // Past the spring-out, or a card that IS dismissing still counts and the assertion holds
+        // whether or not the fix is there.
+        settle(1.0)
+        XCTAssertEqual(toastViews(in: controller).count, 1, "the card stays, so it can be retried")
+    }
+
+    /// Answering one card must leave the others alone. Re-showing the reduced set used to spring
+    /// every survivor out and a replacement in, which read on screen as the stack dropping a good
+    /// way down and settling back (ZEN-368).
+    func test_reShowingAReducedSet_keepsTheSurvivingCard() {
+        let controller = makeController()
+        let a = conflict(loser: .findNext, chord: Chord(command: true, key: "g"), winner: .toggleToolFloat("a"))
+        let b = conflict(loser: .searchSelection, chord: Chord(command: true, key: "e"), winner: .toggleToolFloat("b"))
+        controller.showConflictToasts([a, b])
+        let before = toastViews(in: controller)
+        XCTAssertEqual(before.count, 2)
+
+        controller.showConflictToasts([b])
+
+        waitUntil(toastViews(in: controller).count == 1, "the answered card comes down")
+        XCTAssertTrue(
+            toastViews(in: controller)[0] === before[1],
+            "and the survivor is the SAME view, not a replacement that animated back in")
+    }
+
+    /// The other half: a set that grew keeps what is already up and adds beside it.
+    func test_reShowingAGrownSet_keepsTheExistingCard() {
+        let controller = makeController()
+        let a = conflict(loser: .findNext, chord: Chord(command: true, key: "g"), winner: .toggleToolFloat("a"))
+        let b = conflict(loser: .searchSelection, chord: Chord(command: true, key: "e"), winner: .toggleToolFloat("b"))
+        controller.showConflictToasts([a])
+        let first = toastViews(in: controller)[0]
+
+        controller.showConflictToasts([a, b])
+
+        let now = toastViews(in: controller)
+        XCTAssertEqual(now.count, 2)
+        XCTAssertTrue(now.contains { $0 === first }, "the card already up is untouched")
+    }
+
+    /// The third exit. Answering writes; putting the card away must not, or a user tidying their
+    /// screen would silently edit their config. Actionable toasts had no close affordance at all
+    /// until this, so a conflict card could only be answered (ZEN-368).
+    func test_conflictToast_close_dismissesWithoutWriting() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        let before = try configText()
+        let controller = makeController()
+        controller.showConflictToasts(KeybindConflict.all(in: .current))
+        let toast = toastViews(in: controller)[0]
+
+        try XCTUnwrap(descendants(of: toast).compactMap { $0 as? IconButton }.first).onClick()
+
+        waitUntil(toastViews(in: controller).isEmpty, "the card comes down")
+        XCTAssertEqual(try configText(), before, "byte-identical: closing writes nothing")
+        XCTAssertEqual(
+            KeybindConflict.all(in: .current).map(\.loser), [.toggleCommandPalette],
+            "and it is still outstanding, so the next launch raises it again")
+    }
+
+    /// The × is opt-in. It does nothing unless its host wires `onClose`, and only the conflict card
+    /// does, so an actionable card that never asked for one must not draw a dead button. A confirm
+    /// gates keyboard focus, so clicking a dead × there left the terminal deaf until Cancel was
+    /// found (ZEN-368).
+    func test_theDiagnosticsNotice_hasNoCloseAffordance() throws {
+        let controller = makeController()
+        let content = try XCTUnwrap(
+            ConfigDiagnostic.toast(for: [
+                ConfigDiagnostic(scope: .setting(key: "font-size"), problem: .clamped(value: "200", to: "72"))
+            ]))
+
+        controller.showConfigDiagnosticsToast(content, landingScope: .setting(key: "font-size"))
+
+        let toast = toastViews(in: controller)[0]
+        XCTAssertFalse(descendants(of: toast).compactMap { $0 as? AppButton }.isEmpty, "it has buttons")
+        XCTAssertTrue(
+            descendants(of: toast).compactMap { $0 as? IconButton }.isEmpty,
+            "but no ×, because nothing here would answer it")
+    }
+
+    /// A passive toast has no buttons and dismisses on a body click, so a × there would be a second
+    /// way to do the same thing on a card that needs none.
+    func test_aPassiveToast_hasNoCloseAffordance() {
+        let controller = makeController()
+        controller.showToast(ToastContent(variant: .info, title: "t", message: "m"))
+
+        let toast = toastViews(in: controller)[0]
+        XCTAssertTrue(descendants(of: toast).compactMap { $0 as? IconButton }.isEmpty)
+    }
+
+    /// The card's buttons, end to end. Everything above asserts which buttons exist; this is the
+    /// only thing checking that pressing one reaches the config. A card whose Accept did nothing
+    /// would look completely correct and be the first surface a user meets (ZEN-368).
+    func test_conflictToast_accept_writesTheUnset() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        let controller = makeController()
+        controller.showConflictToasts(KeybindConflict.all(in: .current))
+
+        try button("Accept", on: toastViews(in: controller)[0]).onTap()
+
+        XCTAssertEqual(GeneralConfig.current.unboundActions, [.toggleCommandPalette])
+        let text = try configText()
+        XCTAssertTrue(text.contains("keybind = toggle_command_palette=none"), text)
+        XCTAssertEqual(KeybindConflict.all(in: .current), [], "and nothing reports it again")
+    }
+
+    func test_conflictToast_revert_dropsTheLineThatTookTheChord() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        let controller = makeController()
+        controller.showConflictToasts(KeybindConflict.all(in: .current))
+
+        try button("Revert", on: toastViews(in: controller)[0]).onTap()
+
+        let text = try configText()
+        XCTAssertFalse(text.contains("split_vertical"), text)
+        XCTAssertEqual(GeneralConfig.current.keymap[Chord(command: true, key: "p")], .toggleCommandPalette)
+        XCTAssertEqual(KeybindConflict.all(in: .current), [])
+    }
+
+    /// Answering takes that card down. Left up, it would describe a config that no longer exists.
+    func test_conflictToast_answering_dismissesTheCard() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        let controller = makeController()
+        controller.showConflictToasts(KeybindConflict.all(in: .current))
+
+        try button("Accept", on: toastViews(in: controller)[0]).onTap()
+
+        waitUntil(toastViews(in: controller).isEmpty, "the answered card comes down")
+    }
+
+    /// One card each. A list in a single card would let one Accept settle three decisions.
+    func test_threeConflicts_mountThreeCards() {
+        let controller = makeController()
+
+        controller.showConflictToasts([
+            conflict(loser: .findNext, chord: Chord(command: true, key: "g"), winner: .toggleToolFloat("a")),
+            conflict(
+                loser: .findPrevious, chord: Chord(command: true, shift: true, key: "g"),
+                winner: .toggleToolFloat("b")),
+            conflict(loser: .searchSelection, chord: Chord(command: true, key: "e"), winner: .toggleToolFloat("c")),
+        ])
+
+        XCTAssertEqual(toastViews(in: controller).count, 3)
+    }
+
+    /// The ZEN-143 guarantee holds for these too: a sticky card never arms Return/Esc, so Esc keeps
+    /// reaching the pane. It is why the × is the only keyboard-free way out of one.
+    func test_conflictToast_armsNoKeyEquivalents() {
+        let controller = makeController()
+        controller.showConflictToasts([
+            conflict(loser: .findNext, chord: Chord(command: true, key: "g"), winner: .splitVertical)
+        ])
+
+        let toast = toastViews(in: controller)[0]
+        let armed = descendants(of: toast).compactMap { ($0 as? AppButton)?.keyEquivalent }
+        XCTAssertEqual(armed, ["", ""], "neither button arms a key")
+        XCTAssertFalse(toast.acceptsFirstResponder, "and the card never takes focus from the terminal")
+    }
+
+    func test_dismissConflictToasts_takesThemAllDown() {
+        let controller = makeController()
+        controller.showConflictToasts([
+            conflict(loser: .findNext, chord: Chord(command: true, key: "g"), winner: .toggleToolFloat("a")),
+            conflict(loser: .searchSelection, chord: Chord(command: true, key: "e"), winner: .toggleToolFloat("b")),
+        ])
+        XCTAssertEqual(toastViews(in: controller).count, 2)
+
+        controller.dismissConflictToasts()
+
+        // Dismissal springs out, so the cards leave the hierarchy a frame later.
+        waitUntil(toastViews(in: controller).isEmpty, "both cards come down")
+    }
+
     func test_configDiagnosticsToast_openSettingsButton_opensTheSettingsCard() throws {
         let controller = makeController()
         controller.showConfigDiagnosticsToast(

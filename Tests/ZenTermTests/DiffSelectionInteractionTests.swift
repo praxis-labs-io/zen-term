@@ -89,7 +89,7 @@ final class DiffSelectionInteractionTests: WindowTestCase {
     }
 
     /// An arrow, built the way AppKit actually delivers one: `.function` and `.numericPad` are on every
-    /// arrow keyDown, and a synthesized event without them is a keystroke macOS never sends (ZEN-145).
+    /// arrow keyDown, and a synthesized event without them is a keystroke macOS never sends (ZEN-81).
     private func arrow(
         down: Bool, shift: Bool = false, into overlay: DiffViewerOverlay,
         file: StaticString = #filePath, line: UInt = #line
