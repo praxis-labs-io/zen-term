@@ -922,6 +922,25 @@ final class TabController: NSObject {
         focusPanel(target)
     }
 
+    /// Step focus `delta` panels along the tab's order, wrapping at both ends (ZEN-372).
+    ///
+    /// The order is the pane tree's leaves, then whichever drawers are open. Cycling covers the
+    /// same panels `navigate` does, and has to: leaving the drawers out would let you cycle out of
+    /// one and never back in. It is deliberately not geometric, so the step is predictable in a
+    /// layout where "next" has no direction.
+    ///
+    /// One panel means nowhere to go, and silently, the way `cycleTab` is for one tab. A dead
+    /// `navigate` toasts because the pane exists and just isn't that way; here the whole tab is on
+    /// screen and there is nothing to explain.
+    func cyclePane(_ delta: Int) {
+        if isZoomed { toastZoomBlocked("cycle"); return }
+        var order = paneCanvas.orderedLeafIDs
+        if isBottomOpen { order.append(Self.bottomDrawerID) }
+        if isRightOpen { order.append(Self.rightDrawerID) }
+        guard order.count > 1, let i = order.firstIndex(of: currentPanelID) else { return }
+        focusPanel(order[(i + delta + order.count) % order.count])
+    }
+
     /// Drop focus-memory entries for panes that have closed, so `navReturn` doesn't grow with
     /// every pane ever created in a long-lived tab. Correctness already tolerates stale entries
     /// (they fail the still-open / in-direction checks in `navigate`) — this is memory hygiene only.

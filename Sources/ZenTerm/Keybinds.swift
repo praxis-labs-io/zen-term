@@ -12,6 +12,8 @@ extension KeyInterceptor.ReservedChord {
         case .navRight: return "nav_right"
         case .navUp: return "nav_up"
         case .navDown: return "nav_down"
+        case .prevPane: return "prev_pane"
+        case .nextPane: return "next_pane"
         case .closePane: return "close_pane"
         case .newTab: return "new_tab"
         case .newWindow: return "new_window"
@@ -86,6 +88,7 @@ extension KeyInterceptor.ReservedChord {
         case .jumpToPreviousPrompt, .jumpToNextPrompt: return true
         case .splitVertical, .splitHorizontal, .closePane, .newTab, .newWindow, .selectTab,
             .prevTab, .nextTab, .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
+            .prevPane, .nextPane,
             .toggleToolFloat, .toggleRepoPicker, .toggleCommandPalette, .openSettings,
             .reloadConfig, .checkForUpdates, .reportIssue, .openDiffViewer, .resetFontSize,
             .toggleScrollMode, .toggleSearch, .scrollToTop, .scrollToBottom,
@@ -122,7 +125,7 @@ extension KeyInterceptor.ReservedChord {
             .toggleSearch, .searchSelection, .findNext, .findPrevious,
             .clearScreen, .selectAll, .pasteSelection, .writeScreenFile,
             .copyScreenFilePath, .openScreenFile,
-            .navLeft, .navRight, .navUp, .navDown,
+            .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane,
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
             .newTab, .newWindow, .prevTab, .nextTab, .selectTab,
             .fillScreen, .toggleBottomDrawer, .toggleRightDrawer,
@@ -141,6 +144,8 @@ extension KeyInterceptor.ReservedChord {
         case "nav_right": self = .navRight
         case "nav_up": self = .navUp
         case "nav_down": self = .navDown
+        case "prev_pane": self = .prevPane
+        case "next_pane": self = .nextPane
         case "close_pane": self = .closePane
         case "new_tab": self = .newTab
         case "new_window": self = .newWindow
@@ -240,6 +245,12 @@ enum KeymapDefaults {
         map[Chord(command: true, control: true, key: "→")] = .resizeRight
         map[Chord(command: true, control: true, key: "↑")] = .resizeUp
         map[Chord(command: true, control: true, key: "↓")] = .resizeDown
+        // Stepping through the panels in order, wrapping (ZEN-372). ghostty spells this ⌘[ / ⌘],
+        // which ZenTerm spends on tabs, so it takes the shifted pair. That is ghostty's tab cycling,
+        // so the bracket family is inverted here on both rows, deliberately and in one direction:
+        // tabs unshifted, panes shifted.
+        map[Chord(command: true, shift: true, key: "[")] = .prevPane
+        map[Chord(command: true, shift: true, key: "]")] = .nextPane
         map[Chord(command: true, key: "w")] = .closePane
         map[Chord(command: true, shift: true, key: "s")] = .toggleScrollMode
 

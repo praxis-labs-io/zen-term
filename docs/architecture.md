@@ -830,6 +830,14 @@ second spelling of fullscreen and stays unbound because it is macOS's *native* f
 chord, and Fill Screen is a maximize, so answering it would promise a space switch it does
 not do.
 
+**Pane cycling is ⌘⇧[ / ⌘⇧]**, which ZenTerm had no action for at all: nav was directional
+only. `TabController.cyclePane` steps the pane tree's leaves and then whichever drawers are
+open, wrapping at both ends. The drawers are in the ring on purpose: leaving them out would
+let focus cycle out of a drawer and never back in. The step is deliberately not geometric,
+so it stays predictable in a layout where "next" has no direction, and one panel is a
+silent no-op the way `cycleTab` is for one tab. ghostty spends this pair on tab cycling,
+which is the second half of the bracket divergence above.
+
 **⌃hjkl is deliberately not the default nav**, though it is the obvious vim habit. It costs
 ⌃L clear-screen and ⌃K kill-line in every plain shell pane, and neither is worth a
 directional chord ⌘⌥arrows already covers. The reference config carries it as a four-line

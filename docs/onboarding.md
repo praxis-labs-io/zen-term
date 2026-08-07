@@ -66,6 +66,7 @@ keys? Four lines in the config move it to `⌃HJKL` or anywhere else.
 | Right drawer                     | `⌘\`                        |
 | New window                       | `⌘N`                        |
 | Previous and next tab            | `⌘[` `⌘]`                   |
+| Previous and next pane           | `⌘⇧[` `⌘⇧]`                 |
 | Tab 1 through 9                  | `⌘1` … `⌘9`                 |
 | Clear the screen                 | `⌘K`                        |
 | Select the whole buffer          | `⌘A`                        |

@@ -35,6 +35,8 @@ enum CommandCatalog {
         case .navDown: return pane("Focus Pane Down", glyph, chord)
         case .navUp: return pane("Focus Pane Up", glyph, chord)
         case .navRight: return pane("Focus Pane Right", glyph, chord)
+        case .prevPane: return pane("Focus Previous Pane", glyph, chord)
+        case .nextPane: return pane("Focus Next Pane", glyph, chord)
         case .resizeLeft: return pane("Resize Pane Left", glyph, chord)
         case .resizeDown: return pane("Resize Pane Down", glyph, chord)
         case .resizeUp: return pane("Resize Pane Up", glyph, chord)
@@ -109,7 +111,7 @@ enum CommandCatalog {
         }
         chords += [
             .splitHorizontal, .splitVertical,
-            .navLeft, .navDown, .navUp, .navRight,
+            .navLeft, .navDown, .navUp, .navRight, .prevPane, .nextPane,
             .resizeLeft, .resizeDown, .resizeUp, .resizeRight,
             .toggleZoom, .toggleScrollMode, .toggleSearch, .searchSelection,
             .scrollPageUp, .scrollPageDown, .scrollToTop, .scrollToBottom,
