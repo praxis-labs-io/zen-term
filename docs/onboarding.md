@@ -42,41 +42,44 @@ Six to start.
 
 |                      |                       |
 | -------------------- | --------------------- |
-| Split side by side   | `⌘⇧\`                 |
-| Split top and bottom | `⌘⇧-`                 |
-| Move between panes   | `⌘H` `⌘J` `⌘K` `⌘L`   |
+| Split side by side   | `⌘D`                  |
+| Split top and bottom | `⌘⇧D`                 |
+| Move between panes   | `⌘⌥←` `⌘⌥↓` `⌘⌥↑` `⌘⌥→` |
 | Close the pane       | `⌘W`                  |
 | New tab              | `⌘T`                  |
 | Settings             | `⌘,`                  |
 
-The split keys are shaped like the split they make. `\` is a vertical divider, so
-you get panes side by side. `-` is a horizontal one, so you get panes stacked.
-
-Pane movement is vim's arrow keys. **H** is left, **L** is right, **J** is down,
-**K** is up. Your hands stay on home row.
+Pane movement is ⌘⌥ and an arrow, the direction you want to go. Prefer vim's
+keys? Four lines in the config move it to `⌃HJKL` or anywhere else.
 
 <details>
 <summary>Everything else</summary>
 
 |                                  |                             |
 | -------------------------------- | --------------------------- |
-| Resize the pane                  | `⌘⇧H` `⌘⇧J` `⌘⇧K` `⌘⇧L`     |
-| Focus Mode (pane fills the window) | `⌘F`                      |
-| Fill Screen (window fills the desktop) | `⌘⇧F`                 |
+| Resize the pane                  | `⌘⌃←` `⌘⌃↓` `⌘⌃↑` `⌘⌃→`     |
+| Focus Mode (pane fills the window) | `⌘⇧⏎`                     |
+| Fill Screen (window fills the desktop) | `⌘⏎`                  |
 | Scroll mode (read the buffer with the keyboard) | `⌘⇧S`       |
-| Find in the pane's scrollback    | `⌘/`                        |
+| Find in the pane's scrollback    | `⌘F`                        |
 | Bottom drawer                    | `⌘B`                        |
 | Right drawer                     | `⌘\`                        |
 | New window                       | `⌘N`                        |
 | Previous and next tab            | `⌘[` `⌘]`                   |
 | Tab 1 through 9                  | `⌘1` … `⌘9`                 |
-| Diff viewer                      | `⌘D`                        |
-| Command palette                  | `⌘P`                        |
-| Workspace picker                 | `⌘⇧P`                       |
-| Reload config                    | `⌘⌥R`                       |
+| Clear the screen                 | `⌘K`                        |
+| Select the whole buffer          | `⌘A`                        |
+| Diff viewer                      | `⌘G`                        |
+| Command palette                  | `⌘⇧P`                       |
+| Workspace picker                 | `⌘P`                        |
+| Reload config                    | `⌘⇧,`                       |
 
-**⌘P finds anything.** Press it and type what you want. Each action is listed
+**⌘⇧P finds anything.** Press it and type what you want. Each action is listed
 with its shortcut beside it, so it doubles as the reference for this page.
+
+Coming from Ghostty, this is your keymap. Every shortcut above is the one Ghostty
+binds, with one exception: `⌘[` and `⌘]` are tabs here rather than panes, the way
+Safari and the rest of the Mac use them.
 
 </details>
 
@@ -88,7 +91,7 @@ A workspace is a folder plus the layout you want when you open it.
 2. Choose **＋ Add workspace**.
 3. Name it and point it at a folder.
 
-**⌘⇧P** now opens a picker with that workspace in it. Choose it and you get a tab
+**⌘P** now opens a picker with that workspace in it. Choose it and you get a tab
 in that folder, named after the workspace, with the layout you defined. Add one
 per repo you work in.
 
@@ -101,14 +104,15 @@ A tool float is a command on a shortcut, floating over your work.
 
 1. Press **⌘,** to open Settings, then choose **Tools**.
 2. Choose **＋ Add tool float**.
-3. Set a command (`lazygit`), a shortcut (⌘⌥G), and an icon.
+3. Set a command (`lazygit`), a shortcut of your own (`⌘⇧L` here), and an icon.
 
-⌘⌥G now floats lazygit over your work and closes it again. The float stays warm,
-so reopening it is instant. The same works for `btop`, a dev server, or `gh dash`.
+That chord now floats lazygit over your work and closes it again. The float stays
+warm, so reopening it is instant. The same works for `btop`, a dev server, or
+`gh dash`.
 
 ## Review a diff
 
-**⌘D** opens the diff viewer on the focused pane's repo. A file tree on the left,
+**⌘G** opens the diff viewer on the focused pane's repo. A file tree on the left,
 the diff on the right, side by side or inline.
 
 It has its own keys while it is open, and they are vim's. `j` and `k` move, `h`
@@ -132,7 +136,7 @@ marks the row you are reading.
 took. `q` leaves. Nothing you type reaches the shell while the mode is up, but your own
 shortcuts still work, so ⌘T and pane movement are never swallowed.
 
-**⌘/** searches the pane's whole scrollback rather than only what is on screen, and opens
+**⌘F** searches the pane's whole scrollback rather than only what is on screen, and opens
 on whatever you have selected, so a word you can see never has to be retyped. Every
 match lights up as you type, the bar counts them, and if the only matches are further
 back the pane scrolls so you can see one while you type. `⏎` hands the keys back and
@@ -146,7 +150,7 @@ scrolled or a running command printed.
 
 ## Neovim: one motion across splits and panes
 
-Out of the box these are two separate motions. `⌘H` `⌘J` `⌘K` `⌘L` moves between
+Out of the box these are two separate motions. `⌘⌥` and an arrow moves between
 ZenTerm panes, and Neovim's own `Ctrl-hjkl` moves between Neovim splits. You
 switch between two sets of keys depending on where focus happens to be.
 
@@ -177,7 +181,7 @@ keybind = nav_right=ctrl+l
 
 The tradeoff: `Ctrl-hjkl` now belongs to pane nav, so other TUIs in a shell pane
 (htop, less) lose those keys. That is the same tradeoff tmux and kitty make.
-`⌘H` `⌘J` `⌘K` `⌘L` keeps working regardless, and is never affected.
+`⌘⌥` and an arrow keeps working regardless, and is never affected.
 
 Outside ZenTerm the plugin falls back to a plain `wincmd`, so the same Neovim
 config works anywhere.
@@ -221,7 +225,7 @@ version, what changed, and Install. It downloads and installs in place, then
 offers to relaunch. Skip a version and it stays skipped. Choose Later and ZenTerm
 offers it again at its next check.
 
-To check on your own, open the command palette (⌘P) and run Check for Updates; if
+To check on your own, open the command palette (⌘⇧P) and run Check for Updates; if
 nothing is waiting it tells you you're on the latest. To check only when you ask,
 turn off the background checks in Settings → General, and the command still works.
 

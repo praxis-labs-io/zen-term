@@ -74,7 +74,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
         applier.surfaceConfigNotices()
 
         XCTAssertEqual(announced, [], "nothing joins the shared list")
-        XCTAssertEqual(carded.map(\.loser), [.findNext])
+        XCTAssertEqual(carded.map(\.loser), [.openDiffViewer])
         XCTAssertFalse(carded[0].isRevertable, "a float's key: has nothing to back out to")
     }
 
@@ -85,7 +85,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
         try seed(
             """
             float = order:1 title:lazygit command:lazygit key:cmd+g
-            float = order:2 title:gitdash command:gd key:cmd+shift+g
+            float = order:2 title:gitdash command:gd key:cmd+k
             float = order:3 title:nvim command:nvim key:cmd+e
             """)
 
@@ -97,7 +97,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
     /// A `keybind =` line took it, so there is a line to delete and Revert is on offer.
     func test_aKeybindLineTakingAChord_offersRevert() throws {
         let applier = makeApplier()
-        try seed("keybind = split_vertical=cmd+p\n")
+        try seed("keybind = split_vertical=cmd+shift+p\n")
 
         applier.surfaceConfigNotices()
 
@@ -110,7 +110,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
     /// which is what makes an unanswered conflict come back.
     func test_theSameConflictTwice_isNotReCarded() throws {
         let applier = makeApplier()
-        try seed("keybind = split_vertical=cmd+p\n")
+        try seed("keybind = split_vertical=cmd+shift+p\n")
         applier.surfaceConfigNotices()
         carded = []
 
@@ -122,11 +122,11 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
     /// Answering one has to take its card down, or the card would outlive the config it describes.
     func test_resolvingAConflict_retractsItsCard() throws {
         let applier = makeApplier()
-        try seed("keybind = split_vertical=cmd+p\n")
+        try seed("keybind = split_vertical=cmd+shift+p\n")
         applier.surfaceConfigNotices()
         XCTAssertEqual(carded.count, 1)
 
-        try seed("keybind = split_vertical=cmd+p\nkeybind = toggle_command_palette=none\n")
+        try seed("keybind = split_vertical=cmd+shift+p\nkeybind = toggle_command_palette=none\n")
         applier.surfaceConfigNotices()
 
         XCTAssertEqual(carded, [], "accepted, so nothing is outstanding")

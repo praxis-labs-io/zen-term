@@ -514,7 +514,7 @@ only the user-facing name is Focus Mode.
 
 **Window chrome is config-driven.** The macOS window buttons show by default;
 `window-chrome = false` hides them for a chromeless top, and `ChromeMetrics.topInset`
-adds/drops the traffic-light clearance to match. **Fill Screen** (⌘⇧F) toggles the
+adds/drops the traffic-light clearance to match. **Fill Screen** (⌘⏎) toggles the
 window between its size and the screen's visible frame; it is a maximize, not native
 fullscreen (no space switch, the menu bar stays).
 
@@ -522,7 +522,7 @@ fullscreen (no space switch, the menu bar stays).
 for a different card closes the current one and falls through, so cards switch
 live.
 
-**The diff viewer is the first chrome subsystem to shell out.** ⌘D opens
+**The diff viewer is the first chrome subsystem to shell out.** ⌘G opens
 `DiffViewerOverlay`, a modal card over the focused tile: a single file tree on the
 left split into three status sections (Unstaged → Staged → Committed, empty ones
 hidden, each header carrying its slice's `+n −m` total), the diff of the selected file
@@ -653,7 +653,7 @@ re-close, the selection follows its file even when a `git add` moves it Unstaged
 and the cursor lands back on its line by number (never index). A directory a load is the
 first to show comes up expanded, like any first-seen row. `DiffViewerSession` holds that
 place plus the status cache, the highlight cache, and the picked base for the repo the
-viewer last opened, so ⌘D reopens where you left off; it lives as long as the tab and is
+viewer last opened, so ⌘G reopens where you left off; it lives as long as the tab and is
 never written to disk, and a different repo starts fresh. The overlay snapshots the place
 into the session on teardown (`viewDidMoveToWindow` with no window), not per keystroke.
 
@@ -678,7 +678,7 @@ then back to main with a parsed `[FileDiff]`. The model half (`DiffParser`, `Dif
 so the chrome never touches `Process` and the whole surface is drivable in a test
 without a repo. Opening is guarded upstream: a non-repo directory shows a toast and the
 overlay never mounts, so it always has a repo. Like the palette and floats it has no
-menu entry: chord + ⌘P + toolbar.
+menu entry: chord + ⌘⇧P + toolbar.
 
 **Tool floats are window-level, not app-level**, because a surface is one `NSView`
 and can live in one view hierarchy: an app-global instance would physically yank
@@ -755,7 +755,7 @@ resolution without allocating a `Chord`, because a reserved chord always has one
 Whatever no chord claimed is offered to `modeHandler`, and only then to the PTY.
 
 **`modeHandler` is the sticky-mode hook, and it sits *below* chord routing.** That
-placement is the design: a mode installed above it would swallow ⌘T, ⌘P and pane
+placement is the design: a mode installed above it would swallow ⌘T, ⌘⇧P and pane
 nav for as long as it was up. Below it, a mode still gets every un-reserved key,
 including the bare `j`/`k`/`g` that no chord is allowed to hold, while the user's
 own binds keep working inside the mode. It is installed only while a mode is live,
@@ -783,7 +783,7 @@ give a keypress a Shift its user never held. **A non-US layout can at worst
 mislabel a chord, never invent one.**
 
 **A key that types no character is a glyph in the app and a word in the file.** The
-arrows, Return, Home, End and the page keys carry a private-use character no fold
+arrows, Return, Tab, Home, End and the page keys carry a character no fold
 table knows, so `Chord` names them by keyCode (`specialKeyGlyphs`) and everything
 inside the app matches on `↖`. A config cannot: nobody types ↖ into a text editor. So
 `parse` reads `home` and `configToken` writes it back, and the screen still draws the
@@ -791,30 +791,67 @@ glyph. `KeyboardLayout.resolve` consults the keyCode table **before** the charac
 walk, which is what keeps `canType` from calling these untypeable and dropping a
 rebind onto one.
 
-Defaults (`KeymapDefaults.map`): ⌘⇧\ and ⌘⇧- split, ⌘HJKL nav, ⌘⇧HJKL resize, ⌘W
+Defaults (`KeymapDefaults.map`): ⌘D and ⌘⇧D split, ⌘⌥arrows nav, ⌘⌃arrows resize, ⌘W
 close pane, ⌘T new tab, ⌘N new window, ⌘[ ⌘] tabs, ⌘1-9 select, ⌘B bottom drawer,
-⌘\ right drawer, ⌘F Focus Mode, ⌘⇧F Fill Screen, ⌘⇧S scroll mode, ⌘/ find, ⌘P command
-palette, ⌘⇧P workspace picker, ⌘, settings, ⌘⌥R reload, ⌘= and ⌘+ and ⌘- font size,
-⌘0 reset it. ZEN-367 added seven more on the chords libghostty already used for them:
-⌘Home, ⌘End, ⌘PageUp, ⌘PageDown scroll the viewport, ⌘G and ⌘⇧G step a running
-search, ⌘E finds the selection. ZEN-369 added ⌘⇧V paste the selection and the prompt
-jumps on ⌘⇧↑ and ⌘⇧↓.
+⌘\ right drawer, ⌘⇧⏎ Focus Mode, ⌘⏎ Fill Screen, ⌘⇧S scroll mode, ⌘F find, ⌘⇧P command
+palette, ⌘P workspace picker, ⌘G diff viewer, ⌘, settings, ⌘⇧, reload, ⌘= and ⌘+ and
+⌘- font size, ⌘0 reset it. ZEN-367 added five more on the chords libghostty already used
+for them: ⌘Home, ⌘End, ⌘PageUp, ⌘PageDown scroll the viewport and ⌘E finds the selection.
+ZEN-369 added ⌘A select all, ⌘K clear screen, ⌘J scroll to the selection, ⌘⇧J and its
+⌃/⌥ variants write the screen to a file, ⌘⇧V paste the selection, and the prompt jumps on
+⌘⇧↑ and ⌘⇧↓.
 **No tool float is built in**; a float's chord comes from its own `key:` field.
 
-**Four actions ship with no chord**, and ZEN-369's are the first that ship unbound for
-want of a key rather than for want of a use: libghostty puts Clear Screen on ⌘K, Scroll
-to Selection on ⌘J and Write Screen to File on ⌘⇧J, and those are pane nav and resize
-here. A chord the app leans on all day outranks one of these, so they sit in the
-palette and the Shortcuts card and take whatever chord the user would rather give up.
-(Check for Updates and Report an Issue are unbound for the older reason: the menu bar
-already carries them.)
+**The defaults are ghostty's, and the premise is that a chord doing the wrong thing costs
+more than a chord doing nothing.** So where the two disagree, the concession goes to what a
+ghostty user reaches for first: the splits hold ⌘D and ⌘⇧D (the most-pressed chord in a
+ghostty split workflow after ⌘T), pane focus and resize hold ⌘⌥arrows and ⌘⌃arrows, ⌘F is
+Find, Focus Mode and Fill Screen sit on ⌘⇧⏎ and ⌘⏎, and the palette holds ⌘⇧P with the
+workspace picker on ⌘P.
 
-Select All is the fourth and its reason is different again: ⌘A is left **free**, not
-spent. AppKit serves Select All from an Edit menu item, and ZenTerm has never had one,
-so ⌘A does nothing in any field in the app. Claiming it for the keymap would make the
-terminal answer a chord every Mac user expects their caret to answer, and cement the
-gap. ZEN-370 adds the item, and a key equivalent in `MainMenu` is off limits to the
-keymap by construction, so the chord ends up the menu's either way.
+**One chord per action.** A second spelling costs a Shortcuts row that has to pick one of
+the two to advertise, a line in the reference config nobody asked for, and a rebind that
+has to free both. `KeymapAssemblyTests` holds the rule as an invariant, with increase font
+size named as the one exception (⌘+ *is* ⌘⇧= on a US layout, so the pair is one chord
+spelled two ways).
+
+Ghostty is the outlier on ⌘[ / ⌘], which it spends on panes; ZenTerm holds them on tabs,
+which is Safari's assignment. That is the one place a ghostty hand lands on the wrong
+action rather than on nothing, and it costs one keystroke to undo. `Chord` parses `tab`, so
+a config binding ghostty's ⌃⇥ resolves even though no default holds it, and Tab is the one
+entry in `Chord.specialKeyGlyphs` that types a real character: `\t` draws as nothing on a
+keycap and reads as a stray blank in a config file.
+
+**macOS takes some chords before any app sees them, and a chord bound there is dead while
+every test of it passes.** ⌘⌥D is the Dock toggle and ⌃⌘D is Look Up, which is why the diff
+viewer is on ⌘G. The keymap is an event monitor, so there is nothing to catch this below
+the machine: it takes a person pressing the key. ⌃⌘F is not this case. It is ghostty's
+second spelling of fullscreen and stays unbound because it is macOS's *native* fullscreen
+chord, and Fill Screen is a maximize, so answering it would promise a space switch it does
+not do.
+
+**⌃hjkl is deliberately not the default nav**, though it is the obvious vim habit. It costs
+⌃L clear-screen and ⌃K kill-line in every plain shell pane, and neither is worth a
+directional chord ⌘⌥arrows already covers. The reference config carries it as a four-line
+recipe.
+
+**The screen actions are on libghostty's own chords**: Select All ⌘A, Clear Screen ⌘K,
+Scroll to Selection ⌘J, Write Screen to File ⌘⇧J. Writing the screen has three endings and
+the backend takes the choice in with the call, because it disposes of the path inside the
+same action and never hands it back: ⌘⇧J types the path into the pane, ⌘⇧⌃J copies it,
+⌘⇧⌥J opens the file. (Check for Updates and Report an Issue are the only actions with no
+chord at all: the menu bar already carries them.)
+
+**⌘A is the keymap's and should not be.** `KeyInterceptor` resolves ahead of the responder
+chain, so binding it here also takes it from a focused text field, where a caret needs it
+more: the palette filter, a Settings field, the Report an Issue composer. ZEN-370 is where
+that is settled, by serving Select All from an Edit menu item that works over a field and
+over a pane both. Until then a field cannot select its own text.
+
+Stepping a search is `n` and `N` while the search holds the keyboard, so `find_next` and
+`find_previous` ship with no chord and `SearchController.key(for:)` reads them. They stay
+rebindable, and they stay out of the palette: opening it tears the find bar down, which
+would make the row a no-op every time.
 
 **Which chords a text view owns is a measured fact, not a guessed one.** ⌘⇧↑/⌘⇧↓ are
 `NSTextView`'s own bindings (extend selection to start and end of document) and ⌘A is
@@ -825,6 +862,16 @@ the keystroke to a real text view and reads its selection back rather than asser
 the predicate. A guard that answers "yes, defer" for a chord nothing downstream
 implements hands the keystroke to nobody, which looks identical to working.
 
+**⌘⏎ and ⌘⇧⏎ are in the same set for a different reason.** Not because macOS binds them,
+but because the diff comment composer does: ⏎ sends, ⌘⏎ queues, ⇧⏎ takes a new line, all
+decoded off the raw event in `DiffCommentComposer.sendShortcut`. Fill Screen and Focus Mode
+sitting on those two chords is right for a window and wrong for a caret, and the composer
+lives inside a modal card, so an unguarded ⌘⏎ would be swallowed by
+`WindowController.handle` and do nothing at all. The test routes the event through
+`KeyInterceptor` and feeds what comes back to `sendShortcut`, because the guard returning
+`true` proves nothing about whether the event that survived is still one the composer can
+read.
+
 **Increase ships two chords, and the second is load-bearing.** ⌘+ on a US layout is
 physically ⌘⇧=, which `Chord` folds onto `=` because Shift is set, making it a
 different dictionary key from bare ⌘=. Bind only ⌘= and the keypress most people make falls
@@ -832,7 +879,7 @@ through to libghostty, which still has it bound per surface, reproducing ZEN-224
 for the common case. It is the one action with two defaults; `assemble` drops all of
 an action's defaults on a rebind, and `Chord.displayed` sorts by config token, so a
 keycap renders the plainer ⌘=. (ZEN-142 had moved split off bare ⌘- to leave it to
-libghostty; ZEN-224 took it back, and ⌘⇧- stays split on its own merits.)
+libghostty; ZEN-224 took the chord back, and it is font size alone now.)
 
 **The prompt jumps are the mirror, and the same sort rule is why.** libghostty binds
 them on bare ⌘↑/⌘↓ *and* ⌘⇧↑/⌘⇧↓; ZenTerm ships only the shifted pair, which is the one
@@ -908,7 +955,7 @@ needing a second path here.
 
 **The modal gate cascade** in `WindowController.handle(_:)` runs confirm, then
 modal card, then tool float, then dispatch. The app-global chords (⌘N new window,
-⌘⌥R reload config, the three font-size chords, and the unbound-by-default Check for
+⌘⇧, reload config, the three font-size chords, and the unbound-by-default Check for
 Updates command) bypass it on
 the keyboard path (`AppDelegate.route`) and re-implement the gate by hand, because
 they are app-global rather than window-scoped. A command-palette pick, though,
@@ -1079,7 +1126,7 @@ width. Left on, `$` parks the cursor out in the padding and `v$y` copies a run o
 
 ### Scrollback search (ZEN-324)
 
-⌘/ opens a find bar along the bottom of the focused panel. **The searching is
+⌘F opens a find bar along the bottom of the focused panel. **The searching is
 libghostty's**: it matches, counts, tracks which match is selected, and its renderer
 paints every highlight. `SearchController` owns the bar, the needle, and the keys, and
 that is all the chrome does here.
@@ -1335,7 +1382,7 @@ comparison only covers what the fingerprint samples, and it cannot see a bug tha
 breaks the gated and ungated paths equally, which is why the named per-probe tests
 in `WindowControllerConfigFanOutTests` stay alongside it.
 
-**External hand-edits are picked up on demand only, via ⌘⌥R. There is no file
+**External hand-edits are picked up on demand only, via ⌘⇧,. There is no file
 watcher.**
 
 Both writers do a whole-file read-modify-rewrite over `ConfigFileIO`, which

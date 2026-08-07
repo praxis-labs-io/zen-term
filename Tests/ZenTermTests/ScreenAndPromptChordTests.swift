@@ -71,6 +71,20 @@ final class ScreenAndPromptChordTests: WindowTestCase {
         XCTAssertEqual(surface.writeScreenFileCount, 1)
     }
 
+    /// Writing the file and disposing of the path is one backend call, so the three actions differ
+    /// only by what they ask for. A copy-paste slip here sends all three down the same branch, and
+    /// the pane looks identical for two of them: the file is written either way.
+    func test_theThreeWriteScreenActionsAskForDifferentDispositions() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+
+        controller.handle(.writeScreenFile)
+        controller.handle(.copyScreenFilePath)
+        controller.handle(.openScreenFile)
+
+        XCTAssertEqual(surface.screenFileDispositions, [.paste, .copy, .open])
+    }
+
     // MARK: the prompt marks
 
     /// Negative is up the buffer, toward older output, matching every other scroll the seam takes.

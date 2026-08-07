@@ -97,9 +97,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // One `keyController()` lookup per keystroke, not one per input: this runs on the hot path
         // and the two readings must come from the same window regardless.
         keys.passThroughGuard = { [weak self] chord, action in
-            // A text view holding the keyboard owns ⌘A and the ⌘⇧ arrows, and it is the only thing
-            // that implements them: the menu bar has no Select All (ZEN-369). Asked first because
-            // it does not depend on the window lookup below.
+            // A text view holding the keyboard owns the ⌘⇧ arrows and the Return pair. ⌘A is not in
+            // that set and is measured, not assumed: AppKit serves Select All from an Edit menu item
+            // ZenTerm does not have yet, so deferring it here would hand the chord to nobody. The
+            // keymap holds ⌘A meanwhile, which is what takes it from a focused field until ZEN-370
+            // adds the menu item. Asked first because it does not depend on the window lookup below.
             if TextEditingChords.owns(chord, firstResponder: NSApp.keyWindow?.firstResponder) {
                 return true
             }
@@ -176,7 +178,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         if case .reloadConfig = chord {
-            // Forced: ⌘⌥R is the "make the app match my config" escape hatch, so it re-applies
+            // Forced: ⌘⇧, is the "make the app match my config" escape hatch, so it re-applies
             // everything rather than only what the diff says moved.
             AppConfig.reload(force: true)
             return

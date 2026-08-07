@@ -2,10 +2,10 @@ import AppKit
 
 /// The Workspaces settings section: the configured workspaces, with add / edit / reorder. Each
 /// workspace is a focusable `WorkspaceRow` — Return / click opens the edit form (delete lives there),
-/// Up/Down move between rows, ⌥Up/⌥Down move the workspace itself (the order the ⌘⇧P picker and this
+/// Up/Down move between rows, ⌥Up/⌥Down move the workspace itself (the order the ⌘P picker and this
 /// list both read), Left exits to the nav, Esc closes the card. A trailing "Add workspace" button
 /// opens a blank form. Add / edit route out through `onEditWorkspace`; the host presents
-/// `AddWorkspaceOverlay`, which writes on submit / delete and hands back here, so the ⌘⇧P picker
+/// `AddWorkspaceOverlay`, which writes on submit / delete and hands back here, so the ⌘P picker
 /// reflects the change with no restart. Mirrors `SettingsToolsSection`.
 final class SettingsWorkspacesSection: SettingsSection {
     var navTitle: String { "Workspaces" }
@@ -113,7 +113,7 @@ final class SettingsWorkspacesSection: SettingsSection {
 
         if let workspaces, workspaces.isEmpty {
             let hint = NSTextField(
-                labelWithString: "No workspaces yet. Add one to launch a folder with its own layout from ⌘⇧P.")
+                labelWithString: "No workspaces yet. Add one to launch a folder with its own layout from ⌘P.")
             hint.font = .systemFont(ofSize: 12)
             hint.textColor = Theme.current.chrome.ink(alpha: 0.5)
             hint.lineBreakMode = .byWordWrapping
@@ -137,7 +137,7 @@ final class SettingsWorkspacesSection: SettingsSection {
                 row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
             }
             // The rows are up with whatever git status was already known; fill in the rest when the
-            // background probe lands, the same way the ⌘⇧P picker does.
+            // background probe lands, the same way the ⌘P picker does.
             GitRepoStatus.refresh(workspaces.map(\.path)) { [weak self] in
                 self?.rows.forEach { $0.applyGitStatus() }
             }
@@ -229,7 +229,7 @@ final class WorkspaceRow: NSView {
 
     private let titleLabel: NSTextField
     private let subtitleLabel: NSTextField
-    /// A muted Git logo, trailing, when the folder is a repo — mirrors the ⌘⇧P picker's badge, and
+    /// A muted Git logo, trailing, when the folder is a repo — mirrors the ⌘P picker's badge, and
     /// like the picker's it starts hidden and turns on from `GitRepoStatus` once a background probe
     /// lands (the check is filesystem I/O, which never runs on the main thread — ZEN-90).
     private let gitBadge = NSImageView()

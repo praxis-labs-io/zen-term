@@ -95,10 +95,13 @@ final class RecordingSurface: NSObject, TerminalSurface {
     /// chord that fires twice off one keystroke.
     private(set) var clearScreenCount = 0
     private(set) var selectAllCount = 0
-    private(set) var writeScreenFileCount = 0
+    private(set) var screenFileDispositions: [ScreenFileDisposition] = []
+    var writeScreenFileCount: Int { screenFileDispositions.count }
     func clearScreen() { clearScreenCount += 1 }
     func selectAll() { selectAllCount += 1 }
-    func writeScreenToFile() { writeScreenFileCount += 1 }
+    func writeScreenToFile(_ disposition: ScreenFileDisposition) {
+        screenFileDispositions.append(disposition)
+    }
 
     private(set) var searches: [String] = []
     private(set) var searchSteps: [TerminalSearchStep] = []

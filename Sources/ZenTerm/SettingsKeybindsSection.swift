@@ -27,7 +27,13 @@ final class SettingsKeybindsSection: SettingsSection {
             ]
         ),
         ("Find", [.toggleSearch, .searchSelection, .findNext, .findPrevious]),
-        ("Screen", [.clearScreen, .selectAll, .pasteSelection, .writeScreenFile]),
+        (
+            "Screen",
+            [
+                .clearScreen, .selectAll, .pasteSelection, .writeScreenFile, .copyScreenFilePath,
+                .openScreenFile,
+            ]
+        ),
         ("Navigation", [.navLeft, .navDown, .navUp, .navRight]),
         ("Resize", [.resizeLeft, .resizeDown, .resizeUp, .resizeRight]),
         ("Tabs", [.newTab, .newWindow, .prevTab, .nextTab] + (1...9).map { .selectTab($0) }),
@@ -57,9 +63,9 @@ final class SettingsKeybindsSection: SettingsSection {
 
     init(capturer: KeybindCapturing?) {
         self.capturer = capturer
-        // Pick up a reload this card didn't make — ⌘⌥R after a hand-edit, or another window's
+        // Pick up a reload this card didn't make — ⌘⇧, after a hand-edit, or another window's
         // Settings write. Without it the chips and conflict messages keep showing the pre-reload
-        // config, and ⌘⌥R is exactly what a user reaches for after editing the file to clear a
+        // config, and ⌘⇧, is exactly what a user reaches for after editing the file to clear a
         // conflict this section just told them about.
         configObserver = NotificationCenter.default.addObserver(
             forName: .configDidChange, object: nil, queue: .main

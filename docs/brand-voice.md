@@ -140,7 +140,7 @@ Never leave the reader with advice they can't follow.
 **Empty states: state, imperative, payoff.**
 
 > "No tool floats yet. Add one to get a toolbar button and a shortcut."
-> "No workspaces yet. Add one to launch a folder with its own layout from ⌘⇧P."
+> "No workspaces yet. Add one to launch a folder with its own layout from ⌘P."
 
 **Brevity is measured, not felt.** The toast copy fits a 236pt budget, and
 "went to" was chosen over a spelled-out phrase because it costs ~30pt less. Copy
@@ -220,7 +220,7 @@ names the token you grep for, and that reasoning is sound.
 
 **The rule:** the config vocabulary wins only where the user is looking at the
 config, and the token must be a word the product still uses. `toggle_repo_picker`
-failed that test: a user could be shown "⌘⇧P went to toggle_repo_picker in your
+failed that test: a user could be shown "⌘P went to toggle_repo_picker in your
 config" while every other surface said "Workspaces". It was renamed to
 `toggle_workspace_picker` (ZEN-6), and the old token still parses so an existing
 binding keeps working.

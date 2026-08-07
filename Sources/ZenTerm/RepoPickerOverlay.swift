@@ -1,6 +1,6 @@
 import AppKit
 
-/// The `⌘⇧P` workspace picker: a modal palette over the tab's tile region listing the
+/// The `⌘P` workspace picker: a modal palette over the tab's tile region listing the
 /// workspaces configured in `~/.config/zen-term/workspaces`, led by a persistent
 /// "＋ New Workspace…" row that opens the Add-Workspace form. Enter opens the selected workspace in
 /// a new tab, Shift+Enter replaces the current tab, Esc / backdrop click dismiss. Built on

@@ -109,6 +109,65 @@ final class TextEditingChordsTests: WindowTestCase {
         XCTAssertEqual(fired, [.newTab])
     }
 
+    // MARK: Return belongs to the box you are typing in (ZEN-371)
+
+    /// ⌘⏎ is the diff comment composer's queue chord and ZEN-371 bound Fill Screen to it. The
+    /// interceptor resolves ahead of the responder chain, so without the guard the composer's own
+    /// decoder never sees the keystroke — and the card that hosts it swallows Fill Screen anyway,
+    /// so the chord does nothing at all rather than doing the wrong thing.
+    ///
+    /// The event goes through `route` and out the other side into `sendShortcut`, which is the
+    /// function the composer really calls. Asserting the guard's `true` alone would pass while the
+    /// event that came back was no longer one the composer could read.
+    func test_commandReturnReachesTheComposersOwnDecoder() throws {
+        window.makeFirstResponder(view)
+        let keys = interceptor()
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        let event = try returnKeyDown(flags: .command)
+        let passed = try XCTUnwrap(keys.route(event), "the guard has to hand the real event back")
+
+        XCTAssertEqual(DiffCommentComposer.sendShortcut(for: passed), .queue)
+        XCTAssertEqual(fired, [], "and Fill Screen must not have run behind it")
+    }
+
+    /// ⇧⏎ is the same box's new-line escape hatch, so ⌘⇧⏎ has to reach the text view too rather than
+    /// firing Focus Mode over an open composer. `sendShortcut` answers nil for it by design, which
+    /// is the composer letting the keystroke fall through, so the claim here is that it arrives.
+    func test_commandShiftReturnReachesItAsWell() throws {
+        window.makeFirstResponder(view)
+        let keys = interceptor()
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        let event = try returnKeyDown(flags: [.command, .shift])
+
+        XCTAssertIdentical(keys.route(event), event)
+        XCTAssertEqual(fired, [])
+    }
+
+    /// And with nothing focused they are the window's again, or Fill Screen would only work while
+    /// you happened not to be typing.
+    func test_theReturnChordsFireTheWindowActionsWhenNoTextViewHasTheKeyboard() throws {
+        window.makeFirstResponder(nil)
+        let keys = interceptor()
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        XCTAssertNil(keys.route(try returnKeyDown(flags: .command)))
+        XCTAssertNil(keys.route(try returnKeyDown(flags: [.command, .shift])))
+        XCTAssertEqual(fired, [.fillScreen, .toggleZoom])
+    }
+
+    private func returnKeyDown(flags: NSEvent.ModifierFlags) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, characters: "\r",
+                charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
+    }
+
     // MARK: and the pane keeps them when no text view is focused
 
     func test_theArrowsFireThePromptJumpWhenNoTextViewHasTheKeyboard() throws {
@@ -133,15 +192,14 @@ final class TextEditingChordsTests: WindowTestCase {
         XCTAssertFalse(TextEditingChords.owns(up, firstResponder: nil))
     }
 
-    /// ⌘A is deliberately absent, and measurement is why: AppKit serves Select All from a menu item
-    /// rather than from the text view, so deferring the chord here would hand it to nobody. ZEN-370
-    /// adds the item, and ⌘A becomes the menu's rather than the keymap's.
+    /// ⌘A is deliberately absent from this set, and measurement is why: AppKit serves Select All
+    /// from a menu item rather than from the text view, so deferring the chord here would hand it to
+    /// nobody at all. The keymap holds it, which is what takes it from a focused field until ZEN-370
+    /// adds the menu item that can serve both.
     func test_commandAIsNotTreatedAsATextViewChord() {
         XCTAssertFalse(
             TextEditingChords.owns(Chord(command: true, key: "a"), firstResponder: NSTextView()))
-        XCTAssertNil(
-            KeymapDefaults.map[Chord(command: true, key: "a")],
-            "⌘A is left free for the Edit menu item ZEN-370 adds")
+        XCTAssertEqual(KeymapDefaults.map[Chord(command: true, key: "a")], .selectAll)
     }
 
     private func arrowKeyDown(keyCode: UInt16, character: String) throws -> NSEvent {

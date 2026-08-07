@@ -118,7 +118,7 @@
 # bottom-drawer-fraction = 0.28       # clamped to 0.1…0.9
 # right-drawer-fraction = 0.30        # clamped to 0.1…0.9
 
-# One ⌘⇧HJKL nudge when resizing a focused drawer (px), and the ceiling a
+# One ⌘⌃arrow nudge when resizing a focused drawer (px), and the ceiling a
 # drawer may grow to (fraction of the working area; the canvas keeps the rest).
 # In-app Settings edit: both apply live.
 # drawer-resize-step = 40             # clamped to 4…400
@@ -206,14 +206,14 @@
 #   width    (optional)  width as a fraction of the tab              (default 0.85)
 #   height   (optional)  height as a fraction of the tab            (default 0.85)
 #
-# Example: the GitHub dashboard TUI on ⌘⌥D:
-# float = order:1 title:"Open GitDash" command:"gd" key:cmd+opt+d git:false icon:github
+# Example: the GitHub dashboard TUI, on a chord you pick:
+# float = order:1 title:"Open GitDash" command:"gd" key:cmd+ctrl+g git:false icon:github
 #
 # Example: a dev server with spaces in the command:
-# float = order:2 title:"Dev server" command:"npm run dev" key:cmd+shift+d
+# float = order:2 title:"Dev server" command:"npm run dev" key:cmd+shift+e
 #
 # Example: lazygit kept warm per repo (first open is cold; reopens are instant).
-# float = order:3 title:"Open Lazygit" command:"lazygit" key:cmd+opt+g git:true persist:dir icon:git height:0.78
+# float = order:3 title:"Open Lazygit" command:"lazygit" key:cmd+shift+l git:true persist:dir icon:git height:0.78
 #
 # Example: a system monitor kept alive for the window, reachable from every tab:
 # float = order:4 title:BTop command:"btop" key:cmd+shift+b persist:window icon:gauge
@@ -226,7 +226,7 @@
 #
 # Write `none` in place of a chord to take an action's shortcut away entirely:
 #
-#   keybind = find_next=none
+#   keybind = clear_screen=none
 #
 # The chord then reaches the program in your pane like any other. `unbind` works
 # too, since that's ghostty's word. (ghostty writes the trigger first, so its own
@@ -252,7 +252,7 @@
 # Chord syntax: `+`-joined modifiers then one key, e.g. cmd+shift+g.
 #   modifiers: cmd (command/super), shift, opt (option/alt), ctrl (control)
 #   key:       a single character (letter, digit, or symbol like - \ [ ])
-#              or one of: up down left right enter home end page_up page_down
+#              or one of: up down left right enter tab home end page_up page_down
 #              (ghostty's arrow_up and friends work too)
 #
 # Write the key as it's printed *unshifted*, and add `shift` yourself: cmd+shift+-
@@ -268,7 +268,11 @@
 #   toggle_bottom_drawer  toggle_right_drawer  toggle_focus_mode  fill_screen
 #   toggle_scroll_mode  toggle_search
 #   scroll_to_top  scroll_to_bottom  scroll_page_up  scroll_page_down
-#   find_next  find_previous  search_selection
+#   jump_to_previous_prompt  jump_to_next_prompt  scroll_to_selection
+#   search_selection
+#   find_next  find_previous  (no default; `n` and `N` step a live search)
+#   select_all  clear_screen  paste_selection
+#   write_screen_file  write_screen_file_copy  write_screen_file_open
 #   toggle_workspace_picker  toggle_command_palette  diff_viewer
 #   open_settings  reload_config
 #   increase_font_size  decrease_font_size  reset_font_size
@@ -278,17 +282,17 @@
 #                        apply here, since a float's chord is its own `key:` field)
 #
 # Defaults (uncomment to change; these are what ships):
-# keybind = split_horizontal=cmd+shift+-
-# keybind = split_vertical=cmd+shift+\           # ⌘⇧| on a US layout
+# keybind = split_vertical=cmd+d                 # a new pane to the right
+# keybind = split_horizontal=cmd+shift+d         # a new pane below
 # keybind = close_pane=cmd+w
-# keybind = nav_left=cmd+h
-# keybind = nav_down=cmd+j
-# keybind = nav_up=cmd+k
-# keybind = nav_right=cmd+l
-# keybind = resize_left=cmd+shift+h
-# keybind = resize_down=cmd+shift+j
-# keybind = resize_up=cmd+shift+k
-# keybind = resize_right=cmd+shift+l
+# keybind = nav_left=cmd+opt+left
+# keybind = nav_down=cmd+opt+down
+# keybind = nav_up=cmd+opt+up
+# keybind = nav_right=cmd+opt+right
+# keybind = resize_left=cmd+ctrl+left
+# keybind = resize_down=cmd+ctrl+down
+# keybind = resize_up=cmd+ctrl+up
+# keybind = resize_right=cmd+ctrl+right
 # keybind = new_tab=cmd+t
 # keybind = new_window=cmd+n
 # keybind = prev_tab=cmd+[
@@ -296,28 +300,47 @@
 # keybind = select_tab_1=cmd+1                    # … through select_tab_9=cmd+9
 # keybind = toggle_bottom_drawer=cmd+b
 # keybind = toggle_right_drawer=cmd+\
-# keybind = toggle_focus_mode=cmd+f              # one pane/drawer fills the window
-# keybind = fill_screen=cmd+shift+f              # the window fills the desktop
+# keybind = toggle_focus_mode=cmd+shift+enter    # one pane/drawer fills the window
+# keybind = fill_screen=cmd+enter                # the window fills the desktop
 # keybind = toggle_scroll_mode=cmd+shift+s       # vim keys move the focused pane's scrollback
-# keybind = toggle_search=cmd+/                  # find in the focused pane's scrollback
+# keybind = toggle_search=cmd+f                  # find in the focused pane's scrollback
 # keybind = scroll_to_top=cmd+home
 # keybind = scroll_to_bottom=cmd+end
 # keybind = scroll_page_up=cmd+page_up
 # keybind = scroll_page_down=cmd+page_down
-# keybind = find_next=cmd+g                      # step a running search
-# keybind = find_previous=cmd+shift+g
 # keybind = search_selection=cmd+e               # find what you have selected
 # keybind = paste_selection=cmd+shift+v          # paste what you have selected
+# keybind = select_all=cmd+a                     # selects the whole buffer
+# keybind = clear_screen=cmd+k                   # clears the scrollback with it
+# keybind = scroll_to_selection=cmd+j
+# keybind = write_screen_file=cmd+shift+j        # writes it, then types the path
+# keybind = write_screen_file_copy=cmd+shift+ctrl+j    # …copies the path instead
+# keybind = write_screen_file_open=cmd+shift+opt+j     # …opens the file instead
 # keybind = jump_to_previous_prompt=cmd+shift+up
 # keybind = jump_to_next_prompt=cmd+shift+down
-# keybind = toggle_workspace_picker=cmd+shift+p
-# keybind = toggle_command_palette=cmd+p
-# keybind = diff_viewer=cmd+d                    # diff of the focused repo
+# keybind = toggle_command_palette=cmd+shift+p
+# keybind = toggle_workspace_picker=cmd+p
+# keybind = diff_viewer=cmd+g                    # diff of the focused repo
 # keybind = open_settings=cmd+,
-# keybind = reload_config=cmd+opt+r
+# keybind = reload_config=cmd+shift+,
 # keybind = increase_font_size=cmd+=             # ⌘+ (cmd+shift+=) does this too
 # keybind = decrease_font_size=cmd+-
 # keybind = reset_font_size=cmd+0                # back to font-size above
+#
+# ─── Coming from Ghostty ─────────────────────────────────────────────────────
+#
+# The table above is Ghostty's, chord for chord, with two exceptions.
+#
+# ⌘[ and ⌘] are tabs here rather than panes, matching Safari and the rest of the
+# Mac. Ghostty's ⌃⇥ tab cycling isn't bound either, because ⌘] already is:
+# `keybind = next_tab=ctrl+tab` if you want it back.
+#
+# ⌃⌘F does nothing. Ghostty spells fullscreen that way as well as ⌘⏎, and ⌃⌘F is
+# macOS's own native-fullscreen chord, which this isn't: Fill Screen maximizes the
+# window without taking a space.
+#
+# Every action holds exactly one shortcut, so there is one place to look when you
+# want to change something, and rebinding it moves the whole action.
 #
 # Every other chord reaches the program in your pane, with the exceptions below.
 # Rebind an action away and its old chord goes there too, so ⌘⇧S in vim is vim's ⌘⇧S
@@ -331,15 +354,28 @@
 #   ⌥←  ⌥→        move a word at a time
 #   ⇧ and an arrow, Home, End, Page Up or Page Down, extends a selection
 #
-# Four actions ship with no shortcut, because the ones they would want are spent:
-#   clear_screen         clears the screen and the scrollback with it
-#   scroll_to_selection  moves the viewport to what you have selected
-#   write_screen_file    writes the screen to a file, then types the path for you
-#   select_all           selects the whole buffer
+# Two actions ship with no shortcut, both menu-bar errands:
+#   check_for_updates    runs a manual update check
+#   report_issue         opens the Report an Issue composer
 #
-# They are in the command palette and the Shortcuts settings, or give one a chord
-# here. Nothing stops you taking the shortcut back off whatever holds it: put
-# nav_up somewhere else, and `keybind = clear_screen=cmd+k` is yours.
+# Both are in the command palette, and take a chord here if you want one.
+#
+# Chords ZenTerm does not ship, if you want them:
+#   keybind = nav_left=cmd+h                # ⌘HJKL nav, with the other three
+#   keybind = resize_left=cmd+shift+h       # ⌘⇧HJKL resize, likewise
+#   keybind = split_vertical=cmd+shift+\
+#   keybind = split_horizontal=cmd+shift+-
+#   keybind = fill_screen=cmd+shift+f
+#   keybind = toggle_search=cmd+/
+#   keybind = reload_config=cmd+opt+r
+#
+# Control-key pane nav, the tmux and vim habit, needs four lines and nothing else.
+# It costs you ⌃L clear-screen and ⌃K kill-line at the shell prompt, which is why
+# it isn't the default:
+#   keybind = nav_left=ctrl+h
+#   keybind = nav_down=ctrl+j
+#   keybind = nav_up=ctrl+k
+#   keybind = nav_right=ctrl+l
 #
 # ─── Scroll mode ─────────────────────────────────────────────────────────────
 #
@@ -384,22 +420,20 @@
 #
 # ─── Find ────────────────────────────────────────────────────────────────────
 #
-# `toggle_search` (⌘/) opens a find bar along the bottom of the focused pane and
+# `toggle_search` (⌘F) opens a find bar along the bottom of the focused pane and
 # searches its whole scrollback, not just what's on screen. Every match is
 # highlighted as you type and the bar counts them. If what you typed is only in
 # history, the pane scrolls to it so you can see it while you type; if a match is
 # already on screen, nothing moves.
 #
-# ⌘/ opens on whatever you have selected, so searching a word you can see never
+# ⌘F opens on whatever you have selected, so searching a word you can see never
 # means retyping it. Either kind counts: a mouse selection, or a `v` selection made
 # in scroll mode. With nothing selected the bar opens empty. `search_selection` (⌘E)
 # is the same thing except that with nothing selected it does nothing at all.
 #
-# `find_next` (⌘G) and `find_previous` (⌘⇧G) step through matches from anywhere,
-# so you can search, hit Enter, and keep stepping while you read. With no bar up
-# they do nothing. Like every shortcut, they stay ZenTerm's whether or not there is
-# anything to do, so ⌘G with no search running reaches nothing rather than reaching
-# the program. Move it with a keybind line if you want it back.
+# Stepping matches is `n` and `N` while the search holds the keyboard, not a chord,
+# so `find_next` and `find_previous` ship with no shortcut. Give them one here if you
+# want to step from anywhere: `keybind = find_next=cmd+opt+g` and its shifted pair.
 #
 # Enter hands the keys back to the pane and puts you in scroll mode on the match,
 # where `n` and `N` step forward and back (Enter and shift+Enter do the same), and
@@ -423,20 +457,22 @@
 #
 # ─── The screen ──────────────────────────────────────────────────────────────
 #
-# `select_all` selects the whole buffer, ready for ⌘C. It is the terminal's own
-# selection, the same one a mouse drag makes, so `scroll_to_selection` brings the
-# viewport back to where it starts. It has no shortcut yet and ⌘A is not it: that
-# chord belongs to your caret in a text field, and ZenTerm is not finished handing
-# it over. Reach this from the palette, or give it a chord of your own.
+# `select_all` (⌘A) selects the whole buffer, ready for ⌘C. It is the terminal's own
+# selection, the same one a mouse drag makes, so `scroll_to_selection` (⌘J) brings
+# the viewport back to where it starts.
 #
 # `paste_selection` (⌘⇧V) types what you have selected back into the pane. Either
 # kind counts, a mouse selection or a `v` selection from scroll mode, and with
 # nothing selected it does nothing. ⌘V is still what pastes the clipboard.
 #
-# `clear_screen` wipes the screen and the scrollback with it, the way `clear` does.
-# It leaves a full-screen program alone: vim and its kind draw on a second screen
+# `clear_screen` (⌘K) wipes the screen and the scrollback with it, the way `clear`
+# does. It leaves a full-screen program alone: vim and its kind draw on a second screen
 # that has no scrollback to clear.
 #
-# `write_screen_file` writes what is on screen to a file and types the path at your
-# prompt, so the next command has something to point at. Reach for it when a wall of
-# output is easier to grep than to read.
+# `write_screen_file` (⌘⇧J) writes what is on screen to a file and types the path at
+# your prompt, so the next command has something to point at. Reach for it when a wall
+# of output is easier to grep than to read.
+#
+# The same write, two other endings: `write_screen_file_copy` (⌘⇧⌃J) puts the path on
+# the clipboard, and `write_screen_file_open` (⌘⇧⌥J) opens the file. The file is
+# written either way, so the three differ only in where the path goes.

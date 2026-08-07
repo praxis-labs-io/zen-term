@@ -1,6 +1,6 @@
 import AppKit
 
-/// The add / edit form card for a workspace, opened from the ⌘⇧P picker's ＋ row (add) and the
+/// The add / edit form card for a workspace, opened from the ⌘P picker's ＋ row (add) and the
 /// Settings → Workspaces section (add / edit). It collects a folder, title, layout recipe, and env
 /// vars, builds a `Workspace`, and hands it to `onSubmit` — the host writes it to the `workspaces`
 /// file (and, from the picker, opens it). A `ModalOverlay` like the palettes (shared card + backdrop

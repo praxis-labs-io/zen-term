@@ -72,6 +72,8 @@ enum CommandCatalog {
         case .jumpToNextPrompt: return pane("Jump to Next Prompt", glyph, chord)
         case .pasteSelection: return pane("Paste Selection", glyph, chord)
         case .writeScreenFile: return pane("Write Screen to File", glyph, chord)
+        case .copyScreenFilePath: return pane("Write Screen to File, Copy Path", glyph, chord)
+        case .openScreenFile: return pane("Write Screen to File and Open", glyph, chord)
         // Present for exhaustiveness; all are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
@@ -113,6 +115,7 @@ enum CommandCatalog {
             .scrollPageUp, .scrollPageDown, .scrollToTop, .scrollToBottom,
             .jumpToPreviousPrompt, .jumpToNextPrompt, .scrollToSelection,
             .clearScreen, .selectAll, .pasteSelection, .writeScreenFile,
+            .copyScreenFilePath, .openScreenFile,
             .closePane,
         ]
         chords += [.fillScreen, .increaseFontSize, .decreaseFontSize, .resetFontSize]

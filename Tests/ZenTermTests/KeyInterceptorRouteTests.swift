@@ -81,6 +81,43 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertEqual(fired, [.scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown])
     }
 
+    /// No default binds Tab: ⌘[ and ⌘] are tab cycling and ⌃⇥ would be a second spelling of them.
+    /// A user's own `keybind = next_tab=ctrl+tab` still has to fire, which is what keeps `Chord`'s
+    /// glyph entry honest. Tab is the one key in that table typing a real character, so leaving it
+    /// out looks fine and fails here: ⌃⇥ decodes to "\t", misses the entry, and reaches the program.
+    func test_aUserBoundCtrlTab_fires() throws {
+        let keys = KeyInterceptor()
+        keys.setKeymap([Chord.parse("ctrl+tab")!: .nextTab])
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        XCTAssertNil(keys.route(try tabKeyDown(flags: .control)))
+        XCTAssertEqual(fired, [.nextTab])
+    }
+
+    /// And the shipped keymap leaves it alone, so ⌃⇥ reaches whatever the program does with it.
+    func test_ctrlTab_isNotAShippedDefault() throws {
+        let keys = KeyInterceptor()  // the shipped defaults, not the one-chord stub
+        let event = try tabKeyDown(flags: .control)
+        XCTAssertIdentical(keys.route(event), event)
+    }
+
+    /// A bare Tab carries no modifier, so chord routing never looks at it and it reaches the
+    /// program. Claiming it would break Tab completion in every shell.
+    func test_bareTab_reachesTheProgram() throws {
+        let keys = KeyInterceptor()
+        let event = try tabKeyDown(flags: [])
+        XCTAssertIdentical(keys.route(event), event)
+    }
+
+    private func tabKeyDown(flags: NSEvent.ModifierFlags) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0,
+                context: nil, characters: "\t", charactersIgnoringModifiers: "\t", isARepeat: false,
+                keyCode: 48))
+    }
+
     /// Holding a page key keeps scrolling, and holding Home does not keep jumping to a top it is
     /// already at. A repeat the action declines is still consumed either way, so the difference is
     /// invisible except in what fires.
@@ -159,15 +196,41 @@ final class KeyInterceptorRouteTests: XCTestCase {
     /// An arrow keyDown as AppKit delivers it: `.numericPad` on top of everything `functionKeyDown`
     /// already carries.
     private func arrowKeyDown(
-        keyCode: UInt16, character: String, shift: Bool = false, isARepeat: Bool = false
+        keyCode: UInt16, character: String, shift: Bool = false, option: Bool = false,
+        control: Bool = false, isARepeat: Bool = false
     ) throws -> NSEvent {
         var flags: NSEvent.ModifierFlags = [.command, .function, .numericPad]
         if shift { flags.insert(.shift) }
+        if option { flags.insert(.option) }
+        if control { flags.insert(.control) }
         return try XCTUnwrap(
             NSEvent.keyEvent(
                 with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
                 windowNumber: 0, context: nil, characters: character,
                 charactersIgnoringModifiers: character, isARepeat: isARepeat, keyCode: keyCode))
+    }
+
+    /// Pane focus and resize are arrow-only, so an arrow that decodes wrong costs the app its
+    /// directional nav outright. AppKit hangs `.function` and `.numericPad` on every arrow keyDown,
+    /// and the flags a caller did not hold are the ones that break a match: `Chord` has to read the
+    /// four reservable modifiers and ignore the rest. Both families in one case, because they differ
+    /// only by which modifier rides along, so a slip that loses one loses both.
+    func test_theNavAndResizeArrowsFireThroughTheRealEventShape() throws {
+        let keys = KeyInterceptor()  // the shipped defaults, not the one-chord stub
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        for (keyCode, character) in [(123, "\u{F702}"), (124, "\u{F703}"), (126, "\u{F700}"), (125, "\u{F701}")] {
+            XCTAssertNil(keys.route(try arrowKeyDown(keyCode: UInt16(keyCode), character: character, option: true)))
+            XCTAssertNil(keys.route(try arrowKeyDown(keyCode: UInt16(keyCode), character: character, control: true)))
+        }
+
+        XCTAssertEqual(
+            fired,
+            [
+                .navLeft, .resizeLeft, .navRight, .resizeRight, .navUp, .resizeUp, .navDown,
+                .resizeDown,
+            ])
     }
 
     func test_anUnboundModifiedKeyFallsToTheMode() throws {

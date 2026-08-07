@@ -421,7 +421,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
                 .compactMap { $0 as? CommandPaletteOverlay }.first
             return try XCTUnwrap(palette, "expected the palette mounted").builtRowShortcutsForTesting
         }
-        XCTAssertTrue(try paletteKeycaps().contains("⌘F"), "expected Focus Mode's default chord on a row")
+        XCTAssertTrue(try paletteKeycaps().contains("⌘⇧⏎"), "expected Focus Mode's default chord on a row")
 
         let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
         config.keymap = config.keymap.filter { $0.value != .toggleZoom }
@@ -430,7 +430,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         post(.keymap)
 
         let after = try paletteKeycaps()
-        XCTAssertFalse(after.contains("⌘F"), "the palette is still offering the chord that moved")
+        XCTAssertFalse(after.contains("⌘⇧⏎"), "the palette is still offering the chord that moved")
         XCTAssertTrue(
             after.contains(rebound.displayGlyph),
             "the rebind never reached the open palette's shortcut column")

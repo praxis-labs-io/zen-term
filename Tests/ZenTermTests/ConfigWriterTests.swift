@@ -193,18 +193,18 @@ final class ConfigWriterTests: XCTestCase {
     /// the assembler has to keep picking a winner.
     func test_keybind_bindingAnUnboundActionBack_dropsTheNoneLine() throws {
         let dir = try makeTempDir()
-        try seed("keybind = find_next=none\n", in: dir)
+        try seed("keybind = clear_screen=none\n", in: dir)
         let loaded = ConfigLoader.loadGeneralConfig(configRoot: dir)
 
         var desired = KeymapOverrides(binds: loaded.keymap, unbound: loaded.unboundActions)
-        desired.bind(.findNext, to: [Chord(command: true, key: "g")])  // back to its default
+        desired.bind(.clearScreen, to: [Chord(command: true, key: "k")])  // back to its default
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
 
         let text = try read(dir)
-        XCTAssertFalse(text.contains("find_next"), text)
+        XCTAssertFalse(text.contains("clear_screen"), text)
         XCTAssertEqual(
-            ConfigLoader.loadGeneralConfig(configRoot: dir).keymap[Chord(command: true, key: "g")],
-            .findNext)
+            ConfigLoader.loadGeneralConfig(configRoot: dir).keymap[Chord(command: true, key: "k")],
+            .clearScreen)
     }
 
     func test_keybind_roundTripsThroughAssembler() throws {
@@ -214,7 +214,7 @@ final class ConfigWriterTests: XCTestCase {
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
         let keymap = ConfigLoader.loadGeneralConfig(configRoot: dir).keymap
         XCTAssertEqual(keymap[Chord(command: true, shift: true, key: "z")], .toggleZoom)
-        XCTAssertNil(keymap[Chord(command: true, key: "f")])  // old ⌘F default was dropped
+        XCTAssertNil(keymap[Chord(command: true, shift: true, key: "⏎")])  // old ⌘⇧⏎ default was dropped
     }
 
     // MARK: floats

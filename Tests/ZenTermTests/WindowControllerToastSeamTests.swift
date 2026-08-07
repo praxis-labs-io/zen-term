@@ -337,7 +337,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
     /// unwritable config read as a successful answer: the card slid away, nothing was written, and
     /// no error appeared anywhere.
     func test_conflictToast_aFailedWrite_leavesTheCardUp() throws {
-        try seed("keybind = split_vertical=cmd+p\n")
+        try seed("keybind = split_vertical=cmd+shift+p\n")
         let controller = makeController()
         controller.showConflictToasts(KeybindConflict.all(in: .current))
         // Make the config unwritable by putting a directory where the file belongs.
@@ -391,7 +391,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
     /// screen would silently edit their config. Actionable toasts had no close affordance at all
     /// until this, so a conflict card could only be answered (ZEN-368).
     func test_conflictToast_close_dismissesWithoutWriting() throws {
-        try seed("keybind = split_vertical=cmd+p\n")
+        try seed("keybind = split_vertical=cmd+shift+p\n")
         let before = try configText()
         let controller = makeController()
         controller.showConflictToasts(KeybindConflict.all(in: .current))
@@ -440,7 +440,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
     /// only thing checking that pressing one reaches the config. A card whose Accept did nothing
     /// would look completely correct and be the first surface a user meets (ZEN-368).
     func test_conflictToast_accept_writesTheUnset() throws {
-        try seed("keybind = split_vertical=cmd+p\n")
+        try seed("keybind = split_vertical=cmd+shift+p\n")
         let controller = makeController()
         controller.showConflictToasts(KeybindConflict.all(in: .current))
 
@@ -453,7 +453,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
     }
 
     func test_conflictToast_revert_dropsTheLineThatTookTheChord() throws {
-        try seed("keybind = split_vertical=cmd+p\n")
+        try seed("keybind = split_vertical=cmd+shift+p\n")
         let controller = makeController()
         controller.showConflictToasts(KeybindConflict.all(in: .current))
 
@@ -461,13 +461,13 @@ final class WindowControllerToastSeamTests: WindowTestCase {
 
         let text = try configText()
         XCTAssertFalse(text.contains("split_vertical"), text)
-        XCTAssertEqual(GeneralConfig.current.keymap[Chord(command: true, key: "p")], .toggleCommandPalette)
+        XCTAssertEqual(GeneralConfig.current.keymap[Chord(command: true, shift: true, key: "p")], .toggleCommandPalette)
         XCTAssertEqual(KeybindConflict.all(in: .current), [])
     }
 
     /// Answering takes that card down. Left up, it would describe a config that no longer exists.
     func test_conflictToast_answering_dismissesTheCard() throws {
-        try seed("keybind = split_vertical=cmd+p\n")
+        try seed("keybind = split_vertical=cmd+shift+p\n")
         let controller = makeController()
         controller.showConflictToasts(KeybindConflict.all(in: .current))
 
