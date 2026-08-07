@@ -101,9 +101,9 @@ A tool float is a command on a shortcut, floating over your work.
 
 1. Press **⌘,** to open Settings, then choose **Tools**.
 2. Choose **＋ Add tool float**.
-3. Set a command (`lazygit`), a shortcut (⌘G), and an icon.
+3. Set a command (`lazygit`), a shortcut (⌘⌥G), and an icon.
 
-⌘G now floats lazygit over your work and closes it again. The float stays warm,
+⌘⌥G now floats lazygit over your work and closes it again. The float stays warm,
 so reopening it is instant. The same works for `btop`, a dev server, or `gh dash`.
 
 ## Review a diff
@@ -188,9 +188,10 @@ config works anywhere.
 including Rosé Pine, Catppuccin, Tokyo Night, Nord, Gruvbox, and Dracula. A theme
 colors the whole app, not only the terminal text.
 
-**Shortcuts:** press ⌘, and choose **Keybinds**. Pick a shortcut and press the
+**Shortcuts:** press ⌘, and choose **Shortcuts**. Pick a shortcut and press the
 new one. If it collides with an existing shortcut, the app tells you which action
-already owns it.
+already owns it. Delete takes a shortcut away, and the capture popover has a reset
+icon that puts the default back.
 
 ## One thing that looks like a bug
 

@@ -206,16 +206,14 @@
 #   width    (optional)  width as a fraction of the tab              (default 0.85)
 #   height   (optional)  height as a fraction of the tab            (default 0.85)
 #
-# Example: the GitHub dashboard TUI on ⌘⇧G:
-# float = order:1 title:"Open GitDash" command:"gd" key:cmd+shift+g git:false icon:github
+# Example: the GitHub dashboard TUI on ⌘⌥D:
+# float = order:1 title:"Open GitDash" command:"gd" key:cmd+opt+d git:false icon:github
 #
 # Example: a dev server with spaces in the command:
 # float = order:2 title:"Dev server" command:"npm run dev" key:cmd+shift+d
 #
 # Example: lazygit kept warm per repo (first open is cold; reopens are instant).
-# This is the recipe for the old built-in ⌘G lazygit, now a regular float like any
-# other tool (height:0.78 matches the old card exactly):
-# float = order:3 title:"Open Lazygit" command:"lazygit" key:cmd+g git:true persist:dir icon:git height:0.78
+# float = order:3 title:"Open Lazygit" command:"lazygit" key:cmd+opt+g git:true persist:dir icon:git height:0.78
 #
 # Example: a system monitor kept alive for the window, reachable from every tab:
 # float = order:4 title:BTop command:"btop" key:cmd+shift+b persist:window icon:gauge
@@ -306,7 +304,7 @@
 # keybind = scroll_to_bottom=cmd+end
 # keybind = scroll_page_up=cmd+page_up
 # keybind = scroll_page_down=cmd+page_down
-# keybind = find_next=cmd+g                      # only while the find bar is up
+# keybind = find_next=cmd+g                      # step a running search
 # keybind = find_previous=cmd+shift+g
 # keybind = search_selection=cmd+e               # find what you have selected
 # keybind = toggle_workspace_picker=cmd+shift+p
