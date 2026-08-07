@@ -379,6 +379,31 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertTrue(try resetIcon().isHidden, "nothing to back out of, so nothing to offer")
     }
 
+    /// The input fills the card, less the insets, and less the reset icon when one is showing.
+    ///
+    /// Asserted rather than eyeballed because it has collapsed twice: the box sizes to the chord
+    /// inside it unless something makes it stretch, and a half-width input floating in a full-width
+    /// card looks like a rendering glitch rather than a missing constraint.
+    func test_theInputFillsTheCard() throws {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        let insets: CGFloat = 28  // 14 each side
+
+        row(for: .newTab).chip.onActivate?()
+        try hintBubble().layoutSubtreeIfNeeded()
+        XCTAssertEqual(
+            try hintBubble().inputWidthForTesting, KeybindHintBubble.widthForTesting - insets,
+            accuracy: 0.5, "no reset icon, so the input takes the whole row")
+
+        capturer.feed(event(for: novelChord))
+        row(for: .newTab).chip.onActivate?()
+        try hintBubble().layoutSubtreeIfNeeded()
+        XCTAssertEqual(
+            try hintBubble().inputWidthForTesting,
+            KeybindHintBubble.widthForTesting - insets - 34 - 8,  // icon width + the row's spacing
+            accuracy: 0.5, "and gives up exactly the icon's width when one appears")
+    }
+
     /// A `keybind =` line can be backed out, so the icon is real on a row that lost its chord to one.
     func test_resetIcon_isShownWhenAKeybindLineTookTheChord() throws {
         try seed("keybind = split_vertical=cmd+p\n")

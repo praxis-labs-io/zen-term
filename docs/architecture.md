@@ -844,9 +844,19 @@ leaves the action with no shortcut and writes `= none`. It used to restore the
 default, which read as doing nothing on exactly the rows most likely to be pressed:
 an action whose default is a chord something else already holds gets it back and
 loses it again on the reload. Reset moved into the capture popover, next to the input
-it acts on, and is hidden on a row already at its defaults. A refused chord returns
-the input to its listening placeholder rather than sitting in it, since the box is
-where a *recorded* chord appears.
+it acts on, hidden on a row already at its defaults and on one whose chord a float
+took, where binding back to the defaults leaves the chord set unchanged so the writer
+emits nothing and the icon would do nothing. A refused chord returns the input to its
+listening placeholder rather than sitting in it, since the box is where a *recorded*
+chord appears.
+
+**Settings sets shortcuts; the card answers conflicts.** A conflicted row shows its
+chip and a muted line naming the config line that has the chord, and offers nothing
+else. Accept and Revert lived on the row briefly and came off: a forty-row list where
+a handful of rows sprout a button pair has no stable rhythm, and the pair competes
+with the chip for the same job in whichever column it is put. Dismissing a card means
+"not now", and it returns next launch carrying the same answers, so there is no state
+needing a second path here.
 
 **The modal gate cascade** in `WindowController.handle(_:)` runs confirm, then
 modal card, then tool float, then dispatch. The app-global chords (⌘N new window,

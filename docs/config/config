@@ -240,8 +240,8 @@
 # When a line here takes a chord off one of the defaults, the action that lost it
 # gets a notice of its own at launch, with two answers. Accept writes the `=none`
 # line for you. Revert drops the line that took the chord, so both actions go back
-# to their defaults. The same two sit on the Settings row, and the notice returns
-# every launch until you use one of them or fix the file yourself.
+# to their defaults. Closing the notice with its × changes nothing, and it returns
+# every launch until you answer it or fix the file yourself.
 #
 # A float is Accept only. Its chord is the `key:` on its own `float =` line and
 # `key:` is required, so there is nothing to back the chord out to.

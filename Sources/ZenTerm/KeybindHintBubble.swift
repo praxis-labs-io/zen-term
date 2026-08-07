@@ -16,7 +16,8 @@ final class KeybindHintBubble: ShadowCardView {
     /// for it.** The tool-float form shares this popover and has no defaults to go back to, so an
     /// opt-out default would put a dead control on a card that never mentions it (ZEN-368).
     private lazy var resetButton = IconButton(
-        symbol: "arrow.uturn.backward", accessibilityLabel: "Reset to default"
+        symbol: "arrow.uturn.backward", size: NSSize(width: 34, height: 34), pointSize: 13,
+        accessibilityLabel: "Reset to default", restsFilled: true
     ) { [weak self] in self?.onResetToDefault?() }
     var onResetToDefault: (() -> Void)?
 
@@ -66,17 +67,29 @@ final class KeybindHintBubble: ShadowCardView {
         previewBox.addSubview(previewHost)
 
         // Small red validation line, tucked just under the preview; collapsed until there's an error.
+        // Centered on the input it is about, not on the card: it explains the box above it, and
+        // left-aligned prose under a centered box reads as belonging to neither.
         errorLabel.font = .systemFont(ofSize: 10, weight: .medium)
         errorLabel.textColor = Theme.current.chrome.destructive.nsColor
+        errorLabel.alignment = .center
         errorLabel.preferredMaxLayoutWidth = Self.width - 28
         errorLabel.isHidden = true
 
         // The reset sits beside the input rather than under it: it acts on the same thing the input
         // is showing, and a row of its own would read as a third command next to esc and del.
+        //
+        // The box takes whatever the icon leaves. Without this it sizes to the chord inside it, so
+        // the input shrank to a stub with dead space beside it, and a row with no icon (the common
+        // one) had a half-width box floating in a full-width card.
+        previewBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        resetButton.setContentHuggingPriority(.required, for: .horizontal)
         let inputRow = NSStackView(views: [previewBox, resetButton])
         inputRow.orientation = .horizontal
         inputRow.alignment = .centerY
         inputRow.spacing = 8
+        // `.fill`, not the default gravity areas: only `.fill` grows a low-hugging view to take the
+        // slack, which is what makes the box span the row rather than sit at its content width.
+        inputRow.distribution = .fill
 
         let previewGroup = NSStackView(views: [inputRow, errorLabel])
         previewGroup.orientation = .vertical
@@ -101,6 +114,9 @@ final class KeybindHintBubble: ShadowCardView {
             previewGroup.widthAnchor.constraint(equalTo: col.widthAnchor),
             inputRow.widthAnchor.constraint(equalTo: previewGroup.widthAnchor),
             previewBox.heightAnchor.constraint(equalToConstant: 34),
+            // Same width and leading edge as the box, so centering the text lands it under the box
+            // rather than under the card, which is wider whenever the reset icon is showing.
+            errorLabel.widthAnchor.constraint(equalTo: previewBox.widthAnchor),
             previewHost.centerXAnchor.constraint(equalTo: previewBox.centerXAnchor),
             previewHost.centerYAnchor.constraint(equalTo: previewBox.centerYAnchor),
             previewHost.leadingAnchor.constraint(greaterThanOrEqualTo: previewBox.leadingAnchor, constant: 10),
@@ -140,6 +156,14 @@ final class KeybindHintBubble: ShadowCardView {
             content.bottomAnchor.constraint(equalTo: previewHost.bottomAnchor),
         ])
     }
+
+    /// Test hook: the input box's laid-out width. The box takes whatever the reset icon leaves, and
+    /// it has twice collapsed to the width of the chord inside it, so the budget is asserted rather
+    /// than eyeballed. `previewHost`'s superview *is* the box.
+    var inputWidthForTesting: CGFloat { previewHost.superview?.frame.width ?? 0 }
+
+    /// The card's own width, for measuring the above against.
+    static var widthForTesting: CGFloat { width }
 
     /// Test hook: the chord the input is drawing, or nil when it shows the listening placeholder.
     /// Reads the rendered subview rather than a stored string, so a test can't pass while the box
