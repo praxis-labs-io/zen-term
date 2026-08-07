@@ -95,6 +95,38 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertEqual(fired, [.scrollPageDown])
     }
 
+    /// The prompt jumps ship on both spellings ghostty bound them to, and ⌘⇧↑ is the one worth a
+    /// test: an arrow keyDown carries `.numericPad` as well as `.function`, so a chord matched
+    /// against `.deviceIndependentFlagsMask` would see three modifiers where the user held two and
+    /// fire nothing. `docs/swift-conventions.md` has the failure (ZEN-369).
+    func test_bothArrowSpellingsOfAPromptJumpFire() throws {
+        let keys = KeyInterceptor()
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        XCTAssertNil(keys.route(try arrowKeyDown(keyCode: 126, character: "\u{F700}")))
+        XCTAssertNil(keys.route(try arrowKeyDown(keyCode: 126, character: "\u{F700}", shift: true)))
+        XCTAssertNil(keys.route(try arrowKeyDown(keyCode: 125, character: "\u{F701}")))
+        XCTAssertNil(keys.route(try arrowKeyDown(keyCode: 125, character: "\u{F701}", shift: true)))
+
+        XCTAssertEqual(
+            fired,
+            [.jumpToPreviousPrompt, .jumpToPreviousPrompt, .jumpToNextPrompt, .jumpToNextPrompt])
+    }
+
+    /// Walking back through prompts is a hold, the way pane nav is: each press moves one further
+    /// and the buffer's oldest prompt is where it stops.
+    func test_aHeldPromptJumpRepeats() throws {
+        let keys = KeyInterceptor()
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        XCTAssertNil(
+            keys.route(try arrowKeyDown(keyCode: 126, character: "\u{F700}", isARepeat: true)))
+
+        XCTAssertEqual(fired, [.jumpToPreviousPrompt])
+    }
+
     /// ⌘Home as AppKit delivers it: the private-use character, and `.function` alongside `.command`.
     /// A synthesized `.command`-only event is a keystroke macOS never sends.
     private func functionKeyDown(keyCode: UInt16, character: String, isARepeat: Bool = false) throws
@@ -103,6 +135,20 @@ final class KeyInterceptorRouteTests: XCTestCase {
         try XCTUnwrap(
             NSEvent.keyEvent(
                 with: .keyDown, location: .zero, modifierFlags: [.command, .function], timestamp: 0,
+                windowNumber: 0, context: nil, characters: character,
+                charactersIgnoringModifiers: character, isARepeat: isARepeat, keyCode: keyCode))
+    }
+
+    /// An arrow keyDown as AppKit delivers it: `.numericPad` on top of everything `functionKeyDown`
+    /// already carries.
+    private func arrowKeyDown(
+        keyCode: UInt16, character: String, shift: Bool = false, isARepeat: Bool = false
+    ) throws -> NSEvent {
+        var flags: NSEvent.ModifierFlags = [.command, .function, .numericPad]
+        if shift { flags.insert(.shift) }
+        return try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
                 windowNumber: 0, context: nil, characters: character,
                 charactersIgnoringModifiers: character, isARepeat: isARepeat, keyCode: keyCode))
     }

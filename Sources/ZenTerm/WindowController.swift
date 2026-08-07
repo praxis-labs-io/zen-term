@@ -605,6 +605,23 @@ final class WindowController: NSObject {
         activeController?.focusedScrollTarget?.surface.scroll(command)
     }
 
+    /// Paste what is selected back into the pane it came from, and do nothing when nothing is.
+    ///
+    /// Both selection models, the same pair ⌘E reads: scroll mode's `v` is the chrome's own overlay
+    /// and the backend cannot see it, and a mouse drag is libghostty's, read back through the seam.
+    ///
+    /// Not the pasteboard, which is ⌘V's job. ghostty spells this `paste_from_selection` and means
+    /// the X11 selection clipboard, a thing macOS does not have, so on this platform its chord
+    /// pastes exactly what ⌘V would. The selection you can see is the reading that earns the chord
+    /// (ZEN-369).
+    private func pasteSelection() {
+        guard let target = activeController?.focusedScrollTarget else { return }
+        guard let selected = scrollMode.selectedText ?? target.surface.copySelection(),
+            !selected.isEmpty
+        else { return }
+        target.surface.paste(selected)
+    }
+
     /// End both modes, in the order their layout changes have to unwind: the bar comes down first,
     /// because taking it down reflows the grid that scroll mode is still measuring against.
     ///
@@ -1874,6 +1891,14 @@ final class WindowController: NSObject {
         case .scrollToBottom: scrollFocusedPane(.bottom)
         case .scrollPageUp: scrollFocusedPane(.pageFraction(-1))
         case .scrollPageDown: scrollFocusedPane(.pageFraction(1))
+        case .scrollToSelection: scrollFocusedPane(.selection)
+        // Negative is up the buffer, toward older output, the same sign every other scroll takes.
+        case .jumpToPreviousPrompt: scrollFocusedPane(.prompt(-1))
+        case .jumpToNextPrompt: scrollFocusedPane(.prompt(1))
+        case .clearScreen: activeController?.focusedScrollTarget?.surface.clearScreen()
+        case .selectAll: activeController?.focusedScrollTarget?.surface.selectAll()
+        case .writeScreenFile: activeController?.focusedScrollTarget?.surface.writeScreenToFile()
+        case .pasteSelection: pasteSelection()
         case .fillScreen: toggleFillScreen()
         case .toggleToolFloat(let id):
             // A float is modal too, so it calls off a card that's still loading — otherwise the card

@@ -827,14 +827,38 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     }
 
     /// Positive `lines`/`pageFraction` scroll down in libghostty too (`Binding.zig`: "Positive
-    /// values scroll downwards"), so the seam's sign convention passes straight through.
+    /// values scroll downwards"), so the seam's sign convention passes straight through. Its
+    /// `jump_to_prompt` counts the same way, positive toward newer output.
+    ///
+    /// The last two answer "was there anything to move to": `scroll_to_selection` reports false
+    /// with nothing selected, and `jump_to_prompt` with no prompt that far through the buffer.
+    /// Those are answers, not rejections.
     public func scroll(_ command: TerminalScroll) {
         switch command {
         case .lines(let n): performBindingAction("scroll_page_lines:\(n)")
         case .pageFraction(let f): performBindingAction("scroll_page_fractional:\(f)")
         case .top: performBindingAction("scroll_to_top")
         case .bottom: performBindingAction("scroll_to_bottom")
+        case .selection: performBindingAction("scroll_to_selection", logsFailure: false)
+        case .prompt(let n): performBindingAction("jump_to_prompt:\(n)", logsFailure: false)
         }
+    }
+
+    /// libghostty reports false on the alternate screen, where clearing does nothing and the
+    /// full-screen program keeps its display. An answer rather than a rejection.
+    public func clearScreen() {
+        performBindingAction("clear_screen", logsFailure: false)
+    }
+
+    public func selectAll() {
+        performBindingAction("select_all")
+    }
+
+    /// `write_screen_file` takes what to do with the path it just wrote. `paste` types it into the
+    /// pane, which is where the next command goes; ghostty's other two put it on the pasteboard or
+    /// open the file, and ZenTerm names neither (ZEN-369).
+    public func writeScreenToFile() {
+        performBindingAction("write_screen_file:paste")
     }
 
     public func setSizeSyncSuspended(_ suspended: Bool) {

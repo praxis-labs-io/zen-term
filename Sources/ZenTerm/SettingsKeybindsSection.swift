@@ -21,9 +21,13 @@ final class SettingsKeybindsSection: SettingsSection {
         ("Panes", [.splitHorizontal, .splitVertical, .closePane, .toggleZoom]),
         (
             "Scrollback",
-            [.toggleScrollMode, .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown]
+            [
+                .toggleScrollMode, .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown,
+                .jumpToPreviousPrompt, .jumpToNextPrompt, .scrollToSelection,
+            ]
         ),
         ("Find", [.toggleSearch, .searchSelection, .findNext, .findPrevious]),
+        ("Screen", [.clearScreen, .selectAll, .pasteSelection, .writeScreenFile]),
         ("Navigation", [.navLeft, .navDown, .navUp, .navRight]),
         ("Resize", [.resizeLeft, .resizeDown, .resizeUp, .resizeRight]),
         ("Tabs", [.newTab, .newWindow, .prevTab, .nextTab] + (1...9).map { .selectTab($0) }),

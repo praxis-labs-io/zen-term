@@ -49,6 +49,12 @@ final class KeyInterceptor {
         case scrollToTop, scrollToBottom, scrollPageUp, scrollPageDown
         // Step the running search, and start one on the selection (ZEN-367).
         case findNext, findPrevious, searchSelection
+        // Act on the focused pane's screen and its shell prompts (ZEN-369). The first three ship
+        // unbound: ghostty's chords for them are ⌘K, ⌘J and ⌘⇧J, which ZenTerm already spends on
+        // pane nav and resize.
+        case clearScreen, scrollToSelection, writeScreenFile
+        case selectAll, pasteSelection
+        case jumpToPreviousPrompt, jumpToNextPrompt
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?

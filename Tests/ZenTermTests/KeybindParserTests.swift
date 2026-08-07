@@ -19,6 +19,8 @@ final class KeybindParserTests: XCTestCase {
             .reportIssue, .openDiffViewer, .toggleScrollMode, .toggleSearch,
             .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown,
             .findNext, .findPrevious, .searchSelection,
+            .clearScreen, .selectAll, .scrollToSelection, .writeScreenFile,
+            .jumpToPreviousPrompt, .jumpToNextPrompt, .pasteSelection,
             .increaseFontSize, .decreaseFontSize, .resetFontSize,
             .selectTab(1), .selectTab(9), .toggleToolFloat("gitdash"),
         ]

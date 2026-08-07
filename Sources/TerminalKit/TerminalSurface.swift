@@ -73,6 +73,15 @@ public enum TerminalScroll: Equatable {
     /// rather than a fixed count.
     case pageFraction(Double)
     case top, bottom
+    /// To wherever the selection starts. Nothing happens when nothing is selected.
+    case selection
+    /// A signed count of shell prompts, so `-1` is the prompt above and `1` the one below. Needs
+    /// shell integration to know where a prompt is, and a backend without it does nothing.
+    ///
+    /// Not scroll mode's `{`/`}`, which walk blank rows inside the viewport and move a cursor. This
+    /// moves the viewport itself and can reach a prompt that scrolled off the top, which is the
+    /// half the chrome's own motion cannot do (`docs/architecture.md`).
+    case prompt(Int)
 }
 
 /// Where the viewport sits in the buffer, in lines: `total` rows exist, the viewport starts at
@@ -391,6 +400,24 @@ public protocol TerminalSurface: AnyObject {
     /// the keymap, and this is the whole of what it needs a terminal to do.
     func scroll(_ command: TerminalScroll)
 
+    /// Clear the screen and the scrollback with it, the way `clear` does.
+    ///
+    /// A terminal on its alternate screen has nothing to clear, and a backend does nothing there
+    /// rather than wiping the full-screen program's own display.
+    func clearScreen()
+
+    /// Select everything the buffer holds. The selection is the backend's, so `copySelection`
+    /// reads it back and the chrome's own scroll-mode overlay is untouched.
+    func selectAll()
+
+    /// Write the visible screen to a file and type its path into the pane, so the next command has
+    /// something to point at.
+    ///
+    /// The path arrives as input rather than coming back from this call, and that is the backend's
+    /// shape rather than a choice: libghostty writes the file and feeds the pty in one action, and
+    /// never hands the path out. A backend that cannot do it is a no-op.
+    func writeScreenToFile()
+
     /// The grid's geometry right now, or nil from a backend that has no cells to report or has
     /// not been laid out yet. Read at draw time rather than cached: it moves with the font size
     /// and with every resize.
@@ -480,4 +507,10 @@ public extension TerminalSurface {
 
     /// Default no-op: a backend that doesn't reflow on every frame change needs nothing here.
     func setSizeSyncSuspended(_ suspended: Bool) {}
+
+    /// Default no-ops: a backend that cannot clear, select or dump its own screen leaves the three
+    /// chords doing nothing, which is what an unimplemented action should look like.
+    func clearScreen() {}
+    func selectAll() {}
+    func writeScreenToFile() {}
 }
