@@ -91,6 +91,15 @@ final class RecordingSurface: NSObject, TerminalSurface {
     private(set) var scrolls: [TerminalScroll] = []
     func scroll(_ command: TerminalScroll) { scrolls.append(command) }
 
+    /// Counts rather than flags, so a test can tell one press from two — the discriminator for a
+    /// chord that fires twice off one keystroke.
+    private(set) var clearScreenCount = 0
+    private(set) var selectAllCount = 0
+    private(set) var writeScreenFileCount = 0
+    func clearScreen() { clearScreenCount += 1 }
+    func selectAll() { selectAllCount += 1 }
+    func writeScreenToFile() { writeScreenFileCount += 1 }
+
     private(set) var searches: [String] = []
     private(set) var searchSteps: [TerminalSearchStep] = []
     private(set) var endSearchCount = 0

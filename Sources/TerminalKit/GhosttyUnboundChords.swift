@@ -18,6 +18,7 @@ enum GhosttyUnboundChords {
     /// key and the `unicode` one, so an AZERTY layout reaches it too.
     static let triggers: [String] =
         tabs + splitsAndPanes + windowsAndTabs + appLevel + unimplemented + scrollingAndFinding
+        + screenAndPrompts
 
     /// `goto_tab` and `last_tab`, which ZenTerm holds as select_tab_1…9.
     ///
@@ -74,20 +75,33 @@ enum GhosttyUnboundChords {
         "cmd+g", "cmd+shift+g", "cmd+e",
     ]
 
-    /// What libghostty is left holding, and what the sweep asserts survives.
+    /// The screen, the selection and the prompt marks, which ZenTerm named in ZEN-369. The seam
+    /// grew for each: clear the screen, select everything, scroll to the selection, jump a prompt,
+    /// write the screen to a file. Paste-the-selection is the chrome's own, built from the
+    /// selection it already reads.
     ///
-    /// Two kinds. The first is behavior ZenTerm has no action for yet, kept bound so nothing is
-    /// lost before it is named. The second is terminal encoding rather than chrome action: those
-    /// stay with the backend for good, because a keystroke that turns into bytes for the program
-    /// is not a shortcut.
-    static let kept: [String] = [
-        // Not yet named by ZenTerm.
+    /// Three of these chords are ZenTerm's already — ⌘K and ⌘J are pane nav, ⌘⇧J is resize — so
+    /// their actions ship unbound and the unbind here only frees a chord the backend never saw.
+    ///
+    /// ghostty binds write-screen-file three times, on ⌘⇧⌃J to copy the path, ⌘⇧J to paste it and
+    /// ⌘⇧⌥J to open the file. One behavior, and ZenTerm names it once: the other two go to the
+    /// program.
+    private static let screenAndPrompts: [String] = [
         "cmd+k", "cmd+j", "cmd+a",
         "cmd+arrow_up", "cmd+arrow_down", "cmd+shift+arrow_up", "cmd+shift+arrow_down",
-        "cmd+shift+ctrl+j", "cmd+shift+opt+j", "cmd+shift+j",
         "cmd+shift+v",
-        // Encodings, kept for good. ⌘⌫ is `backspace`: ghostty's `delete` is the forward-delete
-        // key, so spelling it that way would emit an unbind matching nothing the day this moves.
+        "cmd+shift+j", "cmd+shift+ctrl+j", "cmd+shift+opt+j",
+    ]
+
+    /// What libghostty is left holding, and what the sweep asserts survives.
+    ///
+    /// All of one kind now: terminal encoding rather than chrome action. A keystroke that turns
+    /// into bytes for the program is not a shortcut, so these stay with the backend for good, and
+    /// the list is finished rather than waiting on the next ticket.
+    ///
+    /// ⌘⌫ is `backspace`: ghostty's `delete` is the forward-delete key, so spelling it that way
+    /// would emit an unbind matching nothing the day this moves.
+    static let kept: [String] = [
         "cmd+arrow_left", "cmd+arrow_right", "cmd+backspace",
         "opt+arrow_left", "opt+arrow_right",
         "shift+arrow_left", "shift+arrow_right", "shift+arrow_up", "shift+arrow_down",

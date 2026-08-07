@@ -65,6 +65,13 @@ enum CommandCatalog {
         case .scrollPageUp: return pane("Scroll Page Up", glyph, chord)
         case .scrollPageDown: return pane("Scroll Page Down", glyph, chord)
         case .searchSelection: return pane("Find Selection", glyph, chord)
+        case .clearScreen: return pane("Clear Screen", glyph, chord)
+        case .selectAll: return pane("Select All", glyph, chord)
+        case .scrollToSelection: return pane("Scroll to Selection", glyph, chord)
+        case .jumpToPreviousPrompt: return pane("Jump to Previous Prompt", glyph, chord)
+        case .jumpToNextPrompt: return pane("Jump to Next Prompt", glyph, chord)
+        case .pasteSelection: return pane("Paste Selection", glyph, chord)
+        case .writeScreenFile: return pane("Write Screen to File", glyph, chord)
         // Present for exhaustiveness; all are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
@@ -104,6 +111,8 @@ enum CommandCatalog {
             .resizeLeft, .resizeDown, .resizeUp, .resizeRight,
             .toggleZoom, .toggleScrollMode, .toggleSearch, .searchSelection,
             .scrollPageUp, .scrollPageDown, .scrollToTop, .scrollToBottom,
+            .jumpToPreviousPrompt, .jumpToNextPrompt, .scrollToSelection,
+            .clearScreen, .selectAll, .pasteSelection, .writeScreenFile,
             .closePane,
         ]
         chords += [.fillScreen, .increaseFontSize, .decreaseFontSize, .resetFontSize]

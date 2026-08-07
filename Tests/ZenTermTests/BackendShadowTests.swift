@@ -12,9 +12,10 @@ import XCTest
 /// the backend. Nothing could see that before, because on a default install the chord in question
 /// is still ours.
 ///
-/// ZEN-365 emptied most of what this can find. The report is quiet on a default config now, and it
-/// still has work: the binds kept until ZenTerm names them are exactly the ones a rebind can
-/// expose, ⌘K among them.
+/// ZEN-365 emptied most of what this can find and ZEN-369 emptied the rest, so the report is quiet
+/// on every config: the binds a rebind could expose were the ones held until ZenTerm named them,
+/// and all of them are named. What is left is a regression guard, and the cases below keep the
+/// chain that would report the next one honest.
 @MainActor
 final class BackendShadowTests: XCTestCase {
     override func tearDown() {
@@ -162,10 +163,15 @@ final class BackendShadowTests: XCTestCase {
     /// The one that covers the whole chain: the assembler, the layout walk, the seam, and the C
     /// call. The stubbed cases above each cover one link and could all pass with the probe dead.
     ///
-    /// ⌘K is `clear_screen` in libghostty and marked performable, so `.mayClaim` is the expected
-    /// answer and `.claims` would be the over-report ZEN-360 exists to avoid. This is the chord
-    /// behind the whole effort: rebinding nav to `ctrl+hjkl` is what makes ⌘K clear the scrollback.
-    func test_theFreedChordIsMeasuredAgainstTheRunningBackend() throws {
+    /// **It expects nothing, and that is the finding.** ⌘K was the chord behind the whole effort:
+    /// rebinding nav to `ctrl+hjkl` freed it, and libghostty answered `clear_screen`. ZEN-369 named
+    /// that action and unbound libghostty's copy, and it was the last one. No chord a ZenTerm
+    /// default holds is still bound down there, so a rebind now hands over a chord the program gets.
+    ///
+    /// So this reads as a regression guard rather than a demonstration. A ghostty pin bump that
+    /// binds something under one of our defaults turns it red, which is the only way that would ever
+    /// be noticed. The canary is what keeps an empty result from meaning a dead probe.
+    func test_aRebindNowFreesNothingTheBackendStillTakes() throws {
         try XCTSkipUnless(
             KeyboardLayout.canType(Chord(command: true, key: "k")), "layout cannot type ⌘K")
 
@@ -190,9 +196,9 @@ final class BackendShadowTests: XCTestCase {
                 assembled: keymapRebindingNavUp(), probe: surface.disposition)
         else { return XCTFail("the running backend answered nothing") }
 
-        XCTAssertEqual(freed.map(\.chord.configToken), ["cmd+k"])
         XCTAssertEqual(
-            freed.first?.disposition, .mayClaim,
-            "clear_screen is performable, so the backend runs it only when there is something to clear")
+            freed.map(\.chord.configToken), [],
+            "libghostty binds a chord one of our defaults holds again. Either name the action or "
+                + "add the trigger to GhosttyUnboundChords.triggers.")
     }
 }

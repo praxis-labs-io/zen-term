@@ -23,7 +23,9 @@ final class SettingsKeybindGroupsTests: XCTestCase {
         [
             .splitHorizontal, .splitVertical, .closePane, .toggleZoom,
             .toggleScrollMode, .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown,
+            .jumpToPreviousPrompt, .jumpToNextPrompt, .scrollToSelection,
             .toggleSearch, .searchSelection, .findNext, .findPrevious,
+            .clearScreen, .selectAll, .pasteSelection, .writeScreenFile,
             .navLeft, .navDown, .navUp, .navRight,
             .resizeLeft, .resizeDown, .resizeUp, .resizeRight,
             .newTab, .newWindow, .prevTab, .nextTab,

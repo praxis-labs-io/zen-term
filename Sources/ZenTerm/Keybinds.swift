@@ -51,6 +51,17 @@ extension KeyInterceptor.ReservedChord {
         case .findNext: return "find_next"
         case .findPrevious: return "find_previous"
         case .searchSelection: return "search_selection"
+        // ghostty's own spelling for the four it has one for.
+        case .clearScreen: return "clear_screen"
+        case .selectAll: return "select_all"
+        case .scrollToSelection: return "scroll_to_selection"
+        case .writeScreenFile: return "write_screen_file"
+        // Ours: ghostty spells the prompt jumps `jump_to_prompt:-1` and `jump_to_prompt:1`, and no
+        // token here carries an argument. `paste_from_selection` is its name for reading the X11
+        // selection clipboard, which macOS has none of, so a separate word for a separate thing.
+        case .jumpToPreviousPrompt: return "jump_to_previous_prompt"
+        case .jumpToNextPrompt: return "jump_to_next_prompt"
+        case .pasteSelection: return "paste_selection"
         }
     }
 
@@ -58,10 +69,10 @@ extension KeyInterceptor.ReservedChord {
     ///
     /// Only the actions whose effect accumulates toward something the eye tracks, and where the
     /// hold runs out of room on its own: nav stops at the edge pane, resize at the pane's minimum,
-    /// font size at the scale limit, a page scroll at the end of the buffer. Everything else is a
-    /// discrete act, and a held ⌘N spawning windows at 30 a second is the bug this answers. Tab
-    /// cycling and search stepping are deliberately not here: both wrap, so a hold never lands
-    /// anywhere the user aimed.
+    /// font size at the scale limit, a page scroll at the end of the buffer, a prompt jump at the
+    /// oldest prompt in the buffer. Everything else is a discrete act, and a held ⌘N spawning
+    /// windows at 30 a second is the bug this answers. Tab cycling and search stepping are
+    /// deliberately not here: both wrap, so a hold never lands anywhere the user aimed.
     ///
     /// A `switch` so a new `ReservedChord` case has to answer, the same as `actionToken`.
     var shouldRepeat: Bool {
@@ -70,12 +81,14 @@ extension KeyInterceptor.ReservedChord {
         case .resizeLeft, .resizeRight, .resizeUp, .resizeDown: return true
         case .increaseFontSize, .decreaseFontSize: return true
         case .scrollPageUp, .scrollPageDown: return true
+        case .jumpToPreviousPrompt, .jumpToNextPrompt: return true
         case .splitVertical, .splitHorizontal, .closePane, .newTab, .newWindow, .selectTab,
             .prevTab, .nextTab, .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
             .toggleToolFloat, .toggleRepoPicker, .toggleCommandPalette, .openSettings,
             .reloadConfig, .checkForUpdates, .reportIssue, .openDiffViewer, .resetFontSize,
             .toggleScrollMode, .toggleSearch, .scrollToTop, .scrollToBottom,
-            .findNext, .findPrevious, .searchSelection:
+            .findNext, .findPrevious, .searchSelection,
+            .clearScreen, .selectAll, .scrollToSelection, .pasteSelection, .writeScreenFile:
             return false
         }
     }
@@ -90,7 +103,12 @@ extension KeyInterceptor.ReservedChord {
     ///
     /// The ones that say no are file-only, and each for its own reason: the font sizes belong to
     /// the Terminal card's own control, Reload Config is what you press when the file is the thing
-    /// you are editing, a float's toggle chord lives on the float, and the last two ship unbound.
+    /// you are editing, a float's toggle chord lives on the float, and the last two are app errands
+    /// the menu bar already carries.
+    ///
+    /// Shipping unbound is not a reason to say no. Clear Screen, Scroll to Selection and Write
+    /// Screen to File all do, because ZenTerm spends ghostty's chords for them on pane nav and
+    /// resize, and the card is where a user picks the chord they would rather give up.
     var isEditableInSettings: Bool {
         switch self {
         case .increaseFontSize, .decreaseFontSize, .resetFontSize: return false
@@ -98,7 +116,9 @@ extension KeyInterceptor.ReservedChord {
         case .checkForUpdates, .reportIssue: return false
         case .splitVertical, .splitHorizontal, .closePane, .toggleZoom,
             .toggleScrollMode, .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown,
+            .scrollToSelection, .jumpToPreviousPrompt, .jumpToNextPrompt,
             .toggleSearch, .searchSelection, .findNext, .findPrevious,
+            .clearScreen, .selectAll, .pasteSelection, .writeScreenFile,
             .navLeft, .navRight, .navUp, .navDown,
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
             .newTab, .newWindow, .prevTab, .nextTab, .selectTab,
@@ -157,6 +177,13 @@ extension KeyInterceptor.ReservedChord {
         case "find_next": self = .findNext
         case "find_previous": self = .findPrevious
         case "search_selection": self = .searchSelection
+        case "clear_screen": self = .clearScreen
+        case "select_all": self = .selectAll
+        case "scroll_to_selection": self = .scrollToSelection
+        case "write_screen_file": self = .writeScreenFile
+        case "jump_to_previous_prompt": self = .jumpToPreviousPrompt
+        case "jump_to_next_prompt": self = .jumpToNextPrompt
+        case "paste_selection": self = .pasteSelection
         // ghostty's own spelling, so a config carried over from it binds our find bar rather than
         // failing to parse.
         case "start_search": self = .toggleSearch
@@ -251,6 +278,29 @@ enum KeymapDefaults {
         map[Chord(command: true, key: "g")] = .findNext
         map[Chord(command: true, shift: true, key: "g")] = .findPrevious
         map[Chord(command: true, key: "e")] = .searchSelection
+
+        // The screen and the prompt marks (ZEN-369), again on libghostty's own chords, so nobody
+        // already pressing these notices the action changed hands.
+        //
+        // The prompt jumps take ghostty's shifted spelling and not its bare one, which is the one
+        // place we ship fewer chords than it does. macOS claims ⌘↑ and ⌘↓, so the bare pair never
+        // reaches the app, and a second default nobody can press is not free: `Chord.displayed`
+        // renders the lowest config token, and `cmd+down` sorts under `cmd+shift+down`, so the
+        // keycap for Jump to Next Prompt would have advertised the dead one.
+        //
+        // Clear Screen, Scroll to Selection and Write Screen to File get none. ghostty's chords for
+        // them are ⌘K, ⌘J and ⌘⇧J, which are pane nav and resize here, and a chord the app leans on
+        // all day is worth more than one of these. They are in the palette and the Shortcuts card,
+        // one line from a chord the user picks.
+        //
+        // Select All gets none either, and ⌘A is free rather than spent: AppKit serves Select All
+        // from an Edit menu item, which ZenTerm has never had, so ⌘A does nothing in any field in
+        // the app. Claiming it here would make the terminal answer a chord every Mac user expects
+        // their caret to answer, and cement the gap. ZEN-370 adds the menu item, and ⌘A belongs to
+        // it rather than to the keymap.
+        map[Chord(command: true, shift: true, key: "v")] = .pasteSelection
+        map[Chord(command: true, shift: true, key: "↑")] = .jumpToPreviousPrompt
+        map[Chord(command: true, shift: true, key: "↓")] = .jumpToNextPrompt
 
         return map
     }()

@@ -95,6 +95,55 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertEqual(fired, [.scrollPageDown])
     }
 
+    /// An arrow keyDown carries `.numericPad` as well as `.function`, so a chord matched against
+    /// `.deviceIndependentFlagsMask` would see three modifiers where the user held two and fire
+    /// nothing. `docs/swift-conventions.md` has the failure (ZEN-369).
+    func test_theShiftedArrowSpellingOfAPromptJumpFires() throws {
+        let keys = KeyInterceptor()
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        XCTAssertNil(keys.route(try arrowKeyDown(keyCode: 126, character: "\u{F700}", shift: true)))
+        XCTAssertNil(keys.route(try arrowKeyDown(keyCode: 125, character: "\u{F701}", shift: true)))
+
+        XCTAssertEqual(fired, [.jumpToPreviousPrompt, .jumpToNextPrompt])
+    }
+
+    /// ghostty binds the prompt jump on bare ⌘↑ and ⌘↓ as well, and ZenTerm deliberately does not:
+    /// macOS claims both, so the keypress never arrives, and binding them would have put the dead
+    /// spelling on the keycap. `Chord.displayed` renders the lowest config token and `cmd+down`
+    /// sorts under `cmd+shift+down`, so Jump to Next Prompt would have advertised ⌘↓ (ZEN-369).
+    ///
+    /// A miss rather than a claim, so nothing is swallowed on a machine whose system leaves the
+    /// chord alone.
+    func test_theBareArrowSpellingIsNotClaimed() throws {
+        let keys = KeyInterceptor()
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        let up = try arrowKeyDown(keyCode: 126, character: "\u{F700}")
+        let down = try arrowKeyDown(keyCode: 125, character: "\u{F701}")
+
+        XCTAssertIdentical(keys.route(up), up)
+        XCTAssertIdentical(keys.route(down), down)
+        XCTAssertEqual(fired, [])
+    }
+
+    /// Walking back through prompts is a hold, the way pane nav is: each press moves one further
+    /// and the buffer's oldest prompt is where it stops.
+    func test_aHeldPromptJumpRepeats() throws {
+        let keys = KeyInterceptor()
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        XCTAssertNil(
+            keys.route(
+                try arrowKeyDown(
+                    keyCode: 126, character: "\u{F700}", shift: true, isARepeat: true)))
+
+        XCTAssertEqual(fired, [.jumpToPreviousPrompt])
+    }
+
     /// ⌘Home as AppKit delivers it: the private-use character, and `.function` alongside `.command`.
     /// A synthesized `.command`-only event is a keystroke macOS never sends.
     private func functionKeyDown(keyCode: UInt16, character: String, isARepeat: Bool = false) throws
@@ -103,6 +152,20 @@ final class KeyInterceptorRouteTests: XCTestCase {
         try XCTUnwrap(
             NSEvent.keyEvent(
                 with: .keyDown, location: .zero, modifierFlags: [.command, .function], timestamp: 0,
+                windowNumber: 0, context: nil, characters: character,
+                charactersIgnoringModifiers: character, isARepeat: isARepeat, keyCode: keyCode))
+    }
+
+    /// An arrow keyDown as AppKit delivers it: `.numericPad` on top of everything `functionKeyDown`
+    /// already carries.
+    private func arrowKeyDown(
+        keyCode: UInt16, character: String, shift: Bool = false, isARepeat: Bool = false
+    ) throws -> NSEvent {
+        var flags: NSEvent.ModifierFlags = [.command, .function, .numericPad]
+        if shift { flags.insert(.shift) }
+        return try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
                 windowNumber: 0, context: nil, characters: character,
                 charactersIgnoringModifiers: character, isARepeat: isARepeat, keyCode: keyCode))
     }

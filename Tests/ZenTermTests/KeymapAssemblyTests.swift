@@ -234,15 +234,22 @@ final class KeymapAssemblyTests: XCTestCase {
     }
 
     func test_displacementLeavingAnotherChord_isNotADiagnostic() {
-        // toggle_zoom takes split_vertical's ⌘⇧\, but the same config gives split_vertical ⌘⇧V —
-        // a deliberate reshuffle, not a hole. Warning here would cry wolf.
+        // toggle_zoom takes split_vertical's ⌘⇧\, and the same config gives split_vertical ⌘⇧U
+        // instead: a deliberate reshuffle, not a hole. Warning here would cry wolf.
+        //
+        // The landing chord has to be one no default holds, or the reshuffle displaces a third
+        // action and the diagnostic this asserts is absent shows up for a real reason. It was ⌘⇧V
+        // until ZEN-369 made that paste_selection.
+        XCTAssertNil(
+            KeymapDefaults.map[Chord(command: true, shift: true, key: "u")],
+            "a default claimed the fixture's landing chord; move the fixture to a free one")
         let assembled = KeymapAssembler.assemble(
             floats: [],
             keybinds: [
-                KeybindParser.parse("split_vertical=cmd+shift+v")!,
+                KeybindParser.parse("split_vertical=cmd+shift+u")!,
                 KeybindParser.parse("toggle_zoom=cmd+shift+\\")!,
             ])
-        XCTAssertEqual(assembled.map[Chord(command: true, shift: true, key: "v")], .splitVertical)
+        XCTAssertEqual(assembled.map[Chord(command: true, shift: true, key: "u")], .splitVertical)
         XCTAssertEqual(assembled.diagnostics, [])
     }
 

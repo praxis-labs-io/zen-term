@@ -592,3 +592,15 @@ The fix is a switch the table can be measured against: `isEditableInSettings` ma
 declare itself, and `SettingsKeybindGroupsTests` asserts the two agree in both directions. Any
 hand-ordered list keyed off an enum needs the same pairing. Ordering and grouping are editorial and
 belong in the array; membership is not, and belongs in a switch (ZEN-367).
+
+### A test's premise expires when the thing it measures moves
+
+`BackendShadowTests` covered the whole assembler → layout → seam → C chain by rebinding nav away and
+asserting the freed ⌘K came back as `clear_screen`. ZEN-369 named that action and unbound
+libghostty's copy, which is the work succeeding, and the test went red for it.
+
+The reflex is to delete a test whose premise is gone. Do not: the chain it covers is real and
+nothing else covers it. Invert the assertion instead. It now asserts the freed set is **empty**
+against a live backend, which is a regression guard on a currently-empty set, and the liveness
+canary is what stops an empty result from meaning a dead probe. `BackendShadowSweepTests` is the
+same shape, and both fail on the pin bump that would otherwise slip a bind back in unseen (ZEN-369).
