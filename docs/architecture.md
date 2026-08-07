@@ -798,7 +798,7 @@ palette, ⌘⇧P workspace picker, ⌘, settings, ⌘⌥R reload, ⌘= and ⌘+ 
 ⌘0 reset it. ZEN-367 added seven more on the chords libghostty already used for them:
 ⌘Home, ⌘End, ⌘PageUp, ⌘PageDown scroll the viewport, ⌘G and ⌘⇧G step a running
 search, ⌘E finds the selection. ZEN-369 added ⌘A select all, ⌘⇧V paste the selection,
-and the prompt jumps on ⌘↑/⌘⇧↑ and ⌘↓/⌘⇧↓.
+and the prompt jumps on ⌘⇧↑ and ⌘⇧↓.
 **No tool float is built in**; a float's chord comes from its own `key:` field.
 
 **Three actions ship with no chord**, and ZEN-369's are the first that ship unbound for
@@ -817,6 +817,15 @@ for the common case. It is the one action with two defaults; `assemble` drops al
 an action's defaults on a rebind, and `Chord.displayed` sorts by config token, so a
 keycap renders the plainer ⌘=. (ZEN-142 had moved split off bare ⌘- to leave it to
 libghostty; ZEN-224 took it back, and ⌘⇧- stays split on its own merits.)
+
+**The prompt jumps are the mirror, and the same sort rule is why.** libghostty binds
+them on bare ⌘↑/⌘↓ *and* ⌘⇧↑/⌘⇧↓; ZenTerm ships only the shifted pair, which is the one
+place we bind fewer chords than the backend did. macOS claims the bare pair on a stock
+Mac, so the keypress never arrives, and a second default nobody can press is not free:
+`cmd+down` sorts under `cmd+shift+down`, so the keycap for Jump to Next Prompt would
+have advertised the dead spelling while Jump to Previous Prompt advertised the live one.
+Two rows disagreeing about their own shortcut is worse than one chord fewer. Found at
+the machine, not by a test, which is what the runbook is for.
 
 `KeymapAssembler.assemble` resolves defaults, then float chords, then user
 keybinds, later winning. **A user keybind moves its action**: the action's default

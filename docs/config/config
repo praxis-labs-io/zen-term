@@ -309,8 +309,8 @@
 # keybind = search_selection=cmd+e               # find what you have selected
 # keybind = select_all=cmd+a
 # keybind = paste_selection=cmd+shift+v          # paste what you have selected
-# keybind = jump_to_previous_prompt=cmd+up       # cmd+shift+up does this too
-# keybind = jump_to_next_prompt=cmd+down         # cmd+shift+down too
+# keybind = jump_to_previous_prompt=cmd+shift+up
+# keybind = jump_to_next_prompt=cmd+shift+down
 # keybind = toggle_workspace_picker=cmd+shift+p
 # keybind = toggle_command_palette=cmd+p
 # keybind = diff_viewer=cmd+d                    # diff of the focused repo
@@ -369,14 +369,18 @@
 #
 # Some chords move the viewport without the mode, for when you want a look rather
 # than a read: ⌘Home and ⌘End go to the ends of the buffer, ⌘Page Up and ⌘Page Down
-# move a screen at a time, and ⌘↑ and ⌘↓ walk between the prompts your shell marked.
-# All of them repeat if you hold them, and they work on the focused drawer too.
+# move a screen at a time, and ⌘⇧↑ and ⌘⇧↓ walk between the prompts your shell
+# marked. All of them repeat if you hold them, and they work on the focused drawer.
 #
-# ⌘↑ is not scroll mode's `{`, and both are worth having. `{` moves the cursor to a
-# blank line on screen; ⌘↑ moves the buffer, so it reaches a prompt that scrolled off
-# the top and does nothing when your whole session fits on one screen. Prompt marks
-# come from shell integration, so a shell that sets none leaves ⌘↑ with nothing to
-# find. ⌘⇧↑ and ⌘⇧↓ do the same thing, for a hand already holding Shift.
+# ⌘⇧↑ is not scroll mode's `{`, and both are worth having. `{` moves the cursor to a
+# blank line on screen; ⌘⇧↑ moves the buffer, so it reaches a prompt that scrolled
+# off the top and does nothing when your whole session fits on one screen. Prompt
+# marks come from shell integration, so a shell that sets none leaves it with nothing
+# to find.
+#
+# The terminal binds these on bare ⌘↑ and ⌘↓ as well. ZenTerm does not, because macOS
+# claims that pair on most Macs and the keypress never arrives. Bind them here if
+# yours is free.
 #
 # ─── Find ────────────────────────────────────────────────────────────────────
 #

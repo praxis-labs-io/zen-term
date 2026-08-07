@@ -282,9 +282,11 @@ enum KeymapDefaults {
         // The screen and the prompt marks (ZEN-369), again on libghostty's own chords, so nobody
         // already pressing these notices the action changed hands.
         //
-        // Prompt jump ships two chords apiece because ghostty binds it twice, and the pair is worth
-        // keeping: ⌘⇧↑ is what a hand already holding Shift for a selection presses. Both resolve to
-        // one action, the way ⌘= and ⌘+ do.
+        // The prompt jumps take ghostty's shifted spelling and not its bare one, which is the one
+        // place we ship fewer chords than it does. macOS claims ⌘↑ and ⌘↓, so the bare pair never
+        // reaches the app, and a second default nobody can press is not free: `Chord.displayed`
+        // renders the lowest config token, and `cmd+down` sorts under `cmd+shift+down`, so the
+        // keycap for Jump to Next Prompt would have advertised the dead one.
         //
         // Clear Screen, Scroll to Selection and Write Screen to File get none. ghostty's chords for
         // them are ⌘K, ⌘J and ⌘⇧J, which are pane nav and resize here, and a chord the app leans on
@@ -292,9 +294,7 @@ enum KeymapDefaults {
         // one line from a chord the user picks.
         map[Chord(command: true, key: "a")] = .selectAll
         map[Chord(command: true, shift: true, key: "v")] = .pasteSelection
-        map[Chord(command: true, key: "↑")] = .jumpToPreviousPrompt
         map[Chord(command: true, shift: true, key: "↑")] = .jumpToPreviousPrompt
-        map[Chord(command: true, key: "↓")] = .jumpToNextPrompt
         map[Chord(command: true, shift: true, key: "↓")] = .jumpToNextPrompt
 
         return map
