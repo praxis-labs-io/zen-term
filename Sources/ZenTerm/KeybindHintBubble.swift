@@ -159,8 +159,12 @@ final class KeybindHintBubble: ShadowCardView {
     /// at its default, where it would be a control that does nothing.
     func setCanResetToDefault(_ canReset: Bool) { resetButton.isHidden = !canReset }
 
-    /// The default status line: the two command keys. Reset is the icon beside the input, not a
-    /// third key here, because it acts on what the input is showing rather than on the recording.
+    /// The status line: what each command key does. Reset is the icon beside the input rather than a
+    /// key here, because it acts on what the input is showing rather than on the recording.
+    ///
+    /// The same two words on every row, deliberately. A conflict is answered on the card that raises
+    /// it, which carries its own Accept and Revert; this popover is for setting a shortcut. Wording
+    /// it per row meant opening a setter to unset something already unset (ZEN-368).
     func showInstructions() {
         let cancel = Self.muted("to cancel")
         let keys = NSStackView(views: [

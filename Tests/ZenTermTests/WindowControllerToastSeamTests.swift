@@ -323,6 +323,69 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         XCTAssertEqual(titles, ["Accept"], "\(titles)")
     }
 
+    /// Answering one card must leave the others alone. Re-showing the reduced set used to spring
+    /// every survivor out and a replacement in, which read on screen as the stack dropping a good
+    /// way down and settling back (ZEN-368).
+    func test_reShowingAReducedSet_keepsTheSurvivingCard() {
+        let controller = makeController()
+        let a = conflict(loser: .findNext, chord: Chord(command: true, key: "g"), winner: .toggleToolFloat("a"))
+        let b = conflict(loser: .searchSelection, chord: Chord(command: true, key: "e"), winner: .toggleToolFloat("b"))
+        controller.showConflictToasts([a, b])
+        let before = toastViews(in: controller)
+        XCTAssertEqual(before.count, 2)
+
+        controller.showConflictToasts([b])
+
+        waitUntil(toastViews(in: controller).count == 1, "the answered card comes down")
+        XCTAssertTrue(
+            toastViews(in: controller)[0] === before[1],
+            "and the survivor is the SAME view, not a replacement that animated back in")
+    }
+
+    /// The other half: a set that grew keeps what is already up and adds beside it.
+    func test_reShowingAGrownSet_keepsTheExistingCard() {
+        let controller = makeController()
+        let a = conflict(loser: .findNext, chord: Chord(command: true, key: "g"), winner: .toggleToolFloat("a"))
+        let b = conflict(loser: .searchSelection, chord: Chord(command: true, key: "e"), winner: .toggleToolFloat("b"))
+        controller.showConflictToasts([a])
+        let first = toastViews(in: controller)[0]
+
+        controller.showConflictToasts([a, b])
+
+        let now = toastViews(in: controller)
+        XCTAssertEqual(now.count, 2)
+        XCTAssertTrue(now.contains { $0 === first }, "the card already up is untouched")
+    }
+
+    /// The third exit. Answering writes; putting the card away must not, or a user tidying their
+    /// screen would silently edit their config. Actionable toasts had no close affordance at all
+    /// until this, so a conflict card could only be answered (ZEN-368).
+    func test_conflictToast_close_dismissesWithoutWriting() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        let before = try configText()
+        let controller = makeController()
+        controller.showConflictToasts(KeybindConflict.all(in: .current))
+        let toast = toastViews(in: controller)[0]
+
+        try XCTUnwrap(descendants(of: toast).compactMap { $0 as? IconButton }.first).onClick()
+
+        waitUntil(toastViews(in: controller).isEmpty, "the card comes down")
+        XCTAssertEqual(try configText(), before, "byte-identical: closing writes nothing")
+        XCTAssertEqual(
+            KeybindConflict.all(in: .current).map(\.loser), [.toggleCommandPalette],
+            "and it is still outstanding, so the next launch raises it again")
+    }
+
+    /// A passive toast has no buttons and dismisses on a body click, so a × there would be a second
+    /// way to do the same thing on a card that needs none.
+    func test_aPassiveToast_hasNoCloseAffordance() {
+        let controller = makeController()
+        controller.showToast(ToastContent(variant: .info, title: "t", message: "m"))
+
+        let toast = toastViews(in: controller)[0]
+        XCTAssertTrue(descendants(of: toast).compactMap { $0 as? IconButton }.isEmpty)
+    }
+
     /// The card's buttons, end to end. Everything above asserts which buttons exist; this is the
     /// only thing checking that pressing one reaches the config. A card whose Accept did nothing
     /// would look completely correct and be the first surface a user meets (ZEN-368).

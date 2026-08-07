@@ -361,6 +361,46 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         try XCTUnwrap(descendants(of: try hintBubble()).compactMap { $0 as? IconButton }.first)
     }
 
+    /// The status text the popover is showing, flattened.
+    private func hintText() throws -> String {
+        descendants(of: try hintBubble()).compactMap { ($0 as? NSTextField)?.stringValue }
+            .joined(separator: " ")
+    }
+
+    /// A float's chord is a required field, so binding the row back to its defaults leaves its chord
+    /// set equal to the defaults, the writer emits nothing, and the file is untouched. The icon
+    /// would be a control that does nothing on exactly the rows it appeared on.
+    func test_resetIcon_isHiddenWhenAFloatTookTheChord() throws {
+        try seed("float = title:lazygit command:lazygit key:cmd+g\n")
+        _ = mountSection(FakeCapturer())
+
+        row(for: .findNext).chip.onActivate?()
+
+        XCTAssertTrue(try resetIcon().isHidden, "nothing to back out of, so nothing to offer")
+    }
+
+    /// A `keybind =` line can be backed out, so the icon is real on a row that lost its chord to one.
+    func test_resetIcon_isShownWhenAKeybindLineTookTheChord() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        _ = mountSection(FakeCapturer())
+
+        row(for: .toggleCommandPalette).chip.onActivate?()
+
+        XCTAssertFalse(try resetIcon().isHidden)
+    }
+
+    /// The same two words on every row. A conflict is answered on the card that raises it, so this
+    /// popover has no per-row wording to get wrong.
+    func test_theHint_readsTheSameOnEveryRow() throws {
+        try seed("keybind = split_vertical=cmd+p\n")
+        _ = mountSection(FakeCapturer())
+
+        row(for: .toggleCommandPalette).chip.onActivate?()
+        let conflicted = try hintText()
+        XCTAssertTrue(conflicted.contains("to cancel"), conflicted)
+        XCTAssertTrue(conflicted.contains("to remove"), conflicted)
+    }
+
     /// Reset is hidden on a row that already holds exactly its defaults, where it would be a control
     /// that does nothing, and shown the moment the row moves off them.
     func test_resetIcon_appearsOnlyWhenTheRowIsOffItsDefault() throws {
@@ -411,68 +451,43 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertTrue(capturer.isArmed)
     }
 
-    // MARK: the row answers a conflict (ZEN-368)
+    // MARK: a conflicted row (ZEN-368)
 
-    func test_aRowWithAConflict_offersAcceptAndRevert() throws {
+    /// The row explains itself and offers nothing. Answering lives on the launch card; the row's
+    /// job is to say why the chip is empty when someone comes looking.
+    func test_aConflictedRow_explainsItselfInNeutralInk() throws {
         try seed("keybind = split_vertical=cmd+p\n")
         _ = mountSection(FakeCapturer())
 
         let row = row(for: .toggleCommandPalette)
-        XCTAssertEqual(row.conflictButtonsForTesting, ["Revert", "Accept"])
-        XCTAssertEqual(row.messageKind, .explanation, "neutral: the config did what it says")
         XCTAssertNil(row.chip.renderedShortcutForTesting)
+        XCTAssertEqual(row.renderedMessageForTesting, "⌘P goes to split_vertical.")
+        XCTAssertEqual(row.messageKind, .explanation, "neutral: the config did what it says")
     }
 
-    /// A float's `key:` is required, so there is nothing to back out to.
-    func test_aConflictFromAFloat_offersAcceptAlone() throws {
-        try seed("float = title:lazygit command:lazygit key:cmd+g\n")
-        _ = mountSection(FakeCapturer())
-
-        XCTAssertEqual(row(for: .findNext).conflictButtonsForTesting, ["Accept"])
-    }
-
-    func test_accept_writesTheUnsetAndClearsTheRow() throws {
+    /// Accept's write is reachable from the row after all: `del` writes the same `= none` line the
+    /// card's Accept does. So a conflict deferred with the card's × can still be settled here,
+    /// through the gesture the popover already names.
+    func test_deleteOnAConflictedRow_settlesIt() throws {
         try seed("keybind = split_vertical=cmd+p\n")
         _ = mountSection(FakeCapturer())
 
-        try acceptButton(on: row(for: .toggleCommandPalette)).onTap()
+        row(for: .toggleCommandPalette).chip.keyDown(with: deleteKey(option: false))
 
-        XCTAssertEqual(row(for: .toggleCommandPalette).conflictButtonsForTesting, [])
-        XCTAssertNil(row(for: .toggleCommandPalette).renderedMessageForTesting)
         XCTAssertEqual(GeneralConfig.current.unboundActions, [.toggleCommandPalette])
+        XCTAssertEqual(KeybindConflict.all(in: .current), [], "nothing reports it again")
+        XCTAssertNil(row(for: .toggleCommandPalette).renderedMessageForTesting, "and the row goes quiet")
         let text = try configText()
         XCTAssertTrue(text.contains("keybind = toggle_command_palette=none"), text)
     }
 
-    /// Revert backs out both halves: the palette gets ⌘P back and Split Vertically returns to its
-    /// own default, because the line that moved it is gone.
-    func test_revert_dropsTheLineAndPutsBothChordsBack() throws {
-        try seed("keybind = split_vertical=cmd+p\n")
+    /// A row with nothing unresolved carries no message at all. Journey one's whole point: a clean
+    /// config shows a plain list.
+    func test_aCleanRow_showsNoMessage() {
         _ = mountSection(FakeCapturer())
 
-        try revertButton(on: row(for: .toggleCommandPalette)).onTap()
-
-        XCTAssertEqual(row(for: .toggleCommandPalette).chip.renderedShortcutForTesting, "⌘P")
-        XCTAssertEqual(row(for: .splitVertical).chip.renderedShortcutForTesting, "⌘⇧\\")
-        XCTAssertEqual(row(for: .toggleCommandPalette).conflictButtonsForTesting, [])
-        let text = try configText()
-        XCTAssertFalse(text.contains("split_vertical"), text)
-    }
-
-    /// A row with nothing unresolved carries no buttons and no message at all. Journey one's whole
-    /// point: a clean config shows a plain list.
-    func test_aCleanRow_showsNoConflictAffordance() {
-        _ = mountSection(FakeCapturer())
-
-        XCTAssertEqual(row(for: .toggleCommandPalette).conflictButtonsForTesting, [])
         XCTAssertNil(row(for: .toggleCommandPalette).renderedMessageForTesting)
     }
-
-    private func button(_ title: String, on row: KeybindRow) throws -> AppButton {
-        try XCTUnwrap(descendants(of: row).compactMap { $0 as? AppButton }.first { $0.title == title })
-    }
-    private func acceptButton(on row: KeybindRow) throws -> AppButton { try button("Accept", on: row) }
-    private func revertButton(on row: KeybindRow) throws -> AppButton { try button("Revert", on: row) }
 
     // MARK: conflict surface (ZEN-142)
 

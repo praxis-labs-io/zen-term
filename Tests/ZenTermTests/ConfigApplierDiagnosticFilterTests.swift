@@ -63,12 +63,15 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
 
     /// A float on ⌘G, which ZEN-367 made Find Next's default. It gets a card of its own, never a
     /// line in the shared list.
+    ///
+    /// Driven through `surfaceConfigNotices`, which is what launch calls. Calling the conflict half
+    /// directly is what let this ship silent: `apply(_:)` had it, launch did not, and a config with
+    /// three conflicts opened to nothing.
     func test_aChordConflict_getsACardAndNotTheSharedNotice() throws {
         let applier = makeApplier()
         try seed("float = title:lazygit command:lazygit key:cmd+g\n")
 
-        applier.surfaceConfigDiagnostics()
-        applier.surfaceConflicts()
+        applier.surfaceConfigNotices()
 
         XCTAssertEqual(announced, [], "nothing joins the shared list")
         XCTAssertEqual(carded.map(\.loser), [.findNext])
@@ -86,7 +89,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
             float = order:3 title:nvim command:nvim key:cmd+e
             """)
 
-        applier.surfaceConflicts()
+        applier.surfaceConfigNotices()
 
         XCTAssertEqual(carded.count, 3, "\(carded)")
     }
@@ -96,7 +99,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
         let applier = makeApplier()
         try seed("keybind = split_vertical=cmd+p\n")
 
-        applier.surfaceConflicts()
+        applier.surfaceConfigNotices()
 
         XCTAssertEqual(carded.map(\.loser), [.toggleCommandPalette])
         XCTAssertTrue(carded[0].isRevertable)
@@ -108,10 +111,10 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
     func test_theSameConflictTwice_isNotReCarded() throws {
         let applier = makeApplier()
         try seed("keybind = split_vertical=cmd+p\n")
-        applier.surfaceConflicts()
+        applier.surfaceConfigNotices()
         carded = []
 
-        applier.surfaceConflicts()
+        applier.surfaceConfigNotices()
 
         XCTAssertEqual(carded, [], "an unchanged set leaves the cards already up alone")
     }
@@ -120,11 +123,11 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
     func test_resolvingAConflict_retractsItsCard() throws {
         let applier = makeApplier()
         try seed("keybind = split_vertical=cmd+p\n")
-        applier.surfaceConflicts()
+        applier.surfaceConfigNotices()
         XCTAssertEqual(carded.count, 1)
 
         try seed("keybind = split_vertical=cmd+p\nkeybind = toggle_command_palette=none\n")
-        applier.surfaceConflicts()
+        applier.surfaceConfigNotices()
 
         XCTAssertEqual(carded, [], "accepted, so nothing is outstanding")
     }
@@ -140,7 +143,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
         let applier = makeApplier()
         try seed("keybind = frobnicate=cmd+f\n")
 
-        applier.surfaceConfigDiagnostics()
+        applier.surfaceConfigNotices()
 
         XCTAssertEqual(announced.count, 1, "\(announced)")
         XCTAssertTrue(announced[0].message.contains("frobnicate"), announced[0].message)
@@ -152,7 +155,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
         let applier = makeApplier()
         try seed("float = title:lazygit command:lazygit key:cmd+g\nkeybind = frobnicate=cmd+f\n")
 
-        applier.surfaceConfigDiagnostics()
+        applier.surfaceConfigNotices()
 
         XCTAssertEqual(announced.count, 1, "\(announced)")
         XCTAssertTrue(announced[0].message.contains("frobnicate"), announced[0].message)
@@ -166,11 +169,11 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
     func test_fixingTheProblem_retractsEvenWithAnExplanationLeft() throws {
         let applier = makeApplier()
         try seed("float = title:lazygit command:lazygit key:cmd+g\nkeybind = frobnicate=cmd+f\n")
-        applier.surfaceConfigDiagnostics()
+        applier.surfaceConfigNotices()
         XCTAssertNotNil(showing)
 
         try seed("float = title:lazygit command:lazygit key:cmd+g\n")
-        applier.surfaceConfigDiagnostics()
+        applier.surfaceConfigNotices()
 
         XCTAssertNil(showing, "the notice has to come down, not linger behind the explanation")
     }

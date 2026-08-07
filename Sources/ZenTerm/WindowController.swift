@@ -1352,10 +1352,10 @@ final class WindowController: NSObject {
         weak var value: ToastView?
     }
 
-    /// The conflict cards this window is showing, held weakly for the same reason the single notice
-    /// above is: the presenter's stack owns them, and a card the user closed must leave nothing
-    /// behind to retract.
-    private var conflictToasts: [WeakToast] = []
+    /// The conflict cards this window is showing, each paired with what it is about. Held weakly for
+    /// the same reason the single notice above is: the presenter's stack owns them, and a card the
+    /// user closed must leave nothing behind to retract.
+    private var conflictToasts: [(conflict: KeybindConflict, toast: WeakToast)] = []
 
     /// One sticky card per outstanding chord conflict, each carrying the two answers (ZEN-368).
     ///
@@ -1365,8 +1365,21 @@ final class WindowController: NSObject {
     /// Revert is offered only when a `keybind =` line took the chord. A float's `key:` is required,
     /// so there is nothing to back out to, and a card that offered it would be lying.
     func showConflictToasts(_ conflicts: [KeybindConflict]) {
-        dismissConflictToasts()
-        for conflict in conflicts {
+        // Reconcile rather than rebuild. Answering a card writes, which reloads, which lands back
+        // here with one fewer conflict: tearing the stack down and re-showing it sprang every
+        // surviving card out and a new one in, so the remaining cards visibly dropped and settled.
+        // A card the user did not touch should not move (ZEN-368).
+        var kept: [(conflict: KeybindConflict, toast: WeakToast)] = []
+        for entry in conflictToasts {
+            guard let toast = entry.toast.value else { continue }  // already closed by hand
+            if conflicts.contains(entry.conflict) {
+                kept.append(entry)
+            } else {
+                toasts.dismiss(toast)
+            }
+        }
+        conflictToasts = kept
+        for conflict in conflicts where !kept.contains(where: { $0.conflict == conflict }) {
             // `weak toast` for the reason the diagnostics notice uses it: the toast retains its
             // buttons, each button retains its `onTap`, and these closures reach back to the toast.
             weak var toast: ToastView?
@@ -1386,15 +1399,18 @@ final class WindowController: NSObject {
             let content = ToastContent(
                 variant: .warning, title: conflict.headline, message: conflict.message)
             let shown = toasts.showSticky(content, actions: actions)
+            // The third exit: close it, change nothing, and meet it again next launch. Answering is
+            // a write, and putting a card away must not be one (ZEN-368).
+            shown.onClose = { [weak self] in self?.toasts.dismiss(shown) }
             toast = shown
-            conflictToasts.append(WeakToast(value: shown))
+            conflictToasts.append((conflict, WeakToast(value: shown)))
         }
     }
 
     /// Take down every conflict card this window is showing. Closing one by hand leaves its box
     /// empty rather than removed, so the array is swept here rather than kept exact.
     func dismissConflictToasts() {
-        conflictToasts.compactMap(\.value).forEach { toasts.dismiss($0) }
+        conflictToasts.compactMap(\.toast.value).forEach { toasts.dismiss($0) }
         conflictToasts = []
     }
 
@@ -1407,7 +1423,9 @@ final class WindowController: NSObject {
         replacingAcross windows: [WindowController]
     ) -> Bool {
         guard let keyWindow else { return false }
-        windows.forEach { $0.dismissConflictToasts() }
+        // Every window but the target, which reconciles its own rather than being swept: sweeping it
+        // first would rebuild cards that did not change and make the stack jump.
+        windows.filter { $0 !== keyWindow }.forEach { $0.dismissConflictToasts() }
         keyWindow.showConflictToasts(conflicts)
         return true
     }

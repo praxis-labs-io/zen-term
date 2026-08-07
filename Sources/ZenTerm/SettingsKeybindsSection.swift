@@ -410,17 +410,8 @@ final class SettingsKeybindsSection: SettingsSection {
     /// window) silently retract "couldn't write config" while the edit is still not on disk.
     private func refreshRows() {
         let diagnostics = GeneralConfig.current.configDiagnostics
-        let conflicts = KeybindConflict.all(in: GeneralConfig.current)
         for row in rows {
             row.render(currentShortcut: displayedChord(for: row.action)?.displayGlyph ?? "")
-            let conflict = conflicts.first { $0.loser == row.action }
-            // The same two answers the launch card carries, so a conflict can be settled wherever
-            // the user meets it. Cleared on every refresh: resolving one elsewhere has to take the
-            // buttons away here too.
-            row.showConflict(
-                conflict,
-                onAccept: { [weak self] in self?.resolve(conflict, with: KeybindConflictResolver.accept) },
-                onRevert: { [weak self] in self?.resolve(conflict, with: KeybindConflictResolver.revert) })
             guard row.messageKind != .failure else { continue }
             let diagnostic = diagnostics.first { $0.scope == .keybind(row.action) }
             // A conflict is neutral: the config did what it says, and the answer is right there. A
@@ -428,14 +419,6 @@ final class SettingsKeybindsSection: SettingsSection {
             row.showMessage(
                 diagnostic?.message, kind: (diagnostic?.isChordConflict ?? false) ? .explanation : .diagnostic)
         }
-    }
-
-    /// Answer a conflict from its row, then re-read: the write reloads, so `desired` and every row
-    /// have to come off the new config rather than the one the button was built against.
-    private func resolve(_ conflict: KeybindConflict?, with answer: (KeybindConflict) -> Bool) {
-        guard let conflict, answer(conflict) else { return }
-        desired = KeymapOverrides(config: .current)
-        refreshRows()
     }
 
     // MARK: hint bubble
@@ -453,7 +436,12 @@ final class SettingsKeybindsSection: SettingsSection {
         host.addSubview(backdrop)
         hintBackdrop = backdrop
         let bubble = KeybindHintBubble()
-        bubble.setCanResetToDefault(!isAtDefault(row.action))
+        // On a conflicted row, reset is only real when there is a line to back out of. A float's
+        // chord is a required field, so binding the row back to its defaults leaves its chord set
+        // equal to the defaults, the writer emits nothing, and the icon is a control that does
+        // nothing on exactly the rows it would appear on (ZEN-368).
+        let conflict = KeybindConflict.all(in: GeneralConfig.current).first { $0.loser == row.action }
+        bubble.setCanResetToDefault(conflict.map(\.isRevertable) ?? !isAtDefault(row.action))
         // Reset ends the capture the way Delete does: it is an answer, not a step toward one.
         bubble.onResetToDefault = { [weak self, weak row] in
             guard let self, let row else { return }

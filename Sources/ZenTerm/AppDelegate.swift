@@ -86,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // hand-edited their config and quit has no reason to open Settings — they're exactly who this
         // is for. It also seeds the change-gate, so a pre-existing problem can't ambush them later,
         // attached to an unrelated edit that didn't cause it.
-        configApplier.surfaceConfigDiagnostics()
+        configApplier.surfaceConfigNotices()
 
         keys.onReservedChord = { [weak self] chord in self?.route(chord) }
         // Let a `Ctrl`-nav chord fall through to the terminal that owns it: a pane running nvim
