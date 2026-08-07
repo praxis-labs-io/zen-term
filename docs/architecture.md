@@ -997,13 +997,17 @@ one.
 **A move that names a destination puts the cursor on it**, rather than bringing it into
 view and leaving the cursor elsewhere. `gg`/`G` carry it to the ends.
 
-`{`/`}` are the chrome's own motion, not a backend call, and they have to be. libghostty's
-`jump_to_prompt` scrolls the viewport to a prompt **above** the screen, so it cannot reach
-any prompt you are looking at, and in a pane with no scrollback it does nothing at all while
-three prompts sit on screen. `ghostty.h` exposes no prompt marks (only a window-title action),
-so moving a cursor to a prompt is not expressible. Vim's `{`/`}` key off blank lines anyway,
-which are readable, and in a terminal a blank line is what separates one command's output from
-the next.
+`{`/`}` are the chrome's own motion, not a backend call, and they have to be. The backend's
+prompt jump scrolls the viewport to a prompt **above** the screen, so it cannot reach any
+prompt you are looking at, and in a pane with no scrollback it does nothing at all while three
+prompts sit on screen. `ghostty.h` exposes no prompt marks (only a window-title action), so
+moving a cursor to a prompt is not expressible. Vim's `{`/`}` key off blank lines anyway, which
+are readable, and in a terminal a blank line is what separates one command's output from the
+next.
+
+ZEN-369 named that jump as `scroll(.prompt(_:))` on ⌘⇧↑/⌘⇧↓, so both now ship and neither
+replaces the other. `{`/`}` move a cursor within what you can see; the chord moves the
+viewport and reaches what you cannot. Nothing above changed except who owns the chord.
 
 So the motion walks the viewport: step past any blank rows the cursor already sits in, cross
 the block of text, land on the blank after it. `TerminalSurface.text(viewportRow:)` reads one
