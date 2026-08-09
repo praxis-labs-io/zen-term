@@ -318,6 +318,7 @@ final class PanelHostView: NSView {
         contentBottomToFindBar = content.bottomAnchor.constraint(
             equalTo: bar.topAnchor, constant: -padding)
         findBar = bar
+        applyBackground()  // the bar is built on first ⌘/, long after the panel's background was set
         return bar
     }
 
@@ -373,6 +374,10 @@ final class PanelHostView: NSView {
         clip.layer?.backgroundColor = isSolid ? background.cgColor : nil
         ring.isHidden = isSolid
         ring.color = background.withAlphaComponent(alpha)
+        // The chrome strips inside the pane paint their tint over this same fill, so they read at the
+        // pane's alpha rather than blending with the desktop (ZEN-354). Solid or not: at alpha 1 this is
+        // the fill the clip already had behind them.
+        findBar?.paneFill = isSolid ? background : ring.color
     }
 
     private func updateHalo() {
