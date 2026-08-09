@@ -18,6 +18,16 @@ final class SettingsScrollView: NSScrollView {
     private var pendingTarget: CGFloat?
     private var link: CADisplayLink?
 
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        // A glide scrolls programmatically on every frame, and the copy-on-scroll blit leaves the
+        // previous frame's glyphs standing behind the new ones: text reads as doubled while it moves.
+        // Redrawing the whole clip per frame costs nothing on a list of settings rows.
+        contentView.copiesOnScroll = false
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
     /// Where the content lands once the glide in flight settles — the baseline the next keystroke
     /// measures from. Measuring from the live position instead has every repeat of a held arrow
     /// compute its step from an offset that is still catching up, so the destination creeps.
@@ -94,8 +104,12 @@ final class SettingsScrollView: NSScrollView {
         apply(current + remaining * CGFloat(min(1, frame / Self.timeConstant)))
     }
 
+    /// Snapped to the backing store's pixel grid: a fractional offset draws every glyph in the pane
+    /// between two device pixels, which reads as blur for the length of the glide.
     private func apply(_ top: CGFloat) {
-        contentView.scroll(to: NSPoint(x: contentView.bounds.minX, y: top))
+        let scale = window?.backingScaleFactor ?? 2
+        let snapped = (top * scale).rounded() / scale
+        contentView.scroll(to: NSPoint(x: contentView.bounds.minX, y: snapped))
         reflectScrolledClipView(contentView)
     }
 
