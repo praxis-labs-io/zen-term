@@ -176,7 +176,7 @@ final class SettingsToolsSection: SettingsSection {
             self.populateRows()
             guard let moved = self.rows.first(where: { $0.float.id == movedID }) else { return }
             moved.window?.makeFirstResponder(moved)
-            SettingsDetail.reveal(moved, stops: self.rows + [self.addButton])
+            KeyboardFocus.reveal(moved, among: self.rows + [self.addButton])
         }
     }
 

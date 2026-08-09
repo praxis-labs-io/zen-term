@@ -305,6 +305,17 @@ final class PaletteInteractionTests: WindowTestCase {
             "the group's first command comes with the header above it")
     }
 
+    func test_commandPalette_arrowingDown_leavesRoomBelowTheSelection() throws {
+        let (overlay, scroll) = try mountLongPalette()
+        let document = try XCTUnwrap(scroll.documentView)
+
+        for _ in 0..<10 { send(Self.moveDown, to: overlay) }
+
+        let selected = try XCTUnwrap(overlay.rowViews.first { $0.isSelected })
+        let gap = scroll.documentVisibleRect.maxY - selected.convert(selected.bounds, to: document).maxY
+        XCTAssertGreaterThan(gap, 24, "the selection lands inside the list, not flush against the edge")
+    }
+
     /// Arrowing back to the top has to reach it. Revealing the first command alone left the header
     /// above it and the list's top inset clipped, with the scroller parked just short of the top.
     func test_commandPalette_arrowingBackToTheTop_reachesIt() throws {

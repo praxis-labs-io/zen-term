@@ -731,13 +731,17 @@ as a different app.
   `NSScrollView.contentInsets` with `automaticallyAdjustsContentInsets = false`:
   nonzero left/right insets corrupt the clip view and the content spills out of the
   card unclipped.
-- **Settings detail sections scroll themselves as focus moves.** AppKit does not
-  scroll to a newly focused responder, so `SettingsDetail.reveal` computes one
-  position per keystroke and applies it. It covers the strip between the previous stop
-  and the destination, not just the destination, or a group caption (and the
-  document's top inset) parks off the top edge. It also aims past the edge the stop
-  arrives at by a margin, so a row never lands flush against the pane edge. **Do not
-  animate this.** An eased scroll was tried and reverted: a held arrow repeats faster
+- **Keyboard-driven lists scroll themselves as the selection moves**, through
+  `KeyboardFocus.reveal(_:among:)`: the Settings detail sections, the command palette,
+  and the repo picker all call it, so they behave identically. AppKit does not scroll
+  to a newly focused responder, so it computes one position per keystroke and applies
+  it. It covers the strip between the previous stop and the destination, not just the
+  destination, or a group caption or section header (and the document's top inset)
+  parks off the top edge. It also aims past the edge the stop arrives at by a margin,
+  so a row never lands flush against the pane edge. The margin goes on the **arriving
+  edge only**: padding a rect on both sides and handing it to `scrollToVisible` lets
+  the far edge pull the near one around, which moves the list while the selection is
+  still mid-pane. **Do not animate this.** An eased scroll was tried and reverted: a held arrow repeats faster
   than any ease settles, so closing the gap fast enough to keep up moves the text tens
   of points per frame, which reads as doubled or blurred glyphs. Pixel-snapping the
   offset and disabling the clip view's copy-on-scroll blit made no difference, because

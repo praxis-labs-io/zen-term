@@ -438,27 +438,14 @@ class PaletteOverlay: NSView, ModalOverlay {
         for (i, row) in laidOutRows.enumerated() { row.view.isSelected = (i == selected) }
     }
 
-    /// Reveal the selected row along with the section header above it. Revealing the row alone parks
-    /// its header just off the top edge, so arrowing up into a group hides the name of the group.
-    ///
-    /// No breathing room beyond the header on purpose: rows here are a uniform height, so a step is a
-    /// row and the list reads as even. Room on both sides shifts every offset and starts the scroll a
-    /// row early, which reads as the list moving under a selection that hasn't reached the edge yet.
+    /// Reveal the selected row through the shared keyboard reveal, so a palette scrolls exactly like a
+    /// Settings section: the section header above a group's first row comes with it, and the row lands
+    /// inside the list rather than flush against the edge it arrived at. The stops are the selectable
+    /// rows, which is what makes the headers between them read as a header rather than a stop.
     private func scrollSelectedToVisible() {
         guard laidOutRows.indices.contains(selected) else { return }
-        let y = (0..<selected).reduce(listVerticalInset) { $0 + rowHeight(at: $1) }
-
-        var header: CGFloat = 0  // the headers directly above this row belong to it
-        var above = selected - 1
-        while above >= 0, !isSelectable(at: above) {
-            header += rowHeight(at: above)
-            above -= 1
-        }
-        if above < 0 { header += listVerticalInset }  // nothing above: take the list's top inset too
-
-        (scrollView.documentView as? FlippedView)?
-            .scrollToVisible(
-                CGRect(x: 0, y: y - header, width: 1, height: rowHeight(at: selected) + header))
+        let stops = laidOutRows.indices.filter { isSelectable(at: $0) }.map { laidOutRows[$0].view }
+        KeyboardFocus.reveal(laidOutRows[selected].view, among: stops)
     }
 
     /// Build the footer: a centered horizontal row of hints, each a keycap box + its label.

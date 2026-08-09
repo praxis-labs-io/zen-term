@@ -71,7 +71,7 @@ enum SettingsDetail {
     /// core of every section's arrow-nav. `anchor` is the current stop's index (nil = none focused).
     /// `wrap` is off for arrows (a no-op at the ends) and on for Tab, which loops within the card.
     /// `scrollTarget` maps the destination stop to the view actually revealed (e.g. the whole row, so
-    /// its inline message shows). AppKit doesn't scroll to a newly-focused responder on its own.
+    /// its inline message shows), which `KeyboardFocus.reveal` scrolls in.
     ///
     /// Returns whether focus actually moved, so a caller can fall through when it didn't — Shift-Tab
     /// at the first stop exits to the nav rather than dying there.
@@ -84,43 +84,8 @@ enum SettingsDetail {
         else { return false }
         let target = stops[next]
         target.window?.makeFirstResponder(target)
-        reveal(scrollTarget(target), stops: stops)
+        KeyboardFocus.reveal(scrollTarget(target), among: stops)
         return true
-    }
-
-    /// Scroll `view` in, along with the strip above it that belongs to it: a group caption, or the
-    /// document's top inset when nothing focusable sits above. Revealing the stop alone parks that
-    /// strip just off the top edge, so arrowing up to a group's first row hid the caption naming it.
-    ///
-    /// One position, computed and applied once: revealing the strip and then the stop took two
-    /// `scrollToVisible` calls to reach the same place, in two hops.
-    static func reveal(_ view: NSView, stops: [NSView]) {
-        guard let scroll = view.enclosingScrollView, let document = scroll.documentView else { return }
-        let viewport = scroll.contentView.bounds.height
-        let frame = view.convert(view.bounds, to: document)
-        let padded = frame.insetBy(dx: 0, dy: -12)  // shared breathing room above and below a stop
-        let previousBottom =
-            stops
-            .map { $0.convert($0.bounds, to: document).maxY }
-            .filter { $0 <= frame.minY }
-            .max() ?? document.bounds.minY
-
-        // Aim past the edge the stop arrives at rather than flush against it: a row landing hard against
-        // the pane edge arrives with no context around it, and walking the list reads as scraping the
-        // bottom. Capped against a short pane, where a third of the clip is plenty.
-        let margin = min(84, viewport / 3)
-        let revealTop = min(previousBottom, padded.minY)
-        var top = scroll.contentView.bounds.minY
-        if padded.maxY + margin > top + viewport { top = padded.maxY + margin - viewport }  // down
-        if revealTop - margin < top { top = revealTop - margin }  // up: the strip comes with the stop
-        if padded.maxY > top + viewport { top = padded.maxY - viewport }  // the stop outranks the strip
-        let clamped = min(max(0, top), max(0, document.frame.height - viewport))
-        // Snapped to the backing store's pixel grid: `margin` is a third of the clip on a short pane, and
-        // a fractional offset leaves every glyph in the pane drawn between two device pixels.
-        let scale = scroll.window?.backingScaleFactor ?? 2
-        scroll.contentView.scroll(
-            to: NSPoint(x: scroll.contentView.bounds.minX, y: (clamped * scale).rounded() / scale))
-        scroll.reflectScrolledClipView(scroll.contentView)
     }
 
     /// Wrap a control in a full-width row that right-aligns it: a leading spacer takes the slack so
