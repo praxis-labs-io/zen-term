@@ -331,11 +331,10 @@ enum KeymapDefaults {
         map[Chord(command: true, shift: true, control: true, key: "j")] = .copyScreenFilePath
         map[Chord(command: true, shift: true, option: true, key: "j")] = .openScreenFile
 
-        // ⌘A selects the buffer, on ghostty's chord and every Mac user's expectation. A text field
-        // holding the keyboard needs it more, and `KeyInterceptor` resolves ahead of the responder
-        // chain, so the field has to be let through explicitly rather than by leaving ⌘A unbound:
-        // ZEN-370 serves it from the Edit menu, over a field and over a pane both.
-        map[Chord(command: true, key: "a")] = .selectAll
+        // Select All ships no chord: Edit > Select All holds ⌘A, and a menu key equivalent serves a
+        // focused text field and a pane both, which the keymap cannot. `KeyInterceptor` resolves
+        // ahead of the responder chain, so a default here would take ⌘A back off every field in the
+        // app (ZEN-370). The action stays, for the palette and for a config that rebinds it.
         map[Chord(command: true, shift: true, key: "v")] = .pasteSelection
         map[Chord(command: true, shift: true, key: "↑")] = .jumpToPreviousPrompt
         map[Chord(command: true, shift: true, key: "↓")] = .jumpToNextPrompt

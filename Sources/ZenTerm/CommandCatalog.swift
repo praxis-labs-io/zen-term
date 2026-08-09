@@ -87,9 +87,15 @@ enum CommandCatalog {
         }
     }
 
-    /// The glyph currently bound to an action, from the live keymap — empty if unbound.
+    /// The glyph that currently fires an action: the live keymap's, or the Edit menu's for the one
+    /// action the menu serves. Empty when nothing holds it.
     private static func displayGlyph(for chord: KeyInterceptor.ReservedChord) -> String {
-        Chord.displayed(chord, in: GeneralConfig.current.keymap)?.displayGlyph ?? ""
+        if let bound = Chord.displayed(chord, in: GeneralConfig.current.keymap) {
+            return bound.displayGlyph
+        }
+        // Select All ships no keymap default because Edit > Select All holds ⌘A (ZEN-370). The row
+        // still shows the chord that fires, read from the menu's constant rather than spelled again.
+        return chord == .selectAll ? MainMenu.selectAllChord.displayGlyph : ""
     }
 
     /// The ordered commands shown for a window with `tabCount` tabs, grouped by category

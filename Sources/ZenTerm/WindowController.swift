@@ -1898,7 +1898,9 @@ final class WindowController: NSObject {
         case .jumpToPreviousPrompt: scrollFocusedPane(.prompt(-1))
         case .jumpToNextPrompt: scrollFocusedPane(.prompt(1))
         case .clearScreen: activeController?.focusedScrollTarget?.surface.clearScreen()
-        case .selectAll: activeController?.focusedScrollTarget?.surface.selectAll()
+        // The Edit menu serves ⌘A; this is the palette row and whatever chord a config rebinds it to,
+        // routed through the same endpoint so the two spellings cannot drift.
+        case .selectAll: selectAll(nil)
         case .writeScreenFile: activeController?.focusedScrollTarget?.surface.writeScreenToFile(.paste)
         case .copyScreenFilePath: activeController?.focusedScrollTarget?.surface.writeScreenToFile(.copy)
         case .openScreenFile: activeController?.focusedScrollTarget?.surface.writeScreenToFile(.open)
@@ -2029,32 +2031,33 @@ final class WindowController: NSObject {
         }
     }
 
-    // MARK: copy/paste — routed to the shown tool float, else the active tab's controller
+    // MARK: the Edit menu's verbs — routed to the shown tool float, else the active tab's controller
 
-    // A shown float is modal over the window, so it owns the clipboard verbs; a persistent float's
-    // surface outlives its card, so gate on visibility (`isOpen`), not on the registry.
+    // The terminal end of the responder chain for Copy, Paste and Select All. Anything with a caret
+    // is above this: a focused field editor implements all three itself and never lets them reach
+    // the window, which is the whole of how a text field gets served (ZEN-370).
     //
-    // A modal *card* is reached even before that: the Paste menu item's custom `pasteToSurface:`
-    // selector bypasses the focused field editor's standard `paste:`, and this controller is the
-    // window's delegate — so the responder chain lands ⌘C/⌘V here ahead of `AppDelegate`. A card
-    // with a text field (palette, pickers, workspace / tool-float forms) copies from and pastes
-    // into that field; the confirm card has none, so the verb is swallowed. Without this the
-    // clipboard verbs fell straight through every modal into the terminal behind it.
-    @objc func copyFromSurface(_ sender: Any?) {
-        if isConfirmOpen { return }
-        if isModalOverlayOpen {
-            window.firstResponder?.tryToPerform(#selector(NSText.copy(_:)), with: sender)
-            return
-        }
+    // A shown float is modal over the window, so it owns the verbs; a persistent float's surface
+    // outlives its card, so gate on visibility (`isOpen`), not on the registry. A modal card or a
+    // confirm swallows instead of acting: reaching here means the card had no field to take it, and
+    // a card is mid-question, so selecting or copying the buffer behind it answers nothing.
+    @objc func copy(_ sender: Any?) {
+        if isConfirmOpen || isModalOverlayOpen { return }
         if floats.isOpen { floats.copyFromSurface(sender) } else { activeController?.copyFromSurface(sender) }
     }
-    @objc func pasteToSurface(_ sender: Any?) {
-        if isConfirmOpen { return }
-        if isModalOverlayOpen {
-            window.firstResponder?.tryToPerform(#selector(NSText.paste(_:)), with: sender)
-            return
-        }
+    @objc func paste(_ sender: Any?) {
+        if isConfirmOpen || isModalOverlayOpen { return }
         if floats.isOpen { floats.pasteToSurface(sender) } else { activeController?.pasteToSurface(sender) }
+    }
+    @objc func selectAll(_ sender: Any?) {
+        if isConfirmOpen || isModalOverlayOpen { return }
+        // `focusedScrollTarget` already resolves a focused drawer as well as a pane, so this needs
+        // no drawer branch of its own the way copy and paste do.
+        if floats.isOpen {
+            floats.selectAllInSurface(sender)
+        } else {
+            activeController?.focusedScrollTarget?.surface.selectAll()
+        }
     }
 
     // MARK: wiring

@@ -769,7 +769,7 @@ pane), so nothing else may touch it. With one case, scroll mode ate the `⌃j` t
 being handed to nvim, and the key did nothing at all.
 
 **A mode declines what the menu owns.** The monitor is local, so it runs before
-`NSApp.sendEvent` resolves menu key equivalents, and ⌘C/⌘V/⌘Q are menu items rather
+`NSApp.sendEvent` resolves menu key equivalents, and ⌘C/⌘V/⌘A/⌘Q are menu items rather
 than reserved chords. A mode that consumed every unmapped key killed Copy and Quit
 for as long as it was up. A mode consumes an unmapped key only when it carries no
 ⌘ or ⌥, which is exactly the set that would otherwise reach the shell as input.
@@ -797,9 +797,10 @@ close pane, ⌘T new tab, ⌘N new window, ⌘[ ⌘] tabs, ⌘1-9 select, ⌘B b
 palette, ⌘P workspace picker, ⌘G diff viewer, ⌘, settings, ⌘⇧, reload, ⌘= and ⌘+ and
 ⌘- font size, ⌘0 reset it. ZEN-367 added five more on the chords libghostty already used
 for them: ⌘Home, ⌘End, ⌘PageUp, ⌘PageDown scroll the viewport and ⌘E finds the selection.
-ZEN-369 added ⌘A select all, ⌘K clear screen, ⌘J scroll to the selection, ⌘⇧J and its
+ZEN-369 added ⌘K clear screen, ⌘J scroll to the selection, ⌘⇧J and its
 ⌃/⌥ variants write the screen to a file, ⌘⇧V paste the selection, and the prompt jumps on
-⌘⇧↑ and ⌘⇧↓.
+⌘⇧↑ and ⌘⇧↓. Select All is ⌘A and is the Edit menu's rather than the keymap's, for the
+reason below.
 **No tool float is built in**; a float's chord comes from its own `key:` field.
 
 **The defaults are ghostty's, and the premise is that a chord doing the wrong thing costs
@@ -843,18 +844,24 @@ which is the second half of the bracket divergence above.
 directional chord ⌘⌥arrows already covers. The reference config carries it as a four-line
 recipe.
 
-**The screen actions are on libghostty's own chords**: Select All ⌘A, Clear Screen ⌘K,
+**The screen actions are on libghostty's own chords**: Clear Screen ⌘K,
 Scroll to Selection ⌘J, Write Screen to File ⌘⇧J. Writing the screen has three endings and
 the backend takes the choice in with the call, because it disposes of the path inside the
 same action and never hands it back: ⌘⇧J types the path into the pane, ⌘⇧⌃J copies it,
 ⌘⇧⌥J opens the file. (Check for Updates and Report an Issue are the only actions with no
 chord at all: the menu bar already carries them.)
 
-**⌘A is the keymap's and should not be.** `KeyInterceptor` resolves ahead of the responder
-chain, so binding it here also takes it from a focused text field, where a caret needs it
-more: the palette filter, a Settings field, the Report an Issue composer. ZEN-370 is where
-that is settled, by serving Select All from an Edit menu item that works over a field and
-over a pane both. Until then a field cannot select its own text.
+**A verb a text field owns is served from the Edit menu, never from the keymap.** Select All
+is the case that set the rule. `KeyInterceptor` resolves ahead of the responder chain, so a
+keymap default on ⌘A takes the chord from every field in the app: the palette filter, a
+Settings field, the find bar, the Report an Issue composer. Edit > Select All carries ⌘A
+instead, with AppKit's own `selectAll:` and no target, so the chain decides. A focused field
+editor implements it and takes it first; `WindowController` implements it as the terminal
+endpoint below, and swallows it over a modal card, which has no buffer to act on. Copy and
+Paste are the same three lines for the same reason: they carried a custom `copyFromSurface:`
+selector that walked past the field, so ⌘C in the find bar copied the buffer behind you while
+you typed. `select_all` stays an action, chordless, for the palette and for a rebind
+(ZEN-370).
 
 Stepping a search is `n` and `N` while the search holds the keyboard, so `find_next` and
 `find_previous` ship with no chord and `SearchController.key(for:)` reads them. They stay

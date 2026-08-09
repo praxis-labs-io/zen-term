@@ -1,14 +1,18 @@
 import AppKit
 
-/// Builds zen-term's main menu. Copy/Paste route to the `copyPaste` target's
-/// `copyFromSurface:` / `pasteToSurface:` actions (the focused pane's surface).
+/// Builds zen-term's main menu.
 ///
 /// **Every key equivalent here is off limits to the keymap.** `MenuShortcuts` reads this menu at
 /// keymap-assembly time and refuses any bind that lands on one, so adding a shortcut here protects
 /// it with no list to update. It also means a shortcut added here silently takes that chord away
 /// from a keybind, which is the trade: the menu is the smaller, more visible surface.
 enum MainMenu {
-    static func install(copyPaste target: AnyObject?) {
+    /// Select All's chord, which the menu holds and the keymap does not (ZEN-370). The item is built
+    /// from it and the command palette reads it, so ⌘A is spelled once. Command-only: the item takes
+    /// `NSMenuItem`'s default ⌘ mask, and `MainMenuTests` reads the built item back to prove it.
+    static let selectAllChord = Chord(command: true, key: "a")
+
+    static func install() {
         let main = NSMenu()
 
         // Application menu
@@ -40,19 +44,23 @@ enum MainMenu {
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q")
 
-        // Edit menu (Copy/Paste routed to the focused surface)
+        // Edit menu. AppKit's own selectors, no target, so the responder chain decides: a focused
+        // field editor implements all three and takes them ahead of the window, and `WindowController`
+        // implements them as the terminal endpoint for everything below. A custom selector here
+        // instead (`copyFromSurface:`) walks straight past the field, which is what left ⌘C in the
+        // find bar copying the buffer behind it (ZEN-370).
         let editItem = NSMenuItem()
         main.addItem(editItem)
         let editMenu = NSMenu(title: "Edit")
         editItem.submenu = editMenu
-        let copy = NSMenuItem(
-            title: "Copy", action: #selector(PaneCanvasController.copyFromSurface(_:)), keyEquivalent: "c")
-        copy.target = target
-        editMenu.addItem(copy)
-        let paste = NSMenuItem(
-            title: "Paste", action: #selector(PaneCanvasController.pasteToSurface(_:)), keyEquivalent: "v")
-        paste.target = target
-        editMenu.addItem(paste)
+        editMenu.addItem(
+            withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(
+            withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(.separator())
+        editMenu.addItem(
+            withTitle: "Select All", action: #selector(NSText.selectAll(_:)),
+            keyEquivalent: selectAllChord.key)
 
         // Help menu — Export Diagnostics (ZEN-11). Nil target routes through the responder chain to
         // the app delegate, like About. macOS adds its standard search field to any menu titled

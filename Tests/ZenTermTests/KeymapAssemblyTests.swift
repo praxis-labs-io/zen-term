@@ -71,11 +71,13 @@ final class KeymapAssemblyTests: XCTestCase {
         XCTAssertEqual(map[Chord(command: true, shift: true, key: "j")], .writeScreenFile)
     }
 
-    /// ⌘A selects the buffer, on ghostty's chord. `KeyInterceptor` resolves ahead of the responder
-    /// chain, so this is also what takes ⌘A away from a focused text field until ZEN-370 hands it
-    /// back from the Edit menu.
-    func test_selectAll_isOnCmdA() {
-        XCTAssertEqual(assemble()[Chord(command: true, key: "a")], .selectAll)
+    /// Select All ships no chord: Edit > Select All holds ⌘A, and it has to, because
+    /// `KeyInterceptor` resolves ahead of the responder chain — a default here would take the chord
+    /// off every text field in the app (ZEN-370). The action stays, for the palette and for a rebind.
+    func test_selectAll_shipsNoChord() {
+        let map = assemble()
+        XCTAssertNil(map[Chord(command: true, key: "a")], "⌘A is the Edit menu's")
+        XCTAssertEqual(map.filter { $0.value == .selectAll }, [:])
     }
 
     /// Stepping a search is `n` and `N` while the search holds the keyboard, not a chord, so both

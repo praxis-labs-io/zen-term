@@ -78,7 +78,7 @@ final class MenuShortcutsTests: XCTestCase {
     /// the real menu, so this is the one that goes red if someone gives a menu item a chord the
     /// keymap already holds, in either direction.
     func test_noShippedDefaultTakesAMenuShortcut() {
-        MainMenu.install(copyPaste: nil)
+        MainMenu.install()
         let protected = MenuShortcuts.protected()
         // An empty protected set intersects nothing, so the guard below would pass with the menu
         // read dead. Anchor on a chord the menu bar always holds before trusting the emptiness.
@@ -93,11 +93,18 @@ final class MenuShortcutsTests: XCTestCase {
     /// The other half, in the direction that actually broke: the menu must not hand out a chord
     /// the keymap holds. Same set, but asserting it from the menu's side names the real failure.
     func test_theMenuClaimsNothingTheKeymapAlreadyHolds() {
-        MainMenu.install(copyPaste: nil)
+        MainMenu.install()
         let protected = MenuShortcuts.protected()
         XCTAssertTrue(protected.contains(Chord(command: true, key: "q")), "⌘Q must read as protected")
         let taken = protected.filter { KeymapDefaults.map[$0] != nil }
         XCTAssertEqual(taken.map(\.displayGlyph).sorted(), [])
+    }
+
+    /// ⌘A is the Edit menu's, and a config line asking for it gets the item's name back. The two
+    /// guards above only say the two sets don't overlap; this says which side ⌘A ended up on.
+    func test_selectAllIsTheMenusChord() {
+        MainMenu.install()
+        XCTAssertEqual(MenuShortcuts.owner(of: Chord(command: true, key: "a")), "Select All")
     }
 
     // MARK: Refusing a bind

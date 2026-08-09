@@ -194,12 +194,12 @@ final class TextEditingChordsTests: WindowTestCase {
 
     /// ⌘A is deliberately absent from this set, and measurement is why: AppKit serves Select All
     /// from a menu item rather than from the text view, so deferring the chord here would hand it to
-    /// nobody at all. The keymap holds it, which is what takes it from a focused field until ZEN-370
-    /// adds the menu item that can serve both.
+    /// nobody at all. The Edit menu serves it instead, and the keymap ships no default on it, so it
+    /// never reaches this guard in the first place (ZEN-370).
     func test_commandAIsNotTreatedAsATextViewChord() {
         XCTAssertFalse(
             TextEditingChords.owns(Chord(command: true, key: "a"), firstResponder: NSTextView()))
-        XCTAssertEqual(KeymapDefaults.map[Chord(command: true, key: "a")], .selectAll)
+        XCTAssertNil(KeymapDefaults.map[Chord(command: true, key: "a")])
     }
 
     private func arrowKeyDown(keyCode: UInt16, character: String) throws -> NSEvent {

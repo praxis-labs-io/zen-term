@@ -271,7 +271,8 @@
 #   jump_to_previous_prompt  jump_to_next_prompt  scroll_to_selection
 #   search_selection
 #   find_next  find_previous  (no default; `n` and `N` step a live search)
-#   select_all  clear_screen  paste_selection
+#   clear_screen  paste_selection
+#   select_all  (no default; Edit > Select All holds ⌘A)
 #   write_screen_file  write_screen_file_copy  write_screen_file_open
 #   toggle_workspace_picker  toggle_command_palette  diff_viewer
 #   open_settings  reload_config
@@ -312,7 +313,6 @@
 # keybind = scroll_page_down=cmd+page_down
 # keybind = search_selection=cmd+e               # find what you have selected
 # keybind = paste_selection=cmd+shift+v          # paste what you have selected
-# keybind = select_all=cmd+a                     # selects the whole buffer
 # keybind = clear_screen=cmd+k                   # clears the scrollback with it
 # keybind = scroll_to_selection=cmd+j
 # keybind = write_screen_file=cmd+shift+j        # writes it, then types the path
@@ -463,9 +463,15 @@
 #
 # ─── The screen ──────────────────────────────────────────────────────────────
 #
-# `select_all` (⌘A) selects the whole buffer, ready for ⌘C. It is the terminal's own
-# selection, the same one a mouse drag makes, so `scroll_to_selection` (⌘J) brings
-# the viewport back to where it starts.
+# ⌘A selects the whole buffer, ready for ⌘C. It is the terminal's own selection, the
+# same one a mouse drag makes, so `scroll_to_selection` (⌘J) brings the viewport back
+# to where it starts.
+#
+# ⌘A comes from Edit > Select All, not from a keybind, and `keybind = select_all=cmd+a`
+# is refused for that reason. A menu shortcut reaches a text field as well as a pane;
+# a keybind is resolved before the field ever sees the key, so binding ⌘A here would
+# take it away from every field in the app. `select_all` is still an action: bind it to
+# another chord and it works over a pane like any other.
 #
 # `paste_selection` (⌘⇧V) types what you have selected back into the pane. Either
 # kind counts, a mouse selection or a `v` selection from scroll mode, and with
