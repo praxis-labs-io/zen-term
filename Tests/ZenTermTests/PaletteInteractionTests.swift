@@ -305,15 +305,15 @@ final class PaletteInteractionTests: WindowTestCase {
             "the group's first command comes with the header above it")
     }
 
-    func test_commandPalette_arrowingDown_leavesRoomBelowTheSelection() throws {
+    /// Arrowing back to the top has to reach it. Revealing the first command alone left the header
+    /// above it and the list's top inset clipped, with the scroller parked just short of the top.
+    func test_commandPalette_arrowingBackToTheTop_reachesIt() throws {
         let (overlay, scroll) = try mountLongPalette()
-        let document = try XCTUnwrap(scroll.documentView)
 
-        for _ in 0..<10 { send(Self.moveDown, to: overlay) }
+        for _ in overlay.rowViews.indices { send(Self.moveDown, to: overlay) }
+        for _ in overlay.rowViews.indices { send(Self.moveUp, to: overlay) }
 
-        let selected = try XCTUnwrap(overlay.rowViews.first { $0.isSelected })
-        let gap = scroll.documentVisibleRect.maxY - selected.convert(selected.bounds, to: document).maxY
-        XCTAssertGreaterThan(gap, 20, "the selection keeps a row's worth of room below it, not zero")
+        XCTAssertEqual(scroll.documentVisibleRect.minY, 0, accuracy: 0.5, "the first command opens at the top")
     }
 
     /// Esc dismisses from the search field — the palette's initial first responder. Driven through
