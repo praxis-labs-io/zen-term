@@ -51,7 +51,13 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         textView.font = .systemFont(ofSize: 13)
         textView.textColor = Theme.current.chrome.foreground.nsColor
         textView.insertionPointColor = Theme.current.chrome.foreground.nsColor
-        textView.textContainerInset = NSSize(width: 3, height: 5)
+        // Text lands 7pt in from the box on both axes, matching `FieldBox`: its field sits at 9 less
+        // the 2pt alignment bleed AppKit gives an `NSTextField`. The container carries the padding and
+        // the scroll is only the viewport (2pt in, below), so the two inputs in a form line up. The
+        // layout manager's own 5pt line fragment padding goes to zero, or it adds a fourth term nobody
+        // sees in a constraint.
+        textView.textContainerInset = NSSize(width: 5, height: 5)
+        textView.textContainer?.lineFragmentPadding = 0
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
@@ -76,10 +82,10 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(greaterThanOrEqualToConstant: minHeight),
-            scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            scroll.topAnchor.constraint(equalTo: topAnchor, constant: 5),
-            scroll.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
+            scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
+            scroll.topAnchor.constraint(equalTo: topAnchor, constant: 2),
+            scroll.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
         ])
     }
 

@@ -92,4 +92,37 @@ final class TextAreaBoxTests: WindowTestCase {
             origin.y, glyph.minY + view.textContainerOrigin.y, accuracy: 0.5,
             "and on the same line")
     }
+
+    /// The multiline box sits directly under a `FieldBox` in the Report an Issue form, so their text
+    /// has to start on the same line. It didn't: the field's text lands 7pt in, the text area's 14 (a
+    /// 6pt scroll inset, a 3pt container inset, and the layout manager's 5pt line fragment padding,
+    /// which no constraint in the file mentions).
+    func test_textStartsWhereAFieldBoxsTextStarts() throws {
+        let field = FieldBox(placeholder: "Title")
+        let area = TextAreaBox(placeholder: "What went wrong")
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 260),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        let content = try XCTUnwrap(window.contentView)
+        content.addSubview(field)
+        content.addSubview(area)
+        NSLayoutConstraint.activate([
+            field.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            field.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            field.topAnchor.constraint(equalTo: content.topAnchor),
+            area.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            area.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            area.topAnchor.constraint(equalTo: field.bottomAnchor, constant: 10),
+        ])
+        content.layoutSubtreeIfNeeded()
+
+        let inner = field.field
+        let title = try XCTUnwrap(inner.cell?.titleRect(forBounds: inner.bounds))
+        let fieldTextX = inner.convert(NSPoint(x: title.minX, y: 0), to: field).x
+        let areaTextX = area.textView.convert(area.textView.placeholderOrigin, to: area).x
+
+        XCTAssertEqual(
+            areaTextX, fieldTextX, accuracy: 0.5,
+            "the text area's text starts \(areaTextX)pt in, the field's \(fieldTextX)pt")
+    }
 }
