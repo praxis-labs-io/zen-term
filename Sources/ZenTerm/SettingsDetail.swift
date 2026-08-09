@@ -86,8 +86,29 @@ enum SettingsDetail {
         let target = stops[next]
         target.window?.makeFirstResponder(target)
         let scroll = scrollTarget(target)
+        // Lead-in first, stop second: both calls scroll the minimum amount, so the second is a no-op
+        // when the caption and the row fit together, and wins when they don't.
+        if let leadIn = leadIn(above: scroll, stops: stops) { scroll.scrollToVisible(leadIn) }
         scroll.scrollToVisible(scroll.bounds.insetBy(dx: 0, dy: -12))
         return true
+    }
+
+    /// The strip between the previous focus stop and `view` — a group caption, or the document's top
+    /// inset when `view` is the first stop. Revealing the stop alone parks that strip just off the top
+    /// edge, so arrowing up to the first row of a group hides the caption naming it. Returned in
+    /// `view`'s coordinates; nil when the previous stop sits flush against it.
+    private static func leadIn(above view: NSView, stops: [NSView]) -> NSRect? {
+        guard let document = view.enclosingScrollView?.documentView else { return nil }
+        let frame = view.convert(view.bounds, to: document)
+        let previousBottom =
+            stops
+            .map { $0.convert($0.bounds, to: document).maxY }
+            .filter { $0 <= frame.minY }
+            .max() ?? document.bounds.minY
+        guard previousBottom < frame.minY else { return nil }
+        let strip = NSRect(
+            x: frame.minX, y: previousBottom, width: frame.width, height: frame.minY - previousBottom)
+        return view.convert(strip, from: document)
     }
 
     /// Wrap a control in a full-width row that right-aligns it: a leading spacer takes the slack so
