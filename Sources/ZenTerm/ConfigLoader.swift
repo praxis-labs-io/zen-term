@@ -120,7 +120,7 @@ enum ConfigLoader {
         return url.path
     }
 
-    /// Load the hand-curated `workspaces` file (the `⌘⇧P` picker) from the config root, off the
+    /// Load the hand-curated `workspaces` file (the `⌘P` picker) from the config root, off the
     /// main thread, and deliver the result on it.
     ///
     /// This is what every caller uses. The read is one small file, but `~/.config` can sit on a
@@ -173,7 +173,7 @@ enum ConfigLoader {
     /// — the directory may appear later.
     ///
     /// Diagnostic only, and one `stat` per workspace, so it runs on its own queue after the list has
-    /// already been handed over: nothing waits on it. Every ⌘⇧P open reloads the file, so warning on each pass would
+    /// already been handed over: nothing waits on it. Every ⌘P open reloads the file, so warning on each pass would
     /// reprint the same line for the life of the process; the seen set keeps the first one, which is
     /// the one that tells the user about the typo.
     private static var warnedPaths: Set<String> = []

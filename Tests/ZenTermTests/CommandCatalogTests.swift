@@ -40,6 +40,7 @@ final class CommandCatalogTests: XCTestCase {
                 "Scroll Page Up", "Scroll Page Down", "Scroll to Top", "Scroll to Bottom",
                 "Jump to Previous Prompt", "Jump to Next Prompt", "Scroll to Selection",
                 "Clear Screen", "Select All", "Paste Selection", "Write Screen to File",
+                "Write Screen to File, Copy Path", "Write Screen to File and Open",
                 "Close Pane",
                 "Fill Screen", "Increase Font Size", "Decrease Font Size", "Reset Font Size",
             ])
@@ -115,30 +116,26 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(entry!.shortcut, "", "Check for Updates has no default binding")
     }
 
-    /// The palette is the whole of how these four are reached out of the box, so a row that went
-    /// missing would take the action with it. ghostty puts three of them on ⌘K, ⌘J and ⌘⇧J, which
-    /// are pane nav and resize here. Select All is the fourth for a different reason: ⌘A is left
-    /// free for the Edit menu item ZEN-370 adds, rather than spent (ZEN-369).
-    func test_theUnboundScreenActionsArePresentWithNoGlyph() {
+    /// Every screen action on ghostty's own chord, including the two write-to-file variants that
+    /// differ only in what happens to the path. Three rows one keystroke apart is exactly where a
+    /// glyph drifts from the chord that fires.
+    func test_theScreenActions_showTheirChords() {
         let entries = CommandCatalog.commands(tabCount: 3)
-        for title in ["Clear Screen", "Scroll to Selection", "Write Screen to File", "Select All"] {
-            let entry = entries.first { $0.title == title }
-            XCTAssertNotNil(entry, "\(title) is unreachable without a palette row")
-            XCTAssertEqual(entry?.shortcut, "", "\(title) has no default binding")
+        for (title, shortcut) in [
+            ("Clear Screen", "⌘K"), ("Scroll to Selection", "⌘J"), ("Select All", "⌘A"),
+            ("Write Screen to File", "⌘⇧J"), ("Write Screen to File, Copy Path", "⌘⇧⌃J"),
+            ("Write Screen to File and Open", "⌘⇧⌥J"),
+        ] {
+            XCTAssertEqual(entries.first { $0.title == title }?.shortcut, shortcut, title)
         }
     }
 
     func test_everyEntry_hasTitle_andShortcut() {
-        // Every palette command shows its glyph, except the actions shipped deliberately unbound:
-        // Check for Updates (ZEN-20), Report an Issue (ZEN-212), and the four screen actions whose
-        // chords ZenTerm either spends elsewhere or leaves to the menu bar (ZEN-369).
+        // Every palette command shows its glyph, except the two shipped deliberately unbound:
+        // Check for Updates (ZEN-20) and Report an Issue (ZEN-212) are the menu bar's errands.
         let unbound: Set<String> = [
             KeyInterceptor.ReservedChord.checkForUpdates.actionToken,
             KeyInterceptor.ReservedChord.reportIssue.actionToken,
-            KeyInterceptor.ReservedChord.clearScreen.actionToken,
-            KeyInterceptor.ReservedChord.scrollToSelection.actionToken,
-            KeyInterceptor.ReservedChord.writeScreenFile.actionToken,
-            KeyInterceptor.ReservedChord.selectAll.actionToken,
         ]
         for command in CommandCatalog.commands(tabCount: 9) {
             XCTAssertFalse(command.title.isEmpty)

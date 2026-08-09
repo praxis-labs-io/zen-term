@@ -26,7 +26,7 @@ enum AppConfig {
     }
 
     /// - Parameter force: broadcast `.all` instead of the diff, so every observer re-applies even
-    ///   when the file resolved to the same values. This is what ⌘⌥R (Reload Config) passes: it's
+    ///   when the file resolved to the same values. This is what ⌘⇧, (Reload Config) passes: it's
     ///   the user's "make the app match my config" escape hatch, and a manual keystroke can afford
     ///   the full re-apply that a 5-per-second field edit cannot.
     @MainActor

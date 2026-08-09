@@ -185,15 +185,16 @@ final class ChordTests: XCTestCase {
     }
 
     func test_liveShiftedEvent_resolvesToTheBindingSpelledWithTheBaseKey() {
-        // ZEN-142's whole trap in one assertion: the default is written `cmd+shift+-`, the keyboard
-        // delivers "_", and they have to be the same chord or the binding is dead on arrival.
-        let minus = Chord(event: shiftedKeyDown("_"))
-        XCTAssertEqual(minus, Chord(command: true, shift: true, key: "-"))
-        XCTAssertEqual(KeymapDefaults.map[minus!], .splitHorizontal)
+        // ZEN-142's whole trap in one assertion: a default is written `cmd+shift+=`, the keyboard
+        // delivers "+", and they have to be the same chord or the binding is dead on arrival.
+        // ZEN-371 moved the splits off ⌘⇧- and ⌘⇧\, so increase is the last default that depends
+        // on the fold — the other two still canonicalize, they just resolve to nothing now.
+        let plus = Chord(event: shiftedKeyDown("+"))
+        XCTAssertEqual(plus, Chord(command: true, shift: true, key: "="))
+        XCTAssertEqual(KeymapDefaults.map[plus!], .increaseFontSize)
 
-        let backslash = Chord(event: shiftedKeyDown("|"))
-        XCTAssertEqual(backslash, Chord(command: true, shift: true, key: "\\"))
-        XCTAssertEqual(KeymapDefaults.map[backslash!], .splitVertical)
+        XCTAssertEqual(Chord(event: shiftedKeyDown("_")), Chord(command: true, shift: true, key: "-"))
+        XCTAssertEqual(Chord(event: shiftedKeyDown("|")), Chord(command: true, shift: true, key: "\\"))
     }
 
     func test_liveUnshiftedMinus_isNotTheSplit() {

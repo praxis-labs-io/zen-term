@@ -5,40 +5,52 @@ import AppKit
 /// lean and this carries the rest. A pure builder: it reads `Theme.current` at build time, so the popover
 /// re-creates it on a live theme change.
 enum DiffKeymapSheet {
-    private static let groups: [(title: String, rows: [(keys: [String], label: String)])] = [
-        (
-            "Tree",
-            [
-                (["j", "k"], "Prev / next file"),
-                (["h", "l"], "Fold / open file"),
-                (["⌃j", "⌃k"], "Page files"),
-                (["⌃d", "⌃u"], "Scroll diff"),
-                (["b"], "Base branch"),
-            ]
-        ),
-        (
-            "Diff",
-            [
-                (["j", "k"], "Move cursor"),
-                (["{", "}"], "Prev / next change"),
-                (["gg", "G"], "Top / bottom"),
-                (["0", "$"], "Line start / end"),
-                (["⌃d", "⌃u"], "Half page"),
-                (["V"], "Select lines"),
-                (["y", "Y"], "Yank code / ref"),
-                (["⏎"], "Comment"),
-            ]
-        ),
-        (
-            "General",
-            [
-                (["⌘h", "⌘l"], "Focus tree / diff"),
-                (["\\"], "Toggle layout"),
-                (["q", "esc"], "Close"),
-                (["?"], "This sheet"),
-            ]
-        ),
-    ]
+    /// The chord a keymap action holds right now, for the rows that quote one.
+    ///
+    /// Read live rather than written out: focus tree/diff answers the `nav_left` / `nav_right`
+    /// **actions**, so it follows the keymap and follows a user's rebind, and a hand-written glyph
+    /// here drifts the moment either moves. It has drifted before. An unbound action prints nothing
+    /// rather than a chord that does nothing.
+    private static func glyph(_ action: KeyInterceptor.ReservedChord) -> [String] {
+        Chord.displayed(action, in: GeneralConfig.current.keymap).map { [$0.displayGlyph] } ?? []
+    }
+
+    private static var groups: [(title: String, rows: [(keys: [String], label: String)])] {
+        [
+            (
+                "Tree",
+                [
+                    (["j", "k"], "Prev / next file"),
+                    (["h", "l"], "Fold / open file"),
+                    (["⌃j", "⌃k"], "Page files"),
+                    (["⌃d", "⌃u"], "Scroll diff"),
+                    (["b"], "Base branch"),
+                ]
+            ),
+            (
+                "Diff",
+                [
+                    (["j", "k"], "Move cursor"),
+                    (["{", "}"], "Prev / next change"),
+                    (["gg", "G"], "Top / bottom"),
+                    (["0", "$"], "Line start / end"),
+                    (["⌃d", "⌃u"], "Half page"),
+                    (["V"], "Select lines"),
+                    (["y", "Y"], "Yank code / ref"),
+                    (["⏎"], "Comment"),
+                ]
+            ),
+            (
+                "General",
+                [
+                    (glyph(.navLeft) + glyph(.navRight), "Focus tree / diff"),
+                    (["\\"], "Toggle layout"),
+                    (["q", "esc"], "Close"),
+                    (["?"], "This sheet"),
+                ]
+            ),
+        ]
+    }
 
     static func makeContent() -> NSView {
         let columns = NSStackView(views: groups.map { column($0.title, $0.rows) })

@@ -108,7 +108,7 @@ real. This is the shared setup for steps 3–6 and 11.
 - [ ] **8. Real round-trip.** `bin/release` to a scratch tag, install the previous
       release, and confirm it sees and installs the new one over the real appcast,
       then relaunches into the new build.
-- [ ] **9. Palette dispatch (dev is fine).** Open the command palette (⌘P) → Config:
+- [ ] **9. Palette dispatch (dev is fine).** Open the command palette (⌘⇧P) → Config:
       "Reload Config" and "Check for Updates" are both present. Pick **Reload Config**
       and confirm it re-reads the config (the previously-dead palette path, now fixed).
       "Check for Updates" shows no keycap (unbound by default).
@@ -120,7 +120,7 @@ real. This is the shared setup for steps 3–6 and 11.
 - [ ] **11. Bound keycap.** Add `keybind = check_for_updates=cmd+opt+u` (any free
       chord), relaunch the recipe build, and trigger the available card (step 3): its
       top-right keycap slot now shows the glyph. Rebind or unbind with the card up (⌘, →
-      Keybinds, or ⌘⌥R after a hand-edit) and the keycap tracks it.
+      Keybinds, or ⌘⇧, after a hand-edit) and the keycap tracks it.
 - [ ] **12. Off switch.** Settings → General → Updates → set "Check for updates in the
       background" to Off. `automatic-update-checks = false` lands in the config, and
       Sparkle stops its scheduled checks (the manual command still works).

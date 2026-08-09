@@ -38,14 +38,14 @@ final class KeybindConflictTests: XCTestCase {
     // MARK: reading them off the config
 
     func test_aKeybindLineTakingAChord_isOneRevertableConflict() throws {
-        let config = try load("keybind = split_vertical=cmd+p\n")
+        let config = try load("keybind = split_vertical=cmd+shift+p\n")
 
         let conflicts = KeybindConflict.all(in: config)
 
         XCTAssertEqual(conflicts.count, 1, "\(conflicts)")
         XCTAssertEqual(conflicts[0].loser, .toggleCommandPalette)
         XCTAssertEqual(conflicts[0].winner, .splitVertical)
-        XCTAssertEqual(conflicts[0].chord, Chord(command: true, key: "p"))
+        XCTAssertEqual(conflicts[0].chord, Chord(command: true, shift: true, key: "p"))
         XCTAssertTrue(conflicts[0].isRevertable)
     }
 
@@ -57,7 +57,7 @@ final class KeybindConflictTests: XCTestCase {
         let conflicts = KeybindConflict.all(in: config)
 
         XCTAssertEqual(conflicts.count, 1, "\(conflicts)")
-        XCTAssertEqual(conflicts[0].loser, .findNext)
+        XCTAssertEqual(conflicts[0].loser, .openDiffViewer)
         XCTAssertFalse(conflicts[0].isRevertable)
     }
 
@@ -66,13 +66,13 @@ final class KeybindConflictTests: XCTestCase {
         let config = try load(
             """
             float = order:1 title:lazygit command:lazygit key:cmd+g
-            float = order:2 title:gitdash command:gd key:cmd+shift+g
+            float = order:2 title:gitdash command:gd key:cmd+k
             float = order:3 title:nvim command:nvim key:cmd+e
             """)
 
         XCTAssertEqual(
             Set(KeybindConflict.all(in: config).map(\.loser)),
-            [.findNext, .findPrevious, .searchSelection])
+            [.openDiffViewer, .clearScreen, .searchSelection])
     }
 
     /// An action that merely moved is not a conflict. Only losing the last chord is.
@@ -85,13 +85,13 @@ final class KeybindConflictTests: XCTestCase {
     // MARK: what each answer writes
 
     func test_accept_writesTheUnsetAndLeavesTheLineThatTookIt() throws {
-        let config = try load("keybind = split_vertical=cmd+p\n")
+        let config = try load("keybind = split_vertical=cmd+shift+p\n")
         let conflict = KeybindConflict.all(in: config)[0]
 
         let text = try write(conflict.accepting(KeymapOverrides(config: config)))
 
         XCTAssertTrue(text.contains("keybind = toggle_command_palette=none"), text)
-        XCTAssertTrue(text.contains("keybind = split_vertical=cmd+p"), text)
+        XCTAssertTrue(text.contains("keybind = split_vertical=cmd+shift+p"), text)
         let reloaded = ConfigLoader.loadGeneralConfig(configRoot: tempRoot)
         XCTAssertEqual(KeybindConflict.all(in: reloaded), [], "and it stops being reported")
     }
@@ -99,7 +99,7 @@ final class KeybindConflictTests: XCTestCase {
     /// Revert backs out both halves at once, which is the whole point: the line goes, so the chord
     /// returns to the action that shipped with it and the winner returns to its own default.
     func test_revert_dropsTheLineAndPutsBothBack() throws {
-        let config = try load("keybind = split_vertical=cmd+p\n")
+        let config = try load("keybind = split_vertical=cmd+shift+p\n")
         let conflict = KeybindConflict.all(in: config)[0]
 
         let text = try write(conflict.reverting(KeymapOverrides(config: config)))
@@ -107,8 +107,8 @@ final class KeybindConflictTests: XCTestCase {
         XCTAssertFalse(text.contains("split_vertical"), text)
         XCTAssertFalse(text.contains("toggle_command_palette"), text)
         let reloaded = ConfigLoader.loadGeneralConfig(configRoot: tempRoot)
-        XCTAssertEqual(reloaded.keymap[Chord(command: true, key: "p")], .toggleCommandPalette)
-        XCTAssertEqual(reloaded.keymap[Chord(command: true, shift: true, key: "\\")], .splitVertical)
+        XCTAssertEqual(reloaded.keymap[Chord(command: true, shift: true, key: "p")], .toggleCommandPalette)
+        XCTAssertEqual(reloaded.keymap[Chord(command: true, key: "d")], .splitVertical)
         XCTAssertEqual(KeybindConflict.all(in: reloaded), [])
     }
 
@@ -120,9 +120,10 @@ final class KeybindConflictTests: XCTestCase {
             float = order:1 title:lazygit command:lazygit key:cmd+g
             float = order:2 title:nvim command:nvim key:cmd+e
             """)
-        let findNext = try XCTUnwrap(KeybindConflict.all(in: config).first { $0.loser == .findNext })
+        let viewer = try XCTUnwrap(
+            KeybindConflict.all(in: config).first { $0.loser == .openDiffViewer })
 
-        _ = try write(findNext.accepting(KeymapOverrides(config: config)))
+        _ = try write(viewer.accepting(KeymapOverrides(config: config)))
 
         let reloaded = ConfigLoader.loadGeneralConfig(configRoot: tempRoot)
         XCTAssertEqual(KeybindConflict.all(in: reloaded).map(\.loser), [.searchSelection])
@@ -152,10 +153,10 @@ final class KeybindConflictTests: XCTestCase {
     }
 
     /// Revert used to write the winner's default chord in, and `binds` is keyed by chord, so it
-    /// evicted whatever else held it. Here `new_tab` sits on ⌘F, which is `toggle_zoom`'s default;
+    /// evicted whatever else held it. Here `new_tab` sits on ⌘F, which is `toggle_search`'s default;
     /// reverting the palette's conflict must not cost the user their New Tab line.
     func test_revert_leavesAnUnrelatedBindingAlone() throws {
-        let config = try load("keybind = toggle_zoom=cmd+p\nkeybind = new_tab=cmd+f\n")
+        let config = try load("keybind = toggle_zoom=cmd+shift+p\nkeybind = new_tab=cmd+f\n")
         let conflict = try XCTUnwrap(KeybindConflict.all(in: config).first)
         XCTAssertEqual(conflict.loser, .toggleCommandPalette)
 
@@ -164,14 +165,14 @@ final class KeybindConflictTests: XCTestCase {
         XCTAssertTrue(text.contains("keybind = new_tab=cmd+f"), text)
         XCTAssertFalse(text.contains("toggle_zoom"), text)
         let reloaded = ConfigLoader.loadGeneralConfig(configRoot: tempRoot)
-        XCTAssertEqual(reloaded.keymap[Chord(command: true, key: "p")], .toggleCommandPalette)
+        XCTAssertEqual(reloaded.keymap[Chord(command: true, shift: true, key: "p")], .toggleCommandPalette)
         XCTAssertEqual(reloaded.keymap[Chord(command: true, key: "f")], .newTab, "still the user's")
     }
 
     /// One standing fact, one sentence. The card and the Shortcuts row describe the same thing, and
     /// two phrasings of it read as two different problems.
     func test_theCardAndTheRow_useTheSameSentence() throws {
-        let config = try load("keybind = split_vertical=cmd+p\n")
+        let config = try load("keybind = split_vertical=cmd+shift+p\n")
         let conflict = try XCTUnwrap(KeybindConflict.all(in: config).first)
 
         let rowMessage = config.configDiagnostics.first { $0.scope == .keybind(.toggleCommandPalette) }?
@@ -182,7 +183,7 @@ final class KeybindConflictTests: XCTestCase {
     /// Reverting a keybind line must not touch a float line, which the writer does not own.
     func test_revert_leavesFloatLinesAlone() throws {
         let config = try load(
-            "float = title:lazygit command:lazygit key:cmd+shift+j\nkeybind = split_vertical=cmd+p\n")
+            "float = title:lazygit command:lazygit key:cmd+shift+j\nkeybind = split_vertical=cmd+shift+p\n")
         let conflict = try XCTUnwrap(KeybindConflict.all(in: config).first { $0.isRevertable })
 
         let text = try write(conflict.reverting(KeymapOverrides(config: config)))

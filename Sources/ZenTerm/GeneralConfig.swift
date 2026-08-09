@@ -137,7 +137,7 @@ struct GeneralConfig: Equatable {
 
     /// The resolved config for this launch, re-resolvable via `reloadCurrent()` when the Settings
     /// card writes the file (see `AppConfig.reload()`). External hand-edits are picked up on
-    /// demand via the Reload Config command (⌘⌥R).
+    /// demand via the Reload Config command (⌘⇧,).
     ///
     /// Initialized to the built-in default and resolved from disk by `AppConfig.loadAtLaunch()`
     /// before any window builds. Deliberately *not* `= ConfigLoader.loadGeneralConfig()`: a Swift

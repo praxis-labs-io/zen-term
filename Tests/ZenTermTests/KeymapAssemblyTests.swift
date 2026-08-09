@@ -28,19 +28,84 @@ final class KeymapAssemblyTests: XCTestCase {
 
     func test_defaultsPresent() {
         let map = assemble()
-        XCTAssertEqual(map[Chord(command: true, key: "f")], .toggleZoom)
-        XCTAssertEqual(map[Chord(command: true, shift: true, key: "f")], .fillScreen)
-        XCTAssertEqual(map[Chord(command: true, shift: true, key: "\\")], .splitVertical)
-        XCTAssertEqual(map[Chord(command: true, option: true, key: "r")], .reloadConfig)
+        XCTAssertEqual(map[Chord(command: true, key: "f")], .toggleSearch)
+        XCTAssertEqual(map[Chord(command: true, key: "⏎")], .fillScreen)
+        XCTAssertEqual(map[Chord(command: true, key: "d")], .splitVertical)
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: ",")], .reloadConfig)
     }
 
-    func test_splitHorizontal_isCmdShiftMinus_notBareCmdMinus() {
-        // ZEN-142 moved the split off bare ⌘- to leave it to libghostty's own text magnification.
-        // ZEN-224 took that chord over for app-wide font size, so ⌘- is bound again — but to
-        // decrease, never to split. Getting these two confused resizes the terminal on a split.
+    /// Each chord asserted at its home and absent from the one it left. A stale default nobody
+    /// removed keeps firing alongside the new one, which reads as the new chord working.
+    func test_theMovedChords_areOnlyAtTheirNewHomes() {
         let map = assemble()
-        XCTAssertEqual(map[Chord(command: true, shift: true, key: "-")], .splitHorizontal)
-        XCTAssertEqual(map[Chord(command: true, key: "-")], .decreaseFontSize)
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: "d")], .splitHorizontal)
+        XCTAssertEqual(map[Chord(command: true, key: "g")], .openDiffViewer)
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: "⏎")], .toggleZoom)
+        XCTAssertEqual(map[Chord(command: true, key: "p")], .toggleRepoPicker)
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: "p")], .toggleCommandPalette)
+
+        XCTAssertNil(map[Chord(command: true, shift: true, key: "\\")], "⌘⇧\\ retired with the split")
+        XCTAssertNil(map[Chord(command: true, shift: true, key: "-")], "and so did ⌘⇧-")
+        XCTAssertNil(map[Chord(command: true, shift: true, key: "f")], "⌘⇧F retired with Fill Screen")
+        XCTAssertEqual(map[Chord(command: true, key: "-")], .decreaseFontSize, "⌘- was never a split")
+    }
+
+    /// Pane nav and resize on ghostty's arrows, and nothing beside them. A second spelling of a
+    /// directional action is invisible until a Shortcuts row picks the wrong one of the two to
+    /// advertise.
+    func test_paneDirectionals_areOnGhosttysArrowsAlone() {
+        let map = assemble()
+        XCTAssertEqual(map[Chord(command: true, option: true, key: "↑")], .navUp)
+        XCTAssertEqual(map[Chord(command: true, control: true, key: "←")], .resizeLeft)
+
+        XCTAssertNil(map[Chord(command: true, shift: true, key: "h")], "⌘⇧hjkl resize retired")
+        XCTAssertNotEqual(map[Chord(command: true, key: "k")], .navUp, "and ⌘hjkl nav with it")
+    }
+
+    /// The three screen actions on ghostty's own chords. Each is reachable from the palette either
+    /// way, so a missing default here is invisible from anywhere else in the suite.
+    func test_theScreenActions_tookTheChordsNavAndResizeGaveUp() {
+        let map = assemble()
+        XCTAssertEqual(map[Chord(command: true, key: "k")], .clearScreen)
+        XCTAssertEqual(map[Chord(command: true, key: "j")], .scrollToSelection)
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: "j")], .writeScreenFile)
+    }
+
+    /// ⌘A selects the buffer, on ghostty's chord. `KeyInterceptor` resolves ahead of the responder
+    /// chain, so this is also what takes ⌘A away from a focused text field until ZEN-370 hands it
+    /// back from the Edit menu.
+    func test_selectAll_isOnCmdA() {
+        XCTAssertEqual(assemble()[Chord(command: true, key: "a")], .selectAll)
+    }
+
+    /// Stepping a search is `n` and `N` while the search holds the keyboard, not a chord, so both
+    /// actions ship without one and ⌘G is the diff viewer's.
+    func test_findStepping_holdsNoChord() {
+        let map = assemble()
+        XCTAssertEqual(map.filter { $0.value == .findNext }, [:])
+        XCTAssertEqual(map.filter { $0.value == .findPrevious }, [:])
+        XCTAssertEqual(map[Chord(command: true, key: "g")], .openDiffViewer)
+    }
+
+    /// The chords that would be a second spelling of something already bound. ghostty's is the one
+    /// that ships in each pair.
+    func test_theRemainingDuplicates_areGone() {
+        let map = assemble()
+        XCTAssertNil(map[Chord(control: true, key: "⇥")], "⌃⇥ tab cycling, ⌘] is the default")
+        XCTAssertNil(map[Chord(shift: true, control: true, key: "⇥")], "and ⌃⇧⇥")
+        XCTAssertNil(map[Chord(command: true, control: true, key: "f")], "⌃⌘F fill screen, ⌘⏎ is it")
+        XCTAssertNil(map[Chord(command: true, key: "/")], "⌘/ find, ⌘F is it")
+        XCTAssertNil(map[Chord(command: true, option: true, key: "r")], "⌘⌥R reload, ⌘⇧, is it")
+    }
+
+    /// The rule the tests above are each one case of. Increase is the sole exception, and it is a
+    /// layout artifact rather than a second way to spell the action: ⌘+ *is* ⌘⇧= on a US keyboard.
+    func test_everyActionShipsOneChord_exceptIncrease() {
+        var counts: [KeyInterceptor.ReservedChord: Int] = [:]
+        for action in assemble().values { counts[action, default: 0] += 1 }
+        XCTAssertEqual(
+            counts.filter { $0.value > 1 }.map(\.key), [.increaseFontSize],
+            "a second default chord needs a reason at the call site, and a line in this test")
     }
 
     /// ⌘+ is physically ⌘⇧= on a US layout, and `Chord` folds the "+" onto "=" because Shift is set.
@@ -71,18 +136,20 @@ final class KeymapAssemblyTests: XCTestCase {
         XCTAssertNil(map[Chord(command: true, shift: true, key: "=")])
     }
 
-    func test_shiftedSymbolDefaults_holdExactlyOneEntryEach() {
-        // Canonicalization replaced the hand-listed "|"/"\\" pair with a single entry. The "|"
-        // lookup still resolves — it canonicalizes to the same chord — but it's the SAME entry,
-        // not a second one, which is what makes narrowing and conflict reporting honest.
+    func test_theShiftedSymbolDefault_holdsOneEntryNotTwo() {
+        // Canonicalization replaced hand-listed sibling spellings with a single entry. The "+"
+        // lookup still resolves — it canonicalizes onto "=" because Shift is set — but it's the SAME
+        // entry, not a second one, which is what makes narrowing and conflict reporting honest.
+        //
+        // ⌘⇧= is the last shipped default spelled with a shifted symbol; ZEN-371 moved the splits
+        // off ⌘⇧\ and ⌘⇧-. So increase holds exactly its two written chords and no third.
         let map = assemble()
-        XCTAssertEqual(map[Chord(command: true, shift: true, key: "|")], .splitVertical)
-        XCTAssertEqual(map.filter { $0.value == .splitVertical }.count, 1)
-        XCTAssertEqual(map.filter { $0.value == .splitHorizontal }.count, 1)
+        XCTAssertEqual(map[Chord(command: true, shift: true, key: "+")], .increaseFontSize)
+        XCTAssertEqual(map.filter { $0.value == .increaseFontSize }.count, 2)
     }
 
     func test_floatChord_overridesBuiltin() {
-        // A float claiming ⌘F displaces the built-in .toggleZoom.
+        // A float claiming ⌘F displaces the built-in .toggleSearch.
         let map = assemble(floats: [float(id: "x", key: "cmd+f")])
         XCTAssertEqual(map[Chord(command: true, key: "f")], .toggleToolFloat("x"))
     }
@@ -124,17 +191,17 @@ final class KeymapAssemblyTests: XCTestCase {
 
     // MARK: unbinding (ZEN-368)
 
-    /// The whole point of the feature. A float on ⌘G takes `find_next`'s only chord, which used to
-    /// warn at every launch with no way to say "yes, I meant that". The `= none` line is that way,
+    /// The whole point of the feature. A float on ⌘G takes the diff viewer's only chord, which
+    /// warns at every launch with no way to say "yes, I meant that". The `= none` line is that way,
     /// and the silence is the assertion: a config the user wrote on purpose must not tell them off.
     func test_unbindLine_leavesTheActionChordless_andSaysNothing() {
         let assembled = KeymapAssembler.assemble(
-            floats: [float(id: "x", key: "cmd+g")], keybinds: [.unbind(.findNext)])
+            floats: [float(id: "x", key: "cmd+g")], keybinds: [.unbind(.openDiffViewer)])
 
         XCTAssertEqual(assembled.map[Chord(command: true, key: "g")], .toggleToolFloat("x"))
-        XCTAssertFalse(assembled.map.values.contains(.findNext))
+        XCTAssertFalse(assembled.map.values.contains(.openDiffViewer))
         XCTAssertEqual(assembled.diagnostics, [], "an unbind the user asked for is not a problem")
-        XCTAssertEqual(assembled.unbound, [.findNext])
+        XCTAssertEqual(assembled.unbound, [.openDiffViewer])
     }
 
     /// The same config without the line, so the silence above is the line's doing and not the
@@ -143,7 +210,7 @@ final class KeymapAssemblyTests: XCTestCase {
     func test_theSameCollisionWithoutTheLine_stillRecordsTheFact() {
         let assembled = KeymapAssembler.assemble(floats: [float(id: "x", key: "cmd+g")], keybinds: [])
 
-        XCTAssertEqual(assembled.diagnostics.map(\.scope), [.keybind(.findNext)])
+        XCTAssertEqual(assembled.diagnostics.map(\.scope), [.keybind(.openDiffViewer)])
         XCTAssertEqual(assembled.unbound, [], "a displacement is not an intentional unbind")
     }
 
@@ -214,32 +281,32 @@ final class KeymapAssemblyTests: XCTestCase {
 
     func test_userKeybindStealingAnotherActionsChord_reportsDiagnostic() {
         let assembled = KeymapAssembler.assemble(
-            floats: [], keybinds: [KeybindParser.parse("toggle_zoom=cmd+shift+\\")!])
+            floats: [], keybinds: [KeybindParser.parse("toggle_zoom=cmd+d")!])
         XCTAssertEqual(assembled.diagnostics.map(\.scope), [.keybind(.splitVertical)])
     }
 
     func test_diagnostic_namesTheActionThatActuallyHoldsTheChord() {
-        // Two lines claim ⌘⇧\; last wins, so new_window ends up holding it. The message tells the
+        // Two lines claim ⌘D; last wins, so new_window ends up holding it. The message tells the
         // user which config line to go edit — naming toggle_zoom (which merely passed through on the
         // way) would send them to fix a line that no longer has the chord.
         let assembled = KeymapAssembler.assemble(
             floats: [],
             keybinds: [
-                KeybindParser.parse("toggle_zoom=cmd+shift+\\")!,
-                KeybindParser.parse("new_window=cmd+shift+\\")!,
+                KeybindParser.parse("toggle_zoom=cmd+d")!,
+                KeybindParser.parse("new_window=cmd+d")!,
             ])
-        XCTAssertEqual(assembled.map[Chord(command: true, shift: true, key: "\\")], .newWindow)
+        XCTAssertEqual(assembled.map[Chord(command: true, key: "d")], .newWindow)
         let message = assembled.diagnostics.first { $0.scope == .keybind(.splitVertical) }?.message
-        XCTAssertEqual(message, "⌘⇧\\ goes to new_window.")
+        XCTAssertEqual(message, "⌘D goes to new_window.")
     }
 
     func test_displacementLeavingAnotherChord_isNotADiagnostic() {
-        // toggle_zoom takes split_vertical's ⌘⇧\, and the same config gives split_vertical ⌘⇧U
+        // toggle_zoom takes split_vertical's ⌘D, and the same config gives split_vertical ⌘⇧U
         // instead: a deliberate reshuffle, not a hole. Warning here would cry wolf.
         //
-        // The landing chord has to be one no default holds, or the reshuffle displaces a third
-        // action and the diagnostic this asserts is absent shows up for a real reason. It was ⌘⇧V
-        // until ZEN-369 made that paste_selection.
+        // Both fixture chords have to be ones no default holds, or the reshuffle displaces a third
+        // action and the diagnostic this asserts is absent shows up for a real reason. The landing
+        // chord was ⌘⇧V until ZEN-369 made that paste_selection.
         XCTAssertNil(
             KeymapDefaults.map[Chord(command: true, shift: true, key: "u")],
             "a default claimed the fixture's landing chord; move the fixture to a free one")
@@ -247,7 +314,7 @@ final class KeymapAssemblyTests: XCTestCase {
             floats: [],
             keybinds: [
                 KeybindParser.parse("split_vertical=cmd+shift+u")!,
-                KeybindParser.parse("toggle_zoom=cmd+shift+\\")!,
+                KeybindParser.parse("toggle_zoom=cmd+d")!,
             ])
         XCTAssertEqual(assembled.map[Chord(command: true, shift: true, key: "u")], .splitVertical)
         XCTAssertEqual(assembled.diagnostics, [])
@@ -276,7 +343,7 @@ final class KeymapAssemblyTests: XCTestCase {
         let assembled = KeymapAssembler.assemble(floats: [], keybinds: [user], canType: usLayout)
 
         XCTAssertEqual(
-            assembled.map[Chord(command: true, shift: true, key: "\\")], .splitVertical,
+            assembled.map[Chord(command: true, key: "d")], .splitVertical,
             "an unusable line must not cost the action its default")
         XCTAssertNil(assembled.map[Chord(command: true, key: "|")], "and the dead chord isn't bound")
         XCTAssertEqual(assembled.diagnostics.count, 1)

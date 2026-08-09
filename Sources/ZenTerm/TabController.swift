@@ -472,7 +472,7 @@ final class TabController: NSObject {
     func toggleBottomDrawer() {
         switch zoomedPanel {
         case .pane, .bottomDrawer:
-            toastZoomBlocked("toggle a drawer")  // zoom is strict — only ⌘F exits
+            toastZoomBlocked("toggle a drawer")  // zoom is strict — only Focus Mode's own chord exits
             return
         case .rightDrawer:
             switchZoomedDrawer(to: .bottom)  // jump the zoom to the other drawer
@@ -563,7 +563,7 @@ final class TabController: NSObject {
     func toggleRightDrawer() {
         switch zoomedPanel {
         case .pane, .rightDrawer:
-            toastZoomBlocked("toggle a drawer")  // zoom is strict — only ⌘F exits
+            toastZoomBlocked("toggle a drawer")  // zoom is strict — only Focus Mode's own chord exits
             return
         case .bottomDrawer:
             switchZoomedDrawer(to: .right)  // jump the zoom to the other drawer
@@ -806,7 +806,17 @@ final class TabController: NSObject {
     private var lastNoNeighborToast: (direction: Direction, at: Date)?
 
     /// A grid command (split / navigate / resize / drawers) was invoked while zoomed. Focus Mode is
-    /// strict, so instead of silently doing nothing, point the user at ⌘F.
+    /// strict, so instead of silently doing nothing, name the chord that gets them out.
+    ///
+    /// The chord is read from the live keymap rather than written into the string: a toast quoting a
+    /// chord the user does not have sends them somewhere else, and a default that moves leaves no
+    /// trace here.
+    /// Focus Mode's chord as it stands, or its action name when the user has unbound it, so the
+    /// sentence still reads.
+    private static var focusModeChord: String {
+        Chord.displayed(.toggleZoom, in: GeneralConfig.current.keymap)?.displayGlyph ?? "Focus Mode"
+    }
+
     private func toastZoomBlocked(_ verb: String) {
         let now = Date()
         if let last = lastZoomBlockToast, last.verb == verb,
@@ -818,7 +828,7 @@ final class TabController: NSObject {
         onRequestToast?(
             ToastContent(
                 variant: .info, title: "Focus Mode",
-                message: "Exit Focus Mode (⌘F) to \(verb)."))
+                message: "Exit Focus Mode (\(Self.focusModeChord)) to \(verb)."))
     }
 
     /// ⌘F on a lone pane with no open drawer: focusing would hide nothing, so there's nothing to
@@ -969,9 +979,9 @@ final class TabController: NSObject {
 
     /// Resize whichever panel holds focus by moving its edge in `direction`. For a pane
     /// this defers to the pane canvas's edge-aware resize. A docked drawer only resizes
-    /// along its own axis, growing toward the canvas: the bottom drawer grows up (⌘⇧K) and
-    /// shrinks down (⌘⇧J); the right drawer grows left into the canvas (⌘⇧H) and shrinks
-    /// right (⌘⇧L) — the same feel as an edge pane on that side. The cross axis beeps. A
+    /// along its own axis, growing toward the canvas: the bottom drawer grows up (⌘⌃↑) and
+    /// shrinks down (⌘⌃↓); the right drawer grows left into the canvas (⌘⌃←) and shrinks
+    /// right (⌘⌃→) — the same feel as an edge pane on that side. The cross axis beeps. A
     /// resize chord while zoomed just unzooms, matching `navigate`.
     func resize(_ direction: Direction) {
         if isZoomed { toastZoomBlocked("resize"); return }

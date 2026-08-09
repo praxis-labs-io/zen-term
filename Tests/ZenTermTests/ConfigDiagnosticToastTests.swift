@@ -273,7 +273,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     /// The real config path: a hand-edited file that steals a chord must produce a toast-worthy
     /// diagnostic, not just an inline row note.
     func test_aConfigThatStealsAChord_producesAToast() throws {
-        try "keybind = toggle_focus_mode=cmd+shift+\\\n"
+        try "keybind = toggle_focus_mode=cmd+d\n"
             .write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         AppConfig.reload()
 

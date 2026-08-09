@@ -34,7 +34,7 @@ final class ToastView: ShadowCardView {
     /// `reapplyTheme()` since it's a `Theme.current.chrome`-sourced value baked at init.
     private let variant: ToastVariant
     /// Retained (not throwaway init-locals) so `reapplyTheme()` can recolor them — otherwise an
-    /// already-visible toast (e.g. a confirm left up across ⌘⌥R) stays stale after a live theme
+    /// already-visible toast (e.g. a confirm left up across ⌘⇧,) stays stale after a live theme
     /// change, since a passive `show()` toast is never rebuilt while an old one lingers.
     private let titleLabel: NSTextField
     private let messageLabel: NSTextField

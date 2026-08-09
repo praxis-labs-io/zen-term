@@ -357,7 +357,7 @@ final class GeneralConfigParserTests: XCTestCase {
         let diagnostics = parse(
             """
             font-size = 200
-            keybind = toggle_focus_mode=cmd+shift+\\
+            keybind = toggle_focus_mode=cmd+d
             """
         ).configDiagnostics
         XCTAssertTrue(

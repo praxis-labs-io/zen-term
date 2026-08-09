@@ -248,37 +248,38 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         // default, so neither row could ever be reverted without nuking every customization.
         let capturer = FakeCapturer()
         _ = mountSection(capturer)
-        let cmdH = Chord(command: true, key: "h")
-        let cmdL = Chord(command: true, key: "l")
+        let cmdT = Chord(command: true, key: "t")
+        let cmdN = Chord(command: true, key: "n")
 
         // Build the swap the only way the UI allows — capture blocks on an occupied chord, so
-        // Nav Right has to vacate ⌘L before Nav Left can take it.
-        row(for: .navRight).chip.onActivate?()
-        capturer.feed(event(for: novelChord))  // Nav Right parks elsewhere, freeing ⌘L
-        row(for: .navLeft).chip.onActivate?()
-        capturer.feed(event(for: cmdL))  // Nav Left → ⌘L, freeing ⌘H
-        row(for: .navRight).chip.onActivate?()
-        capturer.feed(event(for: cmdH))  // Nav Right → ⌘H. Swapped.
-        XCTAssertEqual(liveKeymap[cmdH], .navRight)
-        XCTAssertEqual(liveKeymap[cmdL], .navLeft)
+        // New Window has to vacate ⌘N before New Tab can take it.
+        row(for: .newWindow).chip.onActivate?()
+        capturer.feed(event(for: novelChord))  // New Window parks elsewhere, freeing ⌘N
+        row(for: .newTab).chip.onActivate?()
+        capturer.feed(event(for: cmdN))  // New Tab → ⌘N, freeing ⌘T
+        row(for: .newWindow).chip.onActivate?()
+        capturer.feed(event(for: cmdT))  // New Window → ⌘T. Swapped.
+        XCTAssertEqual(liveKeymap[cmdT], .newWindow)
+        XCTAssertEqual(liveKeymap[cmdN], .newTab)
 
-        row(for: .navLeft).chip.onActivate?()  // Reset Nav Left → wants ⌘H, held by Nav Right
+        row(for: .newTab).chip.onActivate?()  // Reset New Tab → wants ⌘T, held by New Window
         try resetIcon().onClick()
 
-        XCTAssertEqual(liveKeymap[cmdH], .navLeft, "Nav Left is back on its default")
-        // Nav Right falls back to its own default — which the reset just freed, so the swap unwinds.
-        XCTAssertEqual(liveKeymap[cmdL], .navRight, "and Nav Right lands on its default too")
+        XCTAssertEqual(liveKeymap[cmdT], .newTab, "New Tab is back on its default")
+        // New Window falls back to its own default — which the reset just freed, so the swap unwinds.
+        XCTAssertEqual(liveKeymap[cmdN], .newWindow, "and New Window lands on its default too")
     }
 
     func test_capturingAnOccupiedShiftedSymbol_blocks() {
-        // The ZEN-142 shape: ⌘⇧- arrives as "_" and must still be recognized as taken.
+        // The ZEN-142 shape: ⌘⇧= arrives as "+" and must still be recognized as taken. ZEN-371 moved
+        // the splits off ⌘⇧- and ⌘⇧\, so increase font size is the last default spelled this way.
         let capturer = FakeCapturer()
         _ = mountSection(capturer)
         row(for: .closePane).chip.onActivate?()
 
-        capturer.feed(keyDown("_", code: 0, flags: [.command, .shift]))
+        capturer.feed(keyDown("+", code: 0, flags: [.command, .shift]))
 
-        XCTAssertEqual(liveKeymap[Chord(command: true, shift: true, key: "-")], .splitHorizontal)
+        XCTAssertEqual(liveKeymap[Chord(command: true, shift: true, key: "=")], .increaseFontSize)
         XCTAssertTrue(capturer.isArmed, "an occupied shifted-symbol chord must block too")
     }
 
@@ -406,7 +407,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
 
     /// A `keybind =` line can be backed out, so the icon is real on a row that lost its chord to one.
     func test_resetIcon_isShownWhenAKeybindLineTookTheChord() throws {
-        try seed("keybind = split_vertical=cmd+p\n")
+        try seed("keybind = split_vertical=cmd+shift+p\n")
         _ = mountSection(FakeCapturer())
 
         row(for: .toggleCommandPalette).chip.onActivate?()
@@ -417,7 +418,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
     /// The same two words on every row. A conflict is answered on the card that raises it, so this
     /// popover has no per-row wording to get wrong.
     func test_theHint_readsTheSameOnEveryRow() throws {
-        try seed("keybind = split_vertical=cmd+p\n")
+        try seed("keybind = split_vertical=cmd+shift+p\n")
         _ = mountSection(FakeCapturer())
 
         row(for: .toggleCommandPalette).chip.onActivate?()
@@ -481,12 +482,12 @@ final class KeybindCaptureFlowTests: WindowTestCase {
     /// The row explains itself and offers nothing. Answering lives on the launch card; the row's
     /// job is to say why the chip is empty when someone comes looking.
     func test_aConflictedRow_explainsItselfInNeutralInk() throws {
-        try seed("keybind = split_vertical=cmd+p\n")
+        try seed("keybind = split_vertical=cmd+shift+p\n")
         _ = mountSection(FakeCapturer())
 
         let row = row(for: .toggleCommandPalette)
         XCTAssertNil(row.chip.renderedShortcutForTesting)
-        XCTAssertEqual(row.renderedMessageForTesting, "⌘P goes to split_vertical.")
+        XCTAssertEqual(row.renderedMessageForTesting, "⌘⇧P goes to split_vertical.")
         XCTAssertEqual(row.messageKind, .explanation, "neutral: the config did what it says")
     }
 
@@ -494,7 +495,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
     /// card's Accept does. So a conflict deferred with the card's × can still be settled here,
     /// through the gesture the popover already names.
     func test_deleteOnAConflictedRow_settlesIt() throws {
-        try seed("keybind = split_vertical=cmd+p\n")
+        try seed("keybind = split_vertical=cmd+shift+p\n")
         _ = mountSection(FakeCapturer())
 
         row(for: .toggleCommandPalette).chip.keyDown(with: deleteKey(option: false))
@@ -608,10 +609,22 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertEqual(row(for: .newTab).renderedMessageForTesting, "⌘T goes to toggle_float:steal.")
     }
 
-    func test_splitRows_showTheBaseKeyGlyph() {
-        // Display ≡ config token: the chip shows what you'd type into the file (ZEN-142).
+    /// The chip is the only place the keymap is quoted back to the user, so a row naming a chord
+    /// the keymap does not hold is a lie that works: the binding fires, the card advertises another
+    /// key, and nothing else in the suite can see the difference.
+    func test_theChips_nameTheMovedChords() {
         _ = mountSection(FakeCapturer())
-        XCTAssertEqual(row(for: .splitHorizontal).chip.renderedShortcutForTesting, "⌘⇧-")
-        XCTAssertEqual(row(for: .splitVertical).chip.renderedShortcutForTesting, "⌘⇧\\")
+        XCTAssertEqual(row(for: .navUp).chip.renderedShortcutForTesting, "⌘⌥↑")
+        XCTAssertEqual(row(for: .resizeLeft).chip.renderedShortcutForTesting, "⌘⌃←")
+        XCTAssertEqual(row(for: .toggleSearch).chip.renderedShortcutForTesting, "⌘F")
+        XCTAssertEqual(row(for: .fillScreen).chip.renderedShortcutForTesting, "⌘⏎")
+        XCTAssertEqual(row(for: .openDiffViewer).chip.renderedShortcutForTesting, "⌘G")
+    }
+
+    /// And a rebound action's chip names whatever chord it holds now, not the default it left.
+    func test_aRebindMovesTheChip_offTheDefault() throws {
+        try seed("keybind = resize_left=cmd+shift+opt+y\n")
+        _ = mountSection(FakeCapturer())
+        XCTAssertEqual(row(for: .resizeLeft).chip.renderedShortcutForTesting, "⌘⇧⌥Y")
     }
 }

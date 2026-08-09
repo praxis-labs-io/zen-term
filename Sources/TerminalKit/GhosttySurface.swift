@@ -854,11 +854,12 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         performBindingAction("select_all")
     }
 
-    /// `write_screen_file` takes what to do with the path it just wrote. `paste` types it into the
-    /// pane, which is where the next command goes; ghostty's other two put it on the pasteboard or
-    /// open the file, and ZenTerm names neither (ZEN-369).
-    public func writeScreenToFile() {
-        performBindingAction("write_screen_file:paste")
+    public func writeScreenToFile(_ disposition: ScreenFileDisposition) {
+        switch disposition {
+        case .paste: performBindingAction("write_screen_file:paste")
+        case .copy: performBindingAction("write_screen_file:copy")
+        case .open: performBindingAction("write_screen_file:open")
+        }
     }
 
     public func setSizeSyncSuspended(_ suspended: Bool) {

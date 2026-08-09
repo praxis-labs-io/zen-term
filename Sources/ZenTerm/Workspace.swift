@@ -1,6 +1,6 @@
 import Foundation
 
-/// One entry in the `⌘⇧P` workspace picker: a named working directory plus an open "recipe"
+/// One entry in the `⌘P` workspace picker: a named working directory plus an open "recipe"
 /// — which regions open and what each runs — and optional environment variables. Parsed
 /// from a `[Title]` section of `~/.config/zen-term/workspaces`. The section header is the
 /// `title`: shown in the picker and pinned as the tab name, independent of the folder name.

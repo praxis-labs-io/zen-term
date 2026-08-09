@@ -27,6 +27,7 @@ final class KeycapView: NSView {
         "↑": "arrow.up", "↓": "arrow.down", "←": "arrow.left", "→": "arrow.right",
         "↖": "arrow.up.left", "↘": "arrow.down.right",
         "⇞": "chevron.up.2", "⇟": "chevron.down.2",
+        "⇥": "arrow.right.to.line",
     ]
     private static var ink: NSColor { Theme.current.chrome.ink(alpha: 0.55) }
 

@@ -203,7 +203,7 @@ final class WindowController: NSObject {
     private let dock: ToggleDock
     private var mountedCanvas: NSView?
 
-    /// Which modal card is open. The repo picker (⌘⇧P), command palette (⌘P), and Add-Workspace
+    /// Which modal card is open. The workspace picker (⌘P), command palette (⌘⇧P), and Add-Workspace
     /// form are mutually exclusive — only one is up at a time — so they share a single slot with
     /// a kind discriminator rather than parallel per-overlay stacks. Window-level (they open/
     /// switch tabs) but presented over the active tab's tile region. Modal while open.
@@ -496,7 +496,7 @@ final class WindowController: NSObject {
                 // "simplifies" it away: `modal` is a single slot, so opening Settings in *this* window
                 // has already closed this palette. The live path is a palette open in window A while
                 // window B saves a float, since the reload is unforced and broadcasts `.floats` alone.
-                // (⌘⌥R can't show it either: it forces `.all`, which carries `.theme`.)
+                // (⌘⇧, can't show it either: it forces `.all`, which carries `.theme`.)
                 if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {
                     self.modal?.overlay.reapplyTheme()
                 }
@@ -890,7 +890,7 @@ final class WindowController: NSObject {
         addTab(cwd: activeController?.focusedCWD, pinnedTitle: nil)
     }
 
-    /// Append a new tab with an explicit cwd and optional pinned title. The `⌘⇧P` picker
+    /// Append a new tab with an explicit cwd and optional pinned title. The `⌘P` picker
     /// passes a `Workspace` (its path + title + open recipe); plain `⌘t` passes the inherited
     /// cwd, no pin, and no workspace (a bare shell).
     private func addTab(cwd: URL?, pinnedTitle: String?, workspace: Workspace? = nil) {
@@ -907,7 +907,7 @@ final class WindowController: NSObject {
     }
 
     /// Replace the active tab's controller in place (same tab id/slot) with a fresh session in
-    /// `cwd`, pinned to `pinnedTitle` and running `workspace`'s recipe. Used by `⌘⇧P` + Shift+Enter.
+    /// `cwd`, pinned to `pinnedTitle` and running `workspace`'s recipe. Used by `⌘P` + Shift+Enter.
     private func replaceActiveTab(cwd: URL, pinnedTitle: String?, workspace: Workspace?) {
         closeFloatForTabChange()  // swapping the tab out from under a modal card is the same bug
         let id = tabs.activeID
@@ -1007,7 +1007,7 @@ final class WindowController: NSObject {
         renderTabBar()
     }
 
-    // MARK: modal cards (⌘⇧P picker / ⌘P palette / Add-Workspace form)
+    // MARK: modal cards (⌘P picker / ⌘⇧P palette / Add-Workspace form)
 
     /// Present a modal card over the active tab: mount it, store it in the single slot, focus its
     /// input, and spring it in. One path for all three cards. No-op if there's no active tab.
@@ -1042,8 +1042,8 @@ final class WindowController: NSObject {
         renderDock()
     }
 
-    /// Toggle the workspace picker (⌘⇧P). Reads the `workspaces` file fresh on each open (so
-    /// hand-edits appear without a relaunch). Pressing ⌘⇧P while it's up closes it.
+    /// Toggle the workspace picker (⌘P). Reads the `workspaces` file fresh on each open (so
+    /// hand-edits appear without a relaunch). Pressing ⌘P while it's up closes it.
     ///
     /// The read is off the main thread (ZEN-275), so the card is built once the workspaces are in
     /// hand rather than presented empty and filled: a card that springs in at one size and resizes a
@@ -1067,8 +1067,8 @@ final class WindowController: NSObject {
         }
     }
 
-    /// Toggle the command palette (⌘P). Builds the catalog fresh (its tab-select entries track
-    /// the live tab count). Pressing ⌘P while it's up closes it.
+    /// Toggle the command palette (⌘⇧P). Builds the catalog fresh (its tab-select entries track
+    /// the live tab count). Pressing ⌘⇧P while it's up closes it.
     private func toggleCommandPalette() {
         if modal?.kind == .commandPalette { closeModal(); return }
         let palette = CommandPaletteOverlay(
@@ -1082,7 +1082,7 @@ final class WindowController: NSObject {
         presentModal(palette, kind: .commandPalette)
     }
 
-    /// Open the Add-Workspace form from the ⌘⇧P picker's ＋ row. Seeds it with the current titles for
+    /// Open the Add-Workspace form from the ⌘P picker's ＋ row. Seeds it with the current titles for
     /// inline collision checks; submitting writes the section and opens it. The picker is still up
     /// when the ＋ fires, so close it first. (Editing / deleting a workspace goes through Settings →
     /// Workspaces instead, via `openWorkspaceForm`.)
@@ -1596,7 +1596,7 @@ final class WindowController: NSObject {
     }
 
     /// Persist a workspace edited / added from Settings, then hand back to Settings → Workspaces (the
-    /// ⌘⇧P picker reads the file fresh on each open, so no reload is needed for it to reflect this).
+    /// ⌘P picker reads the file fresh on each open, so no reload is needed for it to reflect this).
     /// `originalTitle` is the title before an edit — a rename replaces that section in place; a nil
     /// original is a fresh add. A write failure keeps the form up with a toast.
     private func submitWorkspace(_ ws: Workspace, replacing originalTitle: String?) {
@@ -1634,7 +1634,7 @@ final class WindowController: NSObject {
     /// Exchange two workspaces' positions in the `workspaces` file, reporting whether the write
     /// landed so the list only re-renders on a file that really changed. Unlike add / edit / delete
     /// this doesn't reopen Settings — the card is already open and rebuilding it would throw away the
-    /// user's place in the list mid-⌥↓. Nothing to reload either: the ⌘⇧P picker re-reads the file
+    /// user's place in the list mid-⌥↓. Nothing to reload either: the ⌘P picker re-reads the file
     /// every time it opens.
     private func reorderWorkspaces(_ moved: Workspace, with neighbour: Workspace) -> Bool {
         do {
@@ -1784,7 +1784,7 @@ final class WindowController: NSObject {
                 closeModal()
                 return
             }
-            // The diff viewer navigates with the app's pane chords (⌘h/j/k/l): forward them so it can
+            // The diff viewer navigates with the app's pane chords (⌘⌥arrows): forward them so it can
             // move between its tree and diff and jump changes, instead of swallowing them like a form.
             if modal.kind == .diffViewer, let diff = modal.overlay as? DiffViewerOverlay,
                 diff.handleNavChord(chord)
@@ -1897,7 +1897,9 @@ final class WindowController: NSObject {
         case .jumpToNextPrompt: scrollFocusedPane(.prompt(1))
         case .clearScreen: activeController?.focusedScrollTarget?.surface.clearScreen()
         case .selectAll: activeController?.focusedScrollTarget?.surface.selectAll()
-        case .writeScreenFile: activeController?.focusedScrollTarget?.surface.writeScreenToFile()
+        case .writeScreenFile: activeController?.focusedScrollTarget?.surface.writeScreenToFile(.paste)
+        case .copyScreenFilePath: activeController?.focusedScrollTarget?.surface.writeScreenToFile(.copy)
+        case .openScreenFile: activeController?.focusedScrollTarget?.surface.writeScreenToFile(.open)
         case .pasteSelection: pasteSelection()
         case .fillScreen: toggleFillScreen()
         case .toggleToolFloat(let id):
@@ -1913,7 +1915,7 @@ final class WindowController: NSObject {
         }
     }
 
-    /// The window frame before Fill Screen grew it, so a second ⌘⇧F restores the exact size
+    /// The window frame before Fill Screen grew it, so a second ⌘⏎ restores the exact size
     /// and position. Nil means the window is not currently filled.
     private var preFillFrame: NSRect?
 
@@ -2244,7 +2246,7 @@ final class WindowController: NSObject {
         toast = toasts.showSticky(content, actions: actions)
     }
 
-    /// Test hook: open a workspace the way the `⌘⇧P` picker does — `⏎` into a new tab, `⇧⏎`
+    /// Test hook: open a workspace the way the `⌘P` picker does — `⏎` into a new tab, `⇧⏎`
     /// replacing the current one — so a test drives the real staging of the recipe behind the
     /// canvas transition rather than calling `applyRecipe` directly.
     func openWorkspaceForTesting(_ ws: Workspace, replaceCurrentTab: Bool) {
