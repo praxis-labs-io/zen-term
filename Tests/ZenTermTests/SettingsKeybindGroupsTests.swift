@@ -28,6 +28,7 @@ final class SettingsKeybindGroupsTests: XCTestCase {
             .clearScreen, .selectAll, .pasteSelection, .writeScreenFile,
             .copyScreenFilePath, .openScreenFile,
             .navLeft, .navDown, .navUp, .navRight,
+            .prevPane, .nextPane,
             .resizeLeft, .resizeDown, .resizeUp, .resizeRight,
             .newTab, .newWindow, .prevTab, .nextTab,
             .fillScreen, .toggleBottomDrawer, .toggleRightDrawer,
