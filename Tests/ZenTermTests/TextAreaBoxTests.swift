@@ -6,7 +6,7 @@ import XCTest
 /// Unit tests for the multiline input's keyboard-boundary handling, driven through the real
 /// `doCommandBy` path (not the focus-ring closures), so the caret-position logic that decides whether
 /// an arrow leaves the field is actually exercised.
-final class TextAreaBoxTests: XCTestCase {
+final class TextAreaBoxTests: WindowTestCase {
     private func box(_ text: String, caret: Int) -> TextAreaBox {
         let box = TextAreaBox(placeholder: "x")
         box.setText(text)
@@ -52,5 +52,44 @@ final class TextAreaBoxTests: XCTestCase {
         box.onTab = { tabbed += 1 }
         XCTAssertTrue(command(box, #selector(NSResponder.insertTab(_:))))
         XCTAssertEqual(tabbed, 1)
+    }
+
+    // MARK: placeholder placement
+
+    /// The placeholder used to be a label laid out over the text view on its own insets, so it sat
+    /// 4pt left of where typing starts and the caret landed on its first letter. It now draws at the
+    /// origin the text view's own first glyph takes.
+    ///
+    /// The expected origin comes from the layout manager's rect for a real glyph, which is a different
+    /// derivation than the view's (container origin plus line fragment padding), so this measures
+    /// agreement rather than restating one side.
+    func test_placeholder_drawsWhereTheFirstGlyphLands() throws {
+        let box = TextAreaBox(placeholder: "What went wrong")
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 140),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView?.addSubview(box)
+        NSLayoutConstraint.activate([
+            box.leadingAnchor.constraint(equalTo: window.contentView!.leadingAnchor),
+            box.trailingAnchor.constraint(equalTo: window.contentView!.trailingAnchor),
+            box.topAnchor.constraint(equalTo: window.contentView!.topAnchor),
+        ])
+        window.contentView?.layoutSubtreeIfNeeded()
+
+        let view = box.textView
+        box.setText("W")
+        let layout = try XCTUnwrap(view.layoutManager)
+        let container = try XCTUnwrap(view.textContainer)
+        layout.ensureLayout(for: container)
+        let glyph = layout.boundingRect(forGlyphRange: NSRange(location: 0, length: 1), in: container)
+        box.setText("")
+
+        let origin = view.placeholderOrigin
+        XCTAssertEqual(
+            origin.x, glyph.minX + view.textContainerOrigin.x, accuracy: 0.5,
+            "the placeholder starts where a typed character starts")
+        XCTAssertEqual(
+            origin.y, glyph.minY + view.textContainerOrigin.y, accuracy: 0.5,
+            "and on the same line")
     }
 }

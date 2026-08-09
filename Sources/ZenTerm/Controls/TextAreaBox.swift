@@ -16,10 +16,8 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
     /// ⌘Return anywhere in the text — submit the whole form.
     var onSubmit: (() -> Void)?
 
-    /// Retained so callers (tests included) can identify a box by its placeholder, and so a theme
-    /// swap can recolor the placeholder label in place.
+    /// Retained so callers (tests included) can identify a box by its placeholder.
     let placeholder: String
-    private let placeholderLabel = NSTextField(labelWithString: "")
     private let scroll = NSScrollView()
 
     private static var restFill: NSColor { Theme.current.chrome.ink(alpha: 0.06) }
@@ -71,17 +69,10 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         scroll.translatesAutoresizingMaskIntoConstraints = false
         addSubview(scroll)
 
-        // NSTextView has no built-in placeholder, so a muted label sits at the top-left and hides
-        // once there's text (like FieldBox's attributed placeholder, kept readable on light themes).
-        placeholderLabel.font = .systemFont(ofSize: 13)
-        placeholderLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
-        placeholderLabel.stringValue = placeholder
-        placeholderLabel.isEditable = false
-        placeholderLabel.isSelectable = false
-        placeholderLabel.isBordered = false
-        placeholderLabel.drawsBackground = false
-        placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(placeholderLabel)
+        // The text view draws the placeholder itself, at the origin its own first glyph takes (kept
+        // muted rather than the system placeholder tint, which follows the appearance, not the theme).
+        textView.placeholder = placeholder
+        textView.placeholderColor = Theme.current.chrome.ink(alpha: 0.4)
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(greaterThanOrEqualToConstant: minHeight),
@@ -89,9 +80,6 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
             scroll.topAnchor.constraint(equalTo: topAnchor, constant: 5),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
-            placeholderLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-            placeholderLabel.topAnchor.constraint(equalTo: topAnchor, constant: 10),
-            placeholderLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -10),
         ])
     }
 
@@ -150,19 +138,42 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         setFocused(window?.firstResponder === textView)
         textView.textColor = Theme.current.chrome.foreground.nsColor
         textView.insertionPointColor = Theme.current.chrome.foreground.nsColor
-        placeholderLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        textView.placeholderColor = Theme.current.chrome.ink(alpha: 0.4)
     }
 
     private func updatePlaceholderVisibility() {
-        placeholderLabel.isHidden = !textView.string.isEmpty
+        textView.needsDisplay = true  // the text view decides by its own emptiness as it draws
     }
 }
 
 /// An `NSTextView` that reports its first-responder transitions, so its `TextAreaBox` can show the
 /// focus border reliably (the delegate's editing notifications don't fire consistently under
-/// keyboard navigation, the same reason `FieldBox.ClickField` exists).
+/// keyboard navigation, the same reason `FieldBox.ClickField` exists). It also draws its own
+/// placeholder.
 final class FocusReportingTextView: NSTextView {
     var onFocusChange: ((Bool) -> Void)?
+
+    /// Drawn while the view is empty. `NSTextView` has no placeholder of its own, and a label laid out
+    /// over the view lands on its own insets rather than the text's: the caret sat on the first letter.
+    var placeholder = "" { didSet { needsDisplay = true } }
+    var placeholderColor: NSColor = .clear { didSet { needsDisplay = true } }
+
+    /// Where the placeholder draws: the origin the first glyph would take. The container origin covers
+    /// `textContainerInset`, and the line fragment padding is the indent the layout manager adds
+    /// inside the container on top of it.
+    var placeholderOrigin: NSPoint {
+        var origin = textContainerOrigin
+        origin.x += textContainer?.lineFragmentPadding ?? 0
+        return origin
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard string.isEmpty, !placeholder.isEmpty else { return }
+        (placeholder as NSString).draw(
+            at: placeholderOrigin,
+            withAttributes: [.font: font ?? .systemFont(ofSize: 13), .foregroundColor: placeholderColor])
+    }
 
     override func becomeFirstResponder() -> Bool {
         let gained = super.becomeFirstResponder()
