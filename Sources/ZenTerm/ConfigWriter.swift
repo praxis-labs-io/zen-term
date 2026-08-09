@@ -131,10 +131,18 @@ enum ConfigWriter {
 
     private static func isKeybindLine(_ line: String) -> Bool { activeAssignmentKey(line) == "keybind" }
 
+    /// A `keybind = toggle_float:<id>=…` line for a USER float, which is preserved verbatim.
+    ///
+    /// The built-in Scratch float is excluded, and has to be: it is also in the per-action diff
+    /// above, so preserving its line as well would append a second copy on every write, and a
+    /// rebind would leave the stale line sitting above the new one.
     private static func isFloatKeybindLine(_ line: String) -> Bool {
         guard isKeybindLine(line), let equals = line.firstIndex(of: "=") else { return false }
         let value = line[line.index(after: equals)...].trimmingCharacters(in: .whitespaces)
-        return value.hasPrefix("toggle_float:")
+        guard value.hasPrefix("toggle_float:") else { return false }
+        let id = value.dropFirst("toggle_float:".count).prefix { $0 != "=" }
+            .trimmingCharacters(in: .whitespaces)
+        return !ToolFloat.isBuiltIn(id)
     }
 
     // MARK: floats

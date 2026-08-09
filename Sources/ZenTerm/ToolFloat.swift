@@ -18,7 +18,10 @@ struct ToolFloat: Equatable {
     var order: Int
     let title: String  // the source of truth `id` is derived from, e.g. "Open GitDash"
     let icon: String  // toolbar icon: an SF Symbol name, or a bundled brand mark ("github", "git")
-    let command: String  // runs as `$SHELL -l -i -c command` at the focused pane's cwd
+    /// Runs as `$SHELL -l -i -c command` at the focused pane's cwd. Empty means no program at
+    /// all, just a shell — the built-in Scratch float, and the one thing a `float =` line can't
+    /// spell, since `command:` is required there.
+    let command: String
     /// A pinned working directory, or nil to follow the focused pane's cwd. For a tool that isn't
     /// about the directory you're in (a music player, an email client) or one that means a specific
     /// one (a notes scratchpad).
@@ -52,11 +55,44 @@ struct ToolFloat: Equatable {
     var showsInToolbar: Bool = true
 }
 
-/// The active tool floats — the ones the user declared in their config. There are no
-/// built-in floats: with no config the list is empty and the toolbar shows no float buttons.
-/// The toolbar button, palette entry, git guard, and toggle behavior all derive from a spec.
+extension ToolFloat {
+    /// The one built-in float: a blank login shell over the window, on ⌘;. A drawer's behavior in
+    /// a float's shape — `persist: .window` gives it one live instance per window that survives a
+    /// dismissal and dies on `exit`, which is what the two drawers do.
+    ///
+    /// It has no `float =` line, so it is absent from Settings → Tools and is never written to the
+    /// config. Only its chord is the user's to change, on the Shortcuts card.
+    static let scratch = ToolFloat(
+        id: "scratch",
+        order: 0,  // inert: the built-ins lead the catalog and are never sorted with the user's
+        title: "Scratch",
+        icon: "macwindow",
+        command: "",  // no program, just a shell — see `ToolFloatController.spawn`
+        dir: nil,
+        widthFraction: 0.7,
+        heightFraction: 0.6,
+        requiresGitRepo: false,
+        persist: .window,
+        // The DEFAULT chord, not the live one. Nothing may render a shortcut from this: a rebind
+        // only moves the keymap entry, so every glyph goes through `CommandCatalog.spec(for:)`.
+        toggle: Chord(command: true, key: ";"),
+        showsInToolbar: true)
+
+    static let builtInIDs: Set<String> = [scratch.id]
+
+    static func isBuiltIn(_ id: String) -> Bool { builtInIDs.contains(id) }
+}
+
+/// The active tool floats: the one built-in, then the ones the user declared in their config.
+/// Scratch is the only built-in, and it lives here rather than in `GeneralConfig` so a fresh
+/// install still writes nothing to disk. The toolbar button, palette entry, git guard, and
+/// toggle behavior all derive from a spec, built-in or not.
 enum ToolFloatCatalog {
-    static var all: [ToolFloat] { GeneralConfig.current.floats }
+    static let builtIns: [ToolFloat] = [.scratch]
+
+    static var userDefined: [ToolFloat] { GeneralConfig.current.floats }
+
+    static var all: [ToolFloat] { builtIns + userDefined }
 
     static func byID(_ id: String) -> ToolFloat? { all.first { $0.id == id } }
 }

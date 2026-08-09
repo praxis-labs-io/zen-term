@@ -118,7 +118,19 @@ enum GeneralConfigParser {
                 if !value.isEmpty { config.ai = value }
             case "float":
                 let (float, floatDiagnostics) = ToolFloatParser.parseLine(value, fallbackOrder: floatLineIndex)
-                if let float {
+                if let float, ToolFloat.isBuiltIn(float.id) {
+                    // A built-in's id keys its toolbar button, its Shortcuts row, its palette entry
+                    // and its default chord. Shadowing it would repoint that chord at the user's
+                    // command while every one of those still said the built-in's name, so the line
+                    // is refused where the user can see it instead.
+                    Log.warning(
+                        "GeneralConfig: float `\(float.id)` uses a reserved name: ignored",
+                        category: .keybinds)
+                    diagnostics.append(
+                        ConfigDiagnostic(
+                            scope: .toolFloat(label: float.title),
+                            problem: .floatReservedID(float.id)))
+                } else if let float {
                     floats.removeAll { $0.id == float.id }  // last declaration of an id wins
                     floats.append(float)
                 }

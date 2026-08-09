@@ -374,7 +374,9 @@ final class WindowController: NSObject {
             onPalette: { onPalette() }, onBottom: { onBottom() },
             onRight: { onRight() }, onZoom: { onZoom() },
             onDiffViewer: { onDiffViewer() },
-            toolFloats: ToolFloatCatalog.all, onToolFloat: { onToolFloat($0) },
+            // The float tail is the user's floats alone: the built-in Scratch float has its own
+            // fixed button, and passing the whole catalog here would draw a second one.
+            toolFloats: ToolFloatCatalog.userDefined, onToolFloat: { onToolFloat($0) },
             hiddenButtons: GeneralConfig.current.hiddenToolbarButtons)
         super.init()
         nextTabID = 2
@@ -480,7 +482,7 @@ final class WindowController: NSObject {
                     // states. Prune the float registry against the same catalog: a deleted float's
                     // hidden process would otherwise keep running with no control able to ever reach it.
                     self.floats.prune(against: ToolFloatCatalog.all)
-                    self.dock.setToolFloats(ToolFloatCatalog.all)
+                    self.dock.setToolFloats(ToolFloatCatalog.userDefined)
                     self.dock.reapplyTheme()  // the rebuilt buttons bake their colors in at build time
                     self.renderDock()
                 }
@@ -1491,10 +1493,14 @@ final class WindowController: NSObject {
     /// save or cancel it hands back to Settings → Tools (the section it was launched from).
     ///
     /// `existingIDs` is the slug of every *other* float, which the form rejects a colliding title
-    /// against; subtracting the edited float's own id is what lets a re-save keep its title.
+    /// against; subtracting the edited float's own id is what lets a re-save keep its title. The
+    /// built-ins are in there too: the parser refuses a line claiming one, so without this the form
+    /// would cheerfully write a line that vanishes on the next reload.
     private func openToolFloatForm(editing float: ToolFloat?) {
         closeModal()
-        let existingIDs = Set(GeneralConfig.current.floats.map(\.id)).subtracting(float.map { [$0.id] } ?? [])
+        let existingIDs = Set(GeneralConfig.current.floats.map(\.id))
+            .subtracting(float.map { [$0.id] } ?? [])
+            .union(ToolFloat.builtInIDs)
         let originalID = float?.id
         let form = ToolFloatFormOverlay(
             editing: float,

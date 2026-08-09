@@ -109,15 +109,20 @@ extension KeyInterceptor.ReservedChord {
     ///
     /// The ones that say no are file-only, and each for its own reason: the font sizes belong to
     /// the Terminal card's own control, Reload Config is what you press when the file is the thing
-    /// you are editing, a float's toggle chord lives on the float, and the last two are app errands
-    /// the menu bar already carries.
+    /// you are editing, a user float's toggle chord lives on its own `float =` line and is edited
+    /// on its Tools row, and the last two are app errands the menu bar already carries.
+    ///
+    /// The built-in Scratch float is the exception, and has to be: it has no `float =` line and no
+    /// Tools row, so the Shortcuts card is the only place its chord can be edited, and the only
+    /// place a conflict against it can be reported.
     ///
     /// Shipping unbound is not a reason to say no. Check for Updates and Report an Issue are the
     /// two that do, and they say no because the menu bar carries both.
     var isEditableInSettings: Bool {
         switch self {
         case .increaseFontSize, .decreaseFontSize, .resetFontSize: return false
-        case .reloadConfig, .toggleToolFloat: return false
+        case .toggleToolFloat(let id): return ToolFloat.isBuiltIn(id)
+        case .reloadConfig: return false
         case .checkForUpdates, .reportIssue: return false
         // Edit > Select All holds ⌘A, so the row would be an editor for a chord it has to refuse.
         case .selectAll: return false
@@ -289,6 +294,9 @@ enum KeymapDefaults {
         map[Chord(command: true, key: "g")] = .openDiffViewer
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer
         map[Chord(command: true, key: "b")] = .toggleBottomDrawer
+        // The one built-in float, beside the two drawers it behaves like. Read off the spec so the
+        // default and the float cannot drift apart.
+        map[ToolFloat.scratch.toggle] = .toggleToolFloat(ToolFloat.scratch.id)
         map[Chord(command: true, key: ",")] = .openSettings
         map[Chord(command: true, shift: true, key: ",")] = .reloadConfig
 
@@ -408,13 +416,20 @@ struct KeymapOverrides: Equatable {
         self.init(binds: Self.reserved(in: defaults))
     }
 
-    /// A map without the float toggles. A float's chord lives on its own `float =` line, so emitting
-    /// it here would write a second copy that the two halves could then disagree about. One rule,
-    /// applied wherever a map becomes a set the writer may emit.
+    /// A map without the user floats' toggles. A user float's chord lives on its own `float =`
+    /// line, so emitting it here would write a second copy that the two halves could then disagree
+    /// about. One rule, applied wherever a map becomes a set the writer may emit.
+    ///
+    /// The built-in Scratch float stays: it has no `float =` line, so a `keybind =` line is the
+    /// only place its rebind can live, and dropping it here would delete that line on the next
+    /// unrelated Shortcuts edit.
     private static func reserved(
         in map: [Chord: KeyInterceptor.ReservedChord]
     ) -> [Chord: KeyInterceptor.ReservedChord] {
-        map.filter { if case .toggleToolFloat = $0.value { return false } else { return true } }
+        map.filter {
+            if case .toggleToolFloat(let id) = $0.value { return ToolFloat.isBuiltIn(id) }
+            return true
+        }
     }
 }
 
@@ -485,20 +500,25 @@ enum KeymapAssembler {
         menuOwner: @MainActor (Chord) -> String? = MenuShortcuts.owner
     ) -> Assembled {
         var map = KeymapDefaults.map
-        let floatIDs = Set(floats.map(\.id))
+        // `floats` is what the config parsed, which never includes the built-in. Union it in, or a
+        // `toggle_float:scratch` line is dropped below as naming no float.
+        let floatIDs = Set(floats.map(\.id)).union(ToolFloat.builtInIDs)
         var displacements: [Displacement] = []
         let menuChords = protected()
 
-        // A float's chord lives on its `float =` line, whose `key:` is required, so an unbind naming
-        // one would be a no-op that reads as working: the float re-binds the chord a few lines below.
-        // Refused where the unknown-float-id line is refused, and for the same reason.
+        // A user float's chord lives on its `float =` line, whose `key:` is required, so an unbind
+        // naming one would be a no-op that reads as working: the float re-binds the chord a few
+        // lines below. Refused where the unknown-float-id line is refused, and for the same reason.
+        //
+        // The built-in's chord comes from `KeymapDefaults`, which `requestedUnbinds` drops below,
+        // so its `= none` is real and is honored.
         var requestedUnbinds: [KeyInterceptor.ReservedChord] = []
         var binds: [(Chord, KeyInterceptor.ReservedChord)] = []
         for line in keybinds {
             switch line {
             case .bind(let chord, let action): binds.append((chord, action))
             case .unbind(let action):
-                if case .toggleToolFloat(let id) = action {
+                if case .toggleToolFloat(let id) = action, !ToolFloat.isBuiltIn(id) {
                     Log.warning(
                         "GeneralConfig: keybind toggle_float:\(id)=none can't unbind a float. Its "
                             + "chord is the `key:` on its float line: ignored", category: .keybinds)
@@ -567,8 +587,12 @@ enum KeymapAssembler {
         // A float's own `key:` is refused on the same grounds, and reported as the float's problem
         // rather than a keybind's: the user wrote it on the `float =` line, which is where they
         // have to go to fix it.
+        //
+        // A built-in never comes through here even if one is passed in: its chord is a default, so
+        // re-setting it would undo the `= none` above, and a menu collision would be reported on a
+        // Tools row it does not have.
         var menuOwnedFloats: [ToolFloat] = []
-        for float in floats {
+        for float in floats where !ToolFloat.isBuiltIn(float.id) {
             if menuChords.contains(float.toggle) {
                 menuOwnedFloats.append(float)
                 Log.warning(

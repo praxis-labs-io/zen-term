@@ -8,10 +8,16 @@ final class ToolFloatCatalogTests: XCTestCase {
         XCTAssertEqual(ids.count, Set(ids).count, "ToolFloat ids must be unique")
     }
 
-    func test_noBuiltInFloats() {
-        // Floats are entirely config-driven; with no config there are none (gitdash was
-        // dropped as a built-in in ZEN-71 — it lives in the user's personal config now).
+    func test_scratchIsTheOnlyBuiltInFloat() {
+        // gitdash was dropped as a built-in in ZEN-71; Scratch is the one that came back
+        // (ZEN-379), and it is the only one.
+        XCTAssertEqual(ToolFloatCatalog.builtIns.map(\.id), ["scratch"])
+    }
+
+    func test_theBuiltInIsNotAConfigFloat() {
+        // It lives in the catalog, not in the config, so a fresh install still writes nothing.
         XCTAssertTrue(GeneralConfig.builtIn.floats.isEmpty)
+        XCTAssertNotNil(ToolFloatCatalog.byID("scratch"))
     }
 
     func test_byID_unknown_isNil() {

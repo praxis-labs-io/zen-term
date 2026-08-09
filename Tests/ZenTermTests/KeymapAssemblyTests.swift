@@ -191,6 +191,57 @@ final class KeymapAssemblyTests: XCTestCase {
         XCTAssertNil(map[Chord(command: true, key: "y")])  // no such float → not bound
     }
 
+    // MARK: the built-in Scratch float (ZEN-379)
+
+    func test_scratchShipsOnCmdSemicolon() {
+        XCTAssertEqual(assemble()[Chord(command: true, key: ";")], .toggleToolFloat("scratch"))
+    }
+
+    /// `assemble` is handed the floats the CONFIG parsed, which never include the built-in. Read
+    /// `floatIDs` off that list alone and this line dies as naming no float.
+    func test_scratchKeybind_isNotDroppedWithNoConfiguredFloats() {
+        let map = assemble(
+            floats: [], keybinds: [.bind(Chord(command: true, key: "y"), .toggleToolFloat("scratch"))])
+
+        XCTAssertEqual(map[Chord(command: true, key: "y")], .toggleToolFloat("scratch"))
+        XCTAssertNil(map[Chord(command: true, key: ";")], "a rebind moves it, leaving the default free")
+    }
+
+    /// The mirror of `test_unbindingAFloat_isRefused`. The built-in's chord is a default, so
+    /// dropping it is real: the refusal exists for chords a `float =` line puts back.
+    func test_unbindingScratch_isHonored() {
+        let assembled = KeymapAssembler.assemble(
+            floats: [], keybinds: [.unbind(.toggleToolFloat("scratch"))])
+
+        XCTAssertNil(assembled.map[Chord(command: true, key: ";")])
+        XCTAssertEqual(assembled.unbound, [.toggleToolFloat("scratch")])
+        XCTAssertEqual(assembled.diagnostics, [], "a config written on purpose says nothing")
+    }
+
+    /// A user float taking ⌘; leaves the built-in chordless. It has no Tools row, so the problem
+    /// has to land on its Shortcuts row or it has nowhere to render.
+    func test_userFloatTakingScratchsChord_reportsItAgainstScratch() {
+        let assembled = KeymapAssembler.assemble(
+            floats: [float(id: "x", key: "cmd+;")], keybinds: [])
+
+        XCTAssertEqual(assembled.map[Chord(command: true, key: ";")], .toggleToolFloat("x"))
+        XCTAssertEqual(assembled.diagnostics.count, 1)
+        XCTAssertEqual(assembled.diagnostics.first?.scope, .keybind(.toggleToolFloat("scratch")))
+    }
+
+    /// Both answers work for the built-in, unlike a user float's, which can offer neither.
+    func test_scratchConflict_isAcceptableAndRevertable() {
+        let taken = KeybindConflict(
+            loser: .toggleToolFloat("scratch"), chord: Chord(command: true, key: ";"),
+            winner: .newTab)
+        XCTAssertTrue(taken.isAcceptable)
+
+        let holding = KeybindConflict(
+            loser: .newTab, chord: Chord(command: true, key: "t"),
+            winner: .toggleToolFloat("scratch"))
+        XCTAssertTrue(holding.isRevertable)
+    }
+
     // MARK: unbinding (ZEN-368)
 
     /// The whole point of the feature. A float on ⌘G takes the diff viewer's only chord, which

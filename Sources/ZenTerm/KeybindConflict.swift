@@ -16,21 +16,24 @@ struct KeybindConflict: Equatable {
     /// What holds the chord now.
     let winner: KeyInterceptor.ReservedChord
 
-    /// Whether there is a line to back out. A float's chord is the `key:` on its own `float =` line
-    /// and `key:` is required, so backing one out would mean deleting the float or inventing a new
-    /// chord for it. Reverting is offered only when the winner came from a `keybind =` line.
+    /// Whether there is a line to back out. A user float's chord is the `key:` on its own `float =`
+    /// line and `key:` is required, so backing one out would mean deleting the float or inventing a
+    /// new chord for it. Reverting is offered only when the winner came from a `keybind =` line.
+    ///
+    /// The built-in Scratch float is revertable: its chord is a default, so `clearOverride` restores
+    /// it with nothing to delete.
     var isRevertable: Bool {
-        if case .toggleToolFloat = winner { return false }
+        if case .toggleToolFloat(let id) = winner { return ToolFloat.isBuiltIn(id) }
         return true
     }
 
-    /// Whether the loss can be written down. A float is the mirror of the case above: floats bind
-    /// before user keybinds, so a `keybind =` line CAN take a float's chord and leave the float as
-    /// the loser. Accepting that would emit `toggle_float:<id>=none`, which the assembler refuses by
-    /// design, so the line would sit inert in the config and the card would return at every launch
-    /// looking like it had been answered.
+    /// Whether the loss can be written down. A user float is the mirror of the case above: floats
+    /// bind before user keybinds, so a `keybind =` line CAN take a float's chord and leave the float
+    /// as the loser. Accepting that would emit `toggle_float:<id>=none`, which the assembler refuses
+    /// by design, so the line would sit inert in the config and the card would return at every
+    /// launch looking like it had been answered. The built-in's `= none` is honored, so it can.
     var isAcceptable: Bool {
-        if case .toggleToolFloat = loser { return false }
+        if case .toggleToolFloat(let id) = loser { return ToolFloat.isBuiltIn(id) }
         return true
     }
 
