@@ -30,7 +30,7 @@ final class SettingsKeybindsSection: SettingsSection {
         (
             "Screen",
             [
-                .clearScreen, .selectAll, .pasteSelection, .writeScreenFile, .copyScreenFilePath,
+                .clearScreen, .pasteSelection, .writeScreenFile, .copyScreenFilePath,
                 .openScreenFile,
             ]
         ),

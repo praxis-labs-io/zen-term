@@ -68,7 +68,6 @@ enum CommandCatalog {
         case .scrollPageDown: return pane("Scroll Page Down", glyph, chord)
         case .searchSelection: return pane("Find Selection", glyph, chord)
         case .clearScreen: return pane("Clear Screen", glyph, chord)
-        case .selectAll: return pane("Select All", glyph, chord)
         case .scrollToSelection: return pane("Scroll to Selection", glyph, chord)
         case .jumpToPreviousPrompt: return pane("Jump to Previous Prompt", glyph, chord)
         case .jumpToNextPrompt: return pane("Jump to Next Prompt", glyph, chord)
@@ -78,6 +77,9 @@ enum CommandCatalog {
         case .openScreenFile: return pane("Write Screen to File and Open", glyph, chord)
         // Present for exhaustiveness; all are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", glyph, chord)
+        // Edit > Select All is the whole of how ⌘A is offered, the same as Copy and Paste. Listing
+        // it here too would advertise a second, rebindable spelling of a chord the menu owns.
+        case .selectAll: return pane("Select All", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
         // Opening the palette runs `endModes`, which takes the find bar down, so both would reach
         // `navigate` with no search running and do nothing every time. Keyboard-only by necessity
@@ -87,15 +89,9 @@ enum CommandCatalog {
         }
     }
 
-    /// The glyph that currently fires an action: the live keymap's, or the Edit menu's for the one
-    /// action the menu serves. Empty when nothing holds it.
+    /// The glyph currently bound to an action, from the live keymap — empty if unbound.
     private static func displayGlyph(for chord: KeyInterceptor.ReservedChord) -> String {
-        if let bound = Chord.displayed(chord, in: GeneralConfig.current.keymap) {
-            return bound.displayGlyph
-        }
-        // Select All ships no keymap default because Edit > Select All holds ⌘A (ZEN-370). The row
-        // still shows the chord that fires, read from the menu's constant rather than spelled again.
-        return chord == .selectAll ? MainMenu.selectAllChord.displayGlyph : ""
+        Chord.displayed(chord, in: GeneralConfig.current.keymap)?.displayGlyph ?? ""
     }
 
     /// The ordered commands shown for a window with `tabCount` tabs, grouped by category
@@ -122,7 +118,7 @@ enum CommandCatalog {
             .toggleZoom, .toggleScrollMode, .toggleSearch, .searchSelection,
             .scrollPageUp, .scrollPageDown, .scrollToTop, .scrollToBottom,
             .jumpToPreviousPrompt, .jumpToNextPrompt, .scrollToSelection,
-            .clearScreen, .selectAll, .pasteSelection, .writeScreenFile,
+            .clearScreen, .pasteSelection, .writeScreenFile,
             .copyScreenFilePath, .openScreenFile,
             .closePane,
         ]

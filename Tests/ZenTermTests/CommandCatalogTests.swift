@@ -40,7 +40,7 @@ final class CommandCatalogTests: XCTestCase {
                 "Focus Mode", "Scroll Mode", "Find in Scrollback", "Find Selection",
                 "Scroll Page Up", "Scroll Page Down", "Scroll to Top", "Scroll to Bottom",
                 "Jump to Previous Prompt", "Jump to Next Prompt", "Scroll to Selection",
-                "Clear Screen", "Select All", "Paste Selection", "Write Screen to File",
+                "Clear Screen", "Paste Selection", "Write Screen to File",
                 "Write Screen to File, Copy Path", "Write Screen to File and Open",
                 "Close Pane",
                 "Fill Screen", "Increase Font Size", "Decrease Font Size", "Reset Font Size",
@@ -58,6 +58,14 @@ final class CommandCatalogTests: XCTestCase {
         // Find Selection stays: a mouse selection is libghostty's and survives `endModes`, so the
         // action still has something to search for when the palette hands it over.
         XCTAssertTrue(titles.contains("Find Selection"))
+    }
+
+    /// Select All is Edit > Select All's, the same as Copy and Paste, and neither of those is a
+    /// palette row either. A second listing would advertise it as a rebindable action when the
+    /// chord belongs to the menu (ZEN-370).
+    func test_selectAll_isNotInThePalette() {
+        let titles = CommandCatalog.commands(tabCount: 3).map(\.title)
+        XCTAssertFalse(titles.contains("Select All"))
     }
 
     func test_addWorkspace_isNotInThePalette() {
@@ -123,7 +131,7 @@ final class CommandCatalogTests: XCTestCase {
     func test_theScreenActions_showTheirChords() {
         let entries = CommandCatalog.commands(tabCount: 3)
         for (title, shortcut) in [
-            ("Clear Screen", "⌘K"), ("Scroll to Selection", "⌘J"), ("Select All", "⌘A"),
+            ("Clear Screen", "⌘K"), ("Scroll to Selection", "⌘J"),
             ("Write Screen to File", "⌘⇧J"), ("Write Screen to File, Copy Path", "⌘⇧⌃J"),
             ("Write Screen to File and Open", "⌘⇧⌥J"),
         ] {

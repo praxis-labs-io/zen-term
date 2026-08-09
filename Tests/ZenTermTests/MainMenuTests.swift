@@ -27,13 +27,6 @@ final class MainMenuTests: XCTestCase {
             XCTAssertEqual(item?.keyEquivalentModifierMask, .command)
             XCTAssertNil(item?.target, "\(title) must have no target, or it beats the focused field")
         }
-
-        // The palette shows Select All's glyph from `selectAllChord`, so the item the menu actually
-        // draws has to be that chord — read back through the same conversion the keymap guard uses.
-        let selectAll = edit?.items.first { $0.title == "Select All" }
-        XCTAssertEqual(
-            selectAll.flatMap(MenuShortcuts.chord(for:)), MainMenu.selectAllChord,
-            "the built item must match the chord the rest of the app advertises")
     }
 
     func test_helpMenu_carriesReportAnIssueAndExportDiagnostics() {

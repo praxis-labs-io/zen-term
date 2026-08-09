@@ -848,8 +848,8 @@ recipe.
 Scroll to Selection ⌘J, Write Screen to File ⌘⇧J. Writing the screen has three endings and
 the backend takes the choice in with the call, because it disposes of the path inside the
 same action and never hands it back: ⌘⇧J types the path into the pane, ⌘⇧⌃J copies it,
-⌘⇧⌥J opens the file. (Check for Updates and Report an Issue are the only actions with no
-chord at all: the menu bar already carries them.)
+⌘⇧⌥J opens the file. (Check for Updates, Report an Issue and Select All hold no chord of
+their own: the menu bar already carries all three.)
 
 **A verb a text field owns is served from the Edit menu, never from the keymap.** Select All
 is the case that set the rule. `KeyInterceptor` resolves ahead of the responder chain, so a
@@ -860,7 +860,9 @@ editor implements it and takes it first; `WindowController` implements it as the
 endpoint below, and swallows it over a modal card, which has no buffer to act on. Copy and
 Paste are the same three lines for the same reason: they carried a custom `copyFromSurface:`
 selector that walked past the field, so ⌘C in the find bar copied the buffer behind you while
-you typed. `select_all` stays an action, chordless, for the palette and for a rebind
+you typed. `select_all` stays an action a config line can bind to some other chord, and it is
+in neither the palette nor the Shortcuts card, the same as Copy and Paste: the menu is where
+⌘A is offered, and a second listing would advertise a chord the Shortcuts card has to refuse
 (ZEN-370).
 
 Stepping a search is `n` and `N` while the search holds the keyboard, so `find_next` and

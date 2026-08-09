@@ -7,11 +7,6 @@ import AppKit
 /// it with no list to update. It also means a shortcut added here silently takes that chord away
 /// from a keybind, which is the trade: the menu is the smaller, more visible surface.
 enum MainMenu {
-    /// Select All's chord, which the menu holds and the keymap does not (ZEN-370). The item is built
-    /// from it and the command palette reads it, so ⌘A is spelled once. Command-only: the item takes
-    /// `NSMenuItem`'s default ⌘ mask, and `MainMenuTests` reads the built item back to prove it.
-    static let selectAllChord = Chord(command: true, key: "a")
-
     static func install() {
         let main = NSMenu()
 
@@ -59,8 +54,7 @@ enum MainMenu {
             withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         editMenu.addItem(.separator())
         editMenu.addItem(
-            withTitle: "Select All", action: #selector(NSText.selectAll(_:)),
-            keyEquivalent: selectAllChord.key)
+            withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
 
         // Help menu — Export Diagnostics (ZEN-11). Nil target routes through the responder chain to
         // the app delegate, like About. macOS adds its standard search field to any menu titled

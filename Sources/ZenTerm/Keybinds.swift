@@ -119,11 +119,13 @@ extension KeyInterceptor.ReservedChord {
         case .increaseFontSize, .decreaseFontSize, .resetFontSize: return false
         case .reloadConfig, .toggleToolFloat: return false
         case .checkForUpdates, .reportIssue: return false
+        // Edit > Select All holds ⌘A, so the row would be an editor for a chord it has to refuse.
+        case .selectAll: return false
         case .splitVertical, .splitHorizontal, .closePane, .toggleZoom,
             .toggleScrollMode, .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown,
             .scrollToSelection, .jumpToPreviousPrompt, .jumpToNextPrompt,
             .toggleSearch, .searchSelection, .findNext, .findPrevious,
-            .clearScreen, .selectAll, .pasteSelection, .writeScreenFile,
+            .clearScreen, .pasteSelection, .writeScreenFile,
             .copyScreenFilePath, .openScreenFile,
             .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane,
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
