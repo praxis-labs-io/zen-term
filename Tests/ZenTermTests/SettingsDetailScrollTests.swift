@@ -3,17 +3,22 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Arrow-nav scrolling in the Settings detail pane. `SettingsDetail.moveFocus` revealed the
-/// destination stop and nothing else, so arrowing up landed the row's top edge flush against the
-/// visible top and left the group caption naming it just off screen — worst at the top of a
-/// scrolled section, where the first caption never came back.
+/// Arrow-nav scrolling in the Settings detail pane.
 ///
-/// These mount the real section in a window short enough to scroll and drive real arrow events at
-/// the chips: a state-only check on the focused index passes with the caption still hidden.
+/// Two failures live here. `SettingsDetail.moveFocus` revealed the destination stop and nothing else,
+/// so arrowing up landed the row's top edge flush against the visible top and left the group caption
+/// naming it just off screen — worst at the top of a scrolled section, where the first caption never
+/// came back. And it reached its position with `scrollToVisible` calls, which snap: held at key-repeat
+/// speed, each step jumped a different distance (35pt between rows, 66 across a group boundary).
+///
+/// The destinations are asserted under Reduce Motion, where the glide lands immediately. How the glide
+/// itself reads is the runbook's, not a test's; what a test can check is that it does not snap, and
+/// that a burst of keystrokes aims at the same place the instant path lands on.
 final class SettingsDetailScrollTests: WindowTestCase {
     private var tempRoot: URL!
     private var window: NSWindow?
     private var section: SettingsKeybindsSection?
+    private var originalReduceMotion: (() -> Bool)!
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -23,9 +28,12 @@ final class SettingsDetailScrollTests: WindowTestCase {
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
         try "".write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         AppConfig.reload()
+        originalReduceMotion = Motion.isReduceMotionEnabled
+        Motion.isReduceMotionEnabled = { true }  // land on each position, so a destination is readable
     }
 
     override func tearDownWithError() throws {
+        Motion.isReduceMotionEnabled = originalReduceMotion
         window = nil
         section = nil
         ConfigLoader.defaultRootOverrideForTesting = nil
@@ -38,7 +46,7 @@ final class SettingsDetailScrollTests: WindowTestCase {
 
     /// The Keybinds section in a 380pt-tall window: several groups of chips, well past what fits, so
     /// every arrow step has somewhere to scroll.
-    private func mountKeybinds() -> NSScrollView {
+    private func mountKeybinds() -> SettingsScrollView {
         let section = SettingsKeybindsSection(capturer: nil)
         self.section = section
         let detail = section.makeDetailView()
@@ -55,7 +63,7 @@ final class SettingsDetailScrollTests: WindowTestCase {
         ])
         content.layoutSubtreeIfNeeded()
         window = win
-        return detail as! NSScrollView  // swiftlint:disable:this force_cast
+        return detail as! SettingsScrollView  // swiftlint:disable:this force_cast
     }
 
     private func descendants(of view: NSView) -> [NSView] {
@@ -74,7 +82,7 @@ final class SettingsDetailScrollTests: WindowTestCase {
     private static let downKey: UInt16 = 125
 
     /// Send `count` arrows to whatever holds focus, re-reading the first responder each step so the
-    /// walk follows focus down (or up) the section the way a held key does.
+    /// walk follows focus through the section the way a held key does.
     private func press(_ keyCode: UInt16, times count: Int) {
         for _ in 0..<count {
             guard let responder = window?.firstResponder as? NSView else { return }
@@ -94,7 +102,7 @@ final class SettingsDetailScrollTests: WindowTestCase {
         return scroll.documentVisibleRect.contains(view.convert(view.bounds, to: document))
     }
 
-    // MARK: the top of a scrolled section
+    // MARK: what a step reveals
 
     func test_arrowingUpToTheFirstRow_bringsBackTheFirstGroupCaption() throws {
         let scroll = mountKeybinds()
@@ -115,8 +123,6 @@ final class SettingsDetailScrollTests: WindowTestCase {
         XCTAssertEqual(
             scroll.documentVisibleRect.minY, 0, accuracy: 0.5, "the first stop opens at the very top")
     }
-
-    // MARK: a group boundary mid-list
 
     func test_arrowingUpToAGroupsFirstRow_bringsBackThatGroupsCaption() throws {
         let scroll = mountKeybinds()
@@ -139,5 +145,31 @@ final class SettingsDetailScrollTests: WindowTestCase {
         guard let document = caption.superview?.superview else { return nil }
         let captionBottom = caption.convert(caption.bounds, to: document).maxY
         return chips.first { $0.convert($0.bounds, to: document).minY >= captionBottom }
+    }
+
+    // MARK: the glide
+
+    /// A burst of keystrokes aims at one position and eases toward it. Measuring each step from the
+    /// live position instead of the pending one leaves a held arrow short of where it aimed, which is
+    /// the same stutter in a different shape. Whether the glide *arrives* rides on a display link, so
+    /// that part is the runbook's: a test that waits on one is a test that fails on a machine with no
+    /// display attached.
+    func test_aBurstOfKeystrokes_aimsWhereTheInstantPathLands() {
+        let instant = mountKeybinds()
+        let instantChips = descendants(of: instant).compactMap { $0 as? KeybindChip }
+        window!.makeFirstResponder(instantChips[0])
+        press(Self.downKey, times: 12)
+        let landed = instant.documentVisibleRect.minY
+        XCTAssertGreaterThan(landed, 0, "the instant path scrolled somewhere to compare against")
+
+        Motion.isReduceMotionEnabled = { false }
+        let glided = mountKeybinds()
+        let chips = descendants(of: glided).compactMap { $0 as? KeybindChip }
+        window!.makeFirstResponder(chips[0])
+        press(Self.downKey, times: 12)
+
+        XCTAssertEqual(glided.pendingTop, landed, accuracy: 0.5, "the burst aims at the same position")
+        XCTAssertLessThan(
+            glided.documentVisibleRect.minY, landed, "the content eases toward it rather than snapping")
     }
 }

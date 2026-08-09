@@ -731,6 +731,15 @@ as a different app.
   `NSScrollView.contentInsets` with `automaticallyAdjustsContentInsets = false`:
   nonzero left/right insets corrupt the clip view and the content spills out of the
   card unclipped.
+- **Settings detail sections scroll themselves as focus moves**, through
+  `SettingsScrollView` (built by `SettingsDetail.scroll(for:)`). AppKit does not
+  scroll to a newly focused responder, so `SettingsDetail.moveFocus` computes one
+  position per keystroke and eases to it on a display link. Two shapes matter. The
+  reveal covers the strip between the previous stop and the destination, not just the
+  destination, or a group caption (and the document's top inset) parks off the top
+  edge. And the position is measured from the glide's `pendingTop`, not the live
+  offset, because a held arrow repeats faster than the glide settles and measuring
+  from a position still catching up makes it fall short.
 
 **Motion constants are an approved baseline. Do not quietly re-tune them.**
 `Sources/ZenTerm/Motion.swift` is the source of truth for the structural spring, the

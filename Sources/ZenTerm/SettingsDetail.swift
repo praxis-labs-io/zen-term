@@ -6,12 +6,12 @@ enum SettingsDetail {
     /// Wrap a section's rows stack in the standard detail scroll: a flipped document (top-down
     /// coords, so it opens at the top), a slim auto-hiding overlay scroller, and the shared content
     /// insets (18 top/bottom, 20 leading/trailing). The rows stack becomes the document's content.
-    static func scroll(for rowsStack: NSStackView) -> NSScrollView {
+    static func scroll(for rowsStack: NSStackView) -> SettingsScrollView {
         let doc = FlippedView()
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(rowsStack)
 
-        let scroll = NSScrollView()
+        let scroll = SettingsScrollView()
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
         scroll.verticalScroller = SlimScroller()
@@ -70,9 +70,8 @@ enum SettingsDetail {
     /// Move keyboard focus to the `delta`-neighbor of `stops` and scroll it into view — the shared
     /// core of every section's arrow-nav. `anchor` is the current stop's index (nil = none focused).
     /// `wrap` is off for arrows (a no-op at the ends) and on for Tab, which loops within the card.
-    /// `scrollTarget` maps the destination stop to the view actually scrolled visible (e.g. the
-    /// whole row, so its inline message shows), and the `-12` inset is the shared breathing room.
-    /// AppKit doesn't scroll to a newly-focused responder on its own.
+    /// `scrollTarget` maps the destination stop to the view actually revealed (e.g. the whole row, so
+    /// its inline message shows). AppKit doesn't scroll to a newly-focused responder on its own.
     ///
     /// Returns whether focus actually moved, so a caller can fall through when it didn't — Shift-Tab
     /// at the first stop exits to the nav rather than dying there.
@@ -85,30 +84,35 @@ enum SettingsDetail {
         else { return false }
         let target = stops[next]
         target.window?.makeFirstResponder(target)
-        let scroll = scrollTarget(target)
-        // Lead-in first, stop second: both calls scroll the minimum amount, so the second is a no-op
-        // when the caption and the row fit together, and wins when they don't.
-        if let leadIn = leadIn(above: scroll, stops: stops) { scroll.scrollToVisible(leadIn) }
-        scroll.scrollToVisible(scroll.bounds.insetBy(dx: 0, dy: -12))
+        reveal(scrollTarget(target), stops: stops)
         return true
     }
 
-    /// The strip between the previous focus stop and `view` — a group caption, or the document's top
-    /// inset when `view` is the first stop. Revealing the stop alone parks that strip just off the top
-    /// edge, so arrowing up to the first row of a group hides the caption naming it. Returned in
-    /// `view`'s coordinates; nil when the previous stop sits flush against it.
-    private static func leadIn(above view: NSView, stops: [NSView]) -> NSRect? {
-        guard let document = view.enclosingScrollView?.documentView else { return nil }
+    /// Scroll `view` in, along with the strip above it that belongs to it: a group caption, or the
+    /// document's top inset when nothing focusable sits above. Revealing the stop alone parks that
+    /// strip just off the top edge, so arrowing up to a group's first row hid the caption naming it.
+    ///
+    /// One position, computed once and handed to the glide. Two `scrollToVisible` calls (strip, then
+    /// stop) reached the same place but stepped there, and every step of a held arrow snapped.
+    static func reveal(_ view: NSView, stops: [NSView]) {
+        guard let scroll = view.enclosingScrollView as? SettingsScrollView,
+            let document = scroll.documentView
+        else { return }
+        let viewport = scroll.contentView.bounds.height
         let frame = view.convert(view.bounds, to: document)
+        let padded = frame.insetBy(dx: 0, dy: -12)  // shared breathing room above and below a stop
         let previousBottom =
             stops
             .map { $0.convert($0.bounds, to: document).maxY }
             .filter { $0 <= frame.minY }
             .max() ?? document.bounds.minY
-        guard previousBottom < frame.minY else { return nil }
-        let strip = NSRect(
-            x: frame.minX, y: previousBottom, width: frame.width, height: frame.minY - previousBottom)
-        return view.convert(strip, from: document)
+
+        let revealTop = min(previousBottom, padded.minY)
+        var top = scroll.pendingTop
+        if padded.maxY > top + viewport { top = padded.maxY - viewport }  // travelling down
+        if revealTop < top { top = revealTop }  // travelling up: the strip comes with the stop
+        if padded.maxY > top + viewport { top = padded.maxY - viewport }  // the stop outranks the strip
+        scroll.glide(top: min(max(0, top), max(0, document.frame.height - viewport)))
     }
 
     /// Wrap a control in a full-width row that right-aligns it: a leading spacer takes the slack so
