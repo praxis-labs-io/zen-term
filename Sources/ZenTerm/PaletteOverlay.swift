@@ -438,11 +438,27 @@ class PaletteOverlay: NSView, ModalOverlay {
         for (i, row) in laidOutRows.enumerated() { row.view.isSelected = (i == selected) }
     }
 
+    /// Reveal the selected row, the section header above it, and a row's worth of room past the edge
+    /// it arrives at. Revealing the row alone parks its header just off the top edge, so arrowing up
+    /// into a group hides the name of the group, and lands the selection hard against the boundary
+    /// with nothing beyond it.
     private func scrollSelectedToVisible() {
         guard laidOutRows.indices.contains(selected) else { return }
         let y = (0..<selected).reduce(listVerticalInset) { $0 + rowHeight(at: $1) }
+        let height = rowHeight(at: selected)
+
+        var header: CGFloat = 0  // the headers directly above this row belong to it
+        var above = selected - 1
+        while above >= 0, !isSelectable(at: above) {
+            header += rowHeight(at: above)
+            above -= 1
+        }
+        // Halved, so the room fits alongside the row and its header rather than pushing one out.
+        let room = min(height, max(0, (scrollView.contentView.bounds.height - height - header) / 2))
+
         (scrollView.documentView as? FlippedView)?
-            .scrollToVisible(CGRect(x: 0, y: y, width: 1, height: rowHeight(at: selected)))
+            .scrollToVisible(
+                CGRect(x: 0, y: y - header - room, width: 1, height: height + header + 2 * room))
     }
 
     /// Build the footer: a centered horizontal row of hints, each a keycap box + its label.

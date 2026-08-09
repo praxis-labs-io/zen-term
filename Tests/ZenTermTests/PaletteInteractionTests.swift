@@ -253,6 +253,69 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertEqual(ran, .closePane)
     }
 
+    // MARK: scrolling as the selection moves
+
+    /// Two groups of twelve: past the 320pt list, so the selection has to scroll.
+    private func makeLongCommandPalette() -> CommandPaletteOverlay {
+        let commands =
+            (0..<12).map {
+                PaletteCommand(
+                    title: "Pane action \($0)", shortcut: "⌘\($0)", category: "Panes", chord: .splitVertical)
+            }
+            + (0..<12).map {
+                PaletteCommand(
+                    title: "Tab action \($0)", shortcut: "⌥\($0)", category: "Tabs", chord: .newTab)
+            }
+        return CommandPaletteOverlay(
+            commands: { commands }, background: Theme.current.chrome.background.nsColor,
+            onRun: { _ in }, onDismiss: {})
+    }
+
+    private func mountLongPalette() throws -> (CommandPaletteOverlay, NSScrollView) {
+        let overlay = makeLongCommandPalette()
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+        let scroll = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? NSScrollView }.first)
+        XCTAssertGreaterThan(
+            scroll.documentView?.frame.height ?? 0, scroll.contentView.bounds.height,
+            "expected a list taller than the palette")
+        return (overlay, scroll)
+    }
+
+    private func isFullyVisible(_ view: NSView, in scroll: NSScrollView) throws -> Bool {
+        let document = try XCTUnwrap(scroll.documentView)
+        return scroll.documentVisibleRect.contains(view.convert(view.bounds, to: document))
+    }
+
+    /// Scrolling to the selected row alone left the header naming its group just above the visible
+    /// top, so arrowing up into Tabs showed its commands with no "Tabs" over them.
+    func test_commandPalette_arrowingUpIntoAGroup_showsTheHeaderNamingIt() throws {
+        let (overlay, scroll) = try mountLongPalette()
+        let views = overlay.rowViews
+        let headers = views.enumerated().filter { !($0.element is SelectableRowView) }
+        let tabs = try XCTUnwrap(headers.dropFirst().first, "expected a second section header")
+        let firstOfGroup = views[tabs.offset + 1]
+
+        for _ in views.indices { send(Self.moveDown, to: overlay) }  // to the bottom of the list
+        XCTAssertFalse(try isFullyVisible(tabs.element, in: scroll), "the list has to be scrolled first")
+        while !firstOfGroup.isSelected { send(Self.moveUp, to: overlay) }
+
+        XCTAssertTrue(
+            try isFullyVisible(tabs.element, in: scroll),
+            "the group's first command comes with the header above it")
+    }
+
+    func test_commandPalette_arrowingDown_leavesRoomBelowTheSelection() throws {
+        let (overlay, scroll) = try mountLongPalette()
+        let document = try XCTUnwrap(scroll.documentView)
+
+        for _ in 0..<10 { send(Self.moveDown, to: overlay) }
+
+        let selected = try XCTUnwrap(overlay.rowViews.first { $0.isSelected })
+        let gap = scroll.documentVisibleRect.maxY - selected.convert(selected.bounds, to: document).maxY
+        XCTAssertGreaterThan(gap, 20, "the selection keeps a row's worth of room below it, not zero")
+    }
+
     /// Esc dismisses from the search field — the palette's initial first responder. Driven through
     /// the real key-equivalent traversal, since ZEN-149 moved Esc from the field editor's
     /// `cancelOperation` up to the card root, where every card now owns it.
