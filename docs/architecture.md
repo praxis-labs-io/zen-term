@@ -739,7 +739,10 @@ as a different app.
   destination, or a group caption (and the document's top inset) parks off the top
   edge. And the position is measured from the glide's `pendingTop`, not the live
   offset, because a held arrow repeats faster than the glide settles and measuring
-  from a position still catching up makes it fall short.
+  from a position still catching up makes it fall short. That lag is also why the
+  reveal aims past the arrival edge by a margin and why `glide(top:keeping:)` closes
+  any remaining lag that would leave the focused row outside the clip: a stop parked
+  flush against the boundary is off screen for as long as the content is behind.
 
 **Motion constants are an approved baseline. Do not quietly re-tune them.**
 `Sources/ZenTerm/Motion.swift` is the source of truth for the structural spring, the

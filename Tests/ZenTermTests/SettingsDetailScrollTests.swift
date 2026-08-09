@@ -172,4 +172,28 @@ final class SettingsDetailScrollTests: WindowTestCase {
         XCTAssertLessThan(
             glided.documentVisibleRect.minY, landed, "the content eases toward it rather than snapping")
     }
+
+    /// A held arrow repeats faster than the glide settles, so the content is behind where the last
+    /// keystroke aimed. The focused row rode that lag off the top or bottom edge until the glide caught
+    /// up. Nothing is pumped here on purpose: with no frame ticking at all, the content only moves by
+    /// the catch-up the keystroke itself does, which is the worst case a held arrow can produce.
+    func test_holdingAnArrow_keepsTheFocusedRowOnScreen() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let scroll = mountKeybinds()
+        let chips = descendants(of: scroll).compactMap { $0 as? KeybindChip }
+        let rows = descendants(of: scroll).compactMap { $0 as? KeybindRow }
+
+        window!.makeFirstResponder(chips[0])
+        for key in [Self.downKey, Self.upKey] {
+            for step in 0..<chips.count {
+                press(key, times: 1)
+                let responder = try XCTUnwrap(window!.firstResponder as? NSView)
+                // The stop the reader is looking at: a chip's row (Reset-all is its own stop).
+                let focused = rows.first { $0.chip === responder } ?? responder
+                XCTAssertTrue(
+                    isFullyVisible(focused, in: scroll),
+                    "step \(step) of \(key == Self.downKey ? "Down" : "Up") left the focused stop off screen")
+            }
+        }
+    }
 }

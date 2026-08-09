@@ -23,8 +23,10 @@ final class SettingsScrollView: NSScrollView {
     /// compute its step from an offset that is still catching up, so the destination creeps.
     var pendingTop: CGFloat { pendingTarget ?? contentView.bounds.minY }
 
-    /// Ease the content so document coordinate `top` sits at the top of the clip view.
-    func glide(top: CGFloat) {
+    /// Ease the content so document coordinate `top` sits at the top of the clip view, never leaving
+    /// `focused` (document coords) outside it on the way.
+    func glide(top: CGFloat, keeping focused: NSRect) {
+        catchUp(to: focused)
         guard abs(top - contentView.bounds.minY) > Self.settled else {
             stop()
             return
@@ -39,6 +41,23 @@ final class SettingsScrollView: NSScrollView {
         let link = displayLink(target: self, selector: #selector(tick))
         link.add(to: .main, forMode: .common)
         self.link = link
+    }
+
+    /// Close whatever part of the glide's lag would leave `focused` outside the clip, before aiming at
+    /// a new position. A held arrow repeats faster than the glide settles, so the content is genuinely
+    /// behind — and a keystroke that moves focus somewhere the reader can't see is worse than a jump.
+    /// From here the glide only travels toward a position that seats the row inside the clip, so it
+    /// stays visible for the rest of the flight.
+    private func catchUp(to focused: NSRect) {
+        let current = contentView.bounds.minY
+        let viewport = contentView.bounds.height
+        let lowest = focused.maxY - viewport  // any less and the row's bottom is below the clip
+        let highest = focused.minY  // any more and its top is above the clip
+        if current > highest {
+            apply(highest)
+        } else if current < lowest, lowest <= highest {
+            apply(lowest)  // the guard skips a row taller than the clip: showing its top wins
+        }
     }
 
     /// A wheel or trackpad scroll outranks the glide: the reader is aiming by hand now, and a glide

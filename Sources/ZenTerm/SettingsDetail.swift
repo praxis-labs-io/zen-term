@@ -107,12 +107,17 @@ enum SettingsDetail {
             .filter { $0 <= frame.minY }
             .max() ?? document.bounds.minY
 
+        // Aim past the edge the stop arrives at, rather than flush against it. A stop parked on the
+        // boundary is off screen for as long as the glide is behind, and the slack is what the glide
+        // has to be smooth in. Capped against a short pane, where a third of the clip is plenty.
+        let margin = min(84, viewport / 3)
         let revealTop = min(previousBottom, padded.minY)
         var top = scroll.pendingTop
-        if padded.maxY > top + viewport { top = padded.maxY - viewport }  // travelling down
-        if revealTop < top { top = revealTop }  // travelling up: the strip comes with the stop
+        if padded.maxY + margin > top + viewport { top = padded.maxY + margin - viewport }  // down
+        if revealTop - margin < top { top = revealTop - margin }  // up: the strip comes with the stop
         if padded.maxY > top + viewport { top = padded.maxY - viewport }  // the stop outranks the strip
-        scroll.glide(top: min(max(0, top), max(0, document.frame.height - viewport)))
+        scroll.glide(
+            top: min(max(0, top), max(0, document.frame.height - viewport)), keeping: frame)
     }
 
     /// Wrap a control in a full-width row that right-aligns it: a leading spacer takes the slack so
