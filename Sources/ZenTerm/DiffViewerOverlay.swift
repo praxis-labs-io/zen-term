@@ -339,8 +339,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             return true
         }
         // ⌘C / ⌘⇧C yank the diff selection. Claimed here because the view hierarchy is offered a key
-        // equivalent before the main menu is — otherwise both would reach the menu's `copyFromSurface:`
-        // and copy the *terminal's* selection while the viewer is up (ZEN-227).
+        // equivalent before the main menu is: otherwise both would reach Edit > Copy, which the diff
+        // table does not answer, so the chain would carry it to `WindowController` and copy the
+        // *terminal's* selection while the viewer is up (ZEN-227).
         if let wantsReference = Self.yankShortcut(for: event) {
             yank(reference: wantsReference)
             return true

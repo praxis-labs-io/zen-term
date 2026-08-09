@@ -72,8 +72,8 @@ final class KeymapAssemblyTests: XCTestCase {
     }
 
     /// Select All ships no chord: Edit > Select All holds ⌘A, and it has to, because
-    /// `KeyInterceptor` resolves ahead of the responder chain — a default here would take the chord
-    /// off every text field in the app (ZEN-370). The action stays, for the palette and for a rebind.
+    /// `KeyInterceptor` resolves ahead of the responder chain: a default here would take the chord
+    /// off every text field in the app (ZEN-370). The action stays, for a config that rebinds it.
     func test_selectAll_shipsNoChord() {
         let map = assemble()
         XCTAssertNil(map[Chord(command: true, key: "a")], "⌘A is the Edit menu's")

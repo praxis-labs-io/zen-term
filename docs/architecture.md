@@ -848,8 +848,9 @@ recipe.
 Scroll to Selection ⌘J, Write Screen to File ⌘⇧J. Writing the screen has three endings and
 the backend takes the choice in with the call, because it disposes of the path inside the
 same action and never hands it back: ⌘⇧J types the path into the pane, ⌘⇧⌃J copies it,
-⌘⇧⌥J opens the file. (Check for Updates, Report an Issue and Select All hold no chord of
-their own: the menu bar already carries all three.)
+⌘⇧⌥J opens the file. (Select All holds no keymap chord because Edit > Select All carries ⌘A,
+per the rule below. Check for Updates and Report an Issue hold none either: Report an Issue is
+in the Help menu, and Check for Updates is reachable only from the palette or a rebind.)
 
 **A verb a text field owns is served from the Edit menu, never from the keymap.** Select All
 is the case that set the rule. `KeyInterceptor` resolves ahead of the responder chain, so a
@@ -860,10 +861,26 @@ editor implements it and takes it first; `WindowController` implements it as the
 endpoint below, and swallows it over a modal card, which has no buffer to act on. Copy and
 Paste are the same three lines for the same reason: they carried a custom `copyFromSurface:`
 selector that walked past the field, so ⌘C in the find bar copied the buffer behind you while
-you typed. `select_all` stays an action a config line can bind to some other chord, and it is
-in neither the palette nor the Shortcuts card, the same as Copy and Paste: the menu is where
-⌘A is offered, and a second listing would advertise a chord the Shortcuts card has to refuse
-(ZEN-370).
+you typed. Cut, Undo and Redo are in the same menu for the same reason and stop at the field:
+macOS ships no default key binding for them, so an app with no items has ⌘X and ⌘Z dead in every
+box it draws, and a bare `NSTextView` needs `allowsUndo` set or Undo greys out where people
+write paragraphs.
+
+`select_all` stays an action a config line can bind to some other chord, and it is in neither
+the palette nor the Shortcuts card, the same as Copy and Paste: the menu is where ⌘A is
+offered, and a second listing would advertise a chord the Shortcuts card has to refuse. Two
+costs come with that, and the reference config states both. Every bind landing on ⌘A is now
+refused, not just `select_all`, so a config that had `clear_screen=cmd+a` loses it on upgrade.
+And `select_all=none` no longer hands ⌘A to the program in the pane, because a key equivalent
+is not the keymap's to unbind (ZEN-370).
+
+**A responder that keeps its own selection has to answer `selectAll:` itself.** The diff pane
+is the one that does. `NSTableView` implements the selector, so a nil-target menu item reaches
+it ahead of the window, and `DiffPaneTable` deliberately does not read `NSTableView.selectedRow`
+back: the table would light every row while the pane's cursor and anchor still pointed at one,
+Esc would close the viewer instead of collapsing, and the next `j` would snap the highlight
+away. `DiffTableView.selectAll(_:)` routes out to the pane instead of calling `super`, the same
+way it routes every other key it owns.
 
 Stepping a search is `n` and `N` while the search holds the keyboard, so `find_next` and
 `find_previous` ship with no chord and `SearchController.key(for:)` reads them. They stay

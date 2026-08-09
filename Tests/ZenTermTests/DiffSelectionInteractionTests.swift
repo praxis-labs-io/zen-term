@@ -128,6 +128,28 @@ final class DiffSelectionInteractionTests: WindowTestCase {
 
     // MARK: selection + yank
 
+    /// Edit > Select All reaches the table, which implements `selectAll:` itself. Letting `super` run
+    /// lights every row while the pane's cursor and anchor still point at one, so the selection is a
+    /// lie the next keystroke undoes. The pane has to write this one like every other (ZEN-370).
+    func test_selectAll_selectsEveryRowAsASelectionThePaneOwns() throws {
+        let overlay = mount([file()])
+        inline(overlay)
+        let pane = overlay.diffPaneForTesting
+        let rowCount = pane.rowCountForTesting
+
+        pane.scrollFocusTarget.tryToPerform(#selector(NSText.selectAll(_:)), with: nil)
+
+        XCTAssertEqual(pane.selectedRows, IndexSet(0..<rowCount), "every row is selected")
+        XCTAssertTrue(pane.hasVisualSelection, "and the pane knows it owns a running selection")
+
+        // The discriminator. `NSTableView`'s own `selectAll:` leaves the cursor and anchor untouched,
+        // so the next `j` recomputes from them and collapses the whole file down to a single row.
+        try type("j", into: overlay)
+        XCTAssertEqual(
+            pane.selectedRows, IndexSet(0..<rowCount),
+            "j at the last row keeps the block instead of snapping it to one line")
+    }
+
     func test_visualThenMoveThenYank_copiesEveryLineInTheBlock() throws {
         let overlay = mount([file()])
         inline(overlay)

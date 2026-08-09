@@ -40,14 +40,26 @@ enum MainMenu {
             keyEquivalent: "q")
 
         // Edit menu. AppKit's own selectors, no target, so the responder chain decides: a focused
-        // field editor implements all three and takes them ahead of the window, and `WindowController`
-        // implements them as the terminal endpoint for everything below. A custom selector here
+        // field editor implements all six and takes them ahead of the window, and `WindowController`
+        // implements the three a terminal can answer as the endpoint below. A custom selector here
         // instead (`copyFromSurface:`) walks straight past the field, which is what left ⌘C in the
         // find bar copying the buffer behind it (ZEN-370).
+        //
+        // A field editor gets Undo, Redo and Cut from these key equivalents and from nowhere else:
+        // macOS ships no default key binding for them, so an app without the items has ⌘Z and ⌘X
+        // dead in every field it draws. Nothing below a field implements them, so both grey out over
+        // a pane, which is what an unavailable verb should look like.
         let editItem = NSMenuItem()
         main.addItem(editItem)
         let editMenu = NSMenu(title: "Edit")
         editItem.submenu = editMenu
+        // `undo:` and `redo:` are informal responder methods with no Swift-visible declaration to
+        // take a `#selector` from, unlike the four `NSText` verbs below.
+        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(.separator())
+        editMenu.addItem(
+            withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
         editMenu.addItem(
             withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         editMenu.addItem(

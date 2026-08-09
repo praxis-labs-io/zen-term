@@ -16,6 +16,9 @@ final class MainMenuTests: XCTestCase {
 
         let edit = app.mainMenu?.items.first { $0.submenu?.title == "Edit" }?.submenu
         let expected: [(String, Selector, String)] = [
+            ("Undo", Selector(("undo:")), "z"),
+            ("Redo", Selector(("redo:")), "Z"),
+            ("Cut", #selector(NSText.cut(_:)), "x"),
             ("Copy", #selector(NSText.copy(_:)), "c"),
             ("Paste", #selector(NSText.paste(_:)), "v"),
             ("Select All", #selector(NSText.selectAll(_:)), "a"),
@@ -27,6 +30,13 @@ final class MainMenuTests: XCTestCase {
             XCTAssertEqual(item?.keyEquivalentModifierMask, .command)
             XCTAssertNil(item?.target, "\(title) must have no target, or it beats the focused field")
         }
+    }
+
+    /// Undo, Redo and Cut reach a field editor from these key equivalents and from nowhere else:
+    /// macOS ships no default key binding for them. A bare `NSTextView` also needs `allowsUndo`, or
+    /// the item greys out in the two boxes people write paragraphs in (ZEN-370).
+    func test_theMultilineBoxes_allowUndo() {
+        XCTAssertTrue(TextAreaBox(placeholder: "note").textView.allowsUndo)
     }
 
     func test_helpMenu_carriesReportAnIssueAndExportDiagnostics() {

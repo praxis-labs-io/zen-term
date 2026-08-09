@@ -271,19 +271,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wc.showAndStart()
     }
 
-    /// The Edit menu's forwarders, reached via the responder chain (the items have a nil target) —
-    /// always act on the key window's controller, never a stale one. Card and float routing lives in
-    /// `WindowController`: as the window delegate it's reached ahead of this app-delegate fallback,
-    /// so duplicating the guards here would be dead code. Keeping the three implemented here is what
-    /// leaves the items enabled when the key window is not one of ours.
+    /// The Edit menu's forwarders, reached via the responder chain because the items have a nil
+    /// target. Card and float routing lives in `WindowController`: as the window delegate it is
+    /// reached ahead of this app-delegate fallback, so duplicating the guards here would be dead
+    /// code.
+    ///
+    /// **Gated on a live key window, unlike the chord path.** `keyController` falls back to
+    /// `windows.first` so a chord always lands somewhere, and that is wrong for these: the items are
+    /// permanently enabled (nothing here implements `validateMenuItem:`), so with every window
+    /// minimised a ⌘V would paste into a shell nobody can see, and a pasted newline runs it.
+    private func editVerbTarget() -> WindowController? {
+        guard NSApp.keyWindow != nil else { return nil }
+        return keyController()
+    }
     @objc func copy(_ sender: Any?) {
-        keyController()?.copy(sender)
+        editVerbTarget()?.copy(sender)
     }
     @objc func paste(_ sender: Any?) {
-        keyController()?.paste(sender)
+        editVerbTarget()?.paste(sender)
     }
     @objc func selectAll(_ sender: Any?) {
-        keyController()?.selectAll(sender)
+        editVerbTarget()?.selectAll(sender)
     }
 
     /// The standard About panel sources its version from `Info.plist` alone, so an unpackaged

@@ -91,6 +91,7 @@ final class DiffPaneTable: NSView {
         table.onMoveCursor = { [weak self] delta, extend in self?.moveCursor(by: delta, extending: extend) }
         table.onVimKey = { [weak self] key in self?.handleVimKey(key) }
         table.onEscape = { [weak self] in self?.handleEscape() }
+        table.onSelectAll = { [weak self] in self?.selectAllRows() }
         table.onCompose = { [weak self] in self?.onCompose?() }
         table.onViewerCommand = { [weak self] command in
             guard let self else { return }
@@ -326,6 +327,18 @@ final class DiffPaneTable: NSView {
             anchorRow = max(0, cursorRow)
             applySelection()
         }
+    }
+
+    /// ⌘A: select the whole file, as a real visual selection anchored on the first line.
+    ///
+    /// `NSTableView` implements `selectAll:` itself, and letting it run would light every row while
+    /// the cursor and anchor still pointed at one: `hasVisualSelection` would stay false, Esc would
+    /// close the viewer instead of collapsing, and the next `j` would snap the highlight away. The
+    /// pane writes the selection here as it does everywhere else (ZEN-370).
+    func selectAllRows() {
+        guard !source.rows.isEmpty else { return }
+        anchorRow = 0
+        setCursor(source.rows.count - 1)
     }
 
     /// Collapse the selection back to the cursor line, leaving the cursor where it is.
@@ -823,8 +836,18 @@ private final class DiffTableView: NSTableView {
     /// Focus landed on the diff (a click or a keyboard move) — the pane forwards it so the overlay
     /// resyncs focus styling and the footer legend.
     var onBecameFirstResponder: (() -> Void)?
+    /// Edit > Select All reached the table. Routed out like every other key rather than left to
+    /// `NSTableView`, which would write the selection behind the pane's back.
+    var onSelectAll: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
+
+    /// The one AppKit selector the table would otherwise answer on its own. `super` is deliberately
+    /// not called: the pane owns the selection, and two writers is the drift this class exists to
+    /// avoid.
+    override func selectAll(_ sender: Any?) {
+        onSelectAll?()
+    }
 
     /// A bare `g` is waiting for its partner (`gg` jumps to the top). Any other key clears it — vim
     /// puts no timeout on this, so neither does the pane.

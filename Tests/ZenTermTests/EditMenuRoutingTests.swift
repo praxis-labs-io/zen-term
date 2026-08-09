@@ -9,7 +9,7 @@ import XCTest
 ///
 /// The Edit menu carries AppKit's own `copy:` / `paste:` / `selectAll:` with no target, so the chain
 /// decides: a focused field editor implements all three and takes them first, and `WindowController`
-/// — the window's delegate, reached ahead of `NSApp`'s — is the terminal endpoint below that. The
+/// (the window's delegate, reached ahead of `NSApp`'s) is the terminal endpoint below that. The
 /// custom `copyFromSurface:` selector these items used to carry walked straight past the field,
 /// which left ⌘C in the find bar copying the buffer behind it.
 ///
@@ -22,7 +22,7 @@ final class EditMenuRoutingTests: WindowTestCase {
     private var controller: WindowController?
     private var spawned: [RecordingSurface] = []
     /// The user's real clipboard, snapshotted so the test's writes to `NSPasteboard.general` don't
-    /// permanently clobber it — the production paste path reads the general pasteboard directly, so
+    /// permanently clobber it. The production paste path reads the general pasteboard directly, so
     /// there's no private one to redirect to; restore-after is the workable guard.
     private var savedClipboard: String?
 
@@ -78,7 +78,7 @@ final class EditMenuRoutingTests: WindowTestCase {
         return editor
     }
 
-    // MARK: the find bar — a field with no card around it
+    // MARK: the find bar, a field with no card around it
 
     func test_selectAll_inTheFindBar_selectsTheField_notTheBuffer() throws {
         let c = makeWindow()
@@ -178,6 +178,30 @@ final class EditMenuRoutingTests: WindowTestCase {
         XCTAssertEqual(paneSurface.selectAllCount, 0)
     }
 
+    /// The other half of the same guard, and the half a field editor hides everywhere else: in the
+    /// palette and the find bar the editor answers `copy:` and `paste:` itself, so the chain never
+    /// reaches `WindowController` and the modal branch there goes untested. Settings on a nav row is
+    /// the only state that drives it.
+    func test_copyAndPaste_overACardWithNoField_touchTheTerminalNotAtAll() throws {
+        let c = makeWindow()
+        let paneSurface = try XCTUnwrap(spawned.first)
+        paneSurface.selectionText = "TERMINAL-SELECTION"
+
+        c.handle(.openSettings)
+        XCTAssertNil(c.window.firstResponder as? NSTextView, "Settings must land on a nav row")
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("CLIPBOARD-PATH", forType: .string)
+
+        send(#selector(NSText.copy(_:)), in: c)
+        send(#selector(NSText.paste(_:)), in: c)
+
+        XCTAssertEqual(
+            NSPasteboard.general.string(forType: .string), "CLIPBOARD-PATH",
+            "copy must not overwrite the clipboard with the buffer behind the card")
+        XCTAssertEqual(
+            paneSurface.pastes, [], "paste must not reach the terminal behind the card")
+    }
+
     // MARK: a focused pane
 
     func test_selectAll_overAPane_reachesTheSurface() throws {
@@ -205,7 +229,7 @@ final class EditMenuRoutingTests: WindowTestCase {
         XCTAssertEqual(paneSurface.selectAllCount, 0, "not the pane the drawer took focus from")
     }
 
-    /// A shown float is modal over the window, so it owns the verb — the same rule copy and paste
+    /// A shown float is modal over the window, so it owns the verb, the same rule copy and paste
     /// already follow. Before ZEN-370 the chord was swallowed by `handle`'s float gate.
     func test_selectAll_overAnOpenToolFloat_reachesTheFloat() throws {
         var config = GeneralConfig.builtIn

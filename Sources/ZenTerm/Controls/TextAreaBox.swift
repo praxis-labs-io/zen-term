@@ -46,6 +46,9 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         // classic configuration (the scroll view itself is autolayout inside this box).
         textView.isRichText = false
         textView.isEditable = true
+        // Off by default on a bare `NSTextView`, unlike a field editor, so Edit > Undo would grey out
+        // in the one box people write paragraphs in (ZEN-370).
+        textView.allowsUndo = true
         textView.drawsBackground = false
         textView.font = .systemFont(ofSize: 13)
         textView.textColor = Theme.current.chrome.foreground.nsColor

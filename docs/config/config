@@ -467,11 +467,20 @@
 # same one a mouse drag makes, so `scroll_to_selection` (⌘J) brings the viewport back
 # to where it starts.
 #
-# ⌘A comes from Edit > Select All, not from a keybind, and `keybind = select_all=cmd+a`
-# is refused for that reason. A menu shortcut reaches a text field as well as a pane;
-# a keybind is resolved before the field ever sees the key, so binding ⌘A here would
-# take it away from every field in the app. `select_all` is still an action: bind it to
-# another chord and it works over a pane like any other.
+# ⌘A comes from Edit > Select All, not from a keybind. A menu shortcut reaches a text
+# field as well as a pane; a keybind is resolved before the field ever sees the key, so
+# binding ⌘A here would take it away from every field in the app.
+#
+# Two things follow, and they apply to ⌘A the way they already do to ⌘C and ⌘V:
+#
+#   * Any `keybind` or float `key:` landing on ⌘A is refused, not just `select_all`.
+#     A line that worked before, say `keybind = clear_screen=cmd+a`, is dropped with a
+#     notice naming the menu item.
+#   * `select_all=none` does not hand ⌘A back to the program in the pane. Unbinding is
+#     the keymap's, and this chord is the menu's.
+#
+# `select_all` is still an action: bind it to another chord and it works over a pane
+# like any other.
 #
 # `paste_selection` (⌘⇧V) types what you have selected back into the pane. Either
 # kind counts, a mouse selection or a `v` selection from scroll mode, and with

@@ -1833,10 +1833,12 @@ final class WindowController: NSObject {
             case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .openDiffViewer:
                 floats.close()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab, .fillScreen,
-                .increaseFontSize, .decreaseFontSize, .resetFontSize:
+                .increaseFontSize, .decreaseFontSize, .resetFontSize, .selectAll:
                 // Cross-tab/window chords still act; Fill Screen is window-level. Font size is
                 // app-wide and the float itself is a terminal surface, so resizing over an open
-                // float resizes the float too — blocking it here would be the ZEN-224 bug again.
+                // float resizes the float too: blocking it here would be the ZEN-224 bug again.
+                // Select All is here because Edit > Select All reaches the float from the responder
+                // chain, and a rebound chord swallowed here would disagree with the menu.
                 break
             default:
                 return
@@ -1898,8 +1900,8 @@ final class WindowController: NSObject {
         case .jumpToPreviousPrompt: scrollFocusedPane(.prompt(-1))
         case .jumpToNextPrompt: scrollFocusedPane(.prompt(1))
         case .clearScreen: activeController?.focusedScrollTarget?.surface.clearScreen()
-        // The Edit menu serves ⌘A; this is the palette row and whatever chord a config rebinds it to,
-        // routed through the same endpoint so the two spellings cannot drift.
+        // The Edit menu serves ⌘A; this is whatever chord a config rebinds the action to, routed
+        // through the same endpoint so the two spellings cannot drift.
         case .selectAll: selectAll(nil)
         case .writeScreenFile: activeController?.focusedScrollTarget?.surface.writeScreenToFile(.paste)
         case .copyScreenFilePath: activeController?.focusedScrollTarget?.surface.writeScreenToFile(.copy)
@@ -2031,11 +2033,13 @@ final class WindowController: NSObject {
         }
     }
 
-    // MARK: the Edit menu's verbs — routed to the shown tool float, else the active tab's controller
+    // MARK: the Edit menu's verbs, routed to the shown tool float, else the active tab's controller
 
     // The terminal end of the responder chain for Copy, Paste and Select All. Anything with a caret
     // is above this: a focused field editor implements all three itself and never lets them reach
-    // the window, which is the whole of how a text field gets served (ZEN-370).
+    // the window, which is the whole of how a text field gets served (ZEN-370). Cut, Undo and Redo
+    // are the field's alone and stop there, so nothing here answers them and both items grey out
+    // over a pane.
     //
     // A shown float is modal over the window, so it owns the verbs; a persistent float's surface
     // outlives its card, so gate on visibility (`isOpen`), not on the registry. A modal card or a
