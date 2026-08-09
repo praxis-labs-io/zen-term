@@ -6,12 +6,12 @@ enum SettingsDetail {
     /// Wrap a section's rows stack in the standard detail scroll: a flipped document (top-down
     /// coords, so it opens at the top), a slim auto-hiding overlay scroller, and the shared content
     /// insets (18 top/bottom, 20 leading/trailing). The rows stack becomes the document's content.
-    static func scroll(for rowsStack: NSStackView) -> SettingsScrollView {
+    static func scroll(for rowsStack: NSStackView) -> NSScrollView {
         let doc = FlippedView()
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(rowsStack)
 
-        let scroll = SettingsScrollView()
+        let scroll = NSScrollView()
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
         scroll.verticalScroller = SlimScroller()
@@ -92,12 +92,10 @@ enum SettingsDetail {
     /// document's top inset when nothing focusable sits above. Revealing the stop alone parks that
     /// strip just off the top edge, so arrowing up to a group's first row hid the caption naming it.
     ///
-    /// One position, computed once and handed to the glide. Two `scrollToVisible` calls (strip, then
-    /// stop) reached the same place but stepped there, and every step of a held arrow snapped.
+    /// One position, computed and applied once: revealing the strip and then the stop took two
+    /// `scrollToVisible` calls to reach the same place, in two hops.
     static func reveal(_ view: NSView, stops: [NSView]) {
-        guard let scroll = view.enclosingScrollView as? SettingsScrollView,
-            let document = scroll.documentView
-        else { return }
+        guard let scroll = view.enclosingScrollView, let document = scroll.documentView else { return }
         let viewport = scroll.contentView.bounds.height
         let frame = view.convert(view.bounds, to: document)
         let padded = frame.insetBy(dx: 0, dy: -12)  // shared breathing room above and below a stop
@@ -107,17 +105,22 @@ enum SettingsDetail {
             .filter { $0 <= frame.minY }
             .max() ?? document.bounds.minY
 
-        // Aim past the edge the stop arrives at, rather than flush against it. A stop parked on the
-        // boundary is off screen for as long as the glide is behind, and the slack is what the glide
-        // has to be smooth in. Capped against a short pane, where a third of the clip is plenty.
+        // Aim past the edge the stop arrives at rather than flush against it: a row landing hard against
+        // the pane edge arrives with no context around it, and walking the list reads as scraping the
+        // bottom. Capped against a short pane, where a third of the clip is plenty.
         let margin = min(84, viewport / 3)
         let revealTop = min(previousBottom, padded.minY)
-        var top = scroll.pendingTop
+        var top = scroll.contentView.bounds.minY
         if padded.maxY + margin > top + viewport { top = padded.maxY + margin - viewport }  // down
         if revealTop - margin < top { top = revealTop - margin }  // up: the strip comes with the stop
         if padded.maxY > top + viewport { top = padded.maxY - viewport }  // the stop outranks the strip
-        scroll.glide(
-            top: min(max(0, top), max(0, document.frame.height - viewport)), keeping: frame)
+        let clamped = min(max(0, top), max(0, document.frame.height - viewport))
+        // Snapped to the backing store's pixel grid: `margin` is a third of the clip on a short pane, and
+        // a fractional offset leaves every glyph in the pane drawn between two device pixels.
+        let scale = scroll.window?.backingScaleFactor ?? 2
+        scroll.contentView.scroll(
+            to: NSPoint(x: scroll.contentView.bounds.minX, y: (clamped * scale).rounded() / scale))
+        scroll.reflectScrolledClipView(scroll.contentView)
     }
 
     /// Wrap a control in a full-width row that right-aligns it: a leading spacer takes the slack so

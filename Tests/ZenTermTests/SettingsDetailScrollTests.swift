@@ -3,22 +3,17 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Arrow-nav scrolling in the Settings detail pane.
+/// Arrow-nav scrolling in the Settings detail pane. `SettingsDetail.moveFocus` revealed the destination
+/// stop and nothing else, so a step landed the row hard against the edge it arrived at: arrowing up put
+/// its top flush with the visible top and left the group caption naming it just off screen, worst at the
+/// top of a scrolled section where the first caption never came back.
 ///
-/// Two failures live here. `SettingsDetail.moveFocus` revealed the destination stop and nothing else,
-/// so arrowing up landed the row's top edge flush against the visible top and left the group caption
-/// naming it just off screen — worst at the top of a scrolled section, where the first caption never
-/// came back. And it reached its position with `scrollToVisible` calls, which snap: held at key-repeat
-/// speed, each step jumped a different distance (35pt between rows, 66 across a group boundary).
-///
-/// The destinations are asserted under Reduce Motion, where the glide lands immediately. How the glide
-/// itself reads is the runbook's, not a test's; what a test can check is that it does not snap, and
-/// that a burst of keystrokes aims at the same place the instant path lands on.
+/// These mount the real section in a window short enough to scroll and drive real arrow events at the
+/// chips. A state-only check on the focused index passes with the row off screen entirely.
 final class SettingsDetailScrollTests: WindowTestCase {
     private var tempRoot: URL!
     private var window: NSWindow?
     private var section: SettingsKeybindsSection?
-    private var originalReduceMotion: (() -> Bool)!
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -28,12 +23,9 @@ final class SettingsDetailScrollTests: WindowTestCase {
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
         try "".write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         AppConfig.reload()
-        originalReduceMotion = Motion.isReduceMotionEnabled
-        Motion.isReduceMotionEnabled = { true }  // land on each position, so a destination is readable
     }
 
     override func tearDownWithError() throws {
-        Motion.isReduceMotionEnabled = originalReduceMotion
         window = nil
         section = nil
         ConfigLoader.defaultRootOverrideForTesting = nil
@@ -46,7 +38,7 @@ final class SettingsDetailScrollTests: WindowTestCase {
 
     /// The Keybinds section in a 380pt-tall window: several groups of chips, well past what fits, so
     /// every arrow step has somewhere to scroll.
-    private func mountKeybinds() -> SettingsScrollView {
+    private func mountKeybinds() -> NSScrollView {
         let section = SettingsKeybindsSection(capturer: nil)
         self.section = section
         let detail = section.makeDetailView()
@@ -63,7 +55,7 @@ final class SettingsDetailScrollTests: WindowTestCase {
         ])
         content.layoutSubtreeIfNeeded()
         window = win
-        return detail as! SettingsScrollView  // swiftlint:disable:this force_cast
+        return detail as! NSScrollView  // swiftlint:disable:this force_cast
     }
 
     private func descendants(of view: NSView) -> [NSView] {
@@ -147,53 +139,21 @@ final class SettingsDetailScrollTests: WindowTestCase {
         return chips.first { $0.convert($0.bounds, to: document).minY >= captionBottom }
     }
 
-    // MARK: the glide
+    // MARK: room around the focused row
 
-    /// A burst of keystrokes aims at one position and eases toward it. Measuring each step from the
-    /// live position instead of the pending one leaves a held arrow short of where it aimed, which is
-    /// the same stutter in a different shape. Whether the glide *arrives* rides on a display link, so
-    /// that part is the runbook's: a test that waits on one is a test that fails on a machine with no
-    /// display attached.
-    func test_aBurstOfKeystrokes_aimsWhereTheInstantPathLands() {
-        let instant = mountKeybinds()
-        let instantChips = descendants(of: instant).compactMap { $0 as? KeybindChip }
-        window!.makeFirstResponder(instantChips[0])
-        press(Self.downKey, times: 12)
-        let landed = instant.documentVisibleRect.minY
-        XCTAssertGreaterThan(landed, 0, "the instant path scrolled somewhere to compare against")
-
-        Motion.isReduceMotionEnabled = { false }
-        let glided = mountKeybinds()
-        let chips = descendants(of: glided).compactMap { $0 as? KeybindChip }
-        window!.makeFirstResponder(chips[0])
-        press(Self.downKey, times: 12)
-
-        XCTAssertEqual(glided.pendingTop, landed, accuracy: 0.5, "the burst aims at the same position")
-        XCTAssertLessThan(
-            glided.documentVisibleRect.minY, landed, "the content eases toward it rather than snapping")
-    }
-
-    /// A held arrow repeats faster than the glide settles, so the content is behind where the last
-    /// keystroke aimed. The focused row rode that lag off the top or bottom edge until the glide caught
-    /// up. Nothing is pumped here on purpose: with no frame ticking at all, the content only moves by
-    /// the catch-up the keystroke itself does, which is the worst case a held arrow can produce.
-    func test_holdingAnArrow_keepsTheFocusedRowOnScreen() throws {
-        Motion.isReduceMotionEnabled = { false }
+    /// The reveal aims past the edge the row arrives at. Landing it flush there is legible but reads as
+    /// scraping the pane edge, and it was what left the caption above a row off screen.
+    func test_walkingDown_leavesRoomBelowTheFocusedRow() throws {
         let scroll = mountKeybinds()
         let chips = descendants(of: scroll).compactMap { $0 as? KeybindChip }
         let rows = descendants(of: scroll).compactMap { $0 as? KeybindRow }
 
         window!.makeFirstResponder(chips[0])
-        for key in [Self.downKey, Self.upKey] {
-            for step in 0..<chips.count {
-                press(key, times: 1)
-                let responder = try XCTUnwrap(window!.firstResponder as? NSView)
-                // The stop the reader is looking at: a chip's row (Reset-all is its own stop).
-                let focused = rows.first { $0.chip === responder } ?? responder
-                XCTAssertTrue(
-                    isFullyVisible(focused, in: scroll),
-                    "step \(step) of \(key == Self.downKey ? "Down" : "Up") left the focused stop off screen")
-            }
-        }
+        press(Self.downKey, times: 12)
+
+        let focused = try XCTUnwrap(rows.first { $0.chip === window!.firstResponder })
+        let document = try XCTUnwrap(scroll.documentView)
+        let gap = scroll.documentVisibleRect.maxY - focused.convert(focused.bounds, to: document).maxY
+        XCTAssertGreaterThan(gap, 24, "the row it scrolled to keeps room below it, not just its padding")
     }
 }
