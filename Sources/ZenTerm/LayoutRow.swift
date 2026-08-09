@@ -44,13 +44,9 @@ final class LayoutRow: NSView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
-        // No spacer: the caption column takes the row's leftover width itself, so a description has a
-        // definite width to wrap inside. Against a spacer it kept its full single-line width, lost the
-        // compression fight with the control, and truncated mid-sentence (the accent row's did).
-        captionColumn.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        captionColumn.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        controlColumn.setContentHuggingPriority(.defaultHigh, for: .horizontal)
-        let controls = NSStackView(views: [captionColumn, controlColumn])
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let controls = NSStackView(views: [captionColumn, spacer, controlColumn])
         controls.orientation = .horizontal
         controls.alignment = .centerY
         controls.spacing = 8
@@ -87,11 +83,9 @@ final class LayoutRow: NSView {
         primary: NSView, note: String?, alignment: NSLayoutConstraint.Attribute
     ) -> (NSView, NSTextField?) {
         guard let note else { return (primary, nil) }
-        let noteLabel = NSTextField(wrappingLabelWithString: note)
+        let noteLabel = NSTextField(labelWithString: note)
         noteLabel.font = .systemFont(ofSize: 10)
         noteLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
-        noteLabel.isSelectable = false  // `wrappingLabelWithString` ships selectable; a note is not text to take
-        noteLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let stack = NSStackView(views: [primary, noteLabel])
         stack.orientation = .vertical
         stack.spacing = 2
