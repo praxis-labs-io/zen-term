@@ -126,6 +126,9 @@ final class DiffCommentComposer: NSView {
     private func buildNote() {
         note.isRichText = false
         note.drawsBackground = false
+        // Off by default on a bare `NSTextView`, unlike a field editor, so Edit > Undo would grey out
+        // here while it works in every single-line field (ZEN-370).
+        note.allowsUndo = true
         note.font = .systemFont(ofSize: 13)
         note.textContainerInset = NSSize(width: 4, height: 4)
         note.isVerticallyResizable = true

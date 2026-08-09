@@ -119,11 +119,13 @@ extension KeyInterceptor.ReservedChord {
         case .increaseFontSize, .decreaseFontSize, .resetFontSize: return false
         case .reloadConfig, .toggleToolFloat: return false
         case .checkForUpdates, .reportIssue: return false
+        // Edit > Select All holds ⌘A, so the row would be an editor for a chord it has to refuse.
+        case .selectAll: return false
         case .splitVertical, .splitHorizontal, .closePane, .toggleZoom,
             .toggleScrollMode, .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown,
             .scrollToSelection, .jumpToPreviousPrompt, .jumpToNextPrompt,
             .toggleSearch, .searchSelection, .findNext, .findPrevious,
-            .clearScreen, .selectAll, .pasteSelection, .writeScreenFile,
+            .clearScreen, .pasteSelection, .writeScreenFile,
             .copyScreenFilePath, .openScreenFile,
             .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane,
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
@@ -331,11 +333,15 @@ enum KeymapDefaults {
         map[Chord(command: true, shift: true, control: true, key: "j")] = .copyScreenFilePath
         map[Chord(command: true, shift: true, option: true, key: "j")] = .openScreenFile
 
-        // ⌘A selects the buffer, on ghostty's chord and every Mac user's expectation. A text field
-        // holding the keyboard needs it more, and `KeyInterceptor` resolves ahead of the responder
-        // chain, so the field has to be let through explicitly rather than by leaving ⌘A unbound:
-        // ZEN-370 serves it from the Edit menu, over a field and over a pane both.
-        map[Chord(command: true, key: "a")] = .selectAll
+        // Select All ships no chord: Edit > Select All holds ⌘A, and a menu key equivalent serves a
+        // focused text field and a pane both, which the keymap cannot. `KeyInterceptor` resolves
+        // ahead of the responder chain, so a default here would take ⌘A back off every field in the
+        // app (ZEN-370). The action stays for a config that rebinds it to some other chord; it is in
+        // neither the palette nor the Shortcuts card, the same as Copy and Paste.
+        //
+        // The menu owning ⌘A costs two things the reference config states plainly. Any bind landing
+        // on ⌘A is refused, not only `select_all`, and `select_all=none` no longer frees the chord
+        // for the program in the pane, because a key equivalent is not the keymap's to unbind.
         map[Chord(command: true, shift: true, key: "v")] = .pasteSelection
         map[Chord(command: true, shift: true, key: "↑")] = .jumpToPreviousPrompt
         map[Chord(command: true, shift: true, key: "↓")] = .jumpToNextPrompt

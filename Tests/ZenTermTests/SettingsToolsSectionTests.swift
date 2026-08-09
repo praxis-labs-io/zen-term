@@ -126,7 +126,7 @@ final class SettingsToolsSectionTests: WindowTestCase {
             NSApp.mainMenu = previous
             AppConfig.reload()
         }
-        MainMenu.install(copyPaste: nil)
+        MainMenu.install()
 
         try seed("float = title:dev key:cmd+q command:vim")
         let detail = mount(SettingsToolsSection())

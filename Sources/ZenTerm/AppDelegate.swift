@@ -65,7 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The menu must go up before the config load. Assembling the keymap reads `NSApp.mainMenu`
         // for the chords the menu owns (`MenuShortcuts`), and a nil menu there yields an empty
         // protected set, which is the guard silently not running.
-        MainMenu.install(copyPaste: nil)  // Copy/Paste route via the responder chain
+        MainMenu.install()  // every item routes by selector, through the responder chain
 
         // Resolve the config and theme before any window builds, so the first window's font,
         // drawer sizes, and dock floats are already settled rather than built-in defaults. This is
@@ -98,10 +98,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // and the two readings must come from the same window regardless.
         keys.passThroughGuard = { [weak self] chord, action in
             // A text view holding the keyboard owns the ⌘⇧ arrows and the Return pair. ⌘A is not in
-            // that set and is measured, not assumed: AppKit serves Select All from an Edit menu item
-            // ZenTerm does not have yet, so deferring it here would hand the chord to nobody. The
-            // keymap holds ⌘A meanwhile, which is what takes it from a focused field until ZEN-370
-            // adds the menu item. Asked first because it does not depend on the window lookup below.
+            // that set and is measured, not assumed: AppKit serves Select All from an Edit menu item,
+            // not from `NSTextView`, so a guard here would hand the chord to nobody. ZEN-370 serves
+            // it from the menu instead, and the keymap ships ⌘A to no one.
+            // Asked first because it does not depend on the window lookup below.
             if TextEditingChords.owns(chord, firstResponder: NSApp.keyWindow?.firstResponder) {
                 return true
             }
@@ -271,15 +271,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wc.showAndStart()
     }
 
-    /// Copy/Paste forwarders reached via the responder chain (menu items have a nil target) — always
-    /// act on the key window's controller, never a stale one. The modal-aware routing (paste into a
-    /// card's focused field vs the surface) lives in `WindowController`: as the window delegate it's
-    /// reached ahead of this app-delegate fallback, so duplicating the guard here would be dead code.
-    @objc func copyFromSurface(_ sender: Any?) {
-        keyController()?.copyFromSurface(sender)
+    /// The Edit menu's forwarders, reached via the responder chain because the items have a nil
+    /// target. Card and float routing lives in `WindowController`: as the window delegate it is
+    /// reached ahead of this app-delegate fallback, so duplicating the guards here would be dead
+    /// code.
+    ///
+    /// **Gated on a live key window, unlike the chord path.** `keyController` falls back to
+    /// `windows.first` so a chord always lands somewhere, and that is wrong for these: the items are
+    /// permanently enabled (nothing here implements `validateMenuItem:`), so with every window
+    /// minimised a ⌘V would paste into a shell nobody can see, and a pasted newline runs it.
+    private func editVerbTarget() -> WindowController? {
+        guard NSApp.keyWindow != nil else { return nil }
+        return keyController()
     }
-    @objc func pasteToSurface(_ sender: Any?) {
-        keyController()?.pasteToSurface(sender)
+    @objc func copy(_ sender: Any?) {
+        editVerbTarget()?.copy(sender)
+    }
+    @objc func paste(_ sender: Any?) {
+        editVerbTarget()?.paste(sender)
+    }
+    @objc func selectAll(_ sender: Any?) {
+        editVerbTarget()?.selectAll(sender)
     }
 
     /// The standard About panel sources its version from `Info.plist` alone, so an unpackaged

@@ -11,10 +11,10 @@ import AppKit
 /// chord in silence.
 ///
 /// **Membership is measured, not assumed.** ⌘A looks like it belongs here and does not: AppKit
-/// serves Select All from the Edit menu, not from `NSTextView`, so in an app with no such item the
-/// chord does nothing in a field whatever this returns (ZEN-370). Sending the keystroke to a real
-/// text view and reading its selection back is the only way to tell the two apart, and guessing
-/// produces a guard that defers a chord to nobody.
+/// serves Select All from the Edit menu, not from `NSTextView`, so a pass-through would defer the
+/// chord to nobody. It is served by the menu item instead, which reaches a field and a pane both,
+/// and the keymap ships no default on it (ZEN-370). Sending the keystroke to a real text view and
+/// reading its selection back is the only way to tell the two cases apart.
 ///
 /// Pure and standalone for the reason `NavGuard` is, and a sibling to it rather than a branch
 /// inside it: the two answer different questions and share only the seam they return through.

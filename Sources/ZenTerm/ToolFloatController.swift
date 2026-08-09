@@ -344,6 +344,10 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         surface.paste(text)
     }
 
+    @objc func selectAllInSurface(_ sender: Any?) {
+        activeFloat?.surface.selectAll()
+    }
+
     // MARK: TerminalSurfaceDelegate
 
     /// A float's tool posted a desktop notification (a `claude` float asking for input) — relay it
