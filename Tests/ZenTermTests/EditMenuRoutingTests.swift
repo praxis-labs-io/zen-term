@@ -190,6 +190,50 @@ final class EditMenuRoutingTests: WindowTestCase {
         XCTAssertEqual(paneSurface.selectAllCount, 1, "⌘A over a pane selects the buffer")
     }
 
+    /// A drawer holds the keyboard the way a pane does, and `selectAll` leans on
+    /// `focusedScrollTarget` to resolve it rather than branching on the drawer itself.
+    func test_selectAll_withAFocusedDrawer_reachesTheDrawer() throws {
+        let c = makeWindow()
+        let paneSurface = try XCTUnwrap(spawned.first)
+
+        c.handle(.toggleBottomDrawer)  // opens it and moves focus into it
+        let drawerSurface = try XCTUnwrap(spawned.dropFirst().first, "the drawer spawns a surface")
+
+        send(#selector(NSText.selectAll(_:)), in: c)
+
+        XCTAssertEqual(drawerSurface.selectAllCount, 1)
+        XCTAssertEqual(paneSurface.selectAllCount, 0, "not the pane the drawer took focus from")
+    }
+
+    /// A shown float is modal over the window, so it owns the verb — the same rule copy and paste
+    /// already follow. Before ZEN-370 the chord was swallowed by `handle`'s float gate.
+    func test_selectAll_overAnOpenToolFloat_reachesTheFloat() throws {
+        var config = GeneralConfig.builtIn
+        config.floats = [
+            ToolFloat(
+                id: "btop", order: 0, title: "btop", icon: ToolFloatParser.defaultIcon,
+                command: "btop", dir: nil, widthFraction: 0.85, heightFraction: 0.85,
+                requiresGitRepo: false, persist: .window,
+                toggle: Chord(command: true, shift: true, key: "b"))
+        ]
+        GeneralConfig.setCurrentForTesting(config)
+
+        let c = makeWindow()
+        // Resolve the repo root synchronously so the float opens in the same turn as the toggle.
+        c.floatsForTesting.resolveRepoRoot = { $1(GitRepo.repoRoot(for: $0)) }
+        let paneSurface = try XCTUnwrap(spawned.first)
+
+        c.handle(.toggleToolFloat("btop"))
+        let floatSurface = try XCTUnwrap(
+            spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "btop"] },
+            "the float spawns its own surface")
+
+        send(#selector(NSText.selectAll(_:)), in: c)
+
+        XCTAssertEqual(floatSurface.selectAllCount, 1)
+        XCTAssertEqual(paneSurface.selectAllCount, 0, "not the pane behind the float")
+    }
+
     func test_copy_overAPane_reachesTheSurface() throws {
         let c = makeWindow()
         let paneSurface = try XCTUnwrap(spawned.first)
