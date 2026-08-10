@@ -456,6 +456,18 @@ tab bar, and the footer toolbar (`ToggleDock`). `TabController` owns one tab: a
 the active tab's view is mounted. The canvas mounts at the *back* of the container
 (`.below, relativeTo: nil`) because it is the backdrop all window chrome sits on.
 
+**The window-level stack, back to front: canvas, tool float, tab bar and dock, toast
+stack, modal card.** Each position is a decision, not an accident. A **float** sits
+below the tab bar because the ⌘W guard toast ("Close btop first, then ⌘W") fires
+while a float is open and is telling you to close that float, so the toast has to
+win. A **modal card** is the opposite case: it owns the keyboard and dims the tile,
+so a passive notice over it reads as broken, and it mounts at the front (ZEN-280).
+Two things follow. The toast stack is built lazily on the window's first toast, so it
+inserts *below* a card that is already open. And a card is window-hosted, so nothing
+unmounts it implicitly: the `closeModal()` in `select` / `addTab` / `closeTab` is what
+keeps a card from outliving the tab it was opened over, and it owns its own gutter
+constraints (`reapplyModalLayout`) rather than inheriting the tile's.
+
 **Shell command completion is a background-tab signal.** libghostty decodes OSC 133 and emits
 `GHOSTTY_ACTION_COMMAND_FINISHED`; `GhosttySurface` converts its signed exit-code sentinel and
 nanosecond duration into `TerminalCommandResult`, then panes and drawers relay it through their tab.
@@ -1466,6 +1478,15 @@ layer behind the grid), so a repainted pane doesn't sit inside a ring of the old
 Every `ChromeTheme` role stays `Theme.current`: a program recolors its pane, never the frame
 around it. Foreground, cursor and palette changes are dropped, because the terminal draws
 those and no chrome surface repeats them.
+
+**A chrome surface inside a pane paints on the pane's own fill, not its own tint.** Below
+`background-alpha` a pane deliberately has no opaque fill: the clip stops filling so the grid
+can show through, and `RingFillView` paints the padding at the pane's alpha. The chrome's
+tints are alpha inks tuned for an opaque background, so the find bar's accent-at-0.14
+composited onto whatever was behind the *window* and read grey (ZEN-354). Every strip inside a
+pane now takes the same fill the ring paints, with its tint over it
+(`ChromeTheme.surface(tint:over:)`), pushed down by `PanelHostView.applyBackground` so an OSC
+11 repaint carries into it too.
 
 **The reported color is mirrored as-is, a reset included**, which is not the obvious choice.
 An OSC 111 reset arrives as an ordinary change carrying the theme's own background, so
