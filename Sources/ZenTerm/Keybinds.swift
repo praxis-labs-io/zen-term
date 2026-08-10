@@ -35,6 +35,7 @@ extension KeyInterceptor.ReservedChord {
         case .reloadConfig: return "reload_config"
         case .checkForUpdates: return "check_for_updates"
         case .reportIssue: return "report_issue"
+        case .newTool: return "new_tool"
         case .openDiffViewer: return "diff_viewer"
         // ghostty's own spelling for these three, so a keybind line pasted from a ghostty config
         // resolves rather than being dropped as unknown.
@@ -90,7 +91,7 @@ extension KeyInterceptor.ReservedChord {
             .prevTab, .nextTab, .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
             .prevPane, .nextPane,
             .toggleToolFloat, .toggleRepoPicker, .toggleCommandPalette, .openSettings,
-            .reloadConfig, .checkForUpdates, .reportIssue, .openDiffViewer, .resetFontSize,
+            .reloadConfig, .checkForUpdates, .reportIssue, .openDiffViewer, .newTool, .resetFontSize,
             .toggleScrollMode, .toggleSearch, .scrollToTop, .scrollToBottom,
             .findNext, .findPrevious, .searchSelection,
             .clearScreen, .selectAll, .scrollToSelection, .pasteSelection, .writeScreenFile,
@@ -131,7 +132,7 @@ extension KeyInterceptor.ReservedChord {
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
             .newTab, .newWindow, .prevTab, .nextTab, .selectTab,
             .fillScreen, .toggleBottomDrawer, .toggleRightDrawer,
-            .toggleRepoPicker, .toggleCommandPalette, .openDiffViewer, .openSettings:
+            .toggleRepoPicker, .toggleCommandPalette, .openDiffViewer, .newTool, .openSettings:
             return true
         }
     }
@@ -174,6 +175,7 @@ extension KeyInterceptor.ReservedChord {
         case "reload_config": self = .reloadConfig
         case "check_for_updates": self = .checkForUpdates
         case "report_issue": self = .reportIssue
+        case "new_tool": self = .newTool
         case "diff_viewer": self = .openDiffViewer
         case "increase_font_size": self = .increaseFontSize
         case "decrease_font_size": self = .decreaseFontSize

@@ -155,4 +155,32 @@ final class ModalZOrderTests: WindowTestCase {
         XCTAssertLessThan(
             card.frame.width, before.width, "a wider gutter has to shrink the open card with the tile")
     }
+
+    // MARK: the ⌘P route to the tool form (ZEN-286)
+
+    /// Settings was the only way to create a tool float. The palette command opens the same form in
+    /// its create state, and closing it must not conjure the Settings card the user never opened.
+    func test_newToolCommand_opensTheFormInCreateState_andClosesToNothing() throws {
+        let c = makeWindow()
+        let content = try XCTUnwrap(c.window.contentView)
+
+        c.handle(.newTool)
+
+        let form = try XCTUnwrap(
+            descendants(of: content).compactMap { $0 as? ToolFloatFormOverlay }.first,
+            "the New Tool command has to open the tool-float form")
+        let headers = descendants(of: form).compactMap { $0 as? NSTextField }.map(\.stringValue)
+        XCTAssertTrue(headers.contains("New Tool Float"), "in create state, not editing: \(headers)")
+
+        let cancel = try XCTUnwrap(
+            descendants(of: form).compactMap { $0 as? AppButton }.first { $0.title == "Cancel" })
+        cancel.onTap()
+
+        XCTAssertTrue(
+            descendants(of: content).compactMap { $0 as? SettingsOverlay }.isEmpty,
+            "cancelling hands back to where it came from, which from ⌘P is nothing")
+        XCTAssertTrue(
+            descendants(of: content).compactMap { $0 as? ToolFloatFormOverlay }.isEmpty,
+            "and the form itself is gone")
+    }
 }

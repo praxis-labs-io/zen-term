@@ -29,7 +29,7 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(
             names,
             [
-                "Open Workspace Picker", "Diff Viewer", "Settings…", "Reload Config", "Check for Updates",
+                "Open Workspace Picker", "Diff Viewer", "New Tool…", "Settings…", "Reload Config", "Check for Updates",
                 "Report an Issue…",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab",
@@ -140,11 +140,13 @@ final class CommandCatalogTests: XCTestCase {
     }
 
     func test_everyEntry_hasTitle_andShortcut() {
-        // Every palette command shows its glyph, except the two shipped deliberately unbound:
-        // Check for Updates (ZEN-20) and Report an Issue (ZEN-212) are the menu bar's errands.
+        // Every palette command shows its glyph, except the three shipped deliberately unbound:
+        // Check for Updates (ZEN-20) and Report an Issue (ZEN-212) are the menu bar's errands, and
+        // New Tool (ZEN-286) is a once-in-a-while errand that would spend a chord for nothing.
         let unbound: Set<String> = [
             KeyInterceptor.ReservedChord.checkForUpdates.actionToken,
             KeyInterceptor.ReservedChord.reportIssue.actionToken,
+            KeyInterceptor.ReservedChord.newTool.actionToken,
         ]
         for command in CommandCatalog.commands(tabCount: 9) {
             XCTAssertFalse(command.title.isEmpty)

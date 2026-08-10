@@ -1537,13 +1537,17 @@ final class WindowController: NSObject {
         builtToasts?.dismiss(toast)
     }
 
-    /// Open the tool-float add / edit form from the Tools section (`nil` adds, a value edits). Closes
-    /// the Settings card first — one modal slot — mirroring the picker → Add-Workspace hand-off. On
-    /// save or cancel it hands back to Settings → Tools (the section it was launched from).
+    /// Where the tool-float form hands back to when it closes. Launched from Settings → Tools the card
+    /// has to come back, or saving a float drops the user on a bare terminal from a place they were
+    /// mid-task in. Launched from ⌘P (ZEN-286) there is nothing behind it to restore.
+    private enum ToolFormReturn { case settings, none }
+
+    /// Open the tool-float add / edit form (`nil` adds, a value edits). Closes whatever card is up
+    /// first — one modal slot — mirroring the picker → Add-Workspace hand-off.
     ///
     /// `existingIDs` is the slug of every *other* float, which the form rejects a colliding title
     /// against; subtracting the edited float's own id is what lets a re-save keep its title.
-    private func openToolFloatForm(editing float: ToolFloat?) {
+    private func openToolFloatForm(editing float: ToolFloat?, returnTo: ToolFormReturn = .settings) {
         closeModal()
         let existingIDs = Set(GeneralConfig.current.floats.map(\.id)).subtracting(float.map { [$0.id] } ?? [])
         let originalID = float?.id
@@ -1552,8 +1556,10 @@ final class WindowController: NSObject {
             existingIDs: existingIDs,
             capturer: keybindCapturer,
             background: Theme.current.chrome.background.nsColor,
-            onSubmit: { [weak self] built in self?.submitToolFloat(built, replacing: originalID) },
-            onCancel: { [weak self] in self?.reopenSettingsOnTools() },
+            onSubmit: { [weak self] built in
+                self?.submitToolFloat(built, replacing: originalID, returnTo: returnTo)
+            },
+            onCancel: { [weak self] in self?.finishToolFloatForm(returnTo) },
             onDelete: float.map { existing in { [weak self] in self?.deleteToolFloat(existing) } }
         )
         presentModal(form, kind: .toolFloatForm)
@@ -1579,7 +1585,9 @@ final class WindowController: NSObject {
     /// entry, and keybind appear with no restart, then hand back to Settings → Tools. A write failure
     /// keeps the form up with a toast. `originalID` is the id before an edit — when a rename changed
     /// it, the old line is removed in the same write so the float moves rather than duplicating.
-    private func submitToolFloat(_ float: ToolFloat, replacing originalID: String?) {
+    private func submitToolFloat(
+        _ float: ToolFloat, replacing originalID: String?, returnTo: ToolFormReturn = .settings
+    ) {
         let removals: Set<String> = (originalID.map { $0 != float.id ? [$0] : [] }) ?? []
         do {
             try ConfigWriter.apply(floatUpserts: [float], floatRemovals: removals)
@@ -1591,7 +1599,15 @@ final class WindowController: NSObject {
             return
         }
         AppConfig.reload()
-        reopenSettingsOnTools()
+        finishToolFloatForm(returnTo)
+    }
+
+    /// Take the tool-float form down, restoring Settings → Tools when that is where it came from.
+    private func finishToolFloatForm(_ returnTo: ToolFormReturn) {
+        switch returnTo {
+        case .settings: reopenSettingsOnTools()
+        case .none: closeModal()
+        }
     }
 
     /// Persist a new float order (`floats` arrives in the user's intended order), then reload so the
@@ -1844,7 +1860,7 @@ final class WindowController: NSObject {
             }
             switch chord {
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
-                .openDiffViewer:
+                .openDiffViewer, .newTool:
                 closeModal()  // close the current card, then open the requested surface below
             case .selectTab, .prevTab, .nextTab:
                 // The diff viewer is a reading surface you live in, not a form waiting on an answer,
@@ -1881,7 +1897,8 @@ final class WindowController: NSObject {
                 .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom:
                 toastFloatBlocked()
                 return
-            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .openDiffViewer:
+            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .openDiffViewer,
+                .newTool:
                 floats.close()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab, .fillScreen,
                 .increaseFontSize, .decreaseFontSize, .resetFontSize, .selectAll:
@@ -1968,6 +1985,8 @@ final class WindowController: NSObject {
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
         case .reportIssue: openReportIssue()
+        // Settings was the only way to create a tool float; this is the same form, reached from ⌘P.
+        case .newTool: openToolFloatForm(editing: nil, returnTo: .none)
         case .openDiffViewer: openDiffViewer()
         }
     }
