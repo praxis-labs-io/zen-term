@@ -59,6 +59,9 @@ class PaletteOverlay: NSView, ModalOverlay {
     private let searchField = NSTextField()
     private let searchPlaceholder: String
     private let divider = NSView()
+    /// The same hairline under the footer's top edge, so the hint row reads as its own band the way
+    /// the search row does rather than floating over the end of the list.
+    private let footerDivider = NSView()
     private let rowsStack = NSStackView()
     private let scrollView = NSScrollView()
     private let emptyLabel: NSTextField
@@ -129,10 +132,12 @@ class PaletteOverlay: NSView, ModalOverlay {
         searchRow.spacing = 8
         searchRow.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
 
-        divider.wantsLayer = true
-        divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
-        divider.translatesAutoresizingMaskIntoConstraints = false
-        divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        for hairline in [divider, footerDivider] {
+            hairline.wantsLayer = true
+            hairline.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+            hairline.translatesAutoresizingMaskIntoConstraints = false
+            hairline.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        }
 
         // List: a flipped document view (top-down scroll coords) holding a vertical stack.
         rowsStack.orientation = .vertical
@@ -170,7 +175,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         footerRow.translatesAutoresizingMaskIntoConstraints = false
         footerRow.addSubview(footer)
 
-        let stack = NSStackView(views: [searchRow, divider, scrollView, footerRow])
+        let stack = NSStackView(views: [searchRow, divider, scrollView, footerDivider, footerRow])
         stack.orientation = .vertical
         stack.spacing = 0
         stack.alignment = .leading
@@ -202,6 +207,7 @@ class PaletteOverlay: NSView, ModalOverlay {
 
             searchRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             divider.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            footerDivider.widthAnchor.constraint(equalTo: stack.widthAnchor),
             scrollView.widthAnchor.constraint(equalTo: stack.widthAnchor),
             footerRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             footerRow.heightAnchor.constraint(equalToConstant: 34),
@@ -278,7 +284,9 @@ class PaletteOverlay: NSView, ModalOverlay {
         searchGlyph.textColor = chrome.ink(alpha: 0.4)
         searchField.textColor = chrome.foreground.nsColor
         applyPlaceholder()
-        divider.layer?.backgroundColor = chrome.ink(alpha: 0.08).cgColor
+        for hairline in [divider, footerDivider] {
+            hairline.layer?.backgroundColor = chrome.ink(alpha: 0.08).cgColor
+        }
         emptyLabel.textColor = chrome.ink(alpha: 0.4)
         footerHintLabels.forEach { $0.textColor = chrome.ink(alpha: 0.5) }
         footerKeycaps.forEach { $0.reapplyTheme() }
