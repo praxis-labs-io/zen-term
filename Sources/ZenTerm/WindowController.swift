@@ -207,6 +207,12 @@ final class WindowController: NSObject {
     /// place can hand back to it. Lives for one `handle(_:)` call, which clears it on entry.
     private var closingModalKind: ModalKind?
 
+    /// Where the tool-float form on screen hands back to. Kept beside the card rather than only in its
+    /// closure, because the form is itself in the gate's close list: pressing the New Tool Float chord
+    /// over an open form replaces it, and the replacement has to inherit the first one's way back
+    /// instead of dropping the user out of the Settings session it was opened from.
+    private var toolFormReturn: ToolFormReturn?
+
     /// The open modal card's gutter insets, retained for the same reason `floatGutter` is. Nil while
     /// no card is up.
     private var modalGutter:
@@ -1558,6 +1564,17 @@ final class WindowController: NSObject {
     ///
     /// `existingIDs` is the slug of every *other* float, which the form rejects a colliding title
     /// against; subtracting the edited float's own id is what lets a re-save keep its title.
+    /// Where a form opened by the `new_tool_float` chord hands back to: Settings when the gate just
+    /// closed it, and whatever the previous form was going to return to when the gate closed one of
+    /// those. Anything else has nothing to restore.
+    private func toolFormReturnForNewTool() -> ToolFormReturn {
+        switch closingModalKind {
+        case .settings: return .settings
+        case .toolFloatForm: return toolFormReturn ?? .none
+        default: return .none
+        }
+    }
+
     private func openToolFloatForm(editing float: ToolFloat?, returnTo: ToolFormReturn = .settings) {
         closeModal()
         let existingIDs = Set(GeneralConfig.current.floats.map(\.id)).subtracting(float.map { [$0.id] } ?? [])
@@ -1573,6 +1590,7 @@ final class WindowController: NSObject {
             onCancel: { [weak self] in self?.finishToolFloatForm(returnTo) },
             onDelete: float.map { existing in { [weak self] in self?.deleteToolFloat(existing) } }
         )
+        toolFormReturn = returnTo
         presentModal(form, kind: .toolFloatForm)
     }
 
@@ -1615,6 +1633,7 @@ final class WindowController: NSObject {
 
     /// Take the tool-float form down, restoring Settings → Tools when that is where it came from.
     private func finishToolFloatForm(_ returnTo: ToolFormReturn) {
+        toolFormReturn = nil
         switch returnTo {
         case .settings: reopenSettingsOnTools()
         case .none: closeModal()
@@ -2004,7 +2023,7 @@ final class WindowController: NSObject {
         // Settings was the only way to create a tool float; this is the same form, reached from ⌘P.
         // The chord is bindable, so it can be pressed with Settings already up: the gate above closed
         // that card, and cancelling has to put it back rather than drop the user on a bare terminal.
-        case .newTool: openToolFloatForm(editing: nil, returnTo: closingModalKind == .settings ? .settings : .none)
+        case .newTool: openToolFloatForm(editing: nil, returnTo: toolFormReturnForNewTool())
         case .openDiffViewer: openDiffViewer()
         }
     }

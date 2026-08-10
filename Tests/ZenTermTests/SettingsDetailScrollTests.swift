@@ -206,4 +206,30 @@ final class SettingsDetailScrollTests: WindowTestCase {
             spread, 40,
             "the row's place in the pane wandered by \(Int(spread))pt across six steps: \(scrolling)")
     }
+
+    /// Direction gating decides which edge a step aims at, but the stop still has to be on screen either
+    /// way. Gated on direction alone, a Down step onto a row above a hand-scrolled viewport moved
+    /// nothing: focus advanced off the top of the pane and Return would have fired a row nobody could
+    /// see.
+    func test_arrowingDownOntoARowAboveTheViewport_bringsItBack() throws {
+        let scroll = mountKeybinds()
+        let chips = descendants(of: scroll).compactMap { $0 as? KeybindChip }
+        let rows = descendants(of: scroll).compactMap { $0 as? KeybindRow }
+        let document = try XCTUnwrap(scroll.documentView)
+
+        // Focus near the top, then hand-scroll far past it, as a trackpad would.
+        window!.makeFirstResponder(chips[1])
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 600))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        XCTAssertFalse(
+            scroll.documentVisibleRect.intersects(chips[1].convert(chips[1].bounds, to: document)),
+            "premise: the focused row is off the top of the pane")
+
+        press(Self.downKey, times: 1)
+
+        let focused = try XCTUnwrap(rows.first { $0.chip === window!.firstResponder })
+        XCTAssertTrue(
+            scroll.documentVisibleRect.contains(focused.convert(focused.bounds, to: document)),
+            "the row focus moved to has to be on screen, whichever edge it came from")
+    }
 }

@@ -73,15 +73,14 @@ enum SettingsDetail {
     /// `scrollTarget` maps the destination stop to the view actually revealed (e.g. the whole row, so
     /// its inline message shows), which `KeyboardFocus.reveal` scrolls in.
     ///
-    /// Returns whether focus actually moved, so a caller can fall through when it didn't — Shift-Tab
-    /// at the first stop exits to the nav rather than dying there.
-    @discardableResult
+    /// A step with nowhere to go is a no-op: arrows clamp at the ends, and each section's `moveTab`
+    /// decides for itself whether Shift-Tab at the first stop exits to the nav, before calling here.
     static func moveFocus(
         stops: [NSView], from anchor: Int?, delta: Int, wrap: Bool = false,
         scrollTarget: (NSView) -> NSView
-    ) -> Bool {
+    ) {
         guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: stops.count, wrap: wrap)
-        else { return false }
+        else { return }
         let target = stops[next]
         target.window?.makeFirstResponder(target)
         // From the index it landed on, not from `delta`: Tab's wrap from the last stop back to the first
@@ -93,7 +92,6 @@ enum SettingsDetail {
             case nil: .unknown
             }
         KeyboardFocus.reveal(scrollTarget(target), among: stops, travelling: travel)
-        return true
     }
 
     /// Wrap a control in a full-width row that right-aligns it: a leading spacer takes the slack so

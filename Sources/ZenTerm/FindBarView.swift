@@ -123,6 +123,7 @@ final class FindBarView: NSView {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         applyFill()
+        field.applyThemedCaret()  // a field holding focus across the swap keeps the old ink otherwise
         glyph.contentTintColor = chrome.ink(alpha: 0.4)
         field.textColor = chrome.foreground.nsColor
         count.textColor = chrome.ink(alpha: 0.5)
@@ -151,6 +152,12 @@ final class FindBarView: NSView {
 }
 
 extension FindBarView: NSTextFieldDelegate {
+    /// A click focuses the field without going through `focusField`, and the field editor is shared per
+    /// window, so it arrives carrying whatever tint the last field left on it.
+    func controlTextDidBeginEditing(_ obj: Notification) {
+        field.applyThemedCaret()
+    }
+
     func controlTextDidChange(_ obj: Notification) {
         onChange?(field.stringValue)
     }

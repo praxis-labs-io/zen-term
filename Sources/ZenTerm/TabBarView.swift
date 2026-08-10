@@ -186,6 +186,7 @@ final class TabBarView: NSView {
     /// `Theme.current` on every access, not cached).
     func reapplyTheme() {
         tracer.backgroundColor = Theme.current.chrome.accent.nsColor.cgColor
+        chips.forEach { $0.reapplyTheme() }
         render(lastItems)
     }
 
@@ -449,13 +450,8 @@ final class TabBarView: NSView {
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
         /// Re-render this chip for its tab's current title, number, and active state.
-        ///
-        /// The hover fill is re-applied too. `setHover` returns early when the state is unchanged, so a
-        /// chip that survives a theme swap while hovered would otherwise keep the old theme's wash until
-        /// the pointer left it.
         func update(attributed: NSAttributedString, index: Int) {
             tabIndex = index
-            updateBackground()
             guard label.attributedStringValue != attributed else { return }
             label.attributedStringValue = attributed
             needsLayout = true
@@ -496,6 +492,13 @@ final class TabBarView: NSView {
         }
         override func otherMouseDown(with event: NSEvent) {
             if event.buttonNumber == 2 { onMiddleClick?() }  // middle-click closes
+        }
+
+        /// Re-apply the hover wash from the live theme. `setHover` returns early when the state is
+        /// unchanged, so a chip hovered across a theme swap would otherwise keep the old ink until the
+        /// pointer left it. Only the theme path needs this: a re-render doesn't change the color.
+        func reapplyTheme() {
+            updateBackground()
         }
 
         private func updateBackground() {

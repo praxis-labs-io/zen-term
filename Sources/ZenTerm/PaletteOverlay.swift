@@ -283,6 +283,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         CardChrome.reapplyTheme(to: card)
         searchGlyph.textColor = chrome.ink(alpha: 0.4)
         searchField.textColor = chrome.foreground.nsColor
+        searchField.applyThemedCaret()  // the field holds focus across the swap, so re-tint in place
         applyPlaceholder()
         for hairline in [divider, footerDivider] {
             hairline.layer?.backgroundColor = chrome.ink(alpha: 0.08).cgColor
@@ -492,6 +493,12 @@ class PaletteOverlay: NSView, ModalOverlay {
 }
 
 extension PaletteOverlay: NSTextFieldDelegate {
+    /// A click focuses the field without going through `focusInitialResponder`, and the field editor is
+    /// shared per window, so it arrives carrying whatever tint the last field left on it.
+    func controlTextDidBeginEditing(_ obj: Notification) {
+        searchField.applyThemedCaret()
+    }
+
     func controlTextDidChange(_ obj: Notification) {
         applyFilter(query: searchField.stringValue)
         reloadRows()  // resets the selection to the first selectable row

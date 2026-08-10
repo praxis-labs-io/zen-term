@@ -132,7 +132,11 @@ enum KeyboardFocus {
             top = padded.maxY + margin - viewport
         }
         if travelling != .down, revealTop - margin < top { top = revealTop - margin }
-        if padded.maxY > top + viewport { top = padded.maxY - viewport }  // the stop outranks the strip
+        // Whichever way focus travelled, the stop itself has to be on screen: the rules above only aim
+        // at the edge it arrives at, so a step that lands on a stop already off the *other* edge (Down
+        // onto a row above a hand-scrolled viewport) would otherwise move nothing at all.
+        if padded.maxY > top + viewport { top = padded.maxY - viewport }
+        if padded.minY < top { top = padded.minY }
         let clamped = min(max(0, top), max(0, document.frame.height - viewport))
         // Snapped to the backing store's pixel grid: `margin` is a third of the clip on a short pane, and
         // a fractional offset leaves every glyph in the pane drawn between two device pixels.
