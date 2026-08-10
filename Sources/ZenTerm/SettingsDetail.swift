@@ -84,7 +84,15 @@ enum SettingsDetail {
         else { return false }
         let target = stops[next]
         target.window?.makeFirstResponder(target)
-        KeyboardFocus.reveal(scrollTarget(target), among: stops)
+        // From the index it landed on, not from `delta`: Tab's wrap from the last stop back to the first
+        // is a `+1` that travels up the list.
+        let travel: KeyboardFocus.Travel =
+            switch anchor {
+            case .some(let from) where next < from: .up
+            case .some: .down
+            case nil: .unknown
+            }
+        KeyboardFocus.reveal(scrollTarget(target), among: stops, travelling: travel)
         return true
     }
 

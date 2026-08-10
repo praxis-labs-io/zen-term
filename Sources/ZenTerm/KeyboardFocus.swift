@@ -78,6 +78,12 @@ enum KeyboardFocus {
         return ((next % count) + count) % count  // Swift's % keeps the sign; normalize to 0..<count
     }
 
+    /// Which way focus travelled, which decides which edge the stop is arriving at. Without it the two
+    /// edge rules below both apply and fight: the one for the far edge pulls the list back while the
+    /// selection moves forwards. `unknown` is for a move with no direction (a list reloading, a row
+    /// re-revealed after a rebuild), where keeping the stop on screen is all that is asked.
+    enum Travel { case up, down, unknown }
+
     /// Scroll `stop` into its scroll view, along with the strip above it that belongs to it: the group
     /// caption or section header between it and the previous stop, or the document's top inset when
     /// nothing above is a stop. Revealing the stop alone parks that strip just off the top edge, so
@@ -91,7 +97,7 @@ enum KeyboardFocus {
     /// One position, computed and applied once. Revealing the strip and then the stop with two
     /// `scrollToVisible` calls reaches the same place in two hops, and padding a single rect on both
     /// sides makes the far edge pull the near one around.
-    static func reveal(_ stop: NSView, among stops: [NSView]) {
+    static func reveal(_ stop: NSView, among stops: [NSView], travelling: Travel = .unknown) {
         guard let scroll = stop.enclosingScrollView, let document = scroll.documentView else { return }
         // Frames are the geometry this reads, and a list that just reloaded its rows has stale ones.
         document.layoutSubtreeIfNeeded()
@@ -111,11 +117,14 @@ enum KeyboardFocus {
         let margin = min(84, viewport / 3)
         let revealTop = min(previousBottom, padded.minY)
         var top = scroll.contentView.bounds.minY
-        if padded.maxY + margin > top + viewport { top = padded.maxY + margin - viewport }  // down
-        // Only when the stop itself sits above the viewport. Gating on the strip instead scrolled the
-        // list backwards whenever the row above happened to be within `margin` of the top, including on
-        // a step that moved focus *down* to a row already in view.
-        if padded.minY < top { top = revealTop - margin }  // up: the strip comes with the stop
+        // One rule per direction, each firing on every step once the stop is inside `margin` of the edge
+        // it is arriving at, so a held arrow holds the stop at a steady offset while the list moves under
+        // it. Gating a rule on the stop having already left the viewport instead lets it climb a few rows
+        // and then throws it back by the whole margin, which reads as the selection bouncing.
+        if travelling != .up, padded.maxY + margin > top + viewport {
+            top = padded.maxY + margin - viewport
+        }
+        if travelling != .down, revealTop - margin < top { top = revealTop - margin }
         if padded.maxY > top + viewport { top = padded.maxY - viewport }  // the stop outranks the strip
         let clamped = min(max(0, top), max(0, document.frame.height - viewport))
         // Snapped to the backing store's pixel grid: `margin` is a third of the clip on a short pane, and

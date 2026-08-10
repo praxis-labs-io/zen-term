@@ -422,7 +422,7 @@ class PaletteOverlay: NSView, ModalOverlay {
             if isSelectable(at: i) {
                 selected = i
                 updateHighlight()
-                scrollSelectedToVisible()
+                scrollSelectedToVisible(travelling: step < 0 ? .up : .down)
                 return
             }
             i += step
@@ -442,10 +442,11 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// Settings section: the section header above a group's first row comes with it, and the row lands
     /// inside the list rather than flush against the edge it arrived at. The stops are the selectable
     /// rows, which is what makes the headers between them read as a header rather than a stop.
-    private func scrollSelectedToVisible() {
+    /// `travelling` is `.unknown` from a reload, where the selection was recomputed rather than moved.
+    private func scrollSelectedToVisible(travelling: KeyboardFocus.Travel = .unknown) {
         guard laidOutRows.indices.contains(selected) else { return }
         let stops = laidOutRows.indices.filter { isSelectable(at: $0) }.map { laidOutRows[$0].view }
-        KeyboardFocus.reveal(laidOutRows[selected].view, among: stops)
+        KeyboardFocus.reveal(laidOutRows[selected].view, among: stops, travelling: travelling)
     }
 
     /// Build the footer: a centered horizontal row of hints, each a keycap box + its label.

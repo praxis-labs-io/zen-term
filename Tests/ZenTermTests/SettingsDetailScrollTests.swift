@@ -179,4 +179,31 @@ final class SettingsDetailScrollTests: WindowTestCase {
             scroll.documentVisibleRect.minY, before,
             "a step that moves focus down must not move the list up")
     }
+
+    /// A held arrow has to hold the focused row at a steady place in the pane while the list moves under
+    /// it. Firing the up rule only once the row had already left the viewport let it climb several rows
+    /// and then threw it back by the whole margin, which reads as the selection bouncing around the top.
+    func test_walkingUp_keepsTheFocusedRowAtASteadyOffset() throws {
+        let scroll = mountKeybinds()
+        let chips = descendants(of: scroll).compactMap { $0 as? KeybindChip }
+        let rows = descendants(of: scroll).compactMap { $0 as? KeybindRow }
+        let document = try XCTUnwrap(scroll.documentView)
+
+        window!.makeFirstResponder(chips[chips.count - 1])
+        var offsets: [CGFloat] = []
+        for _ in 0..<12 {
+            press(Self.upKey, times: 1)
+            guard let focused = rows.first(where: { $0.chip === window!.firstResponder }) else { continue }
+            let top = focused.convert(focused.bounds, to: document).minY
+            offsets.append(top - scroll.documentVisibleRect.minY)
+        }
+
+        // Only the steps that actually scroll: the first few move focus up through rows already on
+        // screen, where the list correctly stays put.
+        let scrolling = offsets.suffix(6)
+        let spread = try XCTUnwrap(scrolling.max()) - (try XCTUnwrap(scrolling.min()))
+        XCTAssertLessThan(
+            spread, 40,
+            "the row's place in the pane wandered by \(Int(spread))pt across six steps: \(scrolling)")
+    }
 }
