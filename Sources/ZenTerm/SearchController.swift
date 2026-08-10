@@ -2,21 +2,15 @@ import AppKit
 import AppLog
 import TerminalKit
 
-/// Scrollback search: the find bar, the match count, and the keys that step through matches.
+/// Scrollback search: the find bar, the match count, and the keys that step through matches. The
+/// searching itself is libghostty's; this owns the bar, the needle, and the two-phase keyboard
+/// handoff around them.
 ///
-/// The searching itself is libghostty's. It matches, counts, tracks which match is selected, and
-/// paints every highlight through its own renderer. This type owns the bar, the needle, and the
-/// two-phase keyboard handoff around them.
+/// **Phase one** is typing: the bar holds first responder and the needle goes down on a debounce.
+/// **Phase two** starts at ⏎: first responder returns to the pane, scroll mode comes up, and
+/// `n`/`N` step through matches with the cursor following.
 ///
-/// **Phase one** is typing. The bar holds first responder, so every key is the field's and the
-/// needle goes down to the engine on a debounce. The bar shows a total, because the backend
-/// selects no match until it is asked to.
-///
-/// **Phase two** starts at ⏎. First responder goes back to the pane, scroll mode comes up, and
-/// `n`/`N` step through matches with the cursor following. The bar stays up and now reads which
-/// match of how many.
-///
-/// Per window and pointed at one panel, like scroll mode, and it ends for all the same reasons.
+/// Per window and pointed at one panel, like scroll mode, and it ends for the same reasons.
 @MainActor
 final class SearchController {
     /// A phase-two keystroke. Phase one has no decoder: the field owns every key it gets.
@@ -68,25 +62,18 @@ final class SearchController {
     private var selected: Int?
     private var debounce: DispatchWorkItem?
 
-    /// A needle the engine has not been told about yet, or nil once it has.
-    ///
-    /// The work item used to stand in for this, and it was wrong in both directions: cancelled but
-    /// left in place it claimed a needle was pending forever, and fired naturally it claimed the
-    /// same because nothing cleared it. Either way a commit re-sent a needle libghostty already had
-    /// (which it drops as unchanged) and cleared the state saying not to step again, so the reader
-    /// landed one match past the one they were watching. Holding the needle itself cannot desync
-    /// from whether the needle was sent.
+    /// A needle the engine has not been told about yet, or nil once it has. Holding the needle
+    /// itself cannot desync from whether it was sent, which a pending work item could: either state
+    /// of one made a commit re-send a needle libghostty already had and step the reader one match
+    /// past the one they were watching.
     private var unsent: String?
 
     /// Whether this needle has already been previewed. See `previewIfNothingVisible`.
     private var hasPreviewed = false
 
-    /// Whether a step has been asked for on this needle, answered or not.
-    ///
-    /// `selected` cannot stand in for this. It is a mirror of the backend's state and it lags: a
-    /// preview steps, libghostty paints the match, and the reader presses Return before the report
-    /// gets back. Branching on the mirror there steps a second time and lands them one match past
-    /// the one they were looking at.
+    /// Whether a step has been asked for on this needle, answered or not. `selected` cannot stand
+    /// in: it mirrors the backend and lags, so a Return arriving before the report gets back would
+    /// step a second time and land one match past the one they were looking at.
     private var didRequestSelection = false
 
     /// Whether the commit is what brought scroll mode up. Search leaves behind only what it
@@ -98,11 +85,9 @@ final class SearchController {
     private var didMoveViewport = false
 
     /// Fires when the bar goes up or comes down, and again on a commit, so the window can install
-    /// and remove its key hook without this type reaching into `KeyInterceptor`.
-    ///
-    /// The commit is not an open or a close: it is a phase change that takes first responder back,
-    /// and the unfocused render has to be re-asserted over what the responder chain just did. Read
-    /// this as "reconcile the mode state now" rather than as an active-only signal.
+    /// its key hook without this type reaching into `KeyInterceptor`. Read it as "reconcile the
+    /// mode state now": the commit is a phase change that takes first responder back, and the
+    /// unfocused render has to be re-asserted over what the responder chain just did.
     var onActiveChanged: ((Bool) -> Void)?
 
     init(scrollMode: ScrollModeController) {
@@ -114,13 +99,10 @@ final class SearchController {
     /// A selection as a needle: its first line, trimmed.
     ///
     /// **A needle is one line because everything downstream of it is.** The engine would match
-    /// across a line break, but the scan, the cursor and the landing are all per-row, so a
-    /// multi-line needle produced a count and highlights for matches nothing could navigate to.
-    /// Enforcing it here rather than pretending is the honest end of that.
-    ///
-    /// The field then shows exactly what will be searched, which is the whole of how a reader sees
-    /// this happened: a two-row drag puts one row in the bar. Trailing blanks go too, because a
-    /// selection reaching a row's end drags in the cells the program never painted.
+    /// across a line break, but the scan, the cursor and the landing are per-row, so a multi-line
+    /// needle counted and highlighted matches nothing could navigate to. The field then shows
+    /// exactly what will be searched. Trailing blanks go too, since a selection reaching a row's
+    /// end drags in cells the program never painted.
     private static func cleaned(_ seed: String) -> String {
         seed.split(whereSeparator: \.isNewline).first.map(String.init)?
             .trimmingCharacters(in: .whitespaces) ?? ""
@@ -154,15 +136,12 @@ final class SearchController {
         bar?.needle = seed
         showCount()
 
-        // The header goes up with the bar, and this is the reason the pane reflows once for the
-        // whole search rather than twice. Scroll mode raises the same header when a commit brings
-        // it up, and a second reflow there snaps the viewport toward the bottom, which throws away
-        // the match the reader was looking at. Raised here, the commit changes no geometry at all.
+        // Raised with the bar so the pane reflows once for the whole search: a second reflow at
+        // commit snaps the viewport toward the bottom and throws away the match being read.
         //
-        // It reads FIND rather than SCROLL because that is what is true: the bar owns the keyboard
-        // through phase one and none of scroll mode's keys are live yet. Saying SCROLL over a mode
-        // that takes no keys is the state the ⌘⇧S path was fixed to avoid. Only when scroll mode is
-        // not already up, because then the header is its own and says so correctly.
+        // It reads FIND rather than SCROLL because the bar owns the keyboard through phase one and
+        // none of scroll mode's keys are live yet. Skipped when scroll mode is already up, where
+        // the header is its own and says so correctly.
         if !scrollMode.isActive { panel.modeMeta = PanelMeta(title: "Find", action: .toggleSearch) }
 
         // The bar displaces the terminal, so the grid loses a row or two and reflows. Lay out
@@ -232,15 +211,12 @@ final class SearchController {
         surface?.stepSearch(step)
     }
 
-    /// Put the viewport back where the reader had it before the search moved it.
-    ///
-    /// Back to the bottom is what this usually means, because a search usually starts at a live
-    /// prompt. It is not the same rule, though: a reader who had already scrolled into a build log
-    /// before opening the bar gets that place back rather than being dumped at the live end.
+    /// Put the viewport back where the reader had it before the search moved it, which is usually
+    /// but not always the bottom: someone who had scrolled into a build log first gets that place
+    /// back rather than the live end.
     ///
     /// Only when a step took the viewport away, and only when the reader is not being left in a
-    /// scroll mode of their own: they are still reading, and the match is what they asked to be
-    /// shown.
+    /// scroll mode of their own, where the match is what they asked to see.
     private func restoreViewport() {
         guard didMoveViewport else { return }
         let readerOwnsScrollMode = scrollMode.isActive && !didStartScrollMode
@@ -410,15 +386,11 @@ final class SearchController {
     }
 
     /// Bring a match into view while the reader is still typing, but only when there is nothing to
-    /// see without it.
+    /// see without it: a needle whose matches are all in history counts up over a screen showing
+    /// none of them, which asks for a Return on faith.
     ///
-    /// A needle whose only matches are in history counts up in the bar over a screen showing none
-    /// of them, which asks the reader to press Return on faith. One step fixes that, and libghostty
-    /// scrolls the match into view itself.
-    ///
-    /// It deliberately does **not** run when the viewport already holds a match. Stepping then would
-    /// pull the screen off the answer that was already in front of them, which is the part of vim's
-    /// `incsearch` worth leaving out.
+    /// Deliberately does **not** run when the viewport already holds a match, since stepping would
+    /// pull the screen off the answer already in front of them.
     private func previewIfNothingVisible() {
         // Once per needle. `SEARCH_TOTAL` fires repeatedly as the engine works back through the
         // buffer, and a step on each report would drag the viewport through a match per report.
@@ -463,14 +435,10 @@ final class SearchController {
 
     /// Put scroll mode's cursor on the match the backend just selected.
     ///
-    /// **The backend never says where a match is.** It reports an index; the geometry goes to its
-    /// renderer and never crosses the C API. So the cell is found by reading the viewport back and
-    /// looking for the needle, which is inference rather than a lookup and can pick the wrong
-    /// occurrence when one screen holds several.
-    ///
-    /// That is a fair trade here only because the failure is visible: libghostty paints the match
-    /// it selected at the same time, so a disagreement is two markers on one screen and one `j`
-    /// fixes it. A silently wrong cursor would not be worth the keystrokes it saves.
+    /// **The backend never says where a match is**: it reports an index and the geometry never
+    /// crosses the C API. So the cell is inferred by reading the viewport back, which can pick the
+    /// wrong occurrence when one screen holds several. A fair trade only because libghostty paints
+    /// the match it selected, so a disagreement is two visible markers and one `j` fixes it.
     private func land(after step: TerminalSearchStep) {
         guard scrollMode.isActive, let surface else { return }
         let rows = (0..<(surface.cellMetrics?.rows ?? 0)).map { surface.text(viewportRow: $0) ?? "" }
@@ -493,14 +461,13 @@ final class SearchController {
 
     /// Where the selected match is, read off the viewport.
     ///
-    /// Direction is the whole of it. libghostty walks matches newest to oldest, so `next` moves
-    /// **up** the screen and `previous` down, and the nearest occurrence that way is the one it
-    /// just selected. Nothing that way on screen means it had to scroll to reach the match, and a
-    /// scroll parks the match's own row at the top of the viewport, so the topmost occurrence is
-    /// the answer. One rule covers both, with no viewport bookkeeping to drift.
+    /// Direction is the whole of it: libghostty walks matches newest to oldest, so `next` moves
+    /// **up** the screen and the nearest occurrence that way is the one it just selected. Nothing
+    /// that way means it scrolled to reach the match, which parks that row at the top, so the
+    /// topmost occurrence is the answer.
     ///
-    /// Case folding is ASCII-only, matching the engine's `std.ascii.indexOfIgnoreCase`. A match
-    /// that soft-wraps across two rows is not found, and the cursor stays where it is.
+    /// Case folding is ASCII-only, matching the engine. A match that soft-wraps across two rows is
+    /// not found and the cursor stays put.
     static func matchCell(
         needle: String, rows: [String], from cursor: ScrollCell, step: TerminalSearchStep,
         scrolled: Bool
