@@ -410,12 +410,13 @@ class SettingsFormSection: SettingsSection {
         let visible = stops.filter { !$0.isHidden }
         let window = visible.first?.window
         let anchor = visible.firstIndex { KeyboardFocus.isFocused($0, in: window) }
-        let moved = SettingsDetail.moveFocus(stops: visible, from: anchor, delta: delta) { [rows] target in
+        // Up at the first stop stays put, matching the list sections (Shortcuts, Tools, Workspaces).
+        // ZEN-217 added an exit here for a section whose first stop is a segmented row, before Left at
+        // the leftmost segment did it; two ways out that only some sections have reads as a section
+        // losing your place for no reason. Left is the way back, from every stop in every section.
+        SettingsDetail.moveFocus(stops: visible, from: anchor, delta: delta) { [rows] target in
             rows.first { target.isDescendant(of: $0) } ?? target
         }
-        // Up from the first stop has nowhere to go in the pane, so it returns to the nav rather than
-        // dead-ending — the non-mutating way back for a section whose first stop is a segmented row.
-        if !moved, delta < 0 { onExitToNav?() }
     }
 
     /// Tab traversal, which differs from the arrows at the ends: Tab wraps from the last stop back

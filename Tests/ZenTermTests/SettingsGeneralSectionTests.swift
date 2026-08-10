@@ -126,7 +126,11 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         XCTAssertEqual(exited, 0, "cycling within the control must not exit to the nav")
     }
 
-    func test_upFromFirstStop_exitsToNav() {
+    /// Up at the first stop holds, the way it does in Shortcuts, Tools and Workspaces. ZEN-217 made it
+    /// exit here, back when a segmented first row had no other way out; Left at the leftmost segment is
+    /// that way out now (see the test above), so the extra path only made this section lose your place
+    /// where the list sections keep it.
+    func test_upFromFirstStop_staysPut() {
         let notifications = mountSegments()[0]  // the first vertical stop in the section
         var exited = 0
         section?.onExitToNav = { exited += 1 }
@@ -134,6 +138,9 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         hostWindow?.makeFirstResponder(notifications)
         notifications.keyDown(with: arrow(Self.upKey))
 
-        XCTAssertEqual(exited, 1, "Up from the first stop returns to the nav instead of dead-ending")
+        XCTAssertEqual(exited, 0, "Up at the top of a section is a no-op, not a trip back to the nav")
+        XCTAssertTrue(
+            KeyboardFocus.isFocused(notifications, in: hostWindow),
+            "and focus stays on the row it was on")
     }
 }
