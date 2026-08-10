@@ -282,7 +282,7 @@
 #   increase_font_size  decrease_font_size  reset_font_size
 #   check_for_updates   (no default binding; bind a chord to reach it by keyboard)
 #   report_issue        (no default binding; also in the command palette and Help menu)
-#   new_tool            (no default binding; opens the new-tool form, also in the palette)
+#   new_tool_float      (no default binding; opens the form that adds one, also in the palette)
 #   toggle_float:<id>   (bind a second chord to one of your floats; `none` doesn't
 #                        apply here, since a float's chord is its own `key:` field)
 #
@@ -367,7 +367,7 @@
 # Three actions ship with no shortcut:
 #   check_for_updates    runs a manual update check
 #   report_issue         opens the Report an Issue composer
-#   new_tool             opens the form that adds a tool float
+#   new_tool_float       opens the form that adds a tool float
 #
 # The first two are menu-bar errands; the third is something you do once in a while, so it
 # spends no chord by default. All three are in the command palette, and take a chord here

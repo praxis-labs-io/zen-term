@@ -18,3 +18,6 @@ DerivedData/
 !/vendor/ghostty
 /Frameworks/GhosttyKit.xcframework
 /Sources/TerminalKit/Resources/ghostty-resources
+
+# Playwright MCP session artifacts (console logs, traces)
+.playwright-mcp/

@@ -161,7 +161,14 @@ final class FocusReportingTextView: NSTextView {
 
     /// Drawn while the view is empty. `NSTextView` has no placeholder of its own, and a label laid out
     /// over the view lands on its own insets rather than the text's: the caret sat on the first letter.
-    var placeholder = "" { didSet { needsDisplay = true } }
+    /// Also published to the accessibility tree: the label this replaced was static text VoiceOver
+    /// announced, and text painted in `draw` is invisible to it.
+    var placeholder = "" {
+        didSet {
+            setAccessibilityPlaceholderValue(placeholder)
+            needsDisplay = true
+        }
+    }
     var placeholderColor: NSColor = .clear { didSet { needsDisplay = true } }
 
     /// Where the placeholder draws: the origin the first glyph would take. The container origin covers

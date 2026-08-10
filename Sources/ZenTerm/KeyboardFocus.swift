@@ -112,7 +112,10 @@ enum KeyboardFocus {
         let revealTop = min(previousBottom, padded.minY)
         var top = scroll.contentView.bounds.minY
         if padded.maxY + margin > top + viewport { top = padded.maxY + margin - viewport }  // down
-        if revealTop - margin < top { top = revealTop - margin }  // up: the strip comes with the stop
+        // Only when the stop itself sits above the viewport. Gating on the strip instead scrolled the
+        // list backwards whenever the row above happened to be within `margin` of the top, including on
+        // a step that moved focus *down* to a row already in view.
+        if padded.minY < top { top = revealTop - margin }  // up: the strip comes with the stop
         if padded.maxY > top + viewport { top = padded.maxY - viewport }  // the stop outranks the strip
         let clamped = min(max(0, top), max(0, document.frame.height - viewport))
         // Snapped to the backing store's pixel grid: `margin` is a third of the clip on a short pane, and

@@ -183,4 +183,66 @@ final class ModalZOrderTests: WindowTestCase {
             descendants(of: content).compactMap { $0 as? ToolFloatFormOverlay }.isEmpty,
             "and the form itself is gone")
     }
+
+    // MARK: the review's findings
+
+    /// The card's rect is the tile region, and the tile's top carries the traffic-light clearance. Taking
+    /// the plain gutter for the top ran the card up under the window buttons and dimmed a strip that was
+    /// never part of the tile.
+    func test_theCardsTop_clearsTheWindowButtonsLikeTheTileDoes() throws {
+        let c = makeWindow()
+        let card = try openCard(in: c)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let content = try XCTUnwrap(c.window.contentView)
+
+        // Against the tile itself, not a constant: the card's whole job is to cover that region, and
+        // `container` is not the content view (it sits 2pt in), so a constant would encode that offset.
+        let tile = try XCTUnwrap(c.focusedPanelForTesting, "expected a mounted pane to measure against")
+        XCTAssertEqual(
+            card.convert(card.bounds, to: content).minY,
+            tile.convert(tile.bounds, to: content).minY, accuracy: 1,
+            "the card starts where the tile starts, not at the bare gutter")
+        XCTAssertGreaterThan(
+            ChromeMetrics.topInset, GeneralConfig.current.windowGutter,
+            "premise: window-chrome is on, so the tile's top is inset past the buttons")
+    }
+
+    /// A pending destructive confirm outranks opening a card. `handle` already gates every chord on it;
+    /// the Help menu reaches `openReportIssue` directly, and a card over a confirm leaves it both hidden
+    /// and unanswerable.
+    func test_reportIssue_isRefusedWhileAConfirmIsWaiting() throws {
+        let c = makeWindow()
+        var confirmed = 0
+        c.presentConfirm(
+            variant: .warning, title: "Close 2 panes", message: "This closes both.",
+            confirmLabel: "Close", onConfirm: { confirmed += 1 })
+
+        c.openReportIssue()
+
+        let content = try XCTUnwrap(c.window.contentView)
+        XCTAssertTrue(
+            descendants(of: content).compactMap { $0 as? ReportIssueOverlay }.isEmpty,
+            "the confirm has to be answered before a card can cover it")
+        XCTAssertTrue(c.isConfirmOpen, "and it is still up, waiting")
+        XCTAssertEqual(confirmed, 0)
+    }
+
+    /// The chord is bindable, so it can be pressed with Settings already up. The gate closes that card,
+    /// and cancelling has to put it back rather than drop the user on a bare terminal.
+    func test_newToolFromInsideSettings_handsBackToSettings() throws {
+        let c = makeWindow()
+        _ = try openCard(in: c)  // Settings
+
+        c.handle(.newTool)
+        let content = try XCTUnwrap(c.window.contentView)
+        let form = try XCTUnwrap(
+            descendants(of: content).compactMap { $0 as? ToolFloatFormOverlay }.first)
+        let cancel = try XCTUnwrap(
+            descendants(of: form).compactMap { $0 as? AppButton }.first { $0.title == "Cancel" })
+        cancel.onTap()
+
+        XCTAssertFalse(
+            descendants(of: content).compactMap { $0 as? SettingsOverlay }.isEmpty,
+            "cancelling returns to the card the chord closed")
+    }
 }

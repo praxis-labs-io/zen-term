@@ -97,7 +97,7 @@ final class TextAreaBoxTests: WindowTestCase {
     /// has to start on the same line. It didn't: the field's text lands 7pt in, the text area's 14 (a
     /// 6pt scroll inset, a 3pt container inset, and the layout manager's 5pt line fragment padding,
     /// which no constraint in the file mentions).
-    func test_textStartsWhereAFieldBoxsTextStarts() throws {
+    func test_textStartsAtTheSameInsetAsAFieldBox() throws {
         let field = FieldBox(placeholder: "Title")
         let area = TextAreaBox(placeholder: "What went wrong")
         let window = NSWindow(
@@ -124,5 +124,15 @@ final class TextAreaBoxTests: WindowTestCase {
         XCTAssertEqual(
             areaTextX, fieldTextX, accuracy: 0.5,
             "the text area's text starts \(areaTextX)pt in, the field's \(fieldTextX)pt")
+    }
+
+    /// The placeholder moved from a label into `draw`, which VoiceOver cannot see. The text view has to
+    /// carry it as its accessibility placeholder instead, or the one text area in the app is unlabeled.
+    func test_placeholder_isAnnouncedToVoiceOver() {
+        let box = TextAreaBox(placeholder: "What went wrong")
+
+        XCTAssertEqual(
+            box.textView.accessibilityPlaceholderValue() as? String, "What went wrong",
+            "a placeholder painted in draw is invisible to the accessibility tree on its own")
     }
 }

@@ -1,7 +1,0 @@
-[ 3211913ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://us.i.posthog.com/flags/?v=2&_=1786289424633&ver=1.405.2&compression=base64:0
-[ 3511915ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://us.i.posthog.com/flags/?v=2&_=1786289724635&ver=1.405.2&compression=base64:0
-[ 3811918ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://us.i.posthog.com/flags/?v=2&_=1786290024639&ver=1.405.2&compression=base64:0
-[ 4111921ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://us.i.posthog.com/flags/?v=2&_=1786290324642&ver=1.405.2&compression=base64:0
-[ 4411924ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://us.i.posthog.com/flags/?v=2&_=1786290624645&ver=1.405.2&compression=base64:0
-[ 4711924ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://us.i.posthog.com/flags/?v=2&_=1786290924646&ver=1.405.2&compression=base64:0
-[ 5011929ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://us.i.posthog.com/flags/?v=2&_=1786291224650&ver=1.405.2&compression=base64:0

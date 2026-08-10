@@ -220,4 +220,5 @@ final class TabBarViewTests: WindowTestCase {
         tabBar.scrollToForTesting(x: 80)  // drag the strip rightward
         XCTAssertTrue(tabBar.isLeadingFadedForTesting, "scrolling tabs off the left must fade that edge")
     }
+
 }

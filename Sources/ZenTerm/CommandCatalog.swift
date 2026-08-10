@@ -57,7 +57,7 @@ enum CommandCatalog {
         case .checkForUpdates: return config("Check for Updates", glyph, chord)
         case .reportIssue: return help("Report an Issue…", glyph, chord)
         case .openDiffViewer: return tool("Diff Viewer", glyph, chord)
-        case .newTool: return tool("New Tool…", glyph, chord)
+        case .newTool: return tool("New Tool Float…", glyph, chord)
         case .increaseFontSize: return window("Increase Font Size", glyph, chord)
         case .decreaseFontSize: return window("Decrease Font Size", glyph, chord)
         case .resetFontSize: return window("Reset Font Size", glyph, chord)

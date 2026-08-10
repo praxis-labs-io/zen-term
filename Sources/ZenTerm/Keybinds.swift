@@ -35,7 +35,7 @@ extension KeyInterceptor.ReservedChord {
         case .reloadConfig: return "reload_config"
         case .checkForUpdates: return "check_for_updates"
         case .reportIssue: return "report_issue"
-        case .newTool: return "new_tool"
+        case .newTool: return "new_tool_float"
         case .openDiffViewer: return "diff_viewer"
         // ghostty's own spelling for these three, so a keybind line pasted from a ghostty config
         // resolves rather than being dropped as unknown.
@@ -175,7 +175,7 @@ extension KeyInterceptor.ReservedChord {
         case "reload_config": self = .reloadConfig
         case "check_for_updates": self = .checkForUpdates
         case "report_issue": self = .reportIssue
-        case "new_tool": self = .newTool
+        case "new_tool_float": self = .newTool
         case "diff_viewer": self = .openDiffViewer
         case "increase_font_size": self = .increaseFontSize
         case "decrease_font_size": self = .decreaseFontSize

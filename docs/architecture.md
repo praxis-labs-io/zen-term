@@ -1030,9 +1030,8 @@ every chord that is not its own toggle or another surface's toggle is dropped: a
 palette, a form, or a confirm is mid-question, and acting on a chord behind it would
 answer by walking away. The diff viewer is the exception for tab chords (⌘1-9, ⌘[,
 ⌘]), because it is a reading surface you live in rather than a question. It cannot
-ride the switch the way a tool float does, since a card is tab-hosted
-(`presentTileOverlay`) and unmounts with its tab, so it closes and the switch
-happens. Each tab keeps its own `DiffViewerSession` (ZEN-298), so ⌘D on the far side
+ride the switch the way a tool float does: the diff it shows belongs to the tab it
+was opened from, so `closeModal()` takes it down and the switch happens. Each tab keeps its own `DiffViewerSession` (ZEN-298), so ⌘D on the far side
 comes back where that tab left off.
 
 **The float stage speaks rather than swallowing.** A pane command (nav, split,

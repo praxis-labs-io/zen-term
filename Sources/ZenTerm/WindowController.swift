@@ -203,6 +203,10 @@ final class WindowController: NSObject {
             bottom: NSLayoutConstraint
         )?
 
+    /// What kind of card the chord gate closed to open something else, so the surface opening in its
+    /// place can hand back to it. Lives for one `handle(_:)` call, which clears it on entry.
+    private var closingModalKind: ModalKind?
+
     /// The open modal card's gutter insets, retained for the same reason `floatGutter` is. Nil while
     /// no card is up.
     private var modalGutter:
@@ -865,31 +869,6 @@ final class WindowController: NSObject {
     /// below the tab strip, the dock, and the toast stack. That last one is the reason this isn't
     /// a plain top-of-stack `addSubview`: the ⌘W guard toast ("Close btop first, then ⌘W")
     /// fires precisely while a card is up, and a card stacked over the toasts would swallow it.
-    /// Host a modal card at window level, over the active tab's tile region, at the FRONT of the
-    /// stack — above the toast stack (ZEN-280). A card owns the keyboard and dims the tile behind it,
-    /// so a passive notice landing on top of it reads as broken. Tool floats deliberately stay below
-    /// the toasts (see `presentWindowFloat`): the ⌘W guard toast fires while a float is open and is
-    /// telling you to close that float, so it has to be readable. A modal is never in that position.
-    ///
-    /// Same rect as a float, and for the same reason: it is the tile region flattened, so a card's
-    /// dimming backdrop covers exactly that region. The insets are retained so a live `window-gutter`
-    /// edit re-insets an OPEN card (`reapplyModalLayout`) — hosted inside a tab it got that for free
-    /// from the tile's own constraints.
-    private func presentWindowModal(_ overlay: NSView) {
-        overlay.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(overlay)  // front of the stack, so it clears the toasts
-        let gutter = ChromeMetrics.windowGutter
-        let insets = (
-            leading: overlay.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: gutter),
-            trailing: overlay.trailingAnchor.constraint(
-                equalTo: container.trailingAnchor, constant: -gutter),
-            top: overlay.topAnchor.constraint(equalTo: container.topAnchor, constant: gutter),
-            bottom: overlay.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -gutter)
-        )
-        modalGutter = insets
-        NSLayoutConstraint.activate([insets.leading, insets.trailing, insets.top, insets.bottom])
-    }
-
     private func presentWindowFloat(_ overlay: NSView) {
         overlay.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(overlay, positioned: .below, relativeTo: tabBar)
@@ -905,6 +884,34 @@ final class WindowController: NSObject {
             bottom: overlay.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -gutter)
         )
         floatGutter = insets
+        NSLayoutConstraint.activate([insets.leading, insets.trailing, insets.top, insets.bottom])
+    }
+
+    /// Host a modal card at window level, over the active tab's tile region, at the FRONT of the
+    /// stack — above the toast stack (ZEN-280). A card owns the keyboard and dims the tile behind it,
+    /// so a passive notice landing on top of it reads as broken. Tool floats deliberately stay below
+    /// the toasts (see `presentWindowFloat`): the ⌘W guard toast fires while a float is open and is
+    /// telling you to close that float, so it has to be readable. A modal is never in that position.
+    ///
+    /// The rect is the tile region flattened, so a card's dimming backdrop covers exactly that region:
+    /// `windowGutter` on three sides and `ChromeMetrics.topInset` on top, which is the gutter plus the
+    /// traffic-light clearance the tile itself carries. Taking the gutter for the top instead runs the
+    /// card up under the window buttons and dims a strip that was never part of the tile. The insets
+    /// are retained so a live `window-gutter` edit re-insets an OPEN card (`reapplyModalLayout`) —
+    /// hosted inside a tab it got that for free from the tile's own constraints.
+    private func presentWindowModal(_ overlay: NSView) {
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(overlay)  // front of the stack, so it clears the toasts
+        let gutter = ChromeMetrics.windowGutter
+        let insets = (
+            leading: overlay.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: gutter),
+            trailing: overlay.trailingAnchor.constraint(
+                equalTo: container.trailingAnchor, constant: -gutter),
+            top: overlay.topAnchor.constraint(
+                equalTo: container.topAnchor, constant: ChromeMetrics.topInset),
+            bottom: overlay.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -gutter)
+        )
+        modalGutter = insets
         NSLayoutConstraint.activate([insets.leading, insets.trailing, insets.top, insets.bottom])
     }
 
@@ -927,7 +934,7 @@ final class WindowController: NSObject {
         let gutter = ChromeMetrics.windowGutter
         modalGutter.leading.constant = gutter
         modalGutter.trailing.constant = -gutter
-        modalGutter.top.constant = gutter
+        modalGutter.top.constant = ChromeMetrics.topInset  // the tile's top carries traffic-light clearance
         modalGutter.bottom.constant = -gutter
     }
 
@@ -1162,6 +1169,10 @@ final class WindowController: NSObject {
     /// the GitHub issue or cancelling just closes back to the terminal (Settings doesn't reopen).
     /// Reusing the single modal slot means opening it from Settings dismisses Settings first.
     func openReportIssue() {
+        // Reached from the Help menu as well as a chord, and the menu bypasses the `isConfirmOpen`
+        // gate in `handle`. A card would paint over a pending destructive confirm and leave it both
+        // hidden and unanswerable, so the confirm wins the same way it does for a chord.
+        if isConfirmOpen { return }
         if modal?.kind == .reportIssue { closeModal(); return }
         if modal != nil { closeModal() }  // single slot — dismiss whatever's up (e.g. Settings) first
         let overlay = ReportIssueOverlay(
@@ -1836,6 +1847,10 @@ final class WindowController: NSObject {
 
     func handle(_ chord: KeyInterceptor.ReservedChord) {
         guard !tabs.order.isEmpty else { return }  // window tearing down after last tab closed
+        // Written by the card gate below and read by the action that opens in its place, both later in
+        // this call. Cleared here so a value can never survive into a later keypress and hand a form
+        // back to a card that closed minutes ago.
+        closingModalKind = nil
         let active = activeController
         // The close confirm is modal over the window: while it's up every chord is
         // swallowed. Its Return/Esc/button answers go through the toast's own key
@@ -1861,6 +1876,7 @@ final class WindowController: NSObject {
             switch chord {
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
                 .openDiffViewer, .newTool:
+                closingModalKind = modal.kind  // the surface opening below may have to hand back to it
                 closeModal()  // close the current card, then open the requested surface below
             case .selectTab, .prevTab, .nextTab:
                 // The diff viewer is a reading surface you live in, not a form waiting on an answer,
@@ -1986,7 +2002,9 @@ final class WindowController: NSObject {
         case .openSettings: openSettings()
         case .reportIssue: openReportIssue()
         // Settings was the only way to create a tool float; this is the same form, reached from ⌘P.
-        case .newTool: openToolFloatForm(editing: nil, returnTo: .none)
+        // The chord is bindable, so it can be pressed with Settings already up: the gate above closed
+        // that card, and cancelling has to put it back rather than drop the user on a bare terminal.
+        case .newTool: openToolFloatForm(editing: nil, returnTo: closingModalKind == .settings ? .settings : .none)
         case .openDiffViewer: openDiffViewer()
         }
     }

@@ -156,4 +156,27 @@ final class SettingsDetailScrollTests: WindowTestCase {
         let gap = scroll.documentVisibleRect.maxY - focused.convert(focused.bounds, to: document).maxY
         XCTAssertGreaterThan(gap, 24, "the row it scrolled to keeps room below it, not just its padding")
     }
+
+    /// The reveal's up rule was gated on the strip above the stop rather than on the stop itself, so a
+    /// Down step onto a row already in view could pull the list backwards by as much as the margin.
+    func test_arrowingDownOntoAVisibleRow_neverScrollsBackwards() throws {
+        let scroll = mountKeybinds()
+        let chips = descendants(of: scroll).compactMap { $0 as? KeybindChip }
+
+        // Hand-scroll mid-list, then focus a chip sitting near the top of the pane, the state a mouse
+        // user lands in before reaching for the arrows.
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 400))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        let document = try XCTUnwrap(scroll.documentView)
+        let nearTop = try XCTUnwrap(
+            chips.first { $0.convert($0.bounds, to: document).minY > scroll.documentVisibleRect.minY })
+        window!.makeFirstResponder(nearTop)
+        let before = scroll.documentVisibleRect.minY
+
+        press(Self.downKey, times: 1)
+
+        XCTAssertGreaterThanOrEqual(
+            scroll.documentVisibleRect.minY, before,
+            "a step that moves focus down must not move the list up")
+    }
 }
