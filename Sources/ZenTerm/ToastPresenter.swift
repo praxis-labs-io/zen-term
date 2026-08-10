@@ -12,13 +12,18 @@ final class ToastPresenter {
     private let topConstraint: NSLayoutConstraint
     private let trailingConstraint: NSLayoutConstraint
 
-    init(host: NSView, topInset: CGFloat, trailingInset: CGFloat, dismissAfter: TimeInterval = 4) {
+    /// `below` is a view the stack must not cover — a modal card already open when the first toast of
+    /// the window's life fires. Nil puts the stack at the front, above the mounted canvas.
+    init(
+        host: NSView, below: NSView? = nil, topInset: CGFloat, trailingInset: CGFloat,
+        dismissAfter: TimeInterval = 4
+    ) {
         self.dismissAfter = dismissAfter
         stack.orientation = .vertical
         stack.alignment = .trailing  // new toasts stack downward, right-aligned
         stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
-        host.addSubview(stack)  // added last → above the mounted canvas
+        host.addSubview(stack, positioned: below == nil ? .above : .below, relativeTo: below)
         topConstraint = stack.topAnchor.constraint(equalTo: host.topAnchor, constant: topInset)
         trailingConstraint = stack.trailingAnchor.constraint(
             equalTo: host.trailingAnchor, constant: -trailingInset)

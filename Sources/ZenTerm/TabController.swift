@@ -347,20 +347,6 @@ final class TabController: NSObject {
         }
     }
 
-    /// Present a modal overlay filling the tab's tile region — same scoping as the
-    /// tool floats (pinned to `content`, above the canvas and any drawers). Used by
-    /// `WindowController` to host the window-level `⌘P` repo picker over the active tab.
-    func presentTileOverlay(_ overlay: NSView) {
-        overlay.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(overlay)
-        NSLayoutConstraint.activate([
-            overlay.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            overlay.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            overlay.topAnchor.constraint(equalTo: content.topAnchor),
-            overlay.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-        ])
-    }
-
     /// Drop the tab's unified focus (halo + first responder) — the window's modal float is taking
     /// it. `focusedPanel` is deliberately left alone, so closing the card restores focus to
     /// whichever panel had it.

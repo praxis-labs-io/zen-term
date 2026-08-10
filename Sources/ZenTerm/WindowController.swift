@@ -49,8 +49,12 @@ final class WindowController: NSObject {
     private var builtToasts: ToastPresenter?
     private var toasts: ToastPresenter {
         if let builtToasts { return builtToasts }
+        // Below an open card, not on top of it: the stack is built on the first toast of the window's
+        // life, which can be a toast fired while a card is already up (ZEN-280). A card opened later
+        // lands above the stack on its own, being added at the front.
         let presenter = ToastPresenter(
-            host: container, topInset: Self.toastTopInset, trailingInset: Self.toastTrailingInset)
+            host: container, below: modal?.overlay, topInset: Self.toastTopInset,
+            trailingInset: Self.toastTrailingInset)
         builtToasts = presenter
         return presenter
     }
@@ -194,6 +198,14 @@ final class WindowController: NSObject {
     /// The shown float card's gutter insets, retained so a live `window-gutter` change re-insets
     /// it (`reapplyFloatLayout`). Nil until the first float opens.
     private var floatGutter:
+        (
+            leading: NSLayoutConstraint, trailing: NSLayoutConstraint, top: NSLayoutConstraint,
+            bottom: NSLayoutConstraint
+        )?
+
+    /// The open modal card's gutter insets, retained for the same reason `floatGutter` is. Nil while
+    /// no card is up.
+    private var modalGutter:
         (
             leading: NSLayoutConstraint, trailing: NSLayoutConstraint, top: NSLayoutConstraint,
             bottom: NSLayoutConstraint
@@ -429,6 +441,7 @@ final class WindowController: NSObject {
                     self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
                     for controller in self.controllers.values { controller.reapplyChromeLayout() }
                     self.reapplyFloatLayout()  // a gutter change must re-inset an OPEN card too
+                    self.reapplyModalLayout()
                     // Only if a toast has already been shown — see `builtToasts`.
                     self.builtToasts?.reapplyInsets(
                         topInset: Self.toastTopInset, trailingInset: Self.toastTrailingInset)
@@ -838,22 +851,45 @@ final class WindowController: NSObject {
 
     /// Host a tool-float card at window level, over the active tab's tile region (ZEN-141).
     ///
-    /// Hosting on `container` — the same window-level layer `ToastPresenter` uses — rather than
-    /// the active tab's `presentTileOverlay` is the whole point: a tab-hosted card unmounts with
-    /// its tab, which is exactly why `closeModal()` has to run before any tab-bar op. A float has
-    /// to survive a tab switch, so it can't live there.
+    /// Hosting on `container` — the same window-level layer `ToastPresenter` uses — rather than inside
+    /// the active tab is the whole point: a tab-hosted card unmounts with its tab, and a float has to
+    /// survive a tab switch.
     ///
-    /// The constraints reproduce `presentTileOverlay`'s rect exactly, because `SurfaceFloatOverlay`
-    /// resolves its width/height fractions against its OWN bounds — the host rect *is* the
-    /// geometry, and a naive pin to `container` would silently resize every float and slide it over
-    /// the tab bar. A tab's canvas is `container` minus the tab-bar row (`pinCanvas`), and its
-    /// `content` insets that by `windowGutter` on all four sides; this is that composition,
-    /// flattened.
+    /// The constraints reproduce the tile region exactly, because `SurfaceFloatOverlay` resolves its
+    /// width/height fractions against its OWN bounds — the host rect *is* the geometry, and a naive pin
+    /// to `container` would silently resize every float and slide it over the tab bar. A tab's canvas
+    /// is `container` minus the tab-bar row (`pinCanvas`), and its `content` insets that by
+    /// `windowGutter` on all four sides; this is that composition, flattened.
     ///
     /// Inserted below `tabBar` — above every canvas (`pinCanvas` keeps those at the back) but
     /// below the tab strip, the dock, and the toast stack. That last one is the reason this isn't
     /// a plain top-of-stack `addSubview`: the ⌘W guard toast ("Close btop first, then ⌘W")
     /// fires precisely while a card is up, and a card stacked over the toasts would swallow it.
+    /// Host a modal card at window level, over the active tab's tile region, at the FRONT of the
+    /// stack — above the toast stack (ZEN-280). A card owns the keyboard and dims the tile behind it,
+    /// so a passive notice landing on top of it reads as broken. Tool floats deliberately stay below
+    /// the toasts (see `presentWindowFloat`): the ⌘W guard toast fires while a float is open and is
+    /// telling you to close that float, so it has to be readable. A modal is never in that position.
+    ///
+    /// Same rect as a float, and for the same reason: it is the tile region flattened, so a card's
+    /// dimming backdrop covers exactly that region. The insets are retained so a live `window-gutter`
+    /// edit re-insets an OPEN card (`reapplyModalLayout`) — hosted inside a tab it got that for free
+    /// from the tile's own constraints.
+    private func presentWindowModal(_ overlay: NSView) {
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(overlay)  // front of the stack, so it clears the toasts
+        let gutter = ChromeMetrics.windowGutter
+        let insets = (
+            leading: overlay.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: gutter),
+            trailing: overlay.trailingAnchor.constraint(
+                equalTo: container.trailingAnchor, constant: -gutter),
+            top: overlay.topAnchor.constraint(equalTo: container.topAnchor, constant: gutter),
+            bottom: overlay.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -gutter)
+        )
+        modalGutter = insets
+        NSLayoutConstraint.activate([insets.leading, insets.trailing, insets.top, insets.bottom])
+    }
+
     private func presentWindowFloat(_ overlay: NSView) {
         overlay.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(overlay, positioned: .below, relativeTo: tabBar)
@@ -881,6 +917,18 @@ final class WindowController: NSObject {
         floatGutter.trailing.constant = -gutter
         floatGutter.top.constant = gutter
         floatGutter.bottom.constant = -gutter
+    }
+
+    /// The same re-inset for an open modal card. Window-hosted since ZEN-280, so it no longer inherits
+    /// the tile's gutter: without this a live `window-gutter` edit resizes every tab behind an open
+    /// card and leaves the card itself at the old inset.
+    private func reapplyModalLayout() {
+        guard let modalGutter else { return }
+        let gutter = ChromeMetrics.windowGutter
+        modalGutter.leading.constant = gutter
+        modalGutter.trailing.constant = -gutter
+        modalGutter.top.constant = gutter
+        modalGutter.bottom.constant = -gutter
     }
 
     // MARK: tab ops
@@ -959,7 +1007,9 @@ final class WindowController: NSObject {
     }
 
     private func select(_ id: TabID, slideFrom: SlideEdge? = nil) {
-        closeModal()  // a tab-bar click must not orphan a modal palette
+        // Load-bearing since ZEN-280: a card is window-hosted, so nothing unmounts it implicitly and
+        // it would otherwise stay open over the tab you land on.
+        closeModal()
         guard tabs.order.contains(id), id != tabs.activeID else { return }
         Log.info("tab switched", category: .tabs)
         closeFloatForTabChange()
@@ -1020,7 +1070,7 @@ final class WindowController: NSObject {
         // surface already SHOWN is a different case, handled by the chord gate.
         floats.cancelPendingOpen()
         pendingModal = nil
-        active.presentTileOverlay(overlay)
+        presentWindowModal(overlay)
         if kind.stealsHalo { active.yieldFocusToFloat() }  // pane drops its glow; the card wears it
         modal = (overlay, kind)
         overlay.focusInitialResponder()
@@ -1037,6 +1087,7 @@ final class WindowController: NSObject {
         guard let overlay = modal?.overlay else { return }
         stopDiffWatcher()
         modal = nil
+        modalGutter = nil  // the constraints die with the view; don't re-inset a card on its way out
         overlay.animateOut { overlay.removeFromSuperview() }
         restoreFocusToActive()
         renderDock()
@@ -1798,10 +1849,10 @@ final class WindowController: NSObject {
             case .selectTab, .prevTab, .nextTab:
                 // The diff viewer is a reading surface you live in, not a form waiting on an answer,
                 // so a tab switch acts instead of being swallowed — the same as with a tool float
-                // open (see the `floats.isOpen` block below). It can't *ride* the switch the way a
-                // float does, because a card is tab-hosted (`presentTileOverlay`) and unmounts with
-                // its tab, so it closes. ZEN-298 keeps each tab's session, so ⌘D in the tab you land
-                // on comes back where that tab left off.
+                // open (see the `floats.isOpen` block below). It closes rather than riding the switch
+                // the way a float does: the diff it shows belongs to the tab it was opened from, and
+                // ZEN-298 keeps each tab's session, so ⌘D in the tab you land on comes back where that
+                // tab left off.
                 //
                 // Every other card stays swallowed: a palette, a form, or a confirm is mid-question,
                 // and answering it by walking away is not the same act as leaving a diff open.
