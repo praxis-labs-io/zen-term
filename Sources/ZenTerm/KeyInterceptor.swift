@@ -41,6 +41,7 @@ final class KeyInterceptor {
         case checkForUpdates  // run a manual Sparkle update check (unbound by default; ZEN-20)
         case reportIssue  // open the Report an Issue composer (unbound by default; ZEN-212)
         case openDiffViewer  // open the diff viewer overlay (ZEN-226)
+        case newTool  // open the tool-float form in its create state (unbound by default; ZEN-286)
         // Terminal font size, app-wide (ZEN-224). Taken over from libghostty, which binds the same
         // chords itself but applies each to the one focused surface.
         case increaseFontSize, decreaseFontSize, resetFontSize

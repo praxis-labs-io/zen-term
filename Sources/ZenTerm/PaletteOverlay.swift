@@ -59,6 +59,9 @@ class PaletteOverlay: NSView, ModalOverlay {
     private let searchField = NSTextField()
     private let searchPlaceholder: String
     private let divider = NSView()
+    /// The same hairline under the footer's top edge, so the hint row reads as its own band the way
+    /// the search row does rather than floating over the end of the list.
+    private let footerDivider = NSView()
     private let rowsStack = NSStackView()
     private let scrollView = NSScrollView()
     private let emptyLabel: NSTextField
@@ -129,10 +132,12 @@ class PaletteOverlay: NSView, ModalOverlay {
         searchRow.spacing = 8
         searchRow.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
 
-        divider.wantsLayer = true
-        divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
-        divider.translatesAutoresizingMaskIntoConstraints = false
-        divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        for hairline in [divider, footerDivider] {
+            hairline.wantsLayer = true
+            hairline.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+            hairline.translatesAutoresizingMaskIntoConstraints = false
+            hairline.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        }
 
         // List: a flipped document view (top-down scroll coords) holding a vertical stack.
         rowsStack.orientation = .vertical
@@ -170,7 +175,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         footerRow.translatesAutoresizingMaskIntoConstraints = false
         footerRow.addSubview(footer)
 
-        let stack = NSStackView(views: [searchRow, divider, scrollView, footerRow])
+        let stack = NSStackView(views: [searchRow, divider, scrollView, footerDivider, footerRow])
         stack.orientation = .vertical
         stack.spacing = 0
         stack.alignment = .leading
@@ -202,6 +207,7 @@ class PaletteOverlay: NSView, ModalOverlay {
 
             searchRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             divider.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            footerDivider.widthAnchor.constraint(equalTo: stack.widthAnchor),
             scrollView.widthAnchor.constraint(equalTo: stack.widthAnchor),
             footerRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             footerRow.heightAnchor.constraint(equalToConstant: 34),
@@ -229,7 +235,10 @@ class PaletteOverlay: NSView, ModalOverlay {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Make the search field first responder — called by the host after presenting.
-    func focusInitialResponder() { window?.makeFirstResponder(searchField) }
+    func focusInitialResponder() {
+        window?.makeFirstResponder(searchField)
+        searchField.applyThemedCaret()  // the editor exists only once the field has focus
+    }
 
     /// Spring the card in (fade + subtle scale about its center). Call after presenting.
     func animateIn() {
@@ -274,8 +283,11 @@ class PaletteOverlay: NSView, ModalOverlay {
         CardChrome.reapplyTheme(to: card)
         searchGlyph.textColor = chrome.ink(alpha: 0.4)
         searchField.textColor = chrome.foreground.nsColor
+        searchField.applyThemedCaret()  // the field holds focus across the swap, so re-tint in place
         applyPlaceholder()
-        divider.layer?.backgroundColor = chrome.ink(alpha: 0.08).cgColor
+        for hairline in [divider, footerDivider] {
+            hairline.layer?.backgroundColor = chrome.ink(alpha: 0.08).cgColor
+        }
         emptyLabel.textColor = chrome.ink(alpha: 0.4)
         footerHintLabels.forEach { $0.textColor = chrome.ink(alpha: 0.5) }
         footerKeycaps.forEach { $0.reapplyTheme() }
@@ -422,7 +434,7 @@ class PaletteOverlay: NSView, ModalOverlay {
             if isSelectable(at: i) {
                 selected = i
                 updateHighlight()
-                scrollSelectedToVisible()
+                scrollSelectedToVisible(travelling: step < 0 ? .up : .down)
                 return
             }
             i += step
@@ -438,11 +450,15 @@ class PaletteOverlay: NSView, ModalOverlay {
         for (i, row) in laidOutRows.enumerated() { row.view.isSelected = (i == selected) }
     }
 
-    private func scrollSelectedToVisible() {
+    /// Reveal the selected row through the shared keyboard reveal, so a palette scrolls exactly like a
+    /// Settings section: the section header above a group's first row comes with it, and the row lands
+    /// inside the list rather than flush against the edge it arrived at. The stops are the selectable
+    /// rows, which is what makes the headers between them read as a header rather than a stop.
+    /// `travelling` is `.unknown` from a reload, where the selection was recomputed rather than moved.
+    private func scrollSelectedToVisible(travelling: KeyboardFocus.Travel = .unknown) {
         guard laidOutRows.indices.contains(selected) else { return }
-        let y = (0..<selected).reduce(listVerticalInset) { $0 + rowHeight(at: $1) }
-        (scrollView.documentView as? FlippedView)?
-            .scrollToVisible(CGRect(x: 0, y: y, width: 1, height: rowHeight(at: selected)))
+        let stops = laidOutRows.indices.filter { isSelectable(at: $0) }.map { laidOutRows[$0].view }
+        KeyboardFocus.reveal(laidOutRows[selected].view, among: stops, travelling: travelling)
     }
 
     /// Build the footer: a centered horizontal row of hints, each a keycap box + its label.
@@ -477,6 +493,12 @@ class PaletteOverlay: NSView, ModalOverlay {
 }
 
 extension PaletteOverlay: NSTextFieldDelegate {
+    /// A click focuses the field without going through `focusInitialResponder`, and the field editor is
+    /// shared per window, so it arrives carrying whatever tint the last field left on it.
+    func controlTextDidBeginEditing(_ obj: Notification) {
+        searchField.applyThemedCaret()
+    }
+
     func controlTextDidChange(_ obj: Notification) {
         applyFilter(query: searchField.stringValue)
         reloadRows()  // resets the selection to the first selectable row

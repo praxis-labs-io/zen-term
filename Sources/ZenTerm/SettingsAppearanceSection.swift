@@ -97,7 +97,7 @@ final class SettingsAppearanceSection: SettingsFormSection {
         toolbarList = list
         addCustomRow(
             key: "hide-toolbar-buttons", caption: "Toolbar buttons",
-            description: "Uncheck to hide a button. Shortcuts stay active",
+            description: "Shortcuts stay active when hidden",
             control: list, focusStop: list, controlNote: nil, width: 220,
             refresh: { [weak self] in
                 self?.toolbarList?.setItems(Self.toolbarItems(), title: Self.toolbarSummary())
@@ -180,7 +180,7 @@ final class SettingsAppearanceSection: SettingsFormSection {
 
         addCustomRow(
             key: "accent-color", caption: "Accent color",
-            description: "The color for focus, active state, and confirm",
+            description: "Focus, active states, confirms",
             control: dropdown, focusStop: dropdown, controlNote: nil, width: 220,
             refresh: { [weak self] in self?.refreshAccentRow() })
     }

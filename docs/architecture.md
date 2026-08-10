@@ -456,6 +456,18 @@ tab bar, and the footer toolbar (`ToggleDock`). `TabController` owns one tab: a
 the active tab's view is mounted. The canvas mounts at the *back* of the container
 (`.below, relativeTo: nil`) because it is the backdrop all window chrome sits on.
 
+**The window-level stack, back to front: canvas, tool float, tab bar and dock, toast
+stack, modal card.** Each position is a decision, not an accident. A **float** sits
+below the tab bar because the ⌘W guard toast ("Close btop first, then ⌘W") fires
+while a float is open and is telling you to close that float, so the toast has to
+win. A **modal card** is the opposite case: it owns the keyboard and dims the tile,
+so a passive notice over it reads as broken, and it mounts at the front (ZEN-280).
+Two things follow. The toast stack is built lazily on the window's first toast, so it
+inserts *below* a card that is already open. And a card is window-hosted, so nothing
+unmounts it implicitly: the `closeModal()` in `select` / `addTab` / `closeTab` is what
+keeps a card from outliving the tab it was opened over, and it owns its own gutter
+constraints (`reapplyModalLayout`) rather than inheriting the tile's.
+
 **Shell command completion is a background-tab signal.** libghostty decodes OSC 133 and emits
 `GHOSTTY_ACTION_COMMAND_FINISHED`; `GhosttySurface` converts its signed exit-code sentinel and
 nanosecond duration into `TerminalCommandResult`, then panes and drawers relay it through their tab.
@@ -731,6 +743,21 @@ as a different app.
   `NSScrollView.contentInsets` with `automaticallyAdjustsContentInsets = false`:
   nonzero left/right insets corrupt the clip view and the content spills out of the
   card unclipped.
+- **Keyboard-driven lists scroll themselves as the selection moves**, through
+  `KeyboardFocus.reveal(_:among:)`: the Settings detail sections, the command palette,
+  and the repo picker all call it, so they behave identically. AppKit does not scroll
+  to a newly focused responder, so it computes one position per keystroke and applies
+  it. It covers the strip between the previous stop and the destination, not just the
+  destination, or a group caption or section header (and the document's top inset)
+  parks off the top edge. It also aims past the edge the stop arrives at by a margin,
+  so a row never lands flush against the pane edge. The margin goes on the **arriving
+  edge only**: padding a rect on both sides and handing it to `scrollToVisible` lets
+  the far edge pull the near one around, which moves the list while the selection is
+  still mid-pane. **Do not animate this.** An eased scroll was tried and reverted: a held arrow repeats faster
+  than any ease settles, so closing the gap fast enough to keep up moves the text tens
+  of points per frame, which reads as doubled or blurred glyphs. Pixel-snapping the
+  offset and disabling the clip view's copy-on-scroll blit made no difference, because
+  the artifact is the per-frame distance, not how the frame is drawn.
 
 **Motion constants are an approved baseline. Do not quietly re-tune them.**
 `Sources/ZenTerm/Motion.swift` is the source of truth for the structural spring, the
@@ -1003,9 +1030,8 @@ every chord that is not its own toggle or another surface's toggle is dropped: a
 palette, a form, or a confirm is mid-question, and acting on a chord behind it would
 answer by walking away. The diff viewer is the exception for tab chords (⌘1-9, ⌘[,
 ⌘]), because it is a reading surface you live in rather than a question. It cannot
-ride the switch the way a tool float does, since a card is tab-hosted
-(`presentTileOverlay`) and unmounts with its tab, so it closes and the switch
-happens. Each tab keeps its own `DiffViewerSession` (ZEN-298), so ⌘D on the far side
+ride the switch the way a tool float does: the diff it shows belongs to the tab it
+was opened from, so `closeModal()` takes it down and the switch happens. Each tab keeps its own `DiffViewerSession` (ZEN-298), so ⌘D on the far side
 comes back where that tab left off.
 
 **The float stage speaks rather than swallowing.** A pane command (nav, split,
@@ -1451,6 +1477,24 @@ layer behind the grid), so a repainted pane doesn't sit inside a ring of the old
 Every `ChromeTheme` role stays `Theme.current`: a program recolors its pane, never the frame
 around it. Foreground, cursor and palette changes are dropped, because the terminal draws
 those and no chrome surface repeats them.
+
+**A chrome surface inside a pane paints on the pane's own fill, not its own tint.** Below
+`background-alpha` a pane deliberately has no opaque fill: the clip stops filling so the grid
+can show through, and `RingFillView` paints the padding at the pane's alpha. The chrome's
+tints are alpha inks tuned for an opaque background, so the find bar's accent-at-0.14
+composited onto whatever was behind the *window* and read grey (ZEN-354). Every strip inside a
+pane now takes the same fill the ring paints, with its tint over it
+(`ChromeTheme.surface(tint:over:)`), pushed down by `PanelHostView.applyBackground` so an OSC
+11 repaint carries into it too.
+
+**Showing a strip has to mark the ring for redisplay by hand**, and only translucency reveals
+it. The ring punches the terminal's frame out of the padding it paints, so a strip that resizes
+the terminal moves that hole. Flipping a constraint does not mark the panel as needing layout,
+and `layout()` is the only other thing that marks the ring, so the ring keeps the hole it
+punched for the full-height terminal: the strip's band goes unpainted and the window's backdrop
+shows straight through it. That band was the grey in ZEN-354, measured off a screenshot as
+*exactly* the backdrop's color rather than a washed-out fill. Focus Mode never showed it because
+zooming resizes the panel itself, so `layout()` runs.
 
 **The reported color is mirrored as-is, a reset included**, which is not the obvious choice.
 An OSC 111 reset arrives as an ordinary change carrying the theme's own background, so

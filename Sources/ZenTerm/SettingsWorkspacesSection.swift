@@ -153,7 +153,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         // ⌥↓⌥↓ walks one down without re-finding it.
         if let title, let moved = rows.first(where: { $0.workspace.title == title }) {
             stack.window?.makeFirstResponder(moved)
-            moved.scrollToVisible(moved.bounds)
+            KeyboardFocus.reveal(moved, among: rows + [addButton])
             return
         }
         // Focus was in this section before the rebuild, so put it back: on the add button if that's

@@ -85,6 +85,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     func reapplyTheme() {
         setFocused(field.currentEditor() != nil)
         field.textColor = Theme.current.chrome.foreground.nsColor
+        field.applyThemedCaret()  // a field holding focus across the swap keeps the old ink otherwise
         applyPlaceholder()
     }
 
@@ -158,7 +159,10 @@ final class FieldBox: NSView, NSTextFieldDelegate {
 
         override func becomeFirstResponder() -> Bool {
             let ok = super.becomeFirstResponder()
-            if ok { onGainedFocus?() }
+            if ok {
+                applyThemedCaret()
+                onGainedFocus?()
+            }
             return ok
         }
     }

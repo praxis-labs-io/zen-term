@@ -16,10 +16,8 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
     /// ⌘Return anywhere in the text — submit the whole form.
     var onSubmit: (() -> Void)?
 
-    /// Retained so callers (tests included) can identify a box by its placeholder, and so a theme
-    /// swap can recolor the placeholder label in place.
+    /// Retained so callers (tests included) can identify a box by its placeholder.
     let placeholder: String
-    private let placeholderLabel = NSTextField(labelWithString: "")
     private let scroll = NSScrollView()
 
     private static var restFill: NSColor { Theme.current.chrome.ink(alpha: 0.06) }
@@ -53,7 +51,13 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         textView.font = .systemFont(ofSize: 13)
         textView.textColor = Theme.current.chrome.foreground.nsColor
         textView.insertionPointColor = Theme.current.chrome.foreground.nsColor
-        textView.textContainerInset = NSSize(width: 3, height: 5)
+        // Text lands 7pt in from the box on both axes, matching `FieldBox`: its field sits at 9 less
+        // the 2pt alignment bleed AppKit gives an `NSTextField`. The container carries the padding and
+        // the scroll is only the viewport (2pt in, below), so the two inputs in a form line up. The
+        // layout manager's own 5pt line fragment padding goes to zero, or it adds a fourth term nobody
+        // sees in a constraint.
+        textView.textContainerInset = NSSize(width: 5, height: 5)
+        textView.textContainer?.lineFragmentPadding = 0
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
@@ -71,27 +75,17 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         scroll.translatesAutoresizingMaskIntoConstraints = false
         addSubview(scroll)
 
-        // NSTextView has no built-in placeholder, so a muted label sits at the top-left and hides
-        // once there's text (like FieldBox's attributed placeholder, kept readable on light themes).
-        placeholderLabel.font = .systemFont(ofSize: 13)
-        placeholderLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
-        placeholderLabel.stringValue = placeholder
-        placeholderLabel.isEditable = false
-        placeholderLabel.isSelectable = false
-        placeholderLabel.isBordered = false
-        placeholderLabel.drawsBackground = false
-        placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(placeholderLabel)
+        // The text view draws the placeholder itself, at the origin its own first glyph takes (kept
+        // muted rather than the system placeholder tint, which follows the appearance, not the theme).
+        textView.placeholder = placeholder
+        textView.placeholderColor = Theme.current.chrome.ink(alpha: 0.4)
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(greaterThanOrEqualToConstant: minHeight),
-            scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            scroll.topAnchor.constraint(equalTo: topAnchor, constant: 5),
-            scroll.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
-            placeholderLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-            placeholderLabel.topAnchor.constraint(equalTo: topAnchor, constant: 10),
-            placeholderLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -10),
+            scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
+            scroll.topAnchor.constraint(equalTo: topAnchor, constant: 2),
+            scroll.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
         ])
     }
 
@@ -150,19 +144,49 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         setFocused(window?.firstResponder === textView)
         textView.textColor = Theme.current.chrome.foreground.nsColor
         textView.insertionPointColor = Theme.current.chrome.foreground.nsColor
-        placeholderLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        textView.placeholderColor = Theme.current.chrome.ink(alpha: 0.4)
     }
 
     private func updatePlaceholderVisibility() {
-        placeholderLabel.isHidden = !textView.string.isEmpty
+        textView.needsDisplay = true  // the text view decides by its own emptiness as it draws
     }
 }
 
 /// An `NSTextView` that reports its first-responder transitions, so its `TextAreaBox` can show the
 /// focus border reliably (the delegate's editing notifications don't fire consistently under
-/// keyboard navigation, the same reason `FieldBox.ClickField` exists).
+/// keyboard navigation, the same reason `FieldBox.ClickField` exists). It also draws its own
+/// placeholder.
 final class FocusReportingTextView: NSTextView {
     var onFocusChange: ((Bool) -> Void)?
+
+    /// Drawn while the view is empty. `NSTextView` has no placeholder of its own, and a label laid out
+    /// over the view lands on its own insets rather than the text's: the caret sat on the first letter.
+    /// Also published to the accessibility tree: the label this replaced was static text VoiceOver
+    /// announced, and text painted in `draw` is invisible to it.
+    var placeholder = "" {
+        didSet {
+            setAccessibilityPlaceholderValue(placeholder)
+            needsDisplay = true
+        }
+    }
+    var placeholderColor: NSColor = .clear { didSet { needsDisplay = true } }
+
+    /// Where the placeholder draws: the origin the first glyph would take. The container origin covers
+    /// `textContainerInset`, and the line fragment padding is the indent the layout manager adds
+    /// inside the container on top of it.
+    var placeholderOrigin: NSPoint {
+        var origin = textContainerOrigin
+        origin.x += textContainer?.lineFragmentPadding ?? 0
+        return origin
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard string.isEmpty, !placeholder.isEmpty else { return }
+        (placeholder as NSString).draw(
+            at: placeholderOrigin,
+            withAttributes: [.font: font ?? .systemFont(ofSize: 13), .foregroundColor: placeholderColor])
+    }
 
     override func becomeFirstResponder() -> Bool {
         let gained = super.becomeFirstResponder()

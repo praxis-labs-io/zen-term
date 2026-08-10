@@ -36,21 +36,23 @@ This is its own step deliberately. Buried inside the PR step as "confirm the bra
 
 ## 4. Request a Copilot review
 
-```bash
-gh pr edit <PR#> --add-reviewer @copilot
-```
-
-Confirm it registered rather than assuming. `{owner}/{repo}` resolves from the current repo, so this is the same line everywhere:
+One REST call, against the reviewer login `Copilot`. `{owner}/{repo}` resolves from the current repo, so this is the same line everywhere:
 
 ```bash
-gh api 'repos/{owner}/{repo}/pulls/<PR#>' --jq '.requested_reviewers[].login'
+gh api -X POST 'repos/{owner}/{repo}/pulls/<PR#>/requested_reviewers' -f 'reviewers[]=Copilot'
 ```
 
-A live request shows `Copilot`. It reviews as `copilot-pull-request-reviewer[bot]`, so the two names are one bot, not a failed request.
+The response carries `requested_reviewers`, and a live request shows `Copilot` there. That response is the confirmation. Read it instead of re-querying. It reviews as `copilot-pull-request-reviewer[bot]`, so `Copilot` and that login are one bot, not a failed request.
+
+`gh pr edit <PR#> --add-reviewer @copilot` does the same thing in one line, but only on gh 2.96 or newer, and never against GitHub Enterprise Server. Use the REST call when you don't know which you have.
+
+**An empty reviewer list is not a failed request.** A reviewer drops out of `requested_reviewers` the moment it submits, and Copilot is quick, so an empty list often means the review already landed. Check for the review itself with the step 6 command before concluding anything.
 
 **Never confirm with `gh pr view --json reviewRequests`.** It omits Bot reviewers and returns `[]` while the request is live.
 
-**Never write `@copilot` in comment text**, on the PR or in its description. The flag above is the only way to request a review. A mention in prose summons it out of band and re-fires on every edit of the comment carrying it. Read its findings from the review comments and write your triage as prose that does not address it.
+**Never fall back to GraphQL, and never resolve a bot id from `suggestedActors`.** That lookup returns `copilot-swe-agent`, the coding agent, not the reviewer. The `requestReviews` mutation accepts its id, reports success, and requests nothing. This file prescribed that route until 2026-08-02 and it cost two PRs' worth of false "Copilot is broken" diagnosis. Two more repos rebuilt it from scratch in 2026-08-09 after reading an empty reviewer list as a failure. If the REST call above returns an error, report the error; do not invent a second path.
+
+**Never write `@copilot` in comment text**, on the PR or in its description. The call above is the only way to request a review. A mention in prose summons it out of band and re-fires on every edit of the comment carrying it. Read its findings from the review comments and write your triage as prose that does not address it.
 
 It runs async; continue and re-check later.
 

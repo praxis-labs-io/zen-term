@@ -34,7 +34,7 @@ final class SettingsKeybindGroupsTests: XCTestCase {
             .fillScreen, .toggleBottomDrawer, .toggleRightDrawer,
             .toggleRepoPicker, .toggleCommandPalette, .openDiffViewer, .openSettings,
             .increaseFontSize, .decreaseFontSize, .resetFontSize,
-            .reloadConfig, .checkForUpdates, .reportIssue,
+            .reloadConfig, .checkForUpdates, .reportIssue, .newTool,
             .toggleToolFloat("btop"),
         ] + (1...9).map { .selectTab($0) }
 

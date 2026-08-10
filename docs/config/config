@@ -170,6 +170,9 @@
 # Repeat the key for as many as you like. A float's `key:` is the single source
 # of truth for both its chord and its palette glyph.
 #
+# You don't have to write one by hand: Settings > Tools has a form, and so does
+# the New Tool command in the command palette. Either one writes the line here.
+#
 # A float has no id to author: its `title:` is its name, and Settings derives the
 # rest. (The id a `toggle_float:` keybind needs is just the title lowercased, with
 # each run of anything that isn't a letter or number turned into a single dash:
@@ -279,6 +282,7 @@
 #   increase_font_size  decrease_font_size  reset_font_size
 #   check_for_updates   (no default binding; bind a chord to reach it by keyboard)
 #   report_issue        (no default binding; also in the command palette and Help menu)
+#   new_tool_float      (no default binding; opens the form that adds one, also in the palette)
 #   toggle_float:<id>   (bind a second chord to one of your floats; `none` doesn't
 #                        apply here, since a float's chord is its own `key:` field)
 #
@@ -360,11 +364,14 @@
 #   ⌥←  ⌥→        move a word at a time
 #   ⇧ and an arrow, Home, End, Page Up or Page Down, extends a selection
 #
-# Two actions ship with no shortcut, both menu-bar errands:
+# Three actions ship with no shortcut:
 #   check_for_updates    runs a manual update check
 #   report_issue         opens the Report an Issue composer
+#   new_tool_float       opens the form that adds a tool float
 #
-# Both are in the command palette, and take a chord here if you want one.
+# The first two are menu-bar errands; the third is something you do once in a while, so it
+# spends no chord by default. All three are in the command palette, and take a chord here
+# if you want one.
 #
 # Chords ZenTerm does not ship, if you want them:
 #   keybind = nav_left=cmd+h                # ⌘HJKL nav, with the other three
