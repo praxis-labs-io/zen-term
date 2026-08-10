@@ -119,6 +119,25 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertFalse(capturer.isArmed)
     }
 
+    /// The built-in Scratch float rebinds like any other action, and the line has to reach the
+    /// file: it has no `float =` line, so a `keybind =` line is the only place its chord can live
+    /// (ZEN-379).
+    func test_scratchFloat_rebindsThroughTheRealRow_andWritesTheLine() throws {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        let scratch = KeyInterceptor.ReservedChord.toggleToolFloat(ToolFloat.scratch.id)
+        row(for: scratch).chip.onActivate?()
+
+        capturer.feed(event(for: novelChord))
+
+        XCTAssertEqual(liveKeymap[novelChord], scratch, "the novel chord should now open Scratch")
+        XCTAssertNil(liveKeymap[Chord(command: true, key: ";")], "the default is released on rebind")
+        let text = try String(contentsOf: tempRoot.appendingPathComponent("config"), encoding: .utf8)
+        XCTAssertTrue(
+            text.contains("keybind = toggle_float:scratch="),
+            "the rebind has nowhere else to live: \(text)")
+    }
+
     func test_esc_cancelsWithoutRebinding() {
         let capturer = FakeCapturer()
         _ = mountSection(capturer)
