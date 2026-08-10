@@ -161,7 +161,8 @@ struct ConfigDiagnostic: Hashable {
         case .floatUnusableKey(let key):
             return "\(title) has an unusable key: \(key). Ignoring this tool float."
         case .floatReservedID(let id):
-            return "\(title) uses the reserved name \(id). Rename it; ZenTerm's own float has it."
+            return "\(title) takes the name \(id), which ZenTerm's built-in Scratch float owns. "
+                + "Rename it. Ignoring this tool float."
         case .floatFieldInvalid(let field, let got, let using):
             return "\(title): \(field)\(got) isn't valid. Using \(using)."
         case .floatFieldClamped(let field, let got, let to):
