@@ -64,3 +64,16 @@ struct ChromeTheme: Equatable {
             alpha: alpha)
     }
 }
+
+extension NSTextField {
+    /// Paint this field's caret from the theme. AppKit leaves an `NSTextField`'s insertion point at the
+    /// *macOS system accent*, which follows the OS setting rather than `Theme.current`, so a system
+    /// accent with no place in the theme blinks in every field (ZEN-91's rule, in the one spot a color
+    /// is never assigned). `NSTextView` takes `insertionPointColor` directly and needs none of this.
+    ///
+    /// Called each time a field takes focus, not once at build: the field editor is shared per window
+    /// and re-tinted when it moves between fields.
+    func applyThemedCaret() {
+        (currentEditor() as? NSTextView)?.insertionPointColor = Theme.current.chrome.foreground.nsColor
+    }
+}

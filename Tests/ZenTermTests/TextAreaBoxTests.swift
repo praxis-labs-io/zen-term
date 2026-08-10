@@ -135,4 +135,29 @@ final class TextAreaBoxTests: WindowTestCase {
             box.textView.accessibilityPlaceholderValue() as? String, "What went wrong",
             "a placeholder painted in draw is invisible to the accessibility tree on its own")
     }
+
+    /// The caret is the one color AppKit assigns for you, and it assigns the *macOS system accent*, which
+    /// follows the OS setting rather than `Theme.current`. It showed as a pink caret in a field sitting
+    /// directly above a text area whose caret was the theme's foreground.
+    func test_aFocusedFieldsCaret_comesFromTheThemeNotTheSystemAccent() throws {
+        let box = FieldBox(placeholder: "Title")
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 80),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        let content = try XCTUnwrap(window.contentView)
+        content.addSubview(box)
+        NSLayoutConstraint.activate([
+            box.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            box.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            box.topAnchor.constraint(equalTo: content.topAnchor),
+        ])
+        content.layoutSubtreeIfNeeded()
+
+        window.makeFirstResponder(box.field)  // the real focus path, which is what installs the editor
+
+        let editor = try XCTUnwrap(box.field.currentEditor() as? NSTextView, "the field has to be editing")
+        XCTAssertEqual(
+            editor.insertionPointColor, Theme.current.chrome.foreground.nsColor,
+            "the caret is the theme's ink, not whatever accent the OS is set to")
+    }
 }

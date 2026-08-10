@@ -158,7 +158,10 @@ final class FieldBox: NSView, NSTextFieldDelegate {
 
         override func becomeFirstResponder() -> Bool {
             let ok = super.becomeFirstResponder()
-            if ok { onGainedFocus?() }
+            if ok {
+                applyThemedCaret()
+                onGainedFocus?()
+            }
             return ok
         }
     }

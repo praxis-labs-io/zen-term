@@ -229,7 +229,10 @@ class PaletteOverlay: NSView, ModalOverlay {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Make the search field first responder — called by the host after presenting.
-    func focusInitialResponder() { window?.makeFirstResponder(searchField) }
+    func focusInitialResponder() {
+        window?.makeFirstResponder(searchField)
+        searchField.applyThemedCaret()  // the editor exists only once the field has focus
+    }
 
     /// Spring the card in (fade + subtle scale about its center). Call after presenting.
     func animateIn() {

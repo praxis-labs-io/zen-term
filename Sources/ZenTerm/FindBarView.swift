@@ -93,6 +93,7 @@ final class FindBarView: NSView {
 
     func focusField() {
         window?.makeFirstResponder(field)
+        field.applyThemedCaret()  // the editor exists only once the field has focus
     }
 
     /// The count as rendered. Its wording carries meaning a state check cannot: "No matches" and
