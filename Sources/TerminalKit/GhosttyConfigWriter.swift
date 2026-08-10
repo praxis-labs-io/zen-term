@@ -1,37 +1,31 @@
 import AppLog
 import Foundation
 
-/// Translates the chrome's `TerminalTheme` into ghostty config-file text — the seam's
-/// theme vocabulary driving the libghostty backend, so the chrome stays the source of
-/// truth for appearance on both backends. libghostty accepts configuration only from
-/// files (no setter API), so `GhosttyApp` writes this text to a scratch file and loads
-/// it; nothing here reads or touches any user-level ghostty config.
+/// Translates the chrome's `TerminalTheme` into ghostty config-file text, so the chrome stays the
+/// source of truth for appearance. libghostty accepts configuration only from files, so
+/// `GhosttyApp` writes this text to a scratch file and loads it. Nothing here reads or touches any
+/// user-level ghostty config.
 enum GhosttyConfigWriter {
-    /// When ghostty runs the cursor shader's draw timer. ghostty's `.true` animates only while
-    /// the surface is focused, so a blur freezes the tail mid-decay into a permanent tracer;
-    /// `.always` animates regardless of focus. `GhosttySurface` bursts a blurred surface into
-    /// `.always` just long enough for the tail to decay, then drops back (ZEN-237).
+    /// When ghostty runs the cursor shader's draw timer. `.true` animates only while the surface
+    /// is focused, so a blur freezes the tail mid-decay into a permanent tracer; `.always`
+    /// animates regardless.
     enum ShaderAnimation: String {
         case whileFocused = "true"
         case always
     }
 
     /// Blank space libghostty leaves between the surface's edge and the first cell, in points.
-    /// `TerminalCellMetrics.gridInset` reports this up to the chrome, which positions the
-    /// scroll-mode cursor with it. Kept here because this is where it is written.
+    /// Kept here because this is where it is written.
     static let gridInset: CGFloat = 2
 
-    /// The full generated config: theme-derived colors and font, plus the terminal
-    /// behavior (cursor shape/thickness, Option semantics) the chrome dials from user config.
-    /// A nil `behavior` uses the shipped `TerminalBehavior.default`.
-    /// `fontSize` overrides the theme's own size for a config bound to ONE surface.
+    /// The full generated config: theme-derived colors and font, plus the terminal behavior the
+    /// chrome dials from user config. A nil `behavior` uses `TerminalBehavior.default`.
     ///
-    /// Load-bearing, not a convenience. `Surface.updateConfig` resets the font size of any surface
-    /// libghostty has not marked `font_size_adjusted` to whatever the pushed config carries, so a
-    /// per-surface push built from the theme alone silently drops a pane's stepped size (ZEN-224).
-    /// Passing the size the surface is actually running keeps the pushed config truthful, which is
-    /// cheaper than repairing the size afterwards and avoids marking the surface adjusted as a
-    /// side effect. Nil for the app-global config, whose size is the theme's by definition.
+    /// `fontSize` overrides the theme's own size for a config bound to ONE surface, and is
+    /// load-bearing rather than a convenience: `Surface.updateConfig` resets the size of any
+    /// surface libghostty has not marked `font_size_adjusted` to whatever the config carries, so a
+    /// per-surface push built from the theme alone silently drops a pane's stepped size. Nil for
+    /// the app-global config, whose size is the theme's by definition.
     static func configText(
         for theme: TerminalTheme?, behavior: TerminalBehavior? = nil,
         shaderAnimation: ShaderAnimation = .whileFocused,
@@ -43,15 +37,12 @@ enum GhosttyConfigWriter {
             "theme = light:\(lightSchemeThemePath),dark:\(darkSchemeThemePath)",
             "cursor-style = \(behavior.ghosttyCursorStyle)",
             "cursor-style-blink = \(behavior.cursorBlink)",
-            // Shell integration's cursor-shape-per-mode would override the block with a
-            // bar at the prompt; keep the rest (cwd, prompt marking → isBusy) and let
-            // cursor-style rule.
+            // Shell integration's cursor-shape-per-mode would override the block with a bar at
+            // the prompt. Keep the rest (cwd, prompt marking) and let cursor-style rule.
             "shell-integration-features = no-cursor",
             "mouse-hide-while-typing = true",
-            // Emitted rather than left to libghostty's default because the chrome draws ON the
-            // grid: scroll mode's cursor band is placed from this inset, so a default that moved
-            // on a pin bump would silently put every band a row out of true. The value IS the
-            // current default, so nothing about how a pane looks changes.
+            // Emitted rather than left to the default because the chrome draws ON the grid: a
+            // default that moved on a pin bump would put every scroll-mode band out of true.
             "window-padding-x = \(Int(gridInset))",
             "window-padding-y = \(Int(gridInset))",
             "font-thicken = true",
@@ -71,9 +62,8 @@ enum GhosttyConfigWriter {
             lines.append("foreground = \(theme.foreground.hex)")
             lines.append("cursor-color = \(theme.cursor.hex)")
             lines.append("selection-background = \(theme.selectionBackground.hex)")
-            // A theme the chrome resolved carries all four, since `AppTheme` derives whatever the
-            // file left out. The optionality is for a caller below that seam holding a theme
-            // nobody has resolved: emitting an empty value would be worse than saying nothing.
+            // The optionality is for a caller below the seam holding an unresolved theme:
+            // emitting an empty value would be worse than saying nothing.
             if let color = theme.searchForeground { lines.append("search-foreground = \(color.hex)") }
             if let color = theme.searchBackground { lines.append("search-background = \(color.hex)") }
             if let color = theme.searchSelectedForeground {
@@ -86,61 +76,36 @@ enum GhosttyConfigWriter {
                 lines.append("palette = \(index)=\(color.hex)")
             }
         }
-        // The cursor shader runs as a post-process pass via ghostty's `custom-shader` (that stays
-        // ghostty's own key even though the chrome exposes a single `cursor-shader`). The path is
-        // already absolute (the chrome resolves the bundled name), so ghostty's file-relative
-        // resolution — which would look next to this temp config — never applies. Pin
-        // `custom-shader-animation` so it animates regardless of ghostty's default drift; only
-        // emit it when there's a shader to animate.
+        // The path is already absolute, so ghostty's file-relative resolution, which would look
+        // next to this temp config, never applies. `custom-shader-animation` is pinned so it
+        // animates regardless of ghostty's default drift.
         if let shader = behavior.cursorShader {
             lines.append("custom-shader = \(shader)")
             lines.append("custom-shader-animation = \(shaderAnimation.rawValue)")
         }
-        // The chrome's `background-alpha` maps to ghostty's own `background-opacity`, the same
-        // rename `cursor-shader` → `custom-shader` above uses. Only emitted below 1, so the
-        // default config text stays exactly what it has always been.
+        // The chrome's `background-alpha` maps to ghostty's `background-opacity`. Only emitted
+        // below 1, so the default config text is unchanged.
         if let opacity = behavior.ghosttyBackgroundOpacity {
             lines.append("background-opacity = \(opacity)")
         }
         // Take back the chords ZenTerm already answers, and the ones libghostty binds to an action
-        // our apprt never implements. Both are keys the pane's program should be getting (ZEN-365).
+        // our apprt never implements. Both are keys the pane's program should be getting.
         lines += GhosttyUnboundChords.triggers.map { "keybind = \($0)=unbind" }
         return lines.joined(separator: "\n") + "\n"
     }
 
-    /// The two files the generated config's `theme` line points at, and the only reason that
-    /// line exists (ZEN-307).
+    /// The two files the generated config's `theme` line points at, and the only reason that line
+    /// exists.
     ///
-    /// **They theme nothing.** libghostty answers the color-scheme query (DSR `CSI ? 996 n`,
-    /// mode 2031) out of the *Config's* `_conditional_state`, not the surface's.
-    /// `ghostty_surface_set_color_scheme` moves only `Surface.config_conditional_state`, and the
-    /// sole bridge across is `Config.changeConditionalState`, which returns null unless
-    /// `_conditional_set` contains `.theme`. That flag is set in exactly one place,
-    /// `Config.finalize`, when `theme` is a light/dark pair whose two halves differ. So without a
-    /// pair, every surface reports "light" for the life of the process however dark the theme is,
-    /// and calling `set_color_scheme` changes nothing at all. Ghostty.app carries the same bug for
-    /// the same reason, on any config that sets its colors directly.
+    /// **They theme nothing.** libghostty answers the color-scheme query out of the *Config's*
+    /// conditional state, which only carries `.theme` when `theme` is a light/dark pair whose two
+    /// halves differ. Without the pair, every surface reports "light" for the life of the process
+    /// however dark the theme is, and `set_color_scheme` changes nothing.
     ///
-    /// Two constraints, both measured rather than assumed:
-    ///
-    /// - **The files must stay empty of settings.** They really are opened and applied, so any key
-    ///   in one would take effect for whichever scheme is current. The chrome's own explicit keys
-    ///   outrank a theme (`loadTheme` is built that way on purpose), which is what keeps the colors
-    ///   ours, but that only covers keys we actually write.
-    /// - **Only the two paths need to differ.** `finalize` compares the two strings, not the file
-    ///   contents, so identical files at different paths are enough.
-    ///
-    /// The pair has exactly one other effect on the resolved config, found by diffing
-    /// `ghostty +show-config` with and without this line: `finalize` moves `window-theme` off its
-    /// `auto` default to `system` in the same branch that sets the flag. Inert here. Only ghostty's
-    /// GTK apprt reads that key, it appears nowhere in `apprt/embedded.zig` or in core, and the
-    /// chrome never calls `ghostty_config_get`. Every other resolved key is byte-identical, so the
-    /// explicit colors do outrank the loaded files, as `loadTheme` intends. That diff is the check
-    /// to re-run on a pin bump; it is what caught the `window-theme` move in the first place.
-    ///
-    /// Paths rather than bundled theme names, so nothing here depends on which themes libghostty
-    /// happens to ship. Pid-scoped like the generated config, and left for the OS to reap.
-    /// ZEN-320 re-checks the whole mechanism on every ghostty pin bump.
+    /// Two constraints hold it up. The files must stay empty of settings, because they really are
+    /// opened and applied. Only the two paths need to differ, because `finalize` compares the
+    /// strings rather than the contents. `docs/architecture.md` carries the check to re-run on a
+    /// ghostty pin bump.
     private static var lightSchemeThemePath: String { schemeThemePath("light") }
     private static var darkSchemeThemePath: String { schemeThemePath("dark") }
 
@@ -153,21 +118,16 @@ enum GhosttyConfigWriter {
 
     /// Whether this process has already laid down its scheme theme files.
     ///
-    /// A flag rather than a `fileExists` check, deliberately. Testing the filesystem would mean
-    /// trusting whatever sits at the path: these names are pid-scoped, pids are reused, and the
-    /// temp directory is not reliably swept between runs, so a leftover file would be loaded as a
-    /// theme and its keys applied. Everything else here is overwritten on every write, and these
-    /// two are the one thing that has to stay empty, so they are the last thing that should be
-    /// taken from disk unexamined. The flag also keeps the once-per-process cost the comment above
-    /// promises, which a plain unconditional write would put on the per-surface config path.
+    /// A flag rather than a `fileExists` check: the names are pid-scoped, pids are reused, and the
+    /// temp directory is not reliably swept, so a leftover file would be loaded as a theme and its
+    /// keys applied.
     private static var didWriteSchemeThemeFiles = false
 
     /// Put the two scheme theme files on disk, once per process.
     ///
-    /// A failure here is not fatal and deliberately does not block the config. `finalize` inserts
-    /// `.theme` on the strength of the `theme` line alone, before it knows whether either file
-    /// resolved, so the scheme still reports correctly against a missing file. All that is lost is
-    /// a libghostty diagnostic per config load, which is worth a log line and nothing more.
+    /// A failure is not fatal and deliberately does not block the config: `finalize` inserts
+    /// `.theme` on the strength of the `theme` line alone, so the scheme still reports correctly
+    /// against a missing file.
     private static func writeSchemeThemeFiles() {
         guard !didWriteSchemeThemeFiles else { return }
         didWriteSchemeThemeFiles = true
@@ -189,14 +149,13 @@ enum GhosttyConfigWriter {
         }
     }
 
-    /// Write the generated config where libghostty can load it and return the path,
-    /// or nil if the write failed (the caller falls back to ghostty's own defaults).
-    /// The file lives for the process's lifetime — the OS reaps the temp directory.
+    /// Write the generated config where libghostty can load it and return the path, or nil if the
+    /// write failed and the caller should fall back to ghostty's defaults. The file lives for the
+    /// process's lifetime.
     ///
-    /// `variant` names a separate scratch file. Per-surface configs (ZEN-237) pass one so they
-    /// never overwrite the app-global config's file, which every surface loads from. Writes
-    /// within a variant are safe to share a path: this all runs on the main thread and
-    /// libghostty loads the file inside the same call that wrote it.
+    /// `variant` names a separate scratch file, so a per-surface config never overwrites the
+    /// app-global one that every surface loads from. Writes within a variant safely share a path:
+    /// this runs on the main thread and libghostty loads the file inside the same call.
     static func writeConfig(
         for theme: TerminalTheme?, behavior: TerminalBehavior? = nil,
         shaderAnimation: ShaderAnimation = .whileFocused, variant: String? = nil,

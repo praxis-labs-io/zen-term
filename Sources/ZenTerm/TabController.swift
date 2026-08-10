@@ -21,25 +21,18 @@ struct OverlayState: Equatable {
     var rightBusy = false
 }
 
-/// One tab: owns the pane tree (`PaneCanvasController`) and the per-tab overlay
-/// surfaces (drawers, tool floats) and zoom. `view` is the tab's container that
-/// `WindowController` mounts. `content` is the tab's tile region (inset from `view`
-/// to clear the traffic lights and match the pane gutter); the pane canvas and any
-/// open drawers tile within it as sibling panels — right drawer as a full-height
-/// column, bottom drawer under the canvas in the remaining left column — separated
-/// by the same gutter panes use (`ChromeMetrics.panelGap`), never overlapping.
+/// One tab: owns the pane tree, the per-tab drawers, and zoom. `view` is the container
+/// `WindowController` mounts; `content` is the tile region inset from it to clear the traffic
+/// lights. The canvas and any open drawers tile within `content` as sibling panels, separated by
+/// `ChromeMetrics.panelGap` and never overlapping.
 final class TabController: NSObject {
     let view = NSView()
     private let content = NSView()
     private let paneCanvas: PaneCanvasController
     private let canvas: NSView  // paneCanvas.canvasView, cached
 
-    // Drawer sizes are stored as a FRACTION of the tab's working area — not absolute pixels —
-    // and applied as a multiplier constraint, so a drawer stays proportional through window
-    // resizes exactly like a pane. Seeded from the config default; manual ⌥-resize updates the
-    // fraction from then on. These knobs are user-overridable via `~/.config/zen-term/config`
-    // (`bottom-drawer-fraction`, `right-drawer-fraction`, `drawer-resize-step`,
-    // `max-drawer-fraction`).
+    // Drawer sizes are a FRACTION of the tab's working area, not absolute pixels, applied as a
+    // multiplier constraint so a drawer stays proportional through window resizes like a pane.
     private static var bottomDrawerFraction: CGFloat { GeneralConfig.current.bottomDrawerFraction }
     private static var rightDrawerFraction: CGFloat { GeneralConfig.current.rightDrawerFraction }
     private var bottomDrawerRatio = min(
@@ -160,9 +153,7 @@ final class TabController: NSObject {
     var title: String { pinnedTitle ?? paneCanvas.title }
     /// The focused *panel's* cwd: a focused drawer's, else the focused pane's. Reading the canvas
     /// unconditionally meant a drawer you had `cd`'d elsewhere still reported the pane's directory,
-    /// so ⌘D opened the wrong repo's diff, ⌘T inherited the wrong directory, a new window opened in
-    /// the wrong place, and a `persist:dir` tool float anchored to the wrong one. Mirrors
-    /// `focusedDrawerSurface`, which is nil exactly when the canvas has focus.
+    /// so the diff, a new tab and a `persist:dir` float all anchored to the wrong one.
     ///
     /// Falls back to the pane rather than nil when a drawer's backend can't resolve a cwd, because
     /// nil reads downstream as "no repository" rather than "unknown".
@@ -414,13 +405,11 @@ final class TabController: NSObject {
 
     /// Deliver a composed diff comment to `target`.
     ///
-    /// `submit` focuses the target, pastes, and presses Return (`submitLine`, a real keypress — not a
-    /// pasted `"\r"`, which lands inside the bracketed-paste block where a TUI reads it as a literal
-    /// newline and never sends).
+    /// `submit` focuses the target, pastes, and presses Return as a real keypress, since a pasted
+    /// `"\r"` lands inside the bracketed-paste block where a TUI reads it as a literal newline.
     ///
-    /// `queue` pastes the message plus a trailing newline **without** focusing or submitting, so
-    /// several comments can stack in the target's input (each on its own line) and the reviewer stays
-    /// in the diff to add more before a final submit fires them together.
+    /// `queue` pastes the message plus a newline **without** focusing or submitting, so several
+    /// comments stack in the target's input and fire together on a final submit.
     func send(_ message: String, to target: DiffSendTarget, action: DiffSendAction) {
         guard let surface = surface(for: target.id) else { return }
         switch action {
@@ -791,14 +780,9 @@ final class TabController: NSObject {
     /// coalescing as the zoom toast, keyed by direction so a distinct dead direction still speaks.
     private var lastNoNeighborToast: (direction: Direction, at: Date)?
 
-    /// A grid command (split / navigate / resize / drawers) was invoked while zoomed. Focus Mode is
-    /// strict, so instead of silently doing nothing, name the chord that gets them out.
-    ///
-    /// The chord is read from the live keymap rather than written into the string: a toast quoting a
-    /// chord the user does not have sends them somewhere else, and a default that moves leaves no
-    /// trace here.
     /// Focus Mode's chord as it stands, or its action name when the user has unbound it, so the
-    /// sentence still reads.
+    /// toast still reads. Read from the live keymap rather than written into the string, because a
+    /// toast quoting a chord the user does not have sends them somewhere else.
     private static var focusModeChord: String {
         Chord.displayed(.toggleZoom, in: GeneralConfig.current.keymap)?.displayGlyph ?? "Focus Mode"
     }
@@ -908,15 +892,12 @@ final class TabController: NSObject {
         focusPanel(target)
     }
 
-    /// Step focus `delta` panels along the tab's order, wrapping at both ends (ZEN-372).
+    /// Step focus `delta` panels along the tab's order, wrapping at both ends. The order is the
+    /// pane tree's leaves then whichever drawers are open, and it has to cover the drawers or you
+    /// could cycle out of one and never back in. Deliberately not geometric, so the step stays
+    /// predictable where "next" has no direction.
     ///
-    /// The order is the pane tree's leaves, then whichever drawers are open. Cycling covers the
-    /// same panels `navigate` does, and has to: leaving the drawers out would let you cycle out of
-    /// one and never back in. It is deliberately not geometric, so the step is predictable in a
-    /// layout where "next" has no direction.
-    ///
-    /// One panel means nowhere to go, and silently, the way `cycleTab` is for one tab. A dead
-    /// `navigate` toasts because the pane exists and just isn't that way; here the whole tab is on
+    /// One panel means nowhere to go, silently: unlike a dead `navigate`, the whole tab is on
     /// screen and there is nothing to explain.
     func cyclePane(_ delta: Int) {
         if isZoomed { toastZoomBlocked("cycle"); return }
@@ -982,12 +963,9 @@ final class TabController: NSObject {
         lies(candidate, inDirection: direction, from: origin, frames: frames)
     }
 
-    /// Resize whichever panel holds focus by moving its edge in `direction`. For a pane
-    /// this defers to the pane canvas's edge-aware resize. A docked drawer only resizes
-    /// along its own axis, growing toward the canvas: the bottom drawer grows up (⌘⌃↑) and
-    /// shrinks down (⌘⌃↓); the right drawer grows left into the canvas (⌘⌃←) and shrinks
-    /// right (⌘⌃→) — the same feel as an edge pane on that side. The cross axis beeps. A
-    /// resize chord while zoomed just unzooms, matching `navigate`.
+    /// Resize whichever panel holds focus by moving its edge in `direction`. A pane defers to the
+    /// canvas's edge-aware resize. A docked drawer only resizes along its own axis, growing toward
+    /// the canvas, and the cross axis beeps. A resize chord while zoomed just unzooms.
     func resize(_ direction: Direction) {
         if isZoomed { toastZoomBlocked("resize"); return }
         switch focusedPanel {
@@ -1033,12 +1011,10 @@ final class TabController: NSObject {
         return CGRect(x: f.minX, y: h - f.maxY, width: f.width, height: f.height)
     }
 
-    /// Rebuild the tile layout from `isBottomOpen`/`isRightOpen`: the canvas + any
-    /// open drawer panels as sibling panels within `content`, separated by a
-    /// `ChromeMetrics.panelGap` gutter, never overlapping. Right drawer is a full-height column; bottom
-    /// drawer sits under the canvas in the remaining left column (never under the
-    /// right column). Deactivates the previous tile constraint set before activating
-    /// the new one so repeated toggles never accumulate constraints.
+    /// Rebuild the tile layout from `isBottomOpen`/`isRightOpen`. The right drawer is a full-height
+    /// column and the bottom drawer sits under the canvas in the remaining left column, never
+    /// under the right one. Deactivates the previous constraint set first, so repeated toggles
+    /// never accumulate constraints.
     private func zoomedView(_ ref: PanelRef) -> NSView? {
         switch ref {
         case .pane: return canvas
@@ -1114,12 +1090,10 @@ final class TabController: NSObject {
     }
 
     /// Shared drawer-slide machinery for both edges: clip `content`, park `panel` off-edge at its
-    /// final size and slide it in on the landing curve while `animate` (the canvas — and, when the
-    /// right drawer opens over an open bottom drawer, that drawer's trailing) real-resize to their
-    /// targets. On completion the last in-flight slide settles the canonical constraints; a closing
-    /// panel is detached before its transform resets so it can't flash. `isCurrent` reports whether a
-    /// newer toggle of *this* edge has superseded the slide. The caller has already installed the
-    /// final-position constraints and bumped this edge's animation id.
+    /// final size and slide it in while `animate` real-resizes to its target. On completion the
+    /// last in-flight slide settles the canonical constraints, and a closing panel is detached
+    /// before its transform resets so it can't flash. `isCurrent` reports whether a newer toggle of
+    /// this edge has superseded the slide.
     private func runDrawerSlide(
         panel: PanelHostView, opening: Bool, parkOffset: CGVector,
         animate: [(constraint: NSLayoutConstraint, to: CGFloat)], isCurrent: @escaping () -> Bool
@@ -1166,16 +1140,13 @@ final class TabController: NSObject {
         }
     }
 
-    /// Animate the bottom drawer open/closed with a fluid push. The canvas is a *real* resize —
-    /// panes genuinely compress upward — but the drawer *slides* in at its final size rather than
-    /// growing from zero, so its own terminal reflows once (settling its prompt) and then stays put
-    /// instead of jittering through every row count. The two stay one `panelGap` apart the whole
-    /// way: the canvas bottom rises by `slide` while the drawer translates up by `slide` on the same
-    /// curve. The drawer is parked below the content's bottom edge at the start, so `content` is
-    /// clipped for the duration to keep it from spilling over the footer. On completion it settles
-    /// onto the canonical multiplier constraints via `relayoutPanels()` (same size, no jump),
-    /// preserving window-resize proportionality. Zoom / Reduce Motion use the instant path.
-    /// `animateRightDrawer` is the horizontal twin.
+    /// Animate the bottom drawer with a fluid push. The canvas is a *real* resize, but the drawer
+    /// slides in at its final size rather than growing from zero, so its terminal reflows once
+    /// instead of jittering through every row count. The two stay one `panelGap` apart throughout.
+    ///
+    /// `content` is clipped for the duration, since the drawer starts parked below its bottom
+    /// edge. On completion it settles onto the canonical multiplier constraints, preserving
+    /// window-resize proportionality. `animateRightDrawer` is the horizontal twin.
     private func animateBottomDrawer(opening: Bool) {
         guard let bottomPanel = bottomDrawerPanel else {
             relayoutPanels()
@@ -1434,12 +1405,11 @@ extension TabController: TerminalSurfaceDelegate {
         guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
         onCommandFinished?(result)
     }
-    /// A program repainted a drawer's background (OSC 11). Carry it to that drawer's own fill,
-    /// exactly as a pane does (ZEN-23). Panes are handled in `PaneCanvasController` and floats in
-    /// `ToolFloatController`; this only reacts to the two drawer surfaces.
+    /// A program repainted a drawer's background (OSC 11), so carry it to that drawer's own fill.
+    /// Panes and floats are handled by their own controllers.
     ///
-    /// No pull to go with it, for the same reason a pane needs none: a drawer's surface and its
-    /// panel are created together and cleared together, so the panel never postdates the surface.
+    /// No pull to go with it: a drawer's surface and its panel are created and cleared together,
+    /// so the panel never postdates the surface.
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {
         if s === bottomDrawerSurface {
             bottomDrawerPanel?.backgroundOverride = color

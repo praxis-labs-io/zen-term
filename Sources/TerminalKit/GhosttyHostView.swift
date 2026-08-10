@@ -20,23 +20,15 @@ final class GhosttyHostView: NSView {
     private var occlusionObserver: NSObjectProtocol?
     private var appActivationObserver: NSObjectProtocol?
 
-    /// The cursor libghostty last asked for via `GHOSTTY_ACTION_MOUSE_SHAPE` (I-beam over
-    /// text, pointing hand over a ⌘-hovered link, …). Applied through cursor rects
-    /// (`resetCursorRects`) so AppKit owns when to assert it — the idiomatic mechanism, rather
-    /// than fighting `NSCursor.current` with imperative `.set()` calls.
-    ///
-    /// Defaults to `.iBeam`, not `.arrow`: libghostty only emits `MOUSE_SHAPE` on a *change*,
-    /// so before the first one the resting state over the terminal grid must already be the
-    /// text cursor (matching ghostty's own `.horizontalText` default) — otherwise the pointer
-    /// is the plain arrow until some mode change kicks it.
+    /// The cursor libghostty last asked for, applied through cursor rects so AppKit owns when to
+    /// assert it. Defaults to `.iBeam` rather than `.arrow` because libghostty only emits
+    /// `MOUSE_SHAPE` on a *change*, so the resting state has to be right before the first one.
     private var desiredCursor: NSCursor = .iBeam
 
     // MARK: IME / dead-key composition state
 
-    /// The whole preedit (marked) text — what the input method is still composing, shown
-    /// underlined at the cursor. libghostty tracks no internal caret sub-range, so this
-    /// attributed string is the entire model. Read by the `NSTextInputClient` conformance
-    /// in GhosttyHostViewIME.swift.
+    /// The whole preedit text the input method is still composing. libghostty tracks no internal
+    /// caret sub-range, so this attributed string is the entire model.
     var markedText = NSMutableAttributedString()
 
     /// Non-nil only for the duration of a `keyDown`: it flags `insertText`/`setMarkedText`
@@ -53,21 +45,16 @@ final class GhosttyHostView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
 
-    // The host window is chromeless and drags by its background
-    // (`isMovableByWindowBackground`). AppKit converts any click-drag over a subview whose
-    // `mouseDownCanMoveWindow` is true into a window move before the view sees the event —
-    // and NSView defaults to true — so drags over terminal content moved the window instead
-    // of reaching libghostty's selection. Opt out so click-drag here selects text; the
-    // window still drags by the gutters, window inset, and chrome around the panes.
+    // AppKit turns a click-drag over any subview with this true into a window move before the
+    // view sees the event, and NSView defaults to true, so terminal drags moved the chromeless
+    // window instead of selecting. The window still drags by the gutters and chrome.
     override var mouseDownCanMoveWindow: Bool { false }
 
     // MARK: Size / scale
 
     /// How many chrome animations are currently holding this surface's grid. A count rather than a
-    /// flag because the holders overlap: a drawer slide freezes every surface in the tab while a
-    /// split-in freezes every surface on the canvas, and the two sets intersect. With a flag,
-    /// whichever animation finished first unfroze panes the other was still animating, silently
-    /// restoring the per-frame reflow this exists to prevent.
+    /// flag because the holders overlap, and with a flag whichever animation finished first
+    /// unfroze panes another was still animating.
     private var sizeSyncHolds = 0
 
     /// Whether frame changes are currently held back from libghostty, so the grid keeps the size it
@@ -112,15 +99,10 @@ final class GhosttyHostView: NSView {
 
     /// Match the Metal layer's `contentsScale` to the window's backing scale factor.
     ///
-    /// libghostty sets `contentsScale` once, at renderer init, and thereafter sizes every
-    /// render target from `layer.bounds * layer.contentsScale`. It never re-reads the scale
-    /// we push through `ghostty_surface_set_content_scale`. AppKit doesn't sync it for us
-    /// either: libghostty attaches its own Metal layer, making this view layer-*hosting*, and
-    /// the automatic sync only applies to layer-backed views. Left alone, a window moved to a
-    /// display of a different density keeps rendering at the old pixel density and Core
-    /// Animation rescales the result (ZEN-247).
-    ///
-    /// Ref: High Resolution Guidelines for OS X.
+    /// libghostty sets it once at renderer init and never re-reads the scale we push, and AppKit's
+    /// automatic sync only covers layer-*backed* views, not the layer-hosting one libghostty
+    /// attaches. Left alone, a window moved to a display of another density keeps rendering at the
+    /// old pixel density.
     private func syncLayerContentsScale() {
         guard let window else { return }
         CATransaction.begin()
@@ -153,12 +135,9 @@ final class GhosttyHostView: NSView {
         syncSizeAndScale()
     }
 
-    /// Tell libghostty whether this surface is actually on screen. Its render thread skips every
-    /// frame while a surface is invisible (`renderer/Thread.zig`, `drawFrame`), and nothing else
-    /// moves that flag — so without this a covered or minimized window keeps drawing, which with
-    /// a cursor shader means a full-screen post-process pass at 120fps for nobody (ZEN-271).
-    ///
-    /// A nil window reads as not visible: an unmounted view has nothing to show.
+    /// Tell libghostty whether this surface is actually on screen. Nothing else moves that flag,
+    /// so without this a covered or minimized window keeps drawing, which with a cursor shader is
+    /// a full-screen post-process pass at 120fps for nobody. A nil window reads as not visible.
     func syncOcclusion() {
         guard let surfacePtr else { return }
         ghostty_surface_set_occlusion(surfacePtr, window?.occlusionState.contains(.visible) ?? false)
@@ -178,12 +157,9 @@ final class GhosttyHostView: NSView {
         }
     }
 
-    /// AppKit stands the `.activeInActiveApp` tracking area down with a synthesized
-    /// `mouseExited` when the app deactivates, but reactivation synthesizes no matching
-    /// `mouseEntered` (proved against a live build, ZEN-310): a pointer parked over a pane
-    /// stayed at (-1, -1), suppressing mouse reports until it physically moved. Restore the
-    /// position ourselves when the app comes back. Registered once, for any window, matching
-    /// the observers above.
+    /// AppKit stands the tracking area down with a synthesized `mouseExited` when the app
+    /// deactivates, but reactivation synthesizes no matching `mouseEntered`, so a pointer parked
+    /// over a pane stays at (-1, -1) and suppresses mouse reports until it physically moves.
     private func observeAppActivation() {
         guard appActivationObserver == nil else { return }
         appActivationObserver = NotificationCenter.default.addObserver(
@@ -213,9 +189,9 @@ final class GhosttyHostView: NSView {
     }
 
     /// AppKit doesn't reliably send `viewDidChangeBackingProperties` when a window moves to a
-    /// display with a different backing scale (ghostty-org/ghostty#2731), so drive that path
-    /// off the window's screen change as well. Registered once, for any window: this view is
-    /// re-parented across windows over its life, and the handler filters to ours.
+    /// display with a different backing scale (ghostty-org/ghostty#2731), so drive that path off
+    /// the window's screen change too. Registered for any window, then filtered to ours, because
+    /// this view is re-parented across windows over its life.
     private func observeScreenChanges() {
         guard screenChangeObserver == nil else { return }
         screenChangeObserver = NotificationCenter.default.addObserver(
@@ -229,10 +205,8 @@ final class GhosttyHostView: NSView {
 
     private func windowDidChangeScreen() {
         syncDisplayID()
-        // The same work `viewDidChangeBackingProperties` does, run directly rather than by
-        // calling that override: AppKit owns when its lifecycle methods fire. It runs next
-        // turn, not now, because the window's backing scale factor isn't updated yet when
-        // this notification lands.
+        // Next turn, not now: the window's backing scale factor isn't updated yet when this
+        // notification lands.
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.syncLayerContentsScale()
@@ -255,11 +229,9 @@ final class GhosttyHostView: NSView {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let trackingArea { removeTrackingArea(trackingArea) }
-        // `.activeInActiveApp`, decided in ZEN-310: a pane in a background window still gets
-        // hover reports (a watched dashboard in a second window), but tracking stops with the
-        // rest of the app when it is not frontmost, matching the ZEN-271 stand-down. Ghostty's
-        // `.activeAlways` would keep reporting while the app is backgrounded; that gap is
-        // deliberate, not a parity miss.
+        // `.activeInActiveApp`: a pane in a background window still gets hover reports, but
+        // tracking stops with the rest of the app when it is not frontmost. Ghostty's
+        // `.activeAlways` keeps reporting while backgrounded, and that gap is deliberate.
         let area = NSTrackingArea(
             rect: bounds,
             options: [.mouseMoved, .mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
@@ -271,11 +243,9 @@ final class GhosttyHostView: NSView {
     // MARK: Focus
 
     // Responder transitions report pane focus to the owner and nothing else. They must NOT call
-    // `ghostty_surface_set_focus` themselves: what libghostty is told is `paneFocused &&
-    // isAppActive` (ZEN-271), and a direct write here races the owner's. Becoming first responder
-    // while the app is still inactive — every launch, since the first window is built from
-    // `applicationDidFinishLaunching` — wrote `true` here and then the owner immediately corrected
-    // it to `false`, leaving the first surface unfocused and its cursor not blinking.
+    // `ghostty_surface_set_focus` themselves: libghostty is told `paneFocused && isAppActive`, and
+    // a direct write here races the owner's, which is what left the first surface at launch
+    // unfocused with a dead cursor.
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
         owner?.focusDidChange(true)
@@ -292,23 +262,18 @@ final class GhosttyHostView: NSView {
 
     override func keyDown(with event: NSEvent) {
         guard let surfacePtr else { return }
-        // Shift+Enter → LF so multiline-aware CLIs treat it as a soft newline while
-        // plain Enter (CR) still submits — the convention `claude /terminal-setup`
-        // writes. keyCode 36 = kVK_Return.
-        // MUST stay ahead of the interpretKeyEvents hand-off so the IME can't swallow it.
-        // Guarded on not-composing: mid-preedit, Enter must reach the input system to
-        // commit the composition, not shortcut out and strand a stale underline.
+        // Shift+Enter sends LF so multiline-aware CLIs read a soft newline while plain Enter
+        // still submits. MUST stay ahead of the interpretKeyEvents hand-off so the IME can't
+        // swallow it, and guarded on not-composing so a mid-preedit Enter still commits.
         if markedText.length == 0, event.isSoftNewline {
             ghostty_surface_text(surfacePtr, "\n", 1)
             return
         }
 
-        // Ask libghostty which modifiers it consumed for text translation (handles configs
-        // like option-as-alt), then apply ONLY those four named flags on top of the event's
-        // own modifierFlags. Deriving the whole set from the ghostty bitmask instead would
-        // drop capsLock and the hidden device/keypad bits AppKit carries — bits that matter
-        // for dead keys, and whose loss forces an identity-breaking event rebuild that
-        // breaks CJK composition (AppKit's input system keys off NSEvent object identity).
+        // Apply ONLY the four named flags on top of the event's own modifierFlags. Deriving the
+        // whole set from the ghostty bitmask drops capsLock and the hidden device/keypad bits,
+        // which forces an event rebuild that breaks CJK composition, since AppKit's input system
+        // keys off NSEvent object identity.
         let translated = NSEvent.eventModifierFlags(
             mods: ghostty_surface_key_translation_mods(surfacePtr, event.ghosttyMods))
         var translationMods = event.modifierFlags
@@ -351,12 +316,9 @@ final class GhosttyHostView: NSView {
         syncPreedit(clearIfNeeded: markedTextBefore)
 
         if let accumulated = keyTextAccumulator, !accumulated.isEmpty {
-            // Composition produced final text — send it as ordinary key input (never
-            // "composing", since it's the committed result).
-            //
-            // Recorded here rather than in `keyAction`, which also carries the release and must
-            // not record that as a press, and rather than higher up, where every early return
-            // above would record a press nothing sent.
+            // Composition produced final text, so send it as ordinary key input rather than as
+            // composing. Recorded here rather than in `keyAction`, which also carries the release,
+            // or higher up, where the early returns above would record a press nothing sent.
             recordKeyPress(for: event)
             for text in accumulated {
                 _ = keyAction(action, event: event, translationEvent: translationEvent, text: text)
@@ -558,10 +520,9 @@ final class GhosttyHostView: NSView {
         settleSkippedExit(event)
     }
 
-    // Middle click and the side buttons. Without these `ghostty_surface_mouse_button` only ever
-    // sees left and right, so a program with mouse reporting on (tmux, vim, htop) never learns
-    // they were pressed (ZEN-308). Middle-click paste is deliberately not wired: libghostty is
-    // told `supports_selection_clipboard` is false on macOS, which is correct for the platform.
+    // Middle click and the side buttons. Without these, a program with mouse reporting on never
+    // learns they were pressed. Middle-click paste is deliberately not wired: libghostty is told
+    // `supports_selection_clipboard` is false on macOS, which is correct for the platform.
     override func otherMouseDown(with event: NSEvent) {
         // Focus the pane, the same as a left click: the button is reported to whichever pane was
         // hit, so without this the click lands in one pane and the next keystroke in another.
@@ -578,22 +539,18 @@ final class GhosttyHostView: NSView {
         settleSkippedExit(event)
     }
 
-    /// `mouseExited` skips its (-1, -1) while a button is down, matching Ghostty: drags keep
-    /// reporting positions past the edge, so the exit is redundant mid-drag. Ghostty can rely on
-    /// a later real exit because its tracking is `.activeAlways`; ours stands down with the app,
-    /// so a drag that ends after the app deactivated would leave the last in-viewport position
-    /// standing until the pointer happens to re-cross the pane (ZEN-310). Settle the skipped
-    /// exit when the last button comes up with no tracking area left to do it.
+    /// `mouseExited` skips its (-1, -1) while a button is down, since drags keep reporting past
+    /// the edge. Ghostty can rely on a later real exit because its tracking is `.activeAlways`;
+    /// ours stands down with the app, so a drag ending after the app deactivated would strand the
+    /// last in-viewport position until the pointer re-crossed the pane.
     private func settleSkippedExit(_ event: NSEvent) {
         guard let surfacePtr, NSEvent.pressedMouseButtons == 0, !NSApp.isActive else { return }
         ghostty_surface_mouse_pos(surfacePtr, -1, -1, event.ghosttyMods)
     }
 
-    /// Translate an AppKit `buttonNumber` to libghostty's button. AppKit numbers buttons in
-    /// hardware order (0 left, 1 right, 2 middle, 3 back, 4 forward), while libghostty names them
-    /// by the X11 numbering a terminal reports, where back and forward are buttons 8 and 9 — so
-    /// the two orders diverge past the middle button rather than running parallel. Ported from
-    /// Ghostty's `Input.MouseButton(fromNSEventButtonNumber:)`.
+    /// Translate an AppKit `buttonNumber` to libghostty's button. AppKit numbers in hardware order
+    /// while libghostty uses the X11 numbering a terminal reports, so the two diverge past the
+    /// middle button rather than running parallel.
     static func mouseButton(for buttonNumber: Int) -> ghostty_input_mouse_button_e {
         switch buttonNumber {
         case 0: return GHOSTTY_MOUSE_LEFT
@@ -646,19 +603,16 @@ final class GhosttyHostView: NSView {
         window?.invalidateCursorRects(for: self)
     }
 
-    /// Show or hide the pointer for `GHOSTTY_ACTION_MOUSE_VISIBILITY`.
-    /// `setHiddenUntilMouseMoves` is the right primitive for mouse-hide-while-typing: it
-    /// auto-restores on the next mouse move (no balanced unhide to leak), so a surface torn
-    /// down or detached while hidden can never strand a globally invisible cursor — the fragile
-    /// case a `hide()`/`unhide()` refcount hits when the chrome detaches a persistent pane.
+    /// Show or hide the pointer. `setHiddenUntilMouseMoves` auto-restores on the next mouse move,
+    /// so a surface torn down while hidden cannot strand a globally invisible cursor the way an
+    /// unbalanced `hide()`/`unhide()` refcount would.
     func setCursorVisible(_ visible: Bool) {
         NSCursor.setHiddenUntilMouseMoves(!visible)
     }
 
-    /// Map a libghostty mouse shape to a classic `NSCursor`. macOS 14 is our floor, so we
-    /// can't use `NSView.pointerStyle` (macOS 15+) the way ghostty's own app does. The
-    /// diagonal resizes, progress/wait, and zoom shapes have no classic cursor, so they fall
-    /// back to `.arrow` rather than reaching for a private cursor.
+    /// Map a libghostty mouse shape to a classic `NSCursor`. macOS 14 is our floor, so
+    /// `NSView.pointerStyle` is out. Shapes with no classic cursor fall back to `.arrow` rather
+    /// than reaching for a private one.
     static func nsCursor(for shape: ghostty_action_mouse_shape_e) -> NSCursor {
         switch shape {
         case GHOSTTY_MOUSE_SHAPE_TEXT: return .iBeam
@@ -691,11 +645,9 @@ final class GhosttyHostView: NSView {
             x *= scrollMultiplier  // subjective feel multiplier, matching Ghostty's own app
             y *= scrollMultiplier
         }
-        // Packed scroll mods: bit 0 = high-precision. Only the precision bit is set: ghostty's core
-        // ignores the momentum phase entirely (verified in 1.3.1 — zero references), so forwarding it
-        // changes nothing. The flick coast comes from macOS's own decaying deltas; ghostty then
-        // scrolls in whole cells (it carries a sub-cell remainder but never renders fractional rows),
-        // which is the deceleration stutter and needs upstream fractional-line rendering to smooth.
+        // Packed scroll mods: bit 0 = high-precision. Only that bit is set, because ghostty's core
+        // ignores the momentum phase entirely. The flick coast comes from macOS's own decaying
+        // deltas.
         let mods: ghostty_input_scroll_mods_t = precise ? 1 : 0
         ghostty_surface_mouse_scroll(surfacePtr, x, y, mods)
     }
@@ -710,10 +662,9 @@ extension NSScreen {
 }
 
 extension NSEvent {
-    /// The Shift+Enter soft-newline chord: Return (keyCode 36) with Shift and no other
-    /// modifier. Requiring shift *exclusively* leaves Ctrl/Cmd/Opt+Shift+Enter to reach
-    /// libghostty's key encoder as real chords (kitty-protocol CSI-u, ghostty binds)
-    /// rather than collapsing them all to a bare LF.
+    /// The Shift+Enter soft-newline chord: Return with Shift and no other modifier. Requiring
+    /// shift *exclusively* leaves Ctrl/Cmd/Opt+Shift+Enter to reach libghostty's key encoder as
+    /// real chords rather than collapsing them all to a bare LF.
     var isSoftNewline: Bool {
         guard keyCode == 36 else { return false }
         let active = modifierFlags.intersection([.shift, .control, .option, .command])
@@ -734,19 +685,13 @@ extension NSEvent {
         return ghostty_input_mods_e(mods)
     }
 
-    /// Ghostty modifier bitmask *plus which side* each modifier is on, from the device-specific
-    /// bits AppKit carries alongside the named flags.
+    /// Ghostty modifier bitmask *plus which side* each modifier is on.
     ///
-    /// **Key events only.** The kitty keyboard protocol encodes left and right as different keys,
-    /// so a key event without these reports every right-hand modifier as its left-hand
-    /// counterpart. The mouse callbacks must not get them: libghostty stores its mouse mods as
-    /// `Mods.binding()`, which strips the sides, and then compares that stored value against the
-    /// raw mods handed to it (`Surface.modsChanged`). Sided bits make that comparison
-    /// permanently unequal, so while a right-hand modifier is held, every key event and every
-    /// mouse move marks the whole grid dirty and rebuilds every row.
-    ///
-    /// There is no "both sides held" encoding, which matches ghostty's own app: nothing
-    /// downstream distinguishes that case.
+    /// **Key events only.** The kitty protocol encodes left and right as different keys, so a key
+    /// event without these reports every right-hand modifier as its left-hand counterpart. The
+    /// mouse callbacks must not get them: libghostty stores mouse mods with the sides stripped and
+    /// compares that against the raw mods, so sided bits make the comparison permanently unequal
+    /// and every event rebuilds the whole grid while a right-hand modifier is held.
     var ghosttySidedMods: ghostty_input_mods_e { Self.ghosttySidedMods(modifierFlags) }
 
     static func ghosttySidedMods(_ flags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {
