@@ -89,6 +89,12 @@ final class PanelHostView: NSView {
 
     var scrollCursorForTesting: ScrollCursorView { cursor }
 
+    /// Test hook: whether the padding ring is queued to repaint. Toggling a strip resizes the terminal,
+    /// which moves the hole the ring punches out of the padding, and nothing else in the panel marks it
+    /// (ZEN-354). A rendered check can't stand in for this: `cacheDisplay` draws regardless of the flag,
+    /// so it paints the band correctly even when the app would not.
+    var ringNeedsDisplayForTesting: Bool { ring.needsDisplay }
+
     /// Inner breathing room between the pane border and the terminal content, even on
     /// all sides so content (e.g. nvim) doesn't sit against the pane border.
     private let padding: CGFloat = 10
@@ -293,6 +299,7 @@ final class PanelHostView: NSView {
     /// re-measure after this: see `SearchController.settleLayout()`.
     @discardableResult
     func setFindBarShown(_ shown: Bool) -> FindBarView? {
+        defer { ring.needsDisplay = true }  // the terminal resized, so the ring's hole moved (see below)
         guard shown else {
             findBar?.isHidden = true
             NSLayoutConstraint.deactivate(findBarConstraints + [contentBottomToFindBar].compactMap { $0 })
@@ -325,8 +332,18 @@ final class PanelHostView: NSView {
     var findBarForTesting: FindBarView? { findBar?.isHidden == false ? findBar : nil }
 
     /// Swap between header-above-content and content-at-top, and hide/show the header.
+    ///
+    /// Marking the ring for redisplay is load-bearing, and only below `background-alpha` 1, where the
+    /// ring paints the padding with the terminal's frame punched out of it. Showing a strip resizes the
+    /// terminal, which moves that hole, but flipping a constraint does not mark this view as needing
+    /// layout, and `layout()` is the only thing that marks the ring. The ring then keeps the hole it
+    /// punched for the full-height terminal, the strip's band goes unpainted, and the window's backdrop
+    /// shows through it: ZEN-354's grey strip, measured as exactly the backdrop's color rather than a
+    /// washed-out fill. Focus Mode never showed it because zooming resizes the panel itself, so
+    /// `layout()` runs.
     private func setHeaderShown(_ shown: Bool) {
         guard let headerView, let contentTopToHeader, let contentTopToClip else { return }
+        defer { ring.needsDisplay = true }
         headerView.isHidden = !shown
         if shown {
             contentTopToClip.isActive = false

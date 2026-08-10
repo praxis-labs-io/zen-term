@@ -136,4 +136,32 @@ final class PaneChromeSurfaceTests: WindowTestCase {
         XCTAssertEqual(fill.alphaComponent, 0.25, accuracy: 0.001)
         XCTAssertEqual(fill.redComponent, 1, accuracy: 0.001)
     }
+
+    // MARK: the ring's hole follows the terminal
+
+    /// Below `background-alpha` the ring paints the padding with the terminal's frame punched out. A
+    /// strip resizes the terminal, so that hole moves, but flipping a constraint doesn't mark the panel
+    /// as needing layout and `layout()` is the only other thing that marks the ring. The band the strip
+    /// sits in then goes unpainted and the window's backdrop shows through it.
+    func test_togglingTheFindBar_repaintsTheRing() throws {
+        var config = GeneralConfig.builtIn
+        config.backgroundAlpha = 0.5
+        GeneralConfig.setCurrentForTesting(config)
+        let host = try focusedHost()
+        host.layoutSubtreeIfNeeded()
+        host.displayIfNeeded()  // clear the flag, so what it says next came from the toggle
+        XCTAssertFalse(host.ringNeedsDisplayForTesting, "premise: nothing is queued before the toggle")
+
+        _ = host.setFindBarShown(true)
+
+        XCTAssertTrue(
+            host.ringNeedsDisplayForTesting,
+            "showing the bar shrank the terminal, so the ring's hole is stale until it repaints")
+
+        host.layoutSubtreeIfNeeded()
+        host.displayIfNeeded()
+        _ = host.setFindBarShown(false)
+
+        XCTAssertTrue(host.ringNeedsDisplayForTesting, "and hiding it moves the hole back")
+    }
 }

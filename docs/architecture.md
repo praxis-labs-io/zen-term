@@ -1487,6 +1487,15 @@ pane now takes the same fill the ring paints, with its tint over it
 (`ChromeTheme.surface(tint:over:)`), pushed down by `PanelHostView.applyBackground` so an OSC
 11 repaint carries into it too.
 
+**Showing a strip has to mark the ring for redisplay by hand**, and only translucency reveals
+it. The ring punches the terminal's frame out of the padding it paints, so a strip that resizes
+the terminal moves that hole. Flipping a constraint does not mark the panel as needing layout,
+and `layout()` is the only other thing that marks the ring, so the ring keeps the hole it
+punched for the full-height terminal: the strip's band goes unpainted and the window's backdrop
+shows straight through it. That band was the grey in ZEN-354, measured off a screenshot as
+*exactly* the backdrop's color rather than a washed-out fill. Focus Mode never showed it because
+zooming resizes the panel itself, so `layout()` runs.
+
 **The reported color is mirrored as-is, a reset included**, which is not the obvious choice.
 An OSC 111 reset arrives as an ordinary change carrying the theme's own background, so
 recognising it and dropping the override reads as the tidy move. It is wrong: libghostty's
