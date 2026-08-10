@@ -102,6 +102,13 @@ enum KeyboardFocus {
         // Frames are the geometry this reads, and a list that just reloaded its rows has stale ones.
         document.layoutSubtreeIfNeeded()
         let viewport = scroll.contentView.bounds.height
+        // A list that hasn't been laid out yet has no viewport to reveal into, and every rule below
+        // reads against its height: at zero the margin collapses and the "arriving at the bottom" rule
+        // fires for any row, scrolling a freshly-built list to its selection's bottom edge. The palette
+        // reveals its default selection from `reloadRows`, which runs before the card is laid out, so
+        // this is the common path rather than an edge case. A flipped document opens at the top on its
+        // own, which is where an unlaid-out list wants to be anyway.
+        guard viewport > 0 else { return }
         let frame = stop.convert(stop.bounds, to: document)
         let padded = frame.insetBy(dx: 0, dy: -12)  // shared breathing room above and below a stop
         let previousBottom =

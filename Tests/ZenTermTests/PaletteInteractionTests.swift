@@ -316,6 +316,17 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertGreaterThan(gap, 24, "the selection lands inside the list, not flush against the edge")
     }
 
+    /// The palette reveals its default selection while it builds its rows, which is before the card has
+    /// a size. Reading the reveal's rules against a zero-height viewport scrolled the list to that row's
+    /// bottom edge, so ⌘P opened part-way down its own list with the selection above the fold.
+    func test_commandPalette_opensAtTheTopOfItsList() throws {
+        let (_, scroll) = try mountLongPalette()
+
+        XCTAssertEqual(
+            scroll.documentVisibleRect.minY, 0, accuracy: 0.5,
+            "a freshly opened palette shows its first command, not the middle of the list")
+    }
+
     /// Arrowing back to the top has to reach it. Revealing the first command alone left the header
     /// above it and the list's top inset clipped, with the scroller parked just short of the top.
     func test_commandPalette_arrowingBackToTheTop_reachesIt() throws {
