@@ -869,7 +869,8 @@ final class WindowController: NSObject {
     /// width/height fractions against its OWN bounds — the host rect *is* the geometry, and a naive pin
     /// to `container` would silently resize every float and slide it over the tab bar. A tab's canvas
     /// is `container` minus the tab-bar row (`pinCanvas`), and its `content` insets that by
-    /// `windowGutter` on all four sides; this is that composition, flattened.
+    /// `windowGutter` on three sides and `ChromeMetrics.topInset` on top; this is that composition,
+    /// flattened. The bare gutter on top put a tall float's title row under the window buttons (ZEN-384).
     ///
     /// Inserted below `tabBar` — above every canvas (`pinCanvas` keeps those at the back) but
     /// below the tab strip, the dock, and the toast stack. That last one is the reason this isn't
@@ -886,7 +887,8 @@ final class WindowController: NSObject {
         let insets = (
             leading: overlay.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: gutter),
             trailing: overlay.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -gutter),
-            top: overlay.topAnchor.constraint(equalTo: container.topAnchor, constant: gutter),
+            top: overlay.topAnchor.constraint(
+                equalTo: container.topAnchor, constant: ChromeMetrics.topInset),
             bottom: overlay.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -gutter)
         )
         floatGutter = insets
@@ -928,7 +930,7 @@ final class WindowController: NSObject {
         let gutter = ChromeMetrics.windowGutter
         floatGutter.leading.constant = gutter
         floatGutter.trailing.constant = -gutter
-        floatGutter.top.constant = gutter
+        floatGutter.top.constant = ChromeMetrics.topInset  // the tile's top carries traffic-light clearance
         floatGutter.bottom.constant = -gutter
     }
 
