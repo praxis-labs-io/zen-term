@@ -1,9 +1,15 @@
 import AppKit
 
 /// A declarative command float whose process lifetime is set by `persist:`. Everything variable
-/// about a float lives here; the tool-float engine on `TabController` does the rest. Floats are
-/// user-defined in `~/.config/zen-term/config` (`float = …` lines); the `toggle` chord is their
-/// single source of truth, driving both the keybinding and the palette glyph.
+/// about a float lives here; the tool-float engine on `TabController` does the rest. Nearly every
+/// float is user-defined in `~/.config/zen-term/config` (`float = …` lines), and for those the
+/// `toggle` chord is the single source of truth, driving both the keybinding and the palette
+/// glyph.
+///
+/// `ToolFloat.scratch` is the exception on both counts: it has no config line, and its `toggle` is
+/// only the chord it ships with. A rebind moves the keymap entry and leaves the spec alone, so
+/// nothing may render a glyph from `toggle` — `CommandCatalog.spec(for:)` reads the live keymap
+/// and is the only correct source.
 struct ToolFloat: Equatable {
     /// Stable identity, e.g. "open-gitdash" — `ToolFloatParser.slug(forTitle:)` of `title`, never
     /// authored and never stored in the config. It keys the live-float registry, the toolbar button

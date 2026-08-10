@@ -217,8 +217,9 @@ extension KeyInterceptor.ReservedChord {
 }
 
 /// The built-in chord → action map. The user's `keybind` lines and float `key:` chords overlay
-/// this. Note the old `⌘⇧G → gitdash` line is intentionally absent — a float's chord now comes
-/// from its own `key:` field, so no float is built in.
+/// this. Note the old `⌘⇧G → gitdash` line is intentionally absent: a user float's chord comes
+/// from its own `key:` field. The one built-in float, Scratch, has no such field, so its chord
+/// is a default here like any other action's.
 ///
 /// These are ghostty's chords wherever the two would disagree on something a ghostty user reaches
 /// for first, so a hand arriving from it lands right.

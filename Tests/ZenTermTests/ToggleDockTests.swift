@@ -147,8 +147,18 @@ final class ToggleDockTests: XCTestCase {
 
         dock.render(overlay: overlay, floatID: "scratch", paletteOpen: false)
 
-        XCTAssertTrue(dock.scratchActivityForTesting == false, "shown, so no background dot")
-        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
+        XCTAssertTrue(dock.scratchActiveForTesting, "the button IS the card, so it must stay lit")
+        XCTAssertFalse(dock.scratchActivityForTesting, "shown, so no background dot")
+    }
+
+    /// The other side of the same rule: a DIFFERENT float's card dims the drawer pips, and must
+    /// leave Scratch dark rather than lit.
+    func test_render_scratchButtonIsDarkWhileAnotherFloatsCardIsUp() {
+        let dock = makeDock([float("dev")])
+
+        dock.render(overlay: OverlayState(), floatID: "dev", paletteOpen: false)
+
+        XCTAssertFalse(dock.scratchActiveForTesting)
     }
 
     /// Its dot lives on the fixed button, which `dottedToolFloatIDsForTesting` never walks — that

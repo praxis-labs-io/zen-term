@@ -127,9 +127,11 @@ final class ToggleDock: NSView {
     var bottomActivityForTesting: Bool { bottomBtn.showsActivity }
     var rightActivityForTesting: Bool { rightBtn.showsActivity }
 
-    /// Test hook: whether the Scratch button shows its live-in-background dot. Separate from
-    /// `dottedToolFloatIDsForTesting` below, which only walks the config-driven float tail.
+    /// Test hooks: the Scratch button's two states. Separate from `dottedToolFloatIDsForTesting`
+    /// below, which only walks the config-driven float tail. `isActive` is the one the
+    /// `floatCoversTab` ordering in `render` turns on, so it needs a hook of its own.
     var scratchActivityForTesting: Bool { scratchBtn.showsActivity }
+    var scratchActiveForTesting: Bool { scratchBtn.isActive }
 
     /// Test hook: the ids of the per-float buttons currently showing their live-in-background dot
     /// (ZEN-150). Reads the button's real state, not a mirror, so it can't pass while the dot is

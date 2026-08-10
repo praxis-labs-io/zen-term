@@ -801,7 +801,8 @@ ZEN-369 added ⌘K clear screen, ⌘J scroll to the selection, ⌘⇧J and its
 ⌃/⌥ variants write the screen to a file, ⌘⇧V paste the selection, and the prompt jumps on
 ⌘⇧↑ and ⌘⇧↓. Select All is ⌘A and is the Edit menu's rather than the keymap's, for the
 reason below.
-**No tool float is built in**; a float's chord comes from its own `key:` field.
+**One tool float is built in**, Scratch on ⌘;, and its chord is a default here like any
+other action's. Every other float's chord comes from its own `key:` field.
 
 **The defaults are ghostty's, and the premise is that a chord doing the wrong thing costs
 more than a chord doing nothing.** So where the two disagree, the concession goes to what a
