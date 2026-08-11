@@ -90,9 +90,11 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// Request a transient top-right toast (e.g. a `git:true` float opened outside a repo).
     var onRequestToast: ((ToastContent) -> Void)?
     /// A float's tool posted a desktop notification (an agent asking for input), with the float it
-    /// came from so the banner can name it. Relayed for hidden floats too — that's the case that
-    /// needs it most: a dismissed `persist:` agent has no on-screen trace at all.
-    var onNotification: ((TerminalNotification, ToolFloat) -> Void)?
+    /// came from so the banner can name it, and the tab that owns the instance so clicking the
+    /// banner lands there. Nil tab means window-scoped, which belongs to no tab in particular.
+    /// Relayed for hidden floats too — that's the case that needs it most: a dismissed `persist:`
+    /// agent has no on-screen trace at all.
+    var onNotification: ((TerminalNotification, ToolFloat, TabID?) -> Void)?
 
     init(
         presentOverlay: @escaping (SurfaceFloatOverlay) -> Void,
@@ -144,8 +146,12 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         registryKey(spec.id, in: scopedTab(for: spec))
     }
 
-    /// The tab a float's instance belongs to: the current one for a `.tab` float, nil otherwise —
-    /// and nil for a `.tab` float when there is no tab, which is the closure's documented case.
+    /// The tab a float's instance belongs to: the current one for a `.tab` float, nil otherwise.
+    ///
+    /// A `.tab` float would also answer nil if there were no tab, which would file it under the
+    /// bare id — shared by every tab and reaped by no tab close. That cannot happen: there is no
+    /// tab only between `tabs.close` emptying the list and `window.close()`, and nothing opens a
+    /// float in that window. Registration is the invariant to protect if a caller is ever added.
     private func scopedTab(for spec: ToolFloat) -> TabID? {
         spec.scope == .tab ? currentTabID() : nil
     }
@@ -402,12 +408,15 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         // Every tab change closes the card first (`closeFloatForTabChange`), so the slot should not
         // hold this tab's float by the time we get here. Handled anyway rather than assumed: a card
         // left over a tab that no longer exists is unreachable and holds first responder for good.
+        //
+        // No `restoreFocus()` here, unlike `close()`: both callers run this after the tab is out of
+        // the list, so the active tab it resolves is the neighbor that was just promoted, and both
+        // mount and focus a tab themselves right after.
         if let active = activeFloat, active.tab == tab {
             cancelPendingOpen()
             activeFloat = nil
             active.overlay.removeFromSuperview()
             active.surface.terminate()
-            restoreFocus()
         }
         // Snapshot first, like `shutdown()` — the removals mutate the dictionary mid-loop. One
         // `onStateChanged` at the end rather than `discard`'s per-entry fire: each one re-renders
@@ -461,8 +470,8 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// free; owning the delegate here means owning this too, or an agent float's request is
     /// silently dropped.
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
-        guard let spec = spec(for: s) else { return }
-        onNotification?(n, spec)
+        guard let entry = entry(for: s) else { return }
+        onNotification?(n, entry.spec, entry.tab)
     }
 
     /// A program repainted a float's background (OSC 11). Carry it to that card's own fill, the
@@ -482,10 +491,13 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         LinkPreviewPresenter.shared.update(url, near: active.overlay)
     }
 
-    /// The spec behind a live surface — the shown card's, or a hidden persistent float's.
-    private func spec(for s: TerminalSurface) -> ToolFloat? {
-        if let active = activeFloat, s === active.surface { return active.spec }
-        return liveFloats.values.first { $0.surface === s }?.spec
+    /// The spec behind a live surface and the tab that owns it — the shown card's, or a hidden
+    /// persistent float's. A hidden `.tab` float belongs to a tab that may not be the one up, which
+    /// is exactly what a notification has to be routed by.
+    private func entry(for s: TerminalSurface) -> (spec: ToolFloat, tab: TabID?)? {
+        if let active = activeFloat, s === active.surface { return (active.spec, active.tab) }
+        guard let live = liveFloats.values.first(where: { $0.surface === s }) else { return nil }
+        return (live.spec, live.tab)
     }
 
     /// A float's tool ran to completion / quit (`q` in lazygit) → close the card and forget the

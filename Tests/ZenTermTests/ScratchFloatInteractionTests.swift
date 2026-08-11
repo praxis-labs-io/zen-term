@@ -1,4 +1,5 @@
 import AppKit
+import TabKit
 import TerminalKit
 import XCTest
 
@@ -285,6 +286,27 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertFalse(
             c.floatsForTesting.isLiveInBackground(ToolFloat.scratch.id),
             "a tab with no scratch running must not dot one")
+    }
+
+    /// A hidden scratch asking for input is usually not in the tab that happens to be up, and the
+    /// banner's click has to land where the prompt is. The engine reports the owning tab because it
+    /// is the only thing that knows it — the window would otherwise guess the active one, which is
+    /// wrong exactly when the notification matters most.
+    func test_aBackgroundTabsScratchNotification_carriesItsOwnTab() {
+        let c = makeWindow()
+        let owner = c.activeTabIDForTesting
+        let surface = openScratch(c)
+        toggleScratch(c)
+        c.handle(.newTab)  // the scratch is now in a background tab
+        XCTAssertNotEqual(c.activeTabIDForTesting, owner)
+
+        var relayed: [(ToolFloat, TabID?)] = []
+        c.floatsForTesting.onNotification = { relayed.append(($1, $2)) }
+        surface.delegate?.surface(
+            surface, didPostNotification: TerminalNotification(title: "Claude", body: "needs input"))
+
+        XCTAssertEqual(relayed.count, 1, "a hidden float's notification must not be dropped")
+        XCTAssertEqual(relayed.first?.1, owner, "the banner routes to the tab the shell is in")
     }
 
     /// ⇧⏎ replaces a tab in place, keeping its id. Without a scope teardown the replacement session

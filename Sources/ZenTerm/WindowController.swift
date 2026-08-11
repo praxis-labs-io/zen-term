@@ -192,7 +192,9 @@ final class WindowController: NSObject {
             })
         controller.onStateChanged = { [weak self] in self?.renderDock() }
         controller.onRequestToast = { [weak self] content in self?.toasts.show(content) }
-        controller.onNotification = { [weak self] n, spec in self?.floatNotified(n, from: spec) }
+        controller.onNotification = { [weak self] n, spec, owner in
+            self?.floatNotified(n, from: spec, owner: owner)
+        }
         return controller
     }()
 
@@ -2172,15 +2174,24 @@ final class WindowController: NSObject {
     /// A tool float's agent wants attention. Floats are window-level, so unlike a pane or drawer
     /// this has no owning tab: it gets the OS banner but not the in-app rose flag, which is a
     /// per-tab signal that would otherwise point at a surface that isn't the source.
-    private func floatNotified(_ notification: TerminalNotification, from spec: ToolFloat) {
+    /// `owner` is the tab a tab-scoped float belongs to, which is where the banner's click has to
+    /// land: a hidden Scratch that asks for input is usually NOT in the tab that happens to be up,
+    /// and routing to the active tab would send the user somewhere the prompt isn't. A window
+    /// float belongs to no tab, so it keeps falling back to the active one.
+    private func floatNotified(
+        _ notification: TerminalNotification, from spec: ToolFloat, owner: TabID?
+    ) {
         // The notification arrives off the terminal's read path; only touch the UI on main.
         DispatchQueue.main.async { [weak self] in
             guard let self, !self.tabs.order.isEmpty,
                 AgentNotifier.shouldPushNotification(
                     appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
             else { return }
+            // The owner may have closed between the post and this hop, and a banner pointing at a
+            // tab that is gone opens nothing.
+            let target = owner.flatMap { self.tabs.order.contains($0) ? $0 : nil } ?? self.tabs.activeID
             AgentNotifier.shared.notify(
-                windowID: self.windowID, tabID: self.tabs.activeID, title: spec.title,
+                windowID: self.windowID, tabID: target, title: spec.title,
                 body: notification.body.isEmpty ? notification.title : notification.body)
         }
     }
@@ -2388,6 +2399,10 @@ final class WindowController: NSObject {
 
     /// Test hook: the window's float engine, for asserting the relays wired onto it.
     var floatsForTesting: ToolFloatController { floats }
+
+    /// Test hook: the active tab's id, so a test can name the tab a tab-scoped thing belongs to
+    /// and prove it is not simply whichever one is up.
+    var activeTabIDForTesting: TabID? { tabs.order.isEmpty ? nil : tabs.activeID }
 
     /// Test hook: whether the toast presenter has been built yet. The config observer must be able
     /// to re-point its insets WITHOUT constructing it — building it early would mount a toast stack

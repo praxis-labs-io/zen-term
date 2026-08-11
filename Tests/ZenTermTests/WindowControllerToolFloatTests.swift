@@ -1,4 +1,5 @@
 import AppKit
+import TabKit
 import TerminalKit
 import XCTest
 
@@ -220,13 +221,14 @@ final class WindowControllerToolFloatTests: WindowTestCase {
         let surface = floatSurfaces(command: "btop")[0]
         c.handle(.toggleToolFloat("btop"))  // dismissed; still alive in the registry
 
-        var relayed: [(TerminalNotification, ToolFloat)] = []
-        c.floatsForTesting.onNotification = { relayed.append(($0, $1)) }
+        var relayed: [(TerminalNotification, ToolFloat, TabID?)] = []
+        c.floatsForTesting.onNotification = { relayed.append(($0, $1, $2)) }
         surface.delegate?.surface(
             surface, didPostNotification: TerminalNotification(title: "Claude", body: "needs input"))
 
         XCTAssertEqual(relayed.count, 1, "a hidden float's notification must not be dropped")
         XCTAssertEqual(relayed.first?.1.id, "btop", "the banner needs the float it came from to name it")
+        XCTAssertNil(relayed.first?.2, "a window float belongs to no tab, so the banner takes the active one")
     }
 
     /// `persist:window` anchors where it first opened and never re-anchors: it's for tools that
