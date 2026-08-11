@@ -91,4 +91,15 @@ final class NewTabCWDTests: WindowTestCase {
         let pane = try XCTUnwrap(spawned.last)
         XCTAssertEqual(pane.lastConfig?.workingDirectory, root)
     }
+
+    /// ⌘N reads the same rule through the same function, so the two chords cannot drift. Covered here
+    /// rather than through `AppDelegate.route`, which resolves its window from `NSApp.keyWindow` and
+    /// has no key window to find in a test run.
+    func test_newSessionCWD_isTheOneRuleBothChordsRead() {
+        XCTAssertNil(ShellLaunch.newSessionCWD(focused: root), "home by default, whatever is focused")
+
+        inheritCWD(true)
+        XCTAssertEqual(ShellLaunch.newSessionCWD(focused: root), root)
+        XCTAssertNil(ShellLaunch.newSessionCWD(focused: nil), "an unresolvable pane still means home")
+    }
 }

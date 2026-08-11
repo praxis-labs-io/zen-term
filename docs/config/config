@@ -154,7 +154,7 @@
 # Where a new tab (⌘T) or window (⌘N) starts. Off = your home directory, so a new
 # tab is a clean slate. On = the focused pane's working directory. Panes (⌘D / ⌘⇧D),
 # drawers, tool floats and ⌘P workspace tabs inherit either way.
-# In-app Settings edit: applies to new tabs.
+# In-app Settings edit: applies to the next tab or window you open.
 # tab-inherit-cwd = false             # true | false
 
 # ─── Updates ─────────────────────────────────────────────────────────────────

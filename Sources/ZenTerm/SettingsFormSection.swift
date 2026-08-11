@@ -439,4 +439,11 @@ class SettingsFormSection: SettingsSection {
         guard let control = controlForKey[key] else { return nil }
         return rows.first { control.isDescendant(of: $0) }
     }
+
+    #if DEBUG
+        /// Test seam: the mounted control a config key owns. Addressing a row by key rather than by
+        /// its position in the section is what keeps an interaction test pointed at the row it names
+        /// after someone inserts another one above it.
+        func controlForTesting(_ key: String) -> NSView? { controlForKey[key] }
+    #endif
 }

@@ -4,8 +4,8 @@ import TabKit
 import TerminalKit
 
 /// Owns every window and routes chords/Copy/Paste to whichever is key. `⌘n` opens a
-/// new window (inheriting the key window's focused-pane cwd); every other chord goes
-/// to the key window's `WindowController`. Native macOS tabbing is disallowed on
+/// new window (at home, or the key window's focused-pane cwd under `tab-inherit-cwd`);
+/// every other chord goes to the key window's `WindowController`. Native macOS tabbing is disallowed on
 /// `HostWindow`, so each window is an ordinary independently-tileable window.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -174,9 +174,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // ⌘N is intercepted here before `handle(_:)`, so a palette's / confirm's modal
             // gate doesn't cover it — swallow it explicitly while either is open.
             if let key = keyController(), key.isModalOverlayOpen || key.isConfirmOpen { return }
-            // Same `tab-inherit-cwd` rule ⌘T follows: home unless the user opts back in.
-            let inherited = GeneralConfig.current.tabInheritCWD ? keyController()?.focusedCWD : nil
-            newWindow(initialCWD: inherited, centered: false)
+            newWindow(
+                initialCWD: ShellLaunch.newSessionCWD(focused: keyController()?.focusedCWD),
+                centered: false)
             return
         }
         if case .reloadConfig = chord {

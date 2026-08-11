@@ -902,10 +902,7 @@ final class WindowController: NSObject {
 
     private func newTab() {
         cancelConfirm()  // the tab-bar "+" is reachable by mouse while a confirm is up
-        // A tab starts at home unless `tab-inherit-cwd` says otherwise: it's a fresh piece of work,
-        // where a split is a second view of the one in front of you. Nil lets `ShellLaunch` supply
-        // home, so the two paths share one definition of it.
-        addTab(cwd: GeneralConfig.current.tabInheritCWD ? activeController?.focusedCWD : nil, pinnedTitle: nil)
+        addTab(cwd: ShellLaunch.newSessionCWD(focused: activeController?.focusedCWD), pinnedTitle: nil)
     }
 
     /// Append a new tab with an explicit cwd and optional pinned title. The `⌘P` picker
