@@ -34,6 +34,19 @@ final class ScratchFloatTests: XCTestCase {
         XCTAssertEqual(ToolFloat.scratch.persist, .window)
     }
 
+    /// The two axes together: one instance per tab (`scope`), and it survives a dismissal
+    /// (`persist`). Scratch is the only float that gets a tab.
+    func test_scratchIsScopedToTheTab() {
+        XCTAssertEqual(ToolFloat.scratch.scope, .tab)
+    }
+
+    /// The axis is Swift's, not the config's. `persist:tab` was cut after daily driving, and a
+    /// `float =` line must have no way to reach tab scope — no key, and no token that backs into it.
+    func test_aConfiguredFloat_cannotReachTabScope() {
+        let float = ToolFloatParser.parse("title:x command:c key:cmd+shift+j scope:tab persist:tab")
+        XCTAssertEqual(float?.scope, .window)
+    }
+
     /// The one thing a mistyped SF Symbol fails at, and nothing else would catch it.
     func test_scratchIcon_resolves() {
         XCTAssertNotNil(

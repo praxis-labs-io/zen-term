@@ -197,8 +197,9 @@
 # you like. A float's `key:` is the single source of truth for both its chord and
 # its palette glyph.
 #
-# One float ships built in: Scratch, on cmd+;, a blank shell over the window that
-# keeps running when you dismiss it and dies when you type `exit`. It has no line
+# One float ships built in: Scratch, on cmd+;, a blank shell over the tab that keeps
+# running when you dismiss it and dies when you type `exit`. Each tab gets its own,
+# the way each tab gets its own drawers, and closing a tab closes its. It has no line
 # here and no Settings > Tools row. Rebind it under Keybinds below, or in
 # Settings > Shortcuts. `scratch` is a reserved name: a `float =` line whose title
 # lands on it is refused, and the app tells you which line it was.

@@ -122,6 +122,24 @@ final class WindowControllerToolFloatTests: WindowTestCase {
         XCTAssertFalse(all[0].terminated)
     }
 
+    /// The other side of the scope boundary. Scratch is tab-scoped and dies with its tab; a user
+    /// float is not, and closing the tab it was opened in must leave it running.
+    ///
+    /// This one cannot fail against the code that shipped before tab scope existed — it guards the
+    /// implementation from going too far, not a behavior the change adds.
+    func test_windowFloat_survivesTheTabItWasOpenedIn() {
+        let c = makeWindow()
+        c.handle(.newTab)
+        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("btop"))  // dismiss; it keeps running with no on-screen trace
+
+        c.closeTabForTesting(index: 1)
+
+        let all = floatSurfaces(command: "btop")
+        XCTAssertEqual(all.count, 1)
+        XCTAssertFalse(all[0].terminated, "a window float outlives the tab it was opened from")
+    }
+
     /// A float is modal over the window, so the tab underneath must not change behind it — the
     /// same rule every modal card follows (`select` → `closeModal()`). Switching dismisses the
     /// card and reveals the new tab in one keystroke, instead of leaving the user typing into a

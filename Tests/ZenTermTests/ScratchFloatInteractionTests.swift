@@ -77,6 +77,14 @@ final class ScratchFloatInteractionTests: WindowTestCase {
             .flatMap { descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } }
     }
 
+    /// A plain workspace for the ⇧⏎ replace path: no recipe, so nothing but the replace itself
+    /// is under test.
+    private func elsewhere() -> Workspace {
+        Workspace(
+            title: "Elsewhere", path: root, main: nil, right: nil, bottom: nil, focus: .main,
+            env: [:])
+    }
+
     private func toggleScratch(_ c: WindowController) {
         c.handle(.toggleToolFloat(ToolFloat.scratch.id))
     }
@@ -84,10 +92,17 @@ final class ScratchFloatInteractionTests: WindowTestCase {
     /// Open Scratch and hand back the surface it spawned. A Scratch shell and a pane's launch the
     /// same way, so nothing in the config tells them apart — the spawn this toggle caused is the
     /// only reliable handle, and asserting it caused exactly one is half the point.
-    private func openScratch(_ c: WindowController) -> RecordingSurface {
+    private func openScratch(
+        _ c: WindowController, file: StaticString = #filePath, line: UInt = #line
+    ) -> RecordingSurface {
         let before = spawned.count
         toggleScratch(c)
-        XCTAssertEqual(spawned.count, before + 1, "the open must spawn exactly one shell")
+        XCTAssertEqual(
+            spawned.count, before + 1, "the open must spawn exactly one shell", file: file, line: line)
+        // A stand-in rather than `spawned[before]` when the spawn didn't happen: indexing traps,
+        // and a trap here takes the whole suite down with it — the rest of a failing test reads
+        // false, which is what a reader needs to see.
+        guard spawned.count > before else { return RecordingSurface() }
         return spawned[before]
     }
 
@@ -166,20 +181,137 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertFalse(openScratch(c) === surface)
     }
 
-    /// One instance for the window, shared by every tab — `persist:window`, same as a user float
-    /// declaring it. A tab switch dismisses the card but must not kill the shell.
-    func test_itIsOneShellForTheWholeWindow() {
+    /// A tab change dismisses the card and must leave the shell behind it running — the half of
+    /// the old window-wide contract that survives `scope: .tab`.
+    func test_aTabChangeDismissesTheCard_notTheShell() {
         let c = makeWindow()
         let surface = openScratch(c)
 
         c.handle(.newTab)  // spawns the new tab's pane, and dismisses the card
-        XCTAssertFalse(surface.terminated, "a tab change dismisses the card, not the shell")
 
+        XCTAssertTrue(cards(c).isEmpty)
+        XCTAssertFalse(surface.terminated, "a tab change dismisses the card, not the shell")
+        XCTAssertEqual(surface.startCount, 1)
+    }
+
+    /// The point of `scope: .tab`: a second tab gets its own scratch shell, the way it gets its own
+    /// drawers. `openScratch` asserts the spawn, which IS the claim.
+    func test_eachTabGetsItsOwnScratchShell() {
+        let c = makeWindow()
+        let first = openScratch(c)
+
+        c.handle(.newTab)
+        let second = openScratch(c)
+
+        XCTAssertFalse(second === first, "the second tab must not inherit the first tab's shell")
+        XCTAssertFalse(first.terminated, "and must not take the first tab's shell down to get one")
+    }
+
+    /// Going back reveals that tab's own shell, not the one the other tab is running. Reads the
+    /// card's view tree rather than the registry: what could break is a card showing the wrong
+    /// surface while the bookkeeping looks right.
+    func test_returningToATab_revealsThatTabsOwnShell() {
+        let c = makeWindow()
+        let first = openScratch(c)
+        c.handle(.newTab)
+        let second = openScratch(c)
+
+        c.handle(.prevTab)
         let spawnedBefore = spawned.count
         toggleScratch(c)
 
-        XCTAssertEqual(spawned.count, spawnedBefore, "the second tab reveals the window's shell")
-        XCTAssertEqual(surface.startCount, 1)
+        XCTAssertEqual(spawned.count, spawnedBefore, "the tab's own shell is still alive")
+        guard let card = cards(c).first else { return XCTFail("no card") }
+        let shown = descendants(of: card)
+        XCTAssertTrue(shown.contains(first.view), "the first tab's card shows the first tab's shell")
+        XCTAssertFalse(shown.contains(second.view), "never the other tab's")
+    }
+
+    /// A tab's scratch is the tab's, so closing the tab stops it — the same rule as its drawers.
+    func test_closingATabKillsThatTabsScratchShell() {
+        let c = makeWindow()
+        c.handle(.newTab)
+        let surface = openScratch(c)
+        toggleScratch(c)  // dismissed but alive: the case with no on-screen trace
+
+        c.closeTabForTesting(index: 1)
+
+        XCTAssertTrue(surface.terminated, "a closed tab must not leak its scratch shell")
+    }
+
+    /// The other side of that: an over-broad teardown that took the whole registry with it would
+    /// pass the test above and silently kill every other tab's shell.
+    func test_closingATabLeavesTheOtherTabsScratchAlone() {
+        let c = makeWindow()
+        let first = openScratch(c)
+        c.handle(.newTab)
+        let second = openScratch(c)
+        toggleScratch(c)
+
+        c.closeTabForTesting(index: 1)
+
+        XCTAssertTrue(second.terminated)
+        XCTAssertFalse(first.terminated, "the surviving tab keeps its own shell")
+    }
+
+    /// ⌘W on the last pane IS a tab close, so a busy scratch has to be weighed the way a busy
+    /// drawer is. Two tabs, so the window-close term can't be what answers, and the card is
+    /// dismissed first so the float-modal notice isn't either.
+    func test_closingTheLastPaneOfATab_confirmsWhenItsScratchIsBusy() {
+        let c = makeWindow()
+        c.handle(.newTab)
+        let surface = openScratch(c)
+        toggleScratch(c)
+        surface.isBusy = true
+
+        c.handle(.closePane)
+
+        XCTAssertTrue(c.isConfirmOpen, "a busy scratch must not be closed out from under the user")
+        XCTAssertFalse(surface.terminated, "and nothing dies before the answer")
+        XCTAssertTrue(
+            toastText(c).contains { $0.contains("Close Tab") },
+            "the confirm names the real effect: \(toastText(c))")
+    }
+
+    /// The dock dots a dismissed-but-running float. A tab-scoped one dots only where it runs.
+    func test_theDockDotsScratchOnlyInTheTabItIsRunningIn() {
+        let c = makeWindow()
+        _ = openScratch(c)
+        toggleScratch(c)
+        XCTAssertTrue(c.floatsForTesting.isLiveInBackground(ToolFloat.scratch.id))
+
+        c.handle(.newTab)
+
+        XCTAssertFalse(
+            c.floatsForTesting.isLiveInBackground(ToolFloat.scratch.id),
+            "a tab with no scratch running must not dot one")
+    }
+
+    /// ⇧⏎ replaces a tab in place, keeping its id. Without a scope teardown the replacement session
+    /// inherits the old one's scratch shell — same cwd, same scrollback, from a session that is gone.
+    func test_replacingATab_doesNotHandTheNewSessionTheOldScratch() {
+        let c = makeWindow()
+        let surface = openScratch(c)
+        toggleScratch(c)
+
+        c.openWorkspaceForTesting(elsewhere(), replaceCurrentTab: true)
+
+        XCTAssertTrue(surface.terminated, "the replaced session's scratch goes with it")
+        XCTAssertFalse(openScratch(c) === surface, "and the new session gets a cold one")
+    }
+
+    /// The confirm on that path, which weighs the tab's live work. The scratch is part of the tab
+    /// now, so a busy one has to stop the silent clobber.
+    func test_replacingABusyTab_confirmsBeforeItStopsTheScratch() {
+        let c = makeWindow()
+        let surface = openScratch(c)
+        toggleScratch(c)
+        surface.isBusy = true
+
+        c.openWorkspaceForTesting(elsewhere(), replaceCurrentTab: true)
+
+        XCTAssertTrue(c.isConfirmOpen)
+        XCTAssertFalse(surface.terminated, "nothing dies before the answer")
     }
 
     /// ⌘W over a float is a notice, not a close — the built-in follows the same rule as every

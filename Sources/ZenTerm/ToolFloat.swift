@@ -36,10 +36,10 @@ struct ToolFloat: Equatable {
     let heightFraction: CGFloat
     let requiresGitRepo: Bool
 
-    /// How long a float's process lives. Every float is window-level — one live instance
-    /// per id, shared by every tab in the window — so this says only whether that instance survives
-    /// dismissal, and what makes it stale. The raw value is the config token; the case names avoid
-    /// colliding with `Optional.none` (`.none`) and with the `dir:` field.
+    /// How long a float's process lives — whether the instance survives dismissal, and what makes
+    /// it stale. How MANY instances there are is the separate `scope` axis. The raw value is the
+    /// config token; the case names avoid colliding with `Optional.none` (`.none`) and with the
+    /// `dir:` field.
     enum Persistence: String {
         /// Terminate on dismiss; fresh spawn every open. Right for anything whose state goes stale
         /// (a file explorer, a scratch shell).
@@ -54,17 +54,31 @@ struct ToolFloat: Equatable {
         case window
     }
 
+    /// Which container owns a float's live instance, orthogonal to `persist:` — scope says how many
+    /// there are, `persist:` says how long each one lives.
+    ///
+    /// Deliberately not `RawRepresentable`: a raw value is exactly what would make this parseable,
+    /// and `persist:tab` was cut before it shipped because daily driving showed tab scoping is the
+    /// wrong axis for a tool. That verdict was about tools, which are about a directory or a
+    /// machine. Scratch is a blank shell, which is about the work in front of you, so it is the one
+    /// float that wants a tab.
+    enum Scope { case window, tab }
+
     let persist: Persistence
     let toggle: Chord  // the config `key:` — binds the chord AND renders the palette glyph
     /// The config `toolbar:` — false hides the float's toolbar button. Visual only: the chord,
     /// palette entry, and persistence behave exactly as if the button were shown.
     var showsInToolbar: Bool = true
+    /// Only meaningful for a float that registers — an `.ephemeral` one dies on dismiss either way.
+    /// Last and defaulted so no config-built or test-built float has to name it.
+    var scope: Scope = .window
 }
 
 extension ToolFloat {
-    /// The one built-in float: a blank login shell over the window, on ⌘;. A drawer's behavior in
-    /// a float's shape — `persist: .window` gives it one live instance per window that survives a
-    /// dismissal and dies on `exit`, which is what the two drawers do.
+    /// The one built-in float: a blank login shell over the tab, on ⌘;. A drawer's behavior in a
+    /// float's shape — `scope: .tab` plus `persist: .window` gives it one live instance per tab
+    /// that survives a dismissal and dies on `exit` or with its tab, which is what the two drawers
+    /// do. The one deliberate difference: a tab change dismisses the card instead of carrying it.
     ///
     /// It has no `float =` line, so it is absent from Settings → Tools and is never written to the
     /// config. Only its chord is the user's to change, on the Shortcuts card.
@@ -82,7 +96,8 @@ extension ToolFloat {
         // The DEFAULT chord, not the live one. Nothing may render a shortcut from this: a rebind
         // only moves the keymap entry, so every glyph goes through `CommandCatalog.spec(for:)`.
         toggle: Chord(command: true, key: ";"),
-        showsInToolbar: true)
+        showsInToolbar: true,
+        scope: .tab)
 
     static let builtInIDs: Set<String> = [scratch.id]
 
