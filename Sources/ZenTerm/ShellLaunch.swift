@@ -19,6 +19,17 @@ enum ShellLaunch {
     /// otherwise open a pane at the filesystem root. Home is the right default.
     static var defaultCWD: URL { FileManager.default.homeDirectoryForCurrentUser }
 
+    /// Where ⌘T and ⌘N start, given the focused pane's cwd. Nil means home, which the launch
+    /// builders below resolve through `defaultCWD`.
+    ///
+    /// One rule in one place because two callers answer it: a tab (`WindowController.newTab`) and a
+    /// window (`AppDelegate.route`). Split across both, one could keep inheriting after the other
+    /// stopped, and the two chords would silently disagree. A pane is not a caller: a split is a
+    /// second view of the pane in front of you, so it inherits unconditionally.
+    static func newSessionCWD(focused: URL?) -> URL? {
+        GeneralConfig.current.tabInheritCWD ? focused : nil
+    }
+
     /// The default pane/drawer session. With no configured shell this is a plain
     /// login+interactive shell (`command: nil` → the backend rewrites argv[0] to a login
     /// shell). A configured `shell` is launched explicitly, login+interactive by default

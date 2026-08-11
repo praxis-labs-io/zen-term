@@ -70,6 +70,20 @@ final class GhosttyConfigWriterTests: XCTestCase {
         XCTAssertFalse(text.contains("adjust-cursor-thickness"))
     }
 
+    func test_fontThicken_emitsGhosttyKeyWhenOn() {
+        let text = GhosttyConfigWriter.configText(for: theme, behavior: TerminalBehavior(fontThicken: true))
+        XCTAssertTrue(text.contains("font-thicken = true\n"))
+    }
+
+    /// Off by default, and nothing is emitted then, so ghostty's own default rules rather than
+    /// being pinned. The chrome shipped `font-thicken = true` unconditionally until this key existed.
+    func test_fontThicken_defaultsOff_emittingNoKey() {
+        XCTAssertFalse(TerminalBehavior().fontThicken)
+        XCTAssertFalse(
+            GhosttyConfigWriter.configText(for: theme, behavior: TerminalBehavior())
+                .contains("font-thicken"))
+    }
+
     func test_noShader_emitsNeitherShaderKey() {
         let text = GhosttyConfigWriter.configText(for: theme, behavior: TerminalBehavior())
         XCTAssertFalse(text.contains("custom-shader"))

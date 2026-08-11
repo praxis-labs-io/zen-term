@@ -31,6 +31,7 @@ final class GeneralConfigParserTests: XCTestCase {
             cursor-style = bar
             cursor-style-blink = false
             macos-option-as-alt = false
+            font-thicken = true
             scroll-multiplier = 4
             background-alpha = 0.7
             window-chrome = false
@@ -45,6 +46,7 @@ final class GeneralConfigParserTests: XCTestCase {
             diff-layout = inline
             shell = /bin/bash
             shell-args = -l -i
+            tab-inherit-cwd = true
             editor = vim
             ai = codex
             """)
@@ -53,6 +55,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.cursorStyle, .bar)
         XCTAssertFalse(config.cursorBlink)
         XCTAssertFalse(config.optionAsAlt)
+        XCTAssertTrue(config.fontThicken)
         XCTAssertEqual(config.scrollMultiplier, 4)
         XCTAssertEqual(config.backgroundAlpha, 0.7)
         XCTAssertFalse(config.windowChrome)
@@ -67,6 +70,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.diffLayout, .inline)
         XCTAssertEqual(config.shell, "/bin/bash")
         XCTAssertEqual(config.shellArgs, ["-l", "-i"])
+        XCTAssertTrue(config.tabInheritCWD)
         XCTAssertEqual(config.editor, "vim")
         XCTAssertEqual(config.ai, "codex")
     }
@@ -82,6 +86,20 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertTrue(parse("automatic-update-checks = true\n").automaticUpdateChecks)
         XCTAssertTrue(parse("automatic-update-checks = maybe\n").automaticUpdateChecks)  // malformed → default
         XCTAssertTrue(parse("font-size = 14\n").automaticUpdateChecks)  // absent → default (on)
+    }
+
+    func test_fontThicken_parsesAndDefaultsOff() {
+        XCTAssertTrue(parse("font-thicken = true\n").fontThicken)
+        XCTAssertFalse(parse("font-thicken = false\n").fontThicken)
+        XCTAssertFalse(parse("font-thicken = maybe\n").fontThicken)  // malformed → default (off)
+        XCTAssertFalse(parse("font-size = 14\n").fontThicken)  // absent → default (off)
+    }
+
+    func test_tabInheritCWD_parsesAndDefaultsOff() {
+        XCTAssertTrue(parse("tab-inherit-cwd = true\n").tabInheritCWD)
+        XCTAssertFalse(parse("tab-inherit-cwd = false\n").tabInheritCWD)
+        XCTAssertFalse(parse("tab-inherit-cwd = maybe\n").tabInheritCWD)  // malformed → default (off)
+        XCTAssertFalse(parse("font-size = 14\n").tabInheritCWD)  // absent → default (off)
     }
 
     func test_debug_parsesAndDefaultsOff() {

@@ -22,6 +22,10 @@ final class SettingsTerminalSection: SettingsFormSection {
             self.addNumericRow(
                 key: "font-size", caption: "Font size", blurb: "Point size",
                 range: SessionFontSize.range, read: { $0.fontSize }, width: 64)
+            self.addSegmentedRow(
+                key: "font-thicken", caption: "Thicken", blurb: "Heavier terminal text",
+                options: ["On", "Off"], read: { $0.fontThicken ? 0 : 1 },
+                token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
         }
         addGroup("Background") {
             self.addNumericRow(
@@ -59,6 +63,11 @@ final class SettingsTerminalSection: SettingsFormSection {
             self.addTextRow(
                 key: "shell-args", caption: "Shell args", blurb: "Passed to the shell (new tabs)",
                 placeholder: "optional", read: { LayoutFormat.joinArgs($0.shellArgs) }, width: 200)
+            self.addSegmentedRow(
+                key: "tab-inherit-cwd", caption: "Start directory",
+                blurb: "Where a new tab or window opens",
+                options: ["Home", "Current pane"], read: { $0.tabInheritCWD ? 1 : 0 },
+                token: { LayoutFormat.boolToken($0 == 1) }, notifiesOnReselect: false)
         }
         addGroup("Workspace") {
             self.addTextRow(

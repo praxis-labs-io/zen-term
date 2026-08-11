@@ -902,7 +902,7 @@ final class WindowController: NSObject {
 
     private func newTab() {
         cancelConfirm()  // the tab-bar "+" is reachable by mouse while a confirm is up
-        addTab(cwd: activeController?.focusedCWD, pinnedTitle: nil)
+        addTab(cwd: ShellLaunch.newSessionCWD(focused: activeController?.focusedCWD), pinnedTitle: nil)
     }
 
     /// Append a new tab with an explicit cwd and optional pinned title. The `⌘P` picker
@@ -1261,9 +1261,9 @@ final class WindowController: NSObject {
     /// `debug`) or an unrecognized one lands on the nav.
     private static func landing(forSettingKey key: String) -> SettingsLanding {
         switch key {
-        case "font-family", "font-size", "cursor-style", "cursor-style-blink", "cursor-thickness",
-            "cursor-shader", "background-alpha", "macos-option-as-alt", "scroll-multiplier", "shell",
-            "shell-args", "editor", "ai":
+        case "font-family", "font-size", "font-thicken", "cursor-style", "cursor-style-blink",
+            "cursor-thickness", "cursor-shader", "background-alpha", "macos-option-as-alt",
+            "scroll-multiplier", "shell", "shell-args", "tab-inherit-cwd", "editor", "ai":
             return .terminal
         case "theme", "accent-color", "window-chrome", "backdrop-alpha", "window-gutter", "pane-gap",
             "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",

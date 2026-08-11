@@ -54,6 +54,8 @@ enum GeneralConfigParser {
                 }
             case "macos-option-as-alt":
                 if let b = parseBool(value, key, &diagnostics) { config.optionAsAlt = b }
+            case "font-thicken":
+                if let b = parseBool(value, key, &diagnostics) { config.fontThicken = b }
             case "scroll-multiplier":
                 if let n = parseDouble(value, key, &diagnostics) {
                     config.scrollMultiplier = clamp(n, 0.1, 10, key, &diagnostics)
@@ -112,6 +114,8 @@ enum GeneralConfigParser {
                 if !value.isEmpty { config.shell = value }
             case "shell-args":
                 config.shellArgs = value.split(whereSeparator: \.isWhitespace).map(String.init)
+            case "tab-inherit-cwd":
+                if let b = parseBool(value, key, &diagnostics) { config.tabInheritCWD = b }
             case "editor":
                 if !value.isEmpty { config.editor = value }
             case "ai":
