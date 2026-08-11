@@ -43,7 +43,7 @@ enum MainMenu {
         // field editor implements all six and takes them ahead of the window, and `WindowController`
         // implements the three a terminal can answer as the endpoint below. A custom selector here
         // instead (`copyFromSurface:`) walks straight past the field, which is what left ⌘C in the
-        // find bar copying the buffer behind it (ZEN-370).
+        // find bar copying the buffer behind it.
         //
         // A field editor gets Undo, Redo and Cut from these key equivalents and from nowhere else:
         // macOS ships no default key binding for them, so an app without the items has ⌘Z and ⌘X
@@ -68,9 +68,9 @@ enum MainMenu {
         editMenu.addItem(
             withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
 
-        // Help menu — Export Diagnostics (ZEN-11). Nil target routes through the responder chain to
+        // Help menu — Export Diagnostics. Nil target routes through the responder chain to
         // the app delegate, like About. macOS adds its standard search field to any menu titled
-        // "Help"; that's expected. ZEN-212 adds Report an Issue here.
+        // "Help"; that's expected. Report an Issue is added here.
         let helpItem = NSMenuItem()
         main.addItem(helpItem)
         let helpMenu = NSMenu(title: "Help")

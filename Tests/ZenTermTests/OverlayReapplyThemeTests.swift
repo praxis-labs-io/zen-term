@@ -4,7 +4,7 @@ import XCTest
 @testable import ZenTerm
 
 /// Window-mounted recolor tests for the palette overlays + Add-Workspace form's
-/// `reapplyTheme()` (ZEN-89 task 8). Same pattern as `ReapplyThemeTests` (Task 6/7): swap
+/// `reapplyTheme()`. Same pattern as `ReapplyThemeTests`: swap
 /// `Theme.current` via `Theme.setCurrentForTesting(_:)`, call `reapplyTheme()`, assert a real
 /// color-bearing property changed. These overlays additionally hold IN-PROGRESS user input
 /// (a typed search query, a typed field value, a typed env var) that a naive rebuild would

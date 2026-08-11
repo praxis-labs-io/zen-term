@@ -21,7 +21,7 @@ row at a time for motions (`text(viewportRow:)`) and a span at a time for a yank
 **`setFontSize` is separate from `applyAppearance` on purpose.** Appearance travels
 as a whole theme through the app-global config, which on a file-configured backend
 costs a synchronous write/read/parse per distinct value: fine for a theme swap,
-not for a size the user is holding a key to change (ZEN-224). It takes an absolute
+not for a size the user is holding a key to change. It takes an absolute
 size, never a delta, so the chrome stays the single owner of the number: a stepping
 API would leave the running size inside each surface where the chrome can't read it
 back, and surfaces would drift apart at whatever bounds the backend enforces.
@@ -57,21 +57,21 @@ rather than the work being done. The `⇧`-arrow selection binds are the same sh
 whether a selection exists, and they are still in the shadow for the sweep to meet.
 
 **ZenTerm unbinds most of libghostty's keymap, and `GhosttyUnboundChords` holds the
-decision (ZEN-365).** A bind is taken back when ZenTerm already has an action for it,
+decision.** A bind is taken back when ZenTerm already has an action for it,
 so the backend's copy only duplicates the chrome in ghostty's vocabulary, or when its
 action reaches an apprt callback we never implement, so the key is swallowed and
 nothing happens. `GhosttyConfigWriter` emits one `keybind = <trigger>=unbind` line
 per chord, which is the only channel there is: libghostty takes configuration from
 files and has no setter API.
 
-What survives is `GhosttyUnboundChords.kept`, and since ZEN-369 it is one thing:
+What survives is `GhosttyUnboundChords.kept`, and it is one thing:
 terminal encoding rather than chrome action. `⌘←`/`⌘→` send `^A`/`^E`, `⌥←`/`⌥→` send
 `ESC b`/`ESC f`, `⇧`-arrows adjust a selection. A keystroke that turns into bytes for
 the program is not a shortcut, and those stay with the backend for good, so the list
 is finished rather than waiting on the next ticket.
 
-The behavior ZenTerm had not named yet is now named. ZEN-367 took the seven that rode
-seam methods the protocol already had; ZEN-369 took the last seven and grew the seam
+The behavior ZenTerm had not named yet is now named. Seven of them rode
+seam methods the protocol already had, and the last seven grew the seam
 for them: `clearScreen`, `selectAll` and `writeScreenToFile` on `TerminalSurface`, and
 `.selection` and `.prompt(Int)` on `TerminalScroll`, since scrolling to a selection and
 jumping a prompt are viewport moves and the sign convention already covers them.
@@ -97,7 +97,7 @@ config as it stands now. It logs and shows nothing: the probe answers a disposit
 not an action name, so a line can say the backend takes a chord but not what it does
 with it.
 
-**Since ZEN-369 it finds nothing, on any config.** Rebinding nav to `ctrl+hjkl` used
+**It finds nothing today, on any config.** Rebinding nav to `ctrl+hjkl` used
 to make ⌘K clear the scrollback; naming `clear_screen` and unbinding libghostty's copy
 was the last chord a ZenTerm default could hand back, and what survives down there is
 encoding no default sits on. The check stays as a regression guard: a pin bump that
@@ -108,7 +108,7 @@ It confirms the backend is answering before trusting an empty result, on ⌥←.
 on a locked screen and leaves the object alive), and every chord then reads
 `.ignores`. Without the check, a dead probe and a clean config are the same answer,
 and an empty result is this check's all-clear. **The canary has to come from the
-permanently-kept set:** it was ⌘T until ZEN-365 unbound that, and a canary we later
+permanently-kept set:** it was ⌘T until that chord was unbound, and a canary we later
 unbind reports a dead backend forever without changing anything else.
 
 **The rule:** if only one backend can do a thing, it stays below the seam. The
@@ -139,7 +139,7 @@ TerminalKit          the ONLY target that may import GhosttyKit
   TabKit             pure: no AppKit, no backend
 
   AppLog             pure leaf (Foundation + os); TerminalKit and ZenTerm
-                     depend on it for diagnostic logging (ZEN-11)
+                     depend on it for diagnostic logging
 ```
 
 **Nothing lints this. The package graph does.** `ZenTerm` has no dependency on
@@ -223,21 +223,21 @@ masking a resolution failure.
   panes at two different sizes.
 - **One surface can still run its own config.** `updateSurfaceConfig` pushes a
   config to a single surface without touching the app-global one, which is how the
-  cursor shader stands down on an unfocused pane (ZEN-237). Theming stays global:
+  cursor shader stands down on an unfocused pane. Theming stays global:
   the per-surface shape is rebuilt from the theme that just landed, so a stood-down
-  surface follows an appearance change instead of holding the old one (ZEN-271).
+  surface follows an appearance change instead of holding the old one.
 - **libghostty accepts config only from files.** `GhosttyConfigWriter` writes to
   `$TMPDIR/zenterm-ghostty-config-<pid>`. It deliberately does *not* call
   `ghostty_config_load_default_files`, so a user's `~/.config/ghostty` cannot skew
   ZenTerm's appearance. Because that means a synchronous write, read and parse on
   the main thread, the per-surface configs are cached by their generated text and
-  cleared when the app-global config moves (ZEN-90, ZEN-271).
+  cleared when the app-global config moves.
 - **A per-surface config push must carry that surface's font size.** `Surface.updateConfig`
   resets the size of any surface libghostty has not marked `font_size_adjusted` to
   whatever the pushed config says, so a push built from the theme alone silently
   drops a pane's stepped size. `updateSurfaceConfig` takes a `fontSize` for this;
   the app-global config leaves it nil, where the theme's size is correct by
-  definition (ZEN-224).
+  definition.
 - **The generated config's `theme` line is not a theme.** It names two files
   (`$TMPDIR/zenterm-ghostty-scheme-<pid>-{light,dark}`) that ZenTerm writes empty
   and that set nothing. They exist only because libghostty answers the color-scheme
@@ -252,22 +252,27 @@ masking a resolution failure.
   The pair also moves `window-theme` off `auto`, which is inert here: only ghostty's
   GTK apprt reads that key, and the chrome never calls `ghostty_config_get`. So a
   surface's conditional state can differ from the app config's, which is the one
-  place per-surface state is real (ZEN-307; ZEN-320 re-checks it on a pin bump).
+  place per-surface state is real.
+
+  **Re-check this on a ghostty pin bump** by diffing `ghostty +show-config` with and
+  without the `theme` line. Every resolved key should be byte-identical apart from
+  `window-theme`; anything else moving means the explicit colors have stopped
+  outranking the loaded files. That diff is what caught the `window-theme` move.
 - **Shader draw stops when nobody can see it.** The focus libghostty is told about
   is `paneFocused && isAppActive`, and `GhosttyHostView` reports its window's
   occlusion, so a backgrounded, covered or minimized window runs no shader draw
-  timer at all (ZEN-271).
+  timer at all.
 - **Teardown sweeps process sessions, not process groups.** libghostty sends
   `SIGHUP` to the shell's own process group, which misses every job the shell
   parked elsewhere: background jobs, children in their own process group (what
   `npm`, `turbo` and watchers do), `nohup`, `disown`. Those survived a closed tab
-  and a quit (ZEN-269). `ShellSessionLedger` records every shell session the app
+  and a quit. `ShellSessionLedger` records every shell session the app
   starts; teardown sweeps the ones whose *leader has exited*, via
   `ShellSessionReaper` (`SIGTERM`, 150ms grace, `SIGKILL`, off-main).
   **Each leader is watched for its own exit**, with a kqueue process source armed
   when it is recorded. It used to be polled for inside a one-second window, which
   meant a leader slower than that was never swept at all: nothing rescheduled a
-  look, so on the last pane its dev server outlived the close (ZEN-306). No
+  look, so on the last pane its dev server outlived the close. No
   duration is correct here, because a shell waiting on a foreground child exits
   when that child does. These leaders are the app's own direct children, so the
   kernel can name the moment instead.
@@ -287,7 +292,7 @@ masking a resolution failure.
   work to finish: at the moment the last surface is freed no leader has exited
   yet, so a drain watching only for idle sees none and lets the process go before
   a single signal is sent. Without any of it, quit frees no surface at all
-  (ZEN-269).
+.
 - **`GHOSTTY_RESOURCES_DIR` is force-overridden.** Launching ZenTerm from inside
   Ghostty.app would otherwise inherit a mismatched version's shell integration and
   terminfo.
@@ -300,7 +305,7 @@ masking a resolution failure.
 - **Every input event libghostty sees is an explicit `NSView` override.** There is
   no catch-all, so an event nothing overrides is dropped in silence rather than
   failing loudly. Modifier press and release (`flagsChanged`) and every mouse button
-  past left and right were missing for exactly that reason (ZEN-308): the app looks
+  past left and right were missing for exactly that reason: the app looks
   completely normal, and the only thing that notices is a program inside the pane,
   running under the kitty keyboard protocol or with mouse reporting on. Modifier
   events carry which *side* moved, because AppKit reports the modifier state that
@@ -332,7 +337,7 @@ masking a resolution failure.
   responder-chain event, so it reaches the first responder alone. Ghostty adds a
   window-level monitor that fans it out to the other surfaces, which ZenTerm does
   not have, so an unfocused pane holds stale mouse mods until the pointer moves
-  over it (ZEN-316).
+  over it.
 
 ### What the backend will and won't do
 
@@ -356,7 +361,7 @@ and selection. This matches Terminal.app and iTerm2.
 
 ⌘-hover also raises `MOUSE_OVER_LINK`, which crosses the seam as
 `surface(_:hoveredLinkDidChange:)` and mounts a `LinkPreviewView` near the pointer
-(`LinkPreviewPresenter`, ZEN-24), so underline, pointer cursor and URL preview
+(`LinkPreviewPresenter`), so underline, pointer cursor and URL preview
 appear together. Plain-hover underlining was considered and declined: the highlight
 condition is hardcoded per link and the `link` config that could change it is
 unsettable upstream, and since highlight is also what makes a link clickable
@@ -386,9 +391,9 @@ cursor and color uniforms as **sRGB** (raw `/255`), and the pipeline is not line
 so a shader that runs `sRGBToLinear(iCurrentCursorColor.rgb)` comes out nearly
 invisible over text, so use the color raw. **A shader does not affect layer
 opacity.** `layer.isOpaque` follows `behavior.isBackgroundSolid`, which is the
-whole of `background-alpha` (ZEN-282), and nothing else. ZEN-188 once carved out an
+whole of `background-alpha`, and nothing else. An earlier version carved out an
 exception dropping the layer out of opaque whenever a shader was on, against an
-alt-screen white flash; ZEN-271 removed it, because that flash was root-caused by
+alt-screen white flash; it was removed, because that flash was root-caused by
 reading the code and never reproduced, and the guard bought nothing (the window is
 translucent below `background-alpha` 1 regardless, so the compositor blends it
 either way). Only MIT-licensed shaders are bundleable:
@@ -461,7 +466,7 @@ stack, modal card.** Each position is a decision, not an accident. A **float** s
 below the tab bar because the ⌘W guard toast ("Close btop first, then ⌘W") fires
 while a float is open and is telling you to close that float, so the toast has to
 win. A **modal card** is the opposite case: it owns the keyboard and dims the tile,
-so a passive notice over it reads as broken, and it mounts at the front (ZEN-280).
+so a passive notice over it reads as broken, and it mounts at the front.
 Two things follow. The toast stack is built lazily on the window's first toast, so it
 inserts *below* a card that is already open. And a card is window-hosted, so nothing
 unmounts it implicitly: the `closeModal()` in `select` / `addTab` / `closeTab` is what
@@ -555,7 +560,7 @@ them. Each hop falls through to whatever is actually showing, so a repo with no 
 base doesn't swallow Up and strand the branch picker on the mouse.
 `Base: <branch>` re-runs the committed slice against the chosen
 branch, ordered default-first then by recency. `Branch: <name>` picks what is being
-*read* rather than what it is measured against (ZEN-313), ordered checked-out-first.
+*read* rather than what it is measured against, ordered checked-out-first.
 They stack rather than sharing a row because both hold unbounded branch names: split one
 row between them and both truncate while the card is held open. Both set
 `titleTruncatesUnderPressure`, so the pickers yield their width instead of driving the
@@ -568,7 +573,7 @@ live in `DiffViewerOverlay` because only it knows both, and both move as you pic
 `GitDiffRunner.orderedBranches` used to drop the checked-out branch for this reason; it
 excludes nothing now, since once a head is selectable it is the *selection* that decides,
 not the checkout. Picking rebuilds the header immediately rather than waiting for the
-load, because a reload landing an identical status is a deliberate no-op (ZEN-233) and
+load, because a reload landing an identical status is a deliberate no-op and
 would otherwise strand both pickers on the old pair.
 
 **A picked branch is read two different ways.** One with a worktree is a real checkout on
@@ -590,13 +595,13 @@ the diff is right while its colours come from another branch's file contents, an
 added on the picked branch caches a nil span set and renders plain forever.
 
 **The branch lists refresh on every load, ahead of the unchanged-status guard.** That guard
-exists so an identical diff repaints nothing (ZEN-233), but it says nothing about whether
+exists so an identical diff repaints nothing, but it says nothing about whether
 branches were created or deleted. Gated behind it, a picker could name a branch that no
 longer existed until some unrelated edit happened to change the diff. A refresh also
 re-resolves any override by name, so a deleted branch or a moved worktree drops the
 selection rather than leaving the picker showing one branch while the loader is asked for
 another. An empty listing is treated as a failed read, not as proof the branch is gone. Navigation is vim-native and
-local to the card (ZEN-262). ⌘h/⌘l move focus between the tree and the diff (the app's
+local to the card. ⌘h/⌘l move focus between the tree and the diff (the app's
 own pane chords, forwarded from `WindowController.handle` since `KeyInterceptor` consumes
 chords before the responder chain); everything else is a bare key the panes handle in
 `keyDown`. In the tree, j/k step files, h/l (and ←/→) fold a directory or open a file into
@@ -822,9 +827,9 @@ Defaults (`KeymapDefaults.map`): ⌘D and ⌘⇧D split, ⌘⌥arrows nav, ⌘�
 close pane, ⌘T new tab, ⌘N new window, ⌘[ ⌘] tabs, ⌘1-9 select, ⌘B bottom drawer,
 ⌘\ right drawer, ⌘⇧⏎ Focus Mode, ⌘⏎ Fill Screen, ⌘⇧S scroll mode, ⌘F find, ⌘⇧P command
 palette, ⌘P workspace picker, ⌘G diff viewer, ⌘, settings, ⌘⇧, reload, ⌘= and ⌘+ and
-⌘- font size, ⌘0 reset it. ZEN-367 added five more on the chords libghostty already used
+⌘- font size, ⌘0 reset it. Five more sit on the chords libghostty already used
 for them: ⌘Home, ⌘End, ⌘PageUp, ⌘PageDown scroll the viewport and ⌘E finds the selection.
-ZEN-369 added ⌘K clear screen, ⌘J scroll to the selection, ⌘⇧J and its
+Then ⌘K clear screen, ⌘J scroll to the selection, ⌘⇧J and its
 ⌃/⌥ variants write the screen to a file, ⌘⇧V paste the selection, and the prompt jumps on
 ⌘⇧↑ and ⌘⇧↓. Select All is ⌘A and is the Edit menu's rather than the keymap's, for the
 reason below.
@@ -899,7 +904,7 @@ offered, and a second listing would advertise a chord the Shortcuts card has to 
 costs come with that, and the reference config states both. Every bind landing on ⌘A is now
 refused, not just `select_all`, so a config that had `clear_screen=cmd+a` loses it on upgrade.
 And `select_all=none` no longer hands ⌘A to the program in the pane, because a key equivalent
-is not the keymap's to unbind (ZEN-370).
+is not the keymap's to unbind.
 
 **A responder that keeps its own selection has to answer `selectAll:` itself.** The diff pane
 is the one that does. `NSTableView` implements the selector, so a nil-target menu item reaches
@@ -936,11 +941,11 @@ read.
 **Increase ships two chords, and the second is load-bearing.** ⌘+ on a US layout is
 physically ⌘⇧=, which `Chord` folds onto `=` because Shift is set, making it a
 different dictionary key from bare ⌘=. Bind only ⌘= and the keypress most people make falls
-through to libghostty, which still has it bound per surface, reproducing ZEN-224
+through to libghostty, which still has it bound per surface, reproducing that bug
 for the common case. It is the one action with two defaults; `assemble` drops all of
 an action's defaults on a rebind, and `Chord.displayed` sorts by config token, so a
-keycap renders the plainer ⌘=. (ZEN-142 had moved split off bare ⌘- to leave it to
-libghostty; ZEN-224 took the chord back, and it is font size alone now.)
+keycap renders the plainer ⌘=. (An earlier keymap moved split off bare ⌘- to leave it to
+libghostty; the chord came back, and it is font size alone now.)
 
 **The prompt jumps are the mirror, and the same sort rule is why.** libghostty binds
 them on bare ⌘↑/⌘↓ *and* ⌘⇧↑/⌘⇧↓; ZenTerm ships only the shifted pair, which is the one
@@ -955,7 +960,7 @@ the machine, not by a test, which is what the runbook is for.
 keybinds, later winning. **A user keybind moves its action**: the action's default
 chords are dropped first, so the old key is freed rather than both firing.
 
-**Unbound is a value, not an absence (ZEN-368).** `keybind = find_next=none` drops
+**Unbound is a value, not an absence.** `keybind = find_next=none` drops
 the action's defaults and puts nothing back, so the chord reaches the program. The
 drop happens in the same filter a rebind uses, ahead of every write, and that is the
 whole mechanism behind an unbind being silent: the chord is free by the time a float
@@ -992,7 +997,7 @@ surfaces read to decide whether the button exists at all.
 Re-carding is gated on the conflict set changing, because every in-app write reloads
 and a Settings keystroke would otherwise restore a card the user just closed. A
 launch is a fresh process, which is what makes an unanswered conflict come back. The
-card arms no key equivalents (ZEN-143), so Esc keeps reaching the pane and the × is
+card arms no key equivalents, so Esc keeps reaching the pane and the × is
 the only keyboard-free way out.
 
 **Delete removes; reset is an icon beside the input.** On a `KeybindChip`, Backspace
@@ -1031,12 +1036,12 @@ palette, a form, or a confirm is mid-question, and acting on a chord behind it w
 answer by walking away. The diff viewer is the exception for tab chords (⌘1-9, ⌘[,
 ⌘]), because it is a reading surface you live in rather than a question. It cannot
 ride the switch the way a tool float does: the diff it shows belongs to the tab it
-was opened from, so `closeModal()` takes it down and the switch happens. Each tab keeps its own `DiffViewerSession` (ZEN-298), so ⌘D on the far side
+was opened from, so `closeModal()` takes it down and the switch happens. Each tab keeps its own `DiffViewerSession`, so ⌘D on the far side
 comes back where that tab left off.
 
 **The float stage speaks rather than swallowing.** A pane command (nav, split,
 resize, drawer, Focus Mode) pressed over an open float has nowhere to go, so it
-raises a notice naming the float instead of doing nothing at all (ZEN-270). Held
+raises a notice naming the float instead of doing nothing at all. Held
 chords auto-repeat, so it coalesces on a 3-second throttle, the same shape as the
 zoom-block and no-neighbor toasts. It is not keyed by chord: the notice reads the
 same whichever was pressed, so a second chord inside the window would only repeat a
@@ -1054,7 +1059,7 @@ pane nav is untouched whether or not the pane runs nvim.
 Two things claim a Ctrl-nav chord ahead of pane nav: a pane running nvim, and **an
 open tool float**, whatever it is running. A float is modal, so `handle` swallows nav
 while one is up; consuming the chord took it from the tool and then dropped it, which
-is how Ctrl-hjkl died inside an nvim float (ZEN-270). The float path needs no vim
+is how Ctrl-hjkl died inside an nvim float. The float path needs no vim
 check and no socket at all. A float mints no nav token and gets no `$ZEN_PANE`, so the
 plugin inside one degrades to plain `wincmd`, which is the right behavior for a modal
 surface with nowhere to hand off to.
@@ -1128,7 +1133,7 @@ moving a cursor to a prompt is not expressible. Vim's `{`/`}` key off blank line
 are readable, and in a terminal a blank line is what separates one command's output from the
 next.
 
-ZEN-369 named that jump as `scroll(.prompt(_:))` on ⌘⇧↑/⌘⇧↓, so both now ship and neither
+That jump is named `scroll(.prompt(_:))` on ⌘⇧↑/⌘⇧↓, so both now ship and neither
 replaces the other. `{`/`}` move a cursor within what you can see; the chord moves the
 viewport and reaches what you cannot. Nothing above changed except who owns the chord.
 
@@ -1142,7 +1147,7 @@ viewport: a paragraph off-screen needs the buffer moved first, which is what the
 A page move is the other case: it carries the cursor with the viewport, so your place on
 screen is kept.
 
-#### Selection and yank (ZEN-331)
+#### Selection and yank
 
 `v` and `V` anchor a selection at the cursor; motions grow it; `y` copies it, drops back
 to normal mode, and pulses what it took the way `DiffPaneTable.flashYank` does. The pulse
@@ -1177,14 +1182,14 @@ The other limit is columns. `read_text` hands back a string with no per-characte
 mapping, so a column is a character offset into the row's text. A wide character (CJK, an
 emoji) fills two cells while counting as one offset, so the cursor cell sits one to the left
 of true for each one earlier in the row and a yank ending past one stops short of what was
-highlighted. ZEN-349 carries the width-aware model that closes both.
+highlighted. A width-aware model would close both.
 
 A row's trailing blanks come off in `rowText`, not in the backend. `Surface.dumpTextLocked`
 reads with `.trim = false` and the formatter keeps every cell a program actually painted, so a
 row filled edge to edge (a prompt with a right segment, a status bar) arrives padded to the grid
 width. Left on, `$` parks the cursor out in the padding and `v$y` copies a run of spaces.
 
-### Scrollback search (ZEN-324)
+### Scrollback search
 
 ⌘F opens a find bar along the bottom of the focused panel. **The searching is
 libghostty's**: it matches, counts, tracks which match is selected, and its renderer
@@ -1270,7 +1275,7 @@ Do not try to close this by tracking viewport offsets or forcing a scroll before
 navigate; both were considered and neither makes the answer knowable.
 
 The four `search-*` colors are emitted from `Theme.current` by `AppTheme`'s init, so a
-terminal theme cannot reach a surface without them (ZEN-91). Candidates sit back toward the
+terminal theme cannot reach a surface without them. Candidates sit back toward the
 terminal background so a screenful of them is not a wall; the selected one takes the accent
 at full strength and inverts its text. A theme file naming its own keeps them.
 
@@ -1333,7 +1338,7 @@ Two rules keep it honest, and both were silent failures without them:
 - **New surfaces are seeded, not just live ones.** `ShellLaunch` and
   `ToolFloatController` carry `SessionFontSize.points` in the spawn config, so a pane
   split after a step opens matched. Fanning a step out to what is already on screen
-  is only half of ZEN-224; the next split lands at the config size otherwise.
+  is only half the job; the next split lands at the config size otherwise.
 
 **Live reload works because most call sites re-read.** `GeneralConfig.current` and
 `Theme.current` are process-global mutable statics, and things like
@@ -1469,7 +1474,7 @@ CLAUDE.md for the rule that the chrome never hardcodes a color.
 applied by libghostty *below* the seam. It writes the color into `terminal.colors` and its
 renderer draws from there, so the grid follows a program whether the chrome reacts or not,
 and there is no config key to stop it. What the chrome decides is how far that reaches
-(ZEN-23). `GHOSTTY_ACTION_COLOR_CHANGE` is the notification that lands afterwards, and the
+. `GHOSTTY_ACTION_COLOR_CHANGE` is the notification that lands afterwards, and the
 background alone is carried up, as `surface(_:backgroundDidChange:)` plus the
 `backgroundOverride` pull for a host built after the fact. It repaints the fill that pane
 paints around and under its own terminal (`PanelHostView`, `SurfaceFloatOverlay`, and the
@@ -1482,7 +1487,7 @@ those and no chrome surface repeats them.
 `background-alpha` a pane deliberately has no opaque fill: the clip stops filling so the grid
 can show through, and `RingFillView` paints the padding at the pane's alpha. The chrome's
 tints are alpha inks tuned for an opaque background, so the find bar's accent-at-0.14
-composited onto whatever was behind the *window* and read grey (ZEN-354). Every strip inside a
+composited onto whatever was behind the *window* and read grey. Every strip inside a
 pane now takes the same fill the ring paints, with its tint over it
 (`ChromeTheme.surface(tint:over:)`), pushed down by `PanelHostView.applyBackground` so an OSC
 11 repaint carries into it too.
@@ -1492,7 +1497,7 @@ it. The ring punches the terminal's frame out of the padding it paints, so a str
 the terminal moves that hole. Flipping a constraint does not mark the panel as needing layout,
 and `layout()` is the only other thing that marks the ring, so the ring keeps the hole it
 punched for the full-height terminal: the strip's band goes unpainted and the window's backdrop
-shows straight through it. That band was the grey in ZEN-354, measured off a screenshot as
+shows straight through it. That band was the grey strip, measured off a screenshot as
 *exactly* the backdrop's color rather than a washed-out fill. Focus Mode never showed it because
 zooming resizes the panel itself, so `layout()` runs.
 
@@ -1513,14 +1518,14 @@ with nothing the chrome can observe. Both need a backend fix, not a chrome one.
 
 **`accent` is the one role the user can repoint.** It is the chrome's primary and
 is read live at every focus, active, and confirm surface, so `accent-color` in the
-config sends all of them at once by naming an `AccentSlot` (an ANSI hue name, ZEN-255).
+config sends all of them at once by naming an `AccentSlot` (an ANSI hue name).
 The override is applied to the `accent` field alone inside the deriver, so the roles
 that carry meaning stay put: a warning is not a taste. What makes this work with no
 call-site changes is that nothing caches the color: `ConfigChange.between` sets
 `.theme` from a whole-value `AppTheme` diff, and the existing `reapplyTheme()` fan-out
 repaints even the sites that bake their color at init, like the tab bar's tracer.
 
-The syntax roles do not follow it (ZEN-301). `synKeyword` derives from the same
+The syntax roles do not follow it. `synKeyword` derives from the same
 `slot(5)` the accent defaults to, so out of the box the chrome's primary and the diff
 viewer's keywords are the same color by coincidence. Repointing the accent leaves the
 code where it is: a keyword is a token role, not a taste. `ChromeThemeDeriverTests`

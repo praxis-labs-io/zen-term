@@ -104,7 +104,7 @@ enum CommandCatalog {
     static func commands(tabCount: Int) -> [PaletteCommand] {
         var chords: [KeyInterceptor.ReservedChord] = [.toggleRepoPicker, .openDiffViewer]
         chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
-        chords += [.newTool]  // Settings was the only way to create one (ZEN-286)
+        chords += [.newTool]  // Settings was the only way to create one
         chords += [.openSettings, .reloadConfig, .checkForUpdates, .reportIssue]
         chords += [
             .toggleBottomDrawer, .toggleRightDrawer,

@@ -7,7 +7,7 @@ import AppKit
 /// tree stays cheap no matter the file's size. A current-line highlight moves with the arrow keys;
 /// ⌘j/⌘k jump between changes (driven from the overlay).
 ///
-/// Selection is **linewise** (ZEN-227): `V` starts a visual selection anchored on the cursor, movement
+/// Selection is **linewise**: `V` starts a visual selection anchored on the cursor, movement
 /// extends it, and `y`/`Y` yank the selected code or a `path:line` reference. The cursor is tracked
 /// explicitly rather than read back from `NSTableView.selectedRow`, which reports the *last* index in
 /// the set — that's the anchor, not the cursor, whenever a selection was extended upward.
@@ -36,9 +36,9 @@ final class DiffPaneTable: NSView {
     var onYank: ((Bool) -> Void)?
     /// Esc with nothing to clear — wired to close the viewer. A visual selection is collapsed first.
     var onEscape: (() -> Void)?
-    /// ⏎ on the diff — open the comment composer for the current selection (ZEN-257).
+    /// ⏎ on the diff — open the comment composer for the current selection.
     var onCompose: (() -> Void)?
-    /// Bare `\` — flip the viewer between inline and side-by-side (ZEN-262).
+    /// Bare `\` — flip the viewer between inline and side-by-side.
     var onToggleLayout: (() -> Void)?
     /// Bare `b` — focus the base-ref selector.
     var onFocusBase: (() -> Void)?
@@ -69,16 +69,16 @@ final class DiffPaneTable: NSView {
         table.backgroundColor = .clear
         // `.automatic` reserves horizontal row insets (a source-list-style margin), which pushes the diff
         // content off the pane edges — a gap from the tree divider on the left and the card edge on the
-        // right. `.plain` removes it so rows span the full pane width (same trap ZEN-236 hit on the tree).
+        // right. `.plain` removes it so rows span the full pane width (the same trap the tree hit).
         table.style = .plain
         table.gridStyleMask = []
         table.intercellSpacing = NSSize(width: 0, height: 0)
-        table.focusRingType = .none  // no system-blue ring on focus-in (ZEN-27: chrome is theme-only)
-        table.allowsMultipleSelection = true  // linewise selection: drag, shift-click, V (ZEN-227)
+        table.focusRingType = .none  // no system-blue ring on focus-in (chrome is theme-only)
+        table.allowsMultipleSelection = true  // linewise selection: drag, shift-click, V
         table.allowsEmptySelection = true
         // The vim keys are plain letters, so AppKit's type-select would race them for every keystroke.
         table.allowsTypeSelect = false
-        // The delegate's `heightOfRow` grows the comment box's anchor row (ZEN-257); it's consulted per
+        // The delegate's `heightOfRow` grows the comment box's anchor row; it's consulted per
         // row regardless of this base value. `rowHeight` still has to be the real 20, not AppKit's
         // default — `halfPage()` divides the visible height by it to size a Ctrl-D/U jump.
         table.rowHeight = DiffCellMetrics.rowHeight
@@ -154,7 +154,7 @@ final class DiffPaneTable: NSView {
         syncCursorAfterMouseSelection()
     }
 
-    // MARK: the inline comment box (ZEN-257)
+    // MARK: the inline comment box
 
     /// The box currently hanging under the selection, or nil. Held as a plain subview of the table
     /// rather than as a row's cell: a table recycles row views, and a recycled one would take a note
@@ -182,7 +182,7 @@ final class DiffPaneTable: NSView {
     }
 
     /// Grow (or shrink) the reserved room to a new box height as the note gains or loses lines
-    /// (ZEN-257) — re-tile so the lines below follow, and re-frame the box into the new room.
+    /// — re-tile so the lines below follow, and re-frame the box into the new room.
     func setComposerHeight(_ height: CGFloat) {
         guard composerBox != nil, let anchor = source.composerAnchor, source.composerHeight != height
         else { return }
@@ -233,7 +233,7 @@ final class DiffPaneTable: NSView {
 
     /// The cursor's line numbers — a row identity the caller can hold across a rows swap the pane can't
     /// bridge itself. The reload path clears the pane (`show([])`) while the new file's highlight is
-    /// parsed, so by the time its rows arrive the pane has no cursor left to carry (ZEN-233).
+    /// parsed, so by the time its rows arrive the pane has no cursor left to carry.
     var cursorLine: DiffSelection.LineNumbers? { DiffSelection.lineNumbers(at: cursorRow, in: source.rows) }
 
     /// Render `rows`. `preservingSelection` is for a re-render of the *same* file — a layout flip
@@ -283,7 +283,7 @@ final class DiffPaneTable: NSView {
         table.scrollRowToVisible(0)
     }
 
-    // MARK: linewise selection (ZEN-227)
+    // MARK: linewise selection
 
     /// Move the cursor to `row`, extending the visual selection when one is active. The single funnel
     /// for every cursor move — arrows, vim keys, change jumps, half-pages — so the selection, the
@@ -334,7 +334,7 @@ final class DiffPaneTable: NSView {
     /// `NSTableView` implements `selectAll:` itself, and letting it run would light every row while
     /// the cursor and anchor still pointed at one: `hasVisualSelection` would stay false, Esc would
     /// close the viewer instead of collapsing, and the next `j` would snap the highlight away. The
-    /// pane writes the selection here as it does everywhere else (ZEN-370).
+    /// pane writes the selection here as it does everywhere else.
     func selectAllRows() {
         guard !source.rows.isEmpty else { return }
         anchorRow = 0
@@ -472,10 +472,10 @@ final class DiffPaneTable: NSView {
     }
 
     /// The modifiers a chord may claim. Everything else AppKit stamps on an event (`.function`,
-    /// `.numericPad`) is noise that must be masked off before comparing (ZEN-81).
+    /// `.numericPad`) is noise that must be masked off before comparing.
     static let reservableModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
 
-    /// The vim keys the diff pane claims while it holds first responder (ZEN-227). Nothing reaches a
+    /// The vim keys the diff pane claims while it holds first responder. Nothing reaches a
     /// terminal from here, so plain letters are free — but ⌘/⌃/⌥ must fall through, or ⌘C and ⌃D
     /// would land here instead of their own handlers.
     enum VimKey: Equatable {
@@ -487,10 +487,10 @@ final class DiffPaneTable: NSView {
         case top, bottom  // gg / G
         case prevChange, nextChange  // { / }
         case yankCode, yankReference  // y / Y
-        case lineStart, lineEnd  // 0 / $ — pan to the start / end of the line (ZEN-262)
+        case lineStart, lineEnd  // 0 / $ — pan to the start / end of the line
     }
 
-    /// Return / keypad Enter with no modifiers — comment on the selection (ZEN-257). Decoded by key
+    /// Return / keypad Enter with no modifiers — comment on the selection. Decoded by key
     /// code rather than through `KeyboardFocus.key`, whose `.activate` also covers Space: Space keeps
     /// paging the table, because a key that scrolls a diff shouldn't also open a form.
     static func isComposeKey(_ event: NSEvent) -> Bool {
@@ -531,7 +531,7 @@ final class DiffPaneTable: NSView {
         }
     }
 
-    /// The viewer-wide bare keys both panes honor (ZEN-262): they act on the whole viewer, not a
+    /// The viewer-wide bare keys both panes honor: they act on the whole viewer, not a
     /// pane's selection, so the tree and the diff decode them identically. Context-specific keys
     /// (h/l fold, focus moves) stay in each pane's own `keyDown`. Any reservable modifier falls
     /// through — these are truly bare, so Shift-\ (`|`), ⌘\, etc. belong to another handler.
@@ -565,7 +565,7 @@ final class DiffPaneTable: NSView {
         }
     }
 
-    /// Ctrl-j/k and Ctrl-↑/↓ in the tree: jump the file selection about half a page, centered (ZEN-262).
+    /// Ctrl-j/k and Ctrl-↑/↓ in the tree: jump the file selection about half a page, centered.
     /// Deliberately separate from `halfPageDirection` (Ctrl-D/U) so the tree can page its own file list
     /// with these while Ctrl-D/U keeps scrolling the diff underneath it. The diff pane doesn't use this
     /// (its half-page stays on Ctrl-D/U). +1 down, -1 up. Same exact-`.control` match, so ⌘/⌥ fall through.
@@ -603,7 +603,7 @@ final class DiffPaneTable: NSView {
     /// The widest line across both columns, for the horizontal scroll range (hunk headers don't pan).
     /// The font is monospaced, so a line's UTF-16 length is a faithful proxy for its width: scan by
     /// length (cheap) and lay out only the single longest line, rather than measuring every line's text
-    /// on the main thread — the latter hitches when switching to a large file (ZEN-90).
+    /// on the main thread — the latter hitches when switching to a large file.
     private static func widestLine(in rows: [DiffRow]) -> CGFloat {
         var longest = ""
         var longestLength = 0
@@ -757,7 +757,7 @@ final class DiffPaneTable: NSView {
         /// view mid-selection draws as part of the block instead of as a lone pill.
         var decorate: ((DiffLineRowView, Int) -> Void)?
         /// The row the inline comment box hangs under, and how much room it needs. That row is grown by
-        /// `composerHeight`, which is what pushes the lines below it down (ZEN-257).
+        /// `composerHeight`, which is what pushes the lines below it down.
         var composerAnchor: Int?
         var composerHeight: CGFloat = 0
 
@@ -958,10 +958,10 @@ private final class DiffTableView: NSTableView {
 
 /// A diff row's selection highlight, mirroring the file tree's: a solid accent fill while the diff pane
 /// holds focus (`isEmphasized`), and a quiet accent outline when it doesn't — so paging the diff from
-/// the tree still shows where the cursor is, without claiming focus. Theme-only (ZEN-27); no system
+/// the tree still shows where the cursor is, without claiming focus. Theme-only; no system
 /// selection color.
 ///
-/// A multi-row linewise selection has to read as one block, not a stack of pills (ZEN-227). Rather than
+/// A multi-row linewise selection has to read as one block, not a stack of pills. Rather than
 /// build a per-corner path, each row draws a pill that overhangs into its selected neighbours by the
 /// corner radius and clips to its own bounds: the block's outer corners keep their curve, the interior
 /// seams come out square, and the outline case falls out of the same trick (the overhung edges clip
@@ -995,7 +995,7 @@ final class DiffLineRowView: NSTableRowView {
         defer { NSGraphicsContext.restoreGraphicsState() }
         // The overhang below is for the neighbour, not for us. Clipped to the line's slice rather than
         // the row's bounds, so the anchor row of an open comment box highlights its line and not the
-        // gap reserved under it (ZEN-257).
+        // gap reserved under it.
         NSBezierPath(rect: lineBounds).setClip()
 
         let accent = Theme.current.chrome.accent.nsColor

@@ -5,7 +5,7 @@ import XCTest
 @testable import ZenTerm
 
 /// `WindowController.showToast` is the seam `AppDelegate` routes app-global notices through — today
-/// the config keybind conflicts of ZEN-142. The content is unit-tested elsewhere; this asserts the
+/// the config keybind conflicts. The content is unit-tested elsewhere; this asserts the
 /// notice actually reaches the screen, per the house rule that a control tested only through its
 /// view-model can ship dead. A silent no-op here would leave the whole feature invisible.
 @MainActor
@@ -106,7 +106,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         XCTAssertEqual(toastViews(in: controller).count, 1)
     }
 
-    // MARK: the claude / waiting toast (ZEN-148)
+    // MARK: the claude / waiting toast
 
     /// The keycaps a toast currently draws, read off the rendered view tree — a mirror of the
     /// resolved string would pass while the card drew nothing.
@@ -150,7 +150,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         XCTAssertEqual(keycaps(in: toast), ["⌘1"], "the toast for tab 1 names ⌘1")
     }
 
-    /// Displaying a keycap must not arm a key equivalent — the ZEN-143 guarantee that a toast never
+    /// Displaying a keycap must not arm a key equivalent — the guarantee that a toast never
     /// steals keys from the terminal. The binding named is the app's, not the toast's.
     func test_waitingToast_withKeycap_stillArmsNoKeyEquivalents() throws {
         let controller = makeController()
@@ -206,7 +206,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         XCTAssertEqual(keycaps(in: toast), ["⌘2"], "the keycap must follow the tab, not go stale at ⌘3")
     }
 
-    // MARK: command completion (ZEN-38)
+    // MARK: command completion
 
     func test_longCommandInBackgroundTabShowsCompletedAttention() throws {
         let controller = makeController()
@@ -266,7 +266,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
             "Exited 1 after 1h 1m 1s.")
     }
 
-    // MARK: the config-diagnostics toast (ZEN-7)
+    // MARK: the config-diagnostics toast
 
     func test_configDiagnosticsToast_mountsWithOpenSettingsAndDismiss() throws {
         let controller = makeController()
@@ -282,7 +282,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         XCTAssertEqual(Set(titles), ["Dismiss", "Open Settings"], "\(titles)")
     }
 
-    /// The ZEN-143 guarantee holds for the new `.primary` button too: a sticky toast never arms a
+    /// The guarantee holds for the new `.primary` button too: a sticky toast never arms a
     /// Return/Esc equivalent, so it can't steal keys from the terminal.
     func test_configDiagnosticsToast_armsNoKeyEquivalents() {
         let controller = makeController()
@@ -297,7 +297,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
     /// The new seam end to end: firing the toast's "Open Settings" action opens the Settings card
     /// (the section it lands on is unit-tested via the scope→section map). A dead button would leave
     /// the toast's whole point unreachable.
-    // MARK: conflict cards (ZEN-368)
+    // MARK: conflict cards
 
     private func conflict(
         loser: KeyInterceptor.ReservedChord, chord: Chord, winner: KeyInterceptor.ReservedChord
@@ -355,7 +355,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
 
     /// Answering one card must leave the others alone. Re-showing the reduced set used to spring
     /// every survivor out and a replacement in, which read on screen as the stack dropping a good
-    /// way down and settling back (ZEN-368).
+    /// way down and settling back.
     func test_reShowingAReducedSet_keepsTheSurvivingCard() {
         let controller = makeController()
         let a = conflict(loser: .findNext, chord: Chord(command: true, key: "g"), winner: .toggleToolFloat("a"))
@@ -389,7 +389,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
 
     /// The third exit. Answering writes; putting the card away must not, or a user tidying their
     /// screen would silently edit their config. Actionable toasts had no close affordance at all
-    /// until this, so a conflict card could only be answered (ZEN-368).
+    /// until this, so a conflict card could only be answered.
     func test_conflictToast_close_dismissesWithoutWriting() throws {
         try seed("keybind = split_vertical=cmd+shift+p\n")
         let before = try configText()
@@ -409,7 +409,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
     /// The × is opt-in. It does nothing unless its host wires `onClose`, and only the conflict card
     /// does, so an actionable card that never asked for one must not draw a dead button. A confirm
     /// gates keyboard focus, so clicking a dead × there left the terminal deaf until Cancel was
-    /// found (ZEN-368).
+    /// found.
     func test_theDiagnosticsNotice_hasNoCloseAffordance() throws {
         let controller = makeController()
         let content = try XCTUnwrap(
@@ -438,7 +438,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
 
     /// The card's buttons, end to end. Everything above asserts which buttons exist; this is the
     /// only thing checking that pressing one reaches the config. A card whose Accept did nothing
-    /// would look completely correct and be the first surface a user meets (ZEN-368).
+    /// would look completely correct and be the first surface a user meets.
     func test_conflictToast_accept_writesTheUnset() throws {
         try seed("keybind = split_vertical=cmd+shift+p\n")
         let controller = makeController()
@@ -491,7 +491,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         XCTAssertEqual(toastViews(in: controller).count, 3)
     }
 
-    /// The ZEN-143 guarantee holds for these too: a sticky card never arms Return/Esc, so Esc keeps
+    /// The guarantee holds for these too: a sticky card never arms Return/Esc, so Esc keeps
     /// reaching the pane. It is why the × is the only keyboard-free way out of one.
     func test_conflictToast_armsNoKeyEquivalents() {
         let controller = makeController()

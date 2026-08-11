@@ -1,32 +1,24 @@
 import AppKit
 
-/// The diff viewer: a chrome-native modal card over the active tile. The left column is a single file
-/// tree split into three sections — Unstaged, Staged, Committed (top to bottom) — the right column is
-/// the diff of the selected file, and a full-width footer carries the repo name + branch and the key hints. A
-/// `ModalOverlay` sharing the card + backdrop + spring and Esc model with the other overlays. Git work
-/// is injected as `loader`; the caller only opens this over a real repo (a non-repo shows a toast), so
-/// there is no not-a-repo state.
+/// The diff viewer: a modal card over the active tile. A file tree on the left, the selected file's
+/// diff on the right, a footer carrying the repo, branch and key hints. Git work is injected as
+/// `loader`, and the caller only opens this over a real repo, so there is no not-a-repo state.
 ///
-/// Navigation is vim-native and local to this view (ZEN-262). ⌘h/⌘l move focus between the tree and
-/// the diff — the app's pane chords, forwarded through `handleNavChord` since KeyInterceptor consumes
-/// chords before the responder chain — and everything else is a bare key the panes handle in `keyDown`.
-/// In the tree: j/k step files, h/l (and ←/→) fold or open a file into the diff, b focuses the base. In
-/// the diff: j/k move the cursor, {/} jump changes, V selects, y/Y yank, ⏎ comments, h returns to the
-/// tree. `\` toggles the layout and q/esc close, from either pane.
+/// Navigation is vim-native and local to this view. ⌘h/⌘l move focus between the two panes and
+/// arrive through `handleNavChord`, since `KeyInterceptor` consumes chords before the responder
+/// chain. Everything else is a bare key the panes handle in `keyDown`.
 ///
-/// The diff renders in one of two layouts (ZEN-228): `SideBySideDiff` (old │ new) or `UnifiedDiff`
-/// (inline), toggled by bare `\`. Both transforms feed the same `DiffPaneTable` behind the
-/// layout-agnostic `DiffRow` model; the effective layout is the session override (`layoutOverride`),
-/// else the `diff-layout` config default.
+/// Both layouts, side-by-side and unified, feed the same `DiffPaneTable` behind the
+/// layout-agnostic `DiffRow` model. The effective one is the session override, else the
+/// `diff-layout` config default.
 final class DiffViewerOverlay: NSView, ModalOverlay {
     typealias StatusResult = Result<GitDiffRunner.StatusLoad, GitDiffRunner.Failure>
-    /// Loads the repo status for a chosen base (nil = the repo's default) and a chosen head (nil = the
-    /// checkout's own `HEAD`) and calls back on the main thread. Injected so the overlay never touches
-    /// `Process` itself; `WindowController` wires this to a `GitDiffRunner`.
+    /// Loads the repo status for a chosen base and head, both nil meaning the defaults, and calls
+    /// back on the main thread. Injected so the overlay never touches `Process` itself.
     ///
-    /// The head is passed as the whole `BranchOption` rather than a name because picking a branch that
-    /// has a worktree means reading a *different directory*, which needs a different runner. Only the
-    /// host can build that, so the overlay hands over the choice and stays out of it (ZEN-313).
+    /// The head is the whole `BranchOption` rather than a name because picking a branch with a
+    /// worktree means reading a *different directory*, which needs a different runner, and only
+    /// the host can build one.
     typealias Loader = (String?, GitDiffRunner.BranchOption?, @escaping (StatusResult) -> Void) -> Void
     /// Loads the repo's branches (base-picker order) and calls back on the main thread.
     typealias BranchesLoader = (@escaping ([String]) -> Void) -> Void
@@ -58,7 +50,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     /// The branch the viewer is showing once the reader picks one, nil for the checkout's own head.
     /// A branch with a worktree reads that worktree (all three slices live); one without shows only
-    /// the committed slice, because there is no working tree to read (ZEN-313).
+    /// the committed slice, because there is no working tree to read.
     private var headOverride: GitDiffRunner.BranchOption?
     /// The branches offerable as heads, loaded alongside `branches`.
     private var heads: [GitDiffRunner.BranchOption] = []
@@ -93,10 +85,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private let repoName: String
 
     private var selectedFilePath: String?
-    /// The repo root, for the syntax highlighter's blob fetch (ZEN-239).
+    /// The repo root, for the syntax highlighter's blob fetch.
     /// The root every git read resolves against: the worktree of the picked branch when it has one,
     /// else the repo the viewer opened on. A `var` because picking a worktree head retargets it, and
-    /// the highlighter has to follow the loader (ZEN-313). It used to be frozen at init, so a picked
+    /// the highlighter has to follow the loader. It used to be frozen at init, so a picked
     /// worktree branch's diff was highlighted with the *checkout's* file contents.
     private var repoRoot: URL
     /// Discards a stale highlight result when the selection moved on before the off-main parse landed
@@ -109,7 +101,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// (a reopened repo paints highlighted immediately). Cleared on a changed reload (see `reload`).
     private let highlightStore: DiffHighlightStore
     /// The place a reopen has to land on, held until the first load has a tree to put it back into. Nil
-    /// afterwards: every later load reads the place off the live view instead (ZEN-233).
+    /// afterwards: every later load reads the place off the live view instead.
     private var pendingPlace: DiffViewerPlace?
     /// A cursor line waiting for its file's rows to arrive, tagged with the path it belongs to — the
     /// highlight can land after the reader has moved on, and a cursor restored into the wrong file would
@@ -125,7 +117,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     private var renderedLayout: GeneralConfig.DiffLayout?
     /// A per-session layout override set by the bare `\` layout toggle while the pane is wide, never
     /// persisted; nil defers to the config default (`GeneralConfig.current.diffLayout`). Only governs the
-    /// wide state — a narrow pane force-folds to inline regardless (ZEN-243).
+    /// wide state — a narrow pane force-folds to inline regardless.
     private var layoutOverride: GeneralConfig.DiffLayout?
     /// Whether the pane is currently narrow enough to force inline. A stored dead-band decision, not a
     /// pure function of the current width — it only flips true below `foldWidth` and back to false above
@@ -206,12 +198,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
         ])
 
-        // Warm open: render the cached status instantly and refresh silently behind it. Cold open:
-        // show the spinner while the first load runs. A session carrying a picked base can't take the
-        // warm path — the cached status is the *default* base's, so rendering it would show the wrong
-        // comparison until the re-run lands.
-        // `lastStatus` is the default base's, for the checkout's own head. Either override makes it the
-        // wrong thing to paint, so a session carrying one loads instead of rendering from cache.
+        // Warm open renders the cached status instantly and refreshes behind it; a cold open shows
+        // the spinner. `lastStatus` is the *default* base's, for the checkout's own head, so either
+        // override makes it the wrong thing to paint and the session loads instead.
         if let cached = session.lastStatus, baseOverride == nil, headOverride == nil {
             apply(cached)
             reload(showSpinner: false)
@@ -222,7 +211,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     /// A fallback snapshot for a teardown that skips `animateOut` — the whole window closing (⌘W) pulls
     /// the card without a close spring. The normal close goes through `animateOut`, which snapshots
-    /// earlier; `snapshotPlace` runs once, so whichever fires first wins (ZEN-233).
+    /// earlier; `snapshotPlace` runs once, so whichever fires first wins.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         guard window == nil else { return }
@@ -341,7 +330,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // ⌘C / ⌘⇧C yank the diff selection. Claimed here because the view hierarchy is offered a key
         // equivalent before the main menu is: otherwise both would reach Edit > Copy, which the diff
         // table does not answer, so the chain would carry it to `WindowController` and copy the
-        // *terminal's* selection while the viewer is up (ZEN-227).
+        // *terminal's* selection while the viewer is up.
         if let wantsReference = Self.yankShortcut(for: event) {
             yank(reference: wantsReference)
             return true
@@ -356,22 +345,21 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         sheet.toggle(in: card, above: footerDivider)
     }
 
-    // MARK: comment composer (ZEN-257)
+    // MARK: comment composer
 
     /// The open composer, or nil. Held so the viewer can route keys to it and so a second ⏎ can't
     /// stack two of them.
     private var composer: DiffCommentComposer?
 
     /// The bare `?` key-reference popover, created on first use. It floats above the footer's trailing edge
-    /// and carries the full keymap the lean footer legend doesn't (ZEN-262).
+    /// and carries the full keymap the lean footer legend doesn't.
     private var keySheet: ChromePopover?
 
-    /// ⏎ on the diff pane: comment on the selected lines. With no visual selection running the
-    /// selection is the cursor line, so there is always something to comment on — but a message state
-    /// (no file) or a tab with no terminal to send to has nothing to say, and stays quiet.
+    /// ⏎ on the diff pane: comment on the selected lines, defaulting to the cursor line. A message
+    /// state or a tab with no terminal to send to has nothing to say and stays quiet.
     ///
-    /// The box drops into the diff under the selection rather than over it, so the lines it's about
-    /// stay on screen while you write about them (the pane pushes what's below them down).
+    /// The box drops in under the selection rather than over it, so the lines it is about stay on
+    /// screen while you write.
     private func openComposer() {
         guard composer == nil, let file = currentFileDiff else { return }
         let selection = DiffSelection.make(rows: diffTable.rows, selected: diffTable.selectedRows)
@@ -417,7 +405,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     /// ⌘C (code) / ⌘⇧C (reference), or nil for anything else. Compares against the reservable set so
-    /// the `.function` bit AppKit stamps on can't stop ⌘C matching a bare Command (ZEN-81).
+    /// the `.function` bit AppKit stamps on can't stop ⌘C matching a bare Command.
     static func yankShortcut(for event: NSEvent) -> Bool? {
         guard event.charactersIgnoringModifiers?.lowercased() == "c" else { return nil }
         switch event.modifierFlags.intersection(DiffPaneTable.reservableModifiers) {
@@ -468,12 +456,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     // MARK: pane-chord navigation
 
-    /// The pane-nav chords, forwarded by `WindowController` while this overlay is open (KeyInterceptor
-    /// consumes chords before the responder chain, so the overlay can't see them itself). ⌘h/⌘l move
-    /// focus between the tree and the diff (left/right); ⌘j/⌘k (up/down) have nothing stacked to focus,
-    /// so they fall through as no-ops. Everything else the viewer does — jump changes, fold, layout,
-    /// base, yank, close — is a bare key the panes handle in `keyDown`. Returns true when it consumed
-    /// the chord.
+    /// The pane-nav chords, forwarded by `WindowController` because `KeyInterceptor` consumes them
+    /// before the responder chain. ⌘h/⌘l move focus between the tree and the diff; ⌘j/⌘k have
+    /// nothing stacked to focus and fall through. Returns true when it consumed the chord.
     func handleNavChord(_ chord: KeyInterceptor.ReservedChord) -> Bool {
         // Consumed, not acted on, while the composer is up: moving the pane focus underneath an open
         // comment would leave it pointing at lines you can no longer see.
@@ -502,12 +487,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         refreshFocusStyling()
     }
 
-    /// The viewer's bare keys (`\` `b` `q` `h`) are decoded in the panes' `keyDown`, and the comment
-    /// composer's box is a subview of the diff table — so a bare key pressed while a composer button holds
-    /// focus bubbles up the responder chain into the diff table and would fire the viewer command. Gate
-    /// every viewer command on this so a stray key can't re-render, refocus, or close the viewer out from
-    /// under an open note (the same protection `handleNavChord` gives the ⌘-chords). Returns true when it's
-    /// safe to act.
+    /// The viewer's bare keys are decoded in the panes' `keyDown`, and the composer's box is a
+    /// subview of the diff table, so a key pressed while a composer button holds focus bubbles up
+    /// and would fire a viewer command out from under an open note. Returns true when it's safe to
+    /// act.
     private func guardComposer() -> Bool { composer == nil }
 
     /// Resync everything that keys off which pane holds focus: the tree's selected file switches between
@@ -586,12 +569,9 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
                 items.map { DropdownItem(title: $0, group: nil, note: nil, isSelected: $0 == currentBase) },
                 selectedIndex: selected)
         }
-        // The base picker hides with no resolved base, but the branch picker does not: "there is nothing
-        // to compare against" and "there is nothing to look at" are different, and the second is the
-        // state a reader most needs a way out of (ZEN-313). So the header stays for either one.
-        // Both pickers hide independently, and the stack collapses whichever is hidden. The head one
-        // is empty on every open until `headsLoader` returns, so leaving it visible-but-blank showed an
-        // untitled control and sized the header for a row nothing was in.
+        // Both pickers hide independently and the stack collapses whichever is hidden. The head one
+        // is empty on every open until `headsLoader` returns, so leaving it visible-but-blank shows
+        // an untitled control and sizes the header for a row nothing is in.
         headDropdown.isHidden = headItems.isEmpty
         baseDropdown.isHidden = currentBase == nil
         let shown = [headItems.isEmpty ? nil : headDropdown, currentBase == nil ? nil : baseDropdown]
@@ -632,7 +612,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         headOverride = picked.isCurrent ? nil : picked
         retargetRepoRoot()
         // Rebuild both pickers now rather than waiting for the load. What each one offers depends on
-        // the *selection*, and a reload that lands an identical status is a deliberate no-op (ZEN-233),
+        // the *selection*, and a reload that lands an identical status is a deliberate no-op,
         // so leaving it to `apply` strands them showing the old pair whenever two branches happen to
         // produce the same diff.
         updateBaseHeader()
@@ -658,17 +638,13 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         refreshFocusStyling()
     }
 
-    /// Point every git read at the picked branch's worktree, or back at the repo the viewer opened on.
+    /// Point every git read at the picked branch's worktree, or back at the repo the viewer opened
+    /// on. The loader already does this for the diff, but the highlighter reads whole-file blobs
+    /// separately and took the root captured at init, so a picked worktree branch showed the right
+    /// diff coloured by another branch's contents.
     ///
-    /// The loader already does this for the *diff* by building a runner rooted at the worktree. The
-    /// highlighter reads whole-file blobs separately (`DiffHighlighter.enrich`, and the prefetcher's
-    /// background pass), and both took the root captured at init, so a picked worktree branch showed
-    /// the right diff coloured by another branch's file contents. `FileDiff.headRef` covers only the
-    /// no-worktree case: there the runner stays put and the *ref* moves, here the root itself moves.
-    ///
-    /// The highlight cache is keyed per file with no notion of which root produced it, so spans from
-    /// the old root have to go rather than be reused under the same key. That also clears the poisoned
-    /// nil a file added on the picked branch would otherwise cache forever.
+    /// The highlight cache is keyed per file with no notion of which root produced it, so spans
+    /// from the old root have to go rather than be reused under the same key.
     private func retargetRepoRoot() {
         let target = headOverride?.worktree ?? session.repoRoot
         guard target != repoRoot else { return }
@@ -726,12 +702,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         // magnitude reads from its status-tinted icon and the branch total sits in the footer, so no
         // row reserves width for a stat.
         let nameColumn = NSTableColumn(identifier: DiffTreeOutlineController.nameColumnID)
-        // No legacy autoresizing mask / `.firstColumnOnlyAutoresizingStyle` here — that machinery
-        // resizes the column by the DELTA between the outline's old and new width, not by filling
-        // whatever's left. `reload()` populates the tree inside `init()`, before this view is ever
-        // in a window, so the column's first "resize" event fires against a stale pre-Auto-Layout
-        // width (NSTableColumn's 100pt default vs. the outline's placeholder frame) and never
-        // recovers — `NavOutlineView.layout()` drives `nameColumn.width` explicitly instead (ZEN-226).
+        // No autoresizing mask: that machinery resizes the column by the DELTA between old and new
+        // width rather than filling what's left, and `reload()` runs inside `init()` before this
+        // view is in a window, so the first resize fires against a stale pre-Auto-Layout width and
+        // never recovers. `NavOutlineView.layout()` drives the width explicitly instead.
         nameColumn.resizingMask = []
         outline.addTableColumn(nameColumn)
         outline.outlineTableColumn = nameColumn
@@ -739,13 +713,11 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         outline.rowSizeStyle = .small
         outline.indentationPerLevel = 12
         outline.backgroundColor = .clear
-        outline.focusRingType = .none  // no system-blue ring on focus-in (ZEN-27: chrome is theme-only)
-        // Force plain style: the default `.automatic` resolves to the inset/source-list family, whose
-        // tiling reserves a constant +32pt in the outline's own frame *beyond* the column width (and
-        // reports intercellSpacing as (17, 0), not the classic (3, 2)). That baked-in padding is what
-        // made the document permanently wider than the clip regardless of content. `.plain` restores
-        // the documented `documentWidth = columnWidth + intercellSpacing.width` relation, and zeroing
-        // the width component makes `NavOutlineView.layout()`'s fill math exact (target == clip width).
+        outline.focusRingType = .none  // no system-blue ring on focus-in (chrome is theme-only)
+        // Force plain style: `.automatic` resolves to the inset/source-list family, whose tiling
+        // reserves a constant +32pt beyond the column width and makes the document permanently
+        // wider than the clip. `.plain` restores `documentWidth = columnWidth + intercellSpacing`,
+        // so zeroing the spacing makes `NavOutlineView.layout()`'s fill math exact.
         outline.style = .plain
         outline.intercellSpacing = NSSize(width: 0, height: outline.intercellSpacing.height)
         // The vim keys are plain letters, so AppKit's type-select would race j/k for every keystroke.
@@ -769,7 +741,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         diffTable.onClose = { [weak self] in self?.requestClose() }
         diffTable.onShowKeys = { [weak self] in self?.toggleKeySheet() }
         diffTable.onFocusChanged = { [weak self] in self?.refreshFocusStyling() }
-        // Re-evaluate the auto-fold policy whenever the diff pane's width changes (ZEN-243). The frame
+        // Re-evaluate the auto-fold policy whenever the diff pane's width changes. The frame
         // notification fires with the pane's *final* frame on every resize — reliable where piggybacking
         // on a `layout()` pass isn't (the inner table tiles after that runs, so it reads a stale width).
         diffTable.postsFrameChangedNotifications = true
@@ -821,17 +793,10 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
         let footer = buildFooter()
 
-        // The tree width is ~1/5 of the card, clamped to a min (never collapses) and a max (never
-        // sprawls on a wide monitor). The proportional term is the load-bearing detail: a resizable
-        // NSWindow treats its own frame as a layout variable at priority 500
-        // (`NSLayoutPriorityWindowSizeStayPut`). This proportional *equality* traces to the window
-        // through the overlay's edge pins, and on a wide display `0.2 × card` overshoots the 360 cap,
-        // making the equality infeasible at the current size. Above priority 500, AppKit resolves that
-        // by RESIZING THE WINDOW smaller (cheaper than leaving the equality in error) — the recurring
-        // cross-feature shrink, and it only shows on a big monitor because that's the only place the
-        // fraction crosses the cap. Kept below 500 (`.defaultLow`), the equality yields (the tree
-        // clamps to 360) and the window is left alone. The min/max clamps are inequalities and don't
-        // trip this, so their priority is free to stay above the proportional term so it wins.
+        // The tree is ~1/5 of the card, clamped so it neither collapses nor sprawls. The
+        // proportional term must stay below priority 500: it traces to the window through the
+        // overlay's edge pins, and above 500 AppKit resolves the infeasibility by resizing the
+        // WINDOW smaller rather than letting the equality yield. See `docs/swift-conventions.md`.
         treeWidthProportional = treeScroll.widthAnchor.constraint(equalTo: card.widthAnchor, multiplier: 0.2)
         treeWidthProportional.priority = NSLayoutConstraint.Priority(rawValue: 251)
         let treeMinWidth = treeScroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 200)
@@ -939,14 +904,12 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         baseDropdown.onBacktab = { [weak self] in self?.focusHeadDropdown() }
         baseDropdown.titleTruncatesUnderPressure = true
 
-        // Stacked, not side by side: both carry branch names, which are long and unbounded, so a row
-        // split between them truncates two things at once and the card can't get narrow. Reading order
-        // runs top to bottom, this branch then what it is measured against.
+        // Stacked, not side by side: both carry unbounded branch names, so a split row truncates
+        // two things at once and the card can never get narrow.
         //
-        // An `NSStackView` rather than pinned constraints, because either picker can be absent and a
-        // hidden view still participates in Auto Layout. Chaining `baseDropdown.top` off
-        // `headDropdown.bottom` meant an empty branch list left the base picker pushed below a
-        // one-row header that `clipsToBounds` then cut off. `detachesHiddenViews` (the default) drops
+        // An `NSStackView` rather than pinned constraints, because either picker can be absent and
+        // a hidden view still participates in Auto Layout: chaining the base off the head's bottom
+        // pushed it below a one-row header that `clipsToBounds` then cut off. `detachesHiddenViews`
         // a hidden arranged subview out of the layout entirely, so the stack is however tall the
         // showing pickers need.
         pickerStack.orientation = .vertical
@@ -970,7 +933,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         branchLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         // A long branch name must truncate, not push the card (and the window) wider than the pane needs
         // — the labels themselves have to yield, not just their stack, or their intrinsic width holds the
-        // footer open and the window can't reach its own min (ZEN-243).
+        // footer open and the window can't reach its own min.
         repoLabel.lineBreakMode = .byTruncatingTail
         branchLabel.lineBreakMode = .byTruncatingMiddle
         for label in [repoLabel, branchLabel] {
@@ -1050,7 +1013,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
             groups = [(["j", "k"], "files"), (["h", "l"], "fold"), (["b"], "base")]
         }
         // Layout only exists while wide — narrow force-folds to inline, so the toggle is disabled and its
-        // key hidden (ZEN-243).
+        // key hidden.
         if !isNarrow { groups.append((["\\"], "layout")) }
         groups.append((["esc"], "close"))
         // The ? full key sheet is shown in both focus states — it's the affordance that lets the rest of
@@ -1127,7 +1090,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     }
 
     /// Evict only the highlight-cache keys a changed reload actually moved, instead of wiping the whole
-    /// repo's spans (ZEN-261). A file whose `FileDiff` is byte-identical between the old and new load
+    /// repo's spans. A file whose `FileDiff` is byte-identical between the old and new load
     /// keeps its cached spans and repaints with no re-parse; only the changed files (or ones that
     /// vanished) pay the tree-sitter cost. Wiping everything made a warm reopen — the common case, since
     /// you reopen the diff *because* you changed something — blank and re-parse like a cold open.
@@ -1148,7 +1111,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
     /// Render a status: rebuild the tree, then put the reader back where they were. The rebuild is
     /// unavoidable (the `NSOutlineView` holds its rows by object identity, and a changed status means
     /// new objects), so the folds, the selected file and the cursor line are carried across it by value
-    /// instead — from the session on the first load, off the live view on every one after (ZEN-233).
+    /// instead — from the session on the first load, off the live view on every one after.
     private func apply(_ status: GitDiffRunner.StatusLoad) {
         let place = pendingPlace ?? currentPlace()
         pendingPlace = nil
@@ -1251,7 +1214,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
 
     /// The layout a diff renders in. A narrow pane force-folds to inline — that view is objectively best
     /// when two columns can't fit, so it isn't a choice (the toggle is disabled and its hint hidden while
-    /// narrow). While wide: the session pin (the `\` toggle), else the config default (ZEN-243).
+    /// narrow). While wide: the session pin (the `\` toggle), else the config default.
     private var effectiveLayout: GeneralConfig.DiffLayout {
         isNarrow ? .inline : (layoutOverride ?? GeneralConfig.current.diffLayout)
     }
@@ -1317,7 +1280,7 @@ final class DiffViewerOverlay: NSView, ModalOverlay {
         }
         // Won't ever highlight (no repo on disk, or an extension no grammar claims) — plain now is the
         // final state. A path with no extension is not a "no": its blob may still name a language
-        // through a shebang or modeline, so it goes on to the enrich path like any other (ZEN-329).
+        // through a shebang or modeline, so it goes on to the enrich path like any other.
         guard
             FileManager.default.fileExists(atPath: repoRoot.path),
             SyntaxLanguage.mayHighlight(path: file.path)
@@ -1492,7 +1455,7 @@ private final class NavOutlineView: NSOutlineView {
     var onPageFiles: ((Int) -> Void)?
     /// j / k move to the next / previous file, so the tree reads the same way as the diff pane.
     var onMoveFile: ((Int) -> Void)?
-    /// Bare `\` — flip the viewer between inline and side-by-side (ZEN-262).
+    /// Bare `\` — flip the viewer between inline and side-by-side.
     var onToggleLayout: (() -> Void)?
     /// `l` on a file (nvim "open") — hand focus to the diff pane.
     var onFocusDiff: (() -> Void)?
@@ -1519,7 +1482,7 @@ private final class NavOutlineView: NSOutlineView {
     /// Layout has ever resolved a real width — permanently anchors the column to the wrong size.
     /// Reading from `enclosingScrollView.contentSize` instead of `self.bounds` matters too: the
     /// outline's own bounds is exactly the value that legacy machinery leaves in a bad state, where the
-    /// scroll view's content size is the one number here that Auto Layout actually resolves (ZEN-226).
+    /// scroll view's content size is the one number here that Auto Layout actually resolves.
     override func layout() {
         super.layout()
         guard let nameColumn = outlineTableColumn,

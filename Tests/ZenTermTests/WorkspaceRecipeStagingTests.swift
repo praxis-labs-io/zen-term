@@ -25,7 +25,7 @@ final class WorkspaceRecipeStagingTests: WindowTestCase {
         Motion.isReduceMotionEnabled = { false }
         originalOverride = TerminalSurfaceFactory.makeOverride
         // Headless surfaces: no libghostty, and an idle tab, so a replace isn't gated by the
-        // "Replace Tab" confirm a busy one raises (ZEN-213).
+        // "Replace Tab" confirm a busy one raises.
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
     }
 

@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The window-scope claims ZEN-141 exists for, driven through the real chord path on a real
+/// The window-scope claims the float engine exists for, driven through the real chord path on a real
 /// window with real tabs.
 ///
 /// `ToolFloatControllerTests` covers the `persist:` lifecycle against the engine's seam; these are
@@ -106,7 +106,7 @@ final class WindowControllerToolFloatTests: WindowTestCase {
 
     /// The registry is the window's, not the tab's: opening the same float from a second tab must
     /// reveal the SAME instance. Per-tab, this spawns a second process — which is exactly the
-    /// "two tabs on one repo, two lazygits" duplication ZEN-141 removes.
+    /// "two tabs on one repo, two lazygits" duplication window scope removes.
     func test_windowFloat_isOneInstanceSharedAcrossTabs() {
         let c = makeWindow()
 
@@ -192,7 +192,7 @@ final class WindowControllerToolFloatTests: WindowTestCase {
         }
     }
 
-    /// A float's agent asking for input must still reach the user (ZEN-139). The float's surface
+    /// A float's agent asking for input must still reach the user. The float's surface
     /// delegate moved from `TabController` — whose blanket relay every tab-owned surface got for
     /// free — to `ToolFloatController`, so this is the assertion that the relay came with it.
     /// A dismissed `persist:` agent has no on-screen trace at all, which is the case that needs
@@ -255,7 +255,7 @@ final class WindowControllerToolFloatTests: WindowTestCase {
         wait(for: [drained], timeout: 2)
     }
 
-    /// An open float re-reads `background-alpha` (ZEN-287), so the fan-out has to reach it on a
+    /// An open float re-reads `background-alpha`, so the fan-out has to reach it on a
     /// `.terminalBehavior` change and not only a theme swap. This is the silent half: the card
     /// keeps rendering at its old fill, nothing errors, and the setting looks like it did nothing
     /// until the float is closed and reopened. `ConfigChangeTests` owns the alpha → kind mapping;
@@ -282,8 +282,8 @@ final class WindowControllerToolFloatTests: WindowTestCase {
     }
 
     /// A pane command pressed over a float used to do nothing at all: the float is modal, so
-    /// `handle` swallows nav/split/resize/drawer/zoom, and the keystroke vanished with no trace
-    /// (ZEN-270). It must say why instead.
+    /// `handle` swallows nav/split/resize/drawer/zoom, and the keystroke vanished with no trace.
+    /// It must say why instead.
     ///
     /// The card on screen is the runbook's; what's silently dead here is the ROUTING — a chord
     /// dropped from the case list goes back to failing quietly, and nothing on screen says so.

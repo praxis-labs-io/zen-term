@@ -48,7 +48,7 @@ final class GhosttyConfigWriterTests: XCTestCase {
     }
 
     func test_nilBehaviorEmitsHistoricalBaseline() {
-        // The pre-ZEN-71 defaults, so an absent config is byte-identical to before.
+        // The earlier defaults, so an absent config is byte-identical to before.
         let text = GhosttyConfigWriter.configText(for: theme, behavior: nil)
         XCTAssertTrue(text.contains("cursor-style = block\n"))
         XCTAssertTrue(text.contains("cursor-style-blink = true\n"))
@@ -86,7 +86,7 @@ final class GhosttyConfigWriterTests: XCTestCase {
     }
 
     /// The settle-burst's whole mechanism is this one token: `always` is what keeps ghostty's
-    /// draw timer running on a blurred surface so the cursor tail can decay (ZEN-237). Emit
+    /// draw timer running on a blurred surface so the cursor tail can decay. Emit
     /// `true` here and the burst silently does nothing.
     func test_alwaysAnimation_emitsAlways_soABlurredSurfaceKeepsAnimating() {
         let behavior = TerminalBehavior(cursorShader: "/a/cursor_warp.glsl")
@@ -110,7 +110,7 @@ final class GhosttyConfigWriterTests: XCTestCase {
     }
 
     /// What actually stops a tracer: an unfocused surface runs no shader pass at all, so a
-    /// cursor move after the blur has nothing to freeze into a smear (ZEN-237).
+    /// cursor move after the blur has nothing to freeze into a smear.
     func test_strippedShader_emitsNoShaderKeys_soAnUnfocusedSurfaceCannotSmear() {
         var unshaded = TerminalBehavior(cursorShader: "/a/cursor_warp.glsl")
         unshaded.cursorShader = nil
@@ -118,7 +118,7 @@ final class GhosttyConfigWriterTests: XCTestCase {
         XCTAssertFalse(text.contains("custom-shader"))
     }
 
-    /// The chrome's `background-alpha` maps to ghostty's own `background-opacity` (ZEN-282).
+    /// The chrome's `background-alpha` maps to ghostty's own `background-opacity`.
     func test_backgroundAlphaEmitsGhosttyOpacityKey() {
         let behavior = TerminalBehavior(backgroundAlpha: 0.7)
         let text = GhosttyConfigWriter.configText(for: theme, behavior: behavior)

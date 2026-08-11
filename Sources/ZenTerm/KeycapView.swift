@@ -6,7 +6,7 @@ import AppKit
 /// tab-bar `Chip`: faint fill, muted ink. Shown at a command-palette row's trailing edge.
 final class KeycapView: NSView {
     /// The two footprints a keycap draws at: `regular` for command-palette rows and settings chips,
-    /// `compact` for the diff viewer's dense footer legend (ZEN-262). Only the metrics differ — the
+    /// `compact` for the diff viewer's dense footer legend. Only the metrics differ — the
     /// glyph/text split and theming are shared.
     enum Size {
         case regular, compact
@@ -134,7 +134,7 @@ final class KeycapView: NSView {
     /// The glyph images, resolved once per symbol/size and shared by every keycap on screen. The tint
     /// lives on the image VIEW (`contentTintColor`), never on the image, so sharing one instance is
     /// safe and `reapplyTheme()` still recolors. The palette rebuilds rows per keystroke, which made
-    /// this a symbol lookup per token per row (ZEN-15). Main-thread only, like the views it feeds.
+    /// this a symbol lookup per token per row. Main-thread only, like the views it feeds.
     private static var glyphImages: [GlyphKey: NSImage?] = [:]
 
     private static func glyphImage(_ symbol: String, pointSize: CGFloat) -> NSImage? {

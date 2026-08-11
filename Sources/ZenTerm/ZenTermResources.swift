@@ -10,7 +10,7 @@ import TerminalKit
 /// can't be asked for the name without risking its `fatalError` in a packaged app
 /// (see TerminalKit's `Bundle+ZenResource.swift`); `ZenTermResourcesTests` asserts
 /// it matches the actually-emitted bundle so a rename or SwiftPM scheme change fails
-/// the gate rather than re-shipping the ZEN-175 launch crash.
+/// the gate rather than re-shipping the launch crash.
 enum ZenTermResources {
     static let bundleName = "ZenTerm_ZenTerm"
 

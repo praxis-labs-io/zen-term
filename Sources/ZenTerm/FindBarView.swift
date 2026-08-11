@@ -107,7 +107,7 @@ final class FindBarView: NSView {
 
     /// The fill of the pane this bar sits in, pushed down by the host on every background apply. The
     /// bar's tint goes over it, so below `background-alpha` the bar reads at the pane's alpha instead
-    /// of blending with the desktop (ZEN-354).
+    /// of blending with the desktop.
     var paneFill: NSColor = .clear {
         didSet { applyFill() }
     }
@@ -117,7 +117,7 @@ final class FindBarView: NSView {
         layer?.backgroundColor = ChromeTheme.surface(tint: tint, over: paneFill).cgColor
     }
 
-    /// Test hook: the fill actually painted, read off the layer rather than the inputs (ZEN-354).
+    /// Test hook: the fill actually painted, read off the layer rather than the inputs.
     var paintedFillForTesting: CGColor? { layer?.backgroundColor }
 
     func reapplyTheme() {

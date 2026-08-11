@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// `TabBarView` is persistent chrome: it must recolor live on a theme swap (ZEN-89), not just
+/// `TabBarView` is persistent chrome: it must recolor live on a theme swap, not just
 /// on next construction. Per the house rule "GUI controls need interaction tests", this drives
 /// the real window-mounted view and asserts `reapplyTheme()` performs its two real effects
 /// (re-renders the stored snapshot; resets the tracer's baked-in color) — the window-based
@@ -27,7 +27,7 @@ final class TabBarViewTests: WindowTestCase {
 
     /// A re-render keeps each tab's chip. It used to rebuild them all, which took the hovered chip out
     /// of the window mid-hover: its tooltip was torn down and re-armed behind the hover delay, so the
-    /// 1.5s title poll read as a blinking tooltip (ZEN-348). The chip surviving is what fixes that, and
+    /// 1.5s title poll read as a blinking tooltip. The chip surviving is what fixes that, and
     /// the label still has to follow the new title.
     func test_render_keepsEachTabsChipAcrossARerender() throws {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
@@ -141,7 +141,7 @@ final class TabBarViewTests: WindowTestCase {
 
     func test_tabLabel_isBareNumberWithNoCommandGlyph() {
         // The inline label is a bare number for every tab now — the ⌘N shortcut moved to the
-        // hover tooltip, so the glyph never sits inline (ZEN-110).
+        // hover tooltip, so the glyph never sits inline.
         let one = TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle)
         let nine = TabBarItem(id: TabID(9), index: 9, title: "nine", isActive: false, attentionState: .idle)
         let ten = TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, attentionState: .idle)
@@ -155,7 +155,7 @@ final class TabBarViewTests: WindowTestCase {
 
     func test_chipTooltip_readsFocusTabWithCommandShortcut() {
         // The tooltip reads "Focus tab" (not the tab's name); tabs 1–9 resolve a ⌘N keycap from
-        // the live keymap, 10+ have no binding so no keycap (ZEN-110).
+        // the live keymap, 10+ have no binding so no keycap.
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
         tabBar.render([
             TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle),

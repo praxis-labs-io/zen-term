@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Unit tests for the change-kind diff (ZEN-48). The gate in the `.configDidChange` observers is
+/// Unit tests for the change-kind diff. The gate in the `.configDidChange` observers is
 /// only as good as this diff: a kind that fails to light up when its field moves is stale chrome.
 final class ConfigChangeTests: XCTestCase {
     private static func terminalTheme(fontName: String = "Menlo", fontSize: CGFloat = 14)
@@ -48,7 +48,7 @@ final class ConfigChangeTests: XCTestCase {
     /// An unbind can move on its own, with the map and the diagnostics both unchanged: an action
     /// that already held no chord gains a `= none` line and nothing else shifts. An open Shortcuts
     /// card rebuilds the whole keybind block from what it last read, so missing this write means the
-    /// next edit from that card deletes the line (ZEN-368).
+    /// next edit from that card deletes the line.
     func test_unboundActionAlone_yieldsKeymap() {
         let result = change(from: { $0.unboundActions = [.checkForUpdates] })
         XCTAssertEqual(result, .keymap)

@@ -15,7 +15,7 @@ enum BrandMark {
     /// they get back, which on a shared instance would resize every other caller's mark. A copy
     /// shares the underlying representations, so it stays far cheaper than re-reading the file —
     /// the palette rebuilds its rows on every keystroke, which made this disk I/O on the main
-    /// thread, once per row (ZEN-15).
+    /// thread, once per row.
     static func image(_ name: String) -> NSImage? {
         if let cached = loaded[name] { return cached?.copy() as? NSImage }
         let image = load(name)

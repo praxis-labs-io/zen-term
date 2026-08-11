@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the workspace add / edit form's ZEN-112 additions — edit-mode prefill and
+/// Interaction tests for the workspace add / edit form's later additions, edit-mode prefill and
 /// the Delete button — driven through the real controls in a window. A state-only test would pass
 /// while the control was dead, the failure mode the project's interaction-test rule guards against.
 final class AddWorkspaceOverlayTests: WindowTestCase {
@@ -62,7 +62,7 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
     }
 
     /// Press Esc the way `NSWindow.sendEvent` does — a `performKeyEquivalent` traversal of the
-    /// contentView subtree, which is where the card root claims it (ZEN-149). Driving the root
+    /// contentView subtree, which is where the card root claims it. Driving the root
     /// directly would skip the Cancel button's key equivalent, which is the point of the traversal.
     @discardableResult
     private func pressEscape() -> Bool {
@@ -188,7 +188,7 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertEqual(segment(in: overlay, containing: "Editor + AI + Shell")?.selectedIndex, 1)
     }
 
-    // MARK: Tab (ZEN-146)
+    // MARK: Tab
 
     /// An env row is ONE vertical stop (its KEY box), so routing the value box's Tab through
     /// `moveVertical` jumped from KEY straight to the next row — silently skipping the value the
@@ -260,7 +260,7 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertTrue(KeyboardFocus.isFocused(folder.field, in: win), "Left must return to the field")
     }
 
-    // MARK: Esc (ZEN-149)
+    // MARK: Esc
 
     /// Esc closes the form from a focused text field — the case the Cancel button's key equivalent
     /// used to cover by accident, now owned by the card root.

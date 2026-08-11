@@ -77,7 +77,7 @@ final class PaneCanvasController: NSObject {
     var onFocusChanged: (() -> Void)?
 
     /// A pane's scroll position moved. Carries the surface so a consumer can match it against
-    /// the one it cares about (ZEN-330).
+    /// the one it cares about.
     var onScrollPosition: ((TerminalSurface, TerminalScrollPosition) -> Void)?
     var onSearchEvent: ((TerminalSurface, SearchController.Event) -> Void)?
 
@@ -307,7 +307,7 @@ final class PaneCanvasController: NSObject {
         return host
     }
 
-    /// Test hook: the live host per leaf, for asserting reuse across restructures (ZEN-54).
+    /// Test hook: the live host per leaf, for asserting reuse across restructures.
     var hostsForTesting: [PaneID: PanelHostView] { hostByLeaf }
 
     private func updateHalo() {
@@ -605,7 +605,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
         onCommandFinished?(result)
     }
     /// A program repainted its pane's background (OSC 11). Carry it to that pane's own fill so the
-    /// padding around the terminal matches instead of ringing it in the theme color (ZEN-23).
+    /// padding around the terminal matches instead of ringing it in the theme color.
     /// Scoped to the one host: the canvas, the other panes and every chrome role are untouched.
     ///
     /// A pane needs no `backgroundOverride` pull to go with this. `reconcile` starts a leaf's
@@ -618,7 +618,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
         hostByLeaf[id]?.backgroundOverride = color
     }
     /// The pointer is over a link in one of the panes (nil when it leaves) — mirror it into the
-    /// shared preview so the user sees where a Cmd+click would go (ZEN-24).
+    /// shared preview so the user sees where a Cmd+click would go.
     func surface(_ s: TerminalSurface, hoveredLinkDidChange url: String?) {
         guard let id = leafID(of: s), let host = hostByLeaf[id] else { return }
         LinkPreviewPresenter.shared.update(url, near: host)

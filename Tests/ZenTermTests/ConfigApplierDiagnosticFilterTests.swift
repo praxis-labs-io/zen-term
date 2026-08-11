@@ -2,7 +2,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Which config problems share the one notice, and which get a card each (ZEN-368).
+/// Which config problems share the one notice, and which get a card each.
 ///
 /// A chord conflict is the one diagnostic a user can answer from the notice itself, so it gets its
 /// own card with Accept and Revert. Everything else has nothing to press and keeps sharing a list.
@@ -61,7 +61,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
                 reapplyUpdateCardTheme: {}, applyAutoCheckSetting: {}))
     }
 
-    /// A float on ⌘G, which ZEN-367 made Find Next's default. It gets a card of its own, never a
+    /// A float on ⌘G, which is Find Next's default. It gets a card of its own, never a
     /// line in the shared list.
     ///
     /// Driven through `surfaceConfigNotices`, which is what launch calls. Calling the conflict half

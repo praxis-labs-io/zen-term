@@ -72,14 +72,12 @@ extension KeyInterceptor.ReservedChord {
 
     /// Whether holding the chord down should fire the action again at the key-repeat rate.
     ///
-    /// Only the actions whose effect accumulates toward something the eye tracks, and where the
-    /// hold runs out of room on its own: nav stops at the edge pane, resize at the pane's minimum,
-    /// font size at the scale limit, a page scroll at the end of the buffer, a prompt jump at the
-    /// oldest prompt in the buffer. Everything else is a discrete act, and a held ⌘N spawning
-    /// windows at 30 a second is the bug this answers. Tab cycling and search stepping are
-    /// deliberately not here: both wrap, so a hold never lands anywhere the user aimed.
+    /// Only actions whose effect accumulates and whose hold runs out of room on its own: nav stops
+    /// at the edge pane, resize at the minimum, a page scroll at the end of the buffer. Everything
+    /// else is discrete, and a held ⌘N spawning windows at 30 a second is the bug this answers.
+    /// Tab cycling and search stepping wrap, so a hold never lands anywhere aimed.
     ///
-    /// A `switch` so a new `ReservedChord` case has to answer, the same as `actionToken`.
+    /// A `switch` so a new `ReservedChord` case has to answer.
     var shouldRepeat: Bool {
         switch self {
         case .navLeft, .navRight, .navUp, .navDown: return true
@@ -100,21 +98,15 @@ extension KeyInterceptor.ReservedChord {
         }
     }
 
-    /// Whether the Shortcuts settings card offers a row for this action (ZEN-367).
+    /// Whether the Shortcuts settings card offers a row for this action.
     ///
-    /// A `switch` for the reason the two above are, and this one earned it the hard way: the card's
-    /// group list is hand-ordered, so seven actions shipped with no row and nothing anywhere went
-    /// red. An action missing from that list is invisible rather than broken, which is the failure
-    /// a test cannot find on its own. Answering here is what `SettingsKeybindGroupsTests` measures
-    /// the list against.
+    /// A `switch` because the card's group list is hand-ordered, so an action missing from it is
+    /// invisible rather than broken: seven shipped with no row and nothing went red.
+    /// `SettingsKeybindGroupsTests` measures the list against this.
     ///
-    /// The ones that say no are file-only, and each for its own reason: the font sizes belong to
-    /// the Terminal card's own control, Reload Config is what you press when the file is the thing
-    /// you are editing, a float's toggle chord lives on the float, and the last two are app errands
-    /// the menu bar already carries.
-    ///
-    /// Shipping unbound is not a reason to say no. Check for Updates and Report an Issue are the
-    /// two that do, and they say no because the menu bar carries both.
+    /// The ones that say no are file-only: the font sizes belong to the Terminal card's control,
+    /// Reload Config is what you press while editing the file, a float's chord lives on the float,
+    /// and the rest are errands the menu bar already carries. Shipping unbound is not a reason.
     var isEditableInSettings: Bool {
         switch self {
         case .increaseFontSize, .decreaseFontSize, .resetFontSize: return false
@@ -161,12 +153,12 @@ extension KeyInterceptor.ReservedChord {
         case "toggle_bottom_drawer": self = .toggleBottomDrawer
         case "toggle_right_drawer": self = .toggleRightDrawer
         case "toggle_focus_mode": self = .toggleZoom
-        // Back-compat: the action was renamed from zoom to Focus Mode (ZEN-207); an existing
+        // Back-compat: the action was renamed from zoom to Focus Mode; an existing
         // config with the old token still resolves rather than silently dropping the binding.
         case "toggle_zoom": self = .toggleZoom
         case "fill_screen": self = .fillScreen
         case "toggle_workspace_picker": self = .toggleRepoPicker
-        // Back-compat: the config token is `toggle_workspace_picker` (ZEN-6) — the product calls it
+        // Back-compat: the config token is `toggle_workspace_picker` — the product calls it
         // a workspace everywhere, and `repo` was the one token whose product name moved on. The old
         // `toggle_repo_picker` still resolves so an existing binding keeps working.
         case "toggle_repo_picker": self = .toggleRepoPicker
@@ -213,18 +205,16 @@ extension KeyInterceptor.ReservedChord {
     }
 }
 
-/// The built-in chord → action map. The user's `keybind` lines and float `key:` chords overlay
-/// this. Note the old `⌘⇧G → gitdash` line is intentionally absent — a float's chord now comes
-/// from its own `key:` field, so no float is built in.
+/// The built-in chord → action map, which the user's `keybind` lines and float `key:` chords
+/// overlay. No float is built in: a float's chord comes from its own `key:` field.
 ///
-/// These are ghostty's chords wherever the two would disagree on something a ghostty user reaches
-/// for first, so a hand arriving from it lands right.
+/// These are ghostty's chords wherever the two would disagree, so a hand arriving from it lands
+/// right.
 ///
-/// **One chord per action.** A second spelling costs a Shortcuts row that has to pick one of the two
-/// to advertise, a line in the reference config nobody asked for, and a rebind that has to free
-/// both. Increase font size is the only exception and it is a layout artifact, not a second chord.
-/// `KeymapAssemblyTests` holds the rule. Where ghostty binds a chord ZenTerm spends elsewhere, the
-/// reason sits at the point of the conflict rather than collected here.
+/// **One chord per action.** A second spelling costs a Shortcuts row that has to pick one to
+/// advertise, a reference-config line nobody asked for, and a rebind that has to free both.
+/// Increase font size is the only exception, and a layout artifact rather than a second chord.
+/// `KeymapAssemblyTests` holds the rule.
 enum KeymapDefaults {
     /// The chords `action` ships with. One accessor rather than the same `filter`/`keys` walk written
     /// out at each call site: a row and the writer disagreeing about what an action's default *is*
@@ -249,7 +239,7 @@ enum KeymapDefaults {
         map[Chord(command: true, control: true, key: "→")] = .resizeRight
         map[Chord(command: true, control: true, key: "↑")] = .resizeUp
         map[Chord(command: true, control: true, key: "↓")] = .resizeDown
-        // Stepping through the panels in order, wrapping (ZEN-372). ghostty spells this ⌘[ / ⌘],
+        // Stepping through the panels in order, wrapping. ghostty spells this ⌘[ / ⌘],
         // which ZenTerm spends on tabs, so it takes the shifted pair. That is ghostty's tab cycling,
         // so the bracket family is inverted here on both rows, deliberately and in one direction:
         // tabs unshifted, panes shifted.
@@ -279,13 +269,10 @@ enum KeymapDefaults {
         // does not claim it either way.
         map[Chord(command: true, key: "f")] = .toggleSearch
 
-        // The chrome. ⌘⇧P is ghostty's command palette and VS Code's, so the workspace picker (ours
-        // alone, and a chord ghostty leaves free) takes ⌘P.
+        // ⌘⇧P is ghostty's command palette and VS Code's, so the workspace picker takes ⌘P.
         //
-        // The diff viewer wants a D and cannot have one: macOS claims ⌘⌥D for the Dock and ⌃⌘D for
-        // Look Up, and takes both before any app-level monitor runs, so a chord bound there is dead
-        // and every test of it passes. ⌘G is git, and free here because stepping a search is `n`/`N`
-        // in scroll mode rather than a chord.
+        // The diff viewer wants a D and cannot have one: macOS claims ⌘⌥D and ⌃⌘D before any
+        // app-level monitor runs, so a chord bound there is dead and every test of it passes.
         map[Chord(command: true, shift: true, key: "p")] = .toggleCommandPalette
         map[Chord(command: true, key: "p")] = .toggleRepoPicker
         map[Chord(command: true, key: "g")] = .openDiffViewer
@@ -294,56 +281,45 @@ enum KeymapDefaults {
         map[Chord(command: true, key: ",")] = .openSettings
         map[Chord(command: true, shift: true, key: ",")] = .reloadConfig
 
-        // Font size (ZEN-224), matching what libghostty bound before the chrome took these over.
+        // Font size, matching what libghostty bound before the chrome took these over.
         //
-        // Increase needs BOTH entries, and the second is the one that matters: "⌘+" on a US layout
-        // is physically ⌘⇧=, and `Chord` folds the "+" it arrives as back onto "=" because Shift is
-        // set. Bind ⌘= alone and the keypress most people actually make falls through to libghostty,
-        // which still has it bound per surface — reproducing this exact ticket. Two defaults for one
-        // action is fine here, and it is the only place left: `assemble` drops all of an action's
-        // defaults when the user rebinds it, and `Chord.displayed` sorts by config token, so a
-        // keycap renders the plainer ⌘=.
+        // Increase needs BOTH entries: "⌘+" on a US layout is physically ⌘⇧=, which `Chord` folds
+        // back onto "=", so binding ⌘= alone lets the keypress most people make fall through to
+        // libghostty, which still has it bound per surface.
         map[Chord(command: true, key: "=")] = .increaseFontSize
         map[Chord(command: true, shift: true, key: "=")] = .increaseFontSize
         map[Chord(command: true, key: "-")] = .decreaseFontSize
         map[Chord(command: true, key: "0")] = .resetFontSize
 
-        // Scrolling and finding (ZEN-367), on the chords libghostty already used for them. Every
-        // one was live under a pane and answered by the backend rather than by us, so keeping the
-        // chord is what makes naming the action invisible to anyone already pressing it.
+        // Scrolling and finding, on the chords libghostty already used, so naming the action is
+        // invisible to anyone already pressing them.
         //
         // The four scroll keys are `Chord`'s glyph tokens, which is what a live event resolves to:
-        // Home, End, Page Up and Page Down type no character, so the keyCode table is the only way
-        // to name them. A config file spells the same four as words.
+        // Home, End, Page Up and Page Down type no character. A config file spells them as words.
         map[Chord(command: true, key: "↖")] = .scrollToTop
         map[Chord(command: true, key: "↘")] = .scrollToBottom
         map[Chord(command: true, key: "⇞")] = .scrollPageUp
         map[Chord(command: true, key: "⇟")] = .scrollPageDown
         map[Chord(command: true, key: "e")] = .searchSelection
 
-        // The screen and the prompt marks (ZEN-369), again on libghostty's own chords, so nobody
-        // already pressing these notices the action changed hands.
+        // The screen and the prompt marks, again on libghostty's own chords.
         //
-        // The prompt jumps take ghostty's shifted spelling and not its bare one. macOS claims ⌘↑
-        // and ⌘↓, so the bare pair never reaches the app, and a chord nobody can press is not free:
-        // it would sit in the Shortcuts card and the reference config as advice that does nothing.
-        //
-        // Clear Screen, Scroll to Selection and Write Screen to File, on ghostty's chords.
+        // The prompt jumps take ghostty's shifted spelling, not its bare one: macOS claims ⌘↑ and
+        // ⌘↓, so the bare pair never reaches the app and would sit in the Shortcuts card and the
+        // reference config as advice that does nothing.
         map[Chord(command: true, key: "k")] = .clearScreen
         map[Chord(command: true, key: "j")] = .scrollToSelection
         map[Chord(command: true, shift: true, key: "j")] = .writeScreenFile
         map[Chord(command: true, shift: true, control: true, key: "j")] = .copyScreenFilePath
         map[Chord(command: true, shift: true, option: true, key: "j")] = .openScreenFile
 
-        // Select All ships no chord: Edit > Select All holds ⌘A, and a menu key equivalent serves a
+        // Select All ships no chord: the Edit menu holds ⌘A, and a menu key equivalent serves a
         // focused text field and a pane both, which the keymap cannot. `KeyInterceptor` resolves
-        // ahead of the responder chain, so a default here would take ⌘A back off every field in the
-        // app (ZEN-370). The action stays for a config that rebinds it to some other chord; it is in
-        // neither the palette nor the Shortcuts card, the same as Copy and Paste.
+        // ahead of the responder chain, so a default here would take ⌘A off every field in the app.
         //
-        // The menu owning ⌘A costs two things the reference config states plainly. Any bind landing
-        // on ⌘A is refused, not only `select_all`, and `select_all=none` no longer frees the chord
-        // for the program in the pane, because a key equivalent is not the keymap's to unbind.
+        // The menu owning it costs two things: any bind landing on ⌘A is refused, and
+        // `select_all=none` cannot free the chord, because a key equivalent is not the keymap's to
+        // unbind.
         map[Chord(command: true, shift: true, key: "v")] = .pasteSelection
         map[Chord(command: true, shift: true, key: "↑")] = .jumpToPreviousPrompt
         map[Chord(command: true, shift: true, key: "↓")] = .jumpToNextPrompt
@@ -353,15 +329,15 @@ enum KeymapDefaults {
 }
 
 /// The reserved-action keymap as something that can be written back: the chords each action holds,
-/// plus the actions that hold none on purpose (ZEN-368).
+/// plus the actions that hold none on purpose.
 ///
 /// The second half is why this type exists. An unbound action cannot appear in a `[Chord: Action]`
-/// map at all, and its absence there is indistinguishable from "this action is at its defaults",
-/// which is what silently deleted the user's `= none` line on the next Settings write.
+/// map, and its absence is indistinguishable from "at its defaults", which silently deleted the
+/// user's `= none` line on the next Settings write.
 ///
-/// Edit through `bind` / `unbind` rather than the two properties. The card has five paths that
-/// change a binding, and each one hand-editing both collections is where the halves drift into
-/// claiming an action is bound *and* deliberately unbound.
+/// **Edit through `bind` / `unbind`**, not the two properties: five paths change a binding, and
+/// hand-editing both collections is where the halves drift into claiming an action is bound *and*
+/// deliberately unbound.
 struct KeymapOverrides: Equatable {
     var binds: [Chord: KeyInterceptor.ReservedChord]
     var unbound: Set<KeyInterceptor.ReservedChord>
@@ -424,7 +400,7 @@ struct KeymapOverrides: Equatable {
 enum KeybindParser {
     /// What one line asks for. An unbind is a value rather than the absence of a chord, because
     /// every stage downstream has to tell "the user wants no shortcut here" apart from "nothing
-    /// was said about this action" (ZEN-368).
+    /// was said about this action".
     enum Line: Equatable {
         case bind(Chord, KeyInterceptor.ReservedChord)
         case unbind(KeyInterceptor.ReservedChord)
@@ -459,14 +435,14 @@ enum KeybindParser {
 /// is skipped with a warning.
 ///
 /// Also reports the displacements that cost an action its *last* chord, so the Keybinds card can
-/// say why a row has no shortcut rather than rendering a bare empty chip (ZEN-121).
+/// say why a row has no shortcut rather than rendering a bare empty chip.
 enum KeymapAssembler {
     /// What a config assembled to. A struct rather than a tuple because the third member is not
     /// derivable from the first two: an action holding no chord in `map` is either something the
     /// user asked for or something a collision did to them, and only this can tell you which.
     struct Assembled {
         let map: [Chord: KeyInterceptor.ReservedChord]
-        /// The actions a `= none` line named that ended with no chord (ZEN-368). Both halves of
+        /// The actions a `= none` line named that ended with no chord. Both halves of
         /// that matter. An action left chordless by a *displacement* stays out, or the writer would
         /// turn a reported conflict into a silent intentional unbind; an action with both a `= none`
         /// line and a real bind stays out too, since the bind won and writing the contradiction back
@@ -478,7 +454,7 @@ enum KeymapAssembler {
     /// `canType` is injected so tests state the layout instead of inheriting the test machine's.
     /// Its type is `@MainActor` deliberately: a plain `(Chord) -> Bool` parameter erases the leaf's
     /// isolation, so annotating `KeyboardLayout.canType` alone would let an off-main assembly
-    /// compile clean straight past it (ZEN-31).
+    /// compile clean straight past it.
     @MainActor
     static func assemble(
         floats: [ToolFloat], keybinds: [KeybindParser.Line],
@@ -550,7 +526,7 @@ enum KeymapAssembler {
         // explicit unbind being silent: the chord is already free when a float or a later line
         // claims it, so no displacement is recorded and there is nothing for `diagnostics` to
         // report. Move this after the writes and the user gets told off for a config they wrote on
-        // purpose (ZEN-368).
+        // purpose.
         let reboundActions = typeable.map(\.1)
         map = map.filter { entry in
             !reboundActions.contains(entry.value) && !requestedUnbinds.contains(entry.value)

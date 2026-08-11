@@ -12,7 +12,7 @@ enum ChromeMetrics {
 
     /// Extra top clearance for the macOS traffic lights, added to `windowGutter` when window chrome
     /// is shown. 28pt is the standard titlebar height; with the default 8pt gutter this restores the
-    /// pre-ZEN-163 36pt top inset. `window-chrome = false` drops it back to an even gutter all round.
+    /// earlier 36pt top inset. `window-chrome = false` drops it back to an even gutter all round.
     private static let trafficLightClearance: CGFloat = 28
 
     /// Inset from the window's top edge to the tile region: `windowGutter` plus traffic-light

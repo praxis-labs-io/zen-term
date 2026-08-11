@@ -1,7 +1,7 @@
 import Foundation
 
 /// Renders a `DiffSelection` as the `@path:line` reference that gets yanked to the clipboard or sent
-/// to an agent (ZEN-227). Always names *new-side* line numbers: the reference is only useful if
+/// to an agent. Always names *new-side* line numbers: the reference is only useful if
 /// whoever receives it can open the file and find those lines.
 ///
 /// The `@` prefix is the file-mention token Claude Code (and the other agents this feeds) resolves to

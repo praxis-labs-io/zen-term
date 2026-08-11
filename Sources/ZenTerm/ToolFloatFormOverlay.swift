@@ -7,7 +7,7 @@ import AppKit
 /// palettes and `AddWorkspaceOverlay`, which it mirrors.
 ///
 /// There is no id field: a float's id is `slug(title)`, so the title is the only name the user gives
-/// it (ZEN-81). `existingIDs` is therefore a set of slugs — the form rejects a title that collides
+/// it. `existingIDs` is therefore a set of slugs — the form rejects a title that collides
 /// with one, which is what keeps the config's last-wins rule from ever silently eating a float.
 ///
 /// Fully keyboard-driven: Up/Down move between fields, the shortcut chip captures a chord (Return to
@@ -145,10 +145,10 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
     /// The form's Esc fallback. A bare Esc reaches the focused control's `keyDown` first, so an open
     /// icon grid closes itself there (`IconPickerField.keyDown`) and a typed-in form survives
-    /// untouched — this pass never runs while the grid is up (ZEN-5). Claimed in
+    /// untouched — this pass never runs while the grid is up. Claimed in
     /// `performKeyEquivalent`, not a card-root `keyDown`, so it also catches Esc from a focused text
     /// field, whose field editor consumes it (`cancelOperation`) before it could bubble as a keyDown
-    /// — one Esc owner per card, so a stray Esc can't discard a filled-in form (ZEN-77). The Cancel
+    /// — one Esc owner per card, so a stray Esc can't discard a filled-in form. The Cancel
     /// button carries no Esc key equivalent; this pass is the owner.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if ModalEscape.handle(

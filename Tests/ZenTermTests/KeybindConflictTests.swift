@@ -2,7 +2,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The two answers to a chord conflict, and what each writes (ZEN-368).
+/// The two answers to a chord conflict, and what each writes.
 ///
 /// Both are edits to the config, because the config is what created the conflict. Accept records
 /// the loss. Revert puts both actions back on their defaults, which makes the offending line equal

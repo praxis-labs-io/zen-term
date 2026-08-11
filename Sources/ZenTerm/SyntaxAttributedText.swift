@@ -1,13 +1,13 @@
 import AppKit
 
-/// Builds a diff line as an `NSAttributedString` for the syntax-highlighted path (ZEN-238): a `base`
+/// Builds a diff line as an `NSAttributedString` for the syntax-highlighted path: a `base`
 /// foreground over the whole line, each span's range overridden with its role color resolved from the
 /// live theme. Colors resolve here, at render time, from the passed `chrome` — the row model carries
-/// only roles, so a theme swap recolors on the next `configure` (ZEN-27). Shared by the split
+/// only roles, so a theme swap recolors on the next `configure`. Shared by the split
 /// (`DiffLineCell`) and inline (`UnifiedLineCell`) renderers. Only used when spans are present; a line
 /// with no spans keeps the flat `stringValue`/`textColor` path.
 enum SyntaxAttributedText {
-    /// Diff lines never wrap — they pan inside a clip (ZEN-241), so the tail is revealed by scrolling.
+    /// Diff lines never wrap — they pan inside a clip, so the tail is revealed by scrolling.
     /// `DiffCellMetrics.contentLabel()` sets `lineBreakMode = .byClipping` on the *label*, which governs
     /// `stringValue`; an attributed string instead carries its own paragraph style, and with none set it
     /// inherits the default — `.byWordWrapping`. Combined with `maximumNumberOfLines = 1` that renders

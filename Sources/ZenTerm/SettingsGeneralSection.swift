@@ -1,7 +1,7 @@
 import AppKit
 
 /// The General settings section: app-wide preferences that aren't about the terminal surface or the
-/// chrome's look. Today it holds Notifications (ZEN-139) and Updates (ZEN-19), each its own group. A
+/// chrome's look. Today it holds Notifications and Updates, each its own group. A
 /// `SettingsFormSection` subclass, so it only declares its groups; the base owns the row builder,
 /// live-apply debounce, focus stops, and Reset-all. Both toggles default on.
 final class SettingsGeneralSection: SettingsFormSection {

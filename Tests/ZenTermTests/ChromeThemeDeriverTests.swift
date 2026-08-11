@@ -52,7 +52,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
             ChromeThemeDeriver.derive(from: recolored))
     }
 
-    /// `accent-color` repoints the accent role and nothing else (ZEN-255). The "nothing else" half
+    /// `accent-color` repoints the accent role and nothing else. The "nothing else" half
     /// is the one that can rot silently: accent is aliased to a slot other roles also read, so a
     /// deriver change could drag `info` or `attention` along with it and still look plausible.
     func test_accentOverride_movesOnlyTheAccentRole() {
@@ -71,7 +71,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(overridden.foreground, base.foreground)
     }
 
-    /// The diff viewer's syntax roles do not follow the accent picker (ZEN-301). `synKeyword` is
+    /// The diff viewer's syntax roles do not follow the accent picker. `synKeyword` is
     /// `slot(5)`, the same slot accent defaults to, so today they are the same color by
     /// coincidence and the coupling is invisible. Repointing the chrome's primary must not
     /// recolor code: a keyword is a token role, not a taste. This is the assertion that makes the

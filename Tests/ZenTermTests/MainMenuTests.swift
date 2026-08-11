@@ -6,7 +6,7 @@ import XCTest
 final class MainMenuTests: XCTestCase {
     /// AppKit's own selectors with no target, so the responder chain decides who serves them. A
     /// custom selector or an explicit target walks past the focused field, which is what left ⌘A
-    /// dead and ⌘C copying the buffer while you typed in the find bar (ZEN-370).
+    /// dead and ⌘C copying the buffer while you typed in the find bar.
     func test_editMenu_carriesTheStandardVerbsWithNoTarget() {
         let app = NSApplication.shared
         let saved = app.mainMenu
@@ -34,7 +34,7 @@ final class MainMenuTests: XCTestCase {
 
     /// Undo, Redo and Cut reach a field editor from these key equivalents and from nowhere else:
     /// macOS ships no default key binding for them. A bare `NSTextView` also needs `allowsUndo`, or
-    /// the item greys out in the two boxes people write paragraphs in (ZEN-370).
+    /// the item greys out in the two boxes people write paragraphs in.
     func test_theMultilineBoxes_allowUndo() {
         XCTAssertTrue(TextAreaBox(placeholder: "note").textView.allowsUndo)
     }

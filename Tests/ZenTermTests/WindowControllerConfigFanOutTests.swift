@@ -4,12 +4,12 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Integration test for the `.configDidChange` reapply fan-out in `WindowController` (ZEN-102).
+/// Integration test for the `.configDidChange` reapply fan-out in `WindowController`.
 ///
 /// Every persistent component's own `reapplyTheme()` is unit-tested in `ReapplyThemeTests` /
 /// `OverlayReapplyThemeTests`, but nothing failed if a line went missing from the observer's
 /// hand-maintained list (`WindowController.swift` — `tabBar`, `dock`, `modal?.overlay`,
-/// `confirmToast`, …) — the exact stale-chrome bug class ZEN-89 fixed. This mounts the real
+/// `confirmToast`, …) — the exact stale-chrome bug class. This mounts the real
 /// chrome and drives the actual notification, so dropping `tabBar.reapplyTheme()` from the
 /// fan-out fails a test rather than shipping stale chrome after a theme swap.
 @MainActor
@@ -151,7 +151,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         XCTAssertEqual(controller.window.standardWindowButton(.closeButton)?.isHidden, true)
     }
 
-    // MARK: change-kind gating (ZEN-48)
+    // MARK: change-kind gating
 
     private func post(_ change: ConfigChange) {
         NotificationCenter.default.post(
@@ -400,7 +400,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
             "a float added while the palette is open never reached it: \(paletteTitles())")
     }
 
-    /// The same trap one layer out, and it was live until ZEN-281: an open command palette rebuilt
+    /// The same trap one layer out, and it was live for a long time: an open command palette rebuilt
     /// its row *views* on `reapplyTheme()` but replayed the shortcut glyph each `PaletteCommand`
     /// baked in when the catalog built it, so a rebind left the palette showing the old chord. The
     /// gate was already right; the work behind it wasn't. A differential test can't see this on its

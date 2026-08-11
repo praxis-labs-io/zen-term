@@ -48,7 +48,7 @@ final class MotionTests: XCTestCase {
         XCTAssertEqual(layer.opacity, 1)
     }
 
-    // MARK: - Config override (ZEN-71)
+    // MARK: - Config override
 
     func test_motionConfig_forcesOnAndOff() {
         MotionConfig.apply(.on)

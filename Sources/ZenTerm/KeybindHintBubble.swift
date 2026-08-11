@@ -24,7 +24,7 @@ final class KeybindHintBubble: ShadowCardView {
     private let errorLabel = NSTextField(wrappingLabelWithString: "")
     /// Reset the row to its built-in chord, beside the input it acts on. **Hidden until a host asks
     /// for it.** The tool-float form shares this popover and has no defaults to go back to, so an
-    /// opt-out default would put a dead control on a card that never mentions it (ZEN-368).
+    /// opt-out default would put a dead control on a card that never mentions it.
     private lazy var resetButton = IconButton(
         symbol: "arrow.uturn.backward", size: NSSize(width: 34, height: 34), pointSize: 13,
         accessibilityLabel: "Reset to default", restsFilled: true
@@ -201,7 +201,7 @@ final class KeybindHintBubble: ShadowCardView {
     ///
     /// The same two words on every row, deliberately. A conflict is answered on the card that raises
     /// it, which carries its own Accept and Revert; this popover is for setting a shortcut. Wording
-    /// it per row meant opening a setter to unset something already unset (ZEN-368).
+    /// it per row meant opening a setter to unset something already unset.
     func showInstructions() {
         let cancel = Self.muted("to cancel")
         let keys = NSStackView(views: [

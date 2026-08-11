@@ -5,7 +5,7 @@ property of the build, not of `build.zig.zon`**, so the pin moving is what makes
 wrong. Run this pass whenever `vendor/ghostty` changes, and fold any difference into the
 notices before tagging.
 
-Two rules learned the hard way, both from ZEN-167:
+Two rules learned the hard way:
 
 - **Probe the linked executable, not `libghostty-fat.a`.** The archive is a bag of object
   files the linker draws from selectively: it is ~141 MB against a ~16 MB binary. The
@@ -43,7 +43,7 @@ nothing references the GNU libintl it bundles on Apple platforms (Apple's libc o
 `SharedDeps.zig` still links the archive, but with no references the release linker dead-strips
 it, so it leaves the shipped binary (the same mechanism that drops `mpack`). That is what keeps
 this closed-source app clear of libintl's LGPL-2.1 static-linking relink obligation, which
-attribution alone does not discharge (ZEN-170). `bin/package-app` runs this same probe on the
+attribution alone does not discharge. `bin/package-app` runs this same probe on the
 linked binary and refuses to package a build where libintl survived, so a stale GhosttyKit
 cannot ship the violation with the notice already deleted. A nonzero count means i18n came back
 on: the flag was dropped, or ghostty started pulling libintl another way, and the obligation
@@ -51,8 +51,8 @@ returned with it.
 
 Disabling i18n also turns off ghostty's macOS locale canonicalization, so a non-English macOS
 user's child shell gets a non-canonical `LANGUAGE` (e.g. `zh-Hant-TW` rather than `zh_TW`);
-`LANG` is unaffected. That is an accepted tradeoff for staying off libintl at launch, tracked in
-ZEN-193 (restore canonicalization by dynamic-linking libintl or reimplementing the mapping).
+`LANG` is unaffected. That is an accepted tradeoff for staying off libintl at launch.
+Restoring it would mean dynamic-linking libintl or reimplementing the mapping.
 
 C++ libraries mangle their symbols, so demangle through `c++filt` before matching or they
 undercount to zero. Watch for the reverse too: a case-insensitive `gettext` grep matches

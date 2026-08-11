@@ -11,7 +11,7 @@ import XCTest
 final class FloatShadowTests: WindowTestCase {
     private var window: NSWindow!
     /// `SurfaceFloatOverlay` reads `GeneralConfig.current` at construction to pick which
-    /// arrangement paints its card (ZEN-287), so without this the float below is built against the
+    /// arrangement paints its card, so without this the float below is built against the
     /// developer's own `~/.config/zen-term` — and at `background-alpha = 0` it mounts a live
     /// `NSVisualEffectView` into a displayed window, which this suite then drops. That reads as an
     /// unrelated intermittent failure in a later suite, on one machine.
@@ -58,7 +58,7 @@ final class FloatShadowTests: WindowTestCase {
 
     /// The float card is the one card that does NOT take a layer shadow. It hosts a terminal, so
     /// `background-alpha` can make it see-through, and a layer shadow fills `shadowPath` — which
-    /// washed the interior black the moment it did (ZEN-287). It draws an outside-only shadow
+    /// washed the interior black the moment it did. It draws an outside-only shadow
     /// instead, so what has to survive presentation here is that view, not `shadowOpacity`.
     /// `SurfaceFloatOverlayTests` covers what that view paints.
     func test_surfaceFloatCard_drawsItsShadow_ratherThanCastingALayerOne() {

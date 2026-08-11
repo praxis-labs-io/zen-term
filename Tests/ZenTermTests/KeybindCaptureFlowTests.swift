@@ -4,13 +4,13 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the keybind capture flow (ZEN-105): begin capture on a row, feed key
+/// Interaction tests for the keybind capture flow: begin capture on a row, feed key
 /// events through the real `KeybindCapturing` seam, and assert the rebind lands (or doesn't).
 /// `resolve()` was tested; the capture / cancel / conflict / reset path — shipped in the last week
 /// — was not, and a bug here bricks all keyboard input while recording.
 ///
 /// The config write→reload roundtrip is sandboxed via `ConfigLoader.defaultRootOverrideForTesting`
-/// so the tests never touch the real config. (Stacked on the ZEN-104 seam.)
+/// so the tests never touch the real config. (Stacked on the seam.)
 final class KeybindCaptureFlowTests: WindowTestCase {
     /// A `KeybindCapturing` double: stores the section's handler so a test can feed events, and
     /// counts `endCapture` so "still armed vs restored" is observable.
@@ -135,7 +135,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
 
     /// Delete means delete. It used to restore the default, which reads as doing nothing on the
     /// rows most likely to be pressed: an action whose default is a chord something else already
-    /// holds gets it back and loses it again on the reload (ZEN-368).
+    /// holds gets it back and loses it again on the reload.
     func test_delete_leavesTheActionWithNoShortcut() throws {
         let capturer = FakeCapturer()
         _ = mountSection(capturer)
@@ -271,8 +271,8 @@ final class KeybindCaptureFlowTests: WindowTestCase {
     }
 
     func test_capturingAnOccupiedShiftedSymbol_blocks() {
-        // The ZEN-142 shape: ⌘⇧= arrives as "+" and must still be recognized as taken. ZEN-371 moved
-        // the splits off ⌘⇧- and ⌘⇧\, so increase font size is the last default spelled this way.
+        // The shape: ⌘⇧= arrives as "+" and must still be recognized as taken. The splits moved
+        // off ⌘⇧- and ⌘⇧\, so increase font size is the last default spelled this way.
         let capturer = FakeCapturer()
         _ = mountSection(capturer)
         row(for: .closePane).chip.onActivate?()
@@ -283,7 +283,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertTrue(capturer.isArmed, "an occupied shifted-symbol chord must block too")
     }
 
-    // MARK: removing a shortcut (ZEN-368)
+    // MARK: removing a shortcut
 
     /// The real chip, the real `keyDown`. Calling `onRemove` directly would pass with the key case
     /// wired to nothing, which is the whole failure a chord test exists to catch.
@@ -352,7 +352,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         try String(contentsOf: tempRoot.appendingPathComponent("config"), encoding: .utf8)
     }
 
-    // MARK: the capture popover (ZEN-368)
+    // MARK: the capture popover
 
     private func hintBubble() throws -> KeybindHintBubble {
         try XCTUnwrap(descendants(of: hostWindow!.contentView!).compactMap { $0 as? KeybindHintBubble }.first)
@@ -477,7 +477,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertTrue(capturer.isArmed)
     }
 
-    // MARK: a conflicted row (ZEN-368)
+    // MARK: a conflicted row
 
     /// The row explains itself and offers nothing. Answering lives on the launch card; the row's
     /// job is to say why the chip is empty when someone comes looking.
@@ -515,10 +515,10 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertNil(row(for: .toggleCommandPalette).renderedMessageForTesting)
     }
 
-    // MARK: conflict surface (ZEN-142)
+    // MARK: conflict surface
 
     func test_floatStealingAnActionsChord_showsTheReasonOnTheRow() throws {
-        // A float's `key:` silently wins over a built-in. Before ZEN-142 the New Tab row just
+        // A float's `key:` silently wins over a built-in. The New Tab row used to just
         // rendered an empty chip — no chip, no reason, nothing to act on.
         try seed("float = title:steal command:btop key:cmd+t\n")
         _ = mountSection(FakeCapturer())
@@ -601,7 +601,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
 
     /// A chord your own float took is not a problem, so the row explains it in muted ink rather
     /// than warning-toned. It used to read orange and toast at every launch, which taught the user
-    /// to see a working config as breakage (ZEN-368).
+    /// to see a working config as breakage.
     func test_aChordTakenByAFloat_readsAsAnExplanation() throws {
         try seed("float = title:steal command:btop key:cmd+t\n")
         _ = mountSection(FakeCapturer())

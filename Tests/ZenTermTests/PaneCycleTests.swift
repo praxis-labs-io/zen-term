@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Stepping focus through a tab's panels with ⌘⇧[ and ⌘⇧] (ZEN-372).
+/// Stepping focus through a tab's panels with ⌘⇧[ and ⌘⇧].
 ///
 /// Driven through a real window with real panes, and asserted on the panel that actually holds
 /// focus rather than on the tree's bookkeeping. A cycle that updates `focusedLeaf` while the halo

@@ -2,16 +2,13 @@ import Darwin
 
 /// The process session behind one terminal surface.
 ///
-/// Every surface's shell calls `setsid()`, so it leads its own session and every process it
-/// goes on to spawn inherits that session id, whatever process group the shell parks it in.
-/// That makes the session the one handle that survives job control and re-parenting, both of
-/// which a `SIGHUP` aimed at the shell's own process group misses (ZEN-269).
+/// Every surface's shell calls `setsid()`, so everything it spawns inherits that session id
+/// whatever process group it is parked in. That makes the session the one handle surviving job
+/// control and re-parenting, which a `SIGHUP` at the shell's own process group misses.
 enum ShellSession {
-    /// Live pids paired with their parent, from a single `sysctl` snapshot.
-    ///
-    /// The table can grow between the sizing call and the fetch, which fails the fetch with
-    /// ENOMEM against a buffer sized to the stale count. A silent empty result here reads
-    /// downstream as "nothing to kill," so retry with headroom instead of trusting one size.
+    /// Live pids paired with their parent, from a single `sysctl` snapshot. The table can grow
+    /// between the sizing call and the fetch, failing it with ENOMEM, and a silent empty result
+    /// reads downstream as "nothing to kill", so retry with headroom rather than trust one size.
     private static func snapshot() -> [(pid: pid_t, ppid: pid_t, isExited: Bool)] {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
         for _ in 0..<3 {
@@ -37,10 +34,9 @@ enum ShellSession {
         return []
     }
 
-    /// Direct children of this process that lead their own session — on macOS libghostty starts
-    /// every shell under `/usr/bin/login`, which is the process that calls `setsid()` and so
-    /// leads the session the shell and everything it spawns run in. An ordinary helper
-    /// subprocess (a git probe) stays in our session, so it never matches.
+    /// Direct children of this process that lead their own session. libghostty starts every shell
+    /// under `/usr/bin/login`, which is what calls `setsid()`. An ordinary helper subprocess stays
+    /// in our session, so it never matches.
     static func leaderChildren() -> Set<pid_t> {
         let me = getpid()
         return Set(
@@ -56,10 +52,10 @@ enum ShellSession {
         let table = snapshot()
         // A failed snapshot returns empty, and empty would classify every candidate as orphaned:
         // the sweep would then SIGKILL the shell, dev server and agent of every open pane, with
-        // no surface having closed. That is the ZEN-269 failure arriving through the back door.
+        // no surface having closed. That is the failure arriving through the back door.
         // A live system always has at least this process in the table, so empty never means
         // "nothing is running", only "we could not look". Sweep nothing and wait for the next
-        // look (ZEN-306).
+        // look.
         guard !table.isEmpty else { return [] }
         let live = Set(table.filter { !$0.isExited }.map(\.pid))
         return candidates.filter { !live.contains($0) }

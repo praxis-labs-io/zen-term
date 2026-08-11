@@ -1,7 +1,7 @@
 import Foundation
 
 /// App and OS metadata for a bug report: the one source both the exported diagnostics `metadata.txt`
-/// and ZEN-212's issue body read, so the zip's header and a filed issue can never disagree about what
+/// and the issue body read, so the zip's header and a filed issue can never disagree about what
 /// was reported.
 ///
 /// The memberwise `init` takes fixed strings so `plainText` is unit-testable without touching the

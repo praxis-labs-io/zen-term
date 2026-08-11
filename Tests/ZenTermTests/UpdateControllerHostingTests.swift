@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// ZEN-248: the update card morphs through its states (available → downloading → ready) by
+/// The update card morphs through its states (available → downloading → ready) by
 /// re-rendering into its host window's toast stack. A re-render must reach the card even when the
 /// key window is momentarily foreign (an open save/open panel makes `keyController()` nil) — else the
 /// card freezes on a stale state whose `fireOnce` reply is already spent, and Later / Relaunch go

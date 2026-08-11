@@ -3,10 +3,10 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Pure, window-free bits of the side-by-side pane (ZEN-241). `halfPageDirection` is the guard that
+/// Pure, window-free bits of the side-by-side pane. `halfPageDirection` is the guard that
 /// keeps Ctrl-D as terminal EOF (only D/U with *exactly* Control half-page) — a silent regression here
 /// (a flipped keyCode, or matching against `deviceIndependentFlagsMask` so ⌘⌃D leaks through, the
-/// ZEN-81 trap) has no on-screen tell, so it earns a test.
+/// same reorder trap) has no on-screen tell, so it earns a test.
 final class DiffPaneTableTests: XCTestCase {
     private func keyDown(keyCode: UInt16, flags: NSEvent.ModifierFlags) throws -> NSEvent {
         try XCTUnwrap(
@@ -30,7 +30,7 @@ final class DiffPaneTableTests: XCTestCase {
 
     func test_toleratesNonReservableBits() throws {
         // AppKit stamps .function / .numericPad onto events; matching the reservable set (not the raw
-        // mask) must still read this as Control-only (ZEN-81).
+        // mask) must still read this as Control-only.
         let event = try keyDown(keyCode: 2, flags: [.control, .function])
         XCTAssertEqual(DiffPaneTable.halfPageDirection(for: event), 1)
     }

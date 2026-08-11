@@ -16,10 +16,10 @@ struct ChromeTheme: Equatable {
     let attention: TerminalColor
     let muted: TerminalColor
     /// Green "added / success" role — the only ANSI hue the chrome hadn't needed until the diff
-    /// viewer's added-line fg/bg (ZEN-226). Named for meaning, not hue, like the other roles.
+    /// viewer's added-line fg/bg. Named for meaning, not hue, like the other roles.
     let positive: TerminalColor
 
-    /// Syntax-highlighting roles for the diff viewer (ZEN-238), resolved via `SyntaxRole`. Named
+    /// Syntax-highlighting roles for the diff viewer, resolved via `SyntaxRole`. Named
     /// for token meaning, not hue, and derived from the ANSI-16 set so a bring-your-own theme
     /// recolors them; `synComment` is a faint fg/bg blend (like `muted`) rather than an ANSI slot.
     let synKeyword: TerminalColor
@@ -46,7 +46,7 @@ struct ChromeTheme: Equatable {
     /// `tint` composited over `base`, source-over. A chrome surface inside a pane paints its tint on
     /// the pane's own resolved fill rather than on its own: the tints are alpha inks tuned for an
     /// opaque background, and below `background-alpha` a pane has none, so a bare tint blends with
-    /// whatever is behind the window and reads grey (ZEN-354). Compositing keeps the surface at the
+    /// whatever is behind the window and reads grey. Compositing keeps the surface at the
     /// pane's alpha, so it agrees with the padding ring instead of the desktop.
     static func surface(tint: NSColor, over base: NSColor) -> NSColor {
         guard let top = tint.usingColorSpace(.sRGB), let bottom = base.usingColorSpace(.sRGB) else {
@@ -68,8 +68,9 @@ struct ChromeTheme: Equatable {
 extension NSTextField {
     /// Paint this field's caret from the theme. AppKit leaves an `NSTextField`'s insertion point at the
     /// *macOS system accent*, which follows the OS setting rather than `Theme.current`, so a system
-    /// accent with no place in the theme blinks in every field (ZEN-91's rule, in the one spot a color
-    /// is never assigned). `NSTextView` takes `insertionPointColor` directly and needs none of this.
+    /// accent with no place in the theme blinks in every field. The colors rule reaching the one
+    /// spot a color is never assigned. `NSTextView` takes `insertionPointColor` and needs none of
+    /// this.
     ///
     /// Called each time a field takes focus, not once at build: the field editor is shared per window
     /// and re-tinted when it moves between fields.

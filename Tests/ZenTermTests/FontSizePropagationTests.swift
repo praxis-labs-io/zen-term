@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// ZEN-224 itself: a font-size step has to reach every terminal surface, not the focused one.
+/// A font-size step has to reach every terminal surface, not the focused one.
 ///
 /// libghostty binds ⌘+ / ⌘- / ⌘0 itself and applies each to the surface that has focus, so the
 /// shipped behavior was a size change landing on one pane while its siblings, the other tabs and any
@@ -89,7 +89,7 @@ final class FontSizePropagationTests: WindowTestCase {
         for (index, surface) in surfaces.enumerated() {
             XCTAssertEqual(
                 surface.lastFontSize, 17,
-                "surface \(index) never got the step — this is ZEN-224: the size reached some "
+                "surface \(index) never got the step: the size reached some "
                     + "surfaces and not others")
         }
     }

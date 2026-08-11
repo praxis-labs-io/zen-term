@@ -1,6 +1,6 @@
 import AppKit
 
-/// A small themed popover primitive (ZEN-262): it wraps caller-supplied content in a rounded,
+/// A small themed popover primitive: it wraps caller-supplied content in a rounded,
 /// hairline-bordered card with a soft shadow, and shows or hides it anchored just above the trailing
 /// edge of a reference view. The caller owns the trigger and the content; the popover owns the chrome,
 /// the fade, and re-theming — so the same primitive backs any "press a key, get a floating panel" surface.

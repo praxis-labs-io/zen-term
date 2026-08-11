@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Differential tests for the window half of the `.configDidChange` fan-out (ZEN-281). The
+/// Differential tests for the window half of the `.configDidChange` fan-out. The
 /// app-global half is `ConfigApplierDifferentialTests`; the invariant is the same one:
 ///
 /// > For any config change, the **gated** fan-out must leave the chrome identical to the
@@ -13,7 +13,7 @@ import XCTest
 /// `WindowControllerConfigFanOutTests` asserts specific gates hold for specific probes, which is
 /// worth keeping: those give a named failure ("the rebind never reached the drawer header keycap")
 /// where this one only says two fingerprints differ. But they only cover the dependencies someone
-/// already thought of, and the ZEN-48 regressions were exactly the ones nobody thought of. This is
+/// already thought of, and the regressions were exactly the ones nobody thought of. This is
 /// the net under them: it needs no dependency list to be right.
 ///
 /// **Honest limit:** it only covers what the fingerprint samples. Every probe added protects every
@@ -71,7 +71,7 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         /// Every mounted panel host's frame in window coordinates. Subsumes the pane gap, the
         /// window gutter, the drawer split, and the top inset the traffic lights clear.
         var panelFrames: [String]
-        /// Where the toast stack sits — its insets are frozen at construction (ZEN-48).
+        /// Where the toast stack sits — its insets are frozen at construction.
         var toastFrames: [String]
         var trafficLightsHidden: Bool?
         /// Theme color plus `backdrop-alpha`, the one probe covering both halves of that gate.
@@ -88,7 +88,7 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         var text: [String]
         var dockFloatIDs: [String]
         /// The toolbar's visible buttons and dividers left-to-right — the probe that catches a
-        /// `.toolbarButtons` gate skipping the hide/show re-apply (ZEN-327).
+        /// `.toolbarButtons` gate skipping the hide/show re-apply.
         var dockLayout: [String]
         /// What each live surface was last handed. Nil means it was never told anything.
         var surfaces: [SurfaceAppearance?]
@@ -311,7 +311,7 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
 
     // MARK: - scenarios
 
-    /// The ticket's motivating write, and the one both ZEN-48 regressions rode in on: a rebind
+    /// The ticket's motivating write, and the one both regressions rode in on: a rebind
     /// reaches every surface that renders a keycap, none of which sounds like a keymap consumer.
     func test_keymapRebind() throws {
         try assertGateSkipsNothing(
@@ -349,7 +349,7 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
     }
 
     /// Reaches further than the other `TerminalBehavior` keys: it also has to recolor the panel,
-    /// which fills its padding ring to match the surface (ZEN-282).
+    /// which fills its padding ring to match the surface.
     func test_backgroundAlpha() throws {
         try assertGateSkipsNothing(Scenario(name: "background-alpha") { $0.backgroundAlpha = 0.6 })
     }

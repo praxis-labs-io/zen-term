@@ -3,7 +3,7 @@ import XCTest
 
 @testable import TerminalKit
 
-/// What a surface answers when a program asks whether it is running light or dark (ZEN-307).
+/// What a surface answers when a program asks whether it is running light or dark.
 ///
 /// Driven through a real surface and a real shell, because there is no smaller way to see it: the
 /// reply is assembled inside libghostty from state that three separate pieces have to agree on
@@ -55,7 +55,7 @@ final class ColorSchemeReportTests: XCTestCase {
     /// A pane opened at a stepped font size keeps it *and* reports its scheme, in one surface.
     ///
     /// These two have to be asserted together or neither means anything. Reporting the scheme
-    /// requires a config push, and a config push is what reset the font size (ZEN-224): the first
+    /// requires a config push, and a config push is what reset the font size: the first
     /// version of this feature shipped the report working and the size silently dropped. Assert
     /// the size alone and a regression that stops pushing config passes; assert the scheme alone
     /// and the size regression comes back. The pair pins the interaction.
@@ -70,7 +70,7 @@ final class ColorSchemeReportTests: XCTestCase {
         XCTAssertLessThan(
             stepped.columns, base.columns,
             "a 26pt pane must render fewer columns than a 13pt one; equal means the config push "
-                + "reset it to the theme's size (ZEN-224)")
+                + "reset it to the theme's size")
     }
 
     /// Ask one surface for both its color scheme and its grid size.
@@ -118,7 +118,7 @@ final class ColorSchemeReportTests: XCTestCase {
             // Re-query until the answer moves rather than sleeping a fixed interval. The repaint
             // has to cross to the main thread, push a scheme, come back as a config reload and
             // reach the io thread before the reply can change, and no fixed wait covers that on a
-            // loaded machine (ZEN-302). A shell that keeps asking is its own synchronization; if
+            // loaded machine. A shell that keeps asking is its own synchronization; if
             // the answer never moves, the last reply is the wrong one and the assertion says so.
             lines += [
                 "printf '\\033]11;\(repaintTo.hex)\\007'",
@@ -170,8 +170,8 @@ final class ColorSchemeReportTests: XCTestCase {
         }
         try XCTSkipIf(surface.surfacePtr == nil, "ghostty_surface_new failed")
 
-        // Poll rather than sleep: the shell has to start first, and CI is slower than this machine
-        // (ZEN-302). The runloop is also what carries libghostty's action callbacks to us.
+        // Poll rather than sleep: the shell has to start first, and CI is slower than this machine.
+        // The runloop is also what carries libghostty's action callbacks to us.
         let deadline = Date().addingTimeInterval(30)
         while Date() < deadline {
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))

@@ -25,7 +25,7 @@ struct ConfigChange: OptionSet {
 
     /// The `TerminalBehavior` handed across the seam: cursor style/blink/thickness, option-as-alt,
     /// scroll multiplier, cursor shader, background alpha. The last one also reaches chrome —
-    /// `PanelHostView` fills its padding ring to match — so it drives a recolor too (ZEN-282).
+    /// `PanelHostView` fills its padding ring to match — so it drives a recolor too.
     static let terminalBehavior = ConfigChange(rawValue: 1 << 2)
 
     /// The tool-float catalog: a float added, edited, or removed.
@@ -69,7 +69,7 @@ struct ConfigChange: OptionSet {
         if old.floats != new.floats { change.insert(.floats) }
         // The unbound set rides with the map: an action that ships with no chord anyway can gain a
         // `= none` line without either the map or the diagnostics moving, and an open Shortcuts card
-        // rebuilds the whole keybind block from what it last read (ZEN-368).
+        // rebuilds the whole keybind block from what it last read.
         if old.keymap != new.keymap || old.unboundActions != new.unboundActions {
             change.insert(.keymap)
         }

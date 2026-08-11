@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Rendering tests for the non-keybind config diagnostics (ZEN-7): a bad scalar shows inline on the
+/// Rendering tests for the non-keybind config diagnostics: a bad scalar shows inline on the
 /// Settings row that owns its key, a dropped `float =` line shows in the Tools-section notice, and
 /// the reload toast's "Open Settings" button lands on the right section. State-only assertions would
 /// pass while the row/notice is dead, so these mount the real sections in a window and read what's

@@ -16,7 +16,7 @@
 #
 # Verifying: open the built DMG with hidden files SHOWN (⌘⇧.). Checking with them hidden
 # cannot reveal what is actually on the volume, which is how a stray .fseventsd shipped in
-# v0.2.1 sitting on the wordmark (ZEN-203). Every item at the volume root needs a position;
+# v0.2.1 sitting on the wordmark. Every item at the volume root needs a position;
 # an unpositioned one gets auto-arranged into the top row.
 set -euo pipefail
 # Resolve the repo root from the script location, but do NOT cd into it: --app/--dest are
@@ -150,7 +150,7 @@ rm -rf "$MOUNTPOINT/.fseventsd" "$MOUNTPOINT/.Trashes" 2>/dev/null || true
 
 # Then prove the root holds nothing else. The rm above only names the two we've actually seen,
 # but any OS-created root (.Spotlight-V100, .DocumentRevisions-V100, ...) would reproduce
-# ZEN-203 identically: unpositioned items get auto-arranged into the top row, onto the wordmark.
+# the same way: unpositioned items get auto-arranged into the top row, onto the wordmark.
 # This is the general rule the header states, enforced the way the .DS_Store gate above is, so a
 # new one fails the build instead of shipping invisibly to everyone browsing with ⌘⇧. on.
 # Globbed rather than parsed out of `ls`: the volume holds an entry named a single space, and

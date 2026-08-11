@@ -1,6 +1,6 @@
 import AppKit
 
-/// The diff viewer's comment box (ZEN-257): a note field that drops into the diff directly under the
+/// The diff viewer's comment box: a note field that drops into the diff directly under the
 /// selected lines, pushing the lines below it down, the way a review comment reads on a pull request
 /// with the code still on screen above it.
 ///
@@ -127,7 +127,7 @@ final class DiffCommentComposer: NSView {
         note.isRichText = false
         note.drawsBackground = false
         // Off by default on a bare `NSTextView`, unlike a field editor, so Edit > Undo would grey out
-        // here while it works in every single-line field (ZEN-370).
+        // here while it works in every single-line field.
         note.allowsUndo = true
         note.font = .systemFont(ofSize: 13)
         note.textContainerInset = NSSize(width: 4, height: 4)
@@ -201,7 +201,7 @@ final class DiffCommentComposer: NSView {
     /// a note being typed.
     func handleKeyEquivalent(_ event: NSEvent) -> Bool {
         // An open dropdown list owns Return and Esc for itself (commit / close). Claiming them here
-        // would close the box out from under an open list — the ZEN-5 layered-dismissal rule.
+        // would close the box out from under an open list — the layered-dismissal rule.
         guard !targetDropdown.isPopoverOpen else { return false }
         if KeyboardFocus.key(for: event) == .escape {
             onCancel()
@@ -217,7 +217,7 @@ final class DiffCommentComposer: NSView {
     /// sits next to all day.
     ///
     /// Matched against the reservable set, never `deviceIndependentFlagsMask`, which keeps the extra
-    /// bits AppKit stamps on and so never compares equal to a bare modifier (ZEN-81).
+    /// bits AppKit stamps on and so never compares equal to a bare modifier.
     static func sendShortcut(for event: NSEvent) -> DiffSendAction? {
         guard event.keyCode == 36 || event.keyCode == 76 else { return nil }  // Return, keypad Enter
         switch event.modifierFlags.intersection(DiffPaneTable.reservableModifiers) {

@@ -3,8 +3,8 @@ import Foundation
 /// The last-known "is this directory a git repo" answer per directory, probed off the main thread.
 ///
 /// `GitRepo.isGitRepo` is a `fileExists` stat, and the chrome must never block the main queue on
-/// filesystem I/O (ZEN-90) — a workspace on a network share or FUSE mount makes that stat
-/// unbounded, and the ⌘P picker used to run one per row per keystroke (ZEN-15). So a row renders
+/// filesystem I/O — a workspace on a network share or FUSE mount makes that stat
+/// unbounded, and the ⌘P picker used to run one per row per keystroke. So a row renders
 /// from `known` (instant, nil until something has probed the path) and its host calls `refresh` to
 /// fill the badges in when the answers land.
 ///

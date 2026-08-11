@@ -2,7 +2,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The linewise-selection model (ZEN-227). Every case here is one an eye can't check: a reference
+/// The linewise-selection model. Every case here is one an eye can't check: a reference
 /// that names the wrong side, or is off by one at a range's end, looks perfectly plausible on screen
 /// and sends an agent to the wrong lines.
 final class DiffSelectionTests: XCTestCase {

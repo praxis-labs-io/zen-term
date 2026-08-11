@@ -4,7 +4,7 @@ import XCTest
 
 @testable import TerminalKit
 
-/// Two input events `GhosttyHostView` used to drop on the floor (ZEN-308): modifier press and
+/// Two input events `GhosttyHostView` used to drop on the floor: modifier press and
 /// release, and every mouse button past left and right. Both are the silently-dead class — the
 /// app looks completely normal, because the only thing that notices is a program running under
 /// the kitty keyboard protocol or with mouse reporting on, inside the pane.
@@ -34,13 +34,12 @@ final class GhosttyInputForwardingTests: XCTestCase {
 
         // A window per test method, closed in tearDown. XCTest tears down no AppKit state between
         // cases, so one left open stays on screen for the rest of the run and a suite climbs to
-        // dozens of live window-server surfaces, each test running under more load than the last
-        // (ZEN-312).
+        // dozens of live window-server surfaces, each test running under more load than the last.
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
             styleMask: [.titled], backing: .buffered, defer: false)
-        // Closed in tearDown, not ordered out, so the window-server surface goes with it
-        // (ZEN-312). `isReleasedWhenClosed` defaults to true for a window built in code, so clear
+        // Closed in tearDown, not ordered out, so the window-server surface goes with it.
+        // `isReleasedWhenClosed` defaults to true for a window built in code, so clear
         // it or the close frees one this suite still holds: that lands as a segfault later, inside
         // whatever unrelated test happens to be running when the reference is next touched.
         window.isReleasedWhenClosed = false
@@ -85,7 +84,7 @@ final class GhosttyInputForwardingTests: XCTestCase {
 
     /// Enter and exit are what keep libghostty's viewport state honest: exit pushes (-1, -1) and
     /// enter restores a real position after a window or the app becomes active with the pointer
-    /// already parked over a pane (ZEN-310). `NSWindow.sendEvent` routes tracking events by
+    /// already parked over a pane. `NSWindow.sendEvent` routes tracking events by
     /// tracking number, and a synthesized event cannot match the live tracking area's, so these
     /// are dispatched at the view directly; `NSResponder`'s defaults still forward up the chain,
     /// so the recording superview sees exactly what a missing override would have declined to
@@ -386,7 +385,7 @@ final class GhosttyInputForwardingTests: XCTestCase {
         // Escape, because the key has to be one the layout produces no text for. Setting
         // `markedText` writes our own storage, which the input system knows nothing about, so
         // with a letter `interpretKeyEvents` is free to commit it and take the branch that
-        // records the press unconditionally (ZEN-363).
+        // records the press unconditionally.
         host.markedText.mutableString.setString("か")
         host.keyDown(with: try key(.keyDown, "\u{1b}", keyCode: 53))
         XCTAssertFalse(
@@ -519,7 +518,7 @@ final class GhosttyInputForwardingTests: XCTestCase {
 
 /// Records what its subview declined to handle. `NSResponder`'s default `flagsChanged` and
 /// `otherMouse*` implementations pass the event to `nextResponder`, so a count above zero here
-/// means `GhosttyHostView` has no override for that event — which is the ZEN-308 bug exactly.
+/// means `GhosttyHostView` has no override for that event — which is the bug exactly.
 /// Counts focus requests reaching the seam. Every other delegate method has a default
 /// implementation, so this only has to state the one it cares about.
 private final class FocusRecordingDelegate: TerminalSurfaceDelegate {

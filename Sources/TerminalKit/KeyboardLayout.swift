@@ -8,7 +8,7 @@ import Carbon
 enum KeyboardLayout {
     /// Main-thread-only, like every TIS call in a GUI app: off-main it takes the whole process
     /// down with no crash report, nothing on stderr, and no stack to read, and `swift test` can't
-    /// catch it because TIS answers happily in the xctest process (ZEN-17, ZEN-31). Both callers
+    /// catch it because TIS answers happily in the xctest process. Both callers
     /// are `GhosttyHostView.keyDown`, so nothing violates this today — the annotation and the
     /// precondition are here because this is reachable from anywhere in the chrome and its native
     /// failure mode leaves no evidence to debug. See `docs/swift-conventions.md`, "Carbon and the

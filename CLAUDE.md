@@ -91,7 +91,7 @@ chain and no view-level test covers that.
 - No force-unwrap except documented AppKit (`contentView!`).
 - **Never block the main thread.** No synchronous subprocess (`waitUntilExit`),
   filesystem walk, or blocking I/O on the main queue. The chrome *is* the product,
-  and a stalled main thread is a beachball (ZEN-66). Work off-main, hop back to main
+  and a stalled main thread is a beachball. Work off-main, hop back to main
   for the UI update.
 - Per global rules: no `TODO`/`FIXME`/`HACK` markers. Fix it now, or file a Linear
   ticket for genuinely out-of-scope work.
@@ -124,7 +124,7 @@ it here, then copy it out. **It does not go in `zen-term-releases`**: that repo 
 public, and how we talk about ZenTerm is guidance for whoever writes the copy, not
 something a user downloading the app should be handed.
 
-## Colors: always theme-driven (ZEN-91)
+## Colors: always theme-driven
 
 The chrome must **never hardcode a color**. A hardcoded color will not follow a
 bring-your-own theme and washes out on light themes. Everything resolves from

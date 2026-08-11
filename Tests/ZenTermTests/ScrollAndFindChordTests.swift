@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The seven chords ZEN-367 took off libghostty and gave ZenTerm actions for.
+/// The seven chords taken off libghostty and given ZenTerm actions.
 ///
 /// Every one of them worked before this, answered by the backend's own keymap under the pane. So
 /// the failure these guard against is not a dead key: it is a key that stops doing what it used to

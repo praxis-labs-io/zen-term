@@ -38,7 +38,7 @@ final class ConfigLoaderTests: XCTestCase {
         XCTAssertEqual(app.terminal.background, Theme.rosePineMoon.background)
     }
 
-    // MARK: - General config (ZEN-71)
+    // MARK: - General config
 
     func test_loadGeneralConfig_missingFileYieldsBuiltIn() throws {
         let root = try makeTempDir()  // empty — no `config` file
@@ -71,7 +71,7 @@ final class ConfigLoaderTests: XCTestCase {
         XCTAssertEqual(app.terminal.fontSize, 18)
     }
 
-    // MARK: - Workspaces (ZEN-70)
+    // MARK: - Workspaces
 
     func test_loadWorkspaces_missingFileYieldsEmpty() throws {
         let root = try makeTempDir()  // no `workspaces` file
@@ -87,7 +87,7 @@ final class ConfigLoaderTests: XCTestCase {
         XCTAssertEqual(workspaces.first?.main, "nvim")
     }
 
-    /// The form every UI caller uses: the read is off the main thread (ZEN-275), and the result has
+    /// The form every UI caller uses: the read is off the main thread, and the result has
     /// to arrive back ON it, because what it feeds is view building.
     func test_loadWorkspaces_async_deliversTheParsedListOnTheMainThread() throws {
         let root = try makeTempDir()

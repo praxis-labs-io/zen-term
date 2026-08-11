@@ -2,19 +2,16 @@ import AppKit
 import AppLog
 import TerminalKit
 
-/// Scroll mode: a sticky keyboard mode over one focused terminal, where vim keys move the
-/// viewport through the scrollback instead of reaching the shell, and `v`/`V`/`y` select and copy
-/// out of it.
+/// Scroll mode: a sticky keyboard mode over one focused terminal, where vim keys move the viewport
+/// through the scrollback instead of reaching the shell, and `v`/`V`/`y` select and copy out of it.
 ///
-/// It exists because the keys that should scroll a buffer are the ones the shell already owns.
-/// `j`, `k`, `⌃d` and `⌃u` cannot be reserved chords without taking them from every program
-/// running in every pane, and libghostty's own ⌘Home/⌘PageUp defaults are fn-chords on a laptop
-/// that no menu or palette ever mentions. A mode borrows the keys for as long as it is up and
-/// gives them back on the way out.
+/// A mode rather than chords because the keys that should scroll a buffer are the ones the shell
+/// already owns: `j`, `k`, `⌃d` and `⌃u` cannot be reserved without taking them from every program
+/// in every pane.
 ///
-/// The mode is per window and targets whichever panel holds unified focus at the moment it
-/// opens. It does not follow focus afterward: moving focus ends it, because a scroll mode
-/// pointing at a pane you are no longer looking at is a trap rather than a feature.
+/// Per window, and targets whichever panel holds focus when it opens. It does not follow focus
+/// afterward: moving focus ends it, because a mode pointing at a pane you are no longer looking at
+/// is a trap.
 @MainActor
 final class ScrollModeController {
     /// One move through the buffer, decoded from a keystroke. Separate from `TerminalScroll` so
@@ -108,12 +105,9 @@ final class ScrollModeController {
         onActiveChanged?(true)
     }
 
-    /// Leave the mode and take the header down.
-    ///
-    /// Idempotent, and deliberately so: every teardown trigger (focus moved, pane closed, tab
-    /// switched, window resigned key, surface exited) calls this without first checking whether
-    /// one of the others got there first. A sticky mode whose retraction path is conditional is
-    /// how you end up with a header over a pane that no longer exists.
+    /// Leave the mode and take the header down. Idempotent on purpose: every teardown trigger
+    /// calls it without checking whether another got there first, and a sticky mode with a
+    /// conditional retraction path leaves a header over a pane that no longer exists.
     func end() {
         guard isActive else { return }
         flashTimer?.invalidate()
@@ -136,14 +130,9 @@ final class ScrollModeController {
 
     /// The row the mode opens on: the last row of the viewport with anything written on it.
     ///
-    /// Read off the screen rather than from the terminal's cursor. The cursor is the shell's, and
-    /// `imePoint` reports it against the *live* screen with no account of scrolling, so a viewport
-    /// the reader had already scrolled with the trackpad put the band on an unrelated row. What
-    /// the reader means by "where I am" is the last line they can see text on, and the viewport
-    /// is the only thing that answers that in every case.
-    ///
-    /// Falls back to the bottom row when nothing is readable, which is where an empty pane's
-    /// prompt sits anyway.
+    /// Read off the screen rather than the terminal's cursor, which reports against the *live*
+    /// screen with no account of scrolling, so a viewport already scrolled with the trackpad put
+    /// the band on an unrelated row. Falls back to the bottom row when nothing is readable.
     static func entryRow(of surface: TerminalSurface) -> Int {
         let last = max((surface.cellMetrics?.rows ?? 1) - 1, 0)
         for row in stride(from: last, through: 0, by: -1)
@@ -153,13 +142,12 @@ final class ScrollModeController {
         return last
     }
 
-    /// Re-place the overlay against the grid's current geometry. For a change that moves the cell
-    /// size without moving a view's frame, which is what a font step is: no layout pass runs, so
-    /// the overlay never hears about it on its own.
+    /// Re-place the overlay against the grid's current geometry, for a change that moves the cell
+    /// size without moving a view's frame. A font step runs no layout pass, so the overlay never
+    /// hears about it on its own.
     ///
-    /// It also remembers the line the cursor is reading. A step changes the cell size in both
-    /// directions, so the grid gains or loses rows and the text rewraps into them: no coordinate
-    /// survives that, absolute buffer rows included. The content does.
+    /// It also remembers the line the cursor is reading, because a step rewraps the text and no
+    /// coordinate survives that, absolute buffer rows included. The content does.
     func refreshGeometry() {
         guard isActive else { return }
         let line = rowText(cursor.row)
@@ -191,12 +179,9 @@ final class ScrollModeController {
     /// (a pane that just exited) can end only its own mode.
     func isDriving(_ s: AnyObject) -> Bool { surface === (s as AnyObject) }
 
-    /// Put the cursor on `cell`. For search, which finds a row the mode's own motions cannot
-    /// reach: the reader names a match rather than walking to it.
-    ///
-    /// It closes any selection first. A selection is anchored to a row the reader picked, and
-    /// dragging its far end across the screen to a match they were only looking for selects
-    /// everything in between.
+    /// Put the cursor on `cell`, for search, where the reader names a match rather than walking to
+    /// it. Closes any selection first, since dragging its far end across the screen to a match
+    /// they were only looking for would select everything in between.
     func land(on cell: ScrollCell) {
         guard isActive else { return }
         releaseSelection()
@@ -206,16 +191,13 @@ final class ScrollModeController {
 
     // MARK: keys
 
-    /// Handle one `keyDown` while the mode is up. Returns whether it was consumed.
+    /// Handle one `keyDown` while the mode is up. Returns whether it was consumed. An unmapped key
+    /// is consumed only when it would otherwise reach the shell as input, since a mode that passed
+    /// those through would drop a stray `x` into the buffer behind it.
     ///
-    /// An unmapped key is consumed only when it would otherwise reach the shell as input. A mode
-    /// that passed those through would drop a stray `x` into the buffer behind it.
-    ///
-    /// A `⌘` or `⌥` chord is the exception, and getting this wrong is worse than the stray `x`.
-    /// `KeyInterceptor` is a local monitor, so it runs *before* `NSApp.sendEvent` resolves menu
-    /// key equivalents: swallowing an unmapped `⌘` chord kills ⌘C, ⌘V and ⌘Q for as long as the
-    /// mode is up. Those are menu items rather than reserved chords, so nothing above here claims
-    /// them, and the mode has to decline them explicitly.
+    /// A `⌘` or `⌥` chord is the exception. `KeyInterceptor` is a local monitor, so it runs before
+    /// `NSApp.sendEvent` resolves menu key equivalents: swallowing an unmapped `⌘` chord kills ⌘C,
+    /// ⌘V and ⌘Q for as long as the mode is up.
     func handle(_ event: NSEvent) -> Bool {
         guard isActive else { return false }
         guard let command = Self.command(for: event, afterG: sawG) else {
@@ -304,19 +286,14 @@ final class ScrollModeController {
     /// Zero on a blank row, so the cursor has somewhere to be.
     private func lastColumn(of row: Int) -> Int { max(rowText(row).count - 1, 0) }
 
-    /// Vim's paragraph motion over the viewport: from `row`, step past any blank rows we are
-    /// already sitting in, cross the block of text, and land on the blank row after it.
+    /// Vim's paragraph motion over the viewport: step past any blank rows, cross the block of
+    /// text, land on the blank row after it.
     ///
-    /// This is the chrome's own motion rather than libghostty's `jump_to_prompt`, and it has to
-    /// be. `jump_to_prompt` scrolls the viewport to a prompt ABOVE the screen, so it cannot reach
-    /// any of the prompts you are looking at, and in a pane with no scrollback it does nothing at
-    /// all while three prompts sit on screen. The C API exposes no prompt marks (`ghostty.h` has
-    /// only a window-title action), so a cursor cannot be moved to a prompt at all. A blank line
-    /// is what vim actually keys off, it is readable from the text, and in a terminal it is what
-    /// separates one command's output from the next.
+    /// The chrome's own motion rather than libghostty's `jump_to_prompt`, which scrolls to a
+    /// prompt ABOVE the screen and so cannot reach the ones you are looking at. The C API exposes
+    /// no prompt marks either, so a blank line is what is left, and it is what vim keys off anyway.
     ///
-    /// Clamped to the viewport. A paragraph beyond the visible rows needs the buffer moved first,
-    /// which is what the page keys are for.
+    /// Clamped to the viewport: a paragraph beyond the visible rows needs the buffer moved first.
     private func paragraphRow(from row: Int, delta: Int) -> Int {
         guard surface != nil, delta != 0 else { return row }
         let limit = lastRow
@@ -334,18 +311,12 @@ final class ScrollModeController {
 
     /// A viewport row's text, read at most once per viewport state.
     ///
-    /// Each miss is a renderer-mutex-locked read. Crossing a blank-line-free block (a build log,
-    /// `ls -l`) is one per row, and a held `}` or `w` at key-repeat would multiply that by the
-    /// repeat rate against the thread the chrome's responsiveness depends on. Held keys re-walk
-    /// mostly the same rows, so caching per viewport state is what takes the repeat rate out of it.
+    /// Each miss is a renderer-mutex-locked read, and a held `}` at key-repeat would multiply one
+    /// per row by the repeat rate against the main thread. A row the backend declines caches as
+    /// empty. Every path that can move the viewport or resize the grid clears this.
     ///
-    /// A row the backend declines caches as empty; nothing downstream tells that from a blank row.
-    /// Every path that can move the viewport or resize the grid clears this.
-    ///
-    /// Trailing blanks come off here. `read_text` reads with `trim = false` (`Surface.dumpTextLocked`)
-    /// and the formatter keeps every cell a program actually painted, so a row filled edge to edge
-    /// (a prompt with a right segment, a status bar) arrives padded to the grid width. Left on, `$`
-    /// parks the cursor out in the padding and `v$y` copies a run of spaces.
+    /// Trailing blanks come off here: the backend reads untrimmed, so a row filled edge to edge
+    /// arrives padded to the grid width, and `$` would park the cursor out in the padding.
     private func rowText(_ row: Int) -> String {
         if let known = rowCache[row] { return known }
         var text = surface?.text(viewportRow: row) ?? ""

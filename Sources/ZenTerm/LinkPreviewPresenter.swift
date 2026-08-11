@@ -4,7 +4,7 @@ import AppKit
 /// (Cmd+hover, the same gate that underlines it), and clears it when the report clears. Shared
 /// like `TooltipPresenter` so only one preview is ever live, but undelayed — it must appear in
 /// the same beat as libghostty's underline — and point-anchored, because the report arrives as a
-/// surface action with no `NSEvent` to carry a location (ZEN-24).
+/// surface action with no `NSEvent` to carry a location.
 final class LinkPreviewPresenter {
     static let shared = LinkPreviewPresenter()
     private init() {}
@@ -40,7 +40,7 @@ final class LinkPreviewPresenter {
         content.addSubview(card)
         card.layoutSubtreeIfNeeded()
 
-        // The action carries no event, so read the pointer directly (the ZEN-310 primitive).
+        // The action carries no event, so read the pointer position directly.
         // Frame it directly (not via Auto Layout), so a later `layout()` on the content view
         // can't reset an unconstrained card to the origin.
         let pointer = content.convert(window.mouseLocationOutsideOfEventStream, from: nil)

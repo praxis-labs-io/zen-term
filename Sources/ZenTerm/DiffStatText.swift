@@ -1,7 +1,7 @@
 import AppKit
 
 /// The `+n −m` add/remove badge, rendered the same way wherever it appears: the tree's section headers
-/// and the viewer footer. Additions read in the theme's positive role, removals in destructive (ZEN-27);
+/// and the viewer footer. Additions read in the theme's positive role, removals in destructive;
 /// a zero side is omitted, and an all-zero change yields an empty string (a rename or binary shows nothing).
 enum DiffStatText {
     static func attributed(added: Int, removed: Int, fontSize: CGFloat = 11) -> NSAttributedString {

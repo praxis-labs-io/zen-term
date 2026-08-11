@@ -4,7 +4,7 @@ import XCTest
 @testable import TerminalKit
 
 /// End-to-end proof that tearing a surface down takes its whole process tree with it.
-/// This is ZEN-269's regression guard, so it runs in the ordinary suite. It opens a window
+/// This is the regression guard, so it runs in the ordinary suite. It opens a window
 /// and spawns real shells, which a CI runner may not be able to back, so CI alone skips it.
 final class SurfaceTeardownLeakTests: XCTestCase {
     /// GitHub Actions sets `CI`; a local `bin/check` does not.
@@ -44,7 +44,7 @@ final class SurfaceTeardownLeakTests: XCTestCase {
             .split(separator: "\n").compactMap { pid_t($0) }
     }
 
-    /// A ceiling on a broken start, not an estimate of a healthy one (ZEN-302).
+    /// A ceiling on a broken start, not an estimate of a healthy one.
     ///
     /// Polling is what makes a generous ceiling nearly free: a green run returns the moment the
     /// marker appears and never pays this, so the cost falls only on a genuinely broken start.
@@ -78,9 +78,9 @@ final class SurfaceTeardownLeakTests: XCTestCase {
     /// deadline, and gives the caller no way to tell which. So expiring here does not surface as
     /// a timeout: the leak assertions run against a sweep that has not finished, and the suite
     /// reports processes surviving teardown. That is a false leak in the exact code this suite
-    /// exists to guard, which is a worse failure under load than the flake ZEN-302 removed.
+    /// exists to guard, which is a worse failure under load than the flake it removed.
     /// Measured at 0.25s under the load that broke the marker wait (0.15s idle) and it barely
-    /// degrades, because ZEN-306 made the reaper wait on a process-exit source rather than poll.
+    /// degrades, because the reaper waits on a process-exit source rather than polling.
     /// Leaving it at 3.0s was betting that the margin never closes; raising it costs a green run
     /// nothing, since the completion fires as soon as the sweep is done.
     private static let drainTimeout: TimeInterval = 15
@@ -100,7 +100,7 @@ final class SurfaceTeardownLeakTests: XCTestCase {
     }
 
     /// Context for a marker that never appeared, so a timeout does not read as a leak in the
-    /// teardown path it is actually testing. That misread is what ZEN-302 cost a session to.
+    /// teardown path it is actually testing. That misread once cost a session.
     ///
     /// It reports what it counted and stops there, because the tempting conclusions are both
     /// unsound. The count is process-wide: `leaderChildren` filters on `ppid == getpid()`, which
@@ -128,8 +128,8 @@ final class SurfaceTeardownLeakTests: XCTestCase {
             contentRect: NSRect(x: 100, y: 100, width: 800, height: 600),
             styleMask: [.titled], backing: .buffered, defer: false)
         // Callers `close()` rather than order out: an ordered-out window keeps its window-server
-        // surface for the rest of the run, and this suite's own flakiness is load-sensitive
-        // (ZEN-302, ZEN-312). `isReleasedWhenClosed` defaults to true for a window built in code,
+        // surface for the rest of the run, and this suite's own flakiness is load-sensitive.
+        // `isReleasedWhenClosed` defaults to true for a window built in code,
         // so clear it or closing frees one the caller still holds.
         window.isReleasedWhenClosed = false
         window.orderFront(nil)

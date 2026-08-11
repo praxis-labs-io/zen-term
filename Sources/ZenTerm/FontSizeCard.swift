@@ -1,7 +1,7 @@
 import AppKit
 
 /// The bare card ⌘+ / ⌘- / ⌘0 raise, showing the size the terminal is now at ("16pt") and nothing
-/// else (ZEN-224). No icon badge, no description, no buttons: it answers one question — where the
+/// else. No icon badge, no description, no buttons: it answers one question — where the
 /// user currently stands — and a stepped size is only legible if the answer is the whole card.
 ///
 /// A card rather than a `ToastView` variant. `ToastView` builds its badge, message label, variant

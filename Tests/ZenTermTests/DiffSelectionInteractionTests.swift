@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The selection layer driven through the real key path in a real window (ZEN-227): every assertion
+/// The selection layer driven through the real key path in a real window: every assertion
 /// here goes `keyDown` → `DiffTableView` → `DiffPaneTable` → the pasteboard, never by calling the yank
 /// or the cursor move directly. A state-only version of these would stay green with the whole key
 /// route unwired, which is exactly how a dead control has shipped here before.
@@ -89,7 +89,7 @@ final class DiffSelectionInteractionTests: WindowTestCase {
     }
 
     /// An arrow, built the way AppKit actually delivers one: `.function` and `.numericPad` are on every
-    /// arrow keyDown, and a synthesized event without them is a keystroke macOS never sends (ZEN-81).
+    /// arrow keyDown, and a synthesized event without them is a keystroke macOS never sends.
     private func arrow(
         down: Bool, shift: Bool = false, into overlay: DiffViewerOverlay,
         file: StaticString = #filePath, line: UInt = #line
@@ -109,7 +109,7 @@ final class DiffSelectionInteractionTests: WindowTestCase {
 
     private func inline(_ overlay: DiffViewerOverlay) {
         // Inline layout is one row per line, so a row index maps to a line without pairing rules. Toggle
-        // via the real bare `\` key the diff pane decodes (ZEN-262).
+        // via the real bare `\` key the diff pane decodes.
         let event = NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
             context: nil, characters: "\\", charactersIgnoringModifiers: "\\", isARepeat: false, keyCode: 42)!
@@ -130,7 +130,7 @@ final class DiffSelectionInteractionTests: WindowTestCase {
 
     /// Edit > Select All reaches the table, which implements `selectAll:` itself. Letting `super` run
     /// lights every row while the pane's cursor and anchor still point at one, so the selection is a
-    /// lie the next keystroke undoes. The pane has to write this one like every other (ZEN-370).
+    /// lie the next keystroke undoes. The pane has to write this one like every other.
     func test_selectAll_selectsEveryRowAsASelectionThePaneOwns() throws {
         let overlay = mount([file()])
         inline(overlay)

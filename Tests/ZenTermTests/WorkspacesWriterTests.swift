@@ -168,7 +168,7 @@ final class WorkspacesWriterTests: XCTestCase {
         XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).count, 1)
     }
 
-    // MARK: update (ZEN-112)
+    // MARK: update
 
     private func seed(_ text: String, in root: URL) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -279,7 +279,7 @@ final class WorkspacesWriterTests: XCTestCase {
         XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["A", "Fresh"])
     }
 
-    // MARK: remove (ZEN-112)
+    // MARK: remove
 
     func test_remove_dropsSection_preservingNeighbours() throws {
         let root = try makeTempDir()
@@ -313,7 +313,7 @@ final class WorkspacesWriterTests: XCTestCase {
         XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Alpha"])
     }
 
-    // MARK: swap (ZEN-283)
+    // MARK: swap
 
     private let threeSections = """
         [Alpha]

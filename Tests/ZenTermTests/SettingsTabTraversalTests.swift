@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Tab traversal through the Settings card (ZEN-146). Tab was never missing — it was half-wired:
+/// Tab traversal through the Settings card. Tab was never missing — it was half-wired:
 /// four stops ignored it, Shift-Tab teleported to the nav instead of retreating one stop, and
 /// `SettingsNavRow` discarded the shift payload so Shift-Tab *also* entered the detail pane.
 ///

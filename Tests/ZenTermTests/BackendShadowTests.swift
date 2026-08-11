@@ -4,7 +4,7 @@ import XCTest
 @testable import TerminalKit
 @testable import ZenTerm
 
-/// The load-time half of ZEN-10's three checks (ZEN-364).
+/// The load-time half of the three checks.
 ///
 /// `BackendShadowSweepTests` asks what libghostty is left holding at all, and that is a constant.
 /// This asks what reaches it under whatever the user's config assembled to, which is not: a keybind
@@ -12,7 +12,7 @@ import XCTest
 /// the backend. Nothing could see that before, because on a default install the chord in question
 /// is still ours.
 ///
-/// ZEN-365 emptied most of what this can find and ZEN-369 emptied the rest, so the report is quiet
+/// Naming the last of them emptied what this can find, so the report is quiet
 /// on every config: the binds a rebind could expose were the ones held until ZenTerm named them,
 /// and all of them are named. What is left is a regression guard, and the cases below keep the
 /// chain that would report the next one honest.
@@ -68,7 +68,7 @@ final class BackendShadowTests: XCTestCase {
     }
 
     /// The canary is the only chord that decides this, so it has to be one the running backend
-    /// really holds. It was ⌘T until ZEN-365 unbound that, and the failure a canary we unbind
+    /// really holds. It was ⌘T until that chord was unbound, and the failure a canary we unbind
     /// produces is silent: every check reports a dead backend and nothing else changes. So this
     /// asks a real surface rather than a stub, and the next unbind that swallows it fails here.
     func test_theCanaryIsAChordTheRunningBackendStillHolds() throws {
@@ -174,8 +174,8 @@ final class BackendShadowTests: XCTestCase {
     /// call. The stubbed cases above each cover one link and could all pass with the probe dead.
     ///
     /// **It expects nothing, and that is the finding.** ⌘K was the chord behind the whole effort:
-    /// rebinding nav to `ctrl+hjkl` freed it, and libghostty answered `clear_screen`. ZEN-369 named
-    /// that action and unbound libghostty's copy, and it was the last one. No chord a ZenTerm
+    /// rebinding nav to `ctrl+hjkl` freed it, and libghostty answered `clear_screen`. Naming
+    /// that action and unbinding libghostty's copy was the last of them. No chord a ZenTerm
     /// default holds is still bound down there, so a rebind now hands over a chord the program gets.
     ///
     /// So this reads as a regression guard rather than a demonstration. A ghostty pin bump that

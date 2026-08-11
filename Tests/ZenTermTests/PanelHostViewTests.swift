@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// ZEN-65 replaced the floating corner icons with a real header: a drawer shows its title +
+/// A real header replaced the floating corner icons with a real header: a drawer shows its title +
 /// keybind always (swapping to a "<drawer>: Focus Mode" ⌘F variant while zoomed); a pane shows a
 /// "Terminal pane: Focus Mode" header only while zoomed. Per the house rule "GUI controls need
 /// interaction tests", these mount the panel and drive its zoom state.
@@ -50,7 +50,7 @@ final class PanelHostViewTests: WindowTestCase {
         return rep.colorAt(x: Int(point.x * scale), y: Int(point.y * scale))?.alphaComponent ?? -1
     }
 
-    /// ZEN-282 moved the focus glow off the card's own `shadowOpacity` and onto a sibling view,
+    /// The focus glow moved off the card's own `shadowOpacity` and onto a sibling view,
     /// because Core Animation fills `shadowPath` and so painted the accent across the pane
     /// interior once `background-alpha` made it see-through.
     func test_focus_raisesTheGlow_andBlurDropsIt() {
@@ -73,7 +73,7 @@ final class PanelHostViewTests: WindowTestCase {
     /// Note what this does and does not catch: it fails on a glow that paints *nothing* (a clip
     /// that removes everything, a draw that no-ops, a hidden or mis-stacked view), not on one
     /// that is merely too faint to see. Where the line between those sits is a look, and stays
-    /// in the handover runbook (ZEN-282).
+    /// in the handover runbook.
     func test_focus_paintsGlowOutsideTheCard() {
         // Mount inset inside a larger host, because the glow lands outside the panel's own bounds.
         let host = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
@@ -113,7 +113,7 @@ final class PanelHostViewTests: WindowTestCase {
 
     /// Below full opacity the clip stops filling the panel and the ring takes over the padding
     /// alone. If it doesn't paint, the inset between the border and the terminal shows raw
-    /// backdrop and reads a shade off from the terminal beside it (ZEN-282).
+    /// backdrop and reads a shade off from the terminal beside it.
     func test_translucentBackground_stillPaintsThePaddingRing() {
         var config = GeneralConfig.builtIn
         config.backgroundAlpha = 0.5

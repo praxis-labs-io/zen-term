@@ -5,7 +5,7 @@ import XCTest
 @testable import ZenTerm
 
 /// Scroll mode is sticky: once ⌘⇧S is pressed it holds an app-global key handler until something
-/// takes it down. Every one of those retractions is the test (ZEN-330).
+/// takes it down. Every one of those retractions is the test.
 ///
 /// The failure is not cosmetic. A mode left up over a pane you walked away from keeps swallowing
 /// every keystroke that isn't a reserved chord, so the terminal you switched to goes deaf, and the
@@ -557,7 +557,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             "a busy sibling pane must not rewrite the header of the pane being read")
     }
 
-    // MARK: selection and yank (ZEN-331)
+    // MARK: selection and yank
 
     /// A key handler and a pasteboard of its own, so a yank in the suite never clobbers the
     /// developer's clipboard.

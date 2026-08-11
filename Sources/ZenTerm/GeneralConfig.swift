@@ -30,7 +30,7 @@ struct GeneralConfig: Equatable {
     // single `theme` file if present, else the built-in default.
     var themeName: String?
 
-    /// Which ANSI slot of the active theme the chrome's `accent` role points at (ZEN-255). Nil →
+    /// Which ANSI slot of the active theme the chrome's `accent` role points at. Nil →
     /// `AccentSlot.themeDefault`, the slot the chrome has always used. Stored as a slot, not a
     /// color, so it re-resolves against whatever theme is loaded.
     var accentColor: AccentSlot?
@@ -41,7 +41,7 @@ struct GeneralConfig: Equatable {
 
     // Chrome.
     /// Show the standard macOS window buttons (traffic lights) and reserve the header space that
-    /// clears them. Off → the fully chromeless top (ZEN-163): buttons hidden, an even gutter on
+    /// clears them. Off → the fully chromeless top: buttons hidden, an even gutter on
     /// all four sides. Close/minimize still work via ⌘W / ⌘M and the menu.
     var windowChrome: Bool
     var backdropAlpha: CGFloat
@@ -66,11 +66,11 @@ struct GeneralConfig: Equatable {
     // (the macOS permission is the real gate; this is the in-app opt-out).
     var agentNotifications: Bool
 
-    // Updates — check for a new release in the background (ZEN-19). On by default; this is the
+    // Updates — check for a new release in the background. On by default; this is the
     // off switch, driving Sparkle's automatic-check setting. Inert in an unpackaged dev build.
     var automaticUpdateChecks: Bool
 
-    // Diagnostics — tee verbose diagnostics to the log file (ZEN-11). Off by default; the file
+    // Diagnostics — tee verbose diagnostics to the log file. Off by default; the file
     // otherwise carries only warnings/errors and the key-event trail. `ZENTERM_LOG_VERBOSE=1` is
     // the env equivalent.
     var debug: Bool
@@ -87,7 +87,7 @@ struct GeneralConfig: Equatable {
     // Structured.
     var floats: [ToolFloat]
     var keymap: [Chord: KeyInterceptor.ReservedChord]
-    /// The actions a `keybind = <action>=none` line asked to leave with no shortcut (ZEN-368).
+    /// The actions a `keybind = <action>=none` line asked to leave with no shortcut.
     /// Carried beside `keymap` rather than inferred from it: an action missing from the map is
     /// either this or a collision, and the Shortcuts card has to write the first one back.
     var unboundActions: Set<KeyInterceptor.ReservedChord> = []
@@ -102,7 +102,7 @@ struct GeneralConfig: Equatable {
     static let defaultAI = "claude"
 
     /// The historical hardcodes — an absent config file yields exactly this, so behavior is
-    /// unchanged from before ZEN-71. The font literal is single-sourced here; `Theme` reads it.
+    /// unchanged from before the file existed. The font literal is single-sourced here; `Theme` reads it.
     static let builtIn = GeneralConfig(
         cursorStyle: .block,
         cursorBlink: true,
@@ -143,7 +143,7 @@ struct GeneralConfig: Equatable {
     /// before any window builds. Deliberately *not* `= ConfigLoader.loadGeneralConfig()`: a Swift
     /// static is always lazy, so that default ran a main-thread-only call (see
     /// `ConfigLoader.loadGeneralConfig`) on whichever thread touched it first. Initializing to a
-    /// constant makes first touch harmless and puts the load in one named place (ZEN-31).
+    /// constant makes first touch harmless and puts the load in one named place.
     static private(set) var current: GeneralConfig = .builtIn
 
     /// Re-read `config` from disk and swap `current`. Called by `AppConfig.reload()` after a write.

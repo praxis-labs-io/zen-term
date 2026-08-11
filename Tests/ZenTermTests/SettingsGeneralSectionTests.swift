@@ -7,7 +7,7 @@ import XCTest
 /// On/Off segmented controls the way a click would, and assert the value that actually lands in the
 /// config file. A state-only assertion would pass while the control is dead — exactly how a broken
 /// dropdown once shipped past two reviews — so this drives the controls themselves. Notifications
-/// (ZEN-139) and Updates (ZEN-19) share this section, so both toggles are exercised here.
+/// and Updates share this section, so both toggles are exercised here.
 ///
 /// The write→reload pipeline is rooted at `ConfigLoader.defaultRoot`; the test points that at a temp
 /// dir via `defaultRootOverrideForTesting` so it never touches the real config.
@@ -88,7 +88,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
             configText().contains("automatic-update-checks = true"), "got: \(configText())")
     }
 
-    // MARK: back to the nav (ZEN-217) — a section of stacked segmented rows had no arrow path out
+    // MARK: back to the nav — a section of stacked segmented rows had no arrow path out
 
     /// An arrow key as AppKit delivers it: keyCode plus the `.function`/`.numericPad` pair every
     /// arrow keyDown actually carries (a bare-modifier fake is a keystroke macOS never sends).
@@ -126,7 +126,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         XCTAssertEqual(exited, 0, "cycling within the control must not exit to the nav")
     }
 
-    /// Up at the first stop holds, the way it does in Shortcuts, Tools and Workspaces. ZEN-217 made it
+    /// Up at the first stop holds, the way it does in Shortcuts, Tools and Workspaces. It used to
     /// exit here, back when a segmented first row had no other way out; Left at the leftmost segment is
     /// that way out now (see the test above), so the extra path only made this section lose your place
     /// where the list sections keep it.

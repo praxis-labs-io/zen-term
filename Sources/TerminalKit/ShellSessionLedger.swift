@@ -3,24 +3,15 @@ import Foundation
 
 /// The shell sessions this app has started, and which of them nobody is running any more.
 ///
-/// A surface cannot name its own shell. libghostty forks it asynchronously, some way past
-/// `ghostty_surface_new`'s return, under a setuid `/usr/bin/login` whose command line and
-/// environment the kernel will not show us — so neither fork order, nor first sighting, nor a
-/// tag planted in the environment separates this surface's session from the pane next door's.
-/// A surface that guesses can adopt a sibling's session and SIGKILL a live pane's shell, dev
-/// server and agent when it closes (ZEN-269).
+/// **Nothing here attributes a session to a surface**, because a surface cannot name its own
+/// shell: libghostty forks it asynchronously under a setuid `/usr/bin/login` the kernel will not
+/// describe to us, so a surface that guesses can adopt a sibling's session and SIGKILL a live
+/// pane's work when it closes. Instead, freeing a surface closes its pty and takes that session's
+/// leader down, and a session whose leader has exited is by definition nobody's live pane.
 ///
-/// So nothing here attributes a session to a surface. Freeing a surface closes its pty, which
-/// takes that session's leader down with it, and a session whose leader has exited is by
-/// definition nobody's live pane. Teardown sweeps exactly those, which reaches every leftover
-/// of the surface that just went away and can never reach a pane that is still running.
-///
-/// Every recorded leader is watched for its own exit rather than polled for within a window.
-/// The window was a wall-clock guess at how long a leader takes to notice its pty closed, and
-/// a leader that took longer was never swept at all: nothing rescheduled a look, so on the last
-/// pane its dev server outlived the close (ZEN-306). There is no correct duration to guess,
-/// because a shell waiting on a foreground child exits when that child does. These leaders are
-/// our own direct children, so the kernel will tell us the moment each one goes.
+/// Each leader is watched for its own exit rather than polled for within a window. There is no
+/// correct duration to guess, because a shell waiting on a foreground child exits when that child
+/// does, and a leader slower than the window was never swept at all.
 final class ShellSessionLedger {
     static let shared = ShellSessionLedger()
 
@@ -38,9 +29,8 @@ final class ShellSessionLedger {
 
     private init() {}
 
-    /// How many recorded sessions are still waiting for their leader to go. The quit drain
-    /// watches this: `takeOrphans` removes sessions as it hands them out, so zero means nothing
-    /// is outstanding, and a count that stops falling means nothing more is going to happen.
+    /// How many recorded sessions are still waiting for their leader to go. Zero means nothing is
+    /// outstanding, and a count that stops falling means nothing more is going to happen.
     var count: Int {
         lock.lock()
         defer { lock.unlock() }
@@ -59,17 +49,10 @@ final class ShellSessionLedger {
 
     /// Arm a watch for one leader's exit.
     ///
-    /// `leaderChildren` only returns leaders that were alive in its snapshot, so the watch is
-    /// always armed against a live process. If the leader exits in the gap between that
-    /// snapshot and this call the source still fires, because an unreaped child stays in the
-    /// table as a zombie. A fire is only a prompt to look: the sweep re-checks the process
-    /// table through `takeOrphans` and matches sessions with `getsid`, so a stale or recycled
-    /// pid costs one wasted look and can never reach a live pane's session.
-    ///
-    /// Fires go through `scheduleSweep`, not straight to a sweep. A window's panes close
-    /// together and their leaders exit milliseconds apart, so one sweep per fire would put one
-    /// graced `reap` pass per pane on the reaper's serial queue and the tail would still be
-    /// waiting, unsignalled, when quit gave up.
+    /// A fire is only a prompt to look: the sweep re-checks the process table and matches sessions
+    /// with `getsid`, so a stale or recycled pid costs one wasted look and can never reach a live
+    /// pane's session. Fires are coalesced through `scheduleSweep` because a window's panes close
+    /// together, and one sweep per fire would leave the tail unsignalled when quit gave up.
     private func makeWatch(for pid: pid_t) -> DispatchSourceProcess {
         let source = DispatchSource.makeProcessSource(
             identifier: pid, eventMask: .exit,
@@ -81,11 +64,9 @@ final class ShellSessionLedger {
 
     /// Watch for new shell sessions for `duration`, checking every `interval`.
     ///
-    /// libghostty forks the shell well past `ghostty_surface_new`'s return and `setsid()` then
-    /// runs in the child, so a single snapshot taken at start time reliably finds nothing. What
-    /// this records is surface-independent, so one sampler serves every surface starting at
-    /// once: a later start extends the deadline rather than launching a second walk of the
-    /// process table.
+    /// libghostty forks the shell well past `ghostty_surface_new`'s return, so a single snapshot
+    /// at start time reliably finds nothing. One sampler serves every surface: a later start
+    /// extends the deadline rather than launching a second walk of the process table.
     func sample(for duration: TimeInterval, every interval: TimeInterval) {
         let deadline = Date().addingTimeInterval(duration)
         sampleLock.lock()
@@ -115,10 +96,8 @@ final class ShellSessionLedger {
     /// Every recorded session, emptied out, whether or not its leader has exited.
     ///
     /// **Only valid once every surface has been torn down**, which is true exactly on the quit
-    /// path. The leader-exited test that guards `takeOrphans` exists to keep a live pane out of
-    /// reach; when no pane is left alive there is nothing to protect, and a leader still running
-    /// at that point is a shell that has not noticed its pty yet, not somebody's work. Calling
-    /// this while a pane is open would SIGKILL that pane's session, which is the ZEN-269 bug.
+    /// path. Calling this while a pane is open would SIGKILL that pane's session: the
+    /// leader-exited test guarding `takeOrphans` is what normally keeps a live pane out of reach.
     func takeAll() -> [pid_t] {
         lock.lock()
         defer { lock.unlock() }
@@ -129,24 +108,17 @@ final class ShellSessionLedger {
         return all
     }
 
-    /// The recorded sessions whose leader has exited, dropped from the ledger as they are
-    /// handed out so two teardowns racing each other can't both sweep the same one.
+    /// The recorded sessions whose leader has exited, dropped from the ledger as they are handed
+    /// out so two teardowns racing each other can't both sweep the same one. No caller is on the
+    /// main thread.
     ///
-    /// The process-table walk runs *outside* the lock. It used to run inside, and a close of
-    /// many panes queues one walk per pane: with the lock held across each ~0.3ms walk and no
-    /// fairness from `NSLock`, a main-thread `record` arriving behind 19 queued walks measured
-    /// a 5.6ms stall (ZEN-314). Two things make the narrower critical section still safe:
-    ///
-    /// - Hand-out stays exclusive. The subtraction from `known` is one atomic step under the
-    ///   lock, and orphans are filtered against `known` *at that moment*, so of two teardowns
-    ///   racing each other only the first can take a given session — and a `takeAll` draining
-    ///   the ledger in the gap leaves nothing here to hand out twice.
-    /// - The snapshot never judges a session newer than itself. Candidates are read before the
-    ///   walk, so every pid checked was recorded first; a session recorded mid-walk waits for
-    ///   the next look instead of being matched against a table from before its shell forked,
-    ///   which would have swept a live pane (the ZEN-269 bug).
-    ///
-    /// No caller is on the main thread.
+    /// The process-table walk runs *outside* the lock, since holding it across each ~0.3ms walk
+    /// stalled a main-thread `record` behind a queue of them by 5.6ms. Two invariants keep the
+    /// narrower critical section safe: hand-out stays exclusive, because the subtraction from
+    /// `known` is one atomic step under the lock; and the snapshot never judges a session newer
+    /// than itself, because candidates are read before the walk, so a session recorded mid-walk
+    /// waits for the next look rather than being matched against a table from before its shell
+    /// forked, which would sweep a live pane.
     func takeOrphans() -> [pid_t] {
         lock.lock()
         let candidates = known

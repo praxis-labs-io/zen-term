@@ -6,7 +6,7 @@ import XCTest
 /// XCTest tears down no AppKit state between cases, so every window a test opened stayed on screen
 /// for the rest of the run. A full suite climbed monotonically to 69 live window-server surfaces,
 /// several Metal-backed: each test ran under more load than the one before it, and the run took
-/// twice as long as it needed to (ZEN-312). Inheriting this instead of `XCTestCase` sweeps them.
+/// twice as long as it needed to. Inheriting this instead of `XCTestCase` sweeps them.
 ///
 /// `close()` rather than `orderOut(_:)` on purpose. A `WindowController` drives its teardown from
 /// `windowWillClose`, so closing also invalidates the title poll and shuts down every tab's shells.
@@ -24,7 +24,7 @@ class WindowTestCase: XCTestCase {
     }
 
     /// Static so `WindowSweepTests` can drive it directly. A teardown hook that stops running
-    /// fails nothing and the suite silently goes back to leaking, which is the shape of ZEN-312
+    /// fails nothing and the suite silently goes back to leaking, which is the shape of the leak
     /// itself, so the sweep needs a test that does not depend on the hook firing.
     ///
     /// Every window, not just the visible ones: one never ordered in costs no window-server
@@ -41,7 +41,7 @@ class WindowTestCase: XCTestCase {
             // that a closed window stays in `NSApp.windows` for the run, so the sweep re-walks
             // them. That is bounded by the number of windows the suite builds, roughly 70, and
             // re-closing a closed window neither re-posts `willClose` nor costs anything
-            // measurable. The window-server surfaces, which are what ZEN-312 measured, are still
+            // measurable. The window-server surfaces, the thing actually leaking, are still
             // reclaimed.
             window.isReleasedWhenClosed = false
             window.close()

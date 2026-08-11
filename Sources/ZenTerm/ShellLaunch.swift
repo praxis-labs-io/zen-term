@@ -7,7 +7,7 @@ import TerminalKit
 /// to a prompt in the same pane instead of closing it. Used by the `⌘P` workspace preset.
 ///
 /// Both carry `SessionFontSize.points` rather than the theme's size, so a pane opened after ⌘+
-/// comes up matched to the ones already on screen. Half of ZEN-224 is this: fanning a step out to
+/// comes up matched to the ones already on screen. Half the job is this: fanning a step out to
 /// live surfaces alone still leaves the next split opening at the config size.
 enum ShellLaunch {
     static var userShell: String {
@@ -54,7 +54,7 @@ enum ShellLaunch {
         )
     }
 
-    /// Re-arm libghostty's zsh integration for the shell the `exec` tail leaves behind (ZEN-144).
+    /// Re-arm libghostty's zsh integration for the shell the `exec` tail leaves behind.
     ///
     /// libghostty injects integration by pointing `ZDOTDIR` at its own dir, and its `.zshenv`
     /// *restores* the user's `ZDOTDIR` before their rc files run — so only the shell libghostty

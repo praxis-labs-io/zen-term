@@ -4,7 +4,7 @@ import XCTest
 @testable import ZenTerm
 
 /// Covers `TabController.navReturnPruned` — the pure transform behind pruning directional focus
-/// memory when panes close (ZEN-58). Correctness tolerates stale entries, so this guards the
+/// memory when panes close. Correctness tolerates stale entries, so this guards the
 /// memory-hygiene contract: a closed pane leaves no trace as either an origin or a target.
 final class NavReturnPruneTests: XCTestCase {
     private let a = PaneID(1)

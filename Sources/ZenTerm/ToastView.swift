@@ -98,7 +98,7 @@ final class ToastView: ShadowCardView {
 
         // A card with buttons gets a close affordance; a passive one dismisses on body-click or
         // its timer and needs none. Without it an actionable card could only be answered, and a
-        // conflict card has to be dismissible without writing to the config (ZEN-368).
+        // conflict card has to be dismissible without writing to the config.
         titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         titleLabel.textColor = Self.titleColor
         // The title shares its row with the keycap now, and it's a tab title — arbitrary length.
@@ -111,7 +111,7 @@ final class ToastView: ShadowCardView {
         messageLabel.preferredMaxLayoutWidth = Self.messageMaxWidth
 
         // Title leading, keycaps trailing, with a spacer holding them apart. The keycap names an
-        // app-level binding rather than labelling a button (ZEN-143 — the toast arms nothing), so
+        // app-level binding rather than labelling a button (the toast arms nothing), so
         // the card's top-right corner reads as "this toast's chord" instead of implying the button
         // beside it has a key equivalent.
         let headerSpacer = NSView()
@@ -140,7 +140,7 @@ final class ToastView: ShadowCardView {
         // Opt-in rather than "any card with buttons": the button does nothing unless its host wires
         // `onClose`, and only the conflict card does. On by default it drew a dead × on the config
         // notice, both attention toasts, the terminal-failure toast and every confirm, and a confirm
-        // gates keyboard focus, so clicking it left the card up and the terminal deaf (ZEN-368).
+        // gates keyboard focus, so clicking it left the card up and the terminal deaf.
         if showsClose {
             let close = IconButton(
                 symbol: "xmark", size: NSSize(width: 20, height: 20), pointSize: 10,

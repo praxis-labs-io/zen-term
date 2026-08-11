@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// ZEN-54: every shadowed chrome card derives an explicit `layer.shadowPath` from its rounded
+/// Every shadowed chrome card derives an explicit `layer.shadowPath` from its rounded
 /// bounds (no offscreen shadow pass) and keeps it current as the card resizes.
 final class ShadowCardViewTests: WindowTestCase {
     /// Retained so the card stays window-mounted for the duration of each test.

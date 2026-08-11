@@ -23,7 +23,7 @@ final class KeyInterceptor {
     enum ReservedChord: Hashable {
         case splitVertical, splitHorizontal
         case navLeft, navRight, navUp, navDown
-        case prevPane, nextPane  // step through the tab's panels in order, wrapping (ZEN-372)
+        case prevPane, nextPane  // step through the tab's panels in order, wrapping
         case closePane
         case newTab, newWindow
         case selectTab(Int)  // 1...9
@@ -38,20 +38,20 @@ final class KeyInterceptor {
         case toggleCommandPalette
         case openSettings
         case reloadConfig
-        case checkForUpdates  // run a manual Sparkle update check (unbound by default; ZEN-20)
-        case reportIssue  // open the Report an Issue composer (unbound by default; ZEN-212)
-        case openDiffViewer  // open the diff viewer overlay (ZEN-226)
-        case newTool  // open the tool-float form in its create state (unbound by default; ZEN-286)
-        // Terminal font size, app-wide (ZEN-224). Taken over from libghostty, which binds the same
+        case checkForUpdates  // run a manual Sparkle update check (unbound by default)
+        case reportIssue  // open the Report an Issue composer (unbound by default)
+        case openDiffViewer  // open the diff viewer overlay
+        case newTool  // open the tool-float form in its create state (unbound by default)
+        // Terminal font size, app-wide. Taken over from libghostty, which binds the same
         // chords itself but applies each to the one focused surface.
         case increaseFontSize, decreaseFontSize, resetFontSize
-        case toggleScrollMode  // enter/leave scroll mode over the focused pane (ZEN-330)
-        case toggleSearch  // open the find bar over the focused pane's scrollback (ZEN-324)
-        // Move the focused pane's viewport without entering scroll mode (ZEN-367).
+        case toggleScrollMode  // enter/leave scroll mode over the focused pane
+        case toggleSearch  // open the find bar over the focused pane's scrollback
+        // Move the focused pane's viewport without entering scroll mode.
         case scrollToTop, scrollToBottom, scrollPageUp, scrollPageDown
-        // Step the running search, and start one on the selection (ZEN-367).
+        // Step the running search, and start one on the selection.
         case findNext, findPrevious, searchSelection
-        // Act on the focused pane's screen and its shell prompts (ZEN-369), on ghostty's own
+        // Act on the focused pane's screen and its shell prompts, on ghostty's own
         // chords: ⌘K, ⌘J and ⌘⇧J for the first three.
         case clearScreen, scrollToSelection
         // Three acts, because the backend writes the file and disposes of the path in one call and
@@ -87,7 +87,7 @@ final class KeyInterceptor {
     func beginCapture(_ handler: @escaping (NSEvent) -> Void) { captureHandler = handler }
     func endCapture() { captureHandler = nil }
 
-    /// A sticky keyboard mode (scroll mode, ZEN-330) claiming the keys the keymap left alone.
+    /// A sticky keyboard mode (scroll mode) claiming the keys the keymap left alone.
     /// Returns whether it consumed the event; an event it declines still reaches the PTY.
     ///
     /// Weaker than `captureHandler` on purpose, and consulted after chord routing rather than

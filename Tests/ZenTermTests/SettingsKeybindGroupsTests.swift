@@ -2,7 +2,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The Shortcuts card's group list against the actions that claim a row (ZEN-367).
+/// The Shortcuts card's group list against the actions that claim a row.
 ///
 /// This exists because of what it failed to catch. `groups` is hand-ordered, so seven new actions
 /// shipped with a chord, a palette entry, a config token and no Settings row, and every test in the

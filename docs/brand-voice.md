@@ -222,7 +222,7 @@ names the token you grep for, and that reasoning is sound.
 config, and the token must be a word the product still uses. `toggle_repo_picker`
 failed that test: a user could be shown "⌘P went to toggle_repo_picker in your
 config" while every other surface said "Workspaces". It was renamed to
-`toggle_workspace_picker` (ZEN-6), and the old token still parses so an existing
+`toggle_workspace_picker`, and the old token still parses so an existing
 binding keeps working.
 
 Renaming a config token is a breaking change for anyone who has bound it, so it

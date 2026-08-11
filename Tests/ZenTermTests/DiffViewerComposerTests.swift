@@ -5,7 +5,7 @@ import XCTest
 @testable import ZenTerm
 
 /// ⏎ in the diff pane opens the composer on the current selection, and while it's up the viewer's own
-/// keys step aside (ZEN-257). Driven through real `keyDown` / `performKeyEquivalent` for the same
+/// keys step aside. Driven through real `keyDown` / `performKeyEquivalent` for the same
 /// reason as the rest of the diff-viewer suite: the wiring between the table, the viewer and the card
 /// is the part that can be silently dead.
 final class DiffViewerComposerTests: WindowTestCase {
@@ -93,7 +93,7 @@ final class DiffViewerComposerTests: WindowTestCase {
         win.contentView?.layoutSubtreeIfNeeded()
         window = win
         XCTAssertTrue(overlay.handleNavChord(.navRight))  // the diff pane, not the tree
-        // Inline layout (one row per line) via the real bare `\` key the diff pane decodes (ZEN-262).
+        // Inline layout (one row per line) via the real bare `\` key the diff pane decodes.
         overlay.diffPaneForTesting.scrollFocusTarget.keyDown(
             with: NSEvent.keyEvent(
                 with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
@@ -260,7 +260,7 @@ final class DiffViewerComposerTests: WindowTestCase {
         // Down / Tab auto-advances focus from the note to the Submit button, and the composer box is a
         // subview of the diff table — so a bare key pressed there bubbles up the responder chain into the
         // table's keyDown. It must stay inert while the composer is up: `q` would otherwise close the whole
-        // viewer and discard the in-progress note, and `\` would re-render the layout under it (ZEN-262).
+        // viewer and discard the in-progress note, and `\` would re-render the layout under it.
         let submit = composer.submitButtonForTesting
         submit.keyDown(with: bareKey("q"))
         submit.keyDown(with: bareKey("\\"))

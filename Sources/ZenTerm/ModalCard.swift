@@ -51,7 +51,7 @@ enum CardChrome {
     /// from a layer. An opaque fill cancels the surface's alpha out exactly (the chrome background
     /// IS the colour the terminal blends toward), and a layer shadow washes the interior, because
     /// Core Animation *fills* `shadowPath`. `SurfaceFloatOverlay` paints them with a `RingFillView`
-    /// and an `OutsideShadowView` (ZEN-287), and takes no `background` here because it re-derives
+    /// and an `OutsideShadowView`, and takes no `background` here because it re-derives
     /// its own from the live theme and alpha rather than freezing one at construction.
     static func applyTerminalHost(to card: NSView, cornerRadius: CGFloat, halo: Bool) {
         applyEdge(to: card, cornerRadius: cornerRadius, halo: halo)
@@ -104,8 +104,8 @@ struct DismissGate {
 /// first, the card second) is NOT handled here and doesn't need to be: a bare Esc reaches the
 /// focused control's `keyDown` before this `performKeyEquivalent` pass ever runs, so a popover host
 /// (`Dropdown`, `IconPickerField`) closes its own list/grid there and the card never sees that Esc.
-/// The two earlier attempts to close the popover from the card root (ZEN-157) failed for a dull
-/// reason, now confirmed in the running app (ZEN-5): `performKeyEquivalent` is simply not invoked
+/// The two earlier attempts to close the popover from the card root failed for a dull
+/// reason, now confirmed in the running app: `performKeyEquivalent` is simply not invoked
 /// for a bare Esc while a popover host holds focus, so that code never ran. A popover owns its Esc
 /// locally, in its `keyDown` — keep it there.
 enum ModalEscape {

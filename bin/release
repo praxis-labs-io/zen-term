@@ -174,7 +174,7 @@ xcrun --find notarytool >/dev/null && xcrun --find stapler >/dev/null \
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null \
     || { echo "✗ notary profile '$NOTARY_PROFILE' missing or invalid (see CLAUDE.md → Releasing)" >&2; exit 1; }
 
-# Sparkle's EdDSA signing key (ZEN-118). Resolve the pinned Sparkle artifact so sign_update exists,
+# Sparkle's EdDSA signing key. Resolve the pinned Sparkle artifact so sign_update exists,
 # then prove the private key is reachable in the keychain: a missing key must fail here, beside the
 # other credential checks, not after the multi-minute notarize waits. One-time setup: `generate_keys`.
 swift package resolve >/dev/null 2>&1 || true
@@ -225,7 +225,7 @@ if [[ -z "$NOTES_FILE" ]]; then
     sh -c "${EDITOR:-vi} \"\$1\"" sh "$NOTES_FILE"
 fi
 
-# The update card's bullets (ZEN-211). The card wants a short list, not the whole notes file, which
+# The update card's bullets. The card wants a short list, not the whole notes file, which
 # also carries the Install / Reporting boilerplate. A `<!-- card ... -->` block lets the notes read
 # as pure prose on the GitHub release page (HTML comments don't render there) while handing the card
 # an explicit list; a file predating the convention (e.g. the bare git-log scaffold, all bullets)
@@ -269,7 +269,7 @@ xcrun stapler validate "$APP"
 spctl -a -t open --context context:primary-signature -vv "$DMG"
 xcrun stapler validate "$DMG"
 
-# Appcast (ZEN-118). The EdDSA signature is taken here, on the final DMG: `stapler staple` above
+# Appcast. The EdDSA signature is taken here, on the final DMG: `stapler staple` above
 # rewrote its bytes, so a signature taken any earlier wouldn't match what users download. The
 # sparkle:version is read back out of the built app's plist rather than recomputing the commit
 # count: two places deriving one number is how they drift. The card bullets (CARD_NOTES, gathered
@@ -309,14 +309,14 @@ fi
 if [[ -z "$REMOTE_TAG_SHA" ]]; then
     git push origin "$TAG"
 fi
-# Publish the user-facing docs to the public releases repo (ZEN-162). Committed repo content,
+# Publish the user-facing docs to the public releases repo. Committed repo content,
 # not release assets: the marketing site's sync-docs pulls docs/config/* from raw.githubusercontent,
 # and this private repo is the only place they're authored. Publishing on every release keeps the
 # public docs from describing a version that isn't shipped. This runs BEFORE the DMG upload on
 # purpose: a failure here leaves the release unpublished, so a rerun (tag at HEAD, DMG not yet an
 # asset) re-enters this step instead of being refused by the already-shipped guard above. The
 # README stays hand-kept in the releases repo (download-page copy, not a mirror of a doc here);
-# ZEN-123 owns it. Rerun-safe: overwrite, commit only on a real change. Explicit commit identity
+# Rerun-safe: overwrite, commit only on a real change. Explicit commit identity
 # so it never depends on the release machine's ambient git config.
 echo "▸ publishing user docs to $RELEASES_REPO"
 DOCS_CLONE="$(mktemp -d)"

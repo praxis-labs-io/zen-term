@@ -115,7 +115,7 @@ final class IconPickerField: NSView {
     /// not to this field's subtree — so removing the field, or an ancestor like the workspace /
     /// tool-float form, doesn't take it along. Closing it when the field leaves the window binds the
     /// popover's lifetime to the control, so a tab-switch `closeModal()` can't strand a dead grid on
-    /// the content view over every tab (ZEN-268, same class as `Dropdown`).
+    /// the content view over every tab (same class as `Dropdown`).
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil { closePopover() }
@@ -131,7 +131,7 @@ final class IconPickerField: NSView {
             case .activate: commitHighlight()
             // Load-bearing for layered dismissal: a bare Esc reaches this keyDown before any
             // card-root performKeyEquivalent, so closing the grid here leaves the form open. Don't
-            // hoist Esc to the card root — that's the ZEN-5 dead-end.
+            // hoist Esc to the card root — that's the dead-end.
             case .escape: closePopover()
             default: break  // consume every other key while the grid is open
             }

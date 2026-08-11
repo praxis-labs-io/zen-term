@@ -147,7 +147,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     /// One workspace row: title (left) and a muted git icon (right) when its dir is a repo. The
     /// badge is always built and starts hidden — whether the folder is a repo is filesystem I/O,
-    /// which can't run on the main thread (ZEN-90), so the row shows the last-known answer now and
+    /// which can't run on the main thread, so the row shows the last-known answer now and
     /// `applyGitStatus()` turns the badge on when a fresh probe lands.
     final class RowView: SelectableRowView {
         let workspace: Workspace
