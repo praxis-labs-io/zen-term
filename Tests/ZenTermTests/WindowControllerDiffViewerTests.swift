@@ -41,7 +41,7 @@ final class WindowControllerDiffViewerTests: WindowTestCase {
     private func makeWindow() -> WindowController {
         let c = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: root)
-        c.showAndStart()
+        c.mountAndStart()
         controller = c
         return c
     }

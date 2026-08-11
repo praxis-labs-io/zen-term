@@ -57,13 +57,13 @@ final class TabMountZOrderTests: WindowTestCase {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
         self.controller = controller
-        controller.showAndStart()
+        controller.mountAndStart()
 
         guard let container = container(of: controller) else {
             return XCTFail("the window must hold a tab bar and a canvas container")
         }
         guard let outgoing = canvases(in: container).first else {
-            return XCTFail("the first tab's canvas must be mounted after showAndStart()")
+            return XCTFail("the first tab's canvas must be mounted after mountAndStart()")
         }
 
         controller.newTabForTesting()  // ⌘t: the new tab slides in, both canvases up for its length

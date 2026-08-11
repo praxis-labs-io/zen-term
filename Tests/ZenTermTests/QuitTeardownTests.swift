@@ -31,7 +31,7 @@ final class QuitTeardownTests: WindowTestCase {
         let c = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 560), initialCWD: nil)
         controller = c
-        c.showAndStart()
+        c.mountAndStart()
         return c
     }
 

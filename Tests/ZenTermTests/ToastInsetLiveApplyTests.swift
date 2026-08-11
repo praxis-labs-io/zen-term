@@ -60,7 +60,7 @@ final class ToastInsetLiveApplyTests: WindowTestCase {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700), initialCWD: nil)
         self.controller = controller
-        controller.showAndStart()
+        controller.mountAndStart()
         // Build the presenter, which is what freezes the insets.
         controller.showToast(ToastContent(variant: .info, title: "notice", message: "body"))
         drainMainQueue()
@@ -92,7 +92,7 @@ final class ToastInsetLiveApplyTests: WindowTestCase {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700), initialCWD: nil)
         self.controller = controller
-        controller.showAndStart()
+        controller.mountAndStart()
         XCTAssertFalse(controller.hasBuiltToastsForTesting)
 
         config.windowGutter = 48

@@ -218,7 +218,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
         self.controller = controller
-        controller.showAndStart()
+        controller.mountAndStart()
         controller.handle(.toggleBottomDrawer)
         let opened = expectation(description: "drawer opened")
         OperationQueue.main.addOperation { opened.fulfill() }
@@ -251,7 +251,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
         self.controller = controller
-        controller.showAndStart()
+        controller.mountAndStart()
 
         controller.showConfigDiagnosticsToast(
             ToastContent(variant: .warning, title: "1 problem in your config", message: "a line"),
@@ -304,8 +304,8 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         controller = first
         let second = makeWindow()
         secondController = second
-        first.showAndStart()
-        second.showAndStart()
+        first.mountAndStart()
+        second.mountAndStart()
         Motion.isReduceMotionEnabled = { true }
 
         let windows = [first, second]
@@ -335,7 +335,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
     func test_deliveringWithNoKeyWindow_leavesTheExistingNoticeUp() throws {
         let first = makeWindow()
         controller = first
-        first.showAndStart()
+        first.mountAndStart()
         Motion.isReduceMotionEnabled = { true }
 
         XCTAssertTrue(
@@ -372,7 +372,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
         self.controller = controller
-        controller.showAndStart()
+        controller.mountAndStart()
         controller.handle(.toggleCommandPalette)
 
         func paletteTitles() -> [String] {
@@ -409,7 +409,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
         self.controller = controller
-        controller.showAndStart()
+        controller.mountAndStart()
         controller.handle(.toggleCommandPalette)
 
         /// The palette's own rows, excluding the drawer headers that resolve through a different path.

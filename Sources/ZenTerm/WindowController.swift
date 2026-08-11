@@ -658,12 +658,19 @@ final class WindowController: NSObject {
         activeController?.setFocusedSurfaceRendersFocused(!active)
     }
 
-    func showAndStart() {
+    /// Build the first tab, start its shell, and arm the title poll. Does **not** present the
+    /// window: ordering it in and taking key belongs to whoever asked for the window, because a
+    /// test wants everything here and none of that. A run of the window suites ordered 40+ real
+    /// windows across Spaces and took key from whatever the developer was typing in, once per test.
+    func mountAndStart() {
         bindFirstControllerIfNeeded()
         mount(.instant)
         activeController?.start()
-        window.makeKeyAndOrderFront(nil)
         renderTabBar()
+        // Ordering a window in is what used to run the first layout pass, and the pane tree needs
+        // real sizes before anything acts on it: `PaneCanvasController.split` refuses on a host
+        // narrower than `minSplitExtent`, and a zero-size host is every host until layout runs.
+        window.contentView?.layoutSubtreeIfNeeded()
         titlePoll = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             // Scheduled on the main runloop, so it fires on the main thread — assert, don't hop.
             MainActor.assumeIsolated { self?.refreshTitlesFromCWD() }
@@ -2423,7 +2430,7 @@ final class WindowController: NSObject {
     }
 
     /// Wire the first controller once the dict is populated. Called from
-    /// `showAndStart()` before the first `mount(_:)` so the initial tab gets
+    /// `mountAndStart()` before the first `mount(_:)` so the initial tab gets
     /// its title + last-pane-exit callbacks exactly once.
     private func bindFirstControllerIfNeeded() {
         let firstID = tabs.order[0]

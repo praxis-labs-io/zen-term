@@ -49,7 +49,7 @@ final class NewTabCWDTests: WindowTestCase {
     private func makeWindowInRoot() throws -> WindowController {
         let c = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: root)
-        c.showAndStart()
+        c.mountAndStart()
         controller = c
         try XCTUnwrap(spawned.first).currentDirectory = root
         return c

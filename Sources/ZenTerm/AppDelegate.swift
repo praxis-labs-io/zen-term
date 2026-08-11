@@ -270,7 +270,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.windows.removeAll { $0 === wc }
         }
         windows.append(wc)
-        wc.showAndStart()
+        wc.mountAndStart()
+        wc.window.makeKeyAndOrderFront(nil)
     }
 
     /// The Edit menu's forwarders, reached via the responder chain because the items have a nil

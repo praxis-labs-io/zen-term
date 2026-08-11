@@ -48,7 +48,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         let c = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
             initialCWD: FileManager.default.temporaryDirectory)
-        c.showAndStart()
+        c.mountAndStart()
         controller = c
         return c
     }

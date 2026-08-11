@@ -269,7 +269,7 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
 
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
-        controller.showAndStart()
+        controller.mountAndStart()
         // Dress it: two panes (a split gutter to measure), a drawer (a panel header keycap), a
         // toast (which is what freezes the stack's insets), and an open palette (rows whose
         // shortcut column resolves from the live keymap).
