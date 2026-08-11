@@ -66,6 +66,8 @@ struct ConfigDiagnostic: Hashable {
         case floatMissingField(String)
         /// A `float =` line whose `key:` this keyboard can't produce (the raw spec).
         case floatUnusableKey(String)
+        /// A `float =` line whose title slugs to a name a built-in float already holds.
+        case floatReservedID(String)
         /// A surviving float's sub-field value the parser couldn't read; it fell back to `using`.
         case floatFieldInvalid(field: String, got: String, using: String)
         /// A surviving float's numeric sub-field outside its range, clamped to `to`.
@@ -125,7 +127,8 @@ struct ConfigDiagnostic: Hashable {
         case .invalidValue: return "\(title) has an invalid value"
         case .ignoredListItem: return "\(title) has an invalid item"
         case .clamped: return "\(title) is out of range"
-        case .floatMissingField, .floatUnusableKey: return "A tool float was ignored"
+        case .floatMissingField, .floatUnusableKey, .floatReservedID:
+            return "A tool float was ignored"
         case .floatFieldInvalid, .floatFieldClamped: return "\(title) has an invalid setting"
         case .unparseableLine: return "A shortcut line was ignored"
         }
@@ -157,6 +160,9 @@ struct ConfigDiagnostic: Hashable {
             return "\(title) is missing \(field). Ignoring this tool float."
         case .floatUnusableKey(let key):
             return "\(title) has an unusable key: \(key). Ignoring this tool float."
+        case .floatReservedID(let id):
+            return "\(title) takes the name \(id), which ZenTerm's built-in Scratch float owns. "
+                + "Rename it. Ignoring this tool float."
         case .floatFieldInvalid(let field, let got, let using):
             return "\(title): \(field)\(got) isn't valid. Using \(using)."
         case .floatFieldClamped(let field, let got, let to):
@@ -188,6 +194,8 @@ struct ConfigDiagnostic: Hashable {
             return "missing \(field)"
         case .floatUnusableKey:
             return "key can't be typed"
+        case .floatReservedID(let id):
+            return "\(id) is reserved"
         case .floatFieldInvalid(let field, let got, _):
             return "\(field)\(got) isn't valid"
         case .floatFieldClamped(let field, let got, let to):

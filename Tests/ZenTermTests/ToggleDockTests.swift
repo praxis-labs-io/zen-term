@@ -112,6 +112,69 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertTrue(dock.dottedToolFloatIDsForTesting.isEmpty, "a re-render after exit clears the dot")
     }
 
+    // MARK: the built-in Scratch button
+
+    /// Press the real button rather than calling the closure: `accessibilityPerformPress` is the
+    /// same path `mouseDown` takes, so a button wired to nothing fails here.
+    private func press(_ label: String, in dock: ToggleDock) {
+        let button = descendants(of: dock).compactMap { $0 as? IconButton }
+            .first { $0.accessibilityLabel() == label }
+        XCTAssertNotNil(button, "no button labelled \(label)")
+        _ = button?.accessibilityPerformPress()
+    }
+
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews + view.subviews.flatMap { descendants(of: $0) }
+    }
+
+    func test_scratchButton_togglesTheBuiltInFloat() {
+        var toggled: [String] = []
+        let dock = ToggleDock(
+            onNewTab: {}, onSplitH: {}, onSplitV: {}, onPalette: {}, onBottom: {}, onRight: {},
+            onZoom: {}, onDiffViewer: {}, toolFloats: [], onToolFloat: { toggled.append($0.id) })
+
+        press("Scratch", in: dock)
+
+        XCTAssertEqual(toggled, ["scratch"])
+    }
+
+    /// The Scratch button is the card, so it must stay lit while its own float is open — the
+    /// dimming that hides the drawer and zoom pips behind a card must not reach it.
+    func test_render_scratchButtonStaysLitWhileItsOwnCardIsUp() {
+        let dock = makeDock([])
+        var overlay = OverlayState()
+        overlay.isBottomOpen = true
+
+        dock.render(overlay: overlay, floatID: "scratch", paletteOpen: false)
+
+        XCTAssertTrue(dock.scratchActiveForTesting, "the button IS the card, so it must stay lit")
+        XCTAssertFalse(dock.scratchActivityForTesting, "shown, so no background dot")
+    }
+
+    /// The other side of the same rule: a DIFFERENT float's card dims the drawer pips, and must
+    /// leave Scratch dark rather than lit.
+    func test_render_scratchButtonIsDarkWhileAnotherFloatsCardIsUp() {
+        let dock = makeDock([float("dev")])
+
+        dock.render(overlay: OverlayState(), floatID: "dev", paletteOpen: false)
+
+        XCTAssertFalse(dock.scratchActiveForTesting)
+    }
+
+    /// Its dot lives on the fixed button, which `dottedToolFloatIDsForTesting` never walks — that
+    /// hook only covers the config-driven tail.
+    func test_render_dotsScratchWhileItRunsHidden() {
+        let dock = makeDock([])
+
+        dock.render(
+            overlay: OverlayState(), floatID: nil, paletteOpen: false,
+            isLiveInBackground: { $0 == "scratch" })
+        XCTAssertTrue(dock.scratchActivityForTesting)
+
+        dock.render(overlay: OverlayState(), floatID: nil, paletteOpen: false)
+        XCTAssertFalse(dock.scratchActivityForTesting, "a re-render after exit clears the dot")
+    }
+
     func test_newTabButton_isMounted() {
         // New-tab moved from the tab strip into the dock; it must always be present so it
         // never scrolls away with the tabs.
@@ -123,7 +186,7 @@ final class ToggleDockTests: XCTestCase {
     private static let fixedDefault = [
         "New tab", "│",
         "Split horizontally", "Split vertically", "Toggle bottom drawer", "Toggle right drawer",
-        "Focus mode", "│",
+        "Scratch", "Focus mode", "│",
         "Command palette", "Diff viewer",
     ]
 
@@ -145,8 +208,8 @@ final class ToggleDockTests: XCTestCase {
             dock.visibleLayoutForTesting,
             [
                 "New tab", "│",
-                "Split horizontally", "Toggle bottom drawer", "Toggle right drawer", "Focus mode",
-                "│", "Command palette",
+                "Split horizontally", "Toggle bottom drawer", "Toggle right drawer", "Scratch",
+                "Focus mode", "│", "Command palette",
             ])
 
         dock.setHiddenButtons([])
@@ -155,7 +218,9 @@ final class ToggleDockTests: XCTestCase {
 
     func test_emptyMiddleGroup_collapsesToOneDivider() {
         let dock = makeDock([])
-        dock.setHiddenButtons([.splitHorizontal, .splitVertical, .bottomDrawer, .rightDrawer, .focusMode])
+        dock.setHiddenButtons([
+            .splitHorizontal, .splitVertical, .bottomDrawer, .rightDrawer, .scratch, .focusMode,
+        ])
         XCTAssertEqual(
             dock.visibleLayoutForTesting, ["New tab", "│", "Command palette", "Diff viewer"])
     }
@@ -167,7 +232,8 @@ final class ToggleDockTests: XCTestCase {
             dock.visibleLayoutForTesting,
             [
                 "Split horizontally", "Split vertically", "Toggle bottom drawer",
-                "Toggle right drawer", "Focus mode", "│", "Command palette", "Diff viewer",
+                "Toggle right drawer", "Scratch", "Focus mode", "│", "Command palette",
+                "Diff viewer",
             ])
     }
 

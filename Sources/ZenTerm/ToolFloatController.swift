@@ -267,15 +267,23 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// pager match a pane's. The cwd is passed in rather than re-read: the open crosses a queue hop
     /// when a repo-root probe is needed, and the anchor this surface is registered under was
     /// derived from the reading taken at the press.
+    ///
+    /// An empty command is the Scratch float: no program, so it takes the launch a pane and a
+    /// drawer take, which is what honors `shell` and `shell-args`. `ToolFloatParser` requires a
+    /// non-empty `command:`, so no user float reaches that branch.
     private func spawn(_ spec: ToolFloat, cwd: URL?) -> TerminalSurface {
         let surface = makeSurface()
         surface.delegate = self
-        surface.start(
-            TerminalSurfaceConfig(
-                command: ShellLaunch.userShell, args: ["-l", "-i", "-c", spec.command],
-                workingDirectory: cwd, fontSize: SessionFontSize.points,
-                theme: Theme.current.terminal,
-                behavior: GeneralConfig.current.terminalBehavior))
+        if spec.command.isEmpty {
+            surface.start(ShellLaunch.shell(cwd: cwd))
+        } else {
+            surface.start(
+                TerminalSurfaceConfig(
+                    command: ShellLaunch.userShell, args: ["-l", "-i", "-c", spec.command],
+                    workingDirectory: cwd, fontSize: SessionFontSize.points,
+                    theme: Theme.current.terminal,
+                    behavior: GeneralConfig.current.terminalBehavior))
+        }
         return surface
     }
 

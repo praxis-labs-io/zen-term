@@ -12,6 +12,9 @@ final class ToggleDock: NSView {
     private let diffBtn: IconButton
     private let bottomBtn: IconButton
     private let rightBtn: IconButton
+    /// The built-in Scratch float's button. Fixed rather than one of the `toolFloatBtns` below,
+    /// since it comes from the catalog's built-ins and not from the config.
+    private let scratchBtn: IconButton
     private let zoomBtn: IconButton
     /// The built-in buttons keyed by their config slug, so `refreshVisibility` can hide by
     /// `ToolbarButton` — the same instances the named properties above hold. The one place the
@@ -66,12 +69,18 @@ final class ToggleDock: NSView {
         diffBtn = button("plus.forwardslash.minus", "Diff viewer", .openDiffViewer, onDiffViewer)
         bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", .toggleBottomDrawer, onBottom)
         rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", .toggleRightDrawer, onRight)
+        // Wired off the `onToolFloat` parameter, not the stored property: this runs before
+        // `super.init`, so nothing here may touch `self`.
+        let scratch = ToolFloat.scratch
+        scratchBtn = button(
+            scratch.icon, scratch.title, .toggleToolFloat(scratch.id), { onToolFloat(scratch) })
         zoomBtn = button("arrow.up.left.and.arrow.down.right", "Focus mode", .toggleZoom, onZoom)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         fixedButtons = [
             .newTab: newTab, .splitHorizontal: splitH, .splitVertical: splitV,
-            .bottomDrawer: bottomBtn, .rightDrawer: rightBtn, .focusMode: zoomBtn,
+            .bottomDrawer: bottomBtn, .rightDrawer: rightBtn, .scratch: scratchBtn,
+            .focusMode: zoomBtn,
             .commandPalette: paletteBtn, .diffViewer: diffBtn,
         ]
         // Derived from the map, never restated: recolor order tracks `allCases`, and the stack
@@ -117,6 +126,12 @@ final class ToggleDock: NSView {
     /// Test hooks: whether each drawer toggle currently shows its busy activity dot.
     var bottomActivityForTesting: Bool { bottomBtn.showsActivity }
     var rightActivityForTesting: Bool { rightBtn.showsActivity }
+
+    /// Test hooks: the Scratch button's two states. Separate from `dottedToolFloatIDsForTesting`
+    /// below, which only walks the config-driven float tail. `isActive` is the one the
+    /// `floatCoversTab` ordering in `render` turns on, so it needs a hook of its own.
+    var scratchActivityForTesting: Bool { scratchBtn.showsActivity }
+    var scratchActiveForTesting: Bool { scratchBtn.isActive }
 
     /// Test hook: the ids of the per-float buttons currently showing their live-in-background dot.
     /// Reads the button's real state, not a mirror, so it can't pass while the dot is
@@ -226,6 +241,11 @@ final class ToggleDock: NSView {
             btn.isHidden = toolbarHiddenFloatIDs.contains(id) && floatID != id && !isLive
         }
         refreshVisibility()  // a surfaced or re-hidden float button moves the tools divider
+
+        // Above the `floatCoversTab` branch below, deliberately: that branch dims the buttons whose
+        // state is hidden behind a card, and this button IS the card when Scratch is the one open.
+        scratchBtn.isActive = floatID == ToolFloat.scratch.id
+        scratchBtn.showsActivity = isLiveInBackground(ToolFloat.scratch.id)
 
         // A float covers the tab, so zoom/drawer state beneath it would read as lit-but-hidden.
         let floatCoversTab = floatID != nil

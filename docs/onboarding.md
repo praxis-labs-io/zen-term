@@ -64,6 +64,7 @@ keys? Four lines in the config move it to `⌃HJKL` or anywhere else.
 | Find in the pane's scrollback    | `⌘F`                        |
 | Bottom drawer                    | `⌘B`                        |
 | Right drawer                     | `⌘\`                        |
+| Scratch, a blank shell over the window | `⌘;`                  |
 | New window                       | `⌘N`                        |
 | Previous and next tab            | `⌘[` `⌘]`                   |
 | Previous and next pane           | `⌘⇧[` `⌘⇧]`                 |

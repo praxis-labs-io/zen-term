@@ -35,7 +35,8 @@ final class SettingsKeybindGroupsTests: XCTestCase {
             .toggleRepoPicker, .toggleCommandPalette, .openDiffViewer, .openSettings,
             .increaseFontSize, .decreaseFontSize, .resetFontSize,
             .reloadConfig, .checkForUpdates, .reportIssue, .newTool,
-            .toggleToolFloat("btop"),
+            // Both sides of the float rule: the built-in claims a row, a user float doesn't.
+            .toggleToolFloat(ToolFloat.scratch.id), .toggleToolFloat("btop"),
         ] + (1...9).map { .selectTab($0) }
 
     func test_everyEditableActionHasARow() {

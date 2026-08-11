@@ -101,7 +101,7 @@
 # Hide any of the footer toolbar's built-in buttons (bottom-right of the tab bar).
 # Comma-separated, any order. Hiding is visual only: every hidden button's
 # shortcut and palette entry stay live. Buttons, in toolbar order:
-#   new-tab, split-h, split-v, bottom-drawer, right-drawer, focus-mode,
+#   new-tab, split-h, split-v, bottom-drawer, right-drawer, scratch, focus-mode,
 #   command-palette, diff-viewer
 # In-app Settings edit: applies live.
 # hide-toolbar-buttons =              # e.g. split-h,split-v,diff-viewer
@@ -178,9 +178,15 @@
 #
 # Command overlays (toolbar button + command-palette entry + keybinding) whose
 # process lifetime is set by `persist:` (default `none` = ephemeral, fresh every
-# open). There are NO built-in floats: define your own with `float = ` lines.
-# Repeat the key for as many as you like. A float's `key:` is the single source
-# of truth for both its chord and its palette glyph.
+# open). Define your own with `float = ` lines, repeating the key for as many as
+# you like. A float's `key:` is the single source of truth for both its chord and
+# its palette glyph.
+#
+# One float ships built in: Scratch, on cmd+;, a blank shell over the window that
+# keeps running when you dismiss it and dies when you type `exit`. It has no line
+# here and no Settings > Tools row. Rebind it under Keybinds below, or in
+# Settings > Shortcuts. `scratch` is a reserved name: a `float =` line whose title
+# lands on it is ignored.
 #
 # You don't have to write one by hand: Settings > Tools has a form, and so does
 # the New Tool command in the command palette. Either one writes the line here.
@@ -296,7 +302,10 @@
 #   report_issue        (no default binding; also in the command palette and Help menu)
 #   new_tool_float      (no default binding; opens the form that adds one, also in the palette)
 #   toggle_float:<id>   (bind a second chord to one of your floats; `none` doesn't
-#                        apply here, since a float's chord is its own `key:` field)
+#                        apply here, since a float's chord is its own `key:` field.
+#                        the exception is the built-in `toggle_float:scratch`,
+#                        which has no `key:` field: it rebinds and unbinds like
+#                        any other action)
 #
 # Defaults (uncomment to change; these are what ships):
 # keybind = split_vertical=cmd+d                 # a new pane to the right
@@ -319,6 +328,7 @@
 # keybind = select_tab_1=cmd+1                    # … through select_tab_9=cmd+9
 # keybind = toggle_bottom_drawer=cmd+b
 # keybind = toggle_right_drawer=cmd+\
+# keybind = toggle_float:scratch=cmd+;           # the built-in scratch shell
 # keybind = toggle_focus_mode=cmd+shift+enter    # one pane/drawer fills the window
 # keybind = fill_screen=cmd+enter                # the window fills the desktop
 # keybind = toggle_scroll_mode=cmd+shift+s       # vim keys move the focused pane's scrollback

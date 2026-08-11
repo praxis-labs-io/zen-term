@@ -274,7 +274,7 @@ final class GeneralConfigParserTests: XCTestCase {
 
     func test_hideToolbarButtons_parsesEverySlug() {
         let config = parse(
-            "hide-toolbar-buttons = new-tab,split-h,split-v,bottom-drawer,right-drawer,"
+            "hide-toolbar-buttons = new-tab,split-h,split-v,bottom-drawer,right-drawer,scratch,"
                 + "focus-mode,command-palette,diff-viewer\n")
         XCTAssertEqual(config.hiddenToolbarButtons, Set(ToolbarButton.allCases))
     }

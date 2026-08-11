@@ -833,7 +833,8 @@ Then ⌘K clear screen, ⌘J scroll to the selection, ⌘⇧J and its
 ⌃/⌥ variants write the screen to a file, ⌘⇧V paste the selection, and the prompt jumps on
 ⌘⇧↑ and ⌘⇧↓. Select All is ⌘A and is the Edit menu's rather than the keymap's, for the
 reason below.
-**No tool float is built in**; a float's chord comes from its own `key:` field.
+**One tool float is built in**, Scratch on ⌘;, and its chord is a default here like any
+other action's. Every other float's chord comes from its own `key:` field.
 
 **The defaults are ghostty's, and the premise is that a chord doing the wrong thing costs
 more than a chord doing nothing.** So where the two disagree, the concession goes to what a
@@ -1312,9 +1313,25 @@ row), and a reload surfaces them all in one actionable toast whose "Open Setting
 lands on the first problem's section.
 
 **A fresh install writes nothing to disk.** `~/.config/zen-term/` does not exist
-until the first save from Settings. There are no built-in tool floats and no
-workspaces, so the ⌘⇧P picker shows only its `＋ Add workspace` row.
-`ToolFloatCatalog.all` is `GeneralConfig.current.floats` and nothing else.
+until the first save from Settings. There are no workspaces, so the ⌘⇧P picker
+shows only its `＋ Add workspace` row.
+
+`ToolFloatCatalog.all` is `builtIns + GeneralConfig.current.floats`, and `builtIns`
+holds exactly one: **Scratch** (⌘;, `persist:window`, a blank login shell), which is
+why the built-in lives in the catalog rather than in `GeneralConfig` and the line
+above still holds. It behaves the way a drawer does: one live instance per window,
+kept running across a dismissal, gone when its shell exits. Two consequences worth
+knowing:
+
+- **`scratch` is a reserved id.** A `float =` line whose title slugs to it is
+  refused with a diagnostic, rather than shadowing the built-in. Its id keys the
+  toolbar button, the Shortcuts row, the palette entry and the default chord, and a
+  shadow would repoint ⌘; while all four still said "Scratch".
+- **Its chord is edited on the Shortcuts card**, not on a Tools row. It is the only
+  float chord that is: a user float's chord is the `key:` on its own `float =` line,
+  and the built-in has neither a line nor a row. That makes `isEditableInSettings`
+  answer true for the built-in and false for every other float, and it is where a
+  chord conflict against it is reported.
 
 `docs/config/config` ships **fully commented out**, and `ReferenceConfigTests`
 asserts that parsing it yields exactly `.builtIn`, so copying it is a clean slate.
@@ -1601,8 +1618,8 @@ Do not describe these as features, and do not assume them when reading:
 - **No left sidebar.** Two drawers: bottom and right.
 - **No second backend.** libghostty is the only one. The DEBUG-only `makeOverride`
   seam exists for headless test stubs.
-- **No built-in lazygit, gitdash, or any built-in tool float.** Every float is a
-  user-authored `float =` line.
+- **No built-in lazygit or gitdash.** Scratch is the only built-in float; every
+  other float is a user-authored `float =` line.
 - **No web panes.** Every leaf is a `TerminalSurface` over a PTY.
 - **No session or layout restore.** Nothing persists the pane tree, tab list, or
   window frames. Every launch is one tab, one pane.

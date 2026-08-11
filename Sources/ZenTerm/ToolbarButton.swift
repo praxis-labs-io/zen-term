@@ -7,6 +7,9 @@ enum ToolbarButton: String, CaseIterable {
     case splitVertical = "split-v"
     case bottomDrawer = "bottom-drawer"
     case rightDrawer = "right-drawer"
+    /// The built-in Scratch float. Fixed rather than part of the config-driven float tail: it has
+    /// no `float =` line, so `hide-toolbar-buttons` is the only thing that can hide it.
+    case scratch = "scratch"
     case focusMode = "focus-mode"
     case commandPalette = "command-palette"
     case diffViewer = "diff-viewer"
@@ -15,7 +18,7 @@ enum ToolbarButton: String, CaseIterable {
     /// `ToggleDock` appends it from the float catalog, since its membership is config-driven.
     static let groups: [[ToolbarButton]] = [
         [.newTab],
-        [.splitHorizontal, .splitVertical, .bottomDrawer, .rightDrawer, .focusMode],
+        [.splitHorizontal, .splitVertical, .bottomDrawer, .rightDrawer, .scratch, .focusMode],
         [.commandPalette, .diffViewer],
     ]
 
@@ -27,6 +30,7 @@ enum ToolbarButton: String, CaseIterable {
         case .splitVertical: return "Split vertically"
         case .bottomDrawer: return "Bottom drawer"
         case .rightDrawer: return "Right drawer"
+        case .scratch: return "Scratch"
         case .focusMode: return "Focus mode"
         case .commandPalette: return "Command palette"
         case .diffViewer: return "Diff viewer"

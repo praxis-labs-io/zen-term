@@ -13,16 +13,17 @@ enum IconCatalog {
     /// Grouped by metaphor, roughly a row at a time: shell/code/build/debug, config/metrics,
     /// infra/data/docs, files/comms, run/VCS/auth — brand marks last.
     static let all: [String] = [
-        "square.on.square", "terminal", "chevron.left.forwardslash.chevron.right", "curlybraces",
-        "hammer", "wrench.and.screwdriver", "ladybug", "gearshape",
-        "slider.horizontal.3", "chart.bar", "chart.line.uptrend.xyaxis", "gauge",
-        "cpu", "linear", "server.rack", "externaldrive",
-        "cylinder.split.1x2", "tablecells", "network", "globe",
-        "shippingbox", "puzzlepiece", "doc.text", "list.bullet.rectangle",
-        "magnifyingglass", "folder", "tray.full", "checklist",
-        "envelope", "bubble.left.and.bubble.right", "bolt", "play.rectangle",
-        "arrow.triangle.branch", "arrow.triangle.pull", "key", "lock",
-        "git", "github", "neovim", "spotify",
+        "square.on.square", "terminal", "apple.terminal.on.rectangle",
+        "chevron.left.forwardslash.chevron.right",
+        "curlybraces", "hammer", "wrench.and.screwdriver", "ladybug",
+        "gearshape", "slider.horizontal.3", "chart.bar", "chart.line.uptrend.xyaxis",
+        "gauge", "cpu", "linear", "server.rack",
+        "externaldrive", "cylinder.split.1x2", "tablecells", "network",
+        "globe", "shippingbox", "puzzlepiece", "doc.text",
+        "list.bullet.rectangle", "magnifyingglass", "folder", "tray.full",
+        "checklist", "envelope", "bubble.left.and.bubble.right", "bolt",
+        "play.rectangle", "arrow.triangle.branch", "arrow.triangle.pull", "key",
+        "lock", "git", "github", "neovim",
     ]
 
     /// A humanized, sentence-case label for a symbol — the picker shows this instead of the raw
@@ -36,6 +37,7 @@ enum IconCatalog {
 
     private static let displayOverrides: [String: String] = [
         "square.on.square": "Windows",
+        "apple.terminal.on.rectangle": "Terminal window",
         "chevron.left.forwardslash.chevron.right": "Code",
         "wrench.and.screwdriver": "Tools",
         "slider.horizontal.3": "Controls",
@@ -53,7 +55,7 @@ enum IconCatalog {
         "github": "GitHub",
         "linear": "Linear",
         "neovim": "Neovim",
-        "spotify": "Spotify",
+        "spotify": "Spotify",  // off the roster, but a float pinned to it keeps this label
     ]
 
     /// Resolve a symbol to an image: an SF Symbol, else a bundled brand mark ("git", "github",
