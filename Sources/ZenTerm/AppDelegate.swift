@@ -174,7 +174,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // ⌘N is intercepted here before `handle(_:)`, so a palette's / confirm's modal
             // gate doesn't cover it — swallow it explicitly while either is open.
             if let key = keyController(), key.isModalOverlayOpen || key.isConfirmOpen { return }
-            newWindow(initialCWD: keyController()?.focusedCWD, centered: false)
+            // Same `tab-inherit-cwd` rule ⌘T follows: home unless the user opts back in.
+            let inherited = GeneralConfig.current.tabInheritCWD ? keyController()?.focusedCWD : nil
+            newWindow(initialCWD: inherited, centered: false)
             return
         }
         if case .reloadConfig = chord {

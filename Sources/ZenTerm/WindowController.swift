@@ -902,7 +902,10 @@ final class WindowController: NSObject {
 
     private func newTab() {
         cancelConfirm()  // the tab-bar "+" is reachable by mouse while a confirm is up
-        addTab(cwd: activeController?.focusedCWD, pinnedTitle: nil)
+        // A tab starts at home unless `tab-inherit-cwd` says otherwise: it's a fresh piece of work,
+        // where a split is a second view of the one in front of you. Nil lets `ShellLaunch` supply
+        // home, so the two paths share one definition of it.
+        addTab(cwd: GeneralConfig.current.tabInheritCWD ? activeController?.focusedCWD : nil, pinnedTitle: nil)
     }
 
     /// Append a new tab with an explicit cwd and optional pinned title. The `⌘P` picker
@@ -1261,9 +1264,9 @@ final class WindowController: NSObject {
     /// `debug`) or an unrecognized one lands on the nav.
     private static func landing(forSettingKey key: String) -> SettingsLanding {
         switch key {
-        case "font-family", "font-size", "cursor-style", "cursor-style-blink", "cursor-thickness",
-            "cursor-shader", "background-alpha", "macos-option-as-alt", "scroll-multiplier", "shell",
-            "shell-args", "editor", "ai":
+        case "font-family", "font-size", "font-thicken", "cursor-style", "cursor-style-blink",
+            "cursor-thickness", "cursor-shader", "background-alpha", "macos-option-as-alt",
+            "scroll-multiplier", "shell", "shell-args", "tab-inherit-cwd", "editor", "ai":
             return .terminal
         case "theme", "accent-color", "window-chrome", "backdrop-alpha", "window-gutter", "pane-gap",
             "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",

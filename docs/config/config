@@ -48,6 +48,12 @@
 # font-size = 14                      # points; clamped to 6…32. ⌘+ / ⌘- step this for the
                                       # session (⌘0 returns here); the file is unchanged.
 
+# Fake-bold every glyph by dilating its coverage. Off matches stock ghostty. On
+# is heavier than it sounds: the thickening strength is maxed out, so on a Retina
+# panel it reads as a permanent bold rather than a nudge.
+# In-app Settings edit: applies live.
+# font-thicken = false                # true | false
+
 # Cursor shape and blink.
 # cursor-style = block                # block | bar | underline
 # cursor-style-blink = true           # true | false
@@ -144,6 +150,12 @@
 # In-app Settings edit: applies to new tabs.
 # shell = /bin/zsh
 # shell-args = -l -i                  # whitespace-separated argv
+
+# Where a new tab (⌘T) or window (⌘N) starts. Off = your home directory, so a new
+# tab is a clean slate. On = the focused pane's working directory. Panes (⌘D / ⌘⇧D),
+# drawers, tool floats and ⌘P workspace tabs inherit either way.
+# In-app Settings edit: applies to new tabs.
+# tab-inherit-cwd = false             # true | false
 
 # ─── Updates ─────────────────────────────────────────────────────────────────
 

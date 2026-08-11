@@ -15,6 +15,7 @@ struct GeneralConfig: Equatable {
     var cursorBlink: Bool
     var cursorThickness: Int
     var optionAsAlt: Bool
+    var fontThicken: Bool
     var scrollMultiplier: Double
 
     /// The selected cursor shader, as a bundled catalog name in a single `cursor-shader = <name>`
@@ -78,6 +79,10 @@ struct GeneralConfig: Equatable {
     // Launch.
     var shell: String?
     var shellArgs: [String]
+    /// Start a new tab or window in the focused pane's working directory instead of home. Off by
+    /// default: a tab is a fresh piece of work, where a split is a second view of the one in front
+    /// of you, so splits inherit unconditionally and this only governs ⌘T and ⌘N.
+    var tabInheritCWD: Bool
 
     // Workspace preset commands — the editor / AI the "Editor + AI + Shell" preset launches.
     // Nil → the built-in `nvim` / `claude` fallback (see AddWorkspaceOverlay).
@@ -108,6 +113,7 @@ struct GeneralConfig: Equatable {
         cursorBlink: true,
         cursorThickness: 2,
         optionAsAlt: true,
+        fontThicken: false,
         scrollMultiplier: 1.5,
         cursorShader: nil,
         backgroundAlpha: 1,
@@ -130,6 +136,7 @@ struct GeneralConfig: Equatable {
         debug: false,
         shell: nil,
         shellArgs: [],
+        tabInheritCWD: false,
         editor: nil,
         ai: nil,
         floats: [],
@@ -162,7 +169,7 @@ struct GeneralConfig: Equatable {
     var terminalBehavior: TerminalBehavior {
         TerminalBehavior(
             cursorStyle: cursorStyle, cursorBlink: cursorBlink, cursorThickness: cursorThickness,
-            optionAsAlt: optionAsAlt, scrollMultiplier: scrollMultiplier, cursorShader: cursorShader,
-            backgroundAlpha: backgroundAlpha)
+            optionAsAlt: optionAsAlt, fontThicken: fontThicken, scrollMultiplier: scrollMultiplier,
+            cursorShader: cursorShader, backgroundAlpha: backgroundAlpha)
     }
 }

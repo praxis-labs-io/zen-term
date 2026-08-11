@@ -45,7 +45,6 @@ enum GhosttyConfigWriter {
             // default that moved on a pin bump would put every scroll-mode band out of true.
             "window-padding-x = \(Int(gridInset))",
             "window-padding-y = \(Int(gridInset))",
-            "font-thicken = true",
             // Option acts as Alt/Meta — ⌥f/⌥b word-nav in readline, Meta chords in
             // vim/emacs — the terminal convention, chosen over macOS accent composing.
             "macos-option-as-alt = \(behavior.optionAsAlt)",
@@ -54,6 +53,11 @@ enum GhosttyConfigWriter {
         // from that base; the block cursor fills the cell and ignores it.
         if let delta = behavior.ghosttyCursorThicknessDelta {
             lines.append("adjust-cursor-thickness = \(delta)")
+        }
+        // Fake-bold, off by default like stock ghostty. Only emitted when on, so the default
+        // config text carries nothing about it and ghostty's own default rules.
+        if behavior.fontThicken {
+            lines.append("font-thicken = true")
         }
         if let theme {
             lines.append("font-family = \(theme.fontName)")
