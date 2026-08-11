@@ -1,6 +1,6 @@
 import Foundation
 
-/// Warms the syntax-highlight cache for a diff's files in the background (ZEN-239), so navigating to a
+/// Warms the syntax-highlight cache for a diff's files in the background, so navigating to a
 /// file is a cache hit — instant and already highlighted — instead of waiting on a fetch+parse. The
 /// selected file is highlighted on its own foreground path (`DiffViewerOverlay.renderCurrentFile`); this
 /// covers all the others. Owned by the overlay: it doesn't need to outlive one open, so "stop on close"
@@ -63,7 +63,7 @@ final class DiffFilePrefetcher {
 
     /// The files worth prefetching: every changed file across the three slices except the selected one
     /// (foreground-fetched), files already resolved in the store, and unsupported languages. A file with
-    /// no extension stays in: its blob may still name a language via a shebang or modeline (ZEN-329).
+    /// no extension stays in: its blob may still name a language via a shebang or modeline.
     /// Keyed by `highlightKey`, so the same path in two slices is two distinct candidates. Pure, so the
     /// filtering is unit-testable without spawning git.
     ///

@@ -93,6 +93,7 @@ final class FindBarView: NSView {
 
     func focusField() {
         window?.makeFirstResponder(field)
+        field.applyThemedCaret()  // the editor exists only once the field has focus
     }
 
     /// The count as rendered. Its wording carries meaning a state check cannot: "No matches" and
@@ -104,9 +105,25 @@ final class FindBarView: NSView {
         return editor.delegate === field
     }
 
+    /// The fill of the pane this bar sits in, pushed down by the host on every background apply. The
+    /// bar's tint goes over it, so below `background-alpha` the bar reads at the pane's alpha instead
+    /// of blending with the desktop.
+    var paneFill: NSColor = .clear {
+        didSet { applyFill() }
+    }
+
+    private func applyFill() {
+        let tint = Theme.current.chrome.accent.nsColor.withAlphaComponent(Self.fillAlpha)
+        layer?.backgroundColor = ChromeTheme.surface(tint: tint, over: paneFill).cgColor
+    }
+
+    /// Test hook: the fill actually painted, read off the layer rather than the inputs.
+    var paintedFillForTesting: CGColor? { layer?.backgroundColor }
+
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = chrome.accent.nsColor.withAlphaComponent(Self.fillAlpha).cgColor
+        applyFill()
+        field.applyThemedCaret()  // a field holding focus across the swap keeps the old ink otherwise
         glyph.contentTintColor = chrome.ink(alpha: 0.4)
         field.textColor = chrome.foreground.nsColor
         count.textColor = chrome.ink(alpha: 0.5)
@@ -135,6 +152,12 @@ final class FindBarView: NSView {
 }
 
 extension FindBarView: NSTextFieldDelegate {
+    /// A click focuses the field without going through `focusField`, and the field editor is shared per
+    /// window, so it arrives carrying whatever tint the last field left on it.
+    func controlTextDidBeginEditing(_ obj: Notification) {
+        field.applyThemedCaret()
+    }
+
     func controlTextDidChange(_ obj: Notification) {
         onChange?(field.stringValue)
     }

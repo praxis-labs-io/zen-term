@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// How ⌘⇧P gets on screen now that the `workspaces` file is read off the main thread (ZEN-275).
+/// How ⌘⇧P gets on screen now that the `workspaces` file is read off the main thread.
 ///
 /// The card is built once the workspaces are in hand rather than presented empty and filled: a card
 /// that springs in at one size and resizes a frame later reads as a flash. That makes the press and
@@ -120,7 +120,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
     ///
     /// Note what this does NOT cover: a bare Esc in that window. Esc is claimed by a card's own
     /// `performKeyEquivalent`, and there is no card yet, so it reaches the terminal instead and the
-    /// picker still arrives. That gap is ZEN-277, and naming this test for Esc would have hidden it.
+    /// picker still arrives. That gap is its own bug, and naming this test for Esc would have hidden it.
     func test_anotherCardOpeningBeforeThePickerArrives_stopsItFromAppearing() throws {
         try seedWorkspaces(twoWorkspaces)
         let c = makeWindow()

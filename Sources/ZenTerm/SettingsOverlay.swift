@@ -96,11 +96,11 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
     /// The card root's Esc fallback. A bare Esc reaches the focused control's `keyDown` first, so an
     /// open dropdown (the Theme picker) closes itself there and the card stays — this pass never runs
-    /// while a popover is up (ZEN-5, verified in the running app). It fires when the focus doesn't
+    /// while a popover is up (verified in the running app). It fires when the focus doesn't
     /// consume Esc: a plain nav row lets it bubble here and closes the card. Claimed in
     /// `performKeyEquivalent`, not a card-root `keyDown`, so it also catches Esc from a focused text
     /// field, whose field editor consumes it (`cancelOperation`) before it could bubble as a keyDown
-    /// — one Esc owner per card (ZEN-77). No Esc-key-equivalent button exists here; this is the owner.
+    /// — one Esc owner per card. No Esc-key-equivalent button exists here; this is the owner.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing, close: { self.onClose() }
@@ -185,13 +185,13 @@ final class SettingsOverlay: NSView, ModalOverlay {
         navRows.last?.onArrowDown = { [weak self] in self?.focusReportButton() }
 
         // The nav rows scroll when they'd overflow the column (many sections on a short window),
-        // instead of clipping or colliding with the version footer pinned below (ZEN-136). Keyboard
+        // instead of clipping or colliding with the version footer pinned below. Keyboard
         // nav scrolls the selected row into view in `selectSection`.
         navScroll.translatesAutoresizingMaskIntoConstraints = false
         // Install the flipped clip view BEFORE `drawsBackground = false`: that property forwards to
         // the scroll view's CURRENT clip view, so swapping the clip view afterwards resurrects the
         // default opaque system background — an appearance-following wash over the nav column that
-        // ignores Theme.current (ZEN-27) and reads as a mismatched sidebar panel.
+        // ignores Theme.current and reads as a mismatched sidebar panel.
         navScroll.contentView = FlippedClipView()  // top-down: the list starts at the top and scrolls down
         navScroll.drawsBackground = false
         navScroll.borderType = .noBorder

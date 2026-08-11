@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The comment composer driven through the real key path in a real window (ZEN-257): every send here
+/// The comment composer driven through the real key path in a real window: every send here
 /// goes `performKeyEquivalent` → the composer → the send closure, and every target pick goes through
 /// the dropdown's own control. A version that called `send` directly, or set the selected index on the
 /// view model, would stay green with the keys unwired and the dropdown dead — which is exactly how a

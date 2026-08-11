@@ -58,7 +58,7 @@ final class SeamTests: XCTestCase {
         TerminalSurfaceFactory.makeOverride = nil
         XCTAssertTrue(
             TerminalSurfaceFactory.make() is GhosttySurface,
-            "libghostty is the sole backend (ZEN-45, ZEN-66)")
+            "libghostty is the sole backend")
 
         let stub = SpySurface()
         TerminalSurfaceFactory.makeOverride = { stub }
@@ -66,7 +66,7 @@ final class SeamTests: XCTestCase {
     }
 }
 
-/// Where a viewport row sits inside the surface view (ZEN-330). The chrome draws scroll mode's
+/// Where a viewport row sits inside the surface view. The chrome draws scroll mode's
 /// cursor band from this, and being one grid inset out puts every band a few pixels off the row
 /// it names. That is a budget the eye can't check against a moving terminal, so it is measured.
 final class TerminalCellMetricsTests: XCTestCase {

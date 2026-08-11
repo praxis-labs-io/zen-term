@@ -3,7 +3,7 @@ import XCTest
 
 @testable import TerminalKit
 
-/// `GHOSTTY_ACTION_MOUSE_OVER_LINK` → the seam's hovered-link value (ZEN-24). libghostty sends
+/// `GHOSTTY_ACTION_MOUSE_OVER_LINK` → the seam's hovered-link value. libghostty sends
 /// the URL while the pointer is over a live link and an empty string when it leaves; the seam
 /// carries "left" as nil so consumers get one optional instead of a sentinel string.
 final class GhosttyMouseOverLinkTests: XCTestCase {

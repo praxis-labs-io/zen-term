@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Lifecycle tests for the tool-float engine (ZEN-77, lifted to window scope in ZEN-141): drive
+/// Lifecycle tests for the tool-float engine (lifted to window scope): drive
 /// `toggle` on a window-mounted `ToolFloatController` and assert what the `persist:` mode does to
 /// the underlying surface. Asserts through the real spawn/terminate path
 /// (`RecordingSurface.startCount` / `.terminated`) rather than the registry, because a state-only
@@ -50,8 +50,8 @@ final class ToolFloatControllerTests: WindowTestCase {
     /// "focused pane's cwd" through the same closure seam `WindowController` wires up — so
     /// `setCWD` here stands in for a pane's shell `cd`-ing, which is exactly what the engine sees.
     ///
-    /// The repo-root probe is injected synchronously: in the app it runs off the main thread
-    /// (ZEN-90/ZEN-15), so a toggle that needs one takes a hop, and every assertion here would have
+    /// The repo-root probe is injected synchronously: in the app it runs off the main thread,
+    /// so a toggle that needs one takes a hop, and every assertion here would have
     /// to become an expectation. `onProbe` fires on each probe, for the tests that care whether one
     /// happened at all. What the async delivery itself does to the open path is a runbook step.
     /// Pass `resolveRepoRoot` to hold the probe instead, which is the window the real walk leaves
@@ -381,7 +381,7 @@ final class ToolFloatControllerTests: WindowTestCase {
     }
 
     /// The repo root feeds exactly two things — the `git:` guard and a `.directory` float's anchor —
-    /// so a float wanting neither must open without walking the filesystem at all (ZEN-15). The walk
+    /// so a float wanting neither must open without walking the filesystem at all. The walk
     /// is a run of stats per ancestor, unbounded on a network mount.
     func test_plainEphemeralFloat_opensWithoutProbingTheFilesystem() throws {
         let dir = try makeDir("plain", git: false)
@@ -405,7 +405,7 @@ final class ToolFloatControllerTests: WindowTestCase {
         XCTAssertEqual(probes, 1, "one walk per press, shared by the guard and the anchor")
     }
 
-    // MARK: calling off an open that is still resolving its repo root (ZEN-15)
+    // MARK: calling off an open that is still resolving its repo root
 
     /// A held probe plus the float engine driving it. `deliver` runs the walk's answer back, so a
     /// test can put the cancelling event between the press and the landing.
@@ -630,7 +630,7 @@ final class ToolFloatControllerTests: WindowTestCase {
                 + "points at the focused pane, which is a repo and irrelevant: \(toasts[0].message)")
     }
 
-    // MARK: live-in-background (ZEN-150)
+    // MARK: live-in-background
 
     func test_isLiveInBackground_trueOnlyWhileLiveAndHidden() throws {
         let dir = try makeDir("plain", git: false)
@@ -697,7 +697,7 @@ final class ToolFloatControllerTests: WindowTestCase {
         XCTAssertEqual(stateChanges, 1)
     }
 
-    /// The repo-root walk resolves off-main (ZEN-234), so `toggle` doesn't open within its own turn:
+    /// The repo-root walk resolves off-main, so `toggle` doesn't open within its own turn:
     /// the card lands a hop later, when the probe delivers. Drives a resolver held open by hand, the
     /// default resolver in `makeFloats` being synchronous. What a SECOND press inside that gap does
     /// belongs to `test_secondPressDuringTheProbe_cancelsInsteadOfOpening`.

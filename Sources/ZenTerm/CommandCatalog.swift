@@ -57,6 +57,7 @@ enum CommandCatalog {
         case .checkForUpdates: return config("Check for Updates", glyph, chord)
         case .reportIssue: return help("Report an Issue…", glyph, chord)
         case .openDiffViewer: return tool("Diff Viewer", glyph, chord)
+        case .newTool: return tool("New Tool Float…", glyph, chord)
         case .increaseFontSize: return window("Increase Font Size", glyph, chord)
         case .decreaseFontSize: return window("Decrease Font Size", glyph, chord)
         case .resetFontSize: return window("Reset Font Size", glyph, chord)
@@ -103,6 +104,7 @@ enum CommandCatalog {
     static func commands(tabCount: Int) -> [PaletteCommand] {
         var chords: [KeyInterceptor.ReservedChord] = [.toggleRepoPicker, .openDiffViewer]
         chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
+        chords += [.newTool]  // Settings was the only way to create one
         chords += [.openSettings, .reloadConfig, .checkForUpdates, .reportIssue]
         chords += [
             .toggleBottomDrawer, .toggleRightDrawer,

@@ -55,7 +55,7 @@ enum IconCatalog {
         "github": "GitHub",
         "linear": "Linear",
         "neovim": "Neovim",
-        "spotify": "Spotify",  // off the roster since ZEN-379; a float pinned to it keeps this label
+        "spotify": "Spotify",  // off the roster, but a float pinned to it keeps this label
     ]
 
     /// Resolve a symbol to an image: an SF Symbol, else a bundled brand mark ("git", "github",

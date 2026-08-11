@@ -20,7 +20,7 @@ final class BrandMarkTests: XCTestCase {
         XCTAssertNil(BrandMark.image("not-a-real-mark"), "a miss stays a miss when it's asked twice")
     }
 
-    /// Marks are read from disk once and handed out as copies (ZEN-15). The copy is the whole point:
+    /// Marks are read from disk once and handed out as copies. The copy is the whole point:
     /// `IconCatalog.gitBadge` and the icon picker's `brandSize` both resize what they get, and on a
     /// shared instance that would resize every other caller's mark.
     func test_marksAreIndependentCopies_soResizingOneLeavesTheRestAlone() throws {

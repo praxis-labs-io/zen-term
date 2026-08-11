@@ -1,7 +1,7 @@
 /// A problem found while loading the config, carried on `GeneralConfig` so a surface can show it
 /// in place instead of the user's only clue being a log line nobody reads.
 ///
-/// ZEN-7 widened this past the original `.keybind` scope: an invalid scalar (`font-size = bigg`),
+/// This widened past the original `.keybind` scope: an invalid scalar (`font-size = bigg`),
 /// an out-of-range number, a bad enum value, and a dropped `float =` line all collect here now,
 /// each rendered on the Settings row that owns it (or, for the home-less cases, a Tools notice and
 /// the reload toast).
@@ -83,7 +83,7 @@ struct ConfigDiagnostic: Hashable {
     ///
     /// A conflict is the one diagnostic a user can resolve from the notice itself: accept the loss,
     /// or revert the line that caused it (`KeybindConflict`). So each gets a toast of its own, while
-    /// everything else, having nothing to press, keeps sharing one (ZEN-368).
+    /// everything else, having nothing to press, keeps sharing one.
     var isChordConflict: Bool {
         if case .chordTaken = problem { return true }
         return false

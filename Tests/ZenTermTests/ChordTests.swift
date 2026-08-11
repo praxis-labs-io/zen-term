@@ -57,7 +57,7 @@ final class ChordTests: XCTestCase {
     }
 
     func test_shiftedGlyph_foldsOntoItsBaseKeyWithShift() {
-        // The bug ZEN-142 tripped on: `charactersIgnoringModifiers` applies Shift, so a live ⌘⇧-
+        // The bug behind the split chord: `charactersIgnoringModifiers` applies Shift, so a live ⌘⇧-
         // press arrives as "_" while the config spells the same chord `cmd+shift+-`. Both fold onto
         // one chord, so the keymap holds one entry per binding rather than one per spelling.
         XCTAssertEqual(Chord(command: true, shift: true, key: "_"), Chord(command: true, shift: true, key: "-"))
@@ -185,9 +185,9 @@ final class ChordTests: XCTestCase {
     }
 
     func test_liveShiftedEvent_resolvesToTheBindingSpelledWithTheBaseKey() {
-        // ZEN-142's whole trap in one assertion: a default is written `cmd+shift+=`, the keyboard
+        // the whole trap in one assertion: a default is written `cmd+shift+=`, the keyboard
         // delivers "+", and they have to be the same chord or the binding is dead on arrival.
-        // ZEN-371 moved the splits off ⌘⇧- and ⌘⇧\, so increase is the last default that depends
+        // The splits moved off ⌘⇧- and ⌘⇧\, so increase is the last default that depends
         // on the fold — the other two still canonicalize, they just resolve to nothing now.
         let plus = Chord(event: shiftedKeyDown("+"))
         XCTAssertEqual(plus, Chord(command: true, shift: true, key: "="))
@@ -198,8 +198,8 @@ final class ChordTests: XCTestCase {
     }
 
     func test_liveUnshiftedMinus_isNotTheSplit() {
-        // The bug ZEN-142 reports: an unshifted ⌘- must never land on the split, which is ⌘⇧-.
-        // ZEN-142 kept it unbound so it reached libghostty's per-surface text zoom; ZEN-224 bound it
+        // The bug: an unshifted ⌘- must never land on the split, which is ⌘⇧-.
+        // It was once unbound so it reached libghostty's per-surface text zoom; now it is bound
         // to the chrome's app-wide decrease instead. Either way the claim under test is the same one
         // — ⌘- is not ⌘⇧- — so this asserts what it resolves to rather than that it resolves at all.
         let event = NSEvent.keyEvent(
@@ -214,7 +214,7 @@ final class ChordTests: XCTestCase {
     /// `charactersIgnoringModifiers` has already applied it, so the event arrives carrying "+".
     /// It has to fold onto ⌘⇧= and find increase — the whole reason increase ships two default
     /// chords. A `Chord(command:shift:key:"+")` built by hand would pass while the real keypress
-    /// fell through to libghostty, which is exactly the bug ZEN-224 fixes.
+    /// fell through to libghostty, which is exactly the bug.
     func test_liveShiftedEquals_isIncreaseFontSize() {
         let event = NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: 0,

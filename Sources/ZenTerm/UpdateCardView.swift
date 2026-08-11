@@ -1,7 +1,7 @@
 import AppKit
 import AppLog
 
-/// The one auto-update card (ZEN-118), a sibling of `ToastView` on the shared overlay-card
+/// The one auto-update card, a sibling of `ToastView` on the shared overlay-card
 /// chrome (`FloatShadow` bg + neutral hairline + drop shadow) in the top-right toast stack. It
 /// morphs in place across the update's states rather than stacking a card per state — the
 /// `UpdateController` re-renders it as Sparkle drives the flow:
@@ -13,7 +13,7 @@ import AppLog
 ///
 /// Non-modal like a sticky toast: it never takes first responder, so it can't steal keys from the
 /// terminal (its buttons are click-only, no Return/Esc equivalents). The top-right keycap slot names
-/// the "Check for Updates" chord (ZEN-20) — empty until the user binds one, since that chord has no
+/// the "Check for Updates" chord — empty until the user binds one, since that chord has no
 /// default and an unbound glyph would lie; it lights up the moment a binding exists.
 final class UpdateCardView: ShadowCardView {
     /// One update state to render. Pure data; the buttons' behavior comes from `Actions`, kept
@@ -24,7 +24,7 @@ final class UpdateCardView: ShadowCardView {
         case downloading(fraction: Double?)  // nil until the expected length is known
         case ready(version: String)
 
-        /// A short, non-sensitive label for the update diagnostic log (ZEN-248). Only the version
+        /// A short, non-sensitive label for the update diagnostic log. Only the version
         /// string, already public in the appcast, appears here — nothing user-specific.
         var logLabel: String {
             switch self {
@@ -246,7 +246,7 @@ final class UpdateCardView: ShadowCardView {
     private func addButton(_ title: String, variant: AppButton.Variant, onTap: @escaping () -> Void) {
         buttonRow.addArrangedSubview(
             AppButton(title: title, variant: variant) { [weak self] in
-                // ZEN-248: log the tap before the action runs, so a reporter's bundle shows whether
+                // Log the tap before the action runs, so a reporter's bundle shows whether
                 // repeated taps registered at the AppKit level at all (one line vs many).
                 Log.info("update card tap: \(title) [\(self?.state.logLabel ?? "gone")]", category: .update)
                 onTap()

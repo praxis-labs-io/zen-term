@@ -2,8 +2,8 @@ import AppLog
 import Foundation
 import TerminalKit
 
-/// The `~/.config/zen-term/` config layer. For ZEN-27 it loads only the theme file; later
-/// tickets (workspaces, general config) extend it. Never throws to callers and never crashes:
+/// The `~/.config/zen-term/` config layer. It loads the theme file, the general config and the
+/// workspaces file. Never throws to callers and never crashes:
 /// a missing file yields the built-in default, an unreadable one logs and falls back, and a
 /// partial/typo'd file falls back per-key inside `GhosttyThemeParser`.
 enum ConfigLoader {
@@ -86,7 +86,7 @@ enum ConfigLoader {
     /// config assembles the keymap, which asks Carbon whether each chord is typable on the current
     /// layout, and `TISCopyCurrentKeyboardLayoutInputSource` off-main takes the whole process down
     /// with no crash report. `swift test` cannot catch it — TIS answers happily in the xctest
-    /// process — so the compiler is the only thing that can (ZEN-17, ZEN-31).
+    /// process — so the compiler is the only thing that can.
     @MainActor
     static func loadGeneralConfig(configRoot: URL = defaultRoot) -> GeneralConfig {
         let configURL = configRoot.appendingPathComponent("config")
@@ -125,8 +125,8 @@ enum ConfigLoader {
     ///
     /// This is what every caller uses. The read is one small file, but `~/.config` can sit on a
     /// network-backed or cloud-synced home directory, and the chrome never blocks the main queue on
-    /// a filesystem answer (ZEN-90), so the card that renders from this is built when the list
-    /// lands rather than presented empty and filled (ZEN-275).
+    /// a filesystem answer, so the card that renders from this is built when the list
+    /// lands rather than presented empty and filled.
     static func loadWorkspaces(configRoot: URL = defaultRoot, completion: @escaping ([Workspace]) -> Void) {
         loadQueue.async {
             let workspaces = loadWorkspaces(configRoot: configRoot)
@@ -154,7 +154,7 @@ enum ConfigLoader {
     /// This is the parse step behind the completion-handler form above, which is what every caller
     /// uses; it is separate only so the read can be driven from the load queue and from tests. It
     /// blocks and it does not validate paths, so calling it directly from the main thread is the
-    /// ZEN-90 stall this whole path exists to remove.
+    /// main-thread stall this whole path exists to remove.
     static func loadWorkspaces(configRoot: URL = defaultRoot) -> [Workspace] {
         let url = configRoot.appendingPathComponent("workspaces")
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }

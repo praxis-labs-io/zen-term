@@ -2,7 +2,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The Shortcuts card's group list against the actions that claim a row (ZEN-367).
+/// The Shortcuts card's group list against the actions that claim a row.
 ///
 /// This exists because of what it failed to catch. `groups` is hand-ordered, so seven new actions
 /// shipped with a chord, a palette entry, a config token and no Settings row, and every test in the
@@ -34,7 +34,7 @@ final class SettingsKeybindGroupsTests: XCTestCase {
             .fillScreen, .toggleBottomDrawer, .toggleRightDrawer,
             .toggleRepoPicker, .toggleCommandPalette, .openDiffViewer, .openSettings,
             .increaseFontSize, .decreaseFontSize, .resetFontSize,
-            .reloadConfig, .checkForUpdates, .reportIssue,
+            .reloadConfig, .checkForUpdates, .reportIssue, .newTool,
             // Both sides of the float rule: the built-in claims a row, a user float doesn't.
             .toggleToolFloat(ToolFloat.scratch.id), .toggleToolFloat("btop"),
         ] + (1...9).map { .selectTab($0) }

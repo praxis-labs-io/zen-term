@@ -31,7 +31,7 @@ struct Hunk: Equatable {
 /// are derived from the hunks so they can never drift from the lines actually rendered.
 ///
 /// `scope` and `baseSHA` are stamped by `GitDiffRunner.loadSync` (the parser doesn't know them) so the
-/// syntax highlighter can fetch each side's whole-file blob (ZEN-239): old vs new refs depend on the
+/// syntax highlighter can fetch each side's whole-file blob: old vs new refs depend on the
 /// scope, and the committed scope's old side is `baseSHA`. Both default so parser-only call sites and
 /// tests are unaffected.
 struct FileDiff: Equatable {
@@ -42,7 +42,7 @@ struct FileDiff: Equatable {
     var scope: DiffScope = .unstaged
     var baseSHA: String?
     /// The ref the committed slice's *new* side lives at, when the reader picked a branch with no
-    /// worktree (ZEN-313). Nil means the checkout's own `HEAD`, which is the ordinary case. Without
+    /// worktree. Nil means the checkout's own `HEAD`, which is the ordinary case. Without
     /// it the highlighter would fetch the new-side blob from `HEAD` while the diff itself was
     /// computed against another branch, and highlight the wrong file contents.
     var headRef: String?

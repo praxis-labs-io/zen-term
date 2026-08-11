@@ -1,6 +1,6 @@
 import AppLog
 
-/// A chord one config line took from another action, and the two ways to answer it (ZEN-368).
+/// A chord one config line took from another action, and the two ways to answer it.
 ///
 /// The config is what created it, so both answers are edits to the config, and both are expressible
 /// through `KeymapOverrides` alone. Accept records the loss as deliberate. Revert puts both actions
@@ -87,7 +87,7 @@ struct KeybindConflict: Equatable {
 }
 
 /// Writing an answer to a conflict and reloading, so the card and the Shortcuts row share one path
-/// rather than each assembling the write for itself (ZEN-368).
+/// rather than each assembling the write for itself.
 @MainActor
 enum KeybindConflictResolver {
     /// Record the loss as deliberate, so nothing reports it again.

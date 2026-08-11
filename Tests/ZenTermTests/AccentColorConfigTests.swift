@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The `accent-color` key's parse and load path (ZEN-255): a token resolves to a slot, a bad one
+/// The `accent-color` key's parse and load path: a token resolves to a slot, a bad one
 /// falls back with a diagnostic the Settings row can render, and the whole thing reaches
 /// `Theme.current.chrome.accent` through a real config file rather than a hand-built struct.
 final class AccentColorConfigTests: XCTestCase {

@@ -31,6 +31,7 @@ final class GeneralConfigParserTests: XCTestCase {
             cursor-style = bar
             cursor-style-blink = false
             macos-option-as-alt = false
+            font-thicken = true
             scroll-multiplier = 4
             background-alpha = 0.7
             window-chrome = false
@@ -45,6 +46,7 @@ final class GeneralConfigParserTests: XCTestCase {
             diff-layout = inline
             shell = /bin/bash
             shell-args = -l -i
+            tab-inherit-cwd = true
             editor = vim
             ai = codex
             """)
@@ -53,6 +55,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.cursorStyle, .bar)
         XCTAssertFalse(config.cursorBlink)
         XCTAssertFalse(config.optionAsAlt)
+        XCTAssertTrue(config.fontThicken)
         XCTAssertEqual(config.scrollMultiplier, 4)
         XCTAssertEqual(config.backgroundAlpha, 0.7)
         XCTAssertFalse(config.windowChrome)
@@ -67,6 +70,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.diffLayout, .inline)
         XCTAssertEqual(config.shell, "/bin/bash")
         XCTAssertEqual(config.shellArgs, ["-l", "-i"])
+        XCTAssertTrue(config.tabInheritCWD)
         XCTAssertEqual(config.editor, "vim")
         XCTAssertEqual(config.ai, "codex")
     }
@@ -82,6 +86,20 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertTrue(parse("automatic-update-checks = true\n").automaticUpdateChecks)
         XCTAssertTrue(parse("automatic-update-checks = maybe\n").automaticUpdateChecks)  // malformed → default
         XCTAssertTrue(parse("font-size = 14\n").automaticUpdateChecks)  // absent → default (on)
+    }
+
+    func test_fontThicken_parsesAndDefaultsOff() {
+        XCTAssertTrue(parse("font-thicken = true\n").fontThicken)
+        XCTAssertFalse(parse("font-thicken = false\n").fontThicken)
+        XCTAssertFalse(parse("font-thicken = maybe\n").fontThicken)  // malformed → default (off)
+        XCTAssertFalse(parse("font-size = 14\n").fontThicken)  // absent → default (off)
+    }
+
+    func test_tabInheritCWD_parsesAndDefaultsOff() {
+        XCTAssertTrue(parse("tab-inherit-cwd = true\n").tabInheritCWD)
+        XCTAssertFalse(parse("tab-inherit-cwd = false\n").tabInheritCWD)
+        XCTAssertFalse(parse("tab-inherit-cwd = maybe\n").tabInheritCWD)  // malformed → default (off)
+        XCTAssertFalse(parse("font-size = 14\n").tabInheritCWD)  // absent → default (off)
     }
 
     func test_debug_parsesAndDefaultsOff() {
@@ -129,7 +147,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.maxDrawerFraction, 0.95)  // clamped to [0.3, 0.95]
     }
 
-    /// The ceiling came down to 32 with ZEN-224, so that ⌘+ / ⌘- and the config file bound the size
+    /// The ceiling came down to 32 so that ⌘+ / ⌘- and the config file bound the size
     /// the same way. A config asking for more lands on 32 rather than the old 72.
     func test_fontSize_clampsToTheSteppingCeiling() {
         XCTAssertEqual(parse("font-size = 40\n").fontSize, 32)
@@ -195,7 +213,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.floats.first?.command, "two")
     }
 
-    // MARK: float order (ZEN-81)
+    // MARK: float order
 
     /// `config.floats` is the single array the dock, ⌘P, and Settings → Tools all read, so this sort
     /// is what "reorder" actually means end to end.
@@ -248,7 +266,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.floats.map(\.id), ["b", "c", "a"])
     }
 
-    // MARK: hide-toolbar-buttons (ZEN-327)
+    // MARK: hide-toolbar-buttons
 
     func test_hideToolbarButtons_absent_hidesNothing() {
         XCTAssertEqual(parse("font-size = 14\n").hiddenToolbarButtons, [])
@@ -284,7 +302,7 @@ final class GeneralConfigParserTests: XCTestCase {
             ])
     }
 
-    // MARK: config diagnostics (ZEN-7)
+    // MARK: config diagnostics
     //
     // The scalar/enum/float fallbacks used to log-and-drop with no trace a surface could show. Each
     // now collects a `ConfigDiagnostic` too — the piece that can go silently dead, so it's asserted.

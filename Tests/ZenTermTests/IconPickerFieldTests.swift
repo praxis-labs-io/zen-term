@@ -4,7 +4,7 @@ import XCTest
 @testable import ZenTerm
 
 final class IconPickerFieldTests: WindowTestCase {
-    /// ZEN-268 (same class as `Dropdown`): the open grid card lives on `window.contentView`, not
+    /// Same class as `Dropdown`: the open grid card lives on `window.contentView`, not
     /// inside the field's own subtree, so tearing the field's host out of the window — what a
     /// tab-switch `closeModal()` does to the workspace / tool-float form hosting this field — must
     /// still take the card with it. Without a leave-the-window hook the grid orphans on the content

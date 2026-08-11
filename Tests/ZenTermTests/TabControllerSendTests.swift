@@ -5,7 +5,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The tab side of a diff comment (ZEN-257): which terminals it offers, and what actually reaches the
+/// The tab side of a diff comment: which terminals it offers, and what actually reaches the
 /// surface. The paste shape is the load-bearing part — `TerminalSurface.paste` is bracketed, so the
 /// message has to arrive as one paste and the Return as a separate one, or a TUI reads the Return as
 /// a literal newline inside the block and the message sits there unsent.

@@ -4,7 +4,7 @@
 /// string with no per-character cell mapping, so a wide character (CJK, emoji) fills two cells while
 /// counting as one offset. Everything downstream reads the number as a cell: the cursor draws a cell
 /// left of true for each wide character earlier in the row, and a yank ending past one stops short of
-/// what was highlighted. ZEN-349 carries the width-aware model that closes both.
+/// what was highlighted. A width-aware model would close both.
 struct ScrollCell: Equatable {
     var row: Int
     var column: Int

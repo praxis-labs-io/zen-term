@@ -2,7 +2,7 @@ import AppKit
 
 /// A side-by-side diff row: a full-width hunk header, or an `old │ new` line pair with line-number
 /// gutters. Long lines don't wrap or truncate — each side's text sits in a clipping container and pans
-/// by a shared `horizontalOffset` (ZEN-241), so both columns scroll together while the gutters and
+/// by a shared `horizontalOffset`, so both columns scroll together while the gutters and
 /// center rule stay frozen. Inline (`.unified`) rows are drawn by `UnifiedLineCell`, not this cell.
 /// Laid out manually (no Auto Layout) so a table full of these stays cheap, and reused across scroll
 /// positions. Colors read `Theme.current` at configure time, so a live theme swap (`reloadData`)
@@ -117,7 +117,7 @@ final class DiffLineCell: NSView, DiffPanningCell {
         let gutter = gutterWidth
         let textHeight = DiffCellMetrics.textHeight
         let height = DiffCellMetrics.lineHeight(in: bounds)
-        // The cell is non-flipped (y=0 is the bottom), so a row grown for the comment box (ZEN-257)
+        // The cell is non-flipped (y=0 is the bottom), so a row grown for the comment box
         // needs its line explicitly pinned to the TOP slice rather than centred in the whole, taller
         // bounds — sliceY is 0 for a plain row and the reserved room below it for a grown one.
         let sliceY = DiffCellMetrics.lineSliceY(in: bounds)
@@ -141,7 +141,7 @@ final class DiffLineCell: NSView, DiffPanningCell {
 
     /// Slide both text labels to the shared offset within their (fixed) clip columns. `leftClip` /
     /// `rightClip` are always exactly `lineHeight` tall and `layout()` pins them to the row's top slice
-    /// (ZEN-257) — so, unlike the gutters' `textY` in `layout()`, this centres purely within that
+    /// — so, unlike the gutters' `textY` in `layout()`, this centres purely within that
     /// fixed-height clip, with no slice offset of its own to add.
     private func repositionText() {
         let textHeight = DiffCellMetrics.textHeight

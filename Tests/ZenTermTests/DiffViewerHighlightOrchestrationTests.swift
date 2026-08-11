@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The overlay's highlight orchestration (ZEN-239): which spans reach the rendered rows, and when the
+/// The overlay's highlight orchestration: which spans reach the rendered rows, and when the
 /// cache is dropped. These paths can be silently dead — if the cache-hit branch stopped painting, a
 /// revisited or reopened file would render nothing; if the cache stopped being cleared on a changed
 /// reload, stale spans would paint over new content — and the suite would stay green either way.
@@ -16,7 +16,7 @@ final class DiffViewerHighlightOrchestrationTests: WindowTestCase {
         super.setUp()
         // Pin the diff-layout default so the tester's own config (or a prior test's leftover) can't decide
         // the layout: a span lands in different rows in side-by-side vs inline, and `spans(of:)` reads them
-        // differently, so an ambient layout made this pass or fail by test order (ZEN-239 isolation).
+        // differently, so an ambient layout made this pass or fail by test order.
         originalConfig = GeneralConfig.current
         GeneralConfig.setCurrentForTesting(.builtIn)
     }
@@ -169,7 +169,7 @@ final class DiffViewerHighlightOrchestrationTests: WindowTestCase {
     }
 
     func test_extensionlessScript_endsUpHighlighted_onTheSameSinglePaintPathAsAnyOtherFile() throws {
-        // An extensionless file whose blob names a language (ZEN-329) takes the ordinary withhold path,
+        // An extensionless file whose blob names a language takes the ordinary withhold path,
         // so it paints once, already highlighted. It deliberately does not get a paint-plain-then-repaint
         // path of its own: a second paint runs `renderRows`, which closes an open comment composer and
         // re-centres the cursor, so a reader who started typing or scrolling in the gap loses it.
@@ -237,7 +237,7 @@ final class DiffViewerHighlightOrchestrationTests: WindowTestCase {
         // A refresh that finds changed content must invalidate the spans of the file that *changed* —
         // they were computed from the old revision's blobs, so keeping them would paint stale colors on
         // new text. But a file that DIDN'T change keeps its spans: re-parsing it would blank and re-fetch
-        // it for nothing, which made a warm reopen re-parse the whole repo like a cold open (ZEN-261).
+        // it for nothing, which made a warm reopen re-parse the whole repo like a cold open.
         //
         // Both files here are unselected (only the first, `selected`, is auto-picked): a selected file's
         // entry gets overwritten by its own re-render regardless, so asserting on the two others isolates
@@ -265,7 +265,7 @@ final class DiffViewerHighlightOrchestrationTests: WindowTestCase {
             "the changed file's spans, computed against the old revision, must drop")
         XCTAssertEqual(
             store.cached(untouched.highlightKey) ?? nil, spans,
-            "the unchanged file keeps its spans — no re-parse, no cold-open flash (ZEN-261)")
+            "the unchanged file keeps its spans — no re-parse, no cold-open flash")
     }
 
     func test_unchangedReload_keepsTheCachedSpans() {

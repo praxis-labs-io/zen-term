@@ -4,7 +4,7 @@ import XCTest
 @testable import ZenTerm
 
 /// Unit tests for `ShellLaunch` — the launch-config builder behind ⌘P workspaces and every
-/// pane/drawer (ZEN-143). Covers the custom-shell / shell-args branch, the login+interactive
+/// pane/drawer. Covers the custom-shell / shell-args branch, the login+interactive
 /// `program` wrapper that keeps a pane alive after the program exits, env merge, and the
 /// home-is-the-default-cwd rule.
 final class ShellLaunchTests: XCTestCase {
@@ -73,7 +73,7 @@ final class ShellLaunchTests: XCTestCase {
         let config = ShellLaunch.program("nvim .", cwd: URL(fileURLWithPath: "/work"))
         XCTAssertEqual(config.command, "/bin/zsh")
         // The `; exec …` tail keeps the pane alive with a fresh shell after the program quits,
-        // and re-arms libghostty's ZDOTDIR redirect so that shell keeps integration (ZEN-144).
+        // and re-arms libghostty's ZDOTDIR redirect so that shell keeps integration.
         XCTAssertEqual(
             config.args,
             [

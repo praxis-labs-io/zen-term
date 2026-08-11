@@ -80,7 +80,7 @@ final class UpdateCardTests: WindowTestCase {
         XCTAssertEqual(ZenUpdateDriver.bullets(from: nil), [])
     }
 
-    // MARK: - The title is theme-driven (ZEN-27), not a system color
+    // MARK: - The title is theme-driven, not a system color
 
     func test_title_usesThemeForeground_notASystemColor() {
         // A title left at NSColor.labelColor follows effectiveAppearance, not Theme.current, and
@@ -106,7 +106,7 @@ final class UpdateCardTests: WindowTestCase {
         XCTAssertEqual(counter.n, 1)
     }
 
-    // MARK: - The buttons are live (ZEN-248)
+    // MARK: - The buttons are live
 
     /// The card measured its notes and parsed its bullets but never pressed a button, so a dead
     /// button — the whole point of the "dead click" report — would ship green. Drive the real

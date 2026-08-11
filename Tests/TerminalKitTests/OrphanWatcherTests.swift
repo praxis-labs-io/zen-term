@@ -33,7 +33,7 @@ final class OrphanWatcherTests: XCTestCase {
     /// The timeout is a ceiling on failure, not a wait a green run pays: a sweep that lands in
     /// 50ms returns in 50ms. A fixed sleep here would be both a flake on a loaded machine and a
     /// tax on every passing run, which is what made the previous version of these tests
-    /// timing-dependent (ZEN-306).
+    /// timing-dependent.
     private func waitForDeath(of pid: pid_t, timeout: TimeInterval = 8.0) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
@@ -130,7 +130,7 @@ final class OrphanWatcherTests: XCTestCase {
     /// This is the path `AppDelegate` takes on ⌘Q, and nothing covered it: `QuitTeardownTests`
     /// drives quit through fakes that never touch the ledger, so `drainAllSessions` ran on an
     /// empty ledger and degenerated to the old group drain. Both halves below ship green with the
-    /// wait condition inverted or with the sweep's reserve removed, which is how ZEN-306 got as
+    /// wait condition inverted or with the sweep's reserve removed, which is how this got as
     /// far as review with the quit path broken.
     func test_quitDrainWaitsForTheLedgerAndThenForTheSweep() throws {
         let session = try startSession(childSleep: 954)

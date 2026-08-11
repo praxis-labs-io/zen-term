@@ -29,7 +29,8 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(
             names,
             [
-                "Open Workspace Picker", "Diff Viewer", "Settings…", "Reload Config", "Check for Updates",
+                "Open Workspace Picker", "Diff Viewer", "New Tool Float…", "Settings…", "Reload Config",
+                "Check for Updates",
                 "Report an Issue…",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab",
@@ -50,7 +51,7 @@ final class CommandCatalogTests: XCTestCase {
     /// Opening the palette runs `endModes`, which takes the find bar down, so a Find Next picked
     /// from it reaches `SearchController.navigate` with no search running and does nothing. Every
     /// time, not sometimes. A row that can never fire is worse than no row: it reads as a feature
-    /// and answers with silence (ZEN-367).
+    /// and answers with silence.
     func test_findNextAndPreviousAreNotInThePalette() {
         let titles = CommandCatalog.commands(tabCount: 3).map(\.title)
         XCTAssertFalse(titles.contains("Find Next"))
@@ -62,14 +63,14 @@ final class CommandCatalogTests: XCTestCase {
 
     /// Select All is Edit > Select All's, the same as Copy and Paste, and neither of those is a
     /// palette row either. A second listing would advertise it as a rebindable action when the
-    /// chord belongs to the menu (ZEN-370).
+    /// chord belongs to the menu.
     func test_selectAll_isNotInThePalette() {
         let titles = CommandCatalog.commands(tabCount: 3).map(\.title)
         XCTAssertFalse(titles.contains("Select All"))
     }
 
     func test_addWorkspace_isNotInThePalette() {
-        // ZEN-112 removed the ⌘P entry — adding a workspace is a Settings-only action now.
+        // The ⌘P entry was removed: adding a workspace is a Settings-only action now.
         let titles = CommandCatalog.commands(tabCount: 3).map(\.title)
         XCTAssertFalse(titles.contains { $0.localizedCaseInsensitiveContains("add workspace") })
     }
@@ -117,7 +118,7 @@ final class CommandCatalogTests: XCTestCase {
     }
 
     func test_checkForUpdates_isPresent_andUnboundByDefault() {
-        // Check for Updates ships without a default chord (ZEN-20), so it's in the palette but shows
+        // Check for Updates ships without a default chord, so it's in the palette but shows
         // no glyph — an unbound glyph would lie. Binding a chord fills it via the live keymap.
         let entry = CommandCatalog.commands(tabCount: 0).first { $0.title == "Check for Updates" }
         XCTAssertNotNil(entry)
@@ -140,11 +141,13 @@ final class CommandCatalogTests: XCTestCase {
     }
 
     func test_everyEntry_hasTitle_andShortcut() {
-        // Every palette command shows its glyph, except the two shipped deliberately unbound:
-        // Check for Updates (ZEN-20) and Report an Issue (ZEN-212) are the menu bar's errands.
+        // Every palette command shows its glyph, except the three shipped deliberately unbound:
+        // Check for Updates and Report an Issue are the menu bar's errands, and
+        // New Tool is a once-in-a-while errand that would spend a chord for nothing.
         let unbound: Set<String> = [
             KeyInterceptor.ReservedChord.checkForUpdates.actionToken,
             KeyInterceptor.ReservedChord.reportIssue.actionToken,
+            KeyInterceptor.ReservedChord.newTool.actionToken,
         ]
         for command in CommandCatalog.commands(tabCount: 9) {
             XCTAssertFalse(command.title.isEmpty)

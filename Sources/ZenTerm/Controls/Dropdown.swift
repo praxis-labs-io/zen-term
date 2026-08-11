@@ -148,7 +148,7 @@ final class Dropdown: NSView {
     /// Off by default, because most dropdowns sit in containers sized around them and a truncated
     /// theme name would be a regression there. The diff viewer's branch pickers turn it on: they hold
     /// branch names, which are unbounded, and the width of the column they sit in is the file tree's
-    /// to decide, not theirs. Same rule as the viewer's footer labels (ZEN-243), and it has to be the
+    /// to decide, not theirs. Same rule as the viewer's footer labels, and it has to be the
     /// label that yields, not just its container, or the intrinsic width still holds the column open.
     var titleTruncatesUnderPressure: Bool = false {
         didSet {
@@ -201,7 +201,7 @@ final class Dropdown: NSView {
     /// own bounds), not to the dropdown's subtree — so removing the dropdown, or an ancestor like
     /// the Settings modal, doesn't take the card with it. Closing it when the dropdown leaves the
     /// window binds the card's lifetime to the control: a tab-switch `closeModal()` that tears out
-    /// the host can no longer strand a dead list on the content view, stuck over every tab (ZEN-268).
+    /// the host can no longer strand a dead list on the content view, stuck over every tab.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil { closeList() }
@@ -225,7 +225,7 @@ final class Dropdown: NSView {
             case .activate: commitHighlight()  // return / enter / space
             // This local Esc is what makes layered dismissal work: a bare Esc reaches the focused
             // control's keyDown before any card-root performKeyEquivalent, so closing the list here
-            // keeps the card open. Don't hoist Esc to the card root — that's the ZEN-5 dead-end.
+            // keeps the card open. Don't hoist Esc to the card root — that's the dead-end.
             case .escape: closeList()
             default: break  // consume every other key while the list is open
             }

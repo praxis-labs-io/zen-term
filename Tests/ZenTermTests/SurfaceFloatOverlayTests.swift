@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// ZEN-287 made `background-alpha` govern a tool float the way it already governed a pane. The two
+/// `background-alpha` governs a tool float the way it already governs a pane. The two
 /// things worth pixels here are the two that are invisible to any assertion on a color or a hidden
 /// flag: whether the inset ring paints at all, and whether the elevation shadow stays outside the
 /// card. Everything else about the float — where it sits, how the shadow reads, the ring's shade
@@ -161,7 +161,7 @@ final class SurfaceFloatOverlayTests: WindowTestCase {
         XCTAssertLessThan(frostIndex, ringIndex, "the frost must sit under the ring, not over it")
     }
 
-    /// The defect ZEN-287 exists to fix, and the one that a look can miss until the card goes
+    /// The defect this exists to fix, and the one that a look can miss until the card goes
     /// translucent: Core Animation renders a layer shadow by *filling* `shadowPath`, so the float's
     /// black washed its whole interior. Drawn as an outside-only shadow, it must reach past the
     /// card and paint nothing at all where the card sits.

@@ -1,4 +1,4 @@
-/// Builds the text a diff comment sends into a terminal (ZEN-257). Pure, so the whole message is
+/// Builds the text a diff comment sends into a terminal. Pure, so the whole message is
 /// assertable without a surface.
 ///
 /// The message is the note with the reference as its first token, and nothing else: no preamble, no

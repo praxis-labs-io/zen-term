@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the ⌘P command palette and ⌘⇧P repo picker (ZEN-103) — the open/type/
+/// Interaction tests for the ⌘P command palette and ⌘⇧P repo picker — the open/type/
 /// arrow/choose path the recolor tests never touched. Drives the real `PaletteOverlay` keyboard
 /// seams (`controlTextDidChange`, `control(_:textView:doCommandBy:)`) and asserts the activation
 /// payload, exactly the Dropdown lesson: state plumbing exists, the choose path was unverified.
@@ -66,7 +66,7 @@ final class PaletteInteractionTests: WindowTestCase {
     ///
     /// The Return hook reads live modifiers off `NSApp.currentEvent`, which holds whatever AppKit
     /// last dequeued for this process. A test that rests on it being nil rests on the order the
-    /// suite happened to run in (ZEN-363). Dequeuing the keystroke is also what production does:
+    /// suite happened to run in. Dequeuing the keystroke is also what production does:
     /// the Return the user pressed is the current event when the hook runs.
     private func sendReturn(
         to overlay: PaletteOverlay, modifiers: NSEvent.ModifierFlags = []
@@ -100,7 +100,7 @@ final class PaletteInteractionTests: WindowTestCase {
     }
 
     /// Press Esc the way `NSWindow.sendEvent` does — a `performKeyEquivalent` traversal of the
-    /// contentView subtree, which is where the card root claims it (ZEN-149).
+    /// contentView subtree, which is where the card root claims it.
     @discardableResult
     private func pressEscape(in window: NSWindow) -> Bool {
         let esc = NSEvent.keyEvent(
@@ -117,7 +117,7 @@ final class PaletteInteractionTests: WindowTestCase {
 
     /// The list stack — the one whose arranged subviews are the rows. What the list SHOWS is its
     /// arranged order, and a reused row keeps its old place in `subviews`, so walking the view tree
-    /// stops telling you the display order the moment rows are reused (ZEN-15).
+    /// stops telling you the display order the moment rows are reused.
     private func rowsStack(
         in overlay: PaletteOverlay, file: StaticString = #filePath, line: UInt = #line
     ) -> NSStackView {
@@ -253,8 +253,93 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertEqual(ran, .closePane)
     }
 
+    // MARK: scrolling as the selection moves
+
+    /// Two groups of twelve: past the 320pt list, so the selection has to scroll.
+    private func makeLongCommandPalette() -> CommandPaletteOverlay {
+        let commands =
+            (0..<12).map {
+                PaletteCommand(
+                    title: "Pane action \($0)", shortcut: "⌘\($0)", category: "Panes", chord: .splitVertical)
+            }
+            + (0..<12).map {
+                PaletteCommand(
+                    title: "Tab action \($0)", shortcut: "⌥\($0)", category: "Tabs", chord: .newTab)
+            }
+        return CommandPaletteOverlay(
+            commands: { commands }, background: Theme.current.chrome.background.nsColor,
+            onRun: { _ in }, onDismiss: {})
+    }
+
+    private func mountLongPalette() throws -> (CommandPaletteOverlay, NSScrollView) {
+        let overlay = makeLongCommandPalette()
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+        let scroll = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? NSScrollView }.first)
+        XCTAssertGreaterThan(
+            scroll.documentView?.frame.height ?? 0, scroll.contentView.bounds.height,
+            "expected a list taller than the palette")
+        return (overlay, scroll)
+    }
+
+    private func isFullyVisible(_ view: NSView, in scroll: NSScrollView) throws -> Bool {
+        let document = try XCTUnwrap(scroll.documentView)
+        return scroll.documentVisibleRect.contains(view.convert(view.bounds, to: document))
+    }
+
+    /// Scrolling to the selected row alone left the header naming its group just above the visible
+    /// top, so arrowing up into Tabs showed its commands with no "Tabs" over them.
+    func test_commandPalette_arrowingUpIntoAGroup_showsTheHeaderNamingIt() throws {
+        let (overlay, scroll) = try mountLongPalette()
+        let views = overlay.rowViews
+        let headers = views.enumerated().filter { !($0.element is SelectableRowView) }
+        let tabs = try XCTUnwrap(headers.dropFirst().first, "expected a second section header")
+        let firstOfGroup = views[tabs.offset + 1]
+
+        for _ in views.indices { send(Self.moveDown, to: overlay) }  // to the bottom of the list
+        XCTAssertFalse(try isFullyVisible(tabs.element, in: scroll), "the list has to be scrolled first")
+        while !firstOfGroup.isSelected { send(Self.moveUp, to: overlay) }
+
+        XCTAssertTrue(
+            try isFullyVisible(tabs.element, in: scroll),
+            "the group's first command comes with the header above it")
+    }
+
+    func test_commandPalette_arrowingDown_leavesRoomBelowTheSelection() throws {
+        let (overlay, scroll) = try mountLongPalette()
+        let document = try XCTUnwrap(scroll.documentView)
+
+        for _ in 0..<10 { send(Self.moveDown, to: overlay) }
+
+        let selected = try XCTUnwrap(overlay.rowViews.first { $0.isSelected })
+        let gap = scroll.documentVisibleRect.maxY - selected.convert(selected.bounds, to: document).maxY
+        XCTAssertGreaterThan(gap, 24, "the selection lands inside the list, not flush against the edge")
+    }
+
+    /// The palette reveals its default selection while it builds its rows, which is before the card has
+    /// a size. Reading the reveal's rules against a zero-height viewport scrolled the list to that row's
+    /// bottom edge, so ⌘P opened part-way down its own list with the selection above the fold.
+    func test_commandPalette_opensAtTheTopOfItsList() throws {
+        let (_, scroll) = try mountLongPalette()
+
+        XCTAssertEqual(
+            scroll.documentVisibleRect.minY, 0, accuracy: 0.5,
+            "a freshly opened palette shows its first command, not the middle of the list")
+    }
+
+    /// Arrowing back to the top has to reach it. Revealing the first command alone left the header
+    /// above it and the list's top inset clipped, with the scroller parked just short of the top.
+    func test_commandPalette_arrowingBackToTheTop_reachesIt() throws {
+        let (overlay, scroll) = try mountLongPalette()
+
+        for _ in overlay.rowViews.indices { send(Self.moveDown, to: overlay) }
+        for _ in overlay.rowViews.indices { send(Self.moveUp, to: overlay) }
+
+        XCTAssertEqual(scroll.documentVisibleRect.minY, 0, accuracy: 0.5, "the first command opens at the top")
+    }
+
     /// Esc dismisses from the search field — the palette's initial first responder. Driven through
-    /// the real key-equivalent traversal, since ZEN-149 moved Esc from the field editor's
+    /// the real key-equivalent traversal, since Esc moved from the field editor's
     /// `cancelOperation` up to the card root, where every card now owns it.
     func test_commandPalette_escDismisses() {
         var dismissed = false
@@ -324,7 +409,7 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertNil(chosen)
     }
 
-    // MARK: row reuse (ZEN-15)
+    // MARK: row reuse
 
     /// Typing re-renders the list, and a row whose identity survives the filter keeps its view
     /// instead of being rebuilt. The list is then ordered by the ARRANGED subviews, not the view

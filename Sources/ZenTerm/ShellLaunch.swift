@@ -7,7 +7,7 @@ import TerminalKit
 /// to a prompt in the same pane instead of closing it. Used by the `⌘P` workspace preset.
 ///
 /// Both carry `SessionFontSize.points` rather than the theme's size, so a pane opened after ⌘+
-/// comes up matched to the ones already on screen. Half of ZEN-224 is this: fanning a step out to
+/// comes up matched to the ones already on screen. Half the job is this: fanning a step out to
 /// live surfaces alone still leaves the next split opening at the config size.
 enum ShellLaunch {
     static var userShell: String {
@@ -18,6 +18,17 @@ enum ShellLaunch {
     /// `/`, and a login shell doesn't `cd` home on its own — so an unspecified cwd would
     /// otherwise open a pane at the filesystem root. Home is the right default.
     static var defaultCWD: URL { FileManager.default.homeDirectoryForCurrentUser }
+
+    /// Where ⌘T and ⌘N start, given the focused pane's cwd. Nil means home, which the launch
+    /// builders below resolve through `defaultCWD`.
+    ///
+    /// One rule in one place because two callers answer it: a tab (`WindowController.newTab`) and a
+    /// window (`AppDelegate.route`). Split across both, one could keep inheriting after the other
+    /// stopped, and the two chords would silently disagree. A pane is not a caller: a split is a
+    /// second view of the pane in front of you, so it inherits unconditionally.
+    static func newSessionCWD(focused: URL?) -> URL? {
+        GeneralConfig.current.tabInheritCWD ? focused : nil
+    }
 
     /// The default pane/drawer session. With no configured shell this is a plain
     /// login+interactive shell (`command: nil` → the backend rewrites argv[0] to a login
@@ -54,7 +65,7 @@ enum ShellLaunch {
         )
     }
 
-    /// Re-arm libghostty's zsh integration for the shell the `exec` tail leaves behind (ZEN-144).
+    /// Re-arm libghostty's zsh integration for the shell the `exec` tail leaves behind.
     ///
     /// libghostty injects integration by pointing `ZDOTDIR` at its own dir, and its `.zshenv`
     /// *restores* the user's `ZDOTDIR` before their rc files run — so only the shell libghostty

@@ -20,7 +20,7 @@ class SurfaceFloatOverlay: NSView {
     private var dismiss = DismissGate()
 
     /// The background a program set in this float's own terminal with OSC 11, or nil while the
-    /// float is on the theme's (ZEN-23). Reaches the card's interior fill alone; the card edge,
+    /// float is on the theme's. Reaches the card's interior fill alone; the card edge,
     /// the elevation shadow and the frost stay as they are. Same rule a pane follows in
     /// `PanelHostView`, because a float hosts the same kind of surface.
     var backgroundOverride: TerminalColor? {
@@ -30,7 +30,7 @@ class SurfaceFloatOverlay: NSView {
         }
     }
 
-    /// Test hook: the colors actually painted into the card's interior (ZEN-23), read off the
+    /// Test hook: the colors actually painted into the card's interior, read off the
     /// layer and the ring view rather than off `backgroundOverride`. `fill` is nil below
     /// `background-alpha` 1, where the ring paints instead.
     var paintedBackgroundForTesting: (fill: CGColor?, ring: NSColor) {
@@ -192,7 +192,7 @@ class SurfaceFloatOverlay: NSView {
     ///
     /// The colour is `backgroundOverride` ahead of the theme, so once a program has repainted this
     /// card's terminal a theme change moves the rest of the chrome and leaves this fill matched to
-    /// the grid (ZEN-23). That also keeps the alpha identity above intact, since what the terminal
+    /// the grid. That also keeps the alpha identity above intact, since what the terminal
     /// blends toward is the repainted colour, not the theme's.
     private func applyBackground() {
         let background = (backgroundOverride ?? Theme.current.chrome.background).nsColor

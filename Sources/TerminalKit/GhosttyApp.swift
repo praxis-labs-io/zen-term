@@ -2,23 +2,19 @@ import AppKit
 import AppLog
 import GhosttyKit
 
-/// The process-global libghostty runtime.
+/// The process-global libghostty runtime. There is exactly one `ghostty_app_t` per process and
+/// every `GhosttySurface` shares it, created on the first surface with that surface's theme.
 ///
-/// libghostty has exactly one `ghostty_app_t` per process; every `GhosttySurface`
-/// shares it. Created on first surface, with that surface's theme — configuration is
-/// app-level in libghostty, and every zen-term pane shares one theme. The app is
-/// event-driven: libghostty calls `wakeup_cb` from any thread when it has work, and we
-/// hop to the main thread to `ghostty_app_tick`. Because there is only ever one
-/// instance, the C callbacks reach it through `GhosttyApp.shared` rather than the
-/// runtime `userdata` pointer, which sidesteps the init-ordering problem of handing
-/// `self` to `ghostty_app_new` before `self` is fully constructed.
+/// Event-driven: libghostty calls `wakeup_cb` from any thread when it has work, and we hop to the
+/// main thread to `ghostty_app_tick`. The C callbacks reach the instance through
+/// `GhosttyApp.shared` rather than the runtime `userdata` pointer, which sidesteps handing `self`
+/// to `ghostty_app_new` before `self` is fully constructed.
 final class GhosttyApp {
     private static var _shared: GhosttyApp?
 
-    /// The shared runtime, created on first call with the first surface's theme.
-    /// Later calls return the existing instance — libghostty config is app-global, so a
-    /// later surface's differing theme would not apply. No live bug today (all panes
-    /// share one theme); per-surface theming via ghostty_surface_update_config is ZEN-27.
+    /// The shared runtime, created on first call with the first surface's theme. Later calls
+    /// return the existing instance, so a later surface's differing theme would not apply through
+    /// this path. `updateSurfaceConfig` is how one surface gets its own config.
     static func shared(theme: TerminalTheme?, behavior: TerminalBehavior?) -> GhosttyApp {
         if let existing = _shared { return existing }
         let created = GhosttyApp(theme: theme, behavior: behavior)
@@ -36,9 +32,8 @@ final class GhosttyApp {
     }
 
     let app: ghostty_app_t
-    // Retained for the app's (process) lifetime: libghostty keeps a reference to the
-    // config passed to ghostty_app_new; freeing it would pull it out from under the app.
-    // A `var`, not `let`: `updateConfig` swaps in a fresh config and frees this one, but
+    // Retained for the process lifetime: libghostty keeps a reference to the config passed to
+    // ghostty_app_new. A `var` because `updateConfig` swaps in a fresh one and frees this, but
     // only AFTER the swap, so the app never sees a freed config.
     private var config: ghostty_config_t
     // Dedupe redundant app-global swaps: N per-surface `applyAppearance` callers for one
@@ -46,25 +41,20 @@ final class GhosttyApp {
     private var lastConfigText: String?
     /// Finalized per-surface configs, keyed by the config text that produced them.
     ///
-    /// libghostty takes configuration only from files, so building one means a synchronous write,
-    /// read and parse — on the main thread, inside whatever interaction triggered it. The ZEN-237
-    /// settle path makes that a hot path: with a cursor shader on, switching panes stands one
-    /// surface down and restores another, which was three of those round-trips per switch. The
-    /// shapes involved are few and fully determined by the theme and behavior, so caching them
-    /// means only the first of each pays.
+    /// libghostty takes configuration only from files, so building one is a synchronous write,
+    /// read and parse on the main thread. The shader settle path makes that hot: switching panes
+    /// stands one surface down and restores another, three round-trips per switch before this.
     ///
-    /// Safe to share one config across surfaces and across calls: `ghostty_surface_update_config`
-    /// derives its own copy (`Surface.updateConfig` → `DerivedConfig.init`) and never retains the
-    /// pointer we pass. Cleared and freed whenever the app-global config changes, since every
-    /// cached shape is derived from the theme and behavior that just moved.
+    /// Safe to share one config across surfaces and calls, because `ghostty_surface_update_config`
+    /// derives its own copy and never retains the pointer we pass. Freed whenever the app-global
+    /// config changes, since every cached shape derives from the theme that just moved.
     private var surfaceConfigCache: [String: ghostty_config_t] = [:]
     // NSApp activate/resign observers keeping libghostty's app-level focus in sync.
     private var focusObservers: [NSObjectProtocol] = []
 
     private init(theme: TerminalTheme?, behavior: TerminalBehavior?) {
-        // Point the embedded lib at the resources staged from the pinned vendor/ghostty
-        // build (shell integration, themes, terminfo) — libghostty resolves none of
-        // these itself when embedded. Must be set before ghostty_init.
+        // libghostty resolves none of these itself when embedded. Must be set before
+        // ghostty_init.
         Self.useBundledResources()
 
         // Global init once per process. argc/argv are libghostty's CLI entry (for
@@ -73,9 +63,8 @@ final class GhosttyApp {
             fatalError("ghostty_init failed")
         }
 
-        // The chrome's theme, translated to ghostty config text and loaded as the ONLY
-        // config source — deliberately not ghostty_config_load_default_files, so a
-        // user's ~/.config/ghostty can't skew zen-term's appearance or behavior.
+        // The ONLY config source, deliberately not ghostty_config_load_default_files, so a user's
+        // ~/.config/ghostty can't skew zen-term's appearance or behavior.
         guard let cfg = ghostty_config_new() else { fatalError("ghostty_config_new failed") }
         if let generated = GhosttyConfigWriter.writeConfig(for: theme, behavior: behavior) {
             ghostty_config_load_file(cfg, generated)
@@ -112,10 +101,9 @@ final class GhosttyApp {
 
     func tick() { ghostty_app_tick(app) }
 
-    /// Keep libghostty's app-level focus in sync with `NSApp`. It's set once at creation, but the
-    /// app backgrounds/foregrounds afterward, and libghostty gates cursor-blink (and other
-    /// focus-conditional behavior) on this flag — without these observers it believes the app is
-    /// focused forever. Ghostty's own macOS app syncs on these same notifications.
+    /// Keep libghostty's app-level focus in sync with `NSApp`. It is set once at creation and
+    /// gates cursor-blink and other focus-conditional behavior, so without these observers
+    /// libghostty believes the app is focused forever.
     private func observeAppFocus() {
         let center = NotificationCenter.default
         let apply: (Bool) -> Void = { [weak self] focused in
@@ -133,16 +121,14 @@ final class GhosttyApp {
         ]
     }
 
-    /// Re-load the app-global libghostty config from a fresh TerminalTheme/behavior and swap it
-    /// live (re-themes every surface). Deduped by generated text so N per-surface callers trigger
-    /// at most one real swap per change.
+    /// Re-load the app-global config from a fresh theme and behavior and swap it live, re-theming
+    /// every surface. Deduped by generated text, so N callers trigger at most one real swap.
     func updateConfig(theme: TerminalTheme, behavior: TerminalBehavior) {
         let text = GhosttyConfigWriter.configText(for: theme, behavior: behavior)
         guard text != lastConfigText else { return }
         guard let cfg = ghostty_config_new() else { return }
-        // If the generated config file can't be written, keep the CURRENT config rather than
-        // pushing an effectively-default one that would drop the theme app-wide. Free the unused
-        // cfg and leave `lastConfigText` untouched so a later reload with the same theme retries.
+        // Keep the CURRENT config rather than pushing an effectively-default one that would drop
+        // the theme app-wide. `lastConfigText` is left untouched so the same theme retries later.
         guard let path = GhosttyConfigWriter.writeConfig(for: theme, behavior: behavior) else {
             ghostty_config_free(cfg)
             return
@@ -159,22 +145,15 @@ final class GhosttyApp {
         tick()
     }
 
-    /// Apply a config to ONE surface, leaving the app-global config (and every other surface)
-    /// untouched. `GhosttySurface` uses this for the shader settle-burst (ZEN-237).
+    /// Apply a config to ONE surface, leaving the app-global config and every other surface
+    /// untouched.
     ///
-    /// The config is cached and reused rather than freed on the way out, unlike the app-global
-    /// one: `ghostty_app_update_config` keeps the pointer it is handed, while the surface path
-    /// derives its own copy (`Surface.updateConfig` → `DerivedConfig.init`) and never retains
-    /// ours. That is what makes a single cached config safe to hand to every surface and every
-    /// later call. See `surfaceConfigCache`.
     /// Returns whether a config actually reached the surface. Callers that depend on the push
-    /// having landed have to check: the two failure paths below leave the surface on its previous
-    /// config, and anything riding along with the push (a conditional-state change, ZEN-307) does
-    /// not take effect either.
+    /// having landed have to check: the failure paths below leave the surface on its previous
+    /// config, and anything riding along with the push does not take effect either.
     ///
-    /// `fontSize` overrides the theme's own size, and a per-surface push should pass the size the
-    /// surface is running. See `GhosttyConfigWriter.configText`: a config that carries the theme's
-    /// size resets any surface libghostty has not marked `font_size_adjusted` (ZEN-224).
+    /// `fontSize` should be the size the surface is actually running, because a config carrying
+    /// the theme's size resets any surface libghostty has not marked `font_size_adjusted`.
     @discardableResult
     func updateSurfaceConfig(
         _ surfacePtr: ghostty_surface_t, theme: TerminalTheme?, behavior: TerminalBehavior,
@@ -209,9 +188,8 @@ final class GhosttyApp {
     }
 
     /// Every diagnostic libghostty attached to a finalized config. The config is entirely
-    /// generated, so a diagnostic never means user error: it means `GhosttyConfigWriter` emitted
-    /// something this libghostty pin does not understand — typically a key upstream renamed or
-    /// removed — and that setting is silently not applying (ZEN-309).
+    /// generated, so a diagnostic never means user error: `GhosttyConfigWriter` emitted something
+    /// this pin does not understand, and that setting is silently not applying.
     static func diagnostics(of cfg: ghostty_config_t) -> [String] {
         (0..<ghostty_config_diagnostics_count(cfg)).compactMap { index in
             ghostty_config_get_diagnostic(cfg, index).message.map { String(cString: $0) }
@@ -231,14 +209,12 @@ final class GhosttyApp {
         surfaceConfigCache.removeAll()
     }
 
-    /// Point `GHOSTTY_RESOURCES_DIR` at the resources bin/build-ghosttykit staged into
-    /// TerminalKit's bundle, always overriding any inherited value. The env var points
-    /// at the `ghostty/` dir; libghostty derives `TERMINFO` from its *sibling*
-    /// `terminfo/` — the same layout as Ghostty.app's `Resources/{ghostty,terminfo}`
-    /// pair. We override rather than defer to an inherited value because launching
-    /// zen-term from inside Ghostty would otherwise inherit that Ghostty's
-    /// `GHOSTTY_RESOURCES_DIR` — a possibly different version than our pinned libghostty,
-    /// silently mismatching shell-integration scripts and terminfo.
+    /// Point `GHOSTTY_RESOURCES_DIR` at the resources staged into TerminalKit's bundle. The var
+    /// points at the `ghostty/` dir and libghostty derives `TERMINFO` from its *sibling*.
+    ///
+    /// Always overrides an inherited value: launching zen-term from inside Ghostty would otherwise
+    /// inherit that Ghostty's resources, silently mismatching shell integration and terminfo
+    /// against our pinned libghostty.
     private static func useBundledResources() {
         guard
             let dir = TerminalKitResources.bundle.resourceURL?
@@ -260,10 +236,9 @@ final class GhosttyApp {
         DispatchQueue.main.async { GhosttyApp.shared.tick() }
     }
 
-    /// Route a surface-targeted action (title / pwd / bell / child-exit) to its
-    /// `GhosttySurface`. App-level actions are ignored — the chrome owns app-level
-    /// behavior (tabs, splits, palette), not the terminal backend. The surface is
-    /// recovered from the `userdata` we set on its config at creation.
+    /// Route a surface-targeted action to its `GhosttySurface`, recovered from the `userdata` set
+    /// on its config at creation. App-level actions are ignored: the chrome owns app-level
+    /// behavior, not the terminal backend.
     private static func action(
         _ app: ghostty_app_t?, _ target: ghostty_target_s, _ action: ghostty_action_s
     ) -> Bool {
@@ -293,9 +268,8 @@ final class GhosttyApp {
         return true
     }
 
-    /// libghostty asks us to confirm a clipboard read (its `clipboard-read = ask` path).
-    /// We already allow reads outright in `readClipboard`, so auto-confirm with the
-    /// content libghostty hands us — a no-op here leaves the requesting program hanging.
+    /// libghostty asks us to confirm a clipboard read. We allow reads outright in `readClipboard`,
+    /// so auto-confirm: a no-op here leaves the requesting program hanging.
     private static func confirmReadClipboard(
         _ userdata: UnsafeMutableRawPointer?,
         _ string: UnsafePointer<CChar>?,
@@ -324,26 +298,16 @@ final class GhosttyApp {
         }
     }
 
-    /// libghostty wants the surface closed. Deliberately does nothing, and is registered only
-    /// so libghostty doesn't log "runtime embedder does not support closing a surface" on every
-    /// close.
+    /// libghostty wants the surface closed. Deliberately does nothing, and is registered only so
+    /// libghostty doesn't log that the embedder can't close a surface on every close.
     ///
-    /// Nothing is lost by ignoring it **on the child-exit path**, which is the only one that
-    /// reaches us. libghostty raises `show_child_exited` unconditionally when a child exits
-    /// (`Surface.zig:1238` is explicit that this happens even when the surface is about to close
-    /// immediately), and only then does `wait-after-command` being false take it on to `close`.
-    /// So a child exit has already reached `surfaceDidExit`, which is where the chrome tears the
-    /// pane down, and routing both would mean two events for one exit.
+    /// Safe because the child-exit path is the only one that reaches us, and a child exit has
+    /// already gone to `surfaceDidExit`, where the chrome tears the pane down. The other callers
+    /// of `Surface.close` never fire because the chrome owns close: ⌘W is taken by
+    /// `KeyInterceptor` before libghostty sees it, and nothing calls
+    /// `ghostty_surface_request_close`. **If either changes, this needs a real implementation.**
     ///
-    /// The other callers of `Surface.close` are not covered by that argument and are unreachable
-    /// for a different reason: the `close_surface` keybind action (`Surface.zig:5807`) and
-    /// `ghostty_surface_request_close` close with no child exit at all. Neither fires here
-    /// because the chrome owns close. ⌘W never reaches `ghostty_surface_key` (`KeyInterceptor`
-    /// takes it first), and nothing calls `ghostty_surface_request_close`. If either ever
-    /// changes, this has to grow a real implementation rather than stay a no-op.
-    ///
-    /// The `processAlive` argument is libghostty's `needsConfirmQuit()`, not "something is
-    /// still running in this session". Confirmation is the chrome's own, and what survives a
-    /// close is the reaper's (ZEN-306), so neither wants it.
+    /// `processAlive` is libghostty's `needsConfirmQuit()`, not "something is still running here".
+    /// Confirmation is the chrome's and what survives a close is the reaper's, so neither wants it.
     private static func closeSurface(_ userdata: UnsafeMutableRawPointer?, _ processAlive: Bool) {}
 }

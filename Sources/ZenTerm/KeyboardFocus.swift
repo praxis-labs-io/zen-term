@@ -47,7 +47,7 @@ enum KeyboardFocus {
     /// Masking with `reservableModifiers` rather than `deviceIndependentFlagsMask` is the whole
     /// point: AppKit tags every arrow event with `.function` and `.numericPad`, which
     /// `deviceIndependentFlagsMask` keeps, so that comparison never equals a bare `.option` and the
-    /// reorder is dead in the app while a synthesized test event passes (ZEN-81). Requiring Option
+    /// reorder is dead in the app while a synthesized test event passes. Requiring Option
     /// to be the only reservable modifier still keeps ⌥⌘↑ out.
     static func isOptionOnly(_ event: NSEvent) -> Bool {
         event.modifierFlags.intersection(reservableModifiers) == .option
@@ -76,5 +76,73 @@ enum KeyboardFocus {
         if (0..<count).contains(next) { return next }
         guard wrap else { return nil }
         return ((next % count) + count) % count  // Swift's % keeps the sign; normalize to 0..<count
+    }
+
+    /// Which way focus travelled, which decides which edge the stop is arriving at. Without it the two
+    /// edge rules below both apply and fight: the one for the far edge pulls the list back while the
+    /// selection moves forwards. `unknown` is for a move with no direction (a list reloading, a row
+    /// re-revealed after a rebuild), where keeping the stop on screen is all that is asked.
+    enum Travel { case up, down, unknown }
+
+    /// Scroll `stop` into its scroll view, along with the strip above it that belongs to it: the group
+    /// caption or section header between it and the previous stop, or the document's top inset when
+    /// nothing above is a stop. Revealing the stop alone parks that strip just off the top edge, so
+    /// arrowing up into a group hides the header naming it, and the strip is why this needs the stop
+    /// list rather than the one view.
+    ///
+    /// AppKit doesn't scroll to a newly-focused responder on its own. `stops` is the section's or
+    /// list's ordered stops; `stop` need not be one of them (a stop's whole row is passed where the
+    /// row carries an inline message that should come along).
+    ///
+    /// One position, computed and applied once. Revealing the strip and then the stop with two
+    /// `scrollToVisible` calls reaches the same place in two hops, and padding a single rect on both
+    /// sides makes the far edge pull the near one around.
+    static func reveal(_ stop: NSView, among stops: [NSView], travelling: Travel = .unknown) {
+        guard let scroll = stop.enclosingScrollView, let document = scroll.documentView else { return }
+        // Frames are the geometry this reads, and a list that just reloaded its rows has stale ones.
+        document.layoutSubtreeIfNeeded()
+        let viewport = scroll.contentView.bounds.height
+        // A list that hasn't been laid out yet has no viewport to reveal into, and every rule below
+        // reads against its height: at zero the margin collapses and the "arriving at the bottom" rule
+        // fires for any row, scrolling a freshly-built list to its selection's bottom edge. The palette
+        // reveals its default selection from `reloadRows`, which runs before the card is laid out, so
+        // this is the common path rather than an edge case. A flipped document opens at the top on its
+        // own, which is where an unlaid-out list wants to be anyway.
+        guard viewport > 0 else { return }
+        let frame = stop.convert(stop.bounds, to: document)
+        let padded = frame.insetBy(dx: 0, dy: -12)  // shared breathing room above and below a stop
+        let previousBottom =
+            stops
+            .map { $0.convert($0.bounds, to: document).maxY }
+            .filter { $0 <= frame.minY }
+            .max() ?? document.bounds.minY
+
+        // Aim past the edge the stop arrives at rather than flush against it: a row landing hard against
+        // the pane edge arrives with no context around it, and walking the list reads as scraping the
+        // bottom. On the arriving edge only — padding both sides moves the list while the stop is still
+        // mid-pane. Capped against a short pane, where a third of the clip is plenty.
+        let margin = min(84, viewport / 3)
+        let revealTop = min(previousBottom, padded.minY)
+        var top = scroll.contentView.bounds.minY
+        // One rule per direction, each firing on every step once the stop is inside `margin` of the edge
+        // it is arriving at, so a held arrow holds the stop at a steady offset while the list moves under
+        // it. Gating a rule on the stop having already left the viewport instead lets it climb a few rows
+        // and then throws it back by the whole margin, which reads as the selection bouncing.
+        if travelling != .up, padded.maxY + margin > top + viewport {
+            top = padded.maxY + margin - viewport
+        }
+        if travelling != .down, revealTop - margin < top { top = revealTop - margin }
+        // Whichever way focus travelled, the stop itself has to be on screen: the rules above only aim
+        // at the edge it arrives at, so a step that lands on a stop already off the *other* edge (Down
+        // onto a row above a hand-scrolled viewport) would otherwise move nothing at all.
+        if padded.maxY > top + viewport { top = padded.maxY - viewport }
+        if padded.minY < top { top = padded.minY }
+        let clamped = min(max(0, top), max(0, document.frame.height - viewport))
+        // Snapped to the backing store's pixel grid: `margin` is a third of the clip on a short pane, and
+        // a fractional offset leaves every glyph in the pane drawn between two device pixels.
+        let scale = scroll.window?.backingScaleFactor ?? 2
+        scroll.contentView.scroll(
+            to: NSPoint(x: scroll.contentView.bounds.minX, y: (clamped * scale).rounded() / scale))
+        scroll.reflectScrolledClipView(scroll.contentView)
     }
 }

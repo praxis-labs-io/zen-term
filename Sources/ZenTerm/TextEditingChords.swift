@@ -1,7 +1,7 @@
 import AppKit
 
 /// The pass-through predicate for a text view holding the keyboard: whether a keymap-bound chord
-/// belongs to the box you are typing in rather than to ZenTerm (ZEN-369).
+/// belongs to the box you are typing in rather than to ZenTerm.
 ///
 /// `KeyInterceptor` is an event monitor that resolves the keymap **ahead of the responder chain**,
 /// so a reserved chord never reaches the focused control. That is right for ⌘T and wrong for the
@@ -13,7 +13,7 @@ import AppKit
 /// **Membership is measured, not assumed.** ⌘A looks like it belongs here and does not: AppKit
 /// serves Select All from the Edit menu, not from `NSTextView`, so a pass-through would defer the
 /// chord to nobody. It is served by the menu item instead, which reaches a field and a pane both,
-/// and the keymap ships no default on it (ZEN-370). Sending the keystroke to a real text view and
+/// and the keymap ships no default on it. Sending the keystroke to a real text view and
 /// reading its selection back is the only way to tell the two cases apart.
 ///
 /// Pure and standalone for the reason `NavGuard` is, and a sibling to it rather than a branch

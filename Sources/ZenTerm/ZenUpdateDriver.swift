@@ -2,7 +2,7 @@ import AppKit
 import AppLog
 import Sparkle
 
-/// Drives Sparkle's user-facing moments into the one `UpdateCardView` (ZEN-118). Sparkle keeps the
+/// Drives Sparkle's user-facing moments into the one `UpdateCardView`. Sparkle keeps the
 /// appcast fetch, EdDSA check, download and install; we own every pixel. Sparkle invokes these on the
 /// main thread, so each one maps the callback to a card state and routes it to `UpdateController`.
 ///
@@ -25,7 +25,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     /// `AppVersion.current` — the old, still-running version — instead of the update's target.
     private var pendingVersion: String?
 
-    /// True while a user-initiated check ("Check for Updates", ZEN-20) is in flight. A manual check
+    /// True while a user-initiated check ("Check for Updates") is in flight. A manual check
     /// reports its result even when nothing's found (an up-to-date / failure toast); a scheduled one
     /// stays silent. Set at `showUserInitiatedUpdateCheck`, cleared once the outcome is delivered.
     private var userInitiated = false
@@ -42,7 +42,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     }
 
     func showUserInitiatedUpdateCheck(cancellation: @escaping () -> Void) {
-        // The "Check for Updates" command started this check (ZEN-20). Remember it so the outcome
+        // The "Check for Updates" command started this check. Remember it so the outcome
         // reports back — an up-to-date or failure toast a scheduled check would swallow silently.
         userInitiated = true
         Log.info("manual update check started", category: .update)
@@ -87,7 +87,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     // MARK: - Nothing to show (stay silent)
 
     func showUpdateNotFoundWithError(_ error: any Error, acknowledgement: @escaping () -> Void) {
-        // Unconditional (ZEN-248): a scheduled check that finds nothing left no trace at all.
+        // Unconditional: a scheduled check that finds nothing left no trace at all.
         Log.info("no update available: \(error.localizedDescription)", category: .update)
         controller?.dismiss()
         if userInitiated {
@@ -101,7 +101,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     }
 
     func showUpdaterError(_ error: any Error, acknowledgement: @escaping () -> Void) {
-        // Unconditional (ZEN-248): before this, a failure after Install produced no card, no toast,
+        // Unconditional: before this, a failure after Install produced no card, no toast,
         // and no log line — the reason the report couldn't be traced in a diagnostics bundle.
         Log.warning("update failed: \(error.localizedDescription)", category: .update)
         controller?.dismiss()
@@ -200,7 +200,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         var fired = false
         return { choice in
             guard !fired else {
-                // ZEN-248: a swallowed repeat. Paired with the tap log, this separates "clicked five
+                // A swallowed repeat. Paired with the tap log, this separates "clicked five
                 // times, forwarded once" (working as designed) from "clicked five, forwarded zero".
                 Log.info("update choice ignored, already answered: \(Self.label(choice))", category: .update)
                 return
@@ -211,7 +211,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         }
     }
 
-    /// A non-sensitive label for a Sparkle choice, for the diagnostic log (ZEN-248).
+    /// A non-sensitive label for a Sparkle choice, for the diagnostic log.
     private static func label(_ choice: SPUUserUpdateChoice) -> String {
         switch choice {
         case .install: return "install"
@@ -222,7 +222,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     }
 
     /// A non-sensitive label for the update's stage at `showUpdateFound` — it changes what `.install`
-    /// does inside Sparkle (resume a downloaded update vs. start one), so the log names it (ZEN-248).
+    /// does inside Sparkle (resume a downloaded update vs. start one), so the log names it.
     private static func label(_ stage: SPUUserUpdateStage) -> String {
         switch stage {
         case .notDownloaded: return "not-downloaded"

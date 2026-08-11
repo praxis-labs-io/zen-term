@@ -23,7 +23,7 @@ final class KeybindChip: NSView {
     private var isFocused = false { didSet { restyle() } }
     private(set) var isCapturing = false { didSet { restyle() } }
     /// A mouse over the chip. Without it the only sign this is a target was the pointing-hand
-    /// cursor, which is a lot to ask of a row in a list of forty (ZEN-368).
+    /// cursor, which is a lot to ask of a row in a list of forty.
     private var isHovered = false { didSet { restyle() } }
     private var trackingAreaRef: NSTrackingArea?
 
@@ -99,7 +99,7 @@ final class KeybindChip: NSView {
         // Delete means delete. It used to restore the default, which reads as doing nothing on the
         // rows most likely to be pressed: an action whose default is the chord something else
         // already holds gets it back and loses it again on the reload. Reset lives on a button in
-        // the capture popover now (ZEN-368).
+        // the capture popover now.
         case .delete: onRemove?()
         case .up: onArrowUp?()
         case .down: onArrowDown?()

@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The built-in Scratch float against the config file (ZEN-379).
+/// The built-in Scratch float against the config file.
 ///
 /// A built-in float sits in two places a user float never does: the per-action keybind diff, which
 /// emits its rebind, and `applyKeybinds`' verbatim preservation of `toggle_float:` lines, which is

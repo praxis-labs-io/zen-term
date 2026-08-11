@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The shared icon button gained a hover tooltip (ZEN-42) and a busy activity dot (ZEN-107).
+/// The shared icon button gained a hover tooltip and a busy activity dot.
 final class IconButtonTests: XCTestCase {
     func test_tooltip_labelAndLiveShortcut() {
         // The shortcut resolves at hover time (via the closure), so it can track the live keymap

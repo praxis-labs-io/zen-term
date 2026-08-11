@@ -20,7 +20,7 @@ enum KeyboardLayout {
     ///
     /// **Main-thread-only, and this is where that constraint actually comes from:**
     /// `glyphsByKeyCode` calls `TISCopyCurrentKeyboardLayoutInputSource`, which off-main takes the
-    /// whole process down with no crash report (ZEN-17). Everything above this — `KeymapAssembler`,
+    /// whole process down with no crash report. Everything above this — `KeymapAssembler`,
     /// `GeneralConfigParser`, `ConfigLoader` — is main-thread-only because it reaches here.
     ///
     /// Only Shift matters: `charactersIgnoringModifiers` — the reading `Chord(event:)` is built on —
@@ -90,7 +90,7 @@ enum KeyboardLayout {
         // The compile-time guard has one hole it structurally cannot close: a closure formed in a
         // main-actor context and handed to `DispatchQueue.async(execute:)` as a `DispatchWorkItem`
         // is type-erased at construction, so the compiler sees nothing crossing and the whole
-        // isolated chain runs off-main anyway (measured, ZEN-31). Everything below this line is the
+        // isolated chain runs off-main anyway (measured). Everything below this line is the
         // Carbon call that cannot survive that, and its native failure mode is exit 6 with no crash
         // report and nothing on stderr. Trap instead, so the violation names itself.
         MainActor.preconditionIsolated("KeyboardLayout: TIS is main-thread-only in a GUI app")

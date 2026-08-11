@@ -5,7 +5,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// ZEN-23: a program that repaints its own background (OSC 11) moves the fill of ITS pane and
+/// A program that repaints its own background (OSC 11) moves the fill of ITS pane and
 /// nothing else. libghostty already repaints the grid below the seam, so what is at stake here is
 /// the padding the chrome paints around that grid: get the routing wrong and a repainted pane sits
 /// inside a ring of the old theme color, which is the state this ticket found.
@@ -17,7 +17,7 @@ import XCTest
 /// `background-alpha` decides which of the two arrangements paints, so it is pinned rather than
 /// inherited: unpinned, Drew's own config (`background-alpha = 0`) runs only the ring path locally
 /// while CI runs only the clip path, and the half the change rewrote goes unexercised on both.
-/// `solid`/`translucent` run each. That unpinned shape is what ZEN-287 cost a run of intermittent
+/// `solid`/`translucent` run each. That unpinned shape once cost a run of intermittent
 /// failures in unrelated suites, so it is pinned here too rather than left to luck.
 final class PaneBackgroundOverrideTests: WindowTestCase {
     private var window: NSWindow!
@@ -120,7 +120,7 @@ final class PaneBackgroundOverrideTests: WindowTestCase {
         XCTAssertEqual(ring.blueComponent, osc11.nsColor.blueComponent, accuracy: 0.01)
         XCTAssertEqual(
             ring.alphaComponent, 0.5, accuracy: 0.01,
-            "the ring has to blend at the same alpha the terminal does (ZEN-282)")
+            "the ring has to blend at the same alpha the terminal does")
     }
 
     /// A reset (OSC 111) reaches the chrome as an ordinary change carrying the restored color, so

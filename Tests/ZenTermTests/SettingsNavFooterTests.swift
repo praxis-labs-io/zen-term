@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The Settings nav footer's version line (ZEN-151). It used to read "ZenTerm v<version>", which
+/// The Settings nav footer's version line. It used to read "ZenTerm v<version>", which
 /// fit a release build and overflowed every dev one — `bin/package-app` stamps `<tag>-dev`, so
 /// "ZenTerm v0.0.0-dev" ran under the divider, clipped, because a plain label doesn't truncate.
 ///

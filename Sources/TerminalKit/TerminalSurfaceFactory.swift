@@ -1,5 +1,5 @@
 /// The one place the chrome asks for a terminal. Chrome only ever calls
-/// `TerminalSurfaceFactory.make()`; libghostty is the sole backend (ZEN-45, ZEN-66).
+/// `TerminalSurfaceFactory.make()`; libghostty is the sole backend.
 public enum TerminalSurfaceFactory {
     #if DEBUG
         /// Test seam: when set, `make()` returns this instead of a live libghostty surface, so

@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// End-to-end tests for the Appearance "Toolbar buttons" multi-select (ZEN-327): mount the real
+/// End-to-end tests for the Appearance "Toolbar buttons" multi-select: mount the real
 /// section over a sandboxed config root, drive the real checkbox list, and read the file it wrote —
 /// the full write path a user's click takes, not the closure in isolation.
 final class SettingsToolbarButtonsRowTests: WindowTestCase {

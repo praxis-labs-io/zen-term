@@ -16,7 +16,7 @@ final class SettingsKeybindsSection: SettingsSection {
     /// group are editorial. What it must not be is *silently* partial: an action absent from here has
     /// no row, and nothing else in the app changes, so it reads as an action nobody can rebind and
     /// looks like nothing at all. `isEditableInSettings` is the exhaustive half, and
-    /// `SettingsKeybindGroupsTests` holds the two together (ZEN-367).
+    /// `SettingsKeybindGroupsTests` holds the two together.
     static let groups: [(String, [KeyInterceptor.ReservedChord])] = [
         ("Panes", [.splitHorizontal, .splitVertical, .closePane, .toggleZoom]),
         (
@@ -43,7 +43,7 @@ final class SettingsKeybindsSection: SettingsSection {
             "Surfaces & Tools",
             [
                 .toggleToolFloat(ToolFloat.scratch.id), .toggleRepoPicker, .toggleCommandPalette,
-                .openDiffViewer, .openSettings,
+                .openDiffViewer, .newTool, .openSettings,
             ]
         ),
     ]
@@ -278,7 +278,7 @@ final class SettingsKeybindsSection: SettingsSection {
     /// Leaving the rejected chord in the preview box read as though it had been taken: the box is
     /// where the recorded chord appears, so a chord sitting in it beside a red line is two claims at
     /// once. Nothing is stolen and nothing changes, so the input returns to where it started and the
-    /// capture stays armed for another try (ZEN-368).
+    /// capture stays armed for another try.
     private func refuse(_ reason: String, for row: KeybindRow) {
         hintBubble?.setPreview("")
         hintBubble?.showError(reason)
@@ -340,7 +340,7 @@ final class SettingsKeybindsSection: SettingsSection {
     ///
     /// Distinct from Backspace, which restores the default. Both are ways to stop using the chord
     /// you have; only this one records the intent, so the chord reaches the program in the pane and
-    /// nothing warns about it again (ZEN-368).
+    /// nothing warns about it again.
     private func remove(_ row: KeybindRow) {
         rebaseIfReloadDeferred()
         desired.unbind(row.action)
@@ -450,7 +450,7 @@ final class SettingsKeybindsSection: SettingsSection {
         // On a conflicted row, reset is only real when there is a line to back out of. A float's
         // chord is a required field, so binding the row back to its defaults leaves its chord set
         // equal to the defaults, the writer emits nothing, and the icon is a control that does
-        // nothing on exactly the rows it would appear on (ZEN-368).
+        // nothing on exactly the rows it would appear on.
         let conflict = KeybindConflict.all(in: GeneralConfig.current).first { $0.loser == row.action }
         bubble.setCanResetToDefault(conflict.map(\.isRevertable) ?? !isAtDefault(row.action))
         // Reset ends the capture the way Delete does: it is an answer, not a step toward one.

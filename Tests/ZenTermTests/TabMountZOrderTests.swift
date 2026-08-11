@@ -8,7 +8,7 @@ import XCTest
 /// outgoing one. Which of the pair is on top decides whether any of it is visible, and nothing
 /// on screen says it went wrong: the transition still runs, the drawer slides of a ⏎ workspace
 /// open still run, and all of it plays behind an opaque canvas until the outgoing view is
-/// detached — a hard cut that reads as "the animation was removed". ZEN-141 mounted every canvas
+/// detached — a hard cut that reads as "the animation was removed". Every canvas mounts
 /// at the very back of the container so a canvas can't cover a float card dismissing above it,
 /// which put the incoming canvas under the outgoing one too.
 @MainActor
@@ -86,6 +86,6 @@ final class TabMountZOrderTests: WindowTestCase {
                 + "anything animating on the new tab play invisibly and the swap reads as a cut")
         XCTAssertEqual(
             outgoingIndex, 0,
-            "both canvases stay at the back of the container, below a float card dismissing above them (ZEN-141)")
+            "both canvases stay at the back of the container, below a float card dismissing above them")
     }
 }

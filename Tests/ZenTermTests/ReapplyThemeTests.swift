@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Window-mounted recolor tests for the shared leaf controls' `reapplyTheme()` (ZEN-89 task 6):
+/// Window-mounted recolor tests for the shared leaf controls' `reapplyTheme()`:
 /// each test swaps `Theme.current` via the test-only `Theme.setCurrentForTesting(_:)` hook,
 /// calls `reapplyTheme()`, and asserts a real color-bearing property actually changed — not
 /// just that the method exists. Per the house rule "GUI controls need interaction tests," the
@@ -12,7 +12,7 @@ final class ReapplyThemeTests: WindowTestCase {
     private var originalTheme: AppTheme!
     private var tempRoots: [URL] = []
     /// The float below reads `GeneralConfig.current` at construction to pick which arrangement
-    /// paints its card (ZEN-287), so without this it is built against the developer's own
+    /// paints its card, so without this it is built against the developer's own
     /// `~/.config/zen-term` rather than a known one.
     private var originalConfig: GeneralConfig!
 
@@ -101,7 +101,7 @@ final class ReapplyThemeTests: WindowTestCase {
 
     /// The system `placeholderString` draws in AppKit's own `placeholderTextColor`, which tracks
     /// the view's `effectiveAppearance` rather than `Theme.current` — near-white on a light theme
-    /// under a dark appearance (ZEN-89). `FieldBox` builds a `placeholderAttributedString` colored
+    /// under a dark appearance. `FieldBox` builds a `placeholderAttributedString` colored
     /// from `chrome.ink(alpha: 0.4)` instead, so it must both match that role and actually change
     /// on a live theme swap.
     func test_reapplyTheme_recolorsFieldBoxPlaceholder() throws {

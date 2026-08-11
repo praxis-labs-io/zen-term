@@ -30,9 +30,9 @@ jobs:
       - name: Toolchain
         run: swift --version
 
-      # The GhosttyKit binaryTarget is linked unconditionally (ZEN-40), so `swift build`
+      # The GhosttyKit binaryTarget is linked unconditionally, so `swift build`
       # needs the xcframework — and the staged runtime resources are a declared SwiftPM
-      # resource (ZEN-45). Both are gitignored and built from the pinned vendor/ghostty
+      # resource. Both are gitignored and built from the pinned vendor/ghostty
       # submodule — same model as ghostty's own CI. Cache the built artifacts keyed on
       # the ghostty pin + build script, so only a ghostty bump triggers the slow
       # Zig/Metal rebuild; every other run restores them in seconds.

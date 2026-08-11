@@ -4,7 +4,7 @@ import AppKit
 /// nothing else. Distinct from `ChromeTooltip`, whose content is a fixed label + keycap with no
 /// width budget: a URL is arbitrary-length program output, so it truncates mid-string against a
 /// fixed budget instead of running the card across the window. Positioned by
-/// `LinkPreviewPresenter` (ZEN-24).
+/// `LinkPreviewPresenter`.
 final class LinkPreviewView: HoverCardView {
     /// The widest the URL may render before truncating. Middle truncation keeps the two ends a
     /// reader actually checks against a link: the host and the tail of the path.

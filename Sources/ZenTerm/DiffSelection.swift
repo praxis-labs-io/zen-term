@@ -2,7 +2,7 @@ import Foundation
 
 /// What a linewise selection in the diff pane resolves to: the text of the selected lines, and the
 /// span of file line numbers they cover on each side. Pure over the rendered `DiffRow` list, so it
-/// reads the same selection out of either layout (ZEN-227).
+/// reads the same selection out of either layout.
 ///
 /// Sides matter because only the *new* side exists on disk. A reference an agent can act on has to
 /// name new-side line numbers, so a selection that covers none (a run of deletions) carries
@@ -45,7 +45,7 @@ struct DiffSelection: Equatable {
 
     /// A row's identity across a re-render: the file line numbers it carries, on either side. Row
     /// *indices* can't play that part — the two layouts index differently, and a reload changes the
-    /// content under them (ZEN-233).
+    /// content under them.
     typealias LineNumbers = (old: Int?, new: Int?)
 
     /// The line numbers a row occupies, or nil for a hunk header or an out-of-range index. This pair

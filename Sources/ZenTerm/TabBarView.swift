@@ -18,7 +18,7 @@ struct TabBarItem {
 /// selection/close flow out through callbacks. Clicking a tab selects it; middle-clicking a tab
 /// closes it. The active tab is marked with an iris underline. When the tabs overflow the bar they
 /// scroll horizontally with no scroller, the active tab is kept in view, and each edge fades
-/// when tabs sit off that side (ZEN-115). New-tab lives in the footer dock, not here.
+/// when tabs sit off that side. New-tab lives in the footer dock, not here.
 ///
 /// The chips are laid out by explicit frame rather than a stack view: inside a scroll view an
 /// `NSStackView`'s intrinsic width isn't authoritative, so the document view stayed capped and
@@ -128,24 +128,30 @@ final class TabBarView: NSView {
 
     func render(_ items: [TabBarItem]) {
         lastItems = items
-        chips.forEach { $0.removeFromSuperview() }
-        chips = []
+        // A chip per tab id, kept across renders. Rebuilding them took the hovered chip out of the
+        // window mid-hover, which tore its tooltip down and re-armed it behind the hover delay: with a
+        // title poll every 1.5s the tooltip read as blinking at a steady pace.
+        var reusable = Dictionary(uniqueKeysWithValues: chips.map { ($0.id, $0) })
+        var next: [Chip] = []
         var activeChip: Chip?
         for item in items {
             let id = item.id
-            // Tabs 1–9 carry a ⌘N shortcut in the tooltip keycap (resolved at hover time from the
-            // live keymap, so it tracks rebinds); 10+ have no binding, so the keycap is omitted.
-            let index = item.index
-            let chip = Chip(
-                attributed: Self.tabLabel(item),
-                tooltipLabel: "Focus tab",
-                tooltipShortcut: index <= 9 ? { CommandCatalog.spec(for: .selectTab(index)).shortcut } : nil,
-                onClick: { [weak self] in self?.onSelect(id) },
-                onMiddleClick: { [weak self] in self?.onClose(id) })
-            docView.addSubview(chip)
-            chips.append(chip)
+            let chip =
+                reusable.removeValue(forKey: id)
+                ?? {
+                    let fresh = Chip(
+                        id: id, attributed: Self.tabLabel(item), index: item.index,
+                        onClick: { [weak self] in self?.onSelect(id) },
+                        onMiddleClick: { [weak self] in self?.onClose(id) })
+                    docView.addSubview(fresh)
+                    return fresh
+                }()
+            chip.update(attributed: Self.tabLabel(item), index: item.index)
+            next.append(chip)
             if item.isActive { activeChip = chip }
         }
+        reusable.values.forEach { $0.removeFromSuperview() }  // tabs that closed
+        chips = next
         layoutChips()
 
         // Slide the tracer to the active tab. Animate only when the active tab actually
@@ -180,11 +186,16 @@ final class TabBarView: NSView {
     /// `Theme.current` on every access, not cached).
     func reapplyTheme() {
         tracer.backgroundColor = Theme.current.chrome.accent.nsColor.cgColor
+        chips.forEach { $0.reapplyTheme() }
         render(lastItems)
     }
 
     /// Test hook: the chip views currently in the bar.
     var chipsForTesting: [NSView] { chips }
+
+    /// Test hook: each chip's rendered label. Chips persist across renders now, so a
+    /// re-render has to be asserted on what the chip draws rather than on a new instance appearing.
+    var chipLabelsForTesting: [NSAttributedString] { chips.map(\.attributedLabelForTesting) }
 
     /// Test hook: the tracer underline's current color.
     var tracerColorForTesting: NSColor? { tracer.backgroundColor.flatMap { NSColor(cgColor: $0) } }
@@ -195,10 +206,10 @@ final class TabBarView: NSView {
     /// Test hook: whether the leading-edge overflow fade is currently active.
     var isLeadingFadedForTesting: Bool { hasLeftOverflow }
 
-    /// Test hook: the rendered label string (number prefix + title) for an item (ZEN-110).
+    /// Test hook: the rendered label string (number prefix + title) for an item.
     static func tabLabelStringForTesting(_ item: TabBarItem) -> String { tabLabel(item).string }
 
-    /// Test hook: each chip's tooltip title + resolved keycap, in bar order (ZEN-110) — the ⌘N
+    /// Test hook: each chip's tooltip title + resolved keycap, in bar order — the ⌘N
     /// shortcut moved off the inline label onto the hover tooltip.
     var chipTooltipsForTesting: [(label: String, shortcut: String?)] {
         chips.map { ($0.tooltipLabelForTesting, $0.tooltipShortcutForTesting) }
@@ -367,8 +378,8 @@ final class TabBarView: NSView {
         case .completed: numberColor = Theme.current.chrome.positive.nsColor
         case .waiting: numberColor = Theme.current.chrome.attention.nsColor
         }
-        // A bare number — the ⌘N binding for tabs 1–9 lives in the hover tooltip now, not inline
-        // (ZEN-110). The prefix shares `numberColor`, so it recolors with the tab attention state.
+        // A bare number — the ⌘N binding for tabs 1–9 lives in the hover tooltip now, not inline.
+        // The prefix shares `numberColor`, so it recolors with the tab attention state.
         let prefix = "\(item.index) "
         let s = NSMutableAttributedString(
             string: prefix,
@@ -384,31 +395,44 @@ final class TabBarView: NSView {
     /// only; the active tab is marked by the shared tracer underline. Used for tabs so they
     /// share hover feel and stay vertically aligned.
     private final class Chip: NSView {
+        /// The tab this chip stands for, so `render` can hand a chip back to the same tab instead of
+        /// building a new one.
+        let id: TabID
+        /// The tab's 1-based position, which the tooltip's keycap reads at hover time. A `var` because
+        /// closing a tab renumbers the ones after it, and the chip outlives that now.
+        private var tabIndex: Int
         private let onClick: () -> Void
         private let onMiddleClick: (() -> Void)?
         private var isHovered = false
         private let label: NSTextField
         /// The hover-tooltip wiring — a branded `ChromeTooltip` (the same one the footer dock buttons
-        /// use), evaluated at hover time so its keybind tracks the live keymap. Shared with `IconButton`.
-        private let tooltip: TooltipHost
+        /// use), evaluated at hover time so its keybind tracks the live keymap. Shared with
+        /// `IconButton`. `lazy` so the resolver can read this chip's live index.
+        private lazy var tooltip = TooltipHost(label: "Focus tab") { [weak self] in
+            // Tabs past ⌘9 have no binding, so the keycap is omitted rather than invented.
+            guard let self, self.tabIndex <= 9 else { return nil }
+            return CommandCatalog.spec(for: .selectTab(self.tabIndex)).shortcut
+        }
 
         /// The width this chip wants: its label plus the 9pt inset on each side. Read from the
         /// label's intrinsic size (not `fittingSize`) so it's independent of the frame the parent
         /// assigns during manual layout.
         var fittingWidth: CGFloat { label.intrinsicContentSize.width + 18 }
 
-        /// Test hooks for the tooltip content (ZEN-110), mirroring `IconButton`.
+        var attributedLabelForTesting: NSAttributedString { label.attributedStringValue }
+
+        /// Test hooks for the tooltip content, mirroring `IconButton`.
         var tooltipLabelForTesting: String { tooltip.label }
         var tooltipShortcutForTesting: String? { tooltip.shortcutForTesting }
 
         init(
-            attributed: NSAttributedString,
-            tooltipLabel: String, tooltipShortcut: (() -> String?)?,
+            id: TabID, attributed: NSAttributedString, index: Int,
             onClick: @escaping () -> Void, onMiddleClick: (() -> Void)?
         ) {
+            self.id = id
+            self.tabIndex = index
             self.onClick = onClick
             self.onMiddleClick = onMiddleClick
-            tooltip = TooltipHost(label: tooltipLabel, shortcut: tooltipShortcut)
             label = NSTextField(labelWithAttributedString: attributed)
             super.init(frame: .zero)
             wantsLayer = true
@@ -424,6 +448,14 @@ final class TabBarView: NSView {
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        /// Re-render this chip for its tab's current title, number, and active state.
+        func update(attributed: NSAttributedString, index: Int) {
+            tabIndex = index
+            guard label.attributedStringValue != attributed else { return }
+            label.attributedStringValue = attributed
+            needsLayout = true
+        }
 
         override func updateTrackingAreas() {
             super.updateTrackingAreas()
@@ -460,6 +492,13 @@ final class TabBarView: NSView {
         }
         override func otherMouseDown(with event: NSEvent) {
             if event.buttonNumber == 2 { onMiddleClick?() }  // middle-click closes
+        }
+
+        /// Re-apply the hover wash from the live theme. `setHover` returns early when the state is
+        /// unchanged, so a chip hovered across a theme swap would otherwise keep the old ink until the
+        /// pointer left it. Only the theme path needs this: a re-render doesn't change the color.
+        func reapplyTheme() {
+            updateBackground()
         }
 
         private func updateBackground() {

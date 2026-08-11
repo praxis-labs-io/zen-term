@@ -9,8 +9,7 @@ final class ToolFloatCatalogTests: XCTestCase {
     }
 
     func test_scratchIsTheOnlyBuiltInFloat() {
-        // gitdash was dropped as a built-in in ZEN-71; Scratch is the one that came back
-        // (ZEN-379), and it is the only one.
+        // gitdash was dropped as a built-in; Scratch is the one that came back, and the only one.
         XCTAssertEqual(ToolFloatCatalog.builtIns.map(\.id), ["scratch"])
     }
 

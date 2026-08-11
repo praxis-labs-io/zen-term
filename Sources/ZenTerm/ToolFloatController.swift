@@ -3,7 +3,7 @@ import TerminalKit
 
 /// The tool-float engine: declarative command floats whose process lifetime is set by `persist:`.
 ///
-/// Floats are **window-level**, not per-tab (ZEN-141). A float card is a modal surface over the
+/// Floats are **window-level**, not per-tab. A float card is a modal surface over the
 /// whole window, hosted on the window's `container` so it survives a tab switch instead of
 /// unmounting with its host tab, and one live instance per float id is shared by every tab in the
 /// window — two tabs on one repo get one lazygit, not two. `persist:` therefore says only whether
@@ -27,8 +27,8 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     private let restoreFocus: () -> Void
     private let makeSurface: () -> TerminalSurface
     /// The enclosing repo root for a cwd, answered asynchronously, for the git guard and the
-    /// `.directory` anchor. The walk is filesystem I/O and never runs on the main thread
-    /// (ZEN-90/ZEN-234). Injected so a test can drive a deterministic resolver: pass one at init for
+    /// `.directory` anchor. The walk is filesystem I/O and never runs on the main thread.
+    /// Injected so a test can drive a deterministic resolver: pass one at init for
     /// a synchronous probe that keeps a toggle one step, or assign afterwards to hold the probe and
     /// exercise the window a real walk leaves open.
     ///
@@ -40,8 +40,8 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// knows to return instead of showing a card nobody is waiting for any more.
     private var toggleGeneration = 0
 
-    /// The float whose open is waiting on its repo-root probe. The open crosses a queue hop now
-    /// (ZEN-90), and everything that can call an open off — a second press, a tab change, a config
+    /// The float whose open is waiting on its repo-root probe. The open crosses a queue hop now,
+    /// and everything that can call an open off — a second press, a tab change, a config
     /// prune, a modal card going up, the window closing — has to be able to reach it during that
     /// window, so the pending open lives here rather than only inside the probe's closure.
     ///
@@ -135,7 +135,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     ///
     /// The repo root feeds exactly two things — the `git:` guard and a `.directory` float's anchor —
     /// so a float that needs neither opens without touching the filesystem at all, synchronously.
-    /// When it IS needed the ancestor walk goes off the main thread (ZEN-90), so the open lands a
+    /// When it IS needed the ancestor walk goes off the main thread, so the open lands a
     /// hop later and is cancellable for that whole window through `pendingOpen`.
     func toggle(_ spec: ToolFloat) {
         // A press while this float's own probe is out is still a press on this float: it calls the
@@ -219,7 +219,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             onDismiss: { [weak self] in self?.close() })
         // A persistent float keeps its surface alive while hidden but gets a fresh card on every
         // open, so a background it repainted with OSC 11 in between arrives by this pull rather
-        // than by the delegate event that landed while no card existed (ZEN-23).
+        // than by the delegate event that landed while no card existed.
         overlay.backgroundOverride = surface.backgroundOverride
         presentOverlay(overlay)
         activeFloat = (spec, surface, overlay)
@@ -361,16 +361,16 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// A float's tool posted a desktop notification (a `claude` float asking for input) — relay it
     /// as this window's attention signal, same as a pane or a drawer.
     ///
-    /// Before ZEN-141 floats were tab-owned, so `TabController`'s blanket relay carried this for
+    /// Floats were once tab-owned, so `TabController`'s blanket relay carried this for
     /// free; owning the delegate here means owning this too, or an agent float's request is
-    /// silently dropped (ZEN-139).
+    /// silently dropped.
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
         guard let spec = spec(for: s) else { return }
         onNotification?(n, spec)
     }
 
     /// A program repainted a float's background (OSC 11). Carry it to that card's own fill, the
-    /// same rule a pane and a drawer follow (ZEN-23). Only the shown card can paint; a hidden
+    /// same rule a pane and a drawer follow. Only the shown card can paint; a hidden
     /// persistent float has no overlay, and picks the color up from `surface.backgroundOverride`
     /// when its next card is built.
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {
@@ -379,7 +379,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     }
 
     /// The pointer is over a link in the shown float (nil when it leaves) — mirror it into the
-    /// shared preview, exactly as a pane does (ZEN-24). A hidden persistent float has no card
+    /// shared preview, exactly as a pane does. A hidden persistent float has no card
     /// under the pointer, so only the active card can report.
     func surface(_ s: TerminalSurface, hoveredLinkDidChange url: String?) {
         guard let active = activeFloat, s === active.surface else { return }

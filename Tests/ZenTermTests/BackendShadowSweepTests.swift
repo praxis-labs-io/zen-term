@@ -4,14 +4,14 @@ import XCTest
 @testable import TerminalKit
 @testable import ZenTerm
 
-/// What libghostty's keymap is still holding under a ZenTerm pane, swept whole (ZEN-365).
+/// What libghostty's keymap is still holding under a ZenTerm pane, swept whole.
 ///
 /// The chrome resolves its keymap ahead of the responder chain and passes on everything it does
 /// not claim, so the backend's keymap is live underneath ours the whole time. `GhosttyConfigWriter`
 /// emits an `unbind` line for every chord ZenTerm answers itself or libghostty answers with an
 /// action our apprt never implements, and what is left is `GhosttyUnboundChords.kept`.
 ///
-/// This replaces the ZEN-360 baseline, which pinned only the chords under our own defaults. That
+/// This replaces the baseline, which pinned only the chords under our own defaults. That
 /// question is now the smaller half: an unbind that stops matching is invisible to it, because a
 /// chord our chrome claims never reaches the backend either way. So the sweep walks the whole
 /// typeable chord space instead and asserts on the exact surviving set. A pin bump that adds a

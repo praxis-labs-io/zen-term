@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// ZEN-100: a tab-owned surface that fails to start (here the bottom drawer) must warn and tear
+/// A tab-owned surface that fails to start (here the bottom drawer) must warn and tear
 /// itself down so the next toggle spawns a fresh one — never mount a dead blank drawer. Regression
 /// guard for the identity-dispatch bug: the failure callback used to fire synchronously inside
 /// `start()`, before `bottomDrawerSurface` was assigned, so every identity check missed and the

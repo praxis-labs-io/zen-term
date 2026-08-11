@@ -5,7 +5,7 @@ import XCTest
 @testable import TerminalKit
 
 /// The focus libghostty is told about is `paneFocused && isAppActive`, and app activation is
-/// half of that pair (ZEN-271). It has to be tested through the real notification, because the
+/// half of that pair. It has to be tested through the real notification, because the
 /// bug was never in the combination — it was that nothing delivered the app half at all, so a
 /// backgrounded pane kept a focused surface and ghostty kept its custom-shader draw timer
 /// running at 120fps against a window nobody could see.

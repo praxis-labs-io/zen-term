@@ -3,7 +3,7 @@ import XCTest
 
 @testable import TerminalKit
 
-/// `GHOSTTY_ACTION_COLOR_CHANGE` → what the chrome does about it (ZEN-23).
+/// `GHOSTTY_ACTION_COLOR_CHANGE` → what the chrome does about it.
 ///
 /// The action is a notification, not a switch: libghostty has already written the color into
 /// `terminal.colors` and its renderer draws from there, so the grid follows the program either

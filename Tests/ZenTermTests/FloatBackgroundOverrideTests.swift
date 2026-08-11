@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// ZEN-23, the float half: a tool float's card follows a background its own program repainted.
+/// The float half: a tool float's card follows a background its own program repainted.
 ///
 /// A float is the one host that genuinely needs the `backgroundOverride` **pull**. A persistent
 /// float keeps its surface running while hidden but is torn down to that surface, so an OSC 11 it
@@ -15,7 +15,7 @@ import XCTest
 ///
 /// `background-alpha` is pinned rather than inherited, because it decides which view paints the
 /// card's interior and an unpinned suite mounting a `SurfaceFloatOverlay` is exactly the shape
-/// that caused ZEN-287's cross-suite flakiness.
+/// that caused the cross-suite flakiness.
 final class FloatBackgroundOverrideTests: WindowTestCase {
     private var windows: [NSWindow] = []
     private var floatControllers: [ToolFloatController] = []

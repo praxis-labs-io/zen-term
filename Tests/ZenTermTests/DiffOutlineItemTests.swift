@@ -48,7 +48,7 @@ final class DiffOutlineItemTests: XCTestCase {
         XCTAssertEqual(leaf?.removedCount, 7)
     }
 
-    // MARK: identity (ZEN-233)
+    // MARK: identity
 
     private func identities(in items: [DiffOutlineItem]) -> [String] {
         items.flatMap { [$0.identity] + identities(in: $0.children) }

@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The built-in Scratch float driven through the real chord on a real window (ZEN-379).
+/// The built-in Scratch float driven through the real chord on a real window.
 ///
 /// `ToolFloatControllerTests` already covers `persist:window` against the engine's seam, so these
 /// assert only what is specific to the built-in: that it reaches the engine at all with an empty

@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction test for the Appearance section's accent picker (ZEN-255), built on the shader
+/// Interaction test for the Appearance section's accent picker, built on the shader
 /// picker's template: mount the real section in a window, drive the dropdown with the key events
 /// AppKit actually delivers, and assert the token that lands in the config file. A state-only
 /// assertion would pass with a dead control.

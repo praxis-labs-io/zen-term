@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The seven actions ZEN-369 took off libghostty, and the seam methods they ride.
+/// The seven actions taken off libghostty, and the seam methods they ride.
 ///
 /// The sister suite to `ScrollAndFindChordTests`, and the failure is the same shape: every one of
 /// these worked before, answered by the backend's own keymap under the pane. The moment we unbind

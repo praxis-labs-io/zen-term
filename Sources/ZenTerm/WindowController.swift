@@ -39,18 +39,18 @@ final class WindowController: NSObject {
     /// The base-color tint over the behind-window blur; stored so a `backdrop-alpha` change can
     /// re-tint the running window (see the `configDidChange` observer).
     private let tint = NSView()
-    /// Top-right transient notices (e.g. "not a git repository"). Built on first use so its stack
-    /// mounts above the canvas; window-level so it's shared by every tab.
-    ///
-    /// Held as an explicit optional rather than `lazy` so the config observer can re-point its
-    /// insets *only when it already exists* — touching a `lazy var` would construct it, mounting a
-    /// toast stack in every window on the first gutter edit and giving up the z-order the
-    /// build-on-first-use exists for.
+    /// Top-right transient notices, built on first use so the stack mounts above the canvas, and
+    /// window-level so every tab shares it. An explicit optional rather than `lazy` because
+    /// touching a `lazy var` to re-inset it would construct one in every window instead.
     private var builtToasts: ToastPresenter?
     private var toasts: ToastPresenter {
         if let builtToasts { return builtToasts }
+        // Below an open card, not on top of it: the stack is built on the first toast of the window's
+        // life, which can be a toast fired while a card is already up. A card opened later
+        // lands above the stack on its own, being added at the front.
         let presenter = ToastPresenter(
-            host: container, topInset: Self.toastTopInset, trailingInset: Self.toastTrailingInset)
+            host: container, below: modal?.overlay, topInset: Self.toastTopInset,
+            trailingInset: Self.toastTrailingInset)
         builtToasts = presenter
         return presenter
     }
@@ -99,13 +99,11 @@ final class WindowController: NSObject {
         toasts.remove(card: card)
     }
 
-    /// Push the session font size to every terminal surface this window owns — the panes of every
+    /// Push the session font size to every terminal surface this window owns: the panes of every
     /// tab, both drawers, and any tool float, open or standing by.
     ///
-    /// The reach is the whole ticket (ZEN-224): libghostty resized only the focused surface. It is
-    /// also why this is a separate pass rather than a value folded into `applyAppearance` — once a
-    /// surface has been given an explicit size, libghostty stops applying config reloads to its
-    /// font, so the theme's size would no longer land on a stepped surface anyway.
+    /// A separate pass rather than a value folded into `applyAppearance`, because once a surface
+    /// has an explicit size libghostty stops applying config reloads to its font.
     func applySessionFontSize() {
         for surface in allTerminalSurfaces { surface.setFontSize(SessionFontSize.points) }
         // A font step changes the cell height without moving any view's frame, so nothing lays
@@ -121,7 +119,7 @@ final class WindowController: NSObject {
         controllers.values.flatMap { $0.allSurfaces } + floats.allSurfaces
     }
 
-    /// Host the app-global update card in this window's toast stack (ZEN-118). `UpdateController`
+    /// Host the app-global update card in this window's toast stack. `UpdateController`
     /// presents into the key window this way and re-homes here if its prior host closes.
     func presentUpdateCard(_ card: UpdateCardView) { toasts.present(card: card) }
 
@@ -132,8 +130,8 @@ final class WindowController: NSObject {
         toasts.remove(card: card)
     }
 
-    /// Save-panel wiring over `DiagnosticsBundleBuilder` (ZEN-11): pick a destination, then build the
-    /// zip off the main thread (ZEN-90) and confirm or report with a toast. The log set is the live
+    /// Save-panel wiring over `DiagnosticsBundleBuilder`: pick a destination, then build the
+    /// zip off the main thread and confirm or report with a toast. The log set is the live
     /// sink's files; with no sink the bundle is just system metadata, still worth exporting.
     func exportDiagnostics() {
         let panel = NSSavePanel()
@@ -170,7 +168,7 @@ final class WindowController: NSObject {
         }
     }
 
-    /// The window's tool floats (ZEN-141). Window-level, not per-tab: one live instance per float
+    /// The window's tool floats. Window-level, not per-tab: one live instance per float
     /// id is shared by every tab, and the card hosts on `container` so a tab switch doesn't
     /// unmount it. Lazy so `container`, `tabBar`, and the tab machinery all exist before the
     /// closures below can run.
@@ -194,6 +192,24 @@ final class WindowController: NSObject {
     /// The shown float card's gutter insets, retained so a live `window-gutter` change re-insets
     /// it (`reapplyFloatLayout`). Nil until the first float opens.
     private var floatGutter:
+        (
+            leading: NSLayoutConstraint, trailing: NSLayoutConstraint, top: NSLayoutConstraint,
+            bottom: NSLayoutConstraint
+        )?
+
+    /// What kind of card the chord gate closed to open something else, so the surface opening in its
+    /// place can hand back to it. Lives for one `handle(_:)` call, which clears it on entry.
+    private var closingModalKind: ModalKind?
+
+    /// Where the tool-float form on screen hands back to. Kept beside the card rather than only in its
+    /// closure, because the form is itself in the gate's close list: pressing the New Tool Float chord
+    /// over an open form replaces it, and the replacement has to inherit the first one's way back
+    /// instead of dropping the user out of the Settings session it was opened from.
+    private var toolFormReturn: ToolFormReturn?
+
+    /// The open modal card's gutter insets, retained for the same reason `floatGutter` is. Nil while
+    /// no card is up.
+    private var modalGutter:
         (
             leading: NSLayoutConstraint, trailing: NSLayoutConstraint, top: NSLayoutConstraint,
             bottom: NSLayoutConstraint
@@ -232,7 +248,7 @@ final class WindowController: NSObject {
     private var modal: (overlay: ModalOverlay, kind: ModalKind)?
 
     /// A card that has been asked for but can't be built yet, because its content is still being
-    /// read off the main thread (the `workspaces` file — ZEN-275). Nothing is on screen for it, so
+    /// read off the main thread (the `workspaces` file). Nothing is on screen for it, so
     /// this is its only trace: a second press must not start a second load and present twice, and a
     /// load landing after an Esc or after another card went up must not present at all.
     private var pendingModal: ModalKind?
@@ -245,11 +261,11 @@ final class WindowController: NSObject {
     /// keystroke rather than a chain of lookups into every window.
     weak var keyModeHost: KeyModeHosting?
 
-    /// Scroll mode over this window's focused panel (ZEN-330). Per window because it targets one
+    /// Scroll mode over this window's focused panel. Per window because it targets one
     /// panel, and the key handler it installs is app-global, so only the key window's can be up.
     let scrollMode = ScrollModeController()
 
-    /// Scrollback search over the same panel (ZEN-324). Per window for the same reasons, and it
+    /// Scrollback search over the same panel. Per window for the same reasons, and it
     /// drives scroll mode on commit, so it holds the one above.
     lazy var search = SearchController(scrollMode: scrollMode)
 
@@ -258,11 +274,9 @@ final class WindowController: NSObject {
     /// no-op — so `handle` forwards them here instead. Injected by `AppDelegate`.
     var onAppGlobalCommand: ((KeyInterceptor.ReservedChord) -> Void)?
 
-    /// Resolves the enclosing git repo root off the main thread (ZEN-90/ZEN-234), injected so a
-    /// test can drive a deterministic or deliberately-slow resolver. Defaults to the real
-    /// filesystem walk. Contract: the completion must be delivered on the **main thread** — the
-    /// continuation presents the viewer and touches AppKit; the default resolver hops back to main,
-    /// and any injected resolver must too.
+    /// Resolves the enclosing git repo root off the main thread, injected so a test can drive a
+    /// deterministic or deliberately-slow resolver. **The completion must be delivered on the main
+    /// thread**, because the continuation presents the viewer and touches AppKit.
     var resolveRepoRoot: (URL?, @escaping (URL?) -> Void) -> Void = GitRepoStatus.repoRoot
     /// True while a diff-viewer open is waiting on its off-main repo-root resolve, so a second
     /// ⌘D landing in that gap doesn't queue a second viewer (the top-of-`openDiffViewer` toggle
@@ -302,7 +316,7 @@ final class WindowController: NSObject {
 
     /// Whether a tool float card is up. Read by the key pass-through guard: a float is modal, so
     /// the window swallows nav rather than acting on it, and a consumed `Ctrl`-nav chord would be
-    /// taken from the tool for nothing (ZEN-270).
+    /// taken from the tool for nothing.
     var isToolFloatOpen: Bool { floats.isOpen }
 
     /// The shown float's tool name for copy: its title with a leading "Open " stripped, so a
@@ -318,11 +332,9 @@ final class WindowController: NSObject {
     private static let floatBlockToastThrottle: TimeInterval = 3
     private var lastFloatBlockToast: Date?
 
-    /// A pane command (nav, split, resize, drawer, Focus Mode) was pressed while a tool float is
-    /// up. The float is modal, so the window swallows every one of them; say why instead of doing
-    /// nothing at all (ZEN-270). Deliberately NOT keyed by chord, unlike the nav toast's
-    /// per-direction key: the notice reads the same whichever was pressed, so a second chord
-    /// inside the window would only repeat a card already on screen.
+    /// A pane command was pressed while a tool float is up. The float is modal, so the window
+    /// swallows every one of them; say why instead of doing nothing. Deliberately not keyed by
+    /// chord: the notice reads the same whichever was pressed.
     private func toastFloatBlocked() {
         let now = Date()
         if let last = lastFloatBlockToast,
@@ -415,7 +427,7 @@ final class WindowController: NSObject {
             // rather than hop, so the re-apply happens in the same turn as the post.
             MainActor.assumeIsolated {
                 guard let self else { return }
-                // Each block below runs only when the config it actually reads moved (ZEN-48). The
+                // Each block below runs only when the config it actually reads moved. The
                 // dependencies are what the call chain *resolves*, not what it's named after: recoloring
                 // a pane rebuilds its header keycap from the live keymap, so a rebind lands there too.
                 let change = ConfigChange.from(note)
@@ -431,22 +443,21 @@ final class WindowController: NSObject {
                     self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
                     for controller in self.controllers.values { controller.reapplyChromeLayout() }
                     self.reapplyFloatLayout()  // a gutter change must re-inset an OPEN card too
+                    self.reapplyModalLayout()
                     // Only if a toast has already been shown — see `builtToasts`.
                     self.builtToasts?.reapplyInsets(
                         topInset: Self.toastTopInset, trailingInset: Self.toastTrailingInset)
                 }
-                // `reapplyChromeColors` reaches `PanelHostView.reapplyTheme()`, which rebuilds the
-                // panel header's keycap against the live keymap — so a rebind needs it too, not just
-                // a theme swap. `.terminalBehavior` for the same reason one step further out: that
-                // call also re-reads `background-alpha` to decide whether the clip fills the panel or
-                // the ring does (ZEN-282).
+                // `reapplyChromeColors` rebuilds the panel header's keycap against the live keymap,
+                // so a rebind needs it too, not just a theme swap. `.terminalBehavior` because that
+                // call also re-reads `background-alpha` to decide what fills the panel.
                 if change.contains(.theme) || change.contains(.keymap)
                     || change.contains(.terminalBehavior)
                 {
                     for controller in self.controllers.values { controller.reapplyChromeColors() }
                 }
                 // An open tool float re-reads `background-alpha` to decide whether its card fills its
-                // own interior or its ring does (ZEN-287), exactly as `PanelHostView` does above — so
+                // own interior or its ring does, exactly as `PanelHostView` does above — so
                 // `.terminalBehavior` has to reach it, or editing the value leaves the card up at its
                 // old fill until it is closed and reopened.
                 if change.contains(.theme) || change.contains(.terminalBehavior) {
@@ -467,13 +478,10 @@ final class WindowController: NSObject {
                         surface.applyAppearance(
                             theme: Theme.current.terminal, behavior: GeneralConfig.current.terminalBehavior)
                     }
-                    // Re-push the session size on top, unconditionally (ZEN-224). Two reasons, and
-                    // both are silent failures without it. libghostty stops applying config reloads
-                    // to a surface's font once that surface has been given an explicit size, so a
-                    // stepped surface ignores the theme size that just landed. And a surface spawned
-                    // at the stepped size has *not* been given one explicitly, so it would follow the
-                    // theme back down — leaving panes in one tab at different sizes after any theme
-                    // edit. Pushing to all of them settles both on the one number the chrome owns.
+                    // Unconditionally, because both halves fail silently otherwise: a stepped
+                    // surface ignores the theme size that just landed, while a surface spawned at
+                    // the stepped size follows the theme back down, leaving one tab's panes at
+                    // different sizes after any theme edit.
                     self.applySessionFontSize()
                 }
                 if change.contains(.floats) {
@@ -489,16 +497,12 @@ final class WindowController: NSObject {
                 if change.contains(.toolbarButtons) {
                     self.dock.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
                 }
-                // An open palette re-renders its rows here, and it re-resolves the whole catalog to do
-                // it — so this tracks far more than a recolor. `.keymap` because a row's shortcut
-                // column resolves from the live keymap; `.floats` because every tool float is also a
-                // palette command.
+                // An open palette re-resolves its whole catalog here, so this tracks more than a
+                // recolor: `.keymap` because a row's shortcut column resolves from the live keymap,
+                // `.floats` because every tool float is also a palette command.
                 //
-                // `.floats` only bites across two windows, and that's worth knowing before anyone
-                // "simplifies" it away: `modal` is a single slot, so opening Settings in *this* window
-                // has already closed this palette. The live path is a palette open in window A while
-                // window B saves a float, since the reload is unforced and broadcasts `.floats` alone.
-                // (⌘⇧, can't show it either: it forces `.all`, which carries `.theme`.)
+                // `.floats` only bites across two windows, which is worth knowing before anyone
+                // simplifies it away: a palette open in window A while window B saves a float.
                 if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {
                     self.modal?.overlay.reapplyTheme()
                 }
@@ -532,7 +536,7 @@ final class WindowController: NSObject {
         container.frame = content.bounds
         container.autoresizingMask = [.width, .height]
         // Layer-back the container for the same reason the tabs' `content` is: a tool-float card
-        // hosted here (ZEN-141) is layer-backed, and one dropped into a non-layer-backed parent
+        // hosted here is layer-backed, and one dropped into a non-layer-backed parent
         // after layout doesn't render its drop shadow.
         container.wantsLayer = true
         content.addSubview(container)
@@ -581,18 +585,16 @@ final class WindowController: NSObject {
     /// putting a bar over an empty panel.
     private func toggleSearch() {
         guard let target = activeController?.focusedScrollTarget else { return }
-        // Seeded from whatever is selected, so searching a word you can see never means retyping
-        // it. There are two selection models and one chord covers both: scroll mode's `v` is the
-        // chrome's own overlay, which the backend cannot see, and a mouse drag is libghostty's,
-        // which the chrome reads back through the seam. `copySelection` is a pure read despite the
-        // name, so peeking at it costs nothing and touches no pasteboard.
+        // Seeded from whichever selection model is live: scroll mode's `v` is the chrome's own
+        // overlay, which the backend cannot see, and a mouse drag is libghostty's. `copySelection`
+        // is a pure read despite the name, and touches no pasteboard.
         let selected = scrollMode.selectedText ?? target.surface.copySelection()
         search.begin(surface: target.surface, panel: target.panel, seed: selected ?? "")
     }
 
     /// Open the find bar on the selection, and do nothing when there is none. That last clause is
     /// the whole difference from `toggle_search`, which reads the same two selection models but
-    /// opens on an empty needle rather than declining (ZEN-367).
+    /// opens on an empty needle rather than declining.
     private func searchSelection() {
         guard let target = activeController?.focusedScrollTarget else { return }
         guard let selected = scrollMode.selectedText ?? target.surface.copySelection(),
@@ -608,14 +610,11 @@ final class WindowController: NSObject {
     }
 
     /// Paste what is selected back into the pane it came from, and do nothing when nothing is.
+    /// Reads both selection models, the same pair ⌘E does.
     ///
-    /// Both selection models, the same pair ⌘E reads: scroll mode's `v` is the chrome's own overlay
-    /// and the backend cannot see it, and a mouse drag is libghostty's, read back through the seam.
-    ///
-    /// Not the pasteboard, which is ⌘V's job. ghostty spells this `paste_from_selection` and means
-    /// the X11 selection clipboard, a thing macOS does not have, so on this platform its chord
-    /// pastes exactly what ⌘V would. The selection you can see is the reading that earns the chord
-    /// (ZEN-369).
+    /// Not the pasteboard, which is ⌘V's job: ghostty's `paste_from_selection` means the X11
+    /// selection clipboard, which macOS does not have, so on this platform that chord would paste
+    /// exactly what ⌘V does.
     private func pasteSelection() {
         guard let target = activeController?.focusedScrollTarget else { return }
         guard let selected = scrollMode.selectedText ?? target.surface.copySelection(),
@@ -625,10 +624,7 @@ final class WindowController: NSObject {
     }
 
     /// End both modes, in the order their layout changes have to unwind: the bar comes down first,
-    /// because taking it down reflows the grid that scroll mode is still measuring against.
-    ///
-    /// One call for every retraction path. Search can be up without scroll mode, so ending scroll
-    /// mode alone is not the choke point it looks like.
+    /// because taking it down reflows the grid scroll mode is still measuring against.
     private func endModes() {
         search.end()
         scrollMode.end()
@@ -642,11 +638,9 @@ final class WindowController: NSObject {
         search.onActiveChanged = { [weak self] _ in self?.updateModeHandler() }
     }
 
-    /// One handler for both modes, because `KeyInterceptor` has one slot.
-    ///
-    /// The order inside it is the two-phase handoff. While the find field holds first responder the
-    /// handler stands down entirely: the interceptor is a local monitor running ahead of the field
-    /// editor, so a mode that kept claiming keys would eat the typing and leave the bar untypeable.
+    /// One handler for both modes, because `KeyInterceptor` has one slot. While the find field
+    /// holds first responder the handler stands down entirely: the interceptor runs ahead of the
+    /// field editor, so a mode that kept claiming keys would leave the bar untypeable.
     private func updateModeHandler() {
         let active = scrollMode.isActive || search.isActive
         keyModeHost?.modeHandler =
@@ -688,7 +682,7 @@ final class WindowController: NSObject {
         if changed { renderTabBar() }
 
         // The active tab's drawer busy-state has no push event, so poll it here (building the
-        // overlay once) and re-render the dock only when a drawer's activity dot flips (ZEN-107).
+        // overlay once) and re-render the dock only when a drawer's activity dot flips.
         let overlay = activeController?.overlayState
         let busy = (overlay?.bottomBusy ?? false, overlay?.rightBusy ?? false)
         if busy != lastDrawerBusy { renderDock() }
@@ -732,16 +726,14 @@ final class WindowController: NSObject {
         case slide(from: SlideEdge)  // switching between tabs, and a new tab entering from the right
     }
 
-    /// Mount the active tab's canvas above the tab bar, replacing the previous one with the
-    /// given transition, and restore focus to the active tab. Animated transitions defer the
-    /// previous canvas's removal to their completion, guarded so a rapid re-switch that
-    /// re-mounts it doesn't delete the now-active terminal.
+    /// Mount the active tab's canvas above the tab bar, replacing the previous one with the given
+    /// transition, and restore focus to the active tab. Animated transitions defer the previous
+    /// canvas's removal to their completion, guarded so a rapid re-switch cannot delete the
+    /// now-active terminal.
     ///
-    /// `onLanded` runs when an animated transition's motion finishes. A transition that has already
-    /// landed by the time `mount` returns never calls it, and says so by **returning true** —
-    /// `.instant`, and any transition Reduce Motion collapses, which `Motion` runs its completion
-    /// through synchronously. A caller with work to sequence after the mount does that case itself,
-    /// rather than having the callback jump the queue in front of that work.
+    /// `onLanded` runs when an animated transition's motion finishes. A transition that has
+    /// already landed by the time this returns never calls it and says so by **returning true**,
+    /// so a caller sequencing work after the mount handles that case itself.
     @discardableResult
     private func mount(_ transition: MountTransition, onLanded: (() -> Void)? = nil) -> Bool {
         guard let c = activeController, mountedCanvas !== c.view else {
@@ -751,11 +743,9 @@ final class WindowController: NSObject {
         }
         let outgoing = mountedCanvas
         pinCanvas(c.view)
-        // `pinCanvas` mounts every canvas at the very back (ZEN-141), which puts the incoming one
-        // *under* the outgoing one for the length of a transition — an opaque canvas over the
-        // arriving one, so anything it plays on the way in is invisible until the outgoing view is
-        // detached. The pair is ordered here instead: incoming directly above outgoing, both still
-        // below every piece of chrome.
+        // `pinCanvas` mounts every canvas at the very back, which would put the incoming one under
+        // the outgoing one for the length of a transition and hide whatever it plays on the way
+        // in. Order the pair here instead, both still below every piece of chrome.
         if let outgoing {
             container.addSubview(c.view, positioned: .above, relativeTo: outgoing)
         }
@@ -800,11 +790,9 @@ final class WindowController: NSObject {
         canvas.layer?.transform = CATransform3DIdentity
         canvas.layer?.opacity = 1
         // Mount at the BACK of the container, not "just below the tab bar": a canvas is the
-        // backdrop every piece of window-level chrome sits on top of. Restacking it relative to
-        // `tabBar` lands it above anything else ALSO hosted just below the tab bar — i.e. a float
-        // card (ZEN-141), which a tab change dismisses but which spends that moment springing out.
-        // Without this the incoming canvas covers the outgoing card and the dismiss just vanishes.
-        // (The dock and the toast stack are added above `tabBar`, so they were never at risk.)
+        // backdrop every piece of window-level chrome sits on. Stacking it relative to `tabBar`
+        // would land it above a float card, which a tab change dismisses and which spends that
+        // moment springing out, so the incoming canvas would swallow the dismiss.
         if canvas.superview === container {
             container.addSubview(canvas, positioned: .below, relativeTo: nil)  // just restack
             return
@@ -819,15 +807,12 @@ final class WindowController: NSObject {
         ])
     }
 
-    /// Dismiss a shown tool float because the tab underneath is about to change — the same rule
-    /// every modal card already follows (`closeModal()` sits beside each call to this).
+    /// Dismiss a shown tool float because the tab underneath is about to change, the same rule
+    /// every modal card follows.
     ///
-    /// A float is modal over the window, so letting the tab change behind it would leave the user
-    /// typing into a card while the world they can't see moved; they'd have to dismiss just to
-    /// learn where they landed. Closing it means one ⌘⇧] both switches AND reveals. Nothing is
-    /// lost: the registry is window-level, so a `dir`/`window` float keeps running and reopening
-    /// from the new tab is instant and lands on the same instance. An ephemeral float dies and
-    /// respawns fresh at the new tab's cwd — which is exactly what `persist:none` means.
+    /// A float is modal over the window, so letting the tab change behind it would leave someone
+    /// typing into a card while the world they can't see moved. Nothing is lost: the registry is
+    /// window-level, so a persistent float keeps running and reopens on the same instance.
     private func closeFloatForTabChange() { floats.close() }
 
     /// Hand keyboard focus back to whatever should hold it: the shown tool float, else the active
@@ -838,24 +823,16 @@ final class WindowController: NSObject {
         if floats.isOpen { floats.refocus() } else { activeController?.restoreUnifiedFocus() }
     }
 
-    /// Host a tool-float card at window level, over the active tab's tile region (ZEN-141).
+    /// Host a tool-float card at window level, over the active tab's tile region. Hosted on
+    /// `container` rather than inside the active tab, because a tab-hosted card unmounts with its
+    /// tab and a float has to survive a tab switch.
     ///
-    /// Hosting on `container` — the same window-level layer `ToastPresenter` uses — rather than
-    /// the active tab's `presentTileOverlay` is the whole point: a tab-hosted card unmounts with
-    /// its tab, which is exactly why `closeModal()` has to run before any tab-bar op. A float has
-    /// to survive a tab switch, so it can't live there.
+    /// The constraints reproduce the tile region exactly, because `SurfaceFloatOverlay` resolves
+    /// its fractions against its OWN bounds: the host rect *is* the geometry, so a naive pin to
+    /// `container` would resize every float and slide it over the tab bar.
     ///
-    /// The constraints reproduce `presentTileOverlay`'s rect exactly, because `SurfaceFloatOverlay`
-    /// resolves its width/height fractions against its OWN bounds — the host rect *is* the
-    /// geometry, and a naive pin to `container` would silently resize every float and slide it over
-    /// the tab bar. A tab's canvas is `container` minus the tab-bar row (`pinCanvas`), and its
-    /// `content` insets that by `windowGutter` on all four sides; this is that composition,
-    /// flattened.
-    ///
-    /// Inserted below `tabBar` — above every canvas (`pinCanvas` keeps those at the back) but
-    /// below the tab strip, the dock, and the toast stack. That last one is the reason this isn't
-    /// a plain top-of-stack `addSubview`: the ⌘W guard toast ("Close btop first, then ⌘W")
-    /// fires precisely while a card is up, and a card stacked over the toasts would swallow it.
+    /// Inserted below `tabBar`, which keeps it under the toast stack. The ⌘W guard toast fires
+    /// precisely while a card is up, and a card stacked over the toasts would swallow it.
     private func presentWindowFloat(_ overlay: NSView) {
         overlay.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(overlay, positioned: .below, relativeTo: tabBar)
@@ -863,14 +840,40 @@ final class WindowController: NSObject {
         // Retained so a live `window-gutter` edit can re-inset an OPEN card. The tab-hosted path
         // this replaced got that for free (it pinned to `content`, whose own gutter constraints
         // `reapplyChromeLayout()` updates); baking the constant in and walking away would leave a
-        // shown float at the old inset while every tab behind it resized (ZEN-89's bug class).
+        // shown float at the old inset while every tab behind it resized (the bug class).
         let insets = (
             leading: overlay.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: gutter),
             trailing: overlay.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -gutter),
-            top: overlay.topAnchor.constraint(equalTo: container.topAnchor, constant: gutter),
+            top: overlay.topAnchor.constraint(
+                equalTo: container.topAnchor, constant: ChromeMetrics.topInset),
             bottom: overlay.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -gutter)
         )
         floatGutter = insets
+        NSLayoutConstraint.activate([insets.leading, insets.trailing, insets.top, insets.bottom])
+    }
+
+    /// Host a modal card at window level, over the active tab's tile region, at the FRONT of the
+    /// stack and above the toasts. A card owns the keyboard and dims the tile behind it, so a
+    /// passive notice landing on top reads as broken. Floats sit below the toasts instead, because
+    /// the ⌘W guard toast fires while a float is open and is telling you to close it.
+    ///
+    /// The rect is the tile region flattened, so the dimming backdrop covers exactly that region:
+    /// gutter on three sides, `ChromeMetrics.topInset` on top. Taking the gutter for the top runs
+    /// the card under the window buttons. The insets are retained so a live gutter edit re-insets
+    /// an open card.
+    private func presentWindowModal(_ overlay: NSView) {
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(overlay)  // front of the stack, so it clears the toasts
+        let gutter = ChromeMetrics.windowGutter
+        let insets = (
+            leading: overlay.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: gutter),
+            trailing: overlay.trailingAnchor.constraint(
+                equalTo: container.trailingAnchor, constant: -gutter),
+            top: overlay.topAnchor.constraint(
+                equalTo: container.topAnchor, constant: ChromeMetrics.topInset),
+            bottom: overlay.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -gutter)
+        )
+        modalGutter = insets
         NSLayoutConstraint.activate([insets.leading, insets.trailing, insets.top, insets.bottom])
     }
 
@@ -881,15 +884,27 @@ final class WindowController: NSObject {
         let gutter = ChromeMetrics.windowGutter
         floatGutter.leading.constant = gutter
         floatGutter.trailing.constant = -gutter
-        floatGutter.top.constant = gutter
+        floatGutter.top.constant = ChromeMetrics.topInset  // the tile's top carries traffic-light clearance
         floatGutter.bottom.constant = -gutter
+    }
+
+    /// The same re-inset for an open modal card. Window-hosted, so it does not inherit
+    /// the tile's gutter: without this a live `window-gutter` edit resizes every tab behind an open
+    /// card and leaves the card itself at the old inset.
+    private func reapplyModalLayout() {
+        guard let modalGutter else { return }
+        let gutter = ChromeMetrics.windowGutter
+        modalGutter.leading.constant = gutter
+        modalGutter.trailing.constant = -gutter
+        modalGutter.top.constant = ChromeMetrics.topInset  // the tile's top carries traffic-light clearance
+        modalGutter.bottom.constant = -gutter
     }
 
     // MARK: tab ops
 
     private func newTab() {
         cancelConfirm()  // the tab-bar "+" is reachable by mouse while a confirm is up
-        addTab(cwd: activeController?.focusedCWD, pinnedTitle: nil)
+        addTab(cwd: ShellLaunch.newSessionCWD(focused: activeController?.focusedCWD), pinnedTitle: nil)
     }
 
     /// Append a new tab with an explicit cwd and optional pinned title. The `⌘P` picker
@@ -926,15 +941,13 @@ final class WindowController: NSObject {
             id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace, transition: .instant)
     }
 
-    /// Build, wire, mount, and start a controller for `id` (already in `tabs`), applying the
-    /// workspace's open recipe when one is given. Shared by new-tab and replace-tab, which mount
-    /// with different transitions: a new tab slides in, a replacement lands in place.
+    /// Build, wire, mount, and start a controller for `id`, applying the workspace's open recipe
+    /// when one is given. Shared by new-tab and replace-tab, which mount with different
+    /// transitions.
     ///
-    /// The recipe is **staged behind the canvas's motion**: a new tab arrives and then unfolds its
-    /// drawers, rather than pushing them open during the slide, where a drawer travelling the same
-    /// direction as the canvas it rides in on has no readable motion of its own. Focus is
-    /// unaffected — `mount` lands it on the tab as it always did, and the recipe only moves it to a
-    /// drawer the recipe names, which cannot hold focus before it exists either way.
+    /// The recipe is **staged behind the canvas's motion**, so a new tab arrives and then unfolds
+    /// its drawers: a drawer travelling the same direction as the canvas it rides in on has no
+    /// readable motion of its own.
     private func installController(
         id: TabID, cwd: URL?, pinnedTitle: String?, workspace: Workspace?, transition: MountTransition
     ) {
@@ -961,7 +974,9 @@ final class WindowController: NSObject {
     }
 
     private func select(_ id: TabID, slideFrom: SlideEdge? = nil) {
-        closeModal()  // a tab-bar click must not orphan a modal palette
+        // Load-bearing: a card is window-hosted, so nothing unmounts it implicitly and
+        // it would otherwise stay open over the tab you land on.
+        closeModal()
         guard tabs.order.contains(id), id != tabs.activeID else { return }
         Log.info("tab switched", category: .tabs)
         closeFloatForTabChange()
@@ -1022,7 +1037,7 @@ final class WindowController: NSObject {
         // surface already SHOWN is a different case, handled by the chord gate.
         floats.cancelPendingOpen()
         pendingModal = nil
-        active.presentTileOverlay(overlay)
+        presentWindowModal(overlay)
         if kind.stealsHalo { active.yieldFocusToFloat() }  // pane drops its glow; the card wears it
         modal = (overlay, kind)
         overlay.focusInitialResponder()
@@ -1039,19 +1054,18 @@ final class WindowController: NSObject {
         guard let overlay = modal?.overlay else { return }
         stopDiffWatcher()
         modal = nil
+        modalGutter = nil  // the constraints die with the view; don't re-inset a card on its way out
         overlay.animateOut { overlay.removeFromSuperview() }
         restoreFocusToActive()
         renderDock()
     }
 
-    /// Toggle the workspace picker (⌘P). Reads the `workspaces` file fresh on each open (so
-    /// hand-edits appear without a relaunch). Pressing ⌘P while it's up closes it.
+    /// Toggle the workspace picker. Reads the `workspaces` file fresh on each open, so hand-edits
+    /// appear without a relaunch.
     ///
-    /// The read is off the main thread (ZEN-275), so the card is built once the workspaces are in
-    /// hand rather than presented empty and filled: a card that springs in at one size and resizes a
-    /// frame later reads as a flash. Nothing blocks meanwhile, and the wait is a file read from the
-    /// config directory, so what a slow disk costs is the card appearing late rather than the app
-    /// going unresponsive.
+    /// The read is off the main thread, and the card is built once the workspaces are in hand
+    /// rather than presented empty and filled, since a card that springs in and resizes a frame
+    /// later reads as a flash. A slow disk costs a late card, not an unresponsive app.
     private func toggleRepoPicker() {
         if modal?.kind == .repoPicker || pendingModal == .repoPicker { closeModal(); return }
         pendingModal = .repoPicker
@@ -1084,14 +1098,11 @@ final class WindowController: NSObject {
         presentModal(palette, kind: .commandPalette)
     }
 
-    /// Open the Add-Workspace form from the ⌘P picker's ＋ row. Seeds it with the current titles for
-    /// inline collision checks; submitting writes the section and opens it. The picker is still up
-    /// when the ＋ fires, so close it first. (Editing / deleting a workspace goes through Settings →
-    /// Workspaces instead, via `openWorkspaceForm`.)
+    /// Open the Add-Workspace form from the picker's ＋ row, seeded with the current titles for
+    /// inline collision checks. The picker is still up when ＋ fires, so close it first.
     ///
-    /// The form waits for the load rather than presenting without it: its title-collision check has
-    /// to be right from the first keystroke, and a form seeded with half the titles would accept a
-    /// duplicate.
+    /// Waits for the load rather than presenting without it: the collision check has to be right
+    /// from the first keystroke, and a form seeded with half the titles would accept a duplicate.
     private func openAddWorkspaceForm() {
         closeModal()
         pendingModal = .workspaceForm
@@ -1113,6 +1124,10 @@ final class WindowController: NSObject {
     /// the GitHub issue or cancelling just closes back to the terminal (Settings doesn't reopen).
     /// Reusing the single modal slot means opening it from Settings dismisses Settings first.
     func openReportIssue() {
+        // Reached from the Help menu as well as a chord, and the menu bypasses the `isConfirmOpen`
+        // gate in `handle`. A card would paint over a pending destructive confirm and leave it both
+        // hidden and unanswerable, so the confirm wins the same way it does for a chord.
+        if isConfirmOpen { return }
         if modal?.kind == .reportIssue { closeModal(); return }
         if modal != nil { closeModal() }  // single slot — dismiss whatever's up (e.g. Settings) first
         let overlay = ReportIssueOverlay(
@@ -1133,7 +1148,7 @@ final class WindowController: NSObject {
     /// closure, so it lives as long as the overlay it serves.
     func openDiffViewer() {
         if modal?.kind == .diffViewer { closeModal(); return }
-        // The repo-root walk is filesystem I/O — resolve it off-main (ZEN-90/ZEN-234), then present
+        // The repo-root walk is filesystem I/O — resolve it off-main, then present
         // on main. That gap means a second ⌘D before the resolve lands must be dropped, not queued.
         if isResolvingDiffRepo { return }
         isResolvingDiffRepo = true
@@ -1157,14 +1172,10 @@ final class WindowController: NSObject {
         guard let tab = activeController else { return }  // no tab, no viewer to mount it in
         if modal != nil { closeModal() }  // single slot — dismiss whatever's up first
         let runner = GitDiffRunner(repoRoot: repoRoot)
-        // One session per repo, reused across opens: it carries the last status (so a reopen renders
-        // instantly and refreshes behind the card instead of flashing a spinner), the highlight cache
-        // (so it paints highlighted with no re-parse), and where the reader left off. A different repo
-        // starts fresh rather than accumulating a session per repo the tab has ever visited.
-        //
-        // The session lives on the tab, not the window (ZEN-298). A window-level slot meant two tabs
-        // on two repos shared one session, so opening the viewer in the second discarded the first's
-        // place and cache, and going back rendered a spinner at the top of the file.
+        // One session per repo, reused across opens: it carries the last status, the highlight
+        // cache and where the reader left off, so a reopen renders instantly instead of flashing a
+        // spinner. On the tab rather than the window, because a window-level slot let two tabs on
+        // two repos share one session and discard each other's place.
         let session: DiffViewerSession
         if let existing = tab.diffViewerSession, existing.repoRoot == repoRoot {
             session = existing
@@ -1179,7 +1190,7 @@ final class WindowController: NSObject {
                 // Picking a branch that has a worktree means reading a different directory, so it gets
                 // its own runner rooted there and all three slices stay live. A branch without one has
                 // no working tree to read, so the pinned runner answers with the branch as its head and
-                // only the committed slice comes back (ZEN-313).
+                // only the committed slice comes back.
                 let target = head?.worktree.map(GitDiffRunner.init(repoRoot:)) ?? runner
                 let headRef = head?.hasWorktree == false ? head?.name : nil
                 target.loadStatus(base: base, head: headRef) { result in
@@ -1233,7 +1244,7 @@ final class WindowController: NSObject {
 
     /// Which section the Settings card opens on. `.tools` / `.workspaces` are used when a sub-form
     /// (tool-float or workspace editor) hands back to the section it was launched from; the
-    /// per-section cases are where the config-diagnostics toast lands (ZEN-7).
+    /// per-section cases are where the config-diagnostics toast lands.
     private enum SettingsLanding { case top, tools, workspaces, terminal, appearance, general, shortcuts }
 
     /// The Settings section that owns a diagnostic's subject — where the config-diagnostics toast's
@@ -1252,9 +1263,9 @@ final class WindowController: NSObject {
     /// `debug`) or an unrecognized one lands on the nav.
     private static func landing(forSettingKey key: String) -> SettingsLanding {
         switch key {
-        case "font-family", "font-size", "cursor-style", "cursor-style-blink", "cursor-thickness",
-            "cursor-shader", "background-alpha", "macos-option-as-alt", "scroll-multiplier", "shell",
-            "shell-args", "editor", "ai":
+        case "font-family", "font-size", "font-thicken", "cursor-style", "cursor-style-blink",
+            "cursor-thickness", "cursor-shader", "background-alpha", "macos-option-as-alt",
+            "scroll-multiplier", "shell", "shell-args", "tab-inherit-cwd", "editor", "ai":
             return .terminal
         case "theme", "accent-color", "window-chrome", "backdrop-alpha", "window-gutter", "pane-gap",
             "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",
@@ -1327,16 +1338,16 @@ final class WindowController: NSObject {
     }
 
     /// Open Settings on the section that owns `scope` — the config-diagnostics toast's "Open Settings"
-    /// action (ZEN-7). Always opens (re-opening on the target if Settings is already up), never the
+    /// action. Always opens (re-opening on the target if Settings is already up), never the
     /// ⌘, toggle: someone acting on the toast wants the section, not to close a card they just opened.
     func openSettings(for scope: ConfigDiagnostic.Scope) {
         if modal != nil { closeModal() }  // single slot: replace whatever's up, then land on the section
         openSettings(landing: Self.landing(for: scope))
     }
 
-    /// Present the config-diagnostics reload notice as a sticky, actionable toast (ZEN-7): a primary
+    /// Present the config-diagnostics reload notice as a sticky, actionable toast: a primary
     /// "Open Settings" that lands on the first problem's section, plus a Dismiss. Non-modal — it arms
-    /// no key equivalents, so it never steals input from the terminal (ZEN-143). `landingScope` is the
+    /// no key equivalents, so it never steals input from the terminal. `landingScope` is the
     /// scope the primary button opens; the caller passes the first diagnostic's.
     func showConfigDiagnosticsToast(_ content: ToastContent, landingScope: ConfigDiagnostic.Scope) {
         // `weak` breaks the retain cycle the strong-capture idiom would form: the toast retains its
@@ -1376,18 +1387,17 @@ final class WindowController: NSObject {
     /// user closed must leave nothing behind to retract.
     private var conflictToasts: [(conflict: KeybindConflict, toast: WeakToast)] = []
 
-    /// One sticky card per outstanding chord conflict, each carrying the two answers (ZEN-368).
+    /// One sticky card per outstanding chord conflict, each carrying the two answers. One per
+    /// conflict rather than a list, because each is a separate decision and one Accept must not
+    /// settle three lines.
     ///
-    /// One per conflict rather than a list in a single card, because each is a separate decision:
-    /// aggregating them would make one Accept settle three lines the user was asked about once.
-    ///
-    /// Revert is offered only when a `keybind =` line took the chord. A float's `key:` is required,
-    /// so there is nothing to back out to, and a card that offered it would be lying.
+    /// Revert is offered only when a `keybind =` line took the chord: a float's `key:` is
+    /// required, so there is nothing to back out to.
     func showConflictToasts(_ conflicts: [KeybindConflict]) {
         // Reconcile rather than rebuild. Answering a card writes, which reloads, which lands back
         // here with one fewer conflict: tearing the stack down and re-showing it sprang every
         // surviving card out and a new one in, so the remaining cards visibly dropped and settled.
-        // A card the user did not touch should not move (ZEN-368).
+        // A card the user did not touch should not move.
         var kept: [(conflict: KeybindConflict, toast: WeakToast)] = []
         for entry in conflictToasts {
             guard let toast = entry.toast.value else { continue }  // already closed by hand
@@ -1421,13 +1431,12 @@ final class WindowController: NSObject {
             let content = ToastContent(
                 variant: .warning, title: conflict.headline, message: conflict.message)
             let shown = toasts.showSticky(content, actions: actions, showsClose: true)
-            // The third exit: close it, change nothing, and meet it again next launch. Answering is
-            // a write, and putting a card away must not be one (ZEN-368).
+            // The third exit: close it, change nothing, meet it again next launch. Answering is a
+            // write and putting a card away must not be one.
             //
-            // `weak toast`, not `shown`: this closure is stored ON the card, so capturing it strongly
-            // is a cycle. It would leak, and worse, `conflictToasts` holds the card weakly precisely
-            // so a hand-closed one drops out and can be raised again. A leaked card stays non-nil,
-            // is kept by the reconcile, and the conflict never comes back.
+            // `weak toast`, not `shown`: this closure is stored ON the card, so a strong capture
+            // cycles. A leaked card stays non-nil, survives the reconcile, and the conflict never
+            // comes back.
             shown.onClose = { [weak self] in toast.map { self?.toasts.dismiss($0) } }
             toast = shown
             conflictToasts.append((conflict, WeakToast(value: shown)))
@@ -1458,16 +1467,12 @@ final class WindowController: NSObject {
     }
 
     /// Deliver the config-problems notice to `keyWindow`, replacing any predecessor across every
-    /// window. Returns whether a window took it; `false` leaves the notice already up untouched, so
+    /// window. Returns whether a window took it; `false` leaves the notice already up untouched so
     /// `ConfigApplier` can retry on the next reload.
     ///
-    /// Static, and taking both the target and the full window list, purely so it is reachable from
-    /// a test. Inline in `AppDelegate`'s sink this was the last of the closure body that nothing
-    /// could drive, and the ordering is the whole point: sweeping before the key window resolves
-    /// would take an accurate notice down and put nothing back.
-    ///
-    /// Sweeping *every* window rather than just the target matters because the outstanding notice
-    /// went to whichever window was key at the time, which need not be the one taking this one.
+    /// Sweeps *every* window, not just the target, because the outstanding notice went to whoever
+    /// was key at the time. Sweeping before the key window resolves would take an accurate notice
+    /// down and put nothing back.
     static func deliverConfigDiagnosticsNotice(
         _ content: ToastContent, landingScope: ConfigDiagnostic.Scope,
         to keyWindow: WindowController?, replacingAcross windows: [WindowController]
@@ -1488,15 +1493,29 @@ final class WindowController: NSObject {
         builtToasts?.dismiss(toast)
     }
 
-    /// Open the tool-float add / edit form from the Tools section (`nil` adds, a value edits). Closes
-    /// the Settings card first — one modal slot — mirroring the picker → Add-Workspace hand-off. On
-    /// save or cancel it hands back to Settings → Tools (the section it was launched from).
+    /// Where the tool-float form hands back to when it closes. Launched from Settings → Tools the card
+    /// has to come back, or saving a float drops the user on a bare terminal from a place they were
+    /// mid-task in. Launched from ⌘P there is nothing behind it to restore.
+    private enum ToolFormReturn { case settings, none }
+
+    /// Where a form opened by the `new_tool_float` chord hands back to: Settings when the gate just
+    /// closed it, and whatever the previous form was returning to when the gate closed one of
+    /// those. Anything else has nothing to restore.
+    private func toolFormReturnForNewTool() -> ToolFormReturn {
+        switch closingModalKind {
+        case .settings: return .settings
+        case .toolFloatForm: return toolFormReturn ?? .none
+        default: return .none
+        }
+    }
+
+    /// Open the tool-float add / edit form (`nil` adds, a value edits).
     ///
     /// `existingIDs` is the slug of every *other* float, which the form rejects a colliding title
     /// against; subtracting the edited float's own id is what lets a re-save keep its title. The
     /// built-ins are in there too: the parser refuses a line claiming one, so without this the form
-    /// would cheerfully write a line that vanishes on the next reload.
-    private func openToolFloatForm(editing float: ToolFloat?) {
+    /// would write a line that vanishes on the next reload.
+    private func openToolFloatForm(editing float: ToolFloat?, returnTo: ToolFormReturn = .settings) {
         closeModal()
         let existingIDs = Set(GeneralConfig.current.floats.map(\.id))
             .subtracting(float.map { [$0.id] } ?? [])
@@ -1507,10 +1526,13 @@ final class WindowController: NSObject {
             existingIDs: existingIDs,
             capturer: keybindCapturer,
             background: Theme.current.chrome.background.nsColor,
-            onSubmit: { [weak self] built in self?.submitToolFloat(built, replacing: originalID) },
-            onCancel: { [weak self] in self?.reopenSettingsOnTools() },
+            onSubmit: { [weak self] built in
+                self?.submitToolFloat(built, replacing: originalID, returnTo: returnTo)
+            },
+            onCancel: { [weak self] in self?.finishToolFloatForm(returnTo) },
             onDelete: float.map { existing in { [weak self] in self?.deleteToolFloat(existing) } }
         )
+        toolFormReturn = returnTo
         presentModal(form, kind: .toolFloatForm)
     }
 
@@ -1534,7 +1556,9 @@ final class WindowController: NSObject {
     /// entry, and keybind appear with no restart, then hand back to Settings → Tools. A write failure
     /// keeps the form up with a toast. `originalID` is the id before an edit — when a rename changed
     /// it, the old line is removed in the same write so the float moves rather than duplicating.
-    private func submitToolFloat(_ float: ToolFloat, replacing originalID: String?) {
+    private func submitToolFloat(
+        _ float: ToolFloat, replacing originalID: String?, returnTo: ToolFormReturn = .settings
+    ) {
         let removals: Set<String> = (originalID.map { $0 != float.id ? [$0] : [] }) ?? []
         do {
             try ConfigWriter.apply(floatUpserts: [float], floatRemovals: removals)
@@ -1546,7 +1570,16 @@ final class WindowController: NSObject {
             return
         }
         AppConfig.reload()
-        reopenSettingsOnTools()
+        finishToolFloatForm(returnTo)
+    }
+
+    /// Take the tool-float form down, restoring Settings → Tools when that is where it came from.
+    private func finishToolFloatForm(_ returnTo: ToolFormReturn) {
+        toolFormReturn = nil
+        switch returnTo {
+        case .settings: reopenSettingsOnTools()
+        case .none: closeModal()
+        }
     }
 
     /// Persist a new float order (`floats` arrives in the user's intended order), then reload so the
@@ -1755,8 +1788,8 @@ final class WindowController: NSObject {
             return
         }
         // ⇧⏎ replaces the current tab, terminating every pane and drawer in it. That silent
-        // clobber gets a confirm when the tab has live work; an idle tab is replaced outright
-        // (ZEN-213). Floats are window-scoped and survive a tab replace, so they don't count.
+        // clobber gets a confirm when the tab has live work; an idle tab is replaced outright.
+        // Floats are window-scoped and survive a tab replace, so they don't count.
         let replace = { [weak self] in
             self?.replaceActiveTab(cwd: ws.path, pinnedTitle: ws.title, workspace: ws)
         }
@@ -1775,6 +1808,10 @@ final class WindowController: NSObject {
 
     func handle(_ chord: KeyInterceptor.ReservedChord) {
         guard !tabs.order.isEmpty else { return }  // window tearing down after last tab closed
+        // Written by the card gate below and read by the action that opens in its place, both later in
+        // this call. Cleared here so a value can never survive into a later keypress and hand a form
+        // back to a card that closed minutes ago.
+        closingModalKind = nil
         let active = activeController
         // The close confirm is modal over the window: while it's up every chord is
         // swallowed. Its Return/Esc/button answers go through the toast's own key
@@ -1799,18 +1836,16 @@ final class WindowController: NSObject {
             }
             switch chord {
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
-                .openDiffViewer:
+                .openDiffViewer, .newTool:
+                closingModalKind = modal.kind  // the surface opening below may have to hand back to it
                 closeModal()  // close the current card, then open the requested surface below
             case .selectTab, .prevTab, .nextTab:
-                // The diff viewer is a reading surface you live in, not a form waiting on an answer,
-                // so a tab switch acts instead of being swallowed — the same as with a tool float
-                // open (see the `floats.isOpen` block below). It can't *ride* the switch the way a
-                // float does, because a card is tab-hosted (`presentTileOverlay`) and unmounts with
-                // its tab, so it closes. ZEN-298 keeps each tab's session, so ⌘D in the tab you land
-                // on comes back where that tab left off.
+                // The diff viewer is a reading surface, not a form waiting on an answer, so a tab
+                // switch acts instead of being swallowed. It closes rather than riding the switch
+                // the way a float does, because the diff belongs to the tab it was opened from and
+                // each tab keeps its own session.
                 //
-                // Every other card stays swallowed: a palette, a form, or a confirm is mid-question,
-                // and answering it by walking away is not the same act as leaving a diff open.
+                // Every other card stays swallowed: a palette, form or confirm is mid-question.
                 guard modal.kind == .diffViewer else { return }
                 closeModal()
             default:
@@ -1836,13 +1871,14 @@ final class WindowController: NSObject {
                 .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom:
                 toastFloatBlocked()
                 return
-            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .openDiffViewer:
+            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .openDiffViewer,
+                .newTool:
                 floats.close()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab, .fillScreen,
                 .increaseFontSize, .decreaseFontSize, .resetFontSize, .selectAll:
                 // Cross-tab/window chords still act; Fill Screen is window-level. Font size is
                 // app-wide and the float itself is a terminal surface, so resizing over an open
-                // float resizes the float too: blocking it here would be the ZEN-224 bug again.
+                // float resizes the float too: blocking it here would be the bug again.
                 // Select All is here because Edit > Select All reaches the float from the responder
                 // chain, and a rebound chord swallowed here would disagree with the menu.
                 break
@@ -1880,7 +1916,7 @@ final class WindowController: NSObject {
             .increaseFontSize, .decreaseFontSize, .resetFontSize:
             // App-global (window manager / config reload / update check / font size). The keyboard
             // path routes these in AppDelegate before handle; a palette pick lands here, so forward
-            // it back. Font size is app-global for the reason ZEN-224 exists: scoping it to a window
+            // it back. Font size is app-global on purpose: scoping it to a window
             // would leave the same "didn't propagate" bug one level up.
             onAppGlobalCommand?(chord)
         case .toggleBottomDrawer:
@@ -1923,6 +1959,10 @@ final class WindowController: NSObject {
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
         case .reportIssue: openReportIssue()
+        // Settings was the only way to create a tool float; this is the same form, reached from ⌘P.
+        // The chord is bindable, so it can be pressed with Settings already up: the gate above closed
+        // that card, and cancelling has to put it back rather than drop the user on a bare terminal.
+        case .newTool: openToolFloatForm(editing: nil, returnTo: toolFormReturnForNewTool())
         case .openDiffViewer: openDiffViewer()
         }
     }
@@ -1983,13 +2023,11 @@ final class WindowController: NSObject {
             confirmLabel: "Quit", onConfirm: onQuit, onCancel: onCancel)
     }
 
-    /// ⌘W: close silently when there's nothing to lose; otherwise confirm first.
-    /// - A focused drawer closes like `exit` (just the drawer, not the tab): confirm only when
-    ///   it's busy; an idle drawer closes silently, like an empty pane (ZEN-213).
-    /// - A non-last pane confirms only if it's busy (mid-tab work).
-    /// - The last pane closes the tab, so the confirm is titled "Close Tab": confirm only when
-    ///   the tab has live work; an idle tab closes silently whether or not other tabs remain.
-    /// `exit`/middle-click stay out of scope.
+    /// ⌘W: close silently when there's nothing to lose, otherwise confirm first.
+    /// - A focused drawer closes like `exit`, just the drawer, and confirms only when busy.
+    /// - A non-last pane confirms only if it's busy.
+    /// - The last pane closes the tab, so the confirm is titled "Close Tab" and fires only when
+    ///   the tab has live work.
     private func requestClosePane() {
         guard let active = activeController else { return }
 
@@ -2010,13 +2048,10 @@ final class WindowController: NSObject {
         // ⌘W on the last pane closes the tab; on the last tab that also closes the window.
         let closesWindow = lastPane && tabs.order.count == 1
 
-        // The confirm weighs exactly the live work THIS ⌘W would stop. Closing the tab stops its
-        // panes and drawers, so those count once it's the last pane. Floats are window-scoped and
-        // survive a tab close (a persistent one keeps running, hidden) — they only die when ⌘W
-        // also closes the window, so they count only then; a dismissed `persist:` tool running
-        // with no on-screen trace is exactly why the window-close case must still see it
-        // (ZEN-141). An idle tab has nothing to lose, so it closes with no toast whether or not
-        // other tabs remain (ZEN-213).
+        // Weighs exactly the live work THIS ⌘W would stop. Panes and drawers count once it's the
+        // last pane. Floats are window-scoped and survive a tab close, so they count only when ⌘W
+        // also closes the window, which is where a dismissed persistent tool has no on-screen
+        // trace and would otherwise die unannounced.
         let needsConfirm =
             busy || (lastPane && active.hasBusyDrawer) || (closesWindow && floats.hasBusy)
         guard needsConfirm else {
@@ -2041,16 +2076,13 @@ final class WindowController: NSObject {
 
     // MARK: the Edit menu's verbs, routed to the shown tool float, else the active tab's controller
 
-    // The terminal end of the responder chain for Copy, Paste and Select All. Anything with a caret
-    // is above this: a focused field editor implements all three itself and never lets them reach
-    // the window, which is the whole of how a text field gets served (ZEN-370). Cut, Undo and Redo
-    // are the field's alone and stop there, so nothing here answers them and both items grey out
-    // over a pane.
+    // The terminal end of the responder chain for Copy, Paste and Select All. Anything with a
+    // caret is above this and never lets them reach the window. Cut, Undo and Redo are the field's
+    // alone, so nothing here answers them and they grey out over a pane.
     //
-    // A shown float is modal over the window, so it owns the verbs; a persistent float's surface
-    // outlives its card, so gate on visibility (`isOpen`), not on the registry. A modal card or a
-    // confirm swallows instead of acting: reaching here means the card had no field to take it, and
-    // a card is mid-question, so selecting or copying the buffer behind it answers nothing.
+    // A shown float is modal and owns the verbs, gated on visibility rather than the registry
+    // because a persistent float's surface outlives its card. A modal card swallows instead of
+    // acting: it is mid-question, so copying the buffer behind it answers nothing.
     @objc func copy(_ sender: Any?) {
         if isConfirmOpen || isModalOverlayOpen { return }
         if floats.isOpen { floats.copyFromSurface(sender) } else { activeController?.copyFromSurface(sender) }
@@ -2112,15 +2144,9 @@ final class WindowController: NSObject {
         c.onCommandFinished = { [weak self] result in self?.commandFinished(id: id, result: result) }
     }
 
-    /// A background tab posted an OSC 777 desktop notification (e.g. an agent asking for
-    /// permission or waiting for input) → flag its number rose and show the notification's own
-    /// message, unless it's the tab you're already looking at. A repeat refreshes the toast in
-    /// place, so "needs permission" updates to "waiting for input" without stacking.
     /// A tool float's agent wants attention. Floats are window-level, so unlike a pane or drawer
-    /// this has no owning tab: it gets the OS banner (the "I walked away" case, named for the
-    /// float rather than a tab it doesn't belong to) but not the in-app rose flag, which is a
-    /// per-tab signal — lighting the active tab would point at a surface that isn't the source.
-    /// Clicking the banner raises this window on its current tab.
+    /// this has no owning tab: it gets the OS banner but not the in-app rose flag, which is a
+    /// per-tab signal that would otherwise point at a surface that isn't the source.
     private func floatNotified(_ notification: TerminalNotification, from spec: ToolFloat) {
         // The notification arrives off the terminal's read path; only touch the UI on main.
         DispatchQueue.main.async { [weak self] in
@@ -2246,7 +2272,7 @@ final class WindowController: NSObject {
             variant: .warning, title: "Terminal Didn't Start",
             message: "The terminal surface failed to launch.")
         // `weak` breaks the retain cycle toast → button → onTap → toast that would otherwise leak this
-        // sticky toast past dismissal (ZEN-229); the presenter's stack keeps it alive until dismissed.
+        // sticky toast past dismissal; the presenter's stack keeps it alive until dismissed.
         weak var toast: ToastView?
         let actions = [
             ToastAction(title: "Close Pane", kind: .destructive) { [weak self] in
@@ -2269,7 +2295,7 @@ final class WindowController: NSObject {
     }
 
     /// Test hooks: the panel and surface scroll mode would target, so a test can assert what the
-    /// header on screen reads rather than only what the mode's own flag says (ZEN-330).
+    /// header on screen reads rather than only what the mode's own flag says.
     var focusedPanelForTesting: PanelHostView? { activeController?.focusedScrollTarget?.panel }
     var focusedScrollTargetForTesting: (surface: TerminalSurface, panel: PanelHostView)? {
         activeController?.focusedScrollTarget
@@ -2311,7 +2337,7 @@ final class WindowController: NSObject {
         return attentionStates[tabs.order[tabIndex]]
     }
 
-    /// Test hook: the diff-viewer session a given tab is holding (ZEN-298). The overlay keeps its
+    /// Test hook: the diff-viewer session a given tab is holding. The overlay keeps its
     /// `session` private, so identity across a tab round-trip is only reachable from the tab that owns
     /// it — which is the thing the ticket is about.
     func diffViewerSessionForTesting(tabIndex: Int) -> DiffViewerSession? {
@@ -2445,7 +2471,7 @@ extension WindowController: NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) { endModes() }
 
     /// Quit terminates the process without closing windows, so `windowWillClose` never fires
-    /// and every shell is orphaned instead of swept (ZEN-269). The app delegate drives this on
+    /// and every shell is orphaned instead of swept. The app delegate drives this on
     /// the way out. `tearDown()` is idempotent, so a window that closes normally afterwards is
     /// unaffected.
     func tearDownForQuit() { tearDown() }

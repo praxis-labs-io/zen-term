@@ -1,7 +1,7 @@
 import Foundation
 
 /// Appends log lines to a size-capped, rotated file set, written on a serial background queue so a
-/// write never touches the main thread (ZEN-90). The active file is `fileName`; when a write would
+/// write never touches the main thread. The active file is `fileName`; when a write would
 /// push it past `maxBytes` it rotates (`fileName` → `fileName.1` → …), keeping at most `maxFiles`
 /// files total and dropping the oldest.
 public final class LogFileSink {
@@ -39,7 +39,7 @@ public final class LogFileSink {
     }
 
     /// The log files that currently exist, active file first then each present rotation — the set
-    /// Export Diagnostics bundles (ZEN-11). Keeps the naming scheme here rather than leaking
+    /// Export Diagnostics bundles. Keeps the naming scheme here rather than leaking
     /// `fileName`/`.1` to callers. Runs on the write queue, so lines still queued when an export
     /// starts are on disk before this returns (the newest line is the one a bug report most needs)
     /// and a concurrent `rotate()` can't tear the listing. Blocks until the queue drains, so call it

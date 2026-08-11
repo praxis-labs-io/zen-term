@@ -5,7 +5,7 @@ import XCTest
 @testable import ZenTerm
 
 /// Where Copy, Paste and Select All land, which is a question about the responder chain rather than
-/// about any one controller (ZEN-370).
+/// about any one controller.
 ///
 /// The Edit menu carries AppKit's own `copy:` / `paste:` / `selectAll:` with no target, so the chain
 /// decides: a focused field editor implements all three and takes them first, and `WindowController`
@@ -230,7 +230,7 @@ final class EditMenuRoutingTests: WindowTestCase {
     }
 
     /// A shown float is modal over the window, so it owns the verb, the same rule copy and paste
-    /// already follow. Before ZEN-370 the chord was swallowed by `handle`'s float gate.
+    /// already follow. The chord used to be swallowed by `handle`'s float gate.
     func test_selectAll_overAnOpenToolFloat_reachesTheFloat() throws {
         var config = GeneralConfig.builtIn
         config.floats = [

@@ -12,7 +12,7 @@ final class KeybindRow: NSView {
         case diagnostic
         /// A chord conflict: a line in the config gave this row's chord to something else, and the
         /// row offers Accept and Revert beside this. Muted rather than warning-toned, because the
-        /// config is doing what it says and the answer is right there (ZEN-368).
+        /// config is doing what it says and the answer is right there.
         case explanation
         /// A side effect of an edit the user just made elsewhere in the card — this row's chord was
         /// taken by another action's reset. Transient: the next refresh clears it.

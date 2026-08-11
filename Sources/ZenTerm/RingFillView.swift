@@ -7,7 +7,7 @@ import AppKit
 /// the padding too and there is nothing to do. Below alpha 1 that fill has to stop, or it repaints
 /// the terminal background behind a surface that is now see-through and nothing shows through — so
 /// this takes over the border region alone, at the same alpha the terminal blends at, and the two
-/// read as one surface instead of the ring sitting a shade lighter (ZEN-282).
+/// read as one surface instead of the ring sitting a shade lighter.
 ///
 /// A view rather than a `CAShapeLayer` hand-inserted under the host's own sublayers, where AppKit
 /// owns the ordering and a later subview insertion can reshuffle it.

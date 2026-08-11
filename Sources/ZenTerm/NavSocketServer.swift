@@ -14,7 +14,7 @@ final class NavSocketServer {
     /// `~/Library/Application Support/ZenTerm/nav.<pid>.sock`. Exported to panes as
     /// `$ZEN_SOCK`. Per-instance: a shared well-known path let a second running ZenTerm
     /// (a `swift run` dev build beside the installed app) bind over this instance's socket
-    /// and then delete it on quit, leaving every nvim here deaf until relaunch (ZEN-116).
+    /// and then delete it on quit, leaving every nvim here deaf until relaunch.
     static var socketURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ZenTerm", isDirectory: true)

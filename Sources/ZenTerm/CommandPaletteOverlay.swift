@@ -20,7 +20,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
 
     /// Re-resolved rather than snapshotted: a `PaletteCommand` bakes its shortcut glyph in when the
     /// catalog builds it, so an open palette held a stale chord after a rebind — `reapplyTheme()`
-    /// rebuilt the row views but replayed the shortcut captured at construction (ZEN-281).
+    /// rebuilt the row views but replayed the shortcut captured at construction.
     private let resolveCommands: () -> [PaletteCommand]
     private var commands: [PaletteCommand]
     private var rows: [Row]

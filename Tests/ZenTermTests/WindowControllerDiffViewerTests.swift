@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The diff viewer's off-main open path (ZEN-234). The repo-root walk is filesystem I/O, so
+/// The diff viewer's off-main open path. The repo-root walk is filesystem I/O, so
 /// `openDiffViewer()` resolves it off the main thread and presents on the hop back — which means it
 /// must NOT present within its own turn, and a second ⌘D landing in the resolve gap must not queue
 /// a second viewer. Both are things a state-only check would miss (the modal slot only fills after
@@ -94,7 +94,7 @@ final class WindowControllerDiffViewerTests: WindowTestCase {
         XCTAssertFalse(c.hasDiffWatcherForTesting, "window teardown must release the repo stream")
     }
 
-    /// Two tabs on two repos each keep their own session (ZEN-298). The slot used to live on
+    /// Two tabs on two repos each keep their own session. The slot used to live on
     /// `WindowController`, so opening the viewer in a second tab on a different repo evicted the
     /// first tab's session; going back rebuilt from nothing, which the reader sees as a spinner and
     /// the top of the file they were part-way through.
@@ -165,7 +165,7 @@ final class WindowControllerDiffViewerTests: WindowTestCase {
     }
 
     /// A tab switch acts with the viewer up instead of being swallowed, the same as with a tool
-    /// float open. The card is tab-hosted so it closes rather than riding the switch; ZEN-298's
+    /// float open. The card is tab-hosted so it closes rather than riding the switch; the
     /// per-tab session is what makes that cheap, since ⌘D on the far side comes back in place.
     func test_diffViewer_tabSwitchChordActs_insteadOfBeingSwallowed() throws {
         let c = makeWindow()

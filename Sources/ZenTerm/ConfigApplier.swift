@@ -1,11 +1,11 @@
 import Foundation
 
-/// The app-global half of the `.configDidChange` fan-out (ZEN-48), lifted out of `AppDelegate` so
-/// it can be driven in a test (ZEN-281).
+/// The app-global half of the `.configDidChange` fan-out, lifted out of `AppDelegate` so
+/// it can be driven in a test.
 ///
 /// `AppDelegate` is the `NSApplicationDelegate` singleton: it binds the nav socket and builds
 /// windows at launch, and its observer closes over private stored properties. A test could neither
-/// stand one up in a known state nor see what the observer block did — and both ZEN-48 regressions
+/// stand one up in a known state nor see what the observer block did — and both regressions
 /// lived in exactly that block.
 ///
 /// Every collaborator arrives as a closure so a test can substitute a double. The doubles model
@@ -20,7 +20,7 @@ final class ConfigApplier {
     /// Every closure type is `@MainActor`, and that is load-bearing rather than decorative: a plain
     /// `() -> Void` property erases the isolation of whatever it was built from, so a sink could do
     /// off-main work — including reaching the config parse — and compile clean straight through
-    /// this seam (ZEN-31).
+    /// this seam.
     struct Sinks {
         /// Rebuild the key interceptor's chord → action map.
         var setKeymap: @MainActor ([Chord: KeyInterceptor.ReservedChord]) -> Void
@@ -92,8 +92,8 @@ final class ConfigApplier {
     ///
     /// Launch does not go through `apply(_:)`; it calls this directly, so a second surface added
     /// beside the first and wired only into `apply` is announced on reload and silent at launch.
-    /// That shipped once: three conflicts, no cards, because launch called the half by name
-    /// (ZEN-368). One public method is what makes calling half of it impossible rather than merely
+    /// That shipped once: three conflicts, no cards, because launch called the half by name.
+    /// One public method is what makes calling half of it impossible rather than merely
     /// unlikely.
     func surfaceConfigNotices() {
         surfaceConfigDiagnostics()
@@ -113,7 +113,7 @@ final class ConfigApplier {
     /// that describes different problems.
     private func surfaceConfigDiagnostics() {
         // Chord conflicts are announced one card each, by `surfaceConflicts`. What's left shares a
-        // notice, because none of it has anything to press (ZEN-368).
+        // notice, because none of it has anything to press.
         let diagnostics = GeneralConfig.current.configDiagnostics.filter { !$0.isChordConflict }
         guard !diagnostics.isEmpty else {
             // Nothing is wrong any more. `announcement` returns nil for an empty set, so before
@@ -139,7 +139,7 @@ final class ConfigApplier {
         lastAnnouncedDiagnostics = diagnostics
     }
 
-    /// Card every chord conflict the config is reporting, one each (ZEN-368).
+    /// Card every chord conflict the config is reporting, one each.
     ///
     /// Retracted as well as raised, for the reason the shared notice is: the cards state what is
     /// true now, so answering one in Settings or fixing the file by hand has to take its card down.

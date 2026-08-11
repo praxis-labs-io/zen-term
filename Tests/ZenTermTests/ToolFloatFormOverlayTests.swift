@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the tool-float add / edit form (ZEN-109): drive the real fields + chord
+/// Interaction tests for the tool-float add / edit form: drive the real fields + chord
 /// chip in a window and assert the built `ToolFloat` (or that an invalid form is blocked). A
 /// state-only test would pass while the form's controls were dead — exactly the failure mode the
 /// project's interaction-test rule guards against.
@@ -30,7 +30,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
     /// The form asks `GeneralConfig.current.keymap` whether a chord is taken, and this suite never
     /// pinned it, so every case here ran against whatever the previous suite left behind. It passed
     /// for years on the order this machine happens to produce and failed on CI's the first time a
-    /// fixture chord became a shipped default (ZEN-367). Pin it, and the answer stops depending on
+    /// fixture chord became a shipped default. Pin it, and the answer stops depending on
     /// who ran before.
     override func setUp() {
         super.setUp()
@@ -112,9 +112,9 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
     }
 
     /// Press Esc as a `performKeyEquivalent` traversal of the contentView subtree. This is the real
-    /// layer for the card-cancel case (confirmed in the running app, ZEN-5): a text field routes Esc
+    /// layer for the card-cancel case (confirmed in the running app): a text field routes Esc
     /// through `cancelOperation`, and the card root claims it here to beat the Cancel button's own
-    /// key equivalent (ZEN-77). It is NOT the path for a bare Esc over an open popover — that reaches
+    /// key equivalent. It is NOT the path for a bare Esc over an open popover — that reaches
     /// the focused control's `keyDown` first, so grid dismissal is driven through the picker's
     /// `keyDown` directly (see `test_iconGrid_escKeyDown_closesGrid`), not this helper.
     @discardableResult
@@ -248,7 +248,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
     }
 
     /// Two floats whose titles slug alike would collide on id, and the config's last-wins rule would
-    /// silently eat one. The form is what prevents that (ZEN-81).
+    /// silently eat one. The form is what prevents that.
     func test_duplicateTitle_blocksSubmit() {
         let (overlay, capturer, sink) = mount(existingIDs: ["dev"])
         field(in: overlay, placeholder: "Open GitDash").setText("dev")
@@ -342,7 +342,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
 
     /// The footer buttons used to be Left/Right-only (Cancel and Delete shared Submit's vertical
     /// stop), so Tab skipped straight past them — a button unreachable by Tab looks perfectly fine
-    /// on screen (ZEN-217). Drive real Tab keyDowns and assert focus walks Submit → Cancel → Delete.
+    /// on screen. Drive real Tab keyDowns and assert focus walks Submit → Cancel → Delete.
     func test_footer_tabWalksSubmitCancelDelete() {
         let existing = existingFloat(title: "dev", icon: IconCatalog.defaultSymbol)
         let (overlay, _, _) = mount(editing: existing, withDelete: true)
@@ -361,7 +361,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
     }
 
     /// A bare Esc over an open icon grid closes the grid at its real dispatch layer — the picker's
-    /// own `keyDown`, which fires before any card-root `performKeyEquivalent` (ZEN-5). Driving the
+    /// own `keyDown`, which fires before any card-root `performKeyEquivalent`. Driving the
     /// real keyDown is what locks this: a `performKeyEquivalent`-by-hand press would stay green even
     /// if this handler were deleted, because that path never runs for a bare Esc while the picker
     /// holds focus — the exact false-green the ticket called out.
@@ -684,7 +684,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.submitted.first?.dir?.path, home.standardizedFileURL.path)
     }
 
-    // MARK: Esc layering (ZEN-149)
+    // MARK: Esc layering
 
     /// Esc from a focused text field closes the card.
     func test_escape_fromFocusedTextField_cancelsTheForm() {
@@ -696,7 +696,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.cancelled, 1)
     }
 
-    // MARK: Tab (ZEN-146)
+    // MARK: Tab
 
     /// Height hangs off Width with Right and isn't a vertical stop, so routing its Tab through
     /// `moveVertical` skipped it entirely and left the field unreachable by Tab. Tab walks the

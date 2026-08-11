@@ -2,8 +2,8 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The off-main git-status cache behind the ⌘⇧P picker's and Settings → Workspaces' badges
-/// (ZEN-15). Pure logic over a real temp tree — no AppKit — so it pins the two things the badge
+/// The off-main git-status cache behind the ⌘⇧P picker's and Settings → Workspaces' badges.
+/// Pure logic over a real temp tree — no AppKit — so it pins the two things the badge
 /// rows depend on: an unprobed directory answers "unknown" rather than "not a repo", and a refresh
 /// re-answers, which is what lets a freshly `git init`ed folder pick up its badge without a
 /// relaunch.

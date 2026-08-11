@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The tool-float icon roster (ZEN-153). Two invariants that were previously only remembered: the
+/// The tool-float icon roster. Two invariants that were previously only remembered: the
 /// grid stays rectangular, and every symbol in it actually resolves to an image. A fat-fingered SF
 /// Symbol name or a brand asset that failed to bundle renders as a blank cell in the picker with
 /// nothing else to catch it.

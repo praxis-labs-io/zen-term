@@ -1,7 +1,7 @@
 import AppKit
 import GhosttyKit
 
-/// NSAccessibility for `GhosttyHostView` (ZEN-323), ported from ghostty's own `SurfaceView`
+/// NSAccessibility for `GhosttyHostView`, ported from ghostty's own `SurfaceView`
 /// accessibility conformance. This is what makes the terminal readable to VoiceOver and other
 /// assistive tools: the view answers as a single text area whose value is the full screen
 /// contents (scrollback included).

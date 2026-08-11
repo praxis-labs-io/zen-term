@@ -7,7 +7,7 @@ import XCTest
 /// roots always miss and the `.module` fallback rescues resolution regardless of
 /// whether the primary path works. These drive the `searchRoots` seam with fixtures
 /// so a broken probe order or subpath is caught, and assert the hardcoded bundle
-/// name still matches what SwiftPM emits (a drift there re-ships the ZEN-175 crash).
+/// name still matches what SwiftPM emits (a drift there re-ships the crash).
 final class BundleZenResourceTests: XCTestCase {
     private var roots: [URL] = []
 
@@ -72,7 +72,7 @@ final class BundleZenResourceTests: XCTestCase {
 
     /// The stand-down shader has to actually ship. Missing, it resolves nil and an unfocused
     /// surface runs no shader at all — which still hides the tracer, so nothing looks broken
-    /// until a cursor smear flies in from a stale position on the next focus (ZEN-237).
+    /// until a cursor smear flies in from a stale position on the next focus.
     func test_passthroughShaderIsBundled() throws {
         let path = try XCTUnwrap(
             TerminalKitResources.passthroughShaderPath, "passthrough.glsl missing from the bundle")

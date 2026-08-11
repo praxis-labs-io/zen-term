@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the Tools settings section (ZEN-109): mount the real section over a
+/// Interaction tests for the Tools settings section: mount the real section over a
 /// sandboxed config, assert it renders a row per configured float, that add / edit route out
 /// through `onEditFloat`, and that remove writes the config and drops the row. The write→reload
 /// roundtrip is sandboxed via `ConfigLoader.defaultRootOverrideForTesting`.
@@ -170,7 +170,7 @@ final class SettingsToolsSectionTests: WindowTestCase {
         XCTAssertEqual(sink.calls.first??.id, "top")
     }
 
-    // MARK: reorder (ZEN-81)
+    // MARK: reorder
 
     /// ⌥↓ moves the float itself and persists it. Asserted through the config file, because that's the
     /// thing the dock and ⌘P re-read — a row list that reordered without the write would look right

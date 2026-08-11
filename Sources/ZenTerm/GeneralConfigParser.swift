@@ -8,7 +8,7 @@ import TerminalKit
 /// `GhosttyThemeParser`: unknown keys are ignored, a malformed value falls back to the
 /// corresponding `fallback` field, and an out-of-range number is clamped to the nearest
 /// valid extreme — every adjustment logs one warning AND collects a `ConfigDiagnostic` so a
-/// Settings row can show it in place (ZEN-7), and nothing ever throws.
+/// Settings row can show it in place, and nothing ever throws.
 enum GeneralConfigParser {
     @MainActor
     static func parse(_ text: String, fallback: GeneralConfig) -> GeneralConfig {
@@ -54,6 +54,8 @@ enum GeneralConfigParser {
                 }
             case "macos-option-as-alt":
                 if let b = parseBool(value, key, &diagnostics) { config.optionAsAlt = b }
+            case "font-thicken":
+                if let b = parseBool(value, key, &diagnostics) { config.fontThicken = b }
             case "scroll-multiplier":
                 if let n = parseDouble(value, key, &diagnostics) {
                     config.scrollMultiplier = clamp(n, 0.1, 10, key, &diagnostics)
@@ -112,6 +114,8 @@ enum GeneralConfigParser {
                 if !value.isEmpty { config.shell = value }
             case "shell-args":
                 config.shellArgs = value.split(whereSeparator: \.isWhitespace).map(String.init)
+            case "tab-inherit-cwd":
+                if let b = parseBool(value, key, &diagnostics) { config.tabInheritCWD = b }
             case "editor":
                 if !value.isEmpty { config.editor = value }
             case "ai":
@@ -168,7 +172,7 @@ enum GeneralConfigParser {
     }
 
     /// A keybind line that didn't parse. `toggle_lazygit` gets a named migration warning —
-    /// ZEN-140 removed the built-in lazygit, and "unparseable" would hide what changed. The
+    /// The built-in lazygit was removed, and "unparseable" would hide what changed. The
     /// suggested replacement echoes the full documented parity recipe (icon/title/height match
     /// the old built-in card) and keeps the chord from the user's own dropped line, so following
     /// the log verbatim reproduces what they had. Exact-match on the action left of `=` (the same

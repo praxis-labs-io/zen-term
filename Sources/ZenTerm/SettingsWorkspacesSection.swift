@@ -66,7 +66,7 @@ final class SettingsWorkspacesSection: SettingsSection {
     /// delete because the form hands back to a freshly-built Settings → Workspaces (no in-place
     /// mutation here).
     private func populateRows() {
-        // The file is read off the main thread (ZEN-275), so the section mounts with its caption and
+        // The file is read off the main thread, so the section mounts with its caption and
         // add button and the rows land a moment later. It must not render the "no workspaces yet"
         // hint in the meantime: that hint is the answer for an empty FILE, and flashing it while the
         // file is still being read tells the user their workspaces are gone.
@@ -153,7 +153,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         // ⌥↓⌥↓ walks one down without re-finding it.
         if let title, let moved = rows.first(where: { $0.workspace.title == title }) {
             stack.window?.makeFirstResponder(moved)
-            moved.scrollToVisible(moved.bounds)
+            KeyboardFocus.reveal(moved, among: rows + [addButton])
             return
         }
         // Focus was in this section before the rebuild, so put it back: on the add button if that's
@@ -231,7 +231,7 @@ final class WorkspaceRow: NSView {
     private let subtitleLabel: NSTextField
     /// A muted Git logo, trailing, when the folder is a repo — mirrors the ⌘P picker's badge, and
     /// like the picker's it starts hidden and turns on from `GitRepoStatus` once a background probe
-    /// lands (the check is filesystem I/O, which never runs on the main thread — ZEN-90).
+    /// lands (the check is filesystem I/O, which never runs on the main thread).
     private let gitBadge = NSImageView()
     private var isFocused = false { didSet { restyle() } }
 

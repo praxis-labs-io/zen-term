@@ -25,7 +25,7 @@ final class SettingsToolsSection: SettingsSection {
     private weak var caption: NSTextField?
     private weak var emptyHint: NSTextField?
     private weak var reorderHint: NSTextField?
-    /// The dropped-`float`-line notice (ZEN-7), when the config has any. A dropped float never becomes
+    /// The dropped-`float`-line notice, when the config has any. A dropped float never becomes
     /// a row, so this top-of-section note is its only in-Settings home.
     private weak var droppedFloatNotice: NSTextField?
     private var rowsStack: NSStackView?
@@ -176,7 +176,7 @@ final class SettingsToolsSection: SettingsSection {
             self.populateRows()
             guard let moved = self.rows.first(where: { $0.float.id == movedID }) else { return }
             moved.window?.makeFirstResponder(moved)
-            moved.scrollToVisible(moved.bounds)
+            KeyboardFocus.reveal(moved, among: self.rows + [self.addButton])
         }
     }
 
@@ -222,7 +222,7 @@ final class ToolFloatRow: NSView {
     /// The trailing shortcut cell: a keycap, or a muted "Not set" when the float has none. Reads
     /// like the Keybinds section's unbound chip rather than drawing an empty cap.
     private let shortcutView: NSView
-    /// A surviving float's sub-field diagnostic (ZEN-7): a bad `width:`/`order:`/`persist:` shows here,
+    /// A surviving float's sub-field diagnostic: a bad `width:`/`order:`/`persist:` shows here,
     /// in warning tone, since the float still works and has this row.
     private let messageLabel = NSTextField(labelWithString: "")
     private var isFocused = false { didSet { restyle() } }

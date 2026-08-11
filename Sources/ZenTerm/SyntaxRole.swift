@@ -5,7 +5,7 @@ import AppKit
 /// The role is what gets stored on a `TokenSpan` in the row model — never a baked `NSColor`. This
 /// is the single place role→color lives, so a live theme swap (`reloadData` → `configure`) recolors
 /// every visible span by re-resolving against the new theme; a color baked into the model would
-/// survive the swap and wash out on the next theme (ZEN-27).
+/// survive the swap and wash out on the next theme.
 enum SyntaxRole: Equatable {
     case keyword
     case string

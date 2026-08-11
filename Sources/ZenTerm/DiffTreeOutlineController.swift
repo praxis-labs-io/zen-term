@@ -35,7 +35,7 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
     }
 
     /// Every file row in tree order — the rows a selection can land on. The first is where a load with
-    /// nothing to restore lands; the whole list is what a restored selection is matched against (ZEN-233).
+    /// nothing to restore lands; the whole list is what a restored selection is matched against.
     var fileItems: [DiffOutlineItem] {
         func leaves(in items: [DiffOutlineItem]) -> [DiffOutlineItem] {
             items.flatMap { $0.fileDiff != nil ? [$0] : leaves(in: $0.children) }
@@ -108,7 +108,7 @@ final class DiffTreeOutlineController: NSObject, NSOutlineViewDataSource, NSOutl
     }
 }
 
-/// A tree row whose selection fill is the theme accent, not macOS's system-blue highlight (ZEN-27).
+/// A tree row whose selection fill is the theme accent, not macOS's system-blue highlight.
 /// Solid accent fill while the tree holds focus; a quiet outline while the diff does, so the selected
 /// file stays marked without competing with the diff's own cursor line.
 private final class ThemedSelectionRowView: NSTableRowView {
@@ -169,7 +169,7 @@ private final class DiffSectionRowView: NSView {
         super.layout()
         let titleHeight = titleLabel.intrinsicContentSize.height
         // Clamp to the cell's real width, same as `DiffTreeRowView` — `NavOutlineView.layout()`
-        // (DiffViewerOverlay.swift) is what makes that width trustworthy (ZEN-226).
+        // (DiffViewerOverlay.swift) is what makes that width trustworthy.
         titleLabel.frame = NSRect(
             x: Self.leadingInset, y: ((bounds.height - titleHeight) / 2).rounded(),
             width: max(0, bounds.width - Self.leadingInset - DiffRowMetrics.contentTrailing),
@@ -220,7 +220,7 @@ private final class DiffTreeRowView: NSView {
 
     /// The SF Symbol + theme tint for a row: a folder for a directory; for a file, a doc tinted by its
     /// change kind — added green, deleted red, renamed accent, modified/binary neutral — with a plus
-    /// badge on additions, so new / changed / deleted read at a glance (ZEN-27: all theme roles).
+    /// badge on additions, so new / changed / deleted read at a glance (all theme roles).
     private static func icon(for item: DiffOutlineItem, chrome: ChromeTheme) -> (symbol: String, color: NSColor) {
         if item.isDirectory { return ("folder", chrome.ink(alpha: 0.5)) }
         switch item.fileDiff?.changeKind {

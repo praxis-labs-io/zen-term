@@ -3,7 +3,7 @@ import AppKit
 /// The shared hover-tooltip wiring for a control: holds the label + a live keybind resolver and
 /// drives the one `TooltipPresenter`. `IconButton` and `TabBarView.Chip` each own one and delegate
 /// their hover / click / window-exit hooks to it, instead of re-implementing the schedule + teardown
-/// glue in two places (ZEN-137). The keybind is resolved at show time, so it tracks the live keymap.
+/// glue in two places. The keybind is resolved at show time, so it tracks the live keymap.
 final class TooltipHost {
     let label: String
     private let shortcut: (() -> String?)?
@@ -23,6 +23,6 @@ final class TooltipHost {
         TooltipPresenter.shared.hide(for: source)
     }
 
-    /// Test hook: the resolved keybind glyph (ZEN-42 / ZEN-110).
+    /// Test hook: the resolved keybind glyph.
     var shortcutForTesting: String? { shortcut?() }
 }

@@ -39,7 +39,7 @@ when the budget is one the eye cannot check. Two of those:
 - **Z-order on a layered view.** Assert the subview index relative to what the view
   must cover. `superview` membership says nothing about paint order, so a card
   buried behind a sibling passes "mounted, on screen, holding first responder"
-  while being invisible (ZEN-141). See `docs/swift-conventions.md`, "Testing
+  while being invisible. See `docs/swift-conventions.md`, "Testing
   AppKit". Still show it in the runbook as well; the assertion is what stops it
   regressing silently.
 

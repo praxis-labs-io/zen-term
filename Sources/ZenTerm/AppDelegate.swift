@@ -4,8 +4,8 @@ import TabKit
 import TerminalKit
 
 /// Owns every window and routes chords/Copy/Paste to whichever is key. `⌘n` opens a
-/// new window (inheriting the key window's focused-pane cwd); every other chord goes
-/// to the key window's `WindowController`. Native macOS tabbing is disallowed on
+/// new window (at home, or the key window's focused-pane cwd under `tab-inherit-cwd`);
+/// every other chord goes to the key window's `WindowController`. Native macOS tabbing is disallowed on
 /// `HostWindow`, so each window is an ordinary independently-tileable window.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -17,10 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// True between a ⌘Q that raised the quit confirm and its reply, so a second ⌘Q can't
     /// stack a second quit dialog — while a non-quit (close-pane) confirm never blocks ⌘Q.
     private var quitConfirmPending = false
-    /// In-app auto-updates (ZEN-118). Nil in an unpackaged dev build, where the updater is inert.
+    /// In-app auto-updates. Nil in an unpackaged dev build, where the updater is inert.
     private var updateController: UpdateController?
 
-    /// The app-global `.configDidChange` re-apply, held in its own type so it's testable (ZEN-281).
+    /// The app-global `.configDidChange` re-apply, held in its own type so it's testable.
     /// Lazy because the sinks reach back through `self`; every one resolves its collaborator at
     /// call time, so building this before `updateController` exists is fine.
     private lazy var configApplier = ConfigApplier(
@@ -69,13 +69,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Resolve the config and theme before any window builds, so the first window's font,
         // drawer sizes, and dock floats are already settled rather than built-in defaults. This is
-        // the one place the load happens: both statics hold the built-in default until now
-        // (ZEN-31), because the load is main-thread-only and a lazy one would run wherever the
+        // the one place the load happens: both statics hold the built-in default until now,
+        // because the load is main-thread-only and a lazy one would run wherever the
         // first reader happened to touch it.
         AppConfig.loadAtLaunch()
         MotionConfig.apply(GeneralConfig.current.reduceMotion)
 
-        // Verbose diagnostics gate (ZEN-11): config `debug = true` turns on the same file tee as
+        // Verbose diagnostics gate: config `debug = true` turns on the same file tee as
         // ZENTERM_LOG_VERBOSE=1 (already seeded into Log.isVerbose), so either switch enables it.
         if GeneralConfig.current.debug { Log.isVerbose = true }
         Log.info("ZenTerm launched v\(AppVersion.current)", category: .app)
@@ -91,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         keys.onReservedChord = { [weak self] chord in self?.route(chord) }
         // Let a `Ctrl`-nav chord fall through to the terminal that owns it: a pane running nvim
         // (the seamless-nav opt-in, so nvim moves its own splits), or an open tool float, which is
-        // modal and would only swallow the chord (ZEN-270). `⌘`-nav (the default) is never passed
+        // modal and would only swallow the chord. `⌘`-nav (the default) is never passed
         // through, so default pane nav is untouched in every case.
         //
         // One `keyController()` lookup per keystroke, not one per input: this runs on the hot path
@@ -99,8 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         keys.passThroughGuard = { [weak self] chord, action in
             // A text view holding the keyboard owns the ⌘⇧ arrows and the Return pair. ⌘A is not in
             // that set and is measured, not assumed: AppKit serves Select All from an Edit menu item,
-            // not from `NSTextView`, so a guard here would hand the chord to nobody. ZEN-370 serves
-            // it from the menu instead, and the keymap ships ⌘A to no one.
+            // not from `NSTextView`, so a guard here would hand the chord to nobody. The menu owns
+            // it instead, and the keymap ships ⌘A to no one.
             // Asked first because it does not depend on the window lookup below.
             if TextEditingChords.owns(chord, firstResponder: NSApp.keyWindow?.firstResponder) {
                 return true
@@ -145,7 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Re-apply the app-global half of a config change: the interceptor's keymap, reduce-motion,
         // the config-problems notice, and the update card. Which blocks run is `ConfigApplier`'s
-        // call, where it can be tested against the ungated fan-out (ZEN-281).
+        // call, where it can be tested against the ungated fan-out.
         NotificationCenter.default.addObserver(
             forName: .configDidChange, object: nil, queue: .main
         ) { [weak self] note in
@@ -153,7 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { self?.configApplier.apply(ConfigChange.from(note)) }
         }
 
-        // Auto-updates (ZEN-118). Inert in an unpackaged dev build (no SUFeedURL). The card is
+        // Auto-updates. Inert in an unpackaged dev build (no SUFeedURL). The card is
         // app-global, so hand the updater a resolver for the current key window's controller.
         if UpdateController.isSupported {
             let controller = UpdateController(keyController: { [weak self] in self?.keyController() })
@@ -174,7 +174,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // ⌘N is intercepted here before `handle(_:)`, so a palette's / confirm's modal
             // gate doesn't cover it — swallow it explicitly while either is open.
             if let key = keyController(), key.isModalOverlayOpen || key.isConfirmOpen { return }
-            newWindow(initialCWD: keyController()?.focusedCWD, centered: false)
+            newWindow(
+                initialCWD: ShellLaunch.newSessionCWD(focused: keyController()?.focusedCWD),
+                centered: false)
             return
         }
         if case .reloadConfig = chord {
@@ -212,7 +214,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Move the session font size, then push it to every terminal surface the app owns and show
     /// where it landed.
     ///
-    /// App-global on purpose (ZEN-224): libghostty binds these chords itself and applies each to the
+    /// App-global on purpose: libghostty binds these chords itself and applies each to the
     /// one focused surface, which is the bug. Every window, every tab, and every tool float gets the
     /// same size, and `SessionFontSize` also seeds surfaces spawned later — a pane split after a
     /// step has to open matched, or it has propagated no better than before.
@@ -314,8 +316,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Export a diagnostics zip (logs + system metadata) via a save panel. Reached from Help ▸ Export
-    /// Diagnostics with a nil target, routed here through the responder chain like About; ZEN-212's
-    /// in-app report reuses the same action.
+    /// Diagnostics with a nil target, routed here through the responder chain like About. The in-app
+    /// report reuses the same action.
     @objc func exportDiagnostics(_ sender: Any?) {
         keyController()?.exportDiagnostics()
     }
@@ -334,8 +336,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         navSocket?.stop()
     }
 
-    /// Tear every window down, then wait for the session sweeps before letting the process go
-    /// (ZEN-269). Without this, quit frees no surface at all: `windowWillClose` does not fire on
+    /// Tear every window down, then wait for the session sweeps before letting the process go.
+    /// Without this, quit frees no surface at all: `windowWillClose` does not fire on
     /// termination, so the shells are orphaned and the kernel only hangs up each tty's foreground
     /// process group. `windows` is an Array, a value type, so iterating it is safe even though
     /// each teardown removes its own controller from it through `onClosed`.
@@ -365,7 +367,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // `onClosed` has already emptied `windows`, so there is nothing to tear down and
         // nothing to ask. Its sweep is already in flight from `windowWillClose` though, and
         // exiting now would cut it off before a single signal went out — the original bug, on
-        // the most ordinary way to close the app (ZEN-269). Wait for it, then go.
+        // the most ordinary way to close the app. Wait for it, then go.
         guard let key = keyController() else {
             drainSessionSweeps { NSApp.reply(toApplicationShouldTerminate: true) }
             return .terminateLater

@@ -17,9 +17,9 @@ final class IconButton: NSView {
     var isActive = false { didSet { update() } }
 
     /// A small accent dot at the top-right corner, shown when the button stands in for a
-    /// hidden surface that has a live process (a closed-but-busy drawer, ZEN-107).
+    /// hidden surface that has a live process (a closed-but-busy drawer).
     var showsActivity = false { didSet { activityDot.isHidden = !showsActivity } }
-    /// Test hook: whether the activity dot is currently rendered (ZEN-107).
+    /// Test hook: whether the activity dot is currently rendered.
     var activityDotHiddenForTesting: Bool { activityDot.isHidden }
     private let activityDot = NSView()
     private static let dotDiameter: CGFloat = 4
@@ -28,13 +28,13 @@ final class IconButton: NSView {
     private static let dotInset: CGFloat = dotDiameter / 2 + 2
 
     /// The hover-tooltip wiring — a branded `ChromeTooltip` (not the OS-drawn `toolTip`), evaluated at
-    /// hover time so its keybind reflects the live keymap (ZEN-42). Shared with `TabBarView.Chip`.
+    /// hover time so its keybind reflects the live keymap. Shared with `TabBarView.Chip`.
     private let tooltip: TooltipHost
 
     /// Whether the button carries a faint fill at rest instead of reading as a bare glyph. Off by
     /// default, which is every toolbar and tab-bar button: they sit on chrome and earn their box on
     /// hover. On for a button standing beside an input it has to match the weight of, where a bare
-    /// glyph reads as decoration rather than a control (ZEN-368).
+    /// glyph reads as decoration rather than a control.
     private let restsFilled: Bool
 
     init(
@@ -119,7 +119,7 @@ final class IconButton: NSView {
         if window == nil { tooltip.hide(from: self) }
     }
 
-    /// Test hooks for the tooltip content (ZEN-42).
+    /// Test hooks for the tooltip content.
     var tooltipLabelForTesting: String { tooltip.label }
     var tooltipShortcutForTesting: String? { tooltip.shortcutForTesting }
 
