@@ -6,15 +6,20 @@ import XCTest
 
 /// Presenting a window is the caller's job, not `mountAndStart()`'s. A window suite mounts real
 /// `WindowController`s, and while `mountAndStart()` ordered its own window in, a local `swift test`
-/// run put 40+ windows across Spaces and took key from whatever was being typed in, once per test.
+/// run peaked at 80 windows on screen and took key from whatever was being typed in, once per test.
 /// The interaction tests still drive a real window; the ones that need key take it themselves.
 final class WindowPresentationTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
+    private var originalConfig: GeneralConfig!
     private var controller: WindowController?
 
     override func setUpWithError() throws {
         try super.setUpWithError()
         originalOverride = TerminalSurfaceFactory.makeOverride
+        // `WindowController` reads config at construction (backdrop alpha, hidden toolbar buttons,
+        // window chrome), and unpinned that is the developer's own `~/.config/zen-term/config`.
+        originalConfig = GeneralConfig.current
+        GeneralConfig.setCurrentForTesting(.builtIn)
         // The real ghostty backend needs a live libghostty app, which a test bundle has no
         // business spinning up.
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
@@ -24,6 +29,7 @@ final class WindowPresentationTests: WindowTestCase {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
+        GeneralConfig.setCurrentForTesting(originalConfig)
         try super.tearDownWithError()
     }
 
