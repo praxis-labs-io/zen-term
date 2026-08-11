@@ -157,6 +157,21 @@
 # In-app Settings edit: applies to the next tab or window you open.
 # tab-inherit-cwd = false             # true | false
 
+# The two commands the "Editor + AI + Shell" workspace preset launches, in its
+# main pane and its right drawer. Unset → nvim and claude. Any command works:
+# these are what the preset runs, not a declaration of what you use.
+# In-app Settings edit: applies to the next workspace you build from the preset.
+# editor = nvim
+# ai = claude
+
+# ─── Notifications ───────────────────────────────────────────────────────────
+
+# Post a macOS banner when an agent needs attention and ZenTerm is not the front
+# app. macOS decides whether the banner appears at all, under System Settings >
+# Notifications; this is the switch on ZenTerm's side.
+# In-app Settings edit: applies live.
+# agent-notifications = true          # true | false
+
 # ─── Updates ─────────────────────────────────────────────────────────────────
 
 # Check for a new release in the background. On by default; turn it off to check
@@ -186,10 +201,10 @@
 # keeps running when you dismiss it and dies when you type `exit`. It has no line
 # here and no Settings > Tools row. Rebind it under Keybinds below, or in
 # Settings > Shortcuts. `scratch` is a reserved name: a `float =` line whose title
-# lands on it is ignored.
+# lands on it is refused, and the app tells you which line it was.
 #
 # You don't have to write one by hand: Settings > Tools has a form, and so does
-# the New Tool command in the command palette. Either one writes the line here.
+# the "New Tool Float" command in the palette. Either one writes the line here.
 #
 # A float has no id to author: its `title:` is its name, and Settings derives the
 # rest. (The id a `toggle_float:` keybind needs is just the title lowercased, with
