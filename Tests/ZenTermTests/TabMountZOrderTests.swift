@@ -14,7 +14,6 @@ import XCTest
 @MainActor
 final class TabMountZOrderTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
-    private var originalReduceMotion: (() -> Bool)!
     private var controller: WindowController?
 
     override func setUp() {
@@ -25,7 +24,6 @@ final class TabMountZOrderTests: WindowTestCase {
         // none in flight: it collapses the slide and detaches the outgoing canvas before this
         // returns. Pin it off so the developer's own accessibility setting can't decide whether
         // the test has anything to look at.
-        originalReduceMotion = Motion.isReduceMotionEnabled
         Motion.isReduceMotionEnabled = { false }
     }
 
@@ -33,7 +31,6 @@ final class TabMountZOrderTests: WindowTestCase {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
-        Motion.isReduceMotionEnabled = originalReduceMotion
         super.tearDown()
     }
 

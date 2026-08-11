@@ -21,7 +21,6 @@ final class FloatBackgroundOverrideTests: WindowTestCase {
     private var floatControllers: [ToolFloatController] = []
     private var root = FileManager.default.temporaryDirectory
     private var originalConfig: GeneralConfig!
-    private var originalReduceMotion: (() -> Bool)!
 
     private let osc11 = TerminalColor(red: 0x3B, green: 0x2E, blue: 0x2E)
 
@@ -29,7 +28,6 @@ final class FloatBackgroundOverrideTests: WindowTestCase {
         try super.setUpWithError()
         originalConfig = GeneralConfig.current
         GeneralConfig.setCurrentForTesting(.builtIn)
-        originalReduceMotion = Motion.isReduceMotionEnabled
         Motion.isReduceMotionEnabled = { true }  // instant present, so the card is mounted on return
         root = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-float-bg-\(UUID().uuidString)", isDirectory: true)
@@ -40,7 +38,6 @@ final class FloatBackgroundOverrideTests: WindowTestCase {
         floatControllers.forEach { $0.shutdown() }
         floatControllers = []
         windows = []
-        Motion.isReduceMotionEnabled = originalReduceMotion
         GeneralConfig.setCurrentForTesting(originalConfig)
         try? FileManager.default.removeItem(at: root)
         try super.tearDownWithError()

@@ -23,7 +23,6 @@ final class PaneBackgroundOverrideTests: WindowTestCase {
     private var window: NSWindow!
     private var controller: PaneCanvasController!
     private var originalConfig: GeneralConfig!
-    private var originalReduceMotion: (() -> Bool)!
 
     private let osc11 = TerminalColor(red: 0x3B, green: 0x2E, blue: 0x2E)
 
@@ -33,7 +32,6 @@ final class PaneBackgroundOverrideTests: WindowTestCase {
         GeneralConfig.setCurrentForTesting(.builtIn)
         // `split` branches on Reduce Motion, so pin it rather than inherit the machine's setting.
         // Instant, so the assertions never read a frame mid-slide.
-        originalReduceMotion = Motion.isReduceMotionEnabled
         Motion.isReduceMotionEnabled = { true }
         controller = PaneCanvasController(makeSurface: { RecordingSurface() })
         window = NSWindow(
@@ -50,7 +48,6 @@ final class PaneBackgroundOverrideTests: WindowTestCase {
         controller.shutdown()
         controller = nil
         window = nil
-        Motion.isReduceMotionEnabled = originalReduceMotion
         GeneralConfig.setCurrentForTesting(originalConfig)
         super.tearDown()
     }

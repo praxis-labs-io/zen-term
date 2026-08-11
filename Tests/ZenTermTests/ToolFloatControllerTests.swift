@@ -255,7 +255,6 @@ final class ToolFloatControllerTests: WindowTestCase {
     /// state, so a broken re-host would fail this test even if the bookkeeping looked fine.
     func test_persistentFloat_reopenBeforeDismissAnimationCompletes_rehostsView_dropsOldCard() throws {
         Motion.isReduceMotionEnabled = { false }  // force the async path so the old card is still parked
-        defer { Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion } }
         let dir = try makeDir("plain", git: false)
         let (floats, spawned, setCWD) = makeFloats(cwd: dir)
         let float = spec("btop", persist: .directory)
@@ -282,7 +281,6 @@ final class ToolFloatControllerTests: WindowTestCase {
     /// is gone the instant `closeToolFloat` returns and ARC deallocates it synchronously.
     func test_persistentFloat_dismissUnderReduceMotion_doesNotStrandTheOverlay() throws {
         Motion.isReduceMotionEnabled = { true }
-        defer { Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion } }
         let dir = try makeDir("plain", git: false)
         let (floats, spawned, setCWD) = makeFloats(cwd: dir)
         let float = spec("btop", persist: .directory)

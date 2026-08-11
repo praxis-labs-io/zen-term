@@ -37,7 +37,6 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         controller = nil
         secondController?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         secondController = nil
-        MotionConfig.apply(.system)
         TerminalSurfaceFactory.makeOverride = originalOverride
         Theme.setCurrentForTesting(originalTheme)
         GeneralConfig.setCurrentForTesting(originalConfig)
@@ -264,8 +263,6 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
 
         // Removal rides `animateOut`'s completion, so pin reduce-motion and let it land rather
         // than measuring mid-spring.
-        let motion = Motion.isReduceMotionEnabled
-        defer { Motion.isReduceMotionEnabled = motion }
         Motion.isReduceMotionEnabled = { true }
         controller.dismissConfigDiagnosticsToast()
         let settled = expectation(description: "dismissal settled")

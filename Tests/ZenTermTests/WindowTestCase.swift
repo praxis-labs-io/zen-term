@@ -1,6 +1,8 @@
 import AppKit
 import XCTest
 
+@testable import ZenTerm
+
 /// Base class for suites that mount a view in a real window.
 ///
 /// XCTest tears down no AppKit state between cases, so every window a test opened stayed on screen
@@ -12,6 +14,18 @@ import XCTest
 /// `windowWillClose`, so closing also invalidates the title poll and shuts down every tab's shells.
 /// Ordering out leaves both running, and the shells then outlive the process as orphans.
 class WindowTestCase: XCTestCase {
+    /// Whatever `Motion.isReduceMotionEnabled` was before this case pinned it.
+    ///
+    /// Captured in the property initializer rather than a setup hook, because XCTest builds the
+    /// case instance before any hook runs: this sees the pristine closure without depending on
+    /// which setup hook a subclass pins from, or on the order XCTest runs them in.
+    ///
+    /// Suites pin the override so animations resolve instantly and a card is mounted by the time
+    /// an assertion reads the tree. Restoring here is what keeps that from deciding another
+    /// suite's result: a case that pins Reduce Motion *off* to watch an animation run reads
+    /// whatever the last file left behind otherwise, and passes or fails on file order.
+    private let originalReduceMotion = Motion.isReduceMotionEnabled
+
     /// `tearDownWithError`, not `tearDown`: XCTest runs `tearDown` first, and most suites here do
     /// their cleanup in `tearDownWithError`. Sweeping from `tearDown` closed their windows before
     /// their own teardown body ran, which turned an explicit `controller?.windowWillClose(...)`
@@ -21,6 +35,9 @@ class WindowTestCase: XCTestCase {
     override func tearDownWithError() throws {
         try super.tearDownWithError()
         Self.closeAllWindows()
+        // After the sweep: closing a window drives `WindowController`'s teardown, and that should
+        // still run under the Reduce Motion setting the test chose, not the machine's.
+        Motion.isReduceMotionEnabled = originalReduceMotion
     }
 
     /// Static so `WindowSweepTests` can drive it directly. A teardown hook that stops running

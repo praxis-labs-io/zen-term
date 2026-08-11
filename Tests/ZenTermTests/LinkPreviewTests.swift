@@ -12,14 +12,12 @@ final class LinkPreviewTests: WindowTestCase {
     private var window: NSWindow!
     private var controller: PaneCanvasController!
     private var originalConfig: GeneralConfig!
-    private var originalReduceMotion: (() -> Bool)!
 
     override func setUp() {
         super.setUp()
         originalConfig = GeneralConfig.current
         GeneralConfig.setCurrentForTesting(.builtIn)
         // `split` branches on Reduce Motion, so pin it rather than inherit the machine's setting.
-        originalReduceMotion = Motion.isReduceMotionEnabled
         Motion.isReduceMotionEnabled = { true }
         controller = PaneCanvasController(makeSurface: { RecordingSurface() })
         window = NSWindow(
@@ -36,7 +34,6 @@ final class LinkPreviewTests: WindowTestCase {
         controller.shutdown()
         controller = nil
         window = nil
-        Motion.isReduceMotionEnabled = originalReduceMotion
         GeneralConfig.setCurrentForTesting(originalConfig)
         super.tearDown()
     }

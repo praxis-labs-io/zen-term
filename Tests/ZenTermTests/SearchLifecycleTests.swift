@@ -51,7 +51,6 @@ final class SearchLifecycleTests: WindowTestCase {
         }
         controllers = []
         spawned = []
-        Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         try? FileManager.default.removeItem(at: root)

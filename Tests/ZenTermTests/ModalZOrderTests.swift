@@ -17,14 +17,12 @@ import XCTest
 final class ModalZOrderTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
-    private var originalReduceMotion: (() -> Bool)!
     private var controller: WindowController?
 
     override func setUpWithError() throws {
         try super.setUpWithError()
         originalOverride = TerminalSurfaceFactory.makeOverride
         originalConfig = GeneralConfig.current
-        originalReduceMotion = Motion.isReduceMotionEnabled
         // Instant present/dismiss, so a card is mounted by the time the assertion reads the tree.
         Motion.isReduceMotionEnabled = { true }
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
@@ -34,7 +32,6 @@ final class ModalZOrderTests: WindowTestCase {
     override func tearDownWithError() throws {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
-        Motion.isReduceMotionEnabled = originalReduceMotion
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         try super.tearDownWithError()
