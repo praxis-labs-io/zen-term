@@ -551,6 +551,16 @@ that stops firing fails nothing. That test counts reads of the inherited closure
 comparing what the closure returns, because a value comparison passes with the bug reinstated on a
 machine that has Reduce Motion switched on: the hardcoded restore returns `true` there too.
 
+**Ordering a window in is also what runs its first layout pass, so anything that reads a view's
+size has to force one.** `WindowController.mountAndStart()` deliberately does not present the
+window, because a test wants the mounted tree and none of the presentation: with the
+`makeKeyAndOrderFront` in it, a run peaked at 80 on-screen windows and took key from whatever was
+being typed in, once per window test. Removing it broke 17 tests in five suites, all through the
+same path: AppKit runs no automatic layout for a window that was never ordered in, so every host
+view kept zero bounds and `PaneCanvasController.split` refused on `minSplitExtent` and beeped.
+`mountAndStart` calls `layoutSubtreeIfNeeded()` itself. A suite that needs the window on screen or
+key orders it in explicitly, and the ones testing key routing do.
+
 Measure this with CoreGraphics, never the accessibility API. `xctest` runs `.prohibited`, so its
 windows are on screen and in Mission Control while absent from the accessibility tree: System Events
 reports `0` windows for the entire run. `CGWindowListCopyWindowInfo([.optionOnScreenOnly,

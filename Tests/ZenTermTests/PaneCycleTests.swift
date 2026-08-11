@@ -67,7 +67,7 @@ final class PaneCycleTests: WindowTestCase {
     private func makeWindow() -> WindowController {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: root)
-        controller.showAndStart()
+        controller.mountAndStart()
         controllers.append(controller)
         return controller
     }

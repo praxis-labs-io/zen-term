@@ -60,7 +60,7 @@ final class SearchLifecycleTests: WindowTestCase {
     private func makeWindow() -> WindowController {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: root)
-        controller.showAndStart()
+        controller.mountAndStart()
         controllers.append(controller)
         return controller
     }

@@ -67,7 +67,7 @@ final class PaneGapLiveApplyTests: WindowTestCase {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
         self.controller = controller
-        controller.showAndStart()
+        controller.mountAndStart()
         controller.handle(.splitHorizontal)
         drainMainQueue()
 

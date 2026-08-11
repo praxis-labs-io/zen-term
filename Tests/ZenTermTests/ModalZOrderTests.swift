@@ -41,7 +41,7 @@ final class ModalZOrderTests: WindowTestCase {
         let c = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
             initialCWD: FileManager.default.temporaryDirectory)
-        c.showAndStart()
+        c.mountAndStart()
         c.window.makeKeyAndOrderFront(nil)
         controller = c
         return c
