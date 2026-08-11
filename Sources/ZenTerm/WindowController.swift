@@ -168,9 +168,10 @@ final class WindowController: NSObject {
         }
     }
 
-    /// The window's tool floats. Window-level, not per-tab: one live instance per float
-    /// id is shared by every tab, and the card hosts on `container` so a tab switch doesn't
-    /// unmount it. Lazy so `container`, `tabBar`, and the tab machinery all exist before the
+    /// The window's tool floats. One engine per window, and the card always hosts on `container` so
+    /// a tab switch doesn't unmount it. How many live instances a float has is its `scope`: a
+    /// `.window` float is shared by every tab, a `.tab` one (Scratch alone) gets one per tab and
+    /// dies with it. Lazy so `container`, `tabBar`, and the tab machinery all exist before the
     /// closures below can run.
     private lazy var floats: ToolFloatController = {
         let controller = ToolFloatController(
@@ -182,10 +183,18 @@ final class WindowController: NSObject {
                 self?.endModes()
                 self?.activeController?.yieldFocusToFloat()
             },
-            restoreFocus: { [weak self] in self?.activeController?.restoreUnifiedFocus() })
+            restoreFocus: { [weak self] in self?.activeController?.restoreUnifiedFocus() },
+            // Guarded like `activeController`: `TabList.activeID` preconditions on a non-empty list,
+            // and `closeTab` empties it before the teardown that re-renders the dock through here.
+            currentTabID: { [weak self] in
+                guard let self, !self.tabs.order.isEmpty else { return nil }
+                return self.tabs.activeID
+            })
         controller.onStateChanged = { [weak self] in self?.renderDock() }
         controller.onRequestToast = { [weak self] content in self?.toasts.show(content) }
-        controller.onNotification = { [weak self] n, spec in self?.floatNotified(n, from: spec) }
+        controller.onNotification = { [weak self] n, spec, owner in
+            self?.floatNotified(n, from: spec, owner: owner)
+        }
         return controller
     }()
 
@@ -941,6 +950,9 @@ final class WindowController: NSObject {
             mountedCanvas = nil
         }
         old?.shutdown()  // terminate the replaced tab's shells — never leak them
+        // Load-bearing, because the tab keeps its id: without this the replacement session inherits
+        // the previous one's Scratch shell, cwd and scrollback and all.
+        floats.shutdownScope(id)
         // The tab stays put — same id, same slot — and its outgoing canvas is already gone with
         // the shells it was showing, so there is nothing to transition from: the replacement
         // appears in place and the workspace's own drawer slides carry the motion.
@@ -1020,6 +1032,7 @@ final class WindowController: NSObject {
             mountedCanvas = nil
         }
         controller?.shutdown()  // terminate the tab's shells — never leak them
+        floats.shutdownScope(id)  // and its Scratch, which is the tab's the way its drawers are
         controllers[id] = nil
         titles[id] = nil
         clearAttention(id)
@@ -1794,13 +1807,17 @@ final class WindowController: NSObject {
             addTab(cwd: ws.path, pinnedTitle: ws.title, workspace: ws)  // ⏎: new tab, destroys nothing
             return
         }
-        // ⇧⏎ replaces the current tab, terminating every pane and drawer in it. That silent
-        // clobber gets a confirm when the tab has live work; an idle tab is replaced outright.
-        // Floats are window-scoped and survive a tab replace, so they don't count.
+        // ⇧⏎ replaces the current tab, terminating every pane and drawer in it, plus its Scratch —
+        // `replaceActiveTab` reaches `shutdownScope`. That silent clobber gets a confirm when the
+        // tab has live work; an idle tab is replaced outright. Window-scoped floats survive the
+        // replace, so they still don't count.
         let replace = { [weak self] in
             self?.replaceActiveTab(cwd: ws.path, pinnedTitle: ws.title, workspace: ws)
         }
-        guard activeController?.allSurfaces.contains(where: { $0.isBusy }) == true else {
+        let tabIsBusy =
+            activeController?.allSurfaces.contains(where: { $0.isBusy }) == true
+            || floats.hasBusyInScope(tabs.activeID)
+        guard tabIsBusy else {
             replace()
             return
         }
@@ -2055,12 +2072,15 @@ final class WindowController: NSObject {
         // ⌘W on the last pane closes the tab; on the last tab that also closes the window.
         let closesWindow = lastPane && tabs.order.count == 1
 
-        // Weighs exactly the live work THIS ⌘W would stop. Panes and drawers count once it's the
-        // last pane. Floats are window-scoped and survive a tab close, so they count only when ⌘W
-        // also closes the window, which is where a dismissed persistent tool has no on-screen
-        // trace and would otherwise die unannounced.
+        // Weighs exactly the live work THIS ⌘W would stop. Panes, drawers and the tab's own floats
+        // count once it's the last pane, since that close IS a tab close and `shutdownScope` takes
+        // the tab-scoped ones down with it. Window-scoped floats survive a tab close, so they count
+        // only when ⌘W also closes the window, which is where a dismissed persistent tool has no
+        // on-screen trace and would otherwise die unannounced.
         let needsConfirm =
-            busy || (lastPane && active.hasBusyDrawer) || (closesWindow && floats.hasBusy)
+            busy
+            || (lastPane && (active.hasBusyDrawer || floats.hasBusyInScope(tabs.activeID)))
+            || (closesWindow && floats.hasBusy)
         guard needsConfirm else {
             // Nothing to lose → close now, cascading to the tab when it was the last pane.
             if active.closeFocused() == false { closeTab(tabs.activeID) }
@@ -2154,15 +2174,24 @@ final class WindowController: NSObject {
     /// A tool float's agent wants attention. Floats are window-level, so unlike a pane or drawer
     /// this has no owning tab: it gets the OS banner but not the in-app rose flag, which is a
     /// per-tab signal that would otherwise point at a surface that isn't the source.
-    private func floatNotified(_ notification: TerminalNotification, from spec: ToolFloat) {
+    /// `owner` is the tab a tab-scoped float belongs to, which is where the banner's click has to
+    /// land: a hidden Scratch that asks for input is usually NOT in the tab that happens to be up,
+    /// and routing to the active tab would send the user somewhere the prompt isn't. A window
+    /// float belongs to no tab, so it keeps falling back to the active one.
+    private func floatNotified(
+        _ notification: TerminalNotification, from spec: ToolFloat, owner: TabID?
+    ) {
         // The notification arrives off the terminal's read path; only touch the UI on main.
         DispatchQueue.main.async { [weak self] in
             guard let self, !self.tabs.order.isEmpty,
                 AgentNotifier.shouldPushNotification(
                     appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
             else { return }
+            // The owner may have closed between the post and this hop, and a banner pointing at a
+            // tab that is gone opens nothing.
+            let target = owner.flatMap { self.tabs.order.contains($0) ? $0 : nil } ?? self.tabs.activeID
             AgentNotifier.shared.notify(
-                windowID: self.windowID, tabID: self.tabs.activeID, title: spec.title,
+                windowID: self.windowID, tabID: target, title: spec.title,
                 body: notification.body.isEmpty ? notification.title : notification.body)
         }
     }
@@ -2370,6 +2399,10 @@ final class WindowController: NSObject {
 
     /// Test hook: the window's float engine, for asserting the relays wired onto it.
     var floatsForTesting: ToolFloatController { floats }
+
+    /// Test hook: the active tab's id, so a test can name the tab a tab-scoped thing belongs to
+    /// and prove it is not simply whichever one is up.
+    var activeTabIDForTesting: TabID? { tabs.order.isEmpty ? nil : tabs.activeID }
 
     /// Test hook: whether the toast presenter has been built yet. The config observer must be able
     /// to re-point its insets WITHOUT constructing it — building it early would mount a toast stack

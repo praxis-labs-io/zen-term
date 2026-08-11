@@ -1,20 +1,23 @@
 import AppKit
+import TabKit
 import TerminalKit
 
-/// The tool-float engine: declarative command floats whose process lifetime is set by `persist:`.
+/// The tool-float engine: declarative command floats whose process lifetime is set by `persist:`
+/// and whose instance count is set by `scope`.
 ///
-/// Floats are **window-level**, not per-tab. A float card is a modal surface over the
-/// whole window, hosted on the window's `container` so it survives a tab switch instead of
-/// unmounting with its host tab, and one live instance per float id is shared by every tab in the
-/// window — two tabs on one repo get one lazygit, not two. `persist:` therefore says only whether
-/// a float's process survives dismissal; it no longer implies anything about where the card lives.
+/// The card is always **window-level**: a modal surface over the whole window, hosted on the
+/// window's `container` so it survives a tab switch instead of unmounting with its host tab.
+///
+/// The *instance* is per `ToolFloat.Scope`. A `.window` float has one live instance shared by every
+/// tab — two tabs on one repo get one lazygit, not two. A `.tab` float has one per tab, filed under
+/// a per-tab registry key and reaped by `shutdownScope` when its tab goes. Scratch is the only
+/// `.tab` float, and only `ToolFloat` can say so: the axis is deliberately unparseable.
 ///
 /// Per-window and not per-app: a surface is one `NSView` and can live in one view hierarchy, so an
 /// app-global instance would physically yank the float out of window A when opened in window B.
 ///
 /// The engine reaches the active tab only through the closures it's built with — `focusedCWD`,
-/// `yieldFocus`, `restoreFocus` — so it holds no reference to any `TabController` and doesn't care
-/// which tab is up.
+/// `yieldFocus`, `restoreFocus`, `currentTabID` — so it holds no reference to any `TabController`.
 final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// Host the card in the window's float region (`WindowController` owns the geometry — it
     /// knows the tab bar the region stops at).
@@ -25,6 +28,14 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     private let yieldFocus: () -> Void
     /// The active tab takes its unified focus back when the card goes away.
     private let restoreFocus: () -> Void
+    /// The tab a `.tab`-scoped float's instance belongs to, read when a float is resolved.
+    ///
+    /// Optional because there is not always a tab to answer with, and asking anyway traps:
+    /// `TabList.activeID` preconditions on a non-empty list, and `closeTab` empties the list before
+    /// tearing the tab down — a teardown that reaches the dock, which reads `isLiveInBackground`,
+    /// which reads this. Nil means no tab scope: a `.tab` float falls back to the bare key and
+    /// reads as not-live, which is the truth when there are no tabs left to run it in.
+    private let currentTabID: () -> TabID?
     private let makeSurface: () -> TerminalSurface
     /// The enclosing repo root for a cwd, answered asynchronously, for the git guard and the
     /// `.directory` anchor. The walk is filesystem I/O and never runs on the main thread.
@@ -50,18 +61,24 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     private var pendingOpen: ToolFloat?
 
     /// The tool float currently SHOWN. Floats are modal and mutually exclusive, so one slot
-    /// suffices. Whether its surface dies on dismiss depends on `spec.persist`.
-    private var activeFloat: (spec: ToolFloat, surface: TerminalSurface, overlay: SurfaceFloatOverlay)?
+    /// suffices. Whether its surface dies on dismiss depends on `spec.persist`; `tab` is the tab it
+    /// is scoped to, nil for a `.window` float.
+    private var activeFloat: (spec: ToolFloat, surface: TerminalSurface, overlay: SurfaceFloatOverlay, tab: TabID?)?
 
-    /// Tool floats whose process is ALIVE, keyed by float id — the persistent ones, kept across
-    /// dismissal. Liveness and visibility are independent: a float can be in here while hidden.
+    /// Tool floats whose process is ALIVE — the persistent ones, kept across dismissal. Liveness
+    /// and visibility are independent: a float can be in here while hidden.
+    ///
+    /// Keyed by `registryKey(for:)`, which is the float id for a `.window` float and `tab/id` for a
+    /// `.tab` one, so two tabs' Scratch shells are two entries. `tab` repeats the owning tab from
+    /// the key so `shutdownScope` and `hasBusyInScope` never have to parse one back.
+    ///
     /// `anchor` is the directory identity a `.directory` float was launched against (`.ephemeral`
     /// floats are never in here at all; a `.window` float's anchor is nil, which is exactly what
     /// makes it never re-anchor). `spec` is the one the instance was SPAWNED with — a Settings
     /// edit to its `command`/`dir` is caught on the next open and respawns, instead of silently
     /// reusing a process still running the old command; its `title` names a hidden float in the
     /// notifications and warnings it can still raise.
-    private var liveFloats: [String: (surface: TerminalSurface, anchor: URL?, spec: ToolFloat)] = [:]
+    private var liveFloats: [String: (surface: TerminalSurface, anchor: URL?, spec: ToolFloat, tab: TabID?)] = [:]
 
     /// A float overlay still springing out. It keeps Auto Layout constraints on a persistent
     /// float's shared `surface.view`, so a fast re-show must snap it away before re-hosting that
@@ -73,15 +90,18 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// Request a transient top-right toast (e.g. a `git:true` float opened outside a repo).
     var onRequestToast: ((ToastContent) -> Void)?
     /// A float's tool posted a desktop notification (an agent asking for input), with the float it
-    /// came from so the banner can name it. Relayed for hidden floats too — that's the case that
-    /// needs it most: a dismissed `persist:` agent has no on-screen trace at all.
-    var onNotification: ((TerminalNotification, ToolFloat) -> Void)?
+    /// came from so the banner can name it, and the tab that owns the instance so clicking the
+    /// banner lands there. Nil tab means window-scoped, which belongs to no tab in particular.
+    /// Relayed for hidden floats too — that's the case that needs it most: a dismissed `persist:`
+    /// agent has no on-screen trace at all.
+    var onNotification: ((TerminalNotification, ToolFloat, TabID?) -> Void)?
 
     init(
         presentOverlay: @escaping (SurfaceFloatOverlay) -> Void,
         focusedCWD: @escaping () -> URL?,
         yieldFocus: @escaping () -> Void,
         restoreFocus: @escaping () -> Void,
+        currentTabID: @escaping () -> TabID? = { nil },
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
         resolveRepoRoot: @escaping (URL?, @escaping (URL?) -> Void) -> Void = GitRepoStatus.repoRoot
     ) {
@@ -89,6 +109,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         self.focusedCWD = focusedCWD
         self.yieldFocus = yieldFocus
         self.restoreFocus = restoreFocus
+        self.currentTabID = currentTabID
         self.makeSurface = makeSurface
         self.resolveRepoRoot = resolveRepoRoot
         super.init()
@@ -99,8 +120,41 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     /// Whether any persistent float's process has live work — hidden ones included, which is the
     /// point: a dismissed persistent float is invisible, and the ⌘W confirm would otherwise let
-    /// the window close over it silently.
+    /// the window close over it silently. Every scope counts: closing the window stops all of them.
     var hasBusy: Bool { liveFloats.values.contains { $0.surface.isBusy } }
+
+    /// Whether any float scoped to `tab` has live work — the float half of the confirm that guards
+    /// a tab close and a tab replace, since `shutdownScope` takes these down with the tab.
+    func hasBusyInScope(_ tab: TabID) -> Bool {
+        liveFloats.values.contains { $0.tab == tab && $0.surface.isBusy }
+    }
+
+    /// The registry key for a float in `tab`: the bare id when there is no tab to scope to, else
+    /// `tab/id`. A float id is a slug (`[a-z0-9-]`, `ToolFloatParser.slug`), so a `/` in the key can
+    /// never collide with a user float's id.
+    ///
+    /// One function for the format because two spellings that drift silently stop the dock finding
+    /// a running float, with nothing on screen to say why.
+    private func registryKey(_ id: String, in tab: TabID?) -> String {
+        guard let tab else { return id }
+        return "\(tab.raw)/\(id)"
+    }
+
+    /// The registry key `spec` resolves to right now. Derived from `scopedTab` so the key and the
+    /// owning tab stored beside it can never disagree.
+    private func registryKey(for spec: ToolFloat) -> String {
+        registryKey(spec.id, in: scopedTab(for: spec))
+    }
+
+    /// The tab a float's instance belongs to: the current one for a `.tab` float, nil otherwise.
+    ///
+    /// A `.tab` float would also answer nil if there were no tab, which would file it under the
+    /// bare id — shared by every tab and reaped by no tab close. That cannot happen: there is no
+    /// tab only between `tabs.close` emptying the list and `window.close()`, and nothing opens a
+    /// float in that window. Registration is the invariant to protect if a caller is ever added.
+    private func scopedTab(for spec: ToolFloat) -> TabID? {
+        spec.scope == .tab ? currentTabID() : nil
+    }
 
     /// Whether this float is running behind the scenes — alive, but not the one on screen. The
     /// dock dots this, so the user can see a tool they dismissed is still going.
@@ -110,7 +164,15 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// is the meaningful signal for a float, and it needs no polling — membership changes push
     /// through `onStateChanged`, while `isBusy` has no event, which is why the drawer path polls.
     /// Only `.directory` / `.window` floats ever register, so an `.ephemeral` float never dots.
-    func isLiveInBackground(_ id: String) -> Bool { liveFloats[id] != nil && activeID != id }
+    ///
+    /// The dock hands a bare id, so both namespaces are probed — at most one can hold it. That is
+    /// what makes a `.tab` float dot only in the tab it is running in: switch away and the current
+    /// tab's key finds nothing.
+    func isLiveInBackground(_ id: String) -> Bool {
+        guard activeID != id else { return false }
+        if liveFloats[id] != nil { return true }
+        return liveFloats[registryKey(id, in: currentTabID())] != nil
+    }
 
     /// Every live float surface, for the config-change re-theming fan-out.
     var allSurfaces: [TerminalSurface] {
@@ -222,7 +284,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         // than by the delegate event that landed while no card existed.
         overlay.backgroundOverride = surface.backgroundOverride
         presentOverlay(overlay)
-        activeFloat = (spec, surface, overlay)
+        activeFloat = (spec, surface, overlay, scopedTab(for: spec))
         yieldFocus()
         surface.focus()
         overlay.animateIn()
@@ -236,15 +298,16 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// Settings edit to the command or pinned dir (reusing would silently keep the OLD command's
     /// process running, making the edit look like a no-op).
     private func surfaceForFloat(_ spec: ToolFloat, cwd: URL?, anchor: URL?) -> TerminalSurface {
-        if let live = liveFloats[spec.id] {
+        let key = registryKey(for: spec)
+        if let live = liveFloats[key] {
             let anchorHolds = spec.persist != .directory || live.anchor?.path == anchor?.path
             let spawnHolds = live.spec.command == spec.command && live.spec.dir == spec.dir
             if spec.persist != .ephemeral, anchorHolds, spawnHolds { return live.surface }
-            discard(spec.id)
+            discard(key)
         }
         let surface = spawn(spec, cwd: cwd)
         if spec.persist != .ephemeral {
-            liveFloats[spec.id] = (surface, anchor, spec)
+            liveFloats[key] = (surface, anchor, spec, scopedTab(for: spec))
         }
         return surface
     }
@@ -260,7 +323,12 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         if let pending = pendingOpen, !ids.contains(pending.id) { cancelPendingOpen() }
         if let active = activeFloat, !ids.contains(active.spec.id) { close() }
         // Snapshot the keys — the discard mutates the dictionary mid-loop (same rule as `shutdown()`).
-        for id in Array(liveFloats.keys) where !ids.contains(id) { discard(id) }
+        // The catalog holds bare ids, so the comparison reads the id back off the STORED spec rather
+        // than the key: a `.tab` key carries a tab prefix, and matching it against the catalog would
+        // discard every tab's Scratch on the next config save.
+        for key in Array(liveFloats.keys) where !ids.contains(liveFloats[key]?.spec.id ?? key) {
+            discard(key)
+        }
     }
 
     /// Spawn `spec.command` in a fresh login+interactive shell at `cwd`, so the user's PATH and
@@ -287,12 +355,23 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         return surface
     }
 
-    /// Drop a persistent float's surface. Clears the ref BEFORE terminate so a synchronous
-    /// `surfaceDidExit` re-entry can't resurrect the entry this is removing.
-    private func discard(_ id: String) {
-        guard let live = liveFloats.removeValue(forKey: id) else { return }
+    /// Drop a persistent float's surface, by registry key. Clears the ref BEFORE terminate so a
+    /// synchronous `surfaceDidExit` re-entry can't resurrect the entry this is removing.
+    private func discard(_ key: String) {
+        guard let live = liveFloats.removeValue(forKey: key) else { return }
         live.surface.terminate()
         onStateChanged?()  // the dock dots live-in-background floats; this one is gone
+    }
+
+    /// Forget a live float by its surface rather than its key. The delegate callbacks arrive with a
+    /// surface and nothing else, and a key rebuilt from a spec can disagree with the one the entry
+    /// was filed under — a `.tab` float that exited while a different tab was up would leave a
+    /// registry entry pointing at a dead surface, which the next open would happily restore.
+    @discardableResult
+    private func removeEntry(forSurface s: TerminalSurface) -> Bool {
+        guard let key = liveFloats.first(where: { $0.value.surface === s })?.key else { return false }
+        liveFloats.removeValue(forKey: key)
+        return true
     }
 
     /// Close the float. An ephemeral float's surface dies with the card; a persistent one keeps
@@ -320,6 +399,32 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         if active.spec.persist == .ephemeral { active.surface.terminate() }
         restoreFocus()
         onStateChanged?()
+    }
+
+    /// Terminate every float scoped to `tab` — that tab is closing or being replaced, and its
+    /// floats go with it the way its drawers do in `TabController.shutdown()`. Window-scoped floats
+    /// are untouched; only `shutdown()` reaps those.
+    func shutdownScope(_ tab: TabID) {
+        // Every tab change closes the card first (`closeFloatForTabChange`), so the slot should not
+        // hold this tab's float by the time we get here. Handled anyway rather than assumed: a card
+        // left over a tab that no longer exists is unreachable and holds first responder for good.
+        //
+        // No `restoreFocus()` here, unlike `close()`: both callers run this after the tab is out of
+        // the list, so the active tab it resolves is the neighbor that was just promoted, and both
+        // mount and focus a tab themselves right after.
+        if let active = activeFloat, active.tab == tab {
+            cancelPendingOpen()
+            activeFloat = nil
+            active.overlay.removeFromSuperview()
+            active.surface.terminate()
+        }
+        // Snapshot first, like `shutdown()` — the removals mutate the dictionary mid-loop. One
+        // `onStateChanged` at the end rather than `discard`'s per-entry fire: each one re-renders
+        // the dock, and this is a single event as far as the dock is concerned.
+        for key in Array(liveFloats.keys) where liveFloats[key]?.tab == tab {
+            liveFloats.removeValue(forKey: key)?.surface.terminate()
+        }
+        onStateChanged?()  // the dock dots live-in-background floats; this tab's are gone
     }
 
     /// Terminate every float this window owns — the window is closing.
@@ -365,8 +470,8 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// free; owning the delegate here means owning this too, or an agent float's request is
     /// silently dropped.
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
-        guard let spec = spec(for: s) else { return }
-        onNotification?(n, spec)
+        guard let entry = entry(for: s) else { return }
+        onNotification?(n, entry.spec, entry.tab)
     }
 
     /// A program repainted a float's background (OSC 11). Carry it to that card's own fill, the
@@ -386,10 +491,13 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         LinkPreviewPresenter.shared.update(url, near: active.overlay)
     }
 
-    /// The spec behind a live surface — the shown card's, or a hidden persistent float's.
-    private func spec(for s: TerminalSurface) -> ToolFloat? {
-        if let active = activeFloat, s === active.surface { return active.spec }
-        return liveFloats.values.first { $0.surface === s }?.spec
+    /// The spec behind a live surface and the tab that owns it — the shown card's, or a hidden
+    /// persistent float's. A hidden `.tab` float belongs to a tab that may not be the one up, which
+    /// is exactly what a notification has to be routed by.
+    private func entry(for s: TerminalSurface) -> (spec: ToolFloat, tab: TabID?)? {
+        if let active = activeFloat, s === active.surface { return (active.spec, active.tab) }
+        guard let live = liveFloats.values.first(where: { $0.surface === s }) else { return nil }
+        return (live.spec, live.tab)
     }
 
     /// A float's tool ran to completion / quit (`q` in lazygit) → close the card and forget the
@@ -397,15 +505,14 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         if let active = activeFloat, s === active.surface {
             activeFloat = nil
-            liveFloats.removeValue(forKey: active.spec.id)
+            removeEntry(forSurface: s)
             active.overlay.animateOut { active.overlay.removeFromSuperview() }
             active.surface.terminate()
             restoreFocus()
             onStateChanged?()
             return
         }
-        if let id = liveFloats.first(where: { $0.value.surface === s })?.key {
-            liveFloats.removeValue(forKey: id)  // a hidden persistent float's tool quit
+        if removeEntry(forSurface: s) {  // a hidden persistent float's tool quit
             s.terminate()
             // The dock dots live-in-background floats, and this is the one path that ends that state
             // without the card ever opening or closing — without it the dot outlives the process.

@@ -1,4 +1,5 @@
 import AppKit
+import TabKit
 import TerminalKit
 import XCTest
 
@@ -122,6 +123,24 @@ final class WindowControllerToolFloatTests: WindowTestCase {
         XCTAssertFalse(all[0].terminated)
     }
 
+    /// The other side of the scope boundary. Scratch is tab-scoped and dies with its tab; a user
+    /// float is not, and closing the tab it was opened in must leave it running.
+    ///
+    /// This one cannot fail against the code that shipped before tab scope existed — it guards the
+    /// implementation from going too far, not a behavior the change adds.
+    func test_windowFloat_survivesTheTabItWasOpenedIn() {
+        let c = makeWindow()
+        c.handle(.newTab)
+        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("btop"))  // dismiss; it keeps running with no on-screen trace
+
+        c.closeTabForTesting(index: 1)
+
+        let all = floatSurfaces(command: "btop")
+        XCTAssertEqual(all.count, 1)
+        XCTAssertFalse(all[0].terminated, "a window float outlives the tab it was opened from")
+    }
+
     /// A float is modal over the window, so the tab underneath must not change behind it — the
     /// same rule every modal card follows (`select` → `closeModal()`). Switching dismisses the
     /// card and reveals the new tab in one keystroke, instead of leaving the user typing into a
@@ -202,13 +221,14 @@ final class WindowControllerToolFloatTests: WindowTestCase {
         let surface = floatSurfaces(command: "btop")[0]
         c.handle(.toggleToolFloat("btop"))  // dismissed; still alive in the registry
 
-        var relayed: [(TerminalNotification, ToolFloat)] = []
-        c.floatsForTesting.onNotification = { relayed.append(($0, $1)) }
+        var relayed: [(TerminalNotification, ToolFloat, TabID?)] = []
+        c.floatsForTesting.onNotification = { relayed.append(($0, $1, $2)) }
         surface.delegate?.surface(
             surface, didPostNotification: TerminalNotification(title: "Claude", body: "needs input"))
 
         XCTAssertEqual(relayed.count, 1, "a hidden float's notification must not be dropped")
         XCTAssertEqual(relayed.first?.1.id, "btop", "the banner needs the float it came from to name it")
+        XCTAssertNil(relayed.first?.2, "a window float belongs to no tab, so the banner takes the active one")
     }
 
     /// `persist:window` anchors where it first opened and never re-anchors: it's for tools that

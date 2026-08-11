@@ -507,7 +507,7 @@ stranded in capture mode, swallowing every keystroke in every window).
 | Bottom drawer, right drawer | `TabController` | per tab |
 | Focus Mode (internally `zoom`) | `TabController` + `PaneCanvasController` | per tab |
 | Fill Screen | `WindowController` | per window |
-| Tool floats | `ToolFloatController` | per window |
+| Tool floats | `ToolFloatController` | per window (Scratch: per tab) |
 | Settings, command palette, workspace picker | `WindowController.modal` | per window |
 | Toasts, confirms | `ToastPresenter` | per window |
 | Terminal font size | `SessionFontSize` | **per app** |
@@ -700,9 +700,18 @@ menu entry: chord + ⌘⇧P + toolbar.
 **Tool floats are window-level, not app-level**, because a surface is one `NSView`
 and can live in one view hierarchy: an app-global instance would physically yank
 the float out of window A when opened in window B. `ToolFloatController` holds no
-reference to any `TabController` and reaches the active tab through four injected
+reference to any `TabController` and reaches the active tab through injected
 closures. Liveness and visibility are independent: `activeFloat` is the one shown,
 `liveFloats` are the ones alive.
+
+**The card is always the window's; the instance follows `ToolFloat.Scope`.** A
+`.window` float has one instance shared by every tab. A `.tab` float has one per
+tab, filed in `liveFloats` under `tabID/id` instead of the bare id, and terminated
+by `shutdownScope` from `closeTab` and `replaceActiveTab` beside
+`TabController.shutdown()`. Scratch is the only `.tab` float, and the axis is
+deliberately unparseable: it is not a `persist:` case, because
+`Persistence(rawValue:)` *is* the config parser, and `persist:tab` was cut after
+daily driving showed tab scoping is the wrong axis for a tool.
 
 **Every silent no-op is a toast.** Focus-Mode-blocked commands, dead nav directions,
 git-guarded floats, ⌘W over a float. Both toast paths throttle at 3s per verb
@@ -1317,11 +1326,12 @@ until the first save from Settings. There are no workspaces, so the ⌘⇧P pick
 shows only its `＋ Add workspace` row.
 
 `ToolFloatCatalog.all` is `builtIns + GeneralConfig.current.floats`, and `builtIns`
-holds exactly one: **Scratch** (⌘;, `persist:window`, a blank login shell), which is
-why the built-in lives in the catalog rather than in `GeneralConfig` and the line
-above still holds. It behaves the way a drawer does: one live instance per window,
-kept running across a dismissal, gone when its shell exits. Two consequences worth
-knowing:
+holds exactly one: **Scratch** (⌘;, a blank login shell), which is why the built-in
+lives in the catalog rather than in `GeneralConfig` and the line above still holds.
+It behaves the way a drawer does: one live instance per tab, kept running across a
+dismissal, gone when its shell exits or its tab closes, and ⌘W on the last pane
+confirms on a busy one. The one deliberate difference from a drawer is that a tab
+change dismisses the card rather than carrying it. Two consequences worth knowing:
 
 - **`scratch` is a reserved id.** A `float =` line whose title slugs to it is
   refused with a diagnostic, rather than shadowing the built-in. Its id keys the
