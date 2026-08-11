@@ -1,7 +1,7 @@
 import AppKit
 
 /// A theme-driven download bar for `UpdateCardView`. `NSProgressIndicator` tints from
-/// `effectiveAppearance`, which ZEN-27 bans in the chrome, so this is a plain two-layer bar:
+/// `effectiveAppearance`, which the chrome bans, so this is a plain two-layer bar:
 /// a neutral ink track under an accent fill. `fraction` nil means the expected length isn't
 /// known yet, and an accent segment sweeps across to read as working.
 final class UpdateProgressBar: NSView {

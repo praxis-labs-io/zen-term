@@ -1,4 +1,4 @@
-# Sparkle Auto-Updates Runbook (ZEN-118, ZEN-19, ZEN-20)
+# Sparkle Auto-Updates Runbook
 
 How in-app updates work, and the manual verification a unit test can't reach
 (signing, notarization, and a real appcast round-trip need a Mac with the
@@ -15,7 +15,7 @@ keycap, and the manual-check toasts are here, by eye.
   (an `SPUUserDriver`) routes each user-facing moment into one `UpdateCardView` in
   the top-right toast stack, which morphs in place: available → downloading →
   ready. There is no stock Sparkle window, so nothing follows `effectiveAppearance`
-  instead of `Theme.current` (ZEN-27).
+  instead of `Theme.current`.
 - **Feed:** `SUFeedURL` is `.../zen-term-releases/releases/latest/download/appcast.xml`.
   `bin/release` uploads a single-item `appcast.xml` beside each DMG, so `latest/`
   always resolves to the newest release. Sparkle only ever offers the newest item.
@@ -23,7 +23,7 @@ keycap, and the manual-check toasts are here, by eye.
   never starts. Only a packaged app checks for updates (hourly, `SUScheduledCheckInterval`).
 - **The card never takes focus.** It is non-modal, like a sticky toast: its buttons
   are click-only, so terminal input is never gated behind it.
-- **On-demand check (ZEN-20).** A "Check for Updates" command in the palette (Config
+- **On-demand check.** A "Check for Updates" command in the palette (Config
   group) runs a manual check. Unlike a scheduled one it reports its result even when
   nothing is found: a "You're on the latest" info toast, or a warning toast on failure
   (an update found still shows the card). It ships with **no default chord**: bind one
@@ -33,7 +33,7 @@ keycap, and the manual-check toasts are here, by eye.
   via `AppDelegate.route`, and a palette pick lands there too through
   `WindowController.onAppGlobalCommand`, the same seam that makes Reload Config work
   from the palette.
-- **Off switch (ZEN-19).** Settings → General → Updates → "Check for updates in the background"
+- **Off switch.** Settings → General → Updates → "Check for updates in the background"
   drives Sparkle's automatic-check schedule (`automatic-update-checks` in the config,
   on by default). It applies live: `AppDelegate` re-points Sparkle on `.configDidChange`.
   Inert in dev (no feed), like everything else here.
@@ -98,7 +98,7 @@ real. This is the shared setup for steps 3–6 and 11.
 - [ ] **4a. Install morphs with a foreign window key.** Install, then immediately open a
       save panel (or click into another app) so ZenTerm's window isn't key while Sparkle
       finishes. The card still reaches "Ready to install" with live Relaunch/Later buttons
-      rather than stranding on the progress bar (ZEN-248).
+      rather than stranding on the progress bar.
 - [ ] **5. Skip / Later persistence.** Skip, then relaunch: no card. Later, then
       relaunch: the card returns.
 - [ ] **6. Re-home on window close.** With a card up, close the window hosting it:

@@ -48,7 +48,7 @@ final class DropdownTests: WindowTestCase {
     }
 
     /// A bare Esc over an open list closes it at the real dispatch layer — the dropdown's own
-    /// `keyDown`, which AppKit reaches before any card-root `performKeyEquivalent` (ZEN-5, confirmed
+    /// `keyDown`, which AppKit reaches before any card-root `performKeyEquivalent` (confirmed
     /// in the running app). The event is built the way AppKit delivers a bare Esc (keyCode 53, no
     /// modifiers). Driving the real keyDown is the point: a `performKeyEquivalent`-by-hand test would
     /// pass even with this handler gone, since that layer never runs for a bare Esc while the
@@ -78,7 +78,7 @@ final class DropdownTests: WindowTestCase {
         XCTAssertFalse(dropdown.isPopoverOpen, "Esc in the dropdown's keyDown closes the list")
     }
 
-    /// ZEN-268: the open list card lives on `window.contentView`, not inside the dropdown's own
+    /// The open list card lives on `window.contentView`, not inside the dropdown's own
     /// subtree, so tearing the dropdown's host out of the window (what a tab-switch `closeModal()`
     /// does to the Settings card) must still take the card with it. Without a leave-the-window hook
     /// the card orphans on the content view — stuck on every tab, no way to clear but restart.

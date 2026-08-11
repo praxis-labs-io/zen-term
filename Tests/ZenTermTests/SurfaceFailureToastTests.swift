@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// ZEN-100: a pane surface that fails to start must surface an actionable toast rather than a
+/// A pane surface that fails to start must surface an actionable toast rather than a
 /// dead blank pane. Mounts the real chrome and drives the toast's ACTUAL buttons (per the house
 /// rule that a control tested only through its view-model can ship dead) — asserting each button
 /// runs its closure and dismisses the toast.

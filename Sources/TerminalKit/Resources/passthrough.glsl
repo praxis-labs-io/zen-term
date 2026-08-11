@@ -1,6 +1,6 @@
 // A cursor shader that draws the terminal and nothing else — zen-term's, not third-party.
 //
-// It stands in for the real shader while a surface is unfocused (ZEN-237). Removing
+// It stands in for the real shader while a surface is unfocused. Removing
 // `custom-shader` outright would be the obvious way to silence an unfocused pane, but
 // ghostty skips its whole cursor-uniform update when no shader is loaded
 // (`renderer/generic.zig`: `if (!self.has_custom_shaders) return;`), so `iCurrentCursor`

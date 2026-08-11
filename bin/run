@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and run ZenTerm on the libghostty backend (ZEN-45). Any args pass through
+# Build and run ZenTerm on the libghostty backend. Any args pass through
 # to `swift run` (e.g. bin/run -Xswiftc -O).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -17,7 +17,7 @@ if [[ ! -d Frameworks/GhosttyKit.xcframework ]] \
 fi
 
 # Filter the harmless linker noise so real app logs stand out: the prebuilt CodeEditLanguages
-# xcframework (ZEN-239) carries debug info pointing at its maintainer's build paths ("unable to
+# xcframework carries debug info pointing at its maintainer's build paths ("unable to
 # open object file /Users/Khan/…"), and libghostty-fat.a has a couple of "could not find symbol …
 # in object file" lines. Neither is a real problem, and `-Xlinker -w` doesn't suppress them on the
 # current linker. The `> >(…) 2>&1` process substitution filters both streams while `exec` keeps

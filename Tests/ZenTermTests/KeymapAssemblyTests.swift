@@ -18,7 +18,7 @@ final class KeymapAssemblyTests: XCTestCase {
     }
 
     /// `toolbar:false` only hides the toolbar button — the chord must still bind, or hiding a
-    /// button would quietly cost the tool its shortcut (the ZEN-327 liveness contract).
+    /// button would quietly cost the tool its shortcut (the liveness contract).
     func test_floatHiddenFromToolbar_stillBindsItsChord() {
         var spec = float(id: "dev", key: "cmd+shift+j")
         spec.showsInToolbar = false
@@ -73,7 +73,7 @@ final class KeymapAssemblyTests: XCTestCase {
 
     /// Select All ships no chord: Edit > Select All holds ⌘A, and it has to, because
     /// `KeyInterceptor` resolves ahead of the responder chain: a default here would take the chord
-    /// off every text field in the app (ZEN-370). The action stays, for a config that rebinds it.
+    /// off every text field in the app. The action stays, for a config that rebinds it.
     func test_selectAll_shipsNoChord() {
         let map = assemble()
         XCTAssertNil(map[Chord(command: true, key: "a")], "⌘A is the Edit menu's")
@@ -112,7 +112,7 @@ final class KeymapAssemblyTests: XCTestCase {
 
     /// ⌘+ is physically ⌘⇧= on a US layout, and `Chord` folds the "+" onto "=" because Shift is set.
     /// Both spellings have to reach increase: binding ⌘= alone leaves the keypress most people make
-    /// falling through to libghostty, which still binds it per surface — ZEN-224 all over again.
+    /// falling through to libghostty, which still binds it per surface.
     func test_bothIncreaseChords_areBound() {
         let map = assemble()
         XCTAssertEqual(map[Chord(command: true, key: "=")], .increaseFontSize)
@@ -143,7 +143,7 @@ final class KeymapAssemblyTests: XCTestCase {
         // lookup still resolves — it canonicalizes onto "=" because Shift is set — but it's the SAME
         // entry, not a second one, which is what makes narrowing and conflict reporting honest.
         //
-        // ⌘⇧= is the last shipped default spelled with a shifted symbol; ZEN-371 moved the splits
+        // ⌘⇧= is the last shipped default spelled with a shifted symbol, since the splits moved
         // off ⌘⇧\ and ⌘⇧-. So increase holds exactly its two written chords and no third.
         let map = assemble()
         XCTAssertEqual(map[Chord(command: true, shift: true, key: "+")], .increaseFontSize)
@@ -171,7 +171,7 @@ final class KeymapAssemblyTests: XCTestCase {
     }
 
     func test_rebindingShiftedSymbol_landsOnOneCanonicalChord() {
-        // The trap that sank the first attempt at ZEN-142: a config written `cmd+shift+-` parses to
+        // The trap that sank the first attempt: a config written `cmd+shift+-` parses to
         // the base "-", but a live ⌘⇧- press decodes to "_". Both spellings canonicalize, so one
         // entry serves both — no sibling expansion, and no way to write a dead bind.
         let map = assemble(keybinds: [KeybindParser.parse("split_vertical=cmd+shift+-")!])
@@ -191,7 +191,7 @@ final class KeymapAssemblyTests: XCTestCase {
         XCTAssertNil(map[Chord(command: true, key: "y")])  // no such float → not bound
     }
 
-    // MARK: unbinding (ZEN-368)
+    // MARK: unbinding
 
     /// The whole point of the feature. A float on ⌘G takes the diff viewer's only chord, which
     /// warns at every launch with no way to say "yes, I meant that". The `= none` line is that way,
@@ -308,7 +308,7 @@ final class KeymapAssemblyTests: XCTestCase {
         //
         // Both fixture chords have to be ones no default holds, or the reshuffle displaces a third
         // action and the diagnostic this asserts is absent shows up for a real reason. The landing
-        // chord was ⌘⇧V until ZEN-369 made that paste_selection.
+        // chord was ⌘⇧V until that became paste_selection.
         XCTAssertNil(
             KeymapDefaults.map[Chord(command: true, shift: true, key: "u")],
             "a default claimed the fixture's landing chord; move the fixture to a free one")

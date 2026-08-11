@@ -3,7 +3,7 @@ import XCTest
 
 @testable import TerminalKit
 
-/// The regression net for the generated-config contract (ZEN-309): we write every line of the
+/// The regression net for the generated-config contract: we write every line of the
 /// ghostty config ourselves, so a finalized config built by `GhosttyConfigWriter` must carry
 /// zero diagnostics. A diagnostic means libghostty no longer understands a key we emit — the
 /// exact failure mode of a pin bump that renames or removes a key, which is otherwise silent.

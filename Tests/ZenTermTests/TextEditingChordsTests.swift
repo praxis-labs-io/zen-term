@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The ⌘⇧ arrows over a text view, through the real interceptor and into a real one (ZEN-369).
+/// The ⌘⇧ arrows over a text view, through the real interceptor and into a real one.
 ///
 /// `KeyInterceptor` resolves the keymap ahead of the responder chain, so binding the prompt jumps
 /// on ⌘⇧↑/⌘⇧↓ took extend-to-start and extend-to-end-of-document away from the Report an Issue
@@ -14,7 +14,7 @@ import XCTest
 /// that answers `true` while the keystroke still selects nothing is the failure this exists to
 /// catch, and only the real control can tell the two apart. That is also how ⌘A was measured OUT of
 /// the owned set: AppKit serves Select All from an Edit menu item ZenTerm has never had, so it does
-/// nothing in a field whatever the guard says (ZEN-370).
+/// nothing in a field whatever the guard says.
 @MainActor
 final class TextEditingChordsTests: WindowTestCase {
     private var window: NSWindow!
@@ -109,9 +109,9 @@ final class TextEditingChordsTests: WindowTestCase {
         XCTAssertEqual(fired, [.newTab])
     }
 
-    // MARK: Return belongs to the box you are typing in (ZEN-371)
+    // MARK: Return belongs to the box you are typing in
 
-    /// ⌘⏎ is the diff comment composer's queue chord and ZEN-371 bound Fill Screen to it. The
+    /// ⌘⏎ is the diff comment composer's queue chord and Fill Screen is bound to it. The
     /// interceptor resolves ahead of the responder chain, so without the guard the composer's own
     /// decoder never sees the keystroke — and the card that hosts it swallows Fill Screen anyway,
     /// so the chord does nothing at all rather than doing the wrong thing.
@@ -195,7 +195,7 @@ final class TextEditingChordsTests: WindowTestCase {
     /// ⌘A is deliberately absent from this set, and measurement is why: AppKit serves Select All
     /// from a menu item rather than from the text view, so deferring the chord here would hand it to
     /// nobody at all. The Edit menu serves it instead, and the keymap ships no default on it, so it
-    /// never reaches this guard in the first place (ZEN-370).
+    /// never reaches this guard in the first place.
     func test_commandAIsNotTreatedAsATextViewChord() {
         XCTAssertFalse(
             TextEditingChords.owns(Chord(command: true, key: "a"), firstResponder: NSTextView()))

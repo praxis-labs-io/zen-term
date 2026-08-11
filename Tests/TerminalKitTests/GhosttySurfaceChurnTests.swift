@@ -3,7 +3,7 @@ import XCTest
 
 @testable import TerminalKit
 
-/// Opt-in stress harness for the ZEN-45 teardown blocker: `ghostty_surface_new`
+/// Opt-in stress harness for the teardown blocker: `ghostty_surface_new`
 /// reportedly starts failing with `error.OutOfMemory` once WindowServer surfaces leak.
 /// This churns real surfaces (Metal layer + PTY spawn) through create → attach →
 /// destroy in one process, far past any realistic pane count, and fails on the first
@@ -23,7 +23,7 @@ final class GhosttySurfaceChurnTests: XCTestCase {
             styleMask: [.titled], backing: .buffered, defer: false)
         window.orderFront(nil)
         // Closed, not ordered out: an ordered-out window keeps its window-server surface for the
-        // rest of the run, and the suite's peak is what ZEN-312 is about. `isReleasedWhenClosed`
+        // rest of the run, and the suite's peak is what matters. `isReleasedWhenClosed`
         // defaults to true for a window built in code, so clear it before closing one still held.
         window.isReleasedWhenClosed = false
         defer { window.close() }

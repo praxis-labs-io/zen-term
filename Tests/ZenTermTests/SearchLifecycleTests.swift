@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The find bar holds an app-global key handler and a live search engine behind it (ZEN-324).
+/// The find bar holds an app-global key handler and a live search engine behind it.
 /// Every retraction has to take down both, and the phase-one gate has to give the keyboard away
 /// while the field owns it.
 ///

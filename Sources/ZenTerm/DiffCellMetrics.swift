@@ -2,13 +2,13 @@ import AppKit
 
 /// Shared metrics and subview factories for the diff pane's row cells — `DiffLineCell` (side-by-side)
 /// and `UnifiedLineCell` (inline) — so both agree on font, row height, gutter size, and the
-/// panning-text / clip setup that ZEN-241 introduced.
+/// panning-text / clip setup long lines need.
 enum DiffCellMetrics {
     static let rowHeight: CGFloat = 20
     static let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
 
     /// The slice of a cell its diff line occupies. Normally the whole thing, but a row can be grown to
-    /// reserve room for the inline comment box (ZEN-257) — and then the line stays in the top
+    /// reserve room for the inline comment box — and then the line stays in the top
     /// `rowHeight` points instead of centring itself in the gap.
     static func lineHeight(in bounds: CGRect) -> CGFloat { min(bounds.height, rowHeight) }
 
@@ -49,7 +49,7 @@ enum DiffCellMetrics {
         gutterInset + numberColumnWidth(forDigits: digits) + gutterTrailing
     }
     /// A stable gutter width (5 digits) for the width thresholds that must not shift per file — the
-    /// auto-fold point (ZEN-243) would jitter if it moved every time you opened a differently-sized file.
+    /// auto-fold point would jitter if it moved every time you opened a differently-sized file.
     static let nominalGutterWidth: CGFloat = gutterWidth(forDigits: 5)
 
     /// Single-line monospace text height, measured once — `NSTextField` top-aligns text in a taller

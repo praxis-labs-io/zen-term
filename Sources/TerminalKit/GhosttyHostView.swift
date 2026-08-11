@@ -380,7 +380,7 @@ final class GhosttyHostView: NSView {
     /// `keyDown`/`keyUp`, and nothing upstream forwards them (`KeyInterceptor`'s monitor passes
     /// them straight through outside capture mode), so without this override libghostty is never
     /// told a modifier moved — and the kitty keyboard protocol's report-all-keys mode, which
-    /// Helix and nvim-with-kitty-protocol rely on, reports no modifiers at all (ZEN-308).
+    /// Helix and nvim-with-kitty-protocol rely on, reports no modifiers at all.
     ///
     /// Unhandled events are swallowed rather than passed up, matching Ghostty's own app: the
     /// only other consumer of `flagsChanged` in ZenTerm is the Settings keybind recorder, and
@@ -575,7 +575,7 @@ final class GhosttyHostView: NSView {
 
     // Restores a real position after `mouseExited` pushed (-1, -1): libghostty gates mouse
     // reporting on the position being inside the viewport, and when a window becomes key with
-    // the pointer already over a pane, no `mouseMoved` arrives to correct it (ZEN-310).
+    // the pointer already over a pane, no `mouseMoved` arrives to correct it.
     override func mouseEntered(with event: NSEvent) { reportMousePos(event) }
 
     override func mouseExited(with event: NSEvent) {

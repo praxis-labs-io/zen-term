@@ -51,7 +51,7 @@ final class DiffFilePrefetcherTests: XCTestCase {
 
     func test_candidates_includeExtensionlessFiles_whichMayResolveFromContent() {
         // An extensionless file can still resolve from its blob (shebang, modeline), so it must reach
-        // the highlight pass (ZEN-329). An unknown *extension* is a real answer and stays out.
+        // the highlight pass. An unknown *extension* is a real answer and stays out.
         let load = status(unstaged: [file("bin/release"), file("notes.xyzzy")])
 
         let paths = DiffFilePrefetcher.candidates(

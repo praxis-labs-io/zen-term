@@ -56,7 +56,7 @@ final class PanelHostView: NSView {
     }
 
     /// A transient header this panel is wearing for as long as a mode is up over it (scroll
-    /// mode, ZEN-330), outranking both the zoom and base metas. Set to nil to give the header
+    /// mode), outranking both the zoom and base metas. Set to nil to give the header
     /// back to whichever of those the panel's state calls for.
     ///
     /// It carries live text, so it is assigned on every scroll report, which is why
@@ -90,8 +90,8 @@ final class PanelHostView: NSView {
     var scrollCursorForTesting: ScrollCursorView { cursor }
 
     /// Test hook: whether the padding ring is queued to repaint. Toggling a strip resizes the terminal,
-    /// which moves the hole the ring punches out of the padding, and nothing else in the panel marks it
-    /// (ZEN-354). A rendered check can't stand in for this: `cacheDisplay` draws regardless of the flag,
+    /// which moves the hole the ring punches out of the padding, and nothing else in the panel marks it.
+    /// A rendered check can't stand in for this: `cacheDisplay` draws regardless of the flag,
     /// so it paints the band correctly even when the app would not.
     var ringNeedsDisplayForTesting: Bool { ring.needsDisplay }
 
@@ -220,14 +220,14 @@ final class PanelHostView: NSView {
     /// the hole from here instead would read a frame that is still stale: AppKit lays a tree out
     /// top-down, so `content` — a descendant, inside `clip` — has not been positioned yet when
     /// this runs. That shipped a panel whose padding went unpainted until any later layout pass
-    /// happened to correct it (ZEN-282).
+    /// happened to correct it.
     override func layout() {
         super.layout()
         ring.needsDisplay = true
     }
 
     /// The background a program set in this panel's own terminal with OSC 11, or nil while the
-    /// panel is on the theme's (ZEN-23). It reaches the interior fill alone, so the padding around
+    /// panel is on the theme's. It reaches the interior fill alone, so the padding around
     /// a repainted terminal matches it instead of ringing it in the theme color. The border, the
     /// focus halo and the header stay on `Theme.current` — a program recolors its pane, not the
     /// chrome around it.
@@ -238,17 +238,17 @@ final class PanelHostView: NSView {
         }
     }
 
-    /// Test hook: the focus glow's current strength (ZEN-282), 0 while unfocused.
+    /// Test hook: the focus glow's current strength, 0 while unfocused.
     var haloOpacityForTesting: Float { halo.layer?.opacity ?? -1 }
 
-    /// Test hook: the colors actually painted into the panel's interior (ZEN-23) — read off the
+    /// Test hook: the colors actually painted into the panel's interior — read off the
     /// layer and the ring view rather than off `backgroundOverride`, so a hook that never reaches
     /// the paint fails. `fill` is nil below `background-alpha` 1, where the ring paints instead.
     var paintedBackgroundForTesting: (fill: CGColor?, ring: NSColor) {
         (clip.layer?.backgroundColor, ring.color)
     }
 
-    /// Test hook: the glow's frame and where it sits in the stack (ZEN-282). It is a sibling
+    /// Test hook: the glow's frame and where it sits in the stack. It is a sibling
     /// *beneath* the card that has to reach past the panel's own bounds — get either wrong and
     /// the glow is drawn over the terminal, or clipped to nothing, with focus state still correct.
     var haloGeometryForTesting: (frame: NSRect, isBelowCard: Bool) {
@@ -258,15 +258,15 @@ final class PanelHostView: NSView {
         return (halo.frame, haloIndex < paneIndex)
     }
 
-    /// Test hook: whether the header is present and currently shown (ZEN-65).
+    /// Test hook: whether the header is present and currently shown.
     var isHeaderVisibleForTesting: Bool { headerView.map { !$0.isHidden } ?? false }
 
-    /// Test hook: the header's current title + resolved keycap shortcut (ZEN-65), for asserting
+    /// Test hook: the header's current title + resolved keycap shortcut, for asserting
     /// the zoom content swap. Nil when there's no header.
     var headerContentForTesting: (title: String, shortcut: String)? { headerView?.contentForTesting }
 
     /// Test hook: the shortcut the mounted header keycap was built with — stale unless the
-    /// header actually rebuilt (ZEN-48).
+    /// header actually rebuilt.
     var builtHeaderKeycapForTesting: String? { headerView?.builtKeycapShortcutForTesting }
 
     /// When true the panel is transparent to the pointer — set while it dissolves out on close, so a
@@ -338,7 +338,7 @@ final class PanelHostView: NSView {
     /// terminal, which moves that hole, but flipping a constraint does not mark this view as needing
     /// layout, and `layout()` is the only thing that marks the ring. The ring then keeps the hole it
     /// punched for the full-height terminal, the strip's band goes unpainted, and the window's backdrop
-    /// shows through it: ZEN-354's grey strip, measured as exactly the backdrop's color rather than a
+    /// shows through it: the grey strip, measured as exactly the backdrop's color rather than a
     /// washed-out fill. Focus Mode never showed it because zooming resizes the panel itself, so
     /// `layout()` runs.
     private func setHeaderShown(_ shown: Bool) {
@@ -378,12 +378,12 @@ final class PanelHostView: NSView {
     /// Translucent: the clip has to stop filling, or it repaints the terminal background behind a
     /// surface that is now see-through, and nothing shows through. The ring takes over the border
     /// region alone at the same alpha the terminal blends at, so the two read as one surface
-    /// instead of the ring sitting a shade lighter (ZEN-282). Both values are re-read here rather
+    /// instead of the ring sitting a shade lighter. Both values are re-read here rather
     /// than captured at init, so a Settings edit applies live.
     ///
     /// The color is `backgroundOverride` ahead of the theme, so once a program has repainted this
     /// panel's terminal a theme change moves the rest of the chrome and leaves this fill matched to
-    /// the grid (ZEN-23). Everything else here still follows the theme.
+    /// the grid. Everything else here still follows the theme.
     private func applyBackground() {
         let background = (backgroundOverride ?? Theme.current.chrome.background).nsColor
         let alpha = CGFloat(GeneralConfig.current.backgroundAlpha)
@@ -392,7 +392,7 @@ final class PanelHostView: NSView {
         ring.isHidden = isSolid
         ring.color = background.withAlphaComponent(alpha)
         // The chrome strips inside the pane paint their tint over this same fill, so they read at the
-        // pane's alpha rather than blending with the desktop (ZEN-354). Solid or not: at alpha 1 this is
+        // pane's alpha rather than blending with the desktop. Solid or not: at alpha 1 this is
         // the fill the clip already had behind them.
         findBar?.paneFill = isSolid ? background : ring.color
     }
@@ -418,7 +418,7 @@ final class PanelHostView: NSView {
         private var keycap: KeycapView
         private static let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
 
-        /// Test hook: the header's current title text + resolved keycap shortcut (ZEN-65), for
+        /// Test hook: the header's current title text + resolved keycap shortcut, for
         /// asserting the drawer's resting → zoomed swap.
         var contentForTesting: (title: String, shortcut: String) {
             (titleField.stringValue, CommandCatalog.spec(for: action).shortcut)
@@ -427,7 +427,7 @@ final class PanelHostView: NSView {
         /// Test hook: the shortcut the MOUNTED keycap was built with. Unlike `contentForTesting`,
         /// which re-resolves against the live keymap on every read, this is the value actually on
         /// screen — so it goes stale if the rebuild is skipped, which is what makes it usable for
-        /// asserting that a rebind reached this header (ZEN-48).
+        /// asserting that a rebind reached this header.
         var builtKeycapShortcutForTesting: String { keycap.shortcut }
 
         init(_ meta: PanelMeta) {

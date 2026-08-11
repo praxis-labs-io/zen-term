@@ -7,8 +7,8 @@ import XCTest
 /// The command palette dispatches a picked command through `WindowController.handle(_:)`, but the
 /// app-global chords (reload config, check for updates) are owned by `AppDelegate.route`, not the
 /// window. `handle` forwards them via `onAppGlobalCommand`; without that seam a palette pick is a
-/// silent no-op — which is exactly how "Reload Config" from the palette shipped doing nothing
-/// (ZEN-20). This pins the forwarding so it can't regress to a bare `break` again.
+/// silent no-op — which is exactly how "Reload Config" from the palette shipped doing nothing.
+/// This pins the forwarding so it can't regress to a bare `break` again.
 @MainActor
 final class WindowControllerAppGlobalDispatchTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?

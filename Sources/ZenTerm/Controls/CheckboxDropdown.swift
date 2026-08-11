@@ -124,7 +124,7 @@ final class CheckboxDropdown: NSView {
 
     /// The open list card is parented to the window's content view (so it escapes this control's
     /// bounds), not to this subtree — so tearing out an ancestor (the Settings modal) can't strand
-    /// a dead list over every tab. Same lifetime binding as `Dropdown` (ZEN-268).
+    /// a dead list over every tab. Same lifetime binding as `Dropdown`.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil { closeList() }
@@ -147,7 +147,7 @@ final class CheckboxDropdown: NSView {
             case .down: moveHighlight(1)
             case .activate: toggleHighlight()  // return / enter / space — the list stays open
             // Local Esc is what makes layered dismissal work: it reaches this keyDown before any
-            // card-root performKeyEquivalent, so the list closes and the Settings card stays (ZEN-5).
+            // card-root performKeyEquivalent, so the list closes and the Settings card stays.
             case .escape: closeList()
             default: break  // consume every other key while the list is open
             }

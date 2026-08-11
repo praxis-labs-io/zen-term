@@ -47,7 +47,7 @@ enum KeyboardFocus {
     /// Masking with `reservableModifiers` rather than `deviceIndependentFlagsMask` is the whole
     /// point: AppKit tags every arrow event with `.function` and `.numericPad`, which
     /// `deviceIndependentFlagsMask` keeps, so that comparison never equals a bare `.option` and the
-    /// reorder is dead in the app while a synthesized test event passes (ZEN-81). Requiring Option
+    /// reorder is dead in the app while a synthesized test event passes. Requiring Option
     /// to be the only reservable modifier still keeps ⌥⌘↑ out.
     static func isOptionOnly(_ event: NSEvent) -> Bool {
         event.modifierFlags.intersection(reservableModifiers) == .option

@@ -15,7 +15,7 @@ final class DiffOutlineItem {
     }
     let kind: Kind
     let children: [DiffOutlineItem]
-    /// A value name for this row that survives the rebuild every changed load does (ZEN-233), so the
+    /// A value name for this row that survives the rebuild every changed load does, so the
     /// folds and the selection can be put back on the new objects: the section title plus the row's
     /// path, `\u{1}`-separated the way `FileDiff.highlightKey` is. Section-qualified for the same reason
     /// that key carries scope — one path can sit in two slices at once (changed in the working tree

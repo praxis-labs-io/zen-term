@@ -99,7 +99,7 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
-    /// The card is the single Esc owner (ZEN-77): a focused button lets Esc bubble here, a focused
+    /// The card is the single Esc owner: a focused button lets Esc bubble here, a focused
     /// text field/area routes it through the field editor's `cancelOperation`; claiming it in
     /// `performKeyEquivalent` catches both.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {

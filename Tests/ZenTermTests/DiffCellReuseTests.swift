@@ -6,7 +6,7 @@ import XCTest
 /// A reused row must resize its text to the new line immediately. `configure` used to only mark the cell
 /// as needing layout, so a cell recycled from a shorter row kept that row's narrow text frame and clipped
 /// the new line's tail (whole lines rendered blank when the previous row was very short) until some other
-/// pass ran — visible as "missing text" in the diff (ZEN-239). Window-based, because the bug is in the
+/// pass ran — visible as "missing text" in the diff. Window-based, because the bug is in the
 /// frame the label actually gets, which a view-model assertion can't see.
 final class DiffCellReuseTests: WindowTestCase {
     private let shortLine = "] as"

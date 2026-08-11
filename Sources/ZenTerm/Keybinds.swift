@@ -153,12 +153,12 @@ extension KeyInterceptor.ReservedChord {
         case "toggle_bottom_drawer": self = .toggleBottomDrawer
         case "toggle_right_drawer": self = .toggleRightDrawer
         case "toggle_focus_mode": self = .toggleZoom
-        // Back-compat: the action was renamed from zoom to Focus Mode (ZEN-207); an existing
+        // Back-compat: the action was renamed from zoom to Focus Mode; an existing
         // config with the old token still resolves rather than silently dropping the binding.
         case "toggle_zoom": self = .toggleZoom
         case "fill_screen": self = .fillScreen
         case "toggle_workspace_picker": self = .toggleRepoPicker
-        // Back-compat: the config token is `toggle_workspace_picker` (ZEN-6) — the product calls it
+        // Back-compat: the config token is `toggle_workspace_picker` — the product calls it
         // a workspace everywhere, and `repo` was the one token whose product name moved on. The old
         // `toggle_repo_picker` still resolves so an existing binding keeps working.
         case "toggle_repo_picker": self = .toggleRepoPicker
@@ -239,7 +239,7 @@ enum KeymapDefaults {
         map[Chord(command: true, control: true, key: "→")] = .resizeRight
         map[Chord(command: true, control: true, key: "↑")] = .resizeUp
         map[Chord(command: true, control: true, key: "↓")] = .resizeDown
-        // Stepping through the panels in order, wrapping (ZEN-372). ghostty spells this ⌘[ / ⌘],
+        // Stepping through the panels in order, wrapping. ghostty spells this ⌘[ / ⌘],
         // which ZenTerm spends on tabs, so it takes the shifted pair. That is ghostty's tab cycling,
         // so the bracket family is inverted here on both rows, deliberately and in one direction:
         // tabs unshifted, panes shifted.
@@ -400,7 +400,7 @@ struct KeymapOverrides: Equatable {
 enum KeybindParser {
     /// What one line asks for. An unbind is a value rather than the absence of a chord, because
     /// every stage downstream has to tell "the user wants no shortcut here" apart from "nothing
-    /// was said about this action" (ZEN-368).
+    /// was said about this action".
     enum Line: Equatable {
         case bind(Chord, KeyInterceptor.ReservedChord)
         case unbind(KeyInterceptor.ReservedChord)
@@ -435,14 +435,14 @@ enum KeybindParser {
 /// is skipped with a warning.
 ///
 /// Also reports the displacements that cost an action its *last* chord, so the Keybinds card can
-/// say why a row has no shortcut rather than rendering a bare empty chip (ZEN-121).
+/// say why a row has no shortcut rather than rendering a bare empty chip.
 enum KeymapAssembler {
     /// What a config assembled to. A struct rather than a tuple because the third member is not
     /// derivable from the first two: an action holding no chord in `map` is either something the
     /// user asked for or something a collision did to them, and only this can tell you which.
     struct Assembled {
         let map: [Chord: KeyInterceptor.ReservedChord]
-        /// The actions a `= none` line named that ended with no chord (ZEN-368). Both halves of
+        /// The actions a `= none` line named that ended with no chord. Both halves of
         /// that matter. An action left chordless by a *displacement* stays out, or the writer would
         /// turn a reported conflict into a silent intentional unbind; an action with both a `= none`
         /// line and a real bind stays out too, since the bind won and writing the contradiction back
@@ -454,7 +454,7 @@ enum KeymapAssembler {
     /// `canType` is injected so tests state the layout instead of inheriting the test machine's.
     /// Its type is `@MainActor` deliberately: a plain `(Chord) -> Bool` parameter erases the leaf's
     /// isolation, so annotating `KeyboardLayout.canType` alone would let an off-main assembly
-    /// compile clean straight past it (ZEN-31).
+    /// compile clean straight past it.
     @MainActor
     static func assemble(
         floats: [ToolFloat], keybinds: [KeybindParser.Line],
@@ -526,7 +526,7 @@ enum KeymapAssembler {
         // explicit unbind being silent: the chord is already free when a float or a later line
         // claims it, so no displacement is recorded and there is nothing for `diagnostics` to
         // report. Move this after the writes and the user gets told off for a config they wrote on
-        // purpose (ZEN-368).
+        // purpose.
         let reboundActions = typeable.map(\.1)
         map = map.filter { entry in
             !reboundActions.contains(entry.value) && !requestedUnbinds.contains(entry.value)

@@ -1,7 +1,7 @@
 import Foundation
 
 /// A syntax-highlighted run within a line: the character range it covers and the role that resolves
-/// its color at render time (ZEN-238). Ranges are `NSRange` because the render path is
+/// its color at render time. Ranges are `NSRange` because the render path is
 /// `NSAttributedString`; `NSRange` is `Equatable`, so the row model stays `Equatable`.
 struct TokenSpan: Equatable {
     let range: NSRange
@@ -12,7 +12,7 @@ struct TokenSpan: Equatable {
 /// right), carrying that side's line number for the gutter and copy-ref.
 ///
 /// `spans` is the syntax highlighting for this line: `nil` means not highlighted (flat fallback);
-/// non-`nil` drives per-range attributed coloring. Produced by `DiffHighlighter` (ZEN-239).
+/// non-`nil` drives per-range attributed coloring. Produced by `DiffHighlighter`.
 struct DiffCell: Equatable {
     let lineNumber: Int
     let text: String

@@ -11,7 +11,7 @@ struct DiffSendTarget: Equatable {
     let label: String
 }
 
-/// What a finished diff comment does to its target terminal (ZEN-257).
+/// What a finished diff comment does to its target terminal.
 enum DiffSendAction: Equatable {
     /// Paste the comment and press Return — the agent gets it now. The viewer closes.
     case submit

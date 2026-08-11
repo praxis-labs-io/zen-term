@@ -57,7 +57,7 @@ final class GitDiffRunnerTests: XCTestCase {
     }
 
     /// This layer excludes nothing now. Which branch to keep out of the base list depends on the
-    /// *selected* head, which only `DiffViewerOverlay` knows, so the exclusion moved there (ZEN-313).
+    /// *selected* head, which only `DiffViewerOverlay` knows, so the exclusion moved there.
     /// `DiffViewerOverlayTests` covers it on both sides.
     func test_orderedBranches_excludesNothing_theOverlayDecidesThat() {
         let ordered = GitDiffRunner.orderedBranches(
@@ -96,7 +96,7 @@ final class GitDiffRunnerTests: XCTestCase {
         XCTAssertTrue(result[0].hunks.isEmpty)
     }
 
-    // MARK: head selection (ZEN-313)
+    // MARK: head selection
 
     /// The committed slice compares the fork point to whichever head the reader picked. Default is
     /// `HEAD`, so the ordinary case is byte-identical to before.

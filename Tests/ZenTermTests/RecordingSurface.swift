@@ -20,11 +20,11 @@ final class RecordingSurface: NSObject, TerminalSurface {
     var isBusy = false
     /// Overrides the protocol extension's nil default so a test can stand a surface up already
     /// repainted by OSC 11 — the state the chrome pulls from when it builds a host for a surface
-    /// that was already running (ZEN-23).
+    /// that was already running.
     var backgroundOverride: TerminalColor?
     var terminated = false
     /// When set, `start` reports a creation failure to the delegate instead of succeeding, which
-    /// exercises the seam's dead-surface path (ZEN-100) without needing a real libghostty failure.
+    /// exercises the seam's dead-surface path without needing a real libghostty failure.
     var failOnStart = false
     private(set) var startCount = 0
     func start(_ config: TerminalSurfaceConfig) {
@@ -46,7 +46,7 @@ final class RecordingSurface: NSObject, TerminalSurface {
     /// The appearance this surface is currently wearing: what it was **started** with, then
     /// whatever `applyAppearance` last pushed. The protocol's default `applyAppearance` is a no-op,
     /// so without this a stub records nothing and the `.configDidChange` fan-out's reach into live
-    /// surfaces is invisible to a test (ZEN-281).
+    /// surfaces is invisible to a test.
     ///
     /// Seeded from `start` deliberately. A real surface is already wearing its launch appearance,
     /// so a stub that starts blank would report a difference between a reload that re-pushed the
@@ -56,7 +56,7 @@ final class RecordingSurface: NSObject, TerminalSurface {
         lastAppearance = (theme, behavior)
     }
     /// Every font size pushed through the seam, in order. A list rather than a latest-value: the
-    /// ZEN-224 bug was a size reaching one surface and not its siblings, so a test has to be able to
+    /// bug was a size reaching one surface and not its siblings, so a test has to be able to
     /// ask "did this surface get the push at all", which a nil-vs-value check on the focused pane
     /// alone cannot answer. Seeded by `start` for the same reason `lastAppearance` is — a real
     /// surface is already wearing the size it launched with.

@@ -3,11 +3,11 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The reload notice for config problems (ZEN-142). The inline note on a Settings row only reaches
+/// The reload notice for config problems. The inline note on a Settings row only reaches
 /// someone already looking at that row, and a user who broke their config by hand has no reason to
 /// go there, so the reload has to announce itself.
 ///
-/// `.chordTaken` is not among them (ZEN-368). A chord conflict carries its own answer, so it gets a
+/// `.chordTaken` is not among them. A chord conflict carries its own answer, so it gets a
 /// card each with Accept and Revert rather than a line in this shared list. Its sentence still
 /// renders here, because the row and that card both show it; `ConfigApplierDiagnosticFilterTests`
 /// holds it out of the shared notice.
@@ -104,7 +104,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     }
 
     /// The sentence a chord conflict carries. Present tense and no "in your config": the row and
-    /// the card both show it beside the two buttons that answer it (ZEN-368).
+    /// the card both show it beside the two buttons that answer it.
     func test_chordTaken_readsAsAStandingState() {
         XCTAssertEqual(splitVerticalLostBackslash.message, "⌘⇧\\ goes to toggle_focus_mode.")
         XCTAssertTrue(splitVerticalLostBackslash.isChordConflict, "it gets its own card")
@@ -162,7 +162,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         XCTAssertTrue(unusable.message.contains("split_vertical=cmd+|"), unusable.message)
     }
 
-    // MARK: non-keybind diagnostics (ZEN-7)
+    // MARK: non-keybind diagnostics
 
     func test_invalidValue_phrasings() {
         let diagnostic = ConfigDiagnostic(

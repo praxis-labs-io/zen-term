@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// ZEN-280: an open modal card paints above the toast stack, and a tool float still paints below it.
+/// An open modal card paints above the toast stack, and a tool float still paints below it.
 ///
 /// A card owns the keyboard and dims the tile behind it, so a passive notice landing on top of it read
 /// as broken. A float is the opposite case on purpose: the ⌘W guard toast ("Close btop first, then
@@ -137,7 +137,7 @@ final class ModalZOrderTests: WindowTestCase {
     // MARK: the geometry the card no longer inherits
 
     /// Window-hosted, the card owns its own gutter constraints. A live `window-gutter` edit used to
-    /// re-inset the tile for free; now it has to reach the card too (ZEN-89's bug class).
+    /// re-inset the tile for free; now it has to reach the card too (the bug class).
     func test_aLiveGutterEdit_reInsetsAnOpenCard() throws {
         let c = makeWindow()
         let card = try openCard(in: c)
@@ -156,7 +156,7 @@ final class ModalZOrderTests: WindowTestCase {
             card.frame.width, before.width, "a wider gutter has to shrink the open card with the tile")
     }
 
-    // MARK: the ⌘P route to the tool form (ZEN-286)
+    // MARK: the ⌘P route to the tool form
 
     /// Settings was the only way to create a tool float. The palette command opens the same form in
     /// its create state, and closing it must not conjure the Settings card the user never opened.

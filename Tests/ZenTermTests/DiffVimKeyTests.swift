@@ -3,10 +3,10 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The two key decoders the diff viewer's selection layer rests on (ZEN-227). Both are pure and both
+/// The two key decoders the diff viewer's selection layer rests on. Both are pure and both
 /// fail silently: a decoder that swallows ⌘C steals Copy from the menu, and one that matches against
 /// the raw modifier mask stops matching the moment AppKit stamps a `.function` bit on the event — the
-/// ZEN-81 trap, which shipped a dead ⌥-reorder past four green tests.
+/// same reorder trap, which shipped a dead ⌥-reorder past four green tests.
 final class DiffVimKeyTests: XCTestCase {
     private func keyDown(
         _ characters: String, unshifted: String? = nil, flags: NSEvent.ModifierFlags = []

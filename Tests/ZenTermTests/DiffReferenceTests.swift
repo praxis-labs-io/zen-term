@@ -2,7 +2,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The `@path:line` string a yank or a comment carries (ZEN-227). Pure string shaping, and wrong in
+/// The `@path:line` string a yank or a comment carries. Pure string shaping, and wrong in
 /// ways nothing on screen shows: a range rendered as `42-42`, a deleted file handed line numbers that
 /// no longer exist, or a missing `@` that stops the agent treating it as a file — all look fine in the
 /// viewer and send the agent somewhere useless.

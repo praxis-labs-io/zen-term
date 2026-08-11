@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The find bar's phase-two key decoder (ZEN-324), and the viewport scan that decides where the
+/// The find bar's phase-two key decoder, and the viewport scan that decides where the
 /// cursor lands.
 ///
 /// Both fail silently. A key the decoder wrongly claims is one the shell never sees; a key it

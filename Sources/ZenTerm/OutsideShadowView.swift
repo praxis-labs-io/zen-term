@@ -6,7 +6,7 @@ import AppKit
 /// A layer shadow can't do this. Core Animation renders `shadowOpacity` by *filling* `shadowPath`
 /// and blurring the result, so the shadow covers the card's whole interior as well as haloing it.
 /// That is free while the card is opaque and paints over it, and becomes a wash across the interior
-/// the moment `background-alpha` makes it see-through (ZEN-282 for the pane focus glow, ZEN-287 for
+/// the moment `background-alpha` makes it see-through (for the pane focus glow, and for
 /// the float's much darker elevation shadow).
 ///
 /// Reshaping the path into a ring doesn't work, and fails in a way that looks like a tuning problem

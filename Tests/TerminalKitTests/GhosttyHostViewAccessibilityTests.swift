@@ -3,8 +3,8 @@ import XCTest
 
 @testable import TerminalKit
 
-/// VoiceOver reads the terminal through the NSAccessibility overrides on `GhosttyHostView`
-/// (ZEN-323). This is the silently-dead class: the app renders identically whether or not the
+/// VoiceOver reads the terminal through the NSAccessibility overrides on `GhosttyHostView`.
+/// This is the silently-dead class: the app renders identically whether or not the
 /// overrides exist, and xctest runs with the accessibility engine `.prohibited`
 /// (docs/swift-conventions.md), so nothing here drives VoiceOver itself. Instead the overrides
 /// are called directly — that proves the contract VoiceOver consumes, while the spoken
@@ -72,7 +72,7 @@ final class GhosttyHostViewAccessibilityTests: XCTestCase {
         let hostView = try XCTUnwrap(surface.view as? GhosttyHostView)
 
         // Poll rather than sleep: the shell has to start first, and CI is slower than this
-        // machine (ZEN-302). The runloop also carries libghostty's callbacks. The 500ms
+        // machine. The runloop also carries libghostty's callbacks. The 500ms
         // content cache just makes early polls stale; later polls refetch.
         let deadline = Date().addingTimeInterval(30)
         var contents = ""

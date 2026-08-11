@@ -3,11 +3,11 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Regression guard for the Settings nav column's background (ZEN-136 follow-up). The nav rows
+/// Regression guard for the Settings nav column's background. The nav rows
 /// scroll inside an `NSScrollView`, and `drawsBackground` FORWARDS to the scroll view's current
 /// clip view — so installing the flipped clip view after clearing the flag silently resurrected
 /// the default opaque system background: an appearance-following wash over the whole column that
-/// ignores `Theme.current` (ZEN-27) and reads as a mismatched sidebar panel.
+/// ignores `Theme.current` and reads as a mismatched sidebar panel.
 final class SettingsOverlayNavTests: WindowTestCase {
     /// Retained so a mounted card's window outlives the mount call (Esc is dispatched through it).
     private var window: NSWindow?
@@ -73,7 +73,7 @@ final class SettingsOverlayNavTests: WindowTestCase {
                 + "appearance-following sidebar wash this test guards against")
     }
 
-    // MARK: Report an Issue button (ZEN-212)
+    // MARK: Report an Issue button
 
     private func mountNav(onReportIssue: @escaping () -> Void) -> (overlay: SettingsOverlay, window: NSWindow) {
         let overlay = SettingsOverlay(
@@ -114,7 +114,7 @@ final class SettingsOverlayNavTests: WindowTestCase {
             "Down from the last section row focuses the Report button")
     }
 
-    // MARK: Esc (ZEN-149)
+    // MARK: Esc
 
     private func mount(_ section: SettingsSection, onClose: @escaping () -> Void) -> NSWindow {
         let overlay = SettingsOverlay(

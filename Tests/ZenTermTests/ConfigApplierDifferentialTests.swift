@@ -4,9 +4,9 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Differential tests for the app-global half of the `.configDidChange` fan-out (ZEN-281).
+/// Differential tests for the app-global half of the `.configDidChange` fan-out.
 ///
-/// ZEN-48 gated the fan-out by change kind on the premise "no behavior change intended", and
+/// The fan-out was gated by change kind on the premise "no behavior change intended", and
 /// nothing checked it. Two regressions shipped past a green suite, both in this observer, both
 /// caught by reading the diff rather than by a failing test — and the second was the *same shape*
 /// as the first, made twenty minutes later. Re-deriving four-deep call chains by hand does not
@@ -59,7 +59,7 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         /// The notice **currently on screen**, as opposed to the log of every one ever raised. The
         /// config notice is sticky, so this is the thing a user is actually looking at.
         var showing: ToastContent?
-        /// The chord conflicts carded, one per card (ZEN-368).
+        /// The chord conflicts carded, one per card.
         var conflicts: [KeybindConflict] = []
         /// Whether a window is there to take a notice. The real sink returns false when the key
         /// window isn't one of ours (an open panel).
@@ -201,7 +201,7 @@ final class ConfigApplierDifferentialTests: XCTestCase {
     }
 
     /// The invariant. The gated run gets the real diff `AppConfig.reload()` would compute; the
-    /// ungated run gets `.all`, which is the pre-ZEN-48 behavior.
+    /// ungated run gets `.all`, which is the earlier behavior.
     private func assertGateSkipsNothing(
         _ scenario: Scenario, file: StaticString = #filePath, line: UInt = #line
     ) {

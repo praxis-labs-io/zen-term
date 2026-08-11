@@ -45,7 +45,7 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         textView.isRichText = false
         textView.isEditable = true
         // Off by default on a bare `NSTextView`, unlike a field editor, so Edit > Undo would grey out
-        // in the one box people write paragraphs in (ZEN-370).
+        // in the one box people write paragraphs in.
         textView.allowsUndo = true
         textView.drawsBackground = false
         textView.font = .systemFont(ofSize: 13)

@@ -61,7 +61,7 @@ enum GhosttyUnboundChords {
         "cmd+z", "cmd+shift+z", "cmd+shift+t",
     ]
 
-    /// Scrolling the viewport and stepping a search, which ZenTerm named in ZEN-367 and kept on
+    /// Scrolling the viewport and stepping a search, which ZenTerm named and kept on
     /// ghostty's own chords. Nothing a user presses changes, and the behavior is ours to describe
     /// in Settings and to rebind.
     private static let scrollingAndFinding: [String] = [

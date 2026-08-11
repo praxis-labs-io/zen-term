@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the Workspaces settings section (ZEN-112): mount the real section over a
+/// Interaction tests for the Workspaces settings section: mount the real section over a
 /// sandboxed `workspaces` file, assert it renders a row per configured workspace and that add / edit
 /// route out through `onEditWorkspace`. Mirrors `SettingsToolsSectionTests`.
 final class SettingsWorkspacesSectionTests: WindowTestCase {
@@ -59,7 +59,7 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         return detail
     }
 
-    /// The section reads the `workspaces` file off the main thread (ZEN-275), so a freshly mounted
+    /// The section reads the `workspaces` file off the main thread, so a freshly mounted
     /// detail has neither rows nor the empty-state hint until the load lands. Either one appearing
     /// means it settled; waiting on rows alone would hang on an empty file.
     private func waitForLoad(in detail: NSView) {
@@ -116,7 +116,7 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         XCTAssertNil(sink.calls.first ?? nil, "the add button adds a new workspace (nil)")
     }
 
-    /// The git probe runs off the main thread (ZEN-90), so a row mounts with its badge hidden and
+    /// The git probe runs off the main thread, so a row mounts with its badge hidden and
     /// turns it on when the answer lands. That fill is exactly the kind of thing that can go
     /// silently dead — the probe returns and nothing updates — so the test observes the transition
     /// rather than priming the cache first.
@@ -197,14 +197,14 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         XCTAssertEqual(sink.calls.first??.title, "Beta")
     }
 
-    // MARK: reorder (ZEN-283)
+    // MARK: reorder
 
     /// An arrow keyDown, built the way AppKit really delivers one.
     ///
     /// `.function` and `.numericPad` are NOT decoration: macOS sets both on every arrow event, and
     /// omitting them is how a reorder that was dead in the app once passed four green tests —
     /// masking with `deviceIndependentFlagsMask` keeps those bits, so the comparison with `.option`
-    /// never matched a real keystroke (ZEN-81).
+    /// never matched a real keystroke.
     private func arrow(_ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags = []) -> NSEvent {
         NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: modifiers.union([.function, .numericPad]),

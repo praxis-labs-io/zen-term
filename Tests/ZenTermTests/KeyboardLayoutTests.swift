@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// `KeyboardLayout` asks the real keyboard what it can type (ZEN-121): the one thing `Chord`'s
+/// `KeyboardLayout` asks the real keyboard what it can type: the one thing `Chord`'s
 /// US-only fold table can't answer. Everything else stubs this seam, so these are the only tests
 /// that exercise the Carbon query itself; without them the whole mechanism could be inert and every
 /// other test would still pass.

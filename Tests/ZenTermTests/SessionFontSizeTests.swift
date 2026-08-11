@@ -2,7 +2,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The session font size ⌘+ / ⌘- / ⌘0 move (ZEN-224), and the rule that decides when a config
+/// The session font size ⌘+ / ⌘- / ⌘0 move, and the rule that decides when a config
 /// reload takes a stepped size away from the user.
 final class SessionFontSizeTests: XCTestCase {
     private func config(fontSize: CGFloat) -> GeneralConfig {

@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The order `KeyInterceptor.route` resolves a keystroke in (ZEN-330). Getting it wrong is
+/// The order `KeyInterceptor.route` resolves a keystroke in. Getting it wrong is
 /// invisible until it isn't: a mode placed above chord routing swallows ⌘T and pane nav for as
 /// long as it's up, and one placed below the modifier fast-bail never sees a bare `j` at all,
 /// which is every key scroll mode exists to claim.
@@ -64,7 +64,7 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertFalse(reachedMode, "chord routing must win, so ⌘T still opens a tab in scroll mode")
     }
 
-    /// ZEN-367's defaults sit on keys that type no character, and that is the shape of a keymap
+    /// the defaults sit on keys that type no character, and that is the shape of a keymap
     /// entry that looks right and never fires: `Chord.init`'s own comment names the trap. The
     /// event has to be the one macOS really sends, `.function` bit included, or the test proves
     /// nothing about ⌘Home. This drives `route`, which is the monitor's whole decision.
@@ -134,7 +134,7 @@ final class KeyInterceptorRouteTests: XCTestCase {
 
     /// An arrow keyDown carries `.numericPad` as well as `.function`, so a chord matched against
     /// `.deviceIndependentFlagsMask` would see three modifiers where the user held two and fire
-    /// nothing. `docs/swift-conventions.md` has the failure (ZEN-369).
+    /// nothing. `docs/swift-conventions.md` has the failure.
     func test_theShiftedArrowSpellingOfAPromptJumpFires() throws {
         let keys = KeyInterceptor()
         var fired: [KeyInterceptor.ReservedChord] = []
@@ -149,7 +149,7 @@ final class KeyInterceptorRouteTests: XCTestCase {
     /// ghostty binds the prompt jump on bare ⌘↑ and ⌘↓ as well, and ZenTerm deliberately does not:
     /// macOS claims both, so the keypress never arrives, and binding them would have put the dead
     /// spelling on the keycap. `Chord.displayed` renders the lowest config token and `cmd+down`
-    /// sorts under `cmd+shift+down`, so Jump to Next Prompt would have advertised ⌘↓ (ZEN-369).
+    /// sorts under `cmd+shift+down`, so Jump to Next Prompt would have advertised ⌘↓.
     ///
     /// A miss rather than a claim, so nothing is swallowed on a machine whose system leaves the
     /// chord alone.

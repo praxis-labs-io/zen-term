@@ -18,7 +18,7 @@ small until the modal closed*. This is the "windows get resized by modals" bug. 
 on the window and it is decoupled from any present or future overlay:
 
 ```swift
-contentMinSize = NSSize(width: 480, height: 320)  // HostWindow.init (ZEN-226)
+contentMinSize = NSSize(width: 480, height: 320)  // HostWindow.init
 ```
 
 ## Event routing and the responder chain
@@ -30,7 +30,7 @@ delegate*, the window controller, `NSApp`, then `NSApp`'s delegate. `WindowContr
 delegate, so it is found and invoked ahead of `AppDelegate`, and the search stops there. Any
 conditional routing (e.g. "when a modal card is up, send copy/paste to the focused field instead of
 the terminal") must live on the responder that is actually reached first. A copy of the same guard
-in `AppDelegate` is dead code that never runs (ZEN-235). The terminal surface controllers
+in `AppDelegate` is dead code that never runs. The terminal surface controllers
 (`PaneCanvasController`, `TabController`) are plain `NSObject`, never real responders in that chain,
 so they are only ever reached through `WindowController`'s own manual dispatch.
 
@@ -39,7 +39,7 @@ so they are only ever reached through `WindowController`'s own manual dispatch.
 `mouseUp`, is silently dropped by AppKit: the sheet never attaches, nothing appears, no error.
 Present from a control's action instead (an `NSButton`/`AppButton` fires on `mouseUp` via
 `sendAction`), or defer to the next runloop turn. This is why the directory picker moved from a
-click-on-the-empty-field affordance to an explicit Choose button (ZEN-235).
+click-on-the-empty-field affordance to an explicit Choose button.
 
 **A consumed `keyDown` leaves its `keyUp` behind, so the surface pairs them itself.**
 `KeyInterceptor` is a local `NSEvent` monitor that resolves a chord *before* the responder chain,
@@ -72,7 +72,7 @@ every held ordinary key over-clears and swallows a release still owed.
 the reservable set instead: `flags.intersection([.command, .shift, .option, .control])`. A
 synthesized `modifierFlags: .option` event is a keystroke macOS never sends: it shipped a dead
 ⌥-arrow reorder past four green tests and a mutation check, because both only ever exercised the fake
-event (ZEN-81).
+event.
 
 **A synthesized mouse event cannot carry a button number.** `NSEvent.mouseEvent` has no
 `buttonNumber` parameter and every event it builds reports 0, whatever the type, so a test cannot
@@ -81,13 +81,13 @@ through the window to prove the override runs, and test the button mapping as a 
 the number AppKit would have supplied. `NSEvent.ModifierFlags` has the opposite property: it
 preserves any raw bits handed to `init(rawValue:)`, so the device-specific `NX_DEVICE*` flags that
 say *which side* a modifier sits on do survive synthesis, and a `flagsChanged` built without them
-skips every side check in silence (ZEN-308).
+skips every side check in silence.
 
 **AppKit's synthesized tracking enter/exit are not symmetric across app activation.** When a
 `.activeInActiveApp` tracking area stands down at app deactivation, AppKit synthesizes the
 `mouseExited`; when the area reactivates with the pointer already inside it, no `mouseEntered`
 arrives until the pointer physically moves. Proven against a live build with a raw mouse-report
-probe (ZEN-310): the exit's `(-1, -1)` reached libghostty, and a click after reactivation was
+probe: the exit's `(-1, -1)` reached libghostty, and a click after reactivation was
 suppressed until the mouse moved. Occlusion boundaries within the active app *are* symmetric:
 covering the pointer's spot with another window synthesizes the exit, uncovering it the enter. So
 state pushed on exit that must be undone on re-entry needs its own
@@ -115,7 +115,7 @@ restores the real `documentWidth = columnWidth + intercellSpacing.width` relatio
 math exact. `.plain` also stops silently overriding `rowSizeStyle` (row height drops 24→17 for
 `.small`). `.plain` draws level-0 rows hard against the column edge, so a section header's disclosure
 triangle pokes left of a selection pill: shift level-0 cells right by one `indentationPerLevel` in
-`frameOfOutlineCell`/`frameOfCell` to seat them inside the pill (ZEN-236).
+`frameOfOutlineCell`/`frameOfCell` to seat them inside the pill.
 
 **`NSTableView` shares the same `.automatic` inset trap.** Left at the default style, a plain
 `NSTableView` reserves a source-list-style horizontal row inset, so its rows, and any full-row
@@ -124,7 +124,7 @@ asked for. The diff pane read as gapped from the tree divider on the left and th
 right until `table.style = .plain` removed it. Once it's `.plain`, add whatever margin you *do* want
 explicitly (a leading/trailing constant on the table, or the row content's own insets) so the amount
 is yours, not the framework's, and a full-row pill takes no extra inset of its own on top of that
-margin, or it nests a second gap inside the first (ZEN-243).
+margin, or it nests a second gap inside the first.
 
 **`NSScrollView.contentInsets` is scrollable range, not padding.** A nonzero inset on an edge
 extends the clip view's pannable range by exactly that many points on that edge, the same model as
@@ -137,7 +137,7 @@ document/clip width relationship, not derived from it. Reserve `contentInsets` f
 actually meant to scroll (e.g. `top`/`bottom` breathing room above/below the first/last row); get
 edge padding on a non-scrolling axis from the row content's own insets instead (`DiffTreeRowView`,
 `DiffTreeOutlineController.swift`), which affect where content draws/truncates, never the
-document's reported frame width (ZEN-226).
+document's reported frame width.
 
 ## Auto Layout, resize, and text sizing
 
@@ -151,13 +151,13 @@ For "do X when this view's width crosses a threshold," observe the view itself:
 `view.postsFrameChangedNotifications = true` + `NSView.frameDidChangeNotification`, which fires with
 the *final* frame on every resize and on first layout. The diff viewer's auto-fold was dead in the app
 (green in tests) until it moved off a `layout()` width read onto the pane's frame notification
-(ZEN-243).
+.
 
 **An `NSTextField` label sized to the exact glyph advances truncates to `…`.** A label insets its text
 a couple of points inside its frame, so a column sized to `characters * digitWidth` is a hair too
 narrow and clips even a single digit. Size a content-fit label to its string plus a few points of
 padding (`DiffCellMetrics.numberColumnWidth`), or measure the actual string with the label's own
-attributes and pad, never the raw advance sum (ZEN-243).
+attributes and pad, never the raw advance sum.
 
 **A non-truncating label holds its container, and the window, open.** A label defaults to a high
 horizontal compression resistance and no truncation, so its intrinsic width becomes a hard floor for
@@ -166,14 +166,14 @@ through the card's proportional width constraint and *stopped the window from re
 `contentMinSize`*. For any label that should yield when space is tight, set a truncating
 `lineBreakMode` **and** lower its horizontal compression resistance
 (`setContentCompressionResistancePriority(.defaultLow, for: .horizontal)`) fixes it; setting it on the
-enclosing `NSStackView` is not enough; the child label resists on its own (ZEN-243).
+enclosing `NSStackView` is not enough; the child label resists on its own.
 
 **Two optional constraints at the same priority do not have a stable winner.** The diff tree's
 proportional width and its branch title's compression resistance were both priority 250. Either
 truncating the title or widening the tree satisfied an equal amount of optional pressure, so a
 key-window relayout could choose the other solution and make the tree jump wider. Give the intended
 winner a strict ordering while keeping both below any window-sizing boundary: the tree proportion is
-251, title compression is 250, and the window stay-put constraint is 500 (ZEN-256).
+251, title compression is 250, and the window stay-put constraint is 500.
 
 **A custom `NSView` with no `intrinsicContentSize` cannot resist stretching in a stack, at any
 priority.** Content-hugging and compression-resistance only install their constraints on an axis where
@@ -187,7 +187,7 @@ keycap's transitively-inherited 250, and wins the tie for who does *not* stretch
 `intrinsicContentSize` to report the width the view's own constraints already produce
 (`tokenStack.fittingSize.width + insets`), and `invalidateIntrinsicContentSize()` when its content
 changes; only then do hugging/compression priorities engage. Setting those priorities at the call site
-is correct code aimed at nothing until the view itself reports an intrinsic size (ZEN-262).
+is correct code aimed at nothing until the view itself reports an intrinsic size.
 
 **In an `NSStackView`, name the view that absorbs the slack. The solver's default is rarely what you
 meant.** When a stack's main axis is larger than the sum of its content, `distribution` hands the extra
@@ -201,7 +201,7 @@ candidate, and make the one thing that *should* flex (a trailing spacer, or a la
 explicit" rule: uniform `spacing` sits between every pair, and `setCustomSpacing(_:after:)` overrides a
 single gap, so reach for it rather than padding a view to fake a wider gap, since a padded view is one
 more thing the distribution can stretch. The keycap-pill bug was the general failure in miniature: the
-keycap was the only view with no real resistance, so it was the one that grew (ZEN-262).
+keycap was the only view with no real resistance, so it was the one that grew.
 
 **A label's `lineBreakMode` governs `stringValue` only; an attributed string carries its own.** Set
 `attributedStringValue` and the label's `lineBreakMode`, `alignment` and `font` stop applying: the
@@ -213,13 +213,13 @@ would merely cut mid-glyph. Whenever a view can render either a plain or an attr
 every layout-affecting attribute (paragraph style and font) on the attributed string so both paths
 behave alike (`SyntaxAttributedText`). The diff viewer shipped this: highlighted lines rendered
 `] as const;` as `] as`, and short lines vanished entirely, while the same diff was complete before
-highlighting existed (ZEN-239).
+highlighting existed.
 
 **Asserting a label's frame width does not prove its text is drawn.** The bug above passed every test,
 including window-based ones through the real table, because they measured `frame.width` against the
 string's measured width and those matched. The frame was never wrong; the *drawing* was. For text that
 must appear in full, assert the property that governs drawing (here the paragraph style's
-`lineBreakMode`), not the geometry around it (ZEN-239).
+`lineBreakMode`), not the geometry around it.
 
 ## Layers, shadows, and colors
 
@@ -229,7 +229,7 @@ subtree (an overlay containing a card) makes AppKit re-realize the backing layer
 `NSView.shadow == nil` to `layer.shadowOpacity = 0` (radius/offset/color survive, so it looks
 half-configured). Use `NSView.shadow = NSShadow(...)` for static shadows (survives the re-sync,
 combines fine with an explicit `layer.shadowPath`). Direct `layer.shadow*` writes are only safe
-*after* insertion, which is why animated focus glows driven post-mount work (ZEN-54).
+*after* insertion, which is why animated focus glows driven post-mount work.
 
 **A drop shadow can't be made outside-only by reshaping `shadowPath`.** Core Animation *fills*
 `shadowPath` and blurs the result, so the shadow covers the card's interior as well as haloing it.
@@ -242,8 +242,8 @@ it. The result is a large dense cloud, at any inflation. The silhouette has to s
 the cut has to happen at draw time: clip to everything outside the card (`ctx.clip(using: .evenOdd)`
 over the bounds plus the card path), set the shadow, then fill the card path. The fill is clipped
 away and only the outward half of its shadow survives, with the falloff unchanged. `OutsideShadowView`
-is the shared implementation, used for the pane focus glow (ZEN-282) and the float's elevation
-shadow (ZEN-287).
+is the shared implementation, used for the pane focus glow and the float's elevation
+shadow.
 
 **`CGContext` blur and `CALayer.shadowRadius` are not the same scale**, so a layer shadow's radius
 cannot be carried across when it becomes a drawn one. Measured by rendering both and sampling the
@@ -260,7 +260,7 @@ terminal's frame two levels down and got stale geometry on every fresh panel, se
 whatever later layout happened to come along (a resize, a tab switch), which is what made it look
 like a rendering bug rather than a layout one. Read a descendant's frame at **draw** time, which
 runs after the whole tree is laid out, and have `layout()` do nothing but `needsDisplay = true`
-(ZEN-282). The same ordering trap applies to anything else deriving geometry from below itself.
+. The same ordering trap applies to anything else deriving geometry from below itself.
 
 **A translucent layer can't rely on libghostty's top-left content pinning.** `IOSurfaceLayer` sets
 `contentsGravity = kCAGravityTopLeft` deliberately, so a frame is never stretched while a resize is
@@ -269,7 +269,7 @@ drawable is smaller than the layer, the background fills in. Drop the layer out 
 `background-alpha` and that uncovered region becomes a see-through block with a hard edge at the
 drawable's bounds, most visible between a surface's first layout and its final size, and on every
 resize after. Set `contentsGravity = .resize` whenever the surface is translucent so the last frame
-stretches until the next one lands (ZEN-282).
+stretches until the next one lands.
 
 **A layer-*hosting* view owns its own `contentsScale`, and screen moves need their own
 notification.** AppKit syncs `layer.contentsScale` to the window's backing scale factor only for
@@ -281,26 +281,26 @@ stays at the old pixel density, rescaled by the compositor. Set it in
 Core Animation animates the scale change and it reads as jank). AppKit also does not reliably deliver
 that callback on a screen move, so observe `NSWindow.didChangeScreenNotification` and re-run the same
 path on the next main-loop turn: the window's `backingScaleFactor` is not updated yet when the
-notification lands (ZEN-247, ghostty-org/ghostty#2731).
+notification lands (ghostty-org/ghostty#2731).
 
 **Never hardcode a color, and remember that system-derived colors count.** They do not look like
 colors but they resolve against the view's `effectiveAppearance`, not `Theme.current`, so they wash
 out on light themes: `NSTextField.placeholderString` (renders in the system `placeholderTextColor`),
 `NSColor.secondaryLabelColor` / `.labelColor` / `.controlTextColor` / `.placeholderTextColor`,
 `NSColor(white:)`. Use theme-derived values: for placeholders, a `placeholderAttributedString`
-colored from a `ChromeTheme` role. See the Colors section in `CLAUDE.md` (ZEN-27, ZEN-89).
+colored from a `ChromeTheme` role. See the Colors section in `CLAUDE.md`.
 
 ## Motion and transitions
 
 **A transition that mounts two views has to order them, and being mounted says nothing about being
 visible.** `pinCanvas` mounts every tab canvas at the very back of the container so a canvas can
-never cover a float card dismissing above it (ZEN-141). Two canvases are mounted at once for the
+never cover a float card dismissing above it. Two canvases are mounted at once for the
 length of a transition, so that also put the arriving one *under* the outgoing one, which is opaque
 and exactly the same size. Everything ran: the fade was on the layer, the workspace's drawer slides
 were animating, and none of it was on screen. It read as a hard cut the moment the outgoing canvas
 was detached, which looks like an animation that was deleted rather than one that is playing
 somewhere invisible. Order the pair explicitly, and assert the subview index: `superview` membership
-is not paint order, and no other assertion catches this (ZEN-300).
+is not paint order, and no other assertion catches this.
 
 **Reduce Motion makes a `Motion` primitive run its completion synchronously, so a completion is not
 a "later".** That is the documented contract, and it is what lets callers sequence work the same way
@@ -309,7 +309,7 @@ on both paths. The trap is a caller whose remaining work is *outside* that compl
 completion put it ahead of the start it is specified to follow the moment Reduce Motion collapsed
 the slide. The failure is invisible in the obvious assertion, because the recipe's drawers open
 either way and only the region left holding focus differs. A call that may or may not animate should
-report which it did, and let the caller sequence the already-landed case itself (ZEN-300).
+report which it did, and let the caller sequence the already-landed case itself.
 
 ## Config read once, then frozen
 
@@ -346,13 +346,13 @@ chrome detaches persistent surfaces with `removeFromSuperview` without calling `
 so tying release to teardown leaks the global lock when a pane is merely hidden. Secure keyboard
 entry (`EnableSecureEventInput`) left engaged after you Cmd-Tab away from a `sudo` prompt suppresses
 keyboard input system-wide in other apps. Scope such state to the *focused* surface and tie it to
-`NSApplication.didResignActive` / `didBecomeActive` (ZEN-72).
+`NSApplication.didResignActive` / `didBecomeActive`.
 
 **A `DispatchGroup` drain reports "done" when the work has not started yet.** `notify` fires the
 moment the group is empty, and empty means *nothing is in flight*, which is indistinguishable from
 *nothing has begun*. Quit freed every surface and then waited on the group, but the shells had not
 exited yet, so nothing had entered it: the drain fired immediately and the process left before a
-single signal went out (ZEN-306). Wait on the **condition you actually care about** (the ledger of
+single signal went out. Wait on the **condition you actually care about** (the ledger of
 recorded sessions emptying) and use the group only for work already entered. Where a gap between
 "claim the work" and "enter the group" exists, hold the group across both, or a drain landing in
 that window sees idle.
@@ -377,7 +377,7 @@ keymap, and `KeymapAssembler` asks `KeyboardLayout.canType` whether each bound c
 on the current layout, which is the TIS call. So **`ConfigLoader.loadGeneralConfig` is
 main-thread-only**, and so is anything that reaches it, which includes every config reload.
 
-**The compiler enforces this now, and two pieces are load-bearing (ZEN-31).** `@MainActor` on
+**The compiler enforces this now, and two pieces are load-bearing.** `@MainActor` on
 `loadGeneralConfig` / `loadAppTheme` / `AppConfig.reload` is only half of it: in Swift 5 language
 mode an isolation violation is a hard error in a synchronous function body but **a warning inside a
 closure**, and a closure (`DispatchQueue.async { … }`) is exactly the shape that killed the app. The
@@ -400,7 +400,7 @@ pins `.swiftLanguageMode(.v5)` so the bump doesn't turn into an unplanned Swift 
 annotation too. A plain `canType: (Chord) -> Bool` parameter erases the isolation of whatever is
 passed in, so annotating the leaf (`KeyboardLayout.canType`) builds clean and lets an off-main
 assembly build clean straight past it. `KeymapAssembler.assemble` therefore declares
-`canType: @MainActor (Chord) -> Bool` and is itself `@MainActor` (ZEN-31). Annotate the **entry
+`canType: @MainActor (Chord) -> Bool` and is itself `@MainActor`. Annotate the **entry
 point** that must be main-thread, not just the leaf.
 
 **A property *read* is a different diagnostic from a *call*, and it cannot be escalated at
@@ -432,7 +432,7 @@ than that has to move the load, not read around it.
 
 **`swift test` will not catch this.** TIS is available in the xctest process and answers happily
 off the main thread, so an off-main parse passes every test while killing the real app. This cost a
-day of bisecting on ZEN-17, through four green repro attempts, one of them using the real config
+day of bisecting, through four green repro attempts, one of them using the real config
 verbatim. Anything moved onto a background queue near config, keybinds, or the keyboard layout has
 to be checked in `swift run ZenTerm`.
 
@@ -443,7 +443,7 @@ And because there is no crash report, an empty `~/Library/Logs/DiagnosticReports
 that the app exited cleanly.
 
 **If you want the config read off the main thread, the read is the only part that can move.** Split
-the file read from the parse, keep the parse on main, and verify in the app. ZEN-17 built exactly
+the file read from the parse, keep the parse on main, and verify in the app. It was built exactly
 that and then dropped it: the measured win was about 2.5 ms against a 180 ms debounce, which did not
 justify the async seam it needed. The constraint above is the part worth keeping.
 
@@ -454,7 +454,7 @@ the backing view-model passes while the control is dead: that is exactly how a f
 shipped past two reviews. Drive the real control in a real window. "Mounted + focused" is the same
 trap one layer up: `superview` membership says nothing about paint order, so a view buried behind a
 sibling passes every reasonable-looking assertion. For layered views (float cards, overlays,
-toasts), assert the subview index relative to what it must cover (ZEN-141).
+toasts), assert the subview index relative to what it must cover.
 
 **Synthetic mouse events are not hit-tested to a view in a headless / off-screen window.**
 `window.sendEvent(mouseDown/Up)` will not route to a target view when the window is not real and key,
@@ -462,7 +462,7 @@ and making it real and key orders it on screen (flashing UI in the test run, and
 along with it). So a click cannot be routed through the scroll/clip view to a control in a unit test.
 Drive the control's `mouseDown` / `mouseUp` handlers directly with real `NSEvent`s (that still
 exercises the control's own logic, not its backing state); leave "a real click at that point reaches
-the control through the view tree" to a runbook step. Corollary to ZEN-81 (ZEN-235).
+the control through the view tree" to a runbook step.
 
 **A synthesized `keyDown` reaches the real input system, and what it commits is not the event's
 `characters`.** `interpretKeyEvents` translates from the keyCode and the active layout, so an event
@@ -473,7 +473,7 @@ test that drives `GhosttyHostView.keyDown` and rests on the no-text branch (the 
 key goes unrecorded) has to use a key the layout produces no text for. Escape is the one that needs
 no modifiers; an arrow or a function key works too, and has to carry the bits above or it is a
 keystroke macOS never sends. With a letter there, the branch taken was the machine's choice: the test
-passed under `--filter`, failed 2 runs in 5 in a full suite, and failed on CI (ZEN-363).
+passed under `--filter`, failed 2 runs in 5 in a full suite, and failed on CI.
 
 The `currentEvent` half of that generalizes past the key path. Anything reading it for live
 modifiers is reading state an earlier case can leave behind: `PaletteOverlay`'s Return hook passes
@@ -488,7 +488,7 @@ tests to hold on either branch rather than to nil, which is what the escape key 
 **Tests must not mutate real OS state.** They run on the developer's machine. Do not clobber
 `NSPasteboard.general` (snapshot it in `setUp`, restore in `tearDown`), and do not present a real
 `NSOpenPanel` (inject a present-panel seam so the test asserts the wiring without a sheet). Both leak
-into the machine on every `swift test` otherwise (ZEN-235). A feature that writes to the pasteboard
+into the machine on every `swift test` otherwise. A feature that writes to the pasteboard
 takes it as an injectable property (`ScrollModeController.yankPasteboard`,
 `DiffViewerOverlay.yankPasteboard`) so a test can point it at a board of its own.
 
@@ -496,19 +496,19 @@ takes it as an injectable property (`ScrollModeController.yankPasteboard`,
 never drawn, and setting it false on one does not stick, so it reads as a pending repaint whether or
 not anything asked for one, so a test asserting it passes with the bug reinstated. When "did this
 ask to repaint" is the thing under test, route the request through a method that counts its calls
-(`ScrollCursorView.redraw()`) and assert the count moved (ZEN-331).
+(`ScrollCursorView.redraw()`) and assert the count moved.
 
 **A redraw keyed off an `Equatable` view-state is a trap for anything the state cannot see.**
 Folding an overlay's fields into one value and repainting on `didSet` looks tidy and silently drops
 every change that lives outside it: a font step moves the cell size without moving the view's frame
 or the cursor, so the state compares equal and nothing repaints. Mark dirty unconditionally when the
-geometry a view derives from is not part of what it stores (ZEN-330, ZEN-331).
+geometry a view derives from is not part of what it stores.
 
 **A window a test opens stays open for the whole run, so suites that mount views inherit
 `WindowTestCase`, not `XCTestCase`.** XCTest tears down no AppKit state between cases. Nothing closed
 its windows, so a full suite climbed monotonically to 69 live window-server surfaces, several
-Metal-backed: every test ran under more load than the one before it, which is the load `ZEN-302`'s
-flakiness is sensitive to. `WindowTestCase` closes them (ZEN-312).
+Metal-backed: every test ran under more load than the one before it, which is the load that
+flakiness is sensitive to. `WindowTestCase` closes them.
 
 **The sweep hangs off `tearDownWithError`, and the order is the reason.** XCTest runs
 `tearDown()` *before* `tearDownWithError()`, and `addTeardownBlock` earlier than either: measured
@@ -522,7 +522,7 @@ because every subclass calls `super.tearDownWithError()` as its final statement.
 Two details that decide whether the sweep works. **Close, do not order out:** a `WindowController`
 drives its teardown from `windowWillClose`, so `close()` also invalidates the title poll and shuts
 down every tab's shells, while `orderOut(_:)` leaves both running and the shells then outlive the
-process as orphans (the ZEN-269 failure mode, reproduced by the test suite itself). And
+process as orphans (the failure mode, reproduced by the test suite itself). And
 **`isReleasedWhenClosed` defaults to true for a window built in code**, so closing one the suite
 still holds in a stored property frees it under ARC and the next access is a use-after-free: clear
 the flag before closing.
@@ -551,7 +551,7 @@ The nasty part is that the damage lands in a *different* suite. `SurfaceFloatOve
 reading `background-alpha` at construction while `FloatShadowTests` / `ReapplyThemeTests` pinned
 nothing; a real config running `background-alpha = 0` made those suites mount a live
 `NSVisualEffectView` into a displayed window and drop it, which surfaced as two unrelated *toast*
-suites failing a dismiss assertion roughly 2 runs in 5, while CI stayed green (ZEN-287). **Widen the
+suites failing a dismiss assertion roughly 2 runs in 5, while CI stayed green. **Widen the
 search whenever a change makes a type newly read `GeneralConfig.current`**: grep every suite that
 constructs it, not just the one you edited. Suspect this class immediately when a test passes
 locally and fails on CI, or fails only on Drew's machine. When an intermittent failure appears in a
@@ -568,7 +568,7 @@ concurrent `swift test` runs deadlock on the SwiftPM lock.
 A repo-relative path can appear in more than one diff scope at once. For example,
 the staged version and a later working-tree edit both produce rows for the same
 path with different content. Diff selection and render deduplication must include
-the scope and content represented by `FileDiff`, not only the path. ZEN-256 exposed
+the scope and content represented by `FileDiff`, not only the path. That was exposed
 this when switching between Staged and Unstaged kept the previously rendered diff.
 
 ### Event debounce does not provide load backpressure
@@ -578,7 +578,7 @@ the work triggered by the first is still running. A watcher-driven subprocess pa
 single-flight and retain one pending request. Rejecting stale completions only protects the UI;
 it does not recover the CPU, disk work, or subprocesses already spent producing them. The watcher
 must also follow any root the reader retargets to and stop on both card and window teardown
-(ZEN-256).
+.
 
 ### An exhaustive switch does not cover the data table beside it
 
@@ -591,16 +591,16 @@ test written against the array cannot notice an absence the array is the only re
 The fix is a switch the table can be measured against: `isEditableInSettings` makes a new case
 declare itself, and `SettingsKeybindGroupsTests` asserts the two agree in both directions. Any
 hand-ordered list keyed off an enum needs the same pairing. Ordering and grouping are editorial and
-belong in the array; membership is not, and belongs in a switch (ZEN-367).
+belong in the array; membership is not, and belongs in a switch.
 
 ### A test's premise expires when the thing it measures moves
 
 `BackendShadowTests` covered the whole assembler → layout → seam → C chain by rebinding nav away and
-asserting the freed ⌘K came back as `clear_screen`. ZEN-369 named that action and unbound
-libghostty's copy, which is the work succeeding, and the test went red for it.
+asserting the freed ⌘K came back as `clear_screen`. Naming that action and unbinding
+libghostty's copy is the work succeeding, and the test went red for it.
 
 The reflex is to delete a test whose premise is gone. Do not: the chain it covers is real and
 nothing else covers it. Invert the assertion instead. It now asserts the freed set is **empty**
 against a live backend, which is a regression guard on a currently-empty set, and the liveness
 canary is what stops an empty result from meaning a dead probe. `BackendShadowSweepTests` is the
-same shape, and both fail on the pin bump that would otherwise slip a bind back in unseen (ZEN-369).
+same shape, and both fail on the pin bump that would otherwise slip a bind back in unseen.

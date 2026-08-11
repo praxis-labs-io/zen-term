@@ -2,7 +2,7 @@ import Foundation
 
 /// Runs `git` off the main thread and delivers a parsed status back on main. The app's first real
 /// subprocess: everything git-facing for the diff viewer lives here, so the chrome only ever sees
-/// `[FileDiff]`. Never blocks the main thread (ZEN-90): the work runs on a global queue and hops
+/// `[FileDiff]`. Never blocks the main thread: the work runs on a global queue and hops
 /// back via `DispatchQueue.main.async`.
 final class GitDiffRunner {
     /// The repo root the diff is computed from, resolved by the caller via `GitRepo.repoRoot(for:)`.
@@ -82,7 +82,7 @@ final class GitDiffRunner {
     }
 
     /// Loads the branches the viewer can be pointed at, each tagged with its worktree if it has one,
-    /// checked-out branch first (ZEN-313). Separate from `loadBranches` because the two pickers want
+    /// checked-out branch first. Separate from `loadBranches` because the two pickers want
     /// opposite things: the base picker hides the current branch, the head picker leads with it.
     /// A git failure yields an empty list, leaving the picker empty rather than failing the load.
     func loadHeads(completion: @escaping ([BranchOption]) -> Void) {
@@ -113,7 +113,7 @@ final class GitDiffRunner {
     ///
     /// **Nothing is excluded here.** This used to drop the checked-out branch, on the grounds that
     /// comparing committed work against the branch it is on is meaningless. That is still true, but it
-    /// is no longer the checkout that decides it: once the reader can pick a head (ZEN-313), the branch
+    /// is no longer the checkout that decides it: once the reader can pick a head, the branch
     /// to keep out of the base list is whichever head is *selected*, which this layer does not know.
     /// `DiffViewerOverlay` owns both selections and does the excluding on both sides.
     static func orderedBranches(recency: [String], default preferred: String?) -> [String] {
@@ -134,7 +134,7 @@ final class GitDiffRunner {
     /// index vs HEAD (`--cached`); committed is the fork point (`mergeBase`) vs `head`.
     ///
     /// `head` is `HEAD` for the checkout being read, or a branch name when the reader picked a branch
-    /// that has no worktree of its own (ZEN-313). Only the committed slice can honour it: unstaged and
+    /// that has no worktree of its own. Only the committed slice can honour it: unstaged and
     /// staged are working-tree state, which exists only where a branch is actually checked out.
     static func diffArguments(scope: DiffScope, mergeBase: String, head: String = "HEAD") -> [String] {
         let base = ["diff", "--no-color", "--no-ext-diff", "--find-renames"]
@@ -237,7 +237,7 @@ final class GitDiffRunner {
     /// committed slice, and the untracked fold into unstaged. Throws `Failure` on any git failure.
     private static func loadSync(base: String?, head: String?, repoRoot: URL) throws -> StatusLoad {
         // A picked branch with no worktree has no working tree to read, so the two working-tree slices
-        // are empty by definition rather than by failure (ZEN-313). Reading them anyway would show the
+        // are empty by definition rather than by failure. Reading them anyway would show the
         // *checkout's* uncommitted work under a heading naming someone else's branch, which is worse
         // than showing nothing: it would look like that branch had those edits.
         let readsWorkingTree = head == nil
@@ -296,8 +296,8 @@ final class GitDiffRunner {
     }
 
     /// Stamp a parsed slice with the scope it came from and (for committed) the refs each side's
-    /// whole-file blob is fetched from, so the syntax highlighter reads the right content (ZEN-239,
-    /// and `headRef` for ZEN-313's picked branch).
+    /// whole-file blob is fetched from, so the syntax highlighter reads the right content (with
+    /// and `headRef` for the picked branch).
     private static func stamp(
         _ diffs: [FileDiff], scope: DiffScope, baseSHA: String?, headRef: String? = nil
     ) -> [FileDiff] {
@@ -337,7 +337,7 @@ final class GitDiffRunner {
         }
     }
 
-    /// The whole-file text for one side of `file`, for syntax highlighting (ZEN-239). A side whose blob
+    /// The whole-file text for one side of `file`, for syntax highlighting. A side whose blob
     /// doesn't exist (an added file's old side, a deleted file's new side) makes `git show` fail and
     /// returns nil, so the caller renders that side plain. Blocking git — call off-main.
     static func blobText(for file: FileDiff, side: Side, repoRoot: URL) -> String? {
@@ -395,7 +395,7 @@ final class GitDiffRunner {
     /// Runs `/usr/bin/git` with `args` in `dir` and returns stdout. Both pipes are drained to EOF
     /// *before* `waitUntilExit`, and stderr is drained on a second queue concurrently with stdout: a
     /// command that fills both pipe buffers can't deadlock. Runs on the background queue, so the
-    /// `waitUntilExit` here never blocks main (ZEN-90).
+    /// `waitUntilExit` here never blocks main.
     private static func runGit(_ args: [String], in dir: URL) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")

@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the ⌘P command palette and ⌘⇧P repo picker (ZEN-103) — the open/type/
+/// Interaction tests for the ⌘P command palette and ⌘⇧P repo picker — the open/type/
 /// arrow/choose path the recolor tests never touched. Drives the real `PaletteOverlay` keyboard
 /// seams (`controlTextDidChange`, `control(_:textView:doCommandBy:)`) and asserts the activation
 /// payload, exactly the Dropdown lesson: state plumbing exists, the choose path was unverified.
@@ -66,7 +66,7 @@ final class PaletteInteractionTests: WindowTestCase {
     ///
     /// The Return hook reads live modifiers off `NSApp.currentEvent`, which holds whatever AppKit
     /// last dequeued for this process. A test that rests on it being nil rests on the order the
-    /// suite happened to run in (ZEN-363). Dequeuing the keystroke is also what production does:
+    /// suite happened to run in. Dequeuing the keystroke is also what production does:
     /// the Return the user pressed is the current event when the hook runs.
     private func sendReturn(
         to overlay: PaletteOverlay, modifiers: NSEvent.ModifierFlags = []
@@ -100,7 +100,7 @@ final class PaletteInteractionTests: WindowTestCase {
     }
 
     /// Press Esc the way `NSWindow.sendEvent` does — a `performKeyEquivalent` traversal of the
-    /// contentView subtree, which is where the card root claims it (ZEN-149).
+    /// contentView subtree, which is where the card root claims it.
     @discardableResult
     private func pressEscape(in window: NSWindow) -> Bool {
         let esc = NSEvent.keyEvent(
@@ -117,7 +117,7 @@ final class PaletteInteractionTests: WindowTestCase {
 
     /// The list stack — the one whose arranged subviews are the rows. What the list SHOWS is its
     /// arranged order, and a reused row keeps its old place in `subviews`, so walking the view tree
-    /// stops telling you the display order the moment rows are reused (ZEN-15).
+    /// stops telling you the display order the moment rows are reused.
     private func rowsStack(
         in overlay: PaletteOverlay, file: StaticString = #filePath, line: UInt = #line
     ) -> NSStackView {
@@ -339,7 +339,7 @@ final class PaletteInteractionTests: WindowTestCase {
     }
 
     /// Esc dismisses from the search field — the palette's initial first responder. Driven through
-    /// the real key-equivalent traversal, since ZEN-149 moved Esc from the field editor's
+    /// the real key-equivalent traversal, since Esc moved from the field editor's
     /// `cancelOperation` up to the card root, where every card now owns it.
     func test_commandPalette_escDismisses() {
         var dismissed = false
@@ -409,7 +409,7 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertNil(chosen)
     }
 
-    // MARK: row reuse (ZEN-15)
+    // MARK: row reuse
 
     /// Typing re-renders the list, and a row whose identity survives the filter keeps its view
     /// instead of being rebuilt. The list is then ordered by the ARRANGED subviews, not the view

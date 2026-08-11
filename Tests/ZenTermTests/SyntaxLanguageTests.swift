@@ -55,7 +55,7 @@ final class SyntaxLanguageTests: XCTestCase {
         XCTAssertNil(SyntaxLanguage.resolve(path: "noextension"))
     }
 
-    // MARK: - Content detection for extensionless files (ZEN-329)
+    // MARK: - Content detection for extensionless files
 
     func test_resolve_shebang_resolvesAnExtensionlessScript() {
         XCTAssertNotNil(

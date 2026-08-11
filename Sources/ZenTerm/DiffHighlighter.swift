@@ -1,7 +1,7 @@
 import Foundation
 import SwiftTreeSitter
 
-/// Turns a whole-file source string into per-line syntax spans (ZEN-239). tree-sitter parses whole
+/// Turns a whole-file source string into per-line syntax spans. tree-sitter parses whole
 /// documents, so we parse the full blob (a bare hunk parses to garbage at its edges) and then map each
 /// colored capture onto the file lines it covers. Ranges come out as UTF-16 `NSRange`s aligned to the
 /// text, because `SwiftTreeSitter.Parser` parses UTF-16LE and `Node.range` is already UTF-16.
@@ -39,7 +39,7 @@ enum DiffHighlighter {
     /// The synchronous body of `enrich`, for a caller already off-main (the prefetch queue) that shouldn't
     /// pay for another dispatch. Resolve, fetch both sides, parse, map. nil if unsupported or no spans.
     /// When the path alone can't answer, the blob's own content gets a turn: a shebang or modeline names
-    /// the language for an extensionless script (ZEN-329).
+    /// the language for an extensionless script.
     static func enrichSync(file: FileDiff, repoRoot: URL) -> DiffFileSpans? {
         if let (language, query) = SyntaxLanguage.resolve(path: file.path) {
             return fileSpans(

@@ -153,5 +153,5 @@ erroring. Notarization rejections print the `notarytool log` command to inspect.
 
 ### Deferred distribution work
 
-Homebrew cask (ZEN-119), tag-triggered CI releases (ZEN-120), universal/Intel
-build (ZEN-121).
+Homebrew cask, tag-triggered CI releases, universal/Intel
+build.

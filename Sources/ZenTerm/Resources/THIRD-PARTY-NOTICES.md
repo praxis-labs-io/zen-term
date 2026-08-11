@@ -2822,7 +2822,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Supplies the 40 compiled tree-sitter grammars the diff viewer highlights with: Agda, Bash, C, C#, C++, CSS, Dart, Dockerfile, Elixir, Go, Go module, Haskell, HTML, Java, JavaScript, JSDoc, JSON, Julia, Kotlin, Lua, Markdown, Markdown (inline), Objective-C, OCaml, OCaml interface, Perl, PHP, Python, Regex, Ruby, Rust, Scala, SQL, Swift, TOML, TSX, TypeScript, Verilog, YAML, Zig.
 
-The upstream repository (`CodeEditApp/CodeEditLanguages`, version 0.1.21) publishes no `LICENSE` file and GitHub reports no license for it, so there is no license text to reproduce here and no grant to cite. The grammars it packages originate from their own upstream projects, each under that project's own license; because they arrive as a prebuilt binary framework, those individual licenses are not recoverable from the dependency and are not reproduced here either. This entry records what ships rather than asserting a permission that has not been granted. Tracked in ZEN-305.
+The upstream repository (`CodeEditApp/CodeEditLanguages`, version 0.1.21) publishes no `LICENSE` file and GitHub reports no license for it, so there is no license text to reproduce here and no grant to cite. The grammars it packages originate from their own upstream projects, each under that project's own license; because they arrive as a prebuilt binary framework, those individual licenses are not recoverable from the dependency and are not reproduced here either. This entry records what ships rather than asserting a permission that has not been granted.
 
 The `highlights.scm` query files under `Sources/ZenTerm/SyntaxQueries` come from the same grammar projects and are redistributed in the app bundle on the same footing.
 

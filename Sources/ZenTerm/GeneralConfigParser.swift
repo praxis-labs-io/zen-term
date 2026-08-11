@@ -8,7 +8,7 @@ import TerminalKit
 /// `GhosttyThemeParser`: unknown keys are ignored, a malformed value falls back to the
 /// corresponding `fallback` field, and an out-of-range number is clamped to the nearest
 /// valid extreme — every adjustment logs one warning AND collects a `ConfigDiagnostic` so a
-/// Settings row can show it in place (ZEN-7), and nothing ever throws.
+/// Settings row can show it in place, and nothing ever throws.
 enum GeneralConfigParser {
     @MainActor
     static func parse(_ text: String, fallback: GeneralConfig) -> GeneralConfig {
@@ -156,7 +156,7 @@ enum GeneralConfigParser {
     }
 
     /// A keybind line that didn't parse. `toggle_lazygit` gets a named migration warning —
-    /// ZEN-140 removed the built-in lazygit, and "unparseable" would hide what changed. The
+    /// The built-in lazygit was removed, and "unparseable" would hide what changed. The
     /// suggested replacement echoes the full documented parity recipe (icon/title/height match
     /// the old built-in card) and keeps the chord from the user's own dropped line, so following
     /// the log verbatim reproduces what they had. Exact-match on the action left of `=` (the same

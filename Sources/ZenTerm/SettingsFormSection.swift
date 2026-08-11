@@ -2,7 +2,7 @@ import AppKit
 
 /// A form control that can re-apply its own theme colors — lets `SettingsFormSection` recolor
 /// whatever `controlForKey` happens to be holding (a `FieldBox`, `Dropdown`, or `SegmentedControl`)
-/// without a type-switch, and lets `AddWorkspaceOverlay` (ZEN-89 task 8) recolor its own mixed
+/// without a type-switch, and lets `AddWorkspaceOverlay` recolor its own mixed
 /// bag of controls (`FieldBox`, `SegmentedControl`, `AppButton`) the same way. Conformance is
 /// declared where each control already defines its own `reapplyTheme()` (Task 6); this file just
 /// groups them so a heterogeneous collection can be filtered/iterated by protocol.
@@ -347,7 +347,7 @@ class SettingsFormSection: SettingsSection {
 
     /// Sync every control to the reloaded config (each row registered its own refresh closure), then
     /// surface any config-file diagnostic on the row that owns its key — the form analogue of the
-    /// Keybinds section's per-row conflict note (ZEN-7). Runs on section open and after every
+    /// Keybinds section's per-row conflict note. Runs on section open and after every
     /// in-section write; the reload toast is what announces a hand-edit made while this isn't open.
     ///
     /// Skips a row currently showing a `.failure` — a live invalid-range error, or a "Couldn't write
@@ -411,7 +411,7 @@ class SettingsFormSection: SettingsSection {
         let window = visible.first?.window
         let anchor = visible.firstIndex { KeyboardFocus.isFocused($0, in: window) }
         // Up at the first stop stays put, matching the list sections (Shortcuts, Tools, Workspaces).
-        // ZEN-217 added an exit here for a section whose first stop is a segmented row, before Left at
+        // An exit was added here for a section whose first stop is a segmented row, before Left at
         // the leftmost segment did it; two ways out that only some sections have reads as a section
         // losing your place for no reason. Left is the way back, from every stop in every section.
         SettingsDetail.moveFocus(stops: visible, from: anchor, delta: delta) { [rows] target in

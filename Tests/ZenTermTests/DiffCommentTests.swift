@@ -2,7 +2,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// What actually lands in the agent's input (ZEN-257). The composition rule is the whole contract of
+/// What actually lands in the agent's input. The composition rule is the whole contract of
 /// the feature: get it wrong and the reference points at the wrong thing, or the removed lines the
 /// agent can't read anywhere else are silently dropped.
 final class DiffCommentTests: XCTestCase {

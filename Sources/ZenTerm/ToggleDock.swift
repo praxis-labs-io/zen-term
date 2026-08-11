@@ -23,7 +23,7 @@ final class ToggleDock: NSView {
     private var toolFloatBtns: [String: IconButton] = [:]
     /// Floats declaring `toolbar:false`. Their buttons are built and hidden rather than skipped:
     /// `render` surfaces one while its tool is running (shown, or live in background), because the
-    /// button's ZEN-150 dot is the only trace a hidden persistent float has — filtering it out
+    /// button's dot is the only trace a hidden persistent float has — filtering it out
     /// would leave a live process with no visible handle.
     private var toolbarHiddenFloatIDs: Set<String> = []
     /// Every button + divider in the dock, retained so `reapplyTheme()` can re-color them all
@@ -105,8 +105,8 @@ final class ToggleDock: NSView {
 
     /// Test hook: the ids of the per-float buttons currently **visible** in the dock, left to right.
     /// Read off the arranged subviews rather than `toolFloatBtns`, so it reports the order the user
-    /// actually sees — a dictionary's keys couldn't, and the float order is the thing under test
-    /// (ZEN-81). Visibility-filtered because a `toolbar:false` float's button is mounted hidden.
+    /// actually sees — a dictionary's keys couldn't, and the float order is the thing under test.
+    /// Visibility-filtered because a `toolbar:false` float's button is mounted hidden.
     var toolFloatButtonIDsForTesting: [String] {
         stack.arrangedSubviews.compactMap { view in
             guard !view.isHidden else { return nil }
@@ -114,18 +114,18 @@ final class ToggleDock: NSView {
         }
     }
 
-    /// Test hooks: whether each drawer toggle currently shows its busy activity dot (ZEN-107).
+    /// Test hooks: whether each drawer toggle currently shows its busy activity dot.
     var bottomActivityForTesting: Bool { bottomBtn.showsActivity }
     var rightActivityForTesting: Bool { rightBtn.showsActivity }
 
-    /// Test hook: the ids of the per-float buttons currently showing their live-in-background dot
-    /// (ZEN-150). Reads the button's real state, not a mirror, so it can't pass while the dot is
+    /// Test hook: the ids of the per-float buttons currently showing their live-in-background dot.
+    /// Reads the button's real state, not a mirror, so it can't pass while the dot is
     /// actually dark.
     var dottedToolFloatIDsForTesting: Set<String> {
         Set(toolFloatBtns.filter { $0.value.showsActivity }.keys)
     }
 
-    /// Test hook: whether the fixed new-tab button is mounted and visible (ZEN-115 moved it from
+    /// Test hook: whether the fixed new-tab button is mounted and visible (it moved from
     /// the tab strip into the dock, so it must be present by default regardless of tab overflow).
     /// The visibility check matters: a hidden arranged subview stays in `arrangedSubviews`, so
     /// without it this hook would pass while the button is gone from the screen.
@@ -161,7 +161,7 @@ final class ToggleDock: NSView {
         toolbarHiddenFloatIDs = Set(toolFloats.filter { !$0.showsInToolbar }.map(\.id))
         for spec in toolFloats {
             // Like the fixed buttons, resolve the glyph from the live keymap so the tooltip tracks
-            // user rebinds of the float's `toggle_float:<id>` chord (ZEN-44).
+            // user rebinds of the float's `toggle_float:<id>` chord.
             let btn = IconButton(
                 symbol: spec.icon, pointSize: Self.iconPointSize, accessibilityLabel: spec.title,
                 shortcut: { CommandCatalog.spec(for: .toggleToolFloat(spec.id)).shortcut }
@@ -252,7 +252,7 @@ final class ToggleDock: NSView {
         }
 
         // A busy drawer earns a dot so its live process is evident from the footer, whether the
-        // drawer is currently shown or hidden (ZEN-107).
+        // drawer is currently shown or hidden.
         bottomBtn.showsActivity = overlay.bottomBusy
         rightBtn.showsActivity = overlay.rightBusy
     }

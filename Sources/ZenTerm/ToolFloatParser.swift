@@ -72,7 +72,7 @@ enum ToolFloatParser {
         parseLine(value, fallbackOrder: fallbackOrder).float
     }
 
-    /// Parse a `float =` line into its float and every `ConfigDiagnostic` the line raised (ZEN-7). A
+    /// Parse a `float =` line into its float and every `ConfigDiagnostic` the line raised. A
     /// dropped line returns no float and one diagnostic saying why. A line that *makes* a float can
     /// still raise diagnostics for an optional sub-field that fell back (`order:`/`persist:`/`width:`/
     /// `height:`) — the float works, but the file didn't get what it asked for, and that must not be

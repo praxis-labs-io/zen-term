@@ -2,7 +2,7 @@ import XCTest
 
 extension XCTestCase {
     /// Pump the main run loop until `condition` holds, then return. For observing work that lands
-    /// back on the main queue from a background probe (`GitRepoStatus.refresh`, ZEN-15).
+    /// back on the main queue from a background probe (`GitRepoStatus.refresh`).
     ///
     /// Waiting on the condition rather than on a fixed delay is what keeps the test both fast and
     /// honest: it returns the moment the state flips instead of always paying the delay, and it

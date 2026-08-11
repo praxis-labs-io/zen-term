@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// ZEN-24: a surface reporting a hovered link puts one URL preview in the window, and reporting
+/// A surface reporting a hovered link puts one URL preview in the window, and reporting
 /// nil takes it down. Window-mounted per the house rule, and the assertions read the card out of
 /// the real view tree rather than the presenter's state — a presenter that recorded the URL but
 /// never mounted the card has to fail.

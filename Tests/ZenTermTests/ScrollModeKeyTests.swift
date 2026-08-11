@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Scroll mode's key decoder (ZEN-330). It is the whole keymap of a mode that holds the keyboard,
+/// Scroll mode's key decoder. It is the whole keymap of a mode that holds the keyboard,
 /// and it fails silently in both directions: a key it wrongly claims is a keystroke the shell never
 /// sees, and a key it wrongly drops is a scroll that does nothing. Neither shows up on screen as
 /// anything but "the terminal ignored me".
@@ -34,7 +34,7 @@ final class ScrollModeKeyTests: XCTestCase {
 
     func test_arrowsMirrorJAndK() throws {
         // Real arrow keys carry .function and .numericPad; a decoder matching the raw modifier
-        // mask would miss every one of them (the ZEN-81 trap).
+        // mask would miss every one of them (the trap).
         let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
         let up = String(UnicodeScalar(NSUpArrowFunctionKey)!)
         XCTAssertEqual(decode(try keyDown(down, flags: [.function, .numericPad])), .step(1))
@@ -91,7 +91,7 @@ final class ScrollModeKeyTests: XCTestCase {
         XCTAssertEqual(decode(try keyDown("J", unshifted: "J")), .step(1))
     }
 
-    // MARK: the column (ZEN-331)
+    // MARK: the column
 
     func test_hAndLMoveOneCellSideways() throws {
         XCTAssertEqual(decode(try keyDown("h")), .column(-1))
@@ -125,7 +125,7 @@ final class ScrollModeKeyTests: XCTestCase {
         XCTAssertEqual(decode(try keyDown("$", unshifted: "4", flags: .shift)), .lineEnd)
     }
 
-    // MARK: selection (ZEN-331)
+    // MARK: selection
 
     func test_vAndShiftVOpenTheTwoKindsOfSelection() throws {
         XCTAssertEqual(decode(try keyDown("v")), .visual(.character))

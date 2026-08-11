@@ -31,12 +31,12 @@ final class DiffViewerOverlayTests: WindowTestCase {
         /// after a base override.
         var lastBase: String?
         /// A `var` so a test can hand the *next* load different content — a changed reload is the whole
-        /// trigger for the restore this file exercises (ZEN-233).
+        /// trigger for the restore this file exercises.
         var status: GitDiffRunner.StatusLoad
         let failure: GitDiffRunner.Failure?
         let branches: [String]
         /// The head picker's options. Its `worktree` is what decides whether a pick reads a whole
-        /// working tree or only the committed slice (ZEN-313).
+        /// working tree or only the committed slice.
         /// A `var` so a test can hand the *next* refresh a different branch list — a branch
         /// vanishing between refreshes is what the reconciliation exists for.
         var heads: [GitDiffRunner.BranchOption]
@@ -200,7 +200,7 @@ final class DiffViewerOverlayTests: WindowTestCase {
 
     /// The bare `\` layout key must actually swap the rendered pane, not just flip a flag — the "control
     /// looks wired but the screen never moved" failure. Driven through a real `\` keyDown into the diff
-    /// pane (ZEN-262); the row count changes because side-by-side pairs +/- lines while inline lists each,
+    /// pane; the row count changes because side-by-side pairs +/- lines while inline lists each,
     /// so a stale render would keep the old count.
     func test_backslashKey_swapsTheRenderedLayoutLive_andBack() {
         let (overlay, _) = mount(unstaged: [file("One.swift")])
@@ -227,7 +227,7 @@ final class DiffViewerOverlayTests: WindowTestCase {
         XCTAssertEqual(overlay.footerBranchForTesting, "feature")
     }
 
-    // MARK: auto-fold on narrow width (ZEN-243)
+    // MARK: auto-fold on narrow width
 
     /// Resize the overlay to a real width and force a layout pass so `DiffPaneTable.layout()` fires the
     /// width callback. The overlay is `translatesAutoresizingMaskIntoConstraints = false`, so its frame
@@ -362,7 +362,7 @@ final class DiffViewerOverlayTests: WindowTestCase {
         XCTAssertFalse(overlay.isBaseHeaderShownForTesting)
     }
 
-    // MARK: branch (head) dropdown — ZEN-313
+    // MARK: branch (head) dropdown
 
     private static func head(_ name: String, worktree: String? = nil, current: Bool = false)
         -> GitDiffRunner.BranchOption
@@ -710,7 +710,7 @@ final class DiffViewerOverlayTests: WindowTestCase {
     }
 
     /// A long branch name must truncate rather than hold the tree column open. The label itself has to
-    /// yield, not just its container, or its intrinsic width still wins (the ZEN-243 rule).
+    /// yield, not just its container, or its intrinsic width still wins (the rule).
     func test_branchPickers_yieldTheirWidthRatherThanWideningTheColumn() {
         let (overlay, _) = mount(
             committed: [file("C.swift")], base: (branch: "main", sha: "abc1234"),
@@ -770,7 +770,7 @@ final class DiffViewerOverlayTests: WindowTestCase {
     // never run in a state-only test — the exact "control looks fine while dead" gap the project guards.
 
     /// A `keyDown` built the way AppKit delivers one (arrows carry `.function`/`.numericPad`), so the
-    /// event isn't a keystroke macOS never sends (ZEN-81).
+    /// event isn't a keystroke macOS never sends.
     private func keyDown(_ keyCode: UInt16) -> NSEvent {
         let isArrow = (123...126).contains(keyCode)
         return NSEvent.keyEvent(
@@ -959,7 +959,7 @@ final class DiffViewerOverlayTests: WindowTestCase {
         XCTAssertFalse(diffCaptions.contains("fold"), "tree-only keys stay off the diff legend")
     }
 
-    // MARK: sticky place across a changed reload (ZEN-233)
+    // MARK: sticky place across a changed reload
 
     /// Send a real vim `j` into the diff pane, the way `DiffPaneTable` decodes it (lowercased
     /// `charactersIgnoringModifiers`), so a cursor move is exercised through the actual key path.
@@ -1138,7 +1138,7 @@ final class DiffViewerOverlayTests: WindowTestCase {
             overlay.treeRowCountForTesting, 5, "a directory the reload first shows opens, it isn't born folded")
     }
 
-    // MARK: reopen memory (ZEN-233)
+    // MARK: reopen memory
 
     func test_reopen_restoresFoldsSelectionCursorAndBase() {
         let session = DiffViewerSession(repoRoot: URL(fileURLWithPath: "/var/empty/zenterm-tests-no-repo/repo"))

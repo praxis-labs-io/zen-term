@@ -1,6 +1,6 @@
 import Foundation
 
-/// Syntax spans for one file's two sides, keyed by 1-based file line number (ZEN-239). The old side is
+/// Syntax spans for one file's two sides, keyed by 1-based file line number. The old side is
 /// keyed by a line's `oldLineNumber`, the new side by its `newLineNumber`; a diff row looks up whichever
 /// side it sits on. Position-keyed rather than text-keyed because the highlighter parses each whole-file
 /// blob and maps token ranges back onto file line numbers. Produced off-main by `DiffHighlighter` and

@@ -30,7 +30,7 @@ final class KeybindParserTests: XCTestCase {
     }
 
     func test_focusMode_token_andLegacyZoomAlias() {
-        // The action was renamed zoom → Focus Mode (ZEN-207): the canonical token is the new one,
+        // The action was renamed zoom → Focus Mode: the canonical token is the new one,
         // and the old `toggle_zoom` still parses so an existing config keeps its binding.
         XCTAssertEqual(KeyInterceptor.ReservedChord.toggleZoom.actionToken, "toggle_focus_mode")
         XCTAssertEqual(action(from: "toggle_focus_mode"), .toggleZoom)
@@ -44,14 +44,14 @@ final class KeybindParserTests: XCTestCase {
 
     func test_diffLayoutToggle_isNotAGlobalChord() {
         // The layout toggle is viewer-local (bare `\`, handled in the overlay's keyDown) — it is not a
-        // reserved chord, so it round-trips to nothing and ⌘I is free (ZEN-254).
+        // reserved chord, so it round-trips to nothing and ⌘I is free.
         XCTAssertNil(action(from: "toggle_diff_layout"))
         XCTAssertNil(KeymapDefaults.map[Chord(command: true, key: "i")], "⌘I is no longer reserved")
     }
 
     func test_checkForUpdates_token_hasNoDefaultBinding() {
         // The action round-trips (so a hand-written keybind resolves), but it isn't in the built-in
-        // keymap — it ships unbound (ZEN-20).
+        // keymap — it ships unbound.
         XCTAssertEqual(KeyInterceptor.ReservedChord.checkForUpdates.actionToken, "check_for_updates")
         XCTAssertEqual(action(from: "check_for_updates"), .checkForUpdates)
         XCTAssertFalse(
@@ -60,7 +60,7 @@ final class KeybindParserTests: XCTestCase {
 
     func test_reportIssue_token_hasNoDefaultBinding() {
         // Round-trips so a hand-written keybind resolves, but ships unbound — it's reached from the
-        // command palette, the Help menu, and Settings, not a default chord (ZEN-212).
+        // command palette, the Help menu, and Settings, not a default chord.
         XCTAssertEqual(KeyInterceptor.ReservedChord.reportIssue.actionToken, "report_issue")
         XCTAssertEqual(action(from: "report_issue"), .reportIssue)
         XCTAssertFalse(
@@ -74,7 +74,7 @@ final class KeybindParserTests: XCTestCase {
             .bind(Chord(command: true, shift: true, key: "p"), .toggleRepoPicker))
     }
 
-    /// Both words for "no shortcut" (ZEN-368). `none` is ours; `unbind` is ghostty's, and a ghostty
+    /// Both words for "no shortcut". `none` is ours; `unbind` is ghostty's, and a ghostty
     /// user reaches for it. Case is the user's business.
     func test_parse_noneAndUnbind_bothMeanNoShortcut() {
         XCTAssertEqual(KeybindParser.parse("find_next=none"), .unbind(.findNext))
@@ -98,7 +98,7 @@ final class KeybindParserTests: XCTestCase {
     }
 
     func test_workspacePicker_token_andLegacyRepoAlias() {
-        // The token was renamed repo → workspace (ZEN-6): the canonical token is the new one, and
+        // The token was renamed repo → workspace: the canonical token is the new one, and
         // the old `toggle_repo_picker` still parses so an existing config keeps its binding.
         XCTAssertEqual(KeyInterceptor.ReservedChord.toggleRepoPicker.actionToken, "toggle_workspace_picker")
         XCTAssertEqual(action(from: "toggle_workspace_picker"), .toggleRepoPicker)
@@ -110,7 +110,7 @@ final class KeybindParserTests: XCTestCase {
     }
 
     func test_parse_removedLazygitAction_isNil() {
-        // ZEN-140 deleted the built-in lazygit: `toggle_lazygit` must stay unparseable (the
+        // The built-in lazygit was deleted: `toggle_lazygit` must stay unparseable (the
         // config loader logs a named migration warning pointing at the float recipe instead).
         XCTAssertNil(KeybindParser.parse("toggle_lazygit=cmd+g"))
     }

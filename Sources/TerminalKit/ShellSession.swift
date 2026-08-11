@@ -52,10 +52,10 @@ enum ShellSession {
         let table = snapshot()
         // A failed snapshot returns empty, and empty would classify every candidate as orphaned:
         // the sweep would then SIGKILL the shell, dev server and agent of every open pane, with
-        // no surface having closed. That is the ZEN-269 failure arriving through the back door.
+        // no surface having closed. That is the failure arriving through the back door.
         // A live system always has at least this process in the table, so empty never means
         // "nothing is running", only "we could not look". Sweep nothing and wait for the next
-        // look (ZEN-306).
+        // look.
         guard !table.isEmpty else { return [] }
         let live = Set(table.filter { !$0.isExited }.map(\.pid))
         return candidates.filter { !live.contains($0) }

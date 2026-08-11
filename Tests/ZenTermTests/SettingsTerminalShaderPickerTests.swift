@@ -7,7 +7,7 @@ import XCTest
 /// window, drive the dropdown with the key events AppKit actually delivers (Return opens/commits,
 /// arrows move the highlight), and assert the token that lands in the config file. A state-only
 /// assertion would pass while the control is dead — exactly how a broken dropdown once shipped past
-/// two reviews (ZEN-78 lesson) — so this drives the control itself, through its real keyDown.
+/// two reviews — so this drives the control itself, through its real keyDown.
 ///
 /// The picker lives in Terminal (not Appearance) because a shader only affects the terminal surface.
 /// The write→reload pipeline is rooted at `ConfigLoader.defaultRoot`; the test points that at a temp

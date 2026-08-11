@@ -2,7 +2,7 @@ import AppKit
 
 /// An inline (unified) diff row: one line drawn full width, with old and new line-number gutters, a
 /// `+`/`−`/` ` sign, and the text in a clipping container that pans by the shared `horizontalOffset`
-/// (ZEN-241) — the same panning as `DiffLineCell`, one column instead of two. The sign and gutters stay
+/// — the same panning as `DiffLineCell`, one column instead of two. The sign and gutters stay
 /// frozen while the text slides. Hunk headers are drawn by `DiffLineCell`; this cell only renders
 /// `.unified` rows. Manual layout, reused across scroll, reads `Theme.current` at configure time.
 final class UnifiedLineCell: NSView, DiffPanningCell {
@@ -89,7 +89,7 @@ final class UnifiedLineCell: NSView, DiffPanningCell {
         let trailing = DiffCellMetrics.gutterTrailing
         let numbers = max(0, gutterWidth - inset - trailing)  // one line-number column's digit width
         let lineHeight = DiffCellMetrics.lineHeight(in: bounds)
-        // The cell is non-flipped (y=0 is the bottom), so a row grown for the comment box (ZEN-257)
+        // The cell is non-flipped (y=0 is the bottom), so a row grown for the comment box
         // needs the slice pinned explicitly to the top rather than centred in the whole, taller bounds.
         let sliceY = DiffCellMetrics.lineSliceY(in: bounds)
         // Old and new numbers left-align adjacent — the old under the hunk header at `inset`, the new one
@@ -106,7 +106,7 @@ final class UnifiedLineCell: NSView, DiffPanningCell {
     }
 
     /// Where the gutters and sign sit in the CELL's own (non-flipped) coordinate space. A row can be
-    /// **taller** than one line — the inline comment box reserves the rest of it (ZEN-257) — so this
+    /// **taller** than one line — the inline comment box reserves the rest of it — so this
     /// centres in the line's own slice at the top, never in the whole row, which would drop it into the
     /// middle of the reserved gap.
     private var gutterTextY: CGFloat {

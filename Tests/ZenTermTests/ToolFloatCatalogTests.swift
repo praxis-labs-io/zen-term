@@ -10,7 +10,7 @@ final class ToolFloatCatalogTests: XCTestCase {
 
     func test_noBuiltInFloats() {
         // Floats are entirely config-driven; with no config there are none (gitdash was
-        // dropped as a built-in in ZEN-71 — it lives in the user's personal config now).
+        // dropped as a built-in — it lives in the user's personal config now).
         XCTAssertTrue(GeneralConfig.builtIn.floats.isEmpty)
     }
 

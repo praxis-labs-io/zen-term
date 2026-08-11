@@ -92,14 +92,14 @@ final class NavSocketServerTests: XCTestCase {
     }
 
     func test_socketPath_isPerProcess() {
-        // ZEN-116: a shared well-known path let a second ZenTerm instance steal (bind-over)
+        // A shared well-known path let a second ZenTerm instance steal (bind-over)
         // and then delete (quit-unlink) the first instance's socket. The path must embed
         // the pid so instances can never collide.
         XCTAssertTrue(NavSocketServer.socketPath.hasSuffix("nav.\(getpid()).sock"))
     }
 
     func test_secondServer_neverDisturbsFirst() throws {
-        // The ZEN-116 mechanism, inverted: with per-instance paths, a second server's full
+        // The mechanism, inverted: with per-instance paths, a second server's full
         // start→stop lifecycle must leave the first server's file AND dispatch intact.
         let pathA = "/tmp/zt-nav-a-\(getpid()).sock"
         let pathB = "/tmp/zt-nav-b-\(getpid()).sock"

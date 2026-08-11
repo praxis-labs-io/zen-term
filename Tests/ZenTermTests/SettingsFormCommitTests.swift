@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the `SettingsFormSection` numeric commit pipeline (ZEN-104): clamp/range
+/// Interaction tests for the `SettingsFormSection` numeric commit pipeline: clamp/range
 /// validation, blank-stage-vs-debounce, integer rounding, and Return/blur early-commit. A
 /// regression here writes garbage into the config file that every window then hot-reloads, so this
 /// drives real form rows and asserts what actually landed in the config file.
@@ -155,7 +155,7 @@ final class SettingsFormCommitTests: WindowTestCase {
         XCTAssertFalse(configText().contains("5.7"))
     }
 
-    // MARK: diagnostics refresh must not stomp a live error (ZEN-7)
+    // MARK: diagnostics refresh must not stomp a live error
 
     private final class TwoNumericSection: SettingsFormSection {
         override var navTitle: String { "Terminal" }

@@ -140,7 +140,7 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertTrue(text.contains("float = title:dev command:\"npm run dev\" key:cmd+shift+d"), text)
     }
 
-    // MARK: unbinding (ZEN-368)
+    // MARK: unbinding
 
     func test_keybind_unboundAction_emitsANoneLine() throws {
         let dir = try makeTempDir()
@@ -297,7 +297,7 @@ final class ConfigWriterTests: XCTestCase {
             "the rename drops the old id, leaving exactly one float — not a duplicate")
     }
 
-    // MARK: float order (ZEN-81)
+    // MARK: float order
 
     /// Reordering only renumbers: every float's line stays exactly where it was, and the comments,
     /// blanks, and unrelated keys around it are untouched. That's the payoff of `order:` being a field
@@ -474,11 +474,11 @@ final class ConfigWriterTests: XCTestCase {
         // A user can point two chords at one action, then drop one. The per-action diff has to
         // write the whole surviving set, and narrowing back to exactly the defaults must write no
         // line at all — leaving the extra chord behind either way would resurrect a bind the user
-        // deleted. (Pre-ZEN-142 splitVertical shipped with two default chords and this guarded
+        // deleted. (Earlier splitVertical shipped with two default chords and this guarded
         // that; canonicalization collapsed them to one, so the multi-chord case is now reachable
         // only from config — which is exactly where it still has to hold.)
         // The extra has to be a chord no default holds, or narrowing back does not leave it nil:
-        // it falls to whichever action ships on it. It was ⌘⇧V until ZEN-369 made that
+        // it falls to whichever action ships on it. It was ⌘⇧V until that became
         // paste_selection.
         XCTAssertNil(
             KeymapDefaults.map[Chord(command: true, shift: true, key: "u")],

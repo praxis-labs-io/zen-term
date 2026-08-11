@@ -3,11 +3,11 @@ import CodeEditLanguages
 import Foundation
 import SwiftTreeSitter
 
-/// Resolves a file path to a tree-sitter grammar + compiled highlight query (ZEN-239), and maps a
-/// query capture name to one of ZEN-238's `SyntaxRole`s. Thin façade over `CodeEditLanguages`, which
+/// Resolves a file path to a tree-sitter grammar + compiled highlight query, and maps a
+/// query capture name to one of the `SyntaxRole`s. Thin façade over `CodeEditLanguages`, which
 /// bundles the grammars (incl. Swift) and their `highlights.scm` — so the engine never vendors a
 /// `parser.c`. Keyed off `FileDiff.path`'s extension (or well-known filename), with the blob's own
-/// shebang or modeline breaking the tie for an extensionless file (ZEN-329).
+/// shebang or modeline breaking the tie for an extensionless file.
 enum SyntaxLanguage {
     /// Compiled-query cache, keyed by tree-sitter grammar name. `resolve` runs on concurrent background
     /// queues — one per prefetching file — and compiling a `Query` means loading `highlights.scm` off
@@ -22,7 +22,7 @@ enum SyntaxLanguage {
     /// The grammar + highlight query for a path, or nil when the language isn't supported (or has no
     /// bundled query), in which case the caller renders that file plain. `content` is the blob's text,
     /// when the caller has it: it feeds shebang and modeline detection for a path the extension table
-    /// can't answer (ZEN-329). Nothing beyond those two signals is sniffed. An ambiguous key=value
+    /// can't answer. Nothing beyond those two signals is sniffed. An ambiguous key=value
     /// config maps to no grammar correctly, so it deliberately stays plain.
     ///
     /// The grammar comes from `CodeEditLanguages` (the linked tree-sitter parser), but the highlight

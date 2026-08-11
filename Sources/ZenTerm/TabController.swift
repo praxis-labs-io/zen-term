@@ -9,14 +9,14 @@ enum DrawerEdge { case bottom, right }
 enum ZoomedPanel: Equatable { case pane, bottomDrawer, rightDrawer }
 
 /// A tab's overlay open-state (drawers + zoom), produced by `TabController` and mirrored by the
-/// footer toggle dock's active tints. Tool floats are window-level (ZEN-141), so the shown float
+/// footer toggle dock's active tints. Tool floats are window-level, so the shown float
 /// isn't part of a tab's state — the dock takes it from `ToolFloatController` instead.
 struct OverlayState: Equatable {
     var isBottomOpen = false
     var isRightOpen = false
     var zoomed: ZoomedPanel?
     /// Whether each drawer's shell has a live process — drives the footer dock's activity dot
-    /// when the drawer is hidden (ZEN-107).
+    /// when the drawer is hidden.
     var bottomBusy = false
     var rightBusy = false
 }
@@ -60,13 +60,13 @@ final class TabController: NSObject {
     private var isRightOpen = false { didSet { onOverlayStateChanged?() } }
     private var rightDrawerToken: Int?
 
-    /// Whether the window's modal tool float is covering this tab (ZEN-141 lifted the float
-    /// engine to `WindowController`, so the tab has to ask). Drives the guards that must not act
+    /// Whether the window's modal tool float is covering this tab (the float
+    /// engine lives on `WindowController`, so the tab has to ask). Drives the guards that must not act
     /// on a panel hidden behind a modal card.
     private let isToolFloatOpen: () -> Bool
 
     /// What the diff viewer remembers about the repo this tab last opened — see `DiffViewerSession`.
-    /// Per tab, not per window (ZEN-298): a window-level slot meant two tabs on two repos shared one
+    /// Per tab, not per window: a window-level slot meant two tabs on two repos shared one
     /// session, so opening the viewer in the second discarded the first's place, base, and highlight
     /// cache. `WindowController` reads and writes it through the active tab; the tab only stores it.
     var diffViewerSession: DiffViewerSession?
@@ -99,7 +99,7 @@ final class TabController: NSObject {
         }
     }
 
-    /// Any surface in this tab moved its scroll position, panes and drawers alike (ZEN-330).
+    /// Any surface in this tab moved its scroll position, panes and drawers alike.
     var onScrollPosition: ((TerminalSurface, TerminalScrollPosition) -> Void)?
     var onSearchEvent: ((TerminalSurface, SearchController.Event) -> Void)?
 
@@ -191,7 +191,7 @@ final class TabController: NSObject {
     }
 
     /// Whether a drawer (not the pane canvas) holds the tab's focus — so ⌘W targets that
-    /// drawer instead of bubbling up to the pane/tab close (ZEN-213).
+    /// drawer instead of bubbling up to the pane/tab close.
     var isDrawerFocused: Bool { focusedPanel != .pane }
 
     /// Whether the focused drawer has a running process. False when the pane holds focus, so
@@ -312,7 +312,7 @@ final class TabController: NSObject {
         return paneCanvas.closeFocused()
     }
 
-    /// Close the focused drawer entirely — the same teardown as typing `exit` in it (ZEN-213).
+    /// Close the focused drawer entirely — the same teardown as typing `exit` in it.
     /// No-op when a pane holds focus; the pane/tab close path handles that case.
     func closeFocusedDrawer() {
         switch focusedPanel {
@@ -370,7 +370,7 @@ final class TabController: NSObject {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
-    // MARK: send a diff comment (ZEN-257)
+    // MARK: send a diff comment
 
     /// The terminals in this tab a diff comment can be sent to, **the focused one first** — the
     /// composer defaults to index 0, so a comment with no target picked lands where you were working.
@@ -591,7 +591,7 @@ final class TabController: NSObject {
 
     private func makeDrawerPanel(edge: DrawerEdge, surface: TerminalSurface) -> PanelHostView {
         // A labeled header (title + live toggle keybind) instead of a floating corner icon;
-        // the drawer is toggled from the footer dock or the keymap (ZEN-65).
+        // the drawer is toggled from the footer dock or the keymap.
         let meta =
             edge == .bottom
             ? PanelMeta(title: "Bottom drawer", action: .toggleBottomDrawer)
@@ -1101,7 +1101,7 @@ final class TabController: NSObject {
         // The one reflow, now, at the geometry the slide lands on: run the animated constraints to
         // their targets and lay out, then freeze the grids and rewind to the starting frame. For
         // the length of the slide the canvas's terminals hold their final grid while their views
-        // animate around them, which the layer's `contentsGravity` already covers (ZEN-282).
+        // animate around them, which the layer's `contentsGravity` already covers.
         let slideStarts = animate.map(\.constraint.constant)
         for (constraint, target) in animate { constraint.constant = target }
         content.layoutSubtreeIfNeeded()
@@ -1418,7 +1418,7 @@ extension TabController: TerminalSurfaceDelegate {
         }
     }
     /// The pointer is over a link in one of the drawer surfaces (nil when it leaves) — mirror it
-    /// into the shared preview, exactly as a pane does (ZEN-24). Panes are handled in
+    /// into the shared preview, exactly as a pane does. Panes are handled in
     /// `PaneCanvasController` and floats in `ToolFloatController`; this only reacts to the two
     /// drawer surfaces.
     func surface(_ s: TerminalSurface, hoveredLinkDidChange url: String?) {
@@ -1443,7 +1443,7 @@ extension TabController: TerminalSurfaceDelegate {
     /// Tear a drawer down entirely: drop its panel view, terminate the surface, clear its
     /// refs + nav token, mark it closed, re-tile, and restore focus if it held it. This is
     /// the shell-is-gone path — shared by `surfaceDidExit` (the user typed `exit`) and ⌘W on
-    /// a focused drawer (ZEN-213), which is meant to behave exactly like `exit`. Distinct from
+    /// a focused drawer, which is meant to behave exactly like `exit`. Distinct from
     /// `toggle*Drawer()`, which merely hides a drawer and keeps its shell alive.
     private func closeDrawer(_ edge: DrawerEdge) {
         let ref: PanelRef

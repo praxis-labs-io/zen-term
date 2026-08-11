@@ -80,7 +80,7 @@ final class DiffHighlighterTests: XCTestCase {
             "`func` should be a keyword at column 0 of line 2")
     }
 
-    // MARK: - Extensionless files resolve from the blob's content (ZEN-329)
+    // MARK: - Extensionless files resolve from the blob's content
 
     /// An unstaged file's new side reads the working tree directly, so a plain directory stands in for
     /// the repo; the old side's `git show` fails there and renders plain, which is fine — the shebang

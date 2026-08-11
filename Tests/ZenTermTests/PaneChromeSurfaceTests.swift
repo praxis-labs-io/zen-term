@@ -5,7 +5,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// ZEN-354: a chrome strip inside a pane has to paint on the pane's own fill.
+/// A chrome strip inside a pane has to paint on the pane's own fill.
 ///
 /// The chrome's tints are alpha inks tuned to sit on an opaque background. Below `background-alpha`
 /// the pane deliberately has no opaque fill (the clip stops filling so the grid can show through),

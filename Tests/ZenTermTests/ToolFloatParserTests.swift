@@ -52,7 +52,7 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertNil(ToolFloatParser.parse("title:x command:foo key:nope+"))  // unparseable key
     }
 
-    // MARK: dropped-line diagnostics (ZEN-7)
+    // MARK: dropped-line diagnostics
     //
     // A dropped float never becomes a row, so `parseLine`'s diagnostic is the only way its reason
     // reaches the user (the Tools notice + the reload toast). `parse` swallows it; `parseLine` carries
@@ -106,7 +106,7 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertTrue(result.diagnostics.isEmpty)
     }
 
-    // MARK: surviving-float sub-field diagnostics (ZEN-7 — order/persist/width/height)
+    // MARK: surviving-float sub-field diagnostics (order/persist/width/height)
     //
     // These floats still work, so they keep their row; the fallback must not be silent. width/height/
     // order gained a log too (they used to fall back with no trace at all).
@@ -166,7 +166,7 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertTrue(result.diagnostics.isEmpty)
     }
 
-    // MARK: identity (ZEN-81)
+    // MARK: identity
 
     /// The title is the source of truth; the id is its slug and is never authored. Renaming a float is
     /// therefore the only thing that can change its id.
@@ -193,7 +193,7 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertNil(ToolFloatParser.parse("title:\"---\" command:foo key:cmd+shift+j"))
     }
 
-    /// `id:` is a dead field from before ZEN-81. It must be inert — silently ignored like any unknown
+    /// `id:` is a dead field from before floats could be reordered. It must be inert — silently ignored like any unknown
     /// field — never resurrected as an identity that could disagree with the title's slug.
     func test_legacyIDField_isIgnored() {
         let float = ToolFloatParser.parse("id:legacy title:Notes command:foo key:cmd+shift+j")
@@ -225,7 +225,7 @@ final class ToolFloatParserTests: XCTestCase {
     }
 
     /// `tab` was cut before it ever shipped (daily driving showed tab scoping is the wrong axis —
-    /// the ZEN-77 pivot). A config that says it must degrade like any unknown token, keeping the float.
+    /// the pivot). A config that says it must degrade like any unknown token, keeping the float.
     func test_persist_tab_isNoLongerAMode_degradesToEphemeral() {
         let float = ToolFloatParser.parse("title:x command:c key:cmd+shift+j persist:tab")
         XCTAssertEqual(float?.persist, .ephemeral)
@@ -243,14 +243,14 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertEqual(float?.id, "x")
     }
 
-    /// ZEN-141 landed `window`, so it must now parse rather than degrade to `none` — the mode is
+    /// `window` landed later, so it must parse rather than degrade to `none` — the mode is
     /// what keeps a tool alive for the whole window, and silently ephemeral would look like
     /// persistence failing.
     func test_persist_window_parses() {
         XCTAssertEqual(ToolFloatParser.parse("title:x command:c key:cmd+shift+j persist:window")?.persist, .window)
     }
 
-    // MARK: toolbar: (ZEN-327)
+    // MARK: toolbar:
 
     func test_toolbar_defaultsToShown() {
         XCTAssertEqual(

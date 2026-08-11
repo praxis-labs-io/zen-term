@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the multi-select checkbox dropdown (ZEN-327): drive the real control in a
+/// Interaction tests for the multi-select checkbox dropdown: drive the real control in a
 /// window — its actual `keyDown` and row `mouseDown` — and assert what it reports and fires. A
 /// state-only test would pass while the rows were dead, the exact failure mode the project's
 /// interaction-test rule guards against.

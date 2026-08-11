@@ -129,7 +129,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.maxDrawerFraction, 0.95)  // clamped to [0.3, 0.95]
     }
 
-    /// The ceiling came down to 32 with ZEN-224, so that ⌘+ / ⌘- and the config file bound the size
+    /// The ceiling came down to 32 so that ⌘+ / ⌘- and the config file bound the size
     /// the same way. A config asking for more lands on 32 rather than the old 72.
     func test_fontSize_clampsToTheSteppingCeiling() {
         XCTAssertEqual(parse("font-size = 40\n").fontSize, 32)
@@ -195,7 +195,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.floats.first?.command, "two")
     }
 
-    // MARK: float order (ZEN-81)
+    // MARK: float order
 
     /// `config.floats` is the single array the dock, ⌘P, and Settings → Tools all read, so this sort
     /// is what "reorder" actually means end to end.
@@ -248,7 +248,7 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.floats.map(\.id), ["b", "c", "a"])
     }
 
-    // MARK: hide-toolbar-buttons (ZEN-327)
+    // MARK: hide-toolbar-buttons
 
     func test_hideToolbarButtons_absent_hidesNothing() {
         XCTAssertEqual(parse("font-size = 14\n").hiddenToolbarButtons, [])
@@ -284,7 +284,7 @@ final class GeneralConfigParserTests: XCTestCase {
             ])
     }
 
-    // MARK: config diagnostics (ZEN-7)
+    // MARK: config diagnostics
     //
     // The scalar/enum/float fallbacks used to log-and-drop with no trace a surface could show. Each
     // now collects a `ConfigDiagnostic` too — the piece that can go silently dead, so it's asserted.

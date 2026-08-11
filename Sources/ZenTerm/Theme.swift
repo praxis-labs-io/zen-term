@@ -2,7 +2,7 @@ import TerminalKit
 
 /// zen-term's built-in terminal theme — Rosé Pine Moon (JetBrainsMono Nerd Font Mono,
 /// faithful bg/fg/palette) — and `current`, the resolved appearance loaded from
-/// `~/.config/zen-term/theme` when present (ZEN-27).
+/// `~/.config/zen-term/theme` when present.
 enum Theme {
     static let rosePineMoon = TerminalTheme(
         // Font is single-sourced on GeneralConfig.builtIn (it's a general-config knob, not a
@@ -29,7 +29,7 @@ enum Theme {
     /// general config for the font, so `GeneralConfig.reloadCurrent()` must run first.
     ///
     /// Initialized to the built-in appearance and resolved from disk by
-    /// `AppConfig.loadAtLaunch()`, for the same reason `GeneralConfig.current` is (ZEN-31).
+    /// `AppConfig.loadAtLaunch()`, for the same reason `GeneralConfig.current` is.
     static private(set) var current: AppTheme = builtIn
 
     /// Re-read the theme (and font from the general config) and swap `current`.

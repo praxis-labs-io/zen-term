@@ -46,7 +46,7 @@ final class WindowController: NSObject {
     private var toasts: ToastPresenter {
         if let builtToasts { return builtToasts }
         // Below an open card, not on top of it: the stack is built on the first toast of the window's
-        // life, which can be a toast fired while a card is already up (ZEN-280). A card opened later
+        // life, which can be a toast fired while a card is already up. A card opened later
         // lands above the stack on its own, being added at the front.
         let presenter = ToastPresenter(
             host: container, below: modal?.overlay, topInset: Self.toastTopInset,
@@ -119,7 +119,7 @@ final class WindowController: NSObject {
         controllers.values.flatMap { $0.allSurfaces } + floats.allSurfaces
     }
 
-    /// Host the app-global update card in this window's toast stack (ZEN-118). `UpdateController`
+    /// Host the app-global update card in this window's toast stack. `UpdateController`
     /// presents into the key window this way and re-homes here if its prior host closes.
     func presentUpdateCard(_ card: UpdateCardView) { toasts.present(card: card) }
 
@@ -130,8 +130,8 @@ final class WindowController: NSObject {
         toasts.remove(card: card)
     }
 
-    /// Save-panel wiring over `DiagnosticsBundleBuilder` (ZEN-11): pick a destination, then build the
-    /// zip off the main thread (ZEN-90) and confirm or report with a toast. The log set is the live
+    /// Save-panel wiring over `DiagnosticsBundleBuilder`: pick a destination, then build the
+    /// zip off the main thread and confirm or report with a toast. The log set is the live
     /// sink's files; with no sink the bundle is just system metadata, still worth exporting.
     func exportDiagnostics() {
         let panel = NSSavePanel()
@@ -168,7 +168,7 @@ final class WindowController: NSObject {
         }
     }
 
-    /// The window's tool floats (ZEN-141). Window-level, not per-tab: one live instance per float
+    /// The window's tool floats. Window-level, not per-tab: one live instance per float
     /// id is shared by every tab, and the card hosts on `container` so a tab switch doesn't
     /// unmount it. Lazy so `container`, `tabBar`, and the tab machinery all exist before the
     /// closures below can run.
@@ -248,7 +248,7 @@ final class WindowController: NSObject {
     private var modal: (overlay: ModalOverlay, kind: ModalKind)?
 
     /// A card that has been asked for but can't be built yet, because its content is still being
-    /// read off the main thread (the `workspaces` file — ZEN-275). Nothing is on screen for it, so
+    /// read off the main thread (the `workspaces` file). Nothing is on screen for it, so
     /// this is its only trace: a second press must not start a second load and present twice, and a
     /// load landing after an Esc or after another card went up must not present at all.
     private var pendingModal: ModalKind?
@@ -261,11 +261,11 @@ final class WindowController: NSObject {
     /// keystroke rather than a chain of lookups into every window.
     weak var keyModeHost: KeyModeHosting?
 
-    /// Scroll mode over this window's focused panel (ZEN-330). Per window because it targets one
+    /// Scroll mode over this window's focused panel. Per window because it targets one
     /// panel, and the key handler it installs is app-global, so only the key window's can be up.
     let scrollMode = ScrollModeController()
 
-    /// Scrollback search over the same panel (ZEN-324). Per window for the same reasons, and it
+    /// Scrollback search over the same panel. Per window for the same reasons, and it
     /// drives scroll mode on commit, so it holds the one above.
     lazy var search = SearchController(scrollMode: scrollMode)
 
@@ -316,7 +316,7 @@ final class WindowController: NSObject {
 
     /// Whether a tool float card is up. Read by the key pass-through guard: a float is modal, so
     /// the window swallows nav rather than acting on it, and a consumed `Ctrl`-nav chord would be
-    /// taken from the tool for nothing (ZEN-270).
+    /// taken from the tool for nothing.
     var isToolFloatOpen: Bool { floats.isOpen }
 
     /// The shown float's tool name for copy: its title with a leading "Open " stripped, so a
@@ -425,7 +425,7 @@ final class WindowController: NSObject {
             // rather than hop, so the re-apply happens in the same turn as the post.
             MainActor.assumeIsolated {
                 guard let self else { return }
-                // Each block below runs only when the config it actually reads moved (ZEN-48). The
+                // Each block below runs only when the config it actually reads moved. The
                 // dependencies are what the call chain *resolves*, not what it's named after: recoloring
                 // a pane rebuilds its header keycap from the live keymap, so a rebind lands there too.
                 let change = ConfigChange.from(note)
@@ -455,7 +455,7 @@ final class WindowController: NSObject {
                     for controller in self.controllers.values { controller.reapplyChromeColors() }
                 }
                 // An open tool float re-reads `background-alpha` to decide whether its card fills its
-                // own interior or its ring does (ZEN-287), exactly as `PanelHostView` does above — so
+                // own interior or its ring does, exactly as `PanelHostView` does above — so
                 // `.terminalBehavior` has to reach it, or editing the value leaves the card up at its
                 // old fill until it is closed and reopened.
                 if change.contains(.theme) || change.contains(.terminalBehavior) {
@@ -534,7 +534,7 @@ final class WindowController: NSObject {
         container.frame = content.bounds
         container.autoresizingMask = [.width, .height]
         // Layer-back the container for the same reason the tabs' `content` is: a tool-float card
-        // hosted here (ZEN-141) is layer-backed, and one dropped into a non-layer-backed parent
+        // hosted here is layer-backed, and one dropped into a non-layer-backed parent
         // after layout doesn't render its drop shadow.
         container.wantsLayer = true
         content.addSubview(container)
@@ -592,7 +592,7 @@ final class WindowController: NSObject {
 
     /// Open the find bar on the selection, and do nothing when there is none. That last clause is
     /// the whole difference from `toggle_search`, which reads the same two selection models but
-    /// opens on an empty needle rather than declining (ZEN-367).
+    /// opens on an empty needle rather than declining.
     private func searchSelection() {
         guard let target = activeController?.focusedScrollTarget else { return }
         guard let selected = scrollMode.selectedText ?? target.surface.copySelection(),
@@ -680,7 +680,7 @@ final class WindowController: NSObject {
         if changed { renderTabBar() }
 
         // The active tab's drawer busy-state has no push event, so poll it here (building the
-        // overlay once) and re-render the dock only when a drawer's activity dot flips (ZEN-107).
+        // overlay once) and re-render the dock only when a drawer's activity dot flips.
         let overlay = activeController?.overlayState
         let busy = (overlay?.bottomBusy ?? false, overlay?.rightBusy ?? false)
         if busy != lastDrawerBusy { renderDock() }
@@ -838,7 +838,7 @@ final class WindowController: NSObject {
         // Retained so a live `window-gutter` edit can re-inset an OPEN card. The tab-hosted path
         // this replaced got that for free (it pinned to `content`, whose own gutter constraints
         // `reapplyChromeLayout()` updates); baking the constant in and walking away would leave a
-        // shown float at the old inset while every tab behind it resized (ZEN-89's bug class).
+        // shown float at the old inset while every tab behind it resized (the bug class).
         let insets = (
             leading: overlay.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: gutter),
             trailing: overlay.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -gutter),
@@ -886,7 +886,7 @@ final class WindowController: NSObject {
         floatGutter.bottom.constant = -gutter
     }
 
-    /// The same re-inset for an open modal card. Window-hosted since ZEN-280, so it no longer inherits
+    /// The same re-inset for an open modal card. Window-hosted, so it does not inherit
     /// the tile's gutter: without this a live `window-gutter` edit resizes every tab behind an open
     /// card and leaves the card itself at the old inset.
     private func reapplyModalLayout() {
@@ -972,7 +972,7 @@ final class WindowController: NSObject {
     }
 
     private func select(_ id: TabID, slideFrom: SlideEdge? = nil) {
-        // Load-bearing since ZEN-280: a card is window-hosted, so nothing unmounts it implicitly and
+        // Load-bearing: a card is window-hosted, so nothing unmounts it implicitly and
         // it would otherwise stay open over the tab you land on.
         closeModal()
         guard tabs.order.contains(id), id != tabs.activeID else { return }
@@ -1146,7 +1146,7 @@ final class WindowController: NSObject {
     /// closure, so it lives as long as the overlay it serves.
     func openDiffViewer() {
         if modal?.kind == .diffViewer { closeModal(); return }
-        // The repo-root walk is filesystem I/O — resolve it off-main (ZEN-90/ZEN-234), then present
+        // The repo-root walk is filesystem I/O — resolve it off-main, then present
         // on main. That gap means a second ⌘D before the resolve lands must be dropped, not queued.
         if isResolvingDiffRepo { return }
         isResolvingDiffRepo = true
@@ -1188,7 +1188,7 @@ final class WindowController: NSObject {
                 // Picking a branch that has a worktree means reading a different directory, so it gets
                 // its own runner rooted there and all three slices stay live. A branch without one has
                 // no working tree to read, so the pinned runner answers with the branch as its head and
-                // only the committed slice comes back (ZEN-313).
+                // only the committed slice comes back.
                 let target = head?.worktree.map(GitDiffRunner.init(repoRoot:)) ?? runner
                 let headRef = head?.hasWorktree == false ? head?.name : nil
                 target.loadStatus(base: base, head: headRef) { result in
@@ -1242,7 +1242,7 @@ final class WindowController: NSObject {
 
     /// Which section the Settings card opens on. `.tools` / `.workspaces` are used when a sub-form
     /// (tool-float or workspace editor) hands back to the section it was launched from; the
-    /// per-section cases are where the config-diagnostics toast lands (ZEN-7).
+    /// per-section cases are where the config-diagnostics toast lands.
     private enum SettingsLanding { case top, tools, workspaces, terminal, appearance, general, shortcuts }
 
     /// The Settings section that owns a diagnostic's subject — where the config-diagnostics toast's
@@ -1336,16 +1336,16 @@ final class WindowController: NSObject {
     }
 
     /// Open Settings on the section that owns `scope` — the config-diagnostics toast's "Open Settings"
-    /// action (ZEN-7). Always opens (re-opening on the target if Settings is already up), never the
+    /// action. Always opens (re-opening on the target if Settings is already up), never the
     /// ⌘, toggle: someone acting on the toast wants the section, not to close a card they just opened.
     func openSettings(for scope: ConfigDiagnostic.Scope) {
         if modal != nil { closeModal() }  // single slot: replace whatever's up, then land on the section
         openSettings(landing: Self.landing(for: scope))
     }
 
-    /// Present the config-diagnostics reload notice as a sticky, actionable toast (ZEN-7): a primary
+    /// Present the config-diagnostics reload notice as a sticky, actionable toast: a primary
     /// "Open Settings" that lands on the first problem's section, plus a Dismiss. Non-modal — it arms
-    /// no key equivalents, so it never steals input from the terminal (ZEN-143). `landingScope` is the
+    /// no key equivalents, so it never steals input from the terminal. `landingScope` is the
     /// scope the primary button opens; the caller passes the first diagnostic's.
     func showConfigDiagnosticsToast(_ content: ToastContent, landingScope: ConfigDiagnostic.Scope) {
         // `weak` breaks the retain cycle the strong-capture idiom would form: the toast retains its
@@ -1395,7 +1395,7 @@ final class WindowController: NSObject {
         // Reconcile rather than rebuild. Answering a card writes, which reloads, which lands back
         // here with one fewer conflict: tearing the stack down and re-showing it sprang every
         // surviving card out and a new one in, so the remaining cards visibly dropped and settled.
-        // A card the user did not touch should not move (ZEN-368).
+        // A card the user did not touch should not move.
         var kept: [(conflict: KeybindConflict, toast: WeakToast)] = []
         for entry in conflictToasts {
             guard let toast = entry.toast.value else { continue }  // already closed by hand
@@ -1493,7 +1493,7 @@ final class WindowController: NSObject {
 
     /// Where the tool-float form hands back to when it closes. Launched from Settings → Tools the card
     /// has to come back, or saving a float drops the user on a bare terminal from a place they were
-    /// mid-task in. Launched from ⌘P (ZEN-286) there is nothing behind it to restore.
+    /// mid-task in. Launched from ⌘P there is nothing behind it to restore.
     private enum ToolFormReturn { case settings, none }
 
     /// Where a form opened by the `new_tool_float` chord hands back to: Settings when the gate just
@@ -1778,8 +1778,8 @@ final class WindowController: NSObject {
             return
         }
         // ⇧⏎ replaces the current tab, terminating every pane and drawer in it. That silent
-        // clobber gets a confirm when the tab has live work; an idle tab is replaced outright
-        // (ZEN-213). Floats are window-scoped and survive a tab replace, so they don't count.
+        // clobber gets a confirm when the tab has live work; an idle tab is replaced outright.
+        // Floats are window-scoped and survive a tab replace, so they don't count.
         let replace = { [weak self] in
             self?.replaceActiveTab(cwd: ws.path, pinnedTitle: ws.title, workspace: ws)
         }
@@ -1868,7 +1868,7 @@ final class WindowController: NSObject {
                 .increaseFontSize, .decreaseFontSize, .resetFontSize, .selectAll:
                 // Cross-tab/window chords still act; Fill Screen is window-level. Font size is
                 // app-wide and the float itself is a terminal surface, so resizing over an open
-                // float resizes the float too: blocking it here would be the ZEN-224 bug again.
+                // float resizes the float too: blocking it here would be the bug again.
                 // Select All is here because Edit > Select All reaches the float from the responder
                 // chain, and a rebound chord swallowed here would disagree with the menu.
                 break
@@ -1906,7 +1906,7 @@ final class WindowController: NSObject {
             .increaseFontSize, .decreaseFontSize, .resetFontSize:
             // App-global (window manager / config reload / update check / font size). The keyboard
             // path routes these in AppDelegate before handle; a palette pick lands here, so forward
-            // it back. Font size is app-global for the reason ZEN-224 exists: scoping it to a window
+            // it back. Font size is app-global on purpose: scoping it to a window
             // would leave the same "didn't propagate" bug one level up.
             onAppGlobalCommand?(chord)
         case .toggleBottomDrawer:
@@ -2262,7 +2262,7 @@ final class WindowController: NSObject {
             variant: .warning, title: "Terminal Didn't Start",
             message: "The terminal surface failed to launch.")
         // `weak` breaks the retain cycle toast → button → onTap → toast that would otherwise leak this
-        // sticky toast past dismissal (ZEN-229); the presenter's stack keeps it alive until dismissed.
+        // sticky toast past dismissal; the presenter's stack keeps it alive until dismissed.
         weak var toast: ToastView?
         let actions = [
             ToastAction(title: "Close Pane", kind: .destructive) { [weak self] in
@@ -2285,7 +2285,7 @@ final class WindowController: NSObject {
     }
 
     /// Test hooks: the panel and surface scroll mode would target, so a test can assert what the
-    /// header on screen reads rather than only what the mode's own flag says (ZEN-330).
+    /// header on screen reads rather than only what the mode's own flag says.
     var focusedPanelForTesting: PanelHostView? { activeController?.focusedScrollTarget?.panel }
     var focusedScrollTargetForTesting: (surface: TerminalSurface, panel: PanelHostView)? {
         activeController?.focusedScrollTarget
@@ -2327,7 +2327,7 @@ final class WindowController: NSObject {
         return attentionStates[tabs.order[tabIndex]]
     }
 
-    /// Test hook: the diff-viewer session a given tab is holding (ZEN-298). The overlay keeps its
+    /// Test hook: the diff-viewer session a given tab is holding. The overlay keeps its
     /// `session` private, so identity across a tab round-trip is only reachable from the tab that owns
     /// it — which is the thing the ticket is about.
     func diffViewerSessionForTesting(tabIndex: Int) -> DiffViewerSession? {
@@ -2461,7 +2461,7 @@ extension WindowController: NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) { endModes() }
 
     /// Quit terminates the process without closing windows, so `windowWillClose` never fires
-    /// and every shell is orphaned instead of swept (ZEN-269). The app delegate drives this on
+    /// and every shell is orphaned instead of swept. The app delegate drives this on
     /// the way out. `tearDown()` is idempotent, so a window that closes normally afterwards is
     /// unaffected.
     func tearDownForQuit() { tearDown() }

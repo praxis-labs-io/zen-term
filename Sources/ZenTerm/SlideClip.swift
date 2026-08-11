@@ -3,7 +3,7 @@ import AppKit
 /// Clips a container to its bounds *expanded* by a margin while a panel slides in — hiding the panel
 /// parked far outside (a full `slide` past the edge) without cutting the pane focus halo/shadow,
 /// which `PanelHostView` deliberately lets escape a few points past its bounds. A hard
-/// `masksToBounds` would clip that halo for the length of the slide (ZEN-132); the expanded mask
+/// `masksToBounds` would clip that halo for the length of the slide; the expanded mask
 /// spares it because the halo sits within `margin`, while the parked panel is far beyond it.
 enum SlideClip {
     /// Kept-visible margin past the clipped view's bounds — covers the focus glow (shadow radius 6

@@ -18,7 +18,7 @@ struct TabBarItem {
 /// selection/close flow out through callbacks. Clicking a tab selects it; middle-clicking a tab
 /// closes it. The active tab is marked with an iris underline. When the tabs overflow the bar they
 /// scroll horizontally with no scroller, the active tab is kept in view, and each edge fades
-/// when tabs sit off that side (ZEN-115). New-tab lives in the footer dock, not here.
+/// when tabs sit off that side. New-tab lives in the footer dock, not here.
 ///
 /// The chips are laid out by explicit frame rather than a stack view: inside a scroll view an
 /// `NSStackView`'s intrinsic width isn't authoritative, so the document view stayed capped and
@@ -130,7 +130,7 @@ final class TabBarView: NSView {
         lastItems = items
         // A chip per tab id, kept across renders. Rebuilding them took the hovered chip out of the
         // window mid-hover, which tore its tooltip down and re-armed it behind the hover delay: with a
-        // title poll every 1.5s the tooltip read as blinking at a steady pace (ZEN-348).
+        // title poll every 1.5s the tooltip read as blinking at a steady pace.
         var reusable = Dictionary(uniqueKeysWithValues: chips.map { ($0.id, $0) })
         var next: [Chip] = []
         var activeChip: Chip?
@@ -193,7 +193,7 @@ final class TabBarView: NSView {
     /// Test hook: the chip views currently in the bar.
     var chipsForTesting: [NSView] { chips }
 
-    /// Test hook: each chip's rendered label. Chips persist across renders now (ZEN-348), so a
+    /// Test hook: each chip's rendered label. Chips persist across renders now, so a
     /// re-render has to be asserted on what the chip draws rather than on a new instance appearing.
     var chipLabelsForTesting: [NSAttributedString] { chips.map(\.attributedLabelForTesting) }
 
@@ -206,10 +206,10 @@ final class TabBarView: NSView {
     /// Test hook: whether the leading-edge overflow fade is currently active.
     var isLeadingFadedForTesting: Bool { hasLeftOverflow }
 
-    /// Test hook: the rendered label string (number prefix + title) for an item (ZEN-110).
+    /// Test hook: the rendered label string (number prefix + title) for an item.
     static func tabLabelStringForTesting(_ item: TabBarItem) -> String { tabLabel(item).string }
 
-    /// Test hook: each chip's tooltip title + resolved keycap, in bar order (ZEN-110) — the ⌘N
+    /// Test hook: each chip's tooltip title + resolved keycap, in bar order — the ⌘N
     /// shortcut moved off the inline label onto the hover tooltip.
     var chipTooltipsForTesting: [(label: String, shortcut: String?)] {
         chips.map { ($0.tooltipLabelForTesting, $0.tooltipShortcutForTesting) }
@@ -378,8 +378,8 @@ final class TabBarView: NSView {
         case .completed: numberColor = Theme.current.chrome.positive.nsColor
         case .waiting: numberColor = Theme.current.chrome.attention.nsColor
         }
-        // A bare number — the ⌘N binding for tabs 1–9 lives in the hover tooltip now, not inline
-        // (ZEN-110). The prefix shares `numberColor`, so it recolors with the tab attention state.
+        // A bare number — the ⌘N binding for tabs 1–9 lives in the hover tooltip now, not inline.
+        // The prefix shares `numberColor`, so it recolors with the tab attention state.
         let prefix = "\(item.index) "
         let s = NSMutableAttributedString(
             string: prefix,
@@ -421,7 +421,7 @@ final class TabBarView: NSView {
 
         var attributedLabelForTesting: NSAttributedString { label.attributedStringValue }
 
-        /// Test hooks for the tooltip content (ZEN-110), mirroring `IconButton`.
+        /// Test hooks for the tooltip content, mirroring `IconButton`.
         var tooltipLabelForTesting: String { tooltip.label }
         var tooltipShortcutForTesting: String? { tooltip.shortcutForTesting }
 

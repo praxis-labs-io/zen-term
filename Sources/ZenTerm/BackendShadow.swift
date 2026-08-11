@@ -1,7 +1,7 @@
 import AppLog
 import TerminalKit
 
-/// What the user's own config handed to the backend (ZEN-364).
+/// What the user's own config handed to the backend.
 ///
 /// The chrome resolves its keymap ahead of the responder chain and passes on everything it does not
 /// claim, so libghostty's keymap is live underneath ours the whole time. `BackendShadowSweepTests`
@@ -13,7 +13,7 @@ import TerminalKit
 /// actually assembled to.
 ///
 /// **It finds nothing today, and that is the point it has reached rather than a fault.** Rebinding
-/// nav to `ctrl+hjkl` used to make ⌘K clear the scrollback; ZEN-369 named `clear_screen` and unbound
+/// nav to `ctrl+hjkl` used to make ⌘K clear the scrollback, until ZenTerm named `clear_screen` and unbound
 /// libghostty's copy, and it was the last chord a ZenTerm default could hand back. What survives in
 /// the backend is terminal encoding, which no default sits on. This stays because a ghostty pin bump
 /// can add a bind, and a freed chord is where that would first show.
@@ -37,7 +37,7 @@ enum BackendShadow {
 
     /// `probe` is injected the way `KeymapAssembler` injects `canType`, and is `@MainActor` for the
     /// same reason: a plain closure parameter erases the isolation of whatever it was built from,
-    /// so an off-main probe would compile clean straight through here (ZEN-31).
+    /// so an off-main probe would compile clean straight through here.
     @MainActor
     static func check(
         assembled: [Chord: KeyInterceptor.ReservedChord],
@@ -52,8 +52,8 @@ enum BackendShadow {
     /// registered, and every chord then reports `.ignores`.
     ///
     /// ⌥← sends `ESC b` to the program, which is a terminal encoding rather than a chrome action, so
-    /// it is one of the binds ZEN-365 keeps for good. **The canary has to come from that permanent
-    /// set.** It was ⌘T until ZEN-365 unbound it, and a canary we later unbind reads as a dead
+    /// it is one of the binds the backend keeps for good. **The canary has to come from that permanent
+    /// set.** It was ⌘T until that chord was unbound, and a canary we later unbind reads as a dead
     /// backend forever. `BackendShadowTests` asks a live surface, so the next one to go turns red.
     @MainActor
     private static func answers(_ probe: @MainActor (TerminalKey) -> ChordDisposition) -> Bool {

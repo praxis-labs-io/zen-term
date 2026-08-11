@@ -44,7 +44,7 @@ final class NavGuardTests: XCTestCase {
                 toolFloatIsOpen: false))
     }
 
-    // MARK: tool floats (ZEN-270)
+    // MARK: tool floats
 
     func test_ctrlNavOverToolFloat_passesThrough() {
         // The window swallows nav while a float is up, so consuming the chord only steals it from
@@ -108,7 +108,7 @@ final class KeyInterceptorResolveTests: XCTestCase {
         // Ctrl-nav vetoed → handed to the program; ⌘-nav still consumed. `deferToTerminal` rather
         // than `passThrough`: the veto means the program is meant to receive this key, so nothing
         // below chord routing may claim it either. A sticky mode ate it while the two were one
-        // case (ZEN-330).
+        // case.
         XCTAssertEqual(interceptor.resolve(Chord(control: true, key: "h")), .deferToTerminal)
         XCTAssertEqual(interceptor.resolve(Chord(command: true, key: "h")), .consume(.navLeft))
     }

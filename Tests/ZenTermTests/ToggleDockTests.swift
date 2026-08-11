@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Guards the dock's live rebuild (ZEN-109): a float added / edited / removed in Settings must
+/// Guards the dock's live rebuild: a float added / edited / removed in Settings must
 /// change the toolbar's per-float buttons, not just recolor them. The bug shipped because the
 /// config-change fan-out only re-themed the dock; the button set was built once and never rebuilt.
 final class ToggleDockTests: XCTestCase {
@@ -37,7 +37,7 @@ final class ToggleDockTests: XCTestCase {
     }
 
     /// The dock renders the catalog in array order, left to right — it does no sorting of its own, so
-    /// a reorder in Settings reaches the toolbar only if this holds (ZEN-81).
+    /// a reorder in Settings reaches the toolbar only if this holds.
     func test_setToolFloats_rendersButtonsInCatalogOrder() {
         let dock = makeDock([float("dev", order: 1), float("top", order: 2), float("notes", order: 3)])
         XCTAssertEqual(dock.toolFloatButtonIDsForTesting, ["dev", "top", "notes"])
@@ -79,7 +79,7 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertFalse(dock.rightActivityForTesting)
     }
 
-    // MARK: live-in-background float dots (ZEN-150)
+    // MARK: live-in-background float dots
 
     func test_render_dotsFloatsLiveInBackground_notTheShownOne() {
         let dock = makeDock([float("dev"), float("top")])
@@ -99,7 +99,7 @@ final class ToggleDockTests: XCTestCase {
     }
 
     /// The dot must clear when the tool dies, not just when a card opens — a dot outliving its
-    /// process is the ZEN-150 stale-dot bug.
+    /// process is the stale-dot bug.
     func test_render_dotClearsWhenTheFloatIsNoLongerLive() {
         let dock = makeDock([float("top")])
         dock.render(
@@ -113,12 +113,12 @@ final class ToggleDockTests: XCTestCase {
     }
 
     func test_newTabButton_isMounted() {
-        // New-tab moved from the tab strip into the dock (ZEN-115); it must always be present so it
+        // New-tab moved from the tab strip into the dock; it must always be present so it
         // never scrolls away with the tabs.
         XCTAssertTrue(makeDock([]).hasNewTabButtonForTesting)
     }
 
-    // MARK: hidden buttons + divider grouping (ZEN-327)
+    // MARK: hidden buttons + divider grouping
 
     private static let fixedDefault = [
         "New tab", "│",
@@ -205,7 +205,7 @@ final class ToggleDockTests: XCTestCase {
 
     /// The liveness handle: a `toolbar:false` float's button must surface (dot and all) while its
     /// tool runs in the background, and hide again when it dies — otherwise a hidden persistent
-    /// float is a running process with no visible trace anywhere (the ZEN-150 dot is its only one).
+    /// float is a running process with no visible trace anywhere (the dot is its only one).
     func test_hiddenFloat_surfacesWhileLiveInBackground_andRehidesWhenItDies() {
         var hidden = float("dev")
         hidden.showsInToolbar = false

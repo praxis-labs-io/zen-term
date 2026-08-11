@@ -362,7 +362,7 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// Re-render the list for the current filtered model, reusing the view of every row whose
     /// identity survived the filter. Typing runs this per keystroke, and rebuilding meant a fresh
     /// view tree (and, for a command row, a fresh `KeycapView` resolving SF Symbols) for every row
-    /// on every character (ZEN-15).
+    /// on every character.
     ///
     /// A reused row stays in the view hierarchy throughout — `insertArrangedSubview` moves an
     /// already-arranged view, so the ordering falls out of the same loop. Detaching it instead

@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The keycap's glyph rendering (ZEN-15). The modifier glyphs are resolved once and shared by every
+/// The keycap's glyph rendering. The modifier glyphs are resolved once and shared by every
 /// keycap on screen, since the palette used to re-resolve them per token per row per keystroke — a
 /// cache that handed back nil, or one image where two were wanted, would ship blank keycaps.
 final class KeycapViewTests: XCTestCase {
@@ -26,7 +26,7 @@ final class KeycapViewTests: XCTestCase {
             "the key itself stays text")
     }
 
-    /// The keys ZEN-367 bound draw as glyphs no font is guaranteed to carry, so each needs a
+    /// The scroll and find keys draw as glyphs no font is guaranteed to carry, so each needs a
     /// symbol name that resolves. A name that does not leaves an image view with no image, which
     /// is a keycap with a gap in it and nothing else to notice it by.
     func test_theKeysThatTypeNothing_renderAsSymbols() {
@@ -60,7 +60,7 @@ final class KeycapViewTests: XCTestCase {
 
     /// The cache is keyed by symbol AND point size, so the two footprints don't share one image.
     /// Keyed by symbol alone, whichever size rendered first would be handed to every later keycap,
-    /// and the diff viewer's compact legend (ZEN-262) would silently wear the palette's 10pt glyphs
+    /// and the diff viewer's compact legend would silently wear the palette's 10pt glyphs
     /// at 9pt metrics. Nothing about that reads as broken on screen, which is why it's asserted here.
     func test_compactAndRegular_resolveTheirOwnGlyph() throws {
         let regular = KeycapView(shortcut: "⌘", size: .regular)

@@ -2,7 +2,7 @@ import AppKit
 import AppLog
 import Sparkle
 
-/// Owns the Sparkle updater and the one app-global update card (ZEN-118). Built and started by
+/// Owns the Sparkle updater and the one app-global update card. Built and started by
 /// `AppDelegate` at launch. The card is app-global, not window-scoped: it presents into the key
 /// window's toast stack and re-homes to the next key window if that window closes mid-flow, so a
 /// download is never stranded by a closed window.
@@ -10,7 +10,7 @@ import Sparkle
 final class UpdateController {
     /// Only a packaged build carries `SUFeedURL`; a `swift run` dev build has none. Gate on it so
     /// the updater stays fully inert in dev — an installed app and a dev build run side by side
-    /// daily (ZEN-116), and this mirrors the reasoning in `AppVersion.current`'s `0.0.0+src` fallback.
+    /// daily, and this mirrors the reasoning in `AppVersion.current`'s `0.0.0+src` fallback.
     static var isSupported: Bool {
         Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil
     }
@@ -74,7 +74,7 @@ final class UpdateController {
         }
     }
 
-    /// Point Sparkle's automatic-check schedule at the config's off switch (ZEN-19). The packaged
+    /// Point Sparkle's automatic-check schedule at the config's off switch. The packaged
     /// plist enables checks by default; this makes the config the source of truth. Called at
     /// launch and re-applied by `AppDelegate` on `.configDidChange`, so a Settings toggle takes
     /// effect with no relaunch. Inert in an unpackaged build.
@@ -94,7 +94,7 @@ final class UpdateController {
         variant: .info, title: "Updates are off in this build",
         message: "Run from source, so there's no feed.\nThe installed app updates itself.")
 
-    /// Run a user-initiated check now (the "Check for Updates" command, ZEN-20). Unlike a scheduled
+    /// Run a user-initiated check now (the "Check for Updates" command). Unlike a scheduled
     /// check, the driver reports its result even when nothing's found.
     func checkForUpdates() {
         guard started else {
@@ -155,7 +155,7 @@ final class UpdateController {
         // `keyController()` can't resolve a host right now. A foreign key window (an open save/open
         // panel, or another app frontmost) makes `keyController()` nil; gating this morph on it is
         // what stranded the card on a stale state whose `fireOnce` reply had already fired, so
-        // Later / Relaunch did nothing and the card couldn't be dismissed (ZEN-248). Re-homing to a
+        // Later / Relaunch did nothing and the card couldn't be dismissed. Re-homing to a
         // *closed* host is handled by `hostWindowMaybeClosing`, which nils `host` first — so a
         // non-nil `host` here always means a live window still showing this card. Not gating on the
         // key window also matches the card's documented intent: it re-homes only when its host
@@ -166,7 +166,7 @@ final class UpdateController {
             return
         }
         guard let controller = keyController() else {
-            // The leading candidate from ZEN-248, which previously left no trace: distinguish the two
+            // The leading candidate, which previously left no trace: distinguish the two
             // `keyController()` failure modes — no key window at all vs. a foreign one (an open save/
             // open panel, or another app frontmost).
             let keyState = NSApp.keyWindow == nil ? "no key window" : "foreign key window"

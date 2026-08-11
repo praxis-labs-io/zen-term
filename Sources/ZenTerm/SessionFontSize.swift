@@ -1,6 +1,6 @@
 import CoreGraphics
 
-/// The terminal font size this session is running at, in points — what ⌘+ / ⌘- / ⌘0 move (ZEN-224).
+/// The terminal font size this session is running at, in points — what ⌘+ / ⌘- / ⌘0 move.
 ///
 /// App-global rather than per-window, and deliberately so: the ticket is that a size change reached
 /// one pane. A per-window value would leave the same bug one level up, where a second window kept
