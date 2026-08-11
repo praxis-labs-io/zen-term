@@ -18,6 +18,7 @@ final class AppConfigTests: XCTestCase {
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         originalConfig = GeneralConfig.current
         originalTheme = Theme.current
+        originalFontSize = SessionFontSize.points
         ConfigLoader.defaultRootOverrideForTesting = root
         GeneralConfig.setCurrentForTesting(.builtIn)
         Theme.setCurrentForTesting(Theme.builtIn)
@@ -27,6 +28,12 @@ final class AppConfigTests: XCTestCase {
         ConfigLoader.defaultRootOverrideForTesting = nil
         GeneralConfig.setCurrentForTesting(originalConfig)
         Theme.setCurrentForTesting(originalTheme)
+        // `points` has no setter, so put it back by seeding from a config carrying the captured
+        // size. That also puts `base` there, which is the same value unless something stepped the
+        // size, and nothing in this class does.
+        var seed = GeneralConfig.builtIn
+        seed.fontSize = originalFontSize
+        SessionFontSize.seed(from: seed)
         try? FileManager.default.removeItem(at: root)
         root = nil
         super.tearDown()
@@ -34,6 +41,7 @@ final class AppConfigTests: XCTestCase {
 
     private var originalConfig = GeneralConfig.builtIn
     private var originalTheme = Theme.builtIn
+    private var originalFontSize = GeneralConfig.builtIn.fontSize
 
     /// `loadAtLaunch()` is the only thing that resolves the config statics off disk, so if
     /// it stops running the app is silently on built-in defaults: built-in theme and font, default
@@ -53,6 +61,22 @@ final class AppConfigTests: XCTestCase {
         XCTAssertEqual(
             Theme.current.terminal.fontName, "Menlo",
             "the theme resolved before the general config, so it took the built-in font")
+    }
+
+    /// The third thing `loadAtLaunch()` does, and the one with no coverage until now: seeding the
+    /// session font size, so the first pane opens at the config's size instead of the built-in one.
+    /// `SessionFontSize.reseedIfBaseChanged` covers the same seed from `reload()`'s side, which is a
+    /// different path with a different guard, and left this one free to be dropped.
+    func test_loadAtLaunch_seedsTheSessionFontSize() throws {
+        let stepped = GeneralConfig.builtIn.fontSize + 3
+        try "font-size = \(Int(stepped))\n"
+            .write(to: root.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+
+        AppConfig.loadAtLaunch()
+
+        XCTAssertEqual(
+            SessionFontSize.points, stepped,
+            "the first pane opens at the built-in size rather than the configured one")
     }
 
     /// `AppConfig.reload()` is the seam `.reloadConfig` routes through (`AppDelegate.route`
