@@ -547,7 +547,9 @@ which hook a subclass pins from. It restores *after* the sweep, because closing 
 `WindowController`'s teardown and that should still run under the setting the test chose. A suite
 that is not a `WindowTestCase` carries its own copy (`MotionTests`). `MotionOverrideRestoreTests`
 drives the restore directly, for the same reason `WindowSweepTests` drives the sweep: a teardown hook
-that stops firing fails nothing.
+that stops firing fails nothing. That test counts reads of the inherited closure rather than
+comparing what the closure returns, because a value comparison passes with the bug reinstated on a
+machine that has Reduce Motion switched on: the hardcoded restore returns `true` there too.
 
 Measure this with CoreGraphics, never the accessibility API. `xctest` runs `.prohibited`, so its
 windows are on screen and in Mission Control while absent from the accessibility tree: System Events
