@@ -13,7 +13,6 @@ import XCTest
 @MainActor
 final class WorkspaceRecipeStagingTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
-    private var originalReduceMotion: (() -> Bool)!
     private var controller: WindowController?
 
     override func setUp() {
@@ -21,7 +20,6 @@ final class WorkspaceRecipeStagingTests: WindowTestCase {
         // Staging is only observable while the slide is in flight, and Reduce Motion collapses it.
         // Pin it off by default so the developer's own accessibility setting can't turn the
         // staging tests into no-ops; the Reduce Motion test below opts back in explicitly.
-        originalReduceMotion = Motion.isReduceMotionEnabled
         Motion.isReduceMotionEnabled = { false }
         originalOverride = TerminalSurfaceFactory.makeOverride
         // Headless surfaces: no libghostty, and an idle tab, so a replace isn't gated by the
@@ -33,7 +31,6 @@ final class WorkspaceRecipeStagingTests: WindowTestCase {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
-        Motion.isReduceMotionEnabled = originalReduceMotion
         super.tearDown()
     }
 

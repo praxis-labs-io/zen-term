@@ -16,13 +16,11 @@ final class PaneChromeSurfaceTests: WindowTestCase {
     private var window: NSWindow!
     private var controller: PaneCanvasController!
     private var originalConfig: GeneralConfig!
-    private var originalReduceMotion: (() -> Bool)!
 
     override func setUp() {
         super.setUp()
         originalConfig = GeneralConfig.current
         GeneralConfig.setCurrentForTesting(.builtIn)
-        originalReduceMotion = Motion.isReduceMotionEnabled
         Motion.isReduceMotionEnabled = { true }
         controller = PaneCanvasController(makeSurface: { RecordingSurface() })
         window = NSWindow(
@@ -39,7 +37,6 @@ final class PaneChromeSurfaceTests: WindowTestCase {
         controller.shutdown()
         controller = nil
         window = nil
-        Motion.isReduceMotionEnabled = originalReduceMotion
         GeneralConfig.setCurrentForTesting(originalConfig)
         super.tearDown()
     }

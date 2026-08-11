@@ -53,7 +53,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         controllers = []
         spawned = []
         hosts = []
-        Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         try? FileManager.default.removeItem(at: root)

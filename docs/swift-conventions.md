@@ -535,6 +535,20 @@ it is bounded by the windows the suite builds, re-closing a closed window neithe
 `willClose` nor costs anything measurable, and the window-server surfaces this section is about are
 still reclaimed. Do not re-litigate it without reproducing the crash first.
 
+**`WindowTestCase` also owns the Reduce Motion override, so a suite pins it and restores nothing.**
+`Motion.isReduceMotionEnabled` is a global closure, and window tests pin it to `{ true }` so
+animations resolve instantly and a card is mounted by the time an assertion reads the tree. When
+each suite put it back itself, 14 of them restored a hardcoded
+`{ NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }`: they installed a fresh OS reader
+rather than what they inherited, so a suite that pins Reduce Motion *off* to watch an animation run
+passes or fails on file order. The base class captures the closure in a **property initializer**,
+which runs when XCTest builds the case and therefore before any setup hook, so it does not depend on
+which hook a subclass pins from. It restores *after* the sweep, because closing a window drives
+`WindowController`'s teardown and that should still run under the setting the test chose. A suite
+that is not a `WindowTestCase` carries its own copy (`MotionTests`). `MotionOverrideRestoreTests`
+drives the restore directly, for the same reason `WindowSweepTests` drives the sweep: a teardown hook
+that stops firing fails nothing.
+
 Measure this with CoreGraphics, never the accessibility API. `xctest` runs `.prohibited`, so its
 windows are on screen and in Mission Control while absent from the accessibility tree: System Events
 reports `0` windows for the entire run. `CGWindowListCopyWindowInfo([.optionOnScreenOnly,

@@ -52,7 +52,6 @@ final class WindowControllerToolFloatTests: WindowTestCase {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         spawned = []
-        Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         try? FileManager.default.removeItem(at: root)

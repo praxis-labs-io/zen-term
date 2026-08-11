@@ -28,7 +28,6 @@ final class ToastInsetLiveApplyTests: WindowTestCase {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
-        MotionConfig.apply(.system)
         GeneralConfig.setCurrentForTesting(originalConfig)
         try super.tearDownWithError()
     }

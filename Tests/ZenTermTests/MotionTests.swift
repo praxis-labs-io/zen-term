@@ -4,8 +4,14 @@ import XCTest
 @testable import ZenTerm
 
 final class MotionTests: XCTestCase {
+    /// The one suite here that is not a `WindowTestCase`, so it carries its own copy of that
+    /// base class's capture and restore. Captured in the property initializer, which XCTest runs
+    /// before any setup hook, and put back rather than assumed: `MotionConfig.apply` rewrites the
+    /// closure, and a case below reads the OS setting as its subject.
+    private let originalReduceMotion = Motion.isReduceMotionEnabled
+
     override func tearDown() {
-        Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+        Motion.isReduceMotionEnabled = originalReduceMotion
         super.tearDown()
     }
 

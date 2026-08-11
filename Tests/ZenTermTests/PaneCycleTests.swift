@@ -14,7 +14,6 @@ import XCTest
 final class PaneCycleTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
-    private var originalReduceMotion: (() -> Bool)!
     private var controllers: [WindowController] = []
     private var root = FileManager.default.temporaryDirectory
 
@@ -23,9 +22,6 @@ final class PaneCycleTests: WindowTestCase {
         originalOverride = TerminalSurfaceFactory.makeOverride
         originalConfig = GeneralConfig.current
         GeneralConfig.setCurrentForTesting(GeneralConfig.builtIn)
-        // Captured rather than restored to the system reading: a case that pins Reduce Motion for
-        // its own reasons must get its value back, or this file decides the suite's order.
-        originalReduceMotion = Motion.isReduceMotionEnabled
         Motion.isReduceMotionEnabled = { true }
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
         root = FileManager.default.temporaryDirectory
@@ -38,7 +34,6 @@ final class PaneCycleTests: WindowTestCase {
             controller.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         }
         controllers = []
-        Motion.isReduceMotionEnabled = originalReduceMotion
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         try? FileManager.default.removeItem(at: root)

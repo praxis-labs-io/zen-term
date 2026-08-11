@@ -34,7 +34,6 @@ final class ScrollAndFindChordTests: WindowTestCase {
             controller.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         }
         controllers = []
-        Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         try? FileManager.default.removeItem(at: root)

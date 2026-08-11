@@ -39,7 +39,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
 
     override func tearDownWithError() throws {
         TerminalSurfaceFactory.makeOverride = originalOverride
-        MotionConfig.apply(.system)
         GeneralConfig.setCurrentForTesting(originalConfig)
         Theme.setCurrentForTesting(originalTheme)
         for dir in tempRoots { try? FileManager.default.removeItem(at: dir) }

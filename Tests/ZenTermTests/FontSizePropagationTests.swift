@@ -49,7 +49,6 @@ final class FontSizePropagationTests: WindowTestCase {
         }
         controllers = []
         spawned = []
-        Motion.isReduceMotionEnabled = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         SessionFontSize.seed(from: GeneralConfig.builtIn)
