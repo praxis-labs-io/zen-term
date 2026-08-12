@@ -75,7 +75,13 @@ final class FindBarView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// How the bar reads while typing (a total, or nothing yet) and after a commit (which match of
-    /// how many). `selected` is zero-based, as the backend reports it, and reads one-based.
+    /// how many).
+    ///
+    /// `selected` is zero-based **and newest-first**, which is the order libghostty walks matches
+    /// in. The count is shown in buffer order instead, oldest first, because that is the order the
+    /// reader sees on screen: the match nearest the top of the scrollback is 1. Reported straight
+    /// through, the first match a search lands on reads `1 / 3` while sitting at the *bottom* of
+    /// three, and stepping up the screen counts up while the index counts down.
     func showCount(total: Int?, selected: Int?) {
         switch (total, selected) {
         case (nil, _):
@@ -87,7 +93,7 @@ final class FindBarView: NSView {
         case (let total?, nil):
             count.stringValue = "\(total) matches"
         case (let total?, let selected?):
-            count.stringValue = "\(selected + 1) / \(total)"
+            count.stringValue = "\(total - selected) / \(total)"
         }
     }
 

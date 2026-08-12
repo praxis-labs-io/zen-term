@@ -643,7 +643,21 @@ final class WindowController: NSObject {
     /// it. Both halves live here because the controllers own their modes, not the window's
     /// plumbing.
     private func wireModes() {
-        scrollMode.onActiveChanged = { [weak self] _ in self?.updateModeHandler() }
+        scrollMode.onActiveChanged = { [weak self] active in
+            guard let self else { return }
+            // The bar up means the keyboard belongs to the search: to the field while the needle is
+            // typed, to scroll mode once ⏎ hands it over. Leaving the mode makes the prompt live,
+            // so the bar goes with it however the reader left: `q`, `i` or the chord.
+            //
+            // Who started the mode does not come into it, which is where this parts company with
+            // Esc: Esc leaves a reader-owned mode alone precisely because the prompt stays dead.
+            //
+            // Re-entrant, and has to stay safe. `search.end()` tears down through
+            // `scrollMode.end()`, which lands back here; both controllers guard on their own
+            // `isActive`, so the second pass returns without doing anything.
+            if !active { self.search.end() }
+            self.updateModeHandler()
+        }
         search.onActiveChanged = { [weak self] _ in self?.updateModeHandler() }
     }
 

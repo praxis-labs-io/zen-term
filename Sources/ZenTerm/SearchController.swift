@@ -207,7 +207,7 @@ final class SearchController {
         pendingStep = step
         didMoveViewport = true
         didRequestSelection = true
-        offsetAtStep = lastPosition?.offset
+        cursorLineAtStep = surface?.text(viewportRow: scrollMode.cursor.row)
         surface?.stepSearch(step)
     }
 
@@ -277,6 +277,7 @@ final class SearchController {
         total = nil
         selected = nil
         pendingStep = nil
+        cursorLineAtStep = nil
         hasPreviewed = false
         didRequestSelection = false
         unsent = nil
@@ -442,22 +443,42 @@ final class SearchController {
     private func land(after step: TerminalSearchStep) {
         guard scrollMode.isActive, let surface else { return }
         let rows = (0..<(surface.cellMetrics?.rows ?? 0)).map { surface.text(viewportRow: $0) ?? "" }
-        // Whether the step had to scroll to reach the match. The cursor names a row in the viewport
-        // it was standing in, so once that viewport moves the coordinate is meaningless and a
-        // direction scan from it walks to whichever match happens to sit near the stale row. The
-        // error compounds over a run of steps, and a row holding several matches gives it more
-        // wrong answers to choose from.
-        let scrolled = lastPosition?.offset != offsetAtStep
+        let cursorRow = scrollMode.cursor.row
+        let moved = Self.viewportMoved(
+            cursorLineAtStep: cursorLineAtStep,
+            cursorLineNow: rows.indices.contains(cursorRow) ? rows[cursorRow] : nil)
         guard
             let cell = Self.matchCell(
-                needle: needle, rows: rows, from: scrollMode.cursor, step: step, scrolled: scrolled)
+                needle: needle, rows: rows, from: scrollMode.cursor, step: step, viewportMoved: moved)
         else { return }
         scrollMode.land(on: cell)
     }
 
-    /// Where the viewport sat when the outstanding step was sent, so the answer can tell whether it
-    /// moved. Nil before any report has arrived, which reads as "no movement to detect".
-    private var offsetAtStep: Int?
+    /// Whether the step moved the viewport out from under the cursor, which is what says to stop
+    /// trusting the cursor's row.
+    ///
+    /// **Not the scroll offset, which cannot answer this.** libghostty emits a scrollbar report
+    /// from the renderer thread and only while drawing a frame (`renderer/generic.zig`: "The
+    /// scrollbar is only emitted during draws"), while the selected index is pushed straight from
+    /// the search thread the moment the match is picked. So the offset in hand when the selection
+    /// lands is a frame or more behind, and comparing it against the offset at step time reads
+    /// "did not move" for a step that plainly did, whenever no frame happened to land in between.
+    ///
+    /// The **cursor's own line** answers it synchronously instead. The search thread scrolls under
+    /// the terminal mutex before it reports the selection (`terminal/search/Thread.zig`), so the
+    /// rows read back here are already the ones on screen, and a line no longer where the cursor
+    /// left it means the viewport moved beneath it.
+    ///
+    /// A blank line reads as no movement, since a blank row that scrolls to another blank row is
+    /// indistinguishable. The cursor stays where it is, which is the safe way to be wrong.
+    static func viewportMoved(cursorLineAtStep: String?, cursorLineNow: String?) -> Bool {
+        guard let cursorLineAtStep, !cursorLineAtStep.isEmpty else { return false }
+        return cursorLineAtStep != cursorLineNow
+    }
+
+    /// The cursor's line as the outstanding step went out, so its answer has something to be
+    /// compared against. Nil before the first step.
+    private var cursorLineAtStep: String?
 
     /// Where the selected match is, read off the viewport.
     ///
@@ -470,21 +491,30 @@ final class SearchController {
     /// not found and the cursor stays put.
     static func matchCell(
         needle: String, rows: [String], from cursor: ScrollCell, step: TerminalSearchStep,
-        scrolled: Bool
+        viewportMoved: Bool
     ) -> ScrollCell? {
         guard !needle.isEmpty else { return nil }
         let occurrences = rows.enumerated().flatMap { row, text in
             occurrenceColumns(of: needle, in: text).map { ScrollCell(row: row, column: $0) }
         }
         guard !occurrences.isEmpty else { return nil }
-        // A step that scrolled parks the match's own row at the top of the viewport, which is the
-        // one case the backend tells us exactly. The cursor is a coordinate in the viewport that
-        // just went away, so a direction scan from it is worse than no scan at all.
-        if scrolled {
+        // A step that moved the viewport parks the match's own row at the top of it: the search
+        // thread scrolls to the match's start pin, and only when the match is not already on
+        // screen. The cursor is a coordinate in the viewport that just went away, so a direction
+        // scan from it is worse than no scan at all.
+        if viewportMoved {
             let onTopRow = occurrences.filter { $0.row == 0 }
             // `next` walks newest to oldest, so within the parked row the match it stopped on is
             // the last one when stepping backwards through the buffer and the first going forwards.
-            return step == .next ? onTopRow.last ?? occurrences.first : onTopRow.first ?? occurrences.first
+            //
+            // Nothing on the top row means the scroll was clamped and could not park it there. The
+            // buffer ends are the two ways that happens, and the direction says which: stepping
+            // toward newer matches clamps at the live end, leaving the match near the bottom of the
+            // screen, so the answer is the last occurrence rather than the first. Taking the first
+            // there is what left the cursor a step behind the highlight on every downward step.
+            return step == .next
+                ? onTopRow.last ?? occurrences.first
+                : onTopRow.first ?? occurrences.last
         }
         // `occurrences` is already in buffer order, rows down and columns across, and the engine
         // steps in exactly that order. So the answer is the immediate neighbour: the last match

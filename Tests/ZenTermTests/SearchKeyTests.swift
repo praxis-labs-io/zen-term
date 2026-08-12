@@ -81,10 +81,11 @@ final class SearchMatchCellTests: XCTestCase {
 
     private func cell(
         _ needle: String, from cursor: ScrollCell, _ step: TerminalSearchStep, rows: [String]? = nil,
-        scrolled: Bool = false
+        viewportMoved: Bool = false
     ) -> ScrollCell? {
         SearchController.matchCell(
-            needle: needle, rows: rows ?? self.rows, from: cursor, step: step, scrolled: scrolled)
+            needle: needle, rows: rows ?? self.rows, from: cursor, step: step,
+            viewportMoved: viewportMoved)
     }
 
     func test_nextTakesTheNearestMatchAboveTheCursor() {
@@ -143,13 +144,69 @@ final class SearchMatchCellTests: XCTestCase {
         // from it walks to whatever sits near the stale row, and the error compounds over a run.
         let scrolledRows = ["error at top", "", "error lower down"]
         XCTAssertEqual(
-            cell("error", from: ScrollCell(row: 2, column: 0), .next, rows: scrolledRows, scrolled: true),
+            cell(
+                "error", from: ScrollCell(row: 2, column: 0), .next, rows: scrolledRows,
+                viewportMoved: true),
             ScrollCell(row: 0, column: 0),
             "a scroll parks the match's own row at the top")
+    }
+
+    func test_aScrollClampedAtTheLiveEndTakesTheLastMatchNotTheFirst() {
+        // Found at the machine. Stepping toward newer matches near the bottom of the buffer, the
+        // scroll cannot park the match at the top because the viewport is already against the live
+        // end. Nothing sits on row 0, and falling back to the first occurrence put the cursor on
+        // the match *above* the one the engine selected: the highlight moved on and the cursor
+        // stayed a step behind, catching up only on the next press.
+        // Row 0 deliberately holds no match, which is what a clamped scroll leaves behind.
+        let clamped = ["line 100", "error above", "error selected", "", "a prompt"]
+        XCTAssertEqual(
+            cell(
+                "error", from: ScrollCell(row: 0, column: 0), .previous, rows: clamped,
+                viewportMoved: true),
+            ScrollCell(row: 2, column: 0),
+            "stepping toward newer matches, the answer is the last on screen")
+    }
+
+    func test_aScrollClampedAtTheTopStillTakesTheFirstMatch() {
+        // The mirror case: stepping toward older matches runs out of buffer at the top instead.
+        let clamped = ["line 1", "error selected", "quiet", "error below"]
+        XCTAssertEqual(
+            cell(
+                "error", from: ScrollCell(row: 3, column: 0), .next, rows: clamped,
+                viewportMoved: true),
+            ScrollCell(row: 1, column: 0))
     }
 
     func test_noOccurrenceLeavesTheCursorAlone() {
         XCTAssertNil(cell("absent", from: ScrollCell(row: 2, column: 0), .next))
         XCTAssertNil(cell("", from: ScrollCell(row: 2, column: 0), .next))
+    }
+}
+
+/// Whether a step took the viewport with it, which decides how `matchCell` reads the screen.
+///
+/// The bug behind these: this used to be a scroll-offset comparison. libghostty emits the scrollbar
+/// report from the renderer thread and only while drawing a frame, so the offset in hand when the
+/// selected index lands is a frame or more behind, and the comparison answers "did not move" for a
+/// step that plainly did. The cursor's line answers synchronously instead.
+final class SearchViewportMovedTests: XCTestCase {
+    private func moved(was: String? = "a prompt line", now: String? = "a prompt line") -> Bool {
+        SearchController.viewportMoved(cursorLineAtStep: was, cursorLineNow: now)
+    }
+
+    func test_aLineThatIsNoLongerWhereTheCursorLeftItMeansTheViewportMoved() {
+        XCTAssertTrue(moved(now: "a different line"))
+        XCTAssertFalse(moved())
+    }
+
+    func test_aBlankLineDecidesNothing() {
+        // A blank row scrolling to another blank row is indistinguishable, so it reads as no
+        // movement and the cursor stays put. Being wrong this way leaves it where the reader left
+        // it rather than throwing it at the top of the screen.
+        XCTAssertFalse(moved(was: "", now: "text now"))
+    }
+
+    func test_theFirstStepOfASearchHasNothingToCompareAndDoesNotGuess() {
+        XCTAssertFalse(moved(was: nil, now: "text now"))
     }
 }

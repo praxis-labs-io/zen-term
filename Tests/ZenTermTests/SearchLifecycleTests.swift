@@ -375,6 +375,66 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertTrue(controller.scrollMode.isActive, "they put themselves there and keep it")
     }
 
+    // MARK: the bar and a live prompt never coexist
+
+    /// The bar being up means the keyboard belongs to the search: to the field while the needle is
+    /// being typed, to scroll mode once ⏎ hands it over. There is no third state, and every way out
+    /// of scroll mode has to hold that.
+    ///
+    /// Left open, the hole is worse than a stray bar. `search.isActive` keeps the app-global
+    /// handler installed, `SearchController.handle` still claims `n` and `N`, and
+    /// `ScrollModeController.handle` declines everything once inactive. So the prompt goes live
+    /// while silently eating the two keys that step a search.
+    func test_everyWayOutOfScrollModeTakesTheBarWithIt() throws {
+        let exits: [(String, (WindowController, ModeHostSpy) throws -> Void)] = [
+            ("q", { _, host in _ = try XCTUnwrap(host.modeHandler)(try self.keyDown("q")) }),
+            ("i", { _, host in _ = try XCTUnwrap(host.modeHandler)(try self.keyDown("i")) }),
+            ("the chord", { controller, _ in controller.handle(.toggleScrollMode) }),
+        ]
+
+        for (name, leave) in exits {
+            let controller = makeWindow()
+            let host = ModeHostSpy()
+            controller.keyModeHost = host
+            let surface = try focusedSurface(controller)
+            let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+            controller.handle(.toggleSearch)
+            controller.search.beginNeedleForTesting("error")
+            controller.search.commit()
+            XCTAssertTrue(controller.scrollMode.isActive, "\(name): precondition")
+
+            try leave(controller, host)
+
+            XCTAssertFalse(controller.scrollMode.isActive, "\(name) must leave the mode")
+            XCTAssertFalse(controller.search.isActive, "\(name) must end the search")
+            XCTAssertNil(panel.findBarForTesting, "\(name) must take the bar down")
+            XCTAssertEqual(surface.endSearchCount, 1, "\(name) must stop the engine, exactly once")
+            XCTAssertFalse(
+                host.isInstalled, "\(name) must give the prompt every key back, n and N included")
+        }
+    }
+
+    /// The reader put themselves in scroll mode, then opened a bar over it. Leaving still takes the
+    /// bar down, because the prompt goes live either way and the invariant does not care who
+    /// started the mode. This is where it parts company with Esc, which leaves a reader-owned mode
+    /// alone precisely because the prompt stays dead.
+    func test_leavingAReaderOwnedScrollModeAlsoTakesTheBarDown() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        controller.handle(.toggleScrollMode)
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        controller.search.commit()
+
+        _ = try XCTUnwrap(host.modeHandler)(try keyDown("q"))
+
+        XCTAssertFalse(controller.search.isActive)
+        XCTAssertNil(panel.findBarForTesting)
+        XCTAssertFalse(host.isInstalled)
+    }
+
     func test_theHeaderIsUpBeforeCommitSoCommittingReflowsNothing() throws {
         // The bug this pins: committing used to raise the header, which displaces content and
         // resizes the grid a second time, and libghostty's reflow snaps the viewport toward the
@@ -681,7 +741,28 @@ final class SearchLifecycleTests: WindowTestCase {
 
         controller.search.commit()
         controller.search.report(selected: 2, from: surface)
-        XCTAssertEqual(bar.countTextForTesting, "3 / 17", "the backend's index is zero-based")
+        XCTAssertEqual(bar.countTextForTesting, "15 / 17", "zero-based, and newest-first")
+    }
+
+    /// The count reads in buffer order, oldest first, because that is the order the reader sees on
+    /// screen. libghostty walks matches newest to oldest, so reported straight through the first
+    /// match a search lands on reads `1 / 3` while sitting at the bottom of three, and stepping up
+    /// the screen counts up while the index counts down.
+    func test_theCountReadsInBufferOrderNotTheBackendsWalkOrder() throws {
+        let controller = makeWindow()
+        let surface = try focusedSurface(controller)
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        controller.handle(.toggleSearch)
+        let bar = try XCTUnwrap(panel.findBarForTesting)
+        controller.search.beginNeedleForTesting("error")
+        controller.search.report(total: 3, from: surface)
+        controller.search.commit()
+
+        controller.search.report(selected: 0, from: surface)
+        XCTAssertEqual(bar.countTextForTesting, "3 / 3", "the newest match is the last one down")
+
+        controller.search.report(selected: 2, from: surface)
+        XCTAssertEqual(bar.countTextForTesting, "1 / 3", "the oldest is the one nearest the top")
     }
 
     func test_noMatchesReadsAsWordsRatherThanAZero() throws {
