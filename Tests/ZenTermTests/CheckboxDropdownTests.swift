@@ -135,6 +135,21 @@ final class CheckboxDropdownTests: WindowTestCase {
 
     /// The row count is fixed at init: a longer array must clamp, or arrow keys walk past the last
     /// rendered row and Space toggles an entry the user cannot see.
+    /// A second open must not rebuild the rows. The card is already up, so fresh row views would
+    /// be mounted nowhere: the rows on screen stop repainting and the highlight moves through views
+    /// the user cannot see.
+    func test_openingTwice_leavesTheMountedRowsInPlace() {
+        let dropdown = makeDropdown()
+
+        dropdown.openListForTesting()
+        dropdown.openListForTesting()
+
+        XCTAssertTrue(dropdown.isPopoverOpen)
+        for row in dropdown.rowViewsForTesting {
+            XCTAssertNotNil(row.window, "a row view is detached, so the list on screen is stale")
+        }
+    }
+
     func test_setItems_clampsToTheInitRowCount() {
         let dropdown = makeDropdown(["One", "Two", "Three"])
         dropdown.setItems(

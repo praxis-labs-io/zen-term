@@ -57,8 +57,9 @@ final class ListPopover {
 
     var isOpen: Bool { card != nil }
 
-    /// Test hook: where the card landed, in window coordinates. Size alone cannot tell a card
-    /// placed below the button from one that ran off the bottom of the window.
+    /// Test hook: where the card landed, in the window content view's coordinates, which is what it
+    /// is parented to. Size alone cannot tell a card placed below the button from one that ran off
+    /// the bottom of the window.
     var cardFrame: NSRect { card?.frame ?? .zero }
 
     /// Build the card from `rows`, put it on the window's content view, and place it. A no-op when
@@ -74,11 +75,12 @@ final class ListPopover {
         // The card is frame-driven and placed once, so a resize leaves it stranded where the button
         // used to be. Close instead of chasing the anchor: that is what a menu does, and following a
         // live resize would re-run the flip-above decision on every frame of the drag.
+        // `queue: nil`, not `.main`: nil runs the block synchronously on the posting thread, which
+        // AppKit guarantees is main for a window notification. Handing it a queue schedules an
+        // operation instead, so the stranded card would survive to the next turn of the run loop.
         resizeObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didResizeNotification, object: window, queue: .main
+            forName: NSWindow.didResizeNotification, object: window, queue: nil
         ) { [weak self] _ in
-            // `queue: .main`, so this is already the main thread — assert it rather than hop, so the
-            // list is gone in the same turn as the resize.
             MainActor.assumeIsolated {
                 guard let self, self.isOpen else { return }
                 self.close()

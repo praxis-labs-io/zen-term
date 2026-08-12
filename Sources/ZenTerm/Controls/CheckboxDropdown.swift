@@ -181,9 +181,11 @@ final class CheckboxDropdown: NSView {
     // MARK: list
 
     private func openList() {
+        // Guarded before `buildRows()`, which reassigns `rowViews`: a second open would leave those
+        // pointing at fresh views that are in no card, so the mounted rows stop repainting.
+        guard !popover.isOpen, window?.contentView != nil else { return }
         highlighted = 0
         popover.open(rows: buildRows())
-        guard popover.isOpen else { return }  // no window to hang it on
         // After the open: `refreshRows` gates the highlight on the list being up, so painting
         // before it would leave the first row unhighlighted until an arrow moves.
         refreshRows()

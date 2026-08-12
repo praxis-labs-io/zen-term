@@ -266,9 +266,12 @@ final class Dropdown: NSView {
     // MARK: list
 
     private func openList() {
+        // Guarded before `buildRows()`, which reassigns `rowViews`: a second open would leave those
+        // pointing at fresh views that are in no card, so the mounted rows stop repainting and the
+        // arrow keys move a highlight nobody can see.
+        guard !popover.isOpen, window?.contentView != nil else { return }
         highlighted = selectedIndex
         popover.open(rows: buildRows())
-        guard popover.isOpen else { return }  // no window to hang it on
         refreshListHighlight()
         scrollHighlightIntoView()  // open scrolled to the current selection when it's below the fold
         restyle()
