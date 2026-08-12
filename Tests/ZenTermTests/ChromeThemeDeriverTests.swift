@@ -126,6 +126,20 @@ final class ChromeThemeDeriverTests: XCTestCase {
             Theme.rosePineMoon.foreground.nsColor.withAlphaComponent(expected))
     }
 
+    func test_aThemeSilentOnSelectedTextGetsItsOwnForeground() {
+        XCTAssertNil(Theme.rosePineMoon.selectionForeground)  // the file names no such key
+        XCTAssertEqual(
+            AppTheme(terminal: Theme.rosePineMoon).terminal.selectionForeground,
+            Theme.rosePineMoon.foreground)
+    }
+
+    func test_aThemeThatNamesSelectedTextKeepsWhatItNamed() {
+        var named = Theme.rosePineMoon
+        named.selectionForeground = TerminalColor(hex: "#abcdef")
+        XCTAssertEqual(
+            AppTheme(terminal: named).terminal.selectionForeground, TerminalColor(hex: "#abcdef"))
+    }
+
     /// Compares two `NSColor`s by their RGBA components, converting both through `.sRGB`
     /// first since the source colors aren't guaranteed to already be in that color space.
     private func assertEqualRGBA(

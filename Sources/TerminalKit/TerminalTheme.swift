@@ -9,6 +9,12 @@ public struct TerminalTheme: Sendable, Equatable {
     public var foreground: TerminalColor
     public var cursor: TerminalColor
     public var selectionBackground: TerminalColor
+    /// What a backend paints selected text in. Without it every cell keeps its own color, and a
+    /// dark one on the selection fill is unreadable.
+    ///
+    /// Optional on the same terms as the search colors below: nil means "not resolved yet", not
+    /// "the backend keeps its defaults".
+    public var selectionForeground: TerminalColor?
     /// The 16 ANSI colors in order: 0–7 normal, 8–15 bright.
     public var ansi: [TerminalColor]
 
@@ -33,6 +39,7 @@ public struct TerminalTheme: Sendable, Equatable {
         cursor: TerminalColor,
         selectionBackground: TerminalColor,
         ansi: [TerminalColor],
+        selectionForeground: TerminalColor? = nil,
         searchForeground: TerminalColor? = nil,
         searchBackground: TerminalColor? = nil,
         searchSelectedForeground: TerminalColor? = nil,
@@ -45,6 +52,7 @@ public struct TerminalTheme: Sendable, Equatable {
         self.cursor = cursor
         self.selectionBackground = selectionBackground
         self.ansi = ansi
+        self.selectionForeground = selectionForeground
         self.searchForeground = searchForeground
         self.searchBackground = searchBackground
         self.searchSelectedForeground = searchSelectedForeground

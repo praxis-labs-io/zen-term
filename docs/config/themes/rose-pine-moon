@@ -19,10 +19,17 @@ foreground = #e0def4
 cursor-color = #6b6790
 selection-background = #403d52
 
-# Scrollback search highlights (⌘F). These are the only optional keys in this file.
-# Leave them out and they're derived from the accent, which is what the values below
-# are. Set any one to take it over. The first pair paints every match, the second
-# the one you're currently on.
+# What gets drawn over your text. These are the only optional keys in this file.
+# Leave one out and it's derived, and the value shown is what you get. Set it to
+# take it over.
+#
+# Selected text. Without it every character keeps its own color, and the dark ones
+# go unreadable on the fill.
+#
+#   selection-foreground = #e0def4
+#
+# Scrollback search highlights (⌘F), derived from the accent. The first pair paints
+# every match, the second the one you're currently on.
 #
 #   search-foreground = #e0def4
 #   search-background = #554968

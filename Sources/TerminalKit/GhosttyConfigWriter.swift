@@ -68,6 +68,9 @@ enum GhosttyConfigWriter {
             lines.append("selection-background = \(theme.selectionBackground.hex)")
             // The optionality is for a caller below the seam holding an unresolved theme:
             // emitting an empty value would be worse than saying nothing.
+            if let color = theme.selectionForeground {
+                lines.append("selection-foreground = \(color.hex)")
+            }
             if let color = theme.searchForeground { lines.append("search-foreground = \(color.hex)") }
             if let color = theme.searchBackground { lines.append("search-background = \(color.hex)") }
             if let color = theme.searchSelectedForeground {
