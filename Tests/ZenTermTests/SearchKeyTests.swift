@@ -81,10 +81,11 @@ final class SearchMatchCellTests: XCTestCase {
 
     private func cell(
         _ needle: String, from cursor: ScrollCell, _ step: TerminalSearchStep, rows: [String]? = nil,
-        scrolled: Bool = false
+        viewportMoved: Bool = false, selected: Int? = nil, total: Int? = nil
     ) -> ScrollCell? {
         SearchController.matchCell(
-            needle: needle, rows: rows ?? self.rows, from: cursor, step: step, scrolled: scrolled)
+            needle: needle, rows: rows ?? self.rows, from: cursor, step: step,
+            viewportMoved: viewportMoved, selected: selected, total: total)
     }
 
     func test_nextTakesTheNearestMatchAboveTheCursor() {
@@ -143,9 +144,75 @@ final class SearchMatchCellTests: XCTestCase {
         // from it walks to whatever sits near the stale row, and the error compounds over a run.
         let scrolledRows = ["error at top", "", "error lower down"]
         XCTAssertEqual(
-            cell("error", from: ScrollCell(row: 2, column: 0), .next, rows: scrolledRows, scrolled: true),
+            cell(
+                "error", from: ScrollCell(row: 2, column: 0), .next, rows: scrolledRows,
+                viewportMoved: true),
             ScrollCell(row: 0, column: 0),
             "a scroll parks the match's own row at the top")
+    }
+
+    func test_aScrollClampedAtTheLiveEndTakesTheLastMatchNotTheFirst() {
+        // Found at the machine. Stepping toward newer matches near the bottom of the buffer, the
+        // scroll cannot park the match at the top because the viewport is already against the live
+        // end. Nothing sits on row 0, and falling back to the first occurrence put the cursor on
+        // the match *above* the one the engine selected: the highlight moved on and the cursor
+        // stayed a step behind, catching up only on the next press.
+        // Row 0 deliberately holds no match, which is what a clamped scroll leaves behind.
+        let clamped = ["line 100", "error above", "error selected", "", "a prompt"]
+        XCTAssertEqual(
+            cell(
+                "error", from: ScrollCell(row: 0, column: 0), .previous, rows: clamped,
+                viewportMoved: true, selected: 0, total: 9),
+            ScrollCell(row: 2, column: 0),
+            "the newest match is the bottom-most on a screen clamped at the live end")
+    }
+
+    func test_aClampedScreenHoldingSeveralCandidatesIsCountedNotGuessed() {
+        // Both reviewers caught this: taking the bottom-most occurrence is right only when the
+        // clamped screen holds one candidate. It does not have to be a guess. A clamped viewport
+        // reaches the live end, so every match newer than the selected one is on screen below it,
+        // and the backend's index says how many that is.
+        let clamped = ["line 100", "error selected", "error newer", "error newest", "a prompt"]
+        XCTAssertEqual(
+            cell(
+                "error", from: ScrollCell(row: 0, column: 0), .previous, rows: clamped,
+                viewportMoved: true, selected: 2, total: 9),
+            ScrollCell(row: 1, column: 0),
+            "two newer matches below it puts the selected one two up from the bottom")
+    }
+
+    func test_aScrollClampedAtTheTopCountsDownFromTheOldest() {
+        // The mirror case: stepping toward older matches runs out of buffer at the top instead, so
+        // the older matches are the ones on screen and the count runs the other way.
+        let clamped = ["line 1", "error oldest", "error selected", "quiet", "error newer"]
+        XCTAssertEqual(
+            cell(
+                "error", from: ScrollCell(row: 4, column: 0), .next, rows: clamped,
+                viewportMoved: true, selected: 1, total: 3),
+            ScrollCell(row: 2, column: 0),
+            "one older match above it puts the selected one one down from the first")
+    }
+
+    func test_aCountThatDoesNotLandOnScreenDoesNotGuess() {
+        // A soft-wrapped match the scan cannot see breaks the premise that every match between the
+        // selected one and the buffer end is on screen. Falling back beats inventing a cell.
+        let clamped = ["line 100", "error one", "error two", "a prompt"]
+        XCTAssertEqual(
+            cell(
+                "error", from: ScrollCell(row: 0, column: 0), .previous, rows: clamped,
+                viewportMoved: true, selected: 7, total: 9),
+            ScrollCell(row: 2, column: 0),
+            "the direction's end of the screen, as before")
+    }
+
+    func test_aStepThatDidNotScrollStillFollowsItsDirectionAtTheEnds() {
+        // The mirror of the clamped bug, reached without a scroll: nothing below the cursor going
+        // down used to throw it to the top of the screen.
+        let ends = ["error above", "quiet", "error below"]
+        XCTAssertEqual(
+            cell("error", from: ScrollCell(row: 2, column: 5), .previous, rows: ends),
+            ScrollCell(row: 2, column: 0),
+            "nothing further down, so not the top of the screen")
     }
 
     func test_noOccurrenceLeavesTheCursorAlone() {

@@ -207,7 +207,7 @@ final class SearchController {
         pendingStep = step
         didMoveViewport = true
         didRequestSelection = true
-        offsetAtStep = lastPosition?.offset
+        rowsAtStep = surface.map(Self.viewportRows(of:))
         surface?.stepSearch(step)
     }
 
@@ -277,6 +277,7 @@ final class SearchController {
         total = nil
         selected = nil
         pendingStep = nil
+        rowsAtStep = nil
         hasPreviewed = false
         didRequestSelection = false
         unsent = nil
@@ -441,50 +442,75 @@ final class SearchController {
     /// the match it selected, so a disagreement is two visible markers and one `j` fixes it.
     private func land(after step: TerminalSearchStep) {
         guard scrollMode.isActive, let surface else { return }
-        let rows = (0..<(surface.cellMetrics?.rows ?? 0)).map { surface.text(viewportRow: $0) ?? "" }
-        // Whether the step had to scroll to reach the match. The cursor names a row in the viewport
-        // it was standing in, so once that viewport moves the coordinate is meaningless and a
-        // direction scan from it walks to whichever match happens to sit near the stale row. The
-        // error compounds over a run of steps, and a row holding several matches gives it more
-        // wrong answers to choose from.
-        let scrolled = lastPosition?.offset != offsetAtStep
+        let rows = Self.viewportRows(of: surface)
         guard
             let cell = Self.matchCell(
-                needle: needle, rows: rows, from: scrollMode.cursor, step: step, scrolled: scrolled)
+                needle: needle, rows: rows, from: scrollMode.cursor, step: step,
+                viewportMoved: rowsAtStep.map { $0 != rows } ?? false, selected: selected,
+                total: total)
         else { return }
         scrollMode.land(on: cell)
     }
 
-    /// Where the viewport sat when the outstanding step was sent, so the answer can tell whether it
-    /// moved. Nil before any report has arrived, which reads as "no movement to detect".
-    private var offsetAtStep: Int?
+    private static func viewportRows(of surface: TerminalSurface) -> [String] {
+        (0..<(surface.cellMetrics?.rows ?? 0)).map { surface.text(viewportRow: $0) ?? "" }
+    }
+
+    /// The whole viewport as the outstanding step went out, so its answer can be compared against
+    /// the screen it produced. Nil before the first step.
+    ///
+    /// **Whether the step moved the viewport cannot be read off the scroll offset.** libghostty
+    /// emits a scrollbar report from the renderer thread and only while drawing a frame
+    /// (`renderer/generic.zig`: "The scrollbar is only emitted during draws"), while the selected
+    /// index is pushed straight from the search thread the moment the match is picked. So the
+    /// offset in hand when the selection lands is a frame or more behind, and comparing it against
+    /// the offset at step time read "did not move" for a step that plainly did, whenever no frame
+    /// happened to land in between.
+    ///
+    /// The screen itself answers synchronously instead: the search thread scrolls under the
+    /// terminal mutex before it reports the selection (`terminal/search/Thread.zig`), so the rows
+    /// read back at landing time are already the ones on screen.
+    ///
+    /// **The whole viewport rather than the cursor's line**, because a screen of repeated prompts
+    /// or repeated log output can scroll onto text identical to the line the cursor left, and one
+    /// line compared against one line calls that standing still. A scroll has to change some row
+    /// unless every row on screen reads the same. It also asks nothing of the cursor, which is what
+    /// makes it right on the preview step, where scroll mode is not up yet and `scrollMode.cursor`
+    /// is a leftover from whenever it last was.
+    private var rowsAtStep: [String]?
 
     /// Where the selected match is, read off the viewport.
     ///
-    /// Direction is the whole of it: libghostty walks matches newest to oldest, so `next` moves
-    /// **up** the screen and the nearest occurrence that way is the one it just selected. Nothing
-    /// that way means it scrolled to reach the match, which parks that row at the top, so the
-    /// topmost occurrence is the answer.
+    /// Direction carries the case where the viewport stood still: libghostty walks matches newest
+    /// to oldest, so `next` moves **up** the screen and the nearest occurrence that way is the one
+    /// it just selected.
     ///
     /// Case folding is ASCII-only, matching the engine. A match that soft-wraps across two rows is
     /// not found and the cursor stays put.
     static func matchCell(
         needle: String, rows: [String], from cursor: ScrollCell, step: TerminalSearchStep,
-        scrolled: Bool
+        viewportMoved: Bool, selected: Int?, total: Int?
     ) -> ScrollCell? {
         guard !needle.isEmpty else { return nil }
         let occurrences = rows.enumerated().flatMap { row, text in
             occurrenceColumns(of: needle, in: text).map { ScrollCell(row: row, column: $0) }
         }
         guard !occurrences.isEmpty else { return nil }
-        // A step that scrolled parks the match's own row at the top of the viewport, which is the
-        // one case the backend tells us exactly. The cursor is a coordinate in the viewport that
-        // just went away, so a direction scan from it is worse than no scan at all.
-        if scrolled {
+        // A step that moved the viewport parks the match's own row at the top of it: the search
+        // thread scrolls to the match's start pin, and only when the match is not already on
+        // screen. The cursor is a coordinate in the viewport that just went away, so a direction
+        // scan from it is worse than no scan at all.
+        if viewportMoved {
             let onTopRow = occurrences.filter { $0.row == 0 }
             // `next` walks newest to oldest, so within the parked row the match it stopped on is
             // the last one when stepping backwards through the buffer and the first going forwards.
-            return step == .next ? onTopRow.last ?? occurrences.first : onTopRow.first ?? occurrences.first
+            if !onTopRow.isEmpty { return step == .next ? onTopRow.last : onTopRow.first }
+            if let clamped = clampedMatch(
+                in: occurrences, step: step, selected: selected, total: total)
+            {
+                return clamped
+            }
+            return step == .next ? occurrences.first : occurrences.last
         }
         // `occurrences` is already in buffer order, rows down and columns across, and the engine
         // steps in exactly that order. So the answer is the immediate neighbour: the last match
@@ -497,7 +523,38 @@ final class SearchController {
         let after = occurrences.filter {
             $0.row > cursor.row || ($0.row == cursor.row && $0.column > cursor.column)
         }
-        return (step == .next ? before.last : after.first) ?? occurrences.first
+        // Nothing that way is the same end-of-buffer clamp as above, reached without a scroll. The
+        // fallback follows the direction for the same reason: throwing the cursor to the top of the
+        // screen on a step that went down is the mirror of the bug fixed above it.
+        return (step == .next ? before.last ?? occurrences.first : after.first ?? occurrences.last)
+    }
+
+    /// The selected match when the scroll ran out of buffer and could not park it at the top.
+    ///
+    /// Counting, not guessing. A clamped viewport reaches a buffer end, so every match between the
+    /// selected one and that end is on screen, and the backend's index says how many those are.
+    /// Stepping toward newer matches clamps at the live end, where the `selected` matches newer
+    /// than this one all sit below it: it is `selected` occurrences up from the bottom. Stepping
+    /// toward older ones clamps at the top, where the `total - 1 - selected` older matches all sit
+    /// above it, putting it that far down from the first.
+    ///
+    /// Direction alone cannot do this, which is what both reviewers said and where the first fix
+    /// stopped: it took the bottom-most occurrence, right only when the clamped screen held one
+    /// candidate. Nil when the count does not land inside the screen, which means something in the
+    /// premise is off (a soft-wrapped match the scan missed, most likely) and a guess is not owed.
+    private static func clampedMatch(
+        in occurrences: [ScrollCell], step: TerminalSearchStep, selected: Int?, total: Int?
+    ) -> ScrollCell? {
+        guard let selected else { return nil }
+        let index: Int
+        switch step {
+        case .previous: index = occurrences.count - 1 - selected
+        case .next:
+            guard let total else { return nil }
+            index = total - 1 - selected
+        }
+        guard occurrences.indices.contains(index) else { return nil }
+        return occurrences[index]
     }
 
     /// Every column `needle` starts at in `text`, folding case the way the engine does.

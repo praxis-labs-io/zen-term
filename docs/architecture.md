@@ -1225,10 +1225,25 @@ out. Once per needle, because `SEARCH_TOTAL` fires repeatedly as the engine work
 through the buffer. `commit` then skips its own step when a preview already selected
 something, or ⏎ would walk straight past the match being looked at.
 
+**The bar and a live prompt never coexist.** The bar being up means the keyboard belongs
+to the search: to the field while the needle is typed, to scroll mode once ⏎ hands it
+over. There is no third state, and every way out of scroll mode holds that, so `q`, `i`
+and ⌘⇧S all take the bar down with the mode. `WindowController.wireModes` is where that
+rule lives, on `scrollMode.onActiveChanged`, because `ScrollModeController` holds no
+reference to the search and the coupling stays one-directional. It is re-entrant by
+construction: `search.end()` tears down through `scrollMode.end()`, which lands back on
+the same callback, and both controllers guard on their own `isActive`.
+
+Left open, the hole was worse than a stray bar on screen. `search.isActive` kept the
+app-global handler installed, `SearchController.handle` kept claiming `n` and `N`, and
+`ScrollModeController.handle` declined everything once inactive, so the prompt went live
+while silently eating the two keys that step a search.
+
 **Search leaves behind only what it started.** Committing brings scroll mode up on the
 reader's behalf, so Esc takes it back down: one keystroke to find something, one to be
 done with it. A reader already in scroll mode when the bar opened put themselves there
-and keeps it, which is what `didStartScrollMode` tracks.
+and keeps it, which is what `didStartScrollMode` tracks. That is where Esc parts company
+with `q`: Esc can leave a reader-owned mode up because the prompt stays dead either way.
 
 The viewport is put back the same way. Stepping is the only thing here that moves it, so
 `didMoveViewport` gates the restore, which scrolls back by the delta between where the
@@ -1262,11 +1277,48 @@ renderer thread's mailbox and never crosses the C API, and `Screen.selection` is
 so reading the selection back gets the mouse drag. There is no API for the position. So
 `matchCell` reads the viewport back and looks for the needle, using direction alone:
 libghostty walks matches newest to oldest (`search/screen.zig`, `Select.next`), so `next`
-moves **up** the screen and the nearest occurrence that way is the one it selected. Nothing
-that way means it had to scroll to reach the match, and a scroll parks the match's own row
-at the viewport top (`search/Thread.zig` scrolls to `flattened.startPin()` only when no
-viewport chunk already overlaps), so the topmost occurrence is the answer. Case folding is
+moves **up** the screen and the nearest occurrence that way is the one it selected. A step
+that moved the viewport is the other case, and a scroll parks the match's own row at the
+viewport top (`search/Thread.zig` scrolls to `flattened.startPin()` only when no viewport
+chunk already overlaps), so the topmost occurrence is the answer. Case folding is
 ASCII-only, matching the engine's `std.ascii.indexOfIgnoreCase`.
+
+**Whether the viewport moved cannot be read off the scroll offset.** libghostty emits the
+scrollbar report from the renderer thread and only while drawing a frame
+(`renderer/generic.zig`: "The scrollbar is only emitted during draws"), while the selected
+index is pushed straight from the search thread the moment the match is picked. So the
+offset in hand when the selection lands is a frame or more behind, and comparing it against
+the offset at step time answered "did not move" for a step that plainly did, whenever no
+frame happened to land in between.
+
+The screen itself answers synchronously instead: the search thread scrolls under the
+terminal mutex before it reports (`search/Thread.zig`), so the rows read back are already
+the ones on screen, and `rowsAtStep` holds the ones the step went out against. **The whole
+viewport rather than the cursor's line**, because a screen of repeated prompts or repeated
+log output can scroll onto text identical to the line the cursor left, and one line against
+one line calls that standing still. It also asks nothing of the cursor, which is what makes
+it right on the preview step, where scroll mode is not up yet and `scrollMode.cursor` is a
+leftover from whenever it last was.
+
+**A scroll parks the match at the top only when it can.** Against either end of the buffer
+it cannot, and nothing lands on row 0. Taking the first occurrence on screen there is what
+left the cursor a step behind the highlight on every downward step, catching up only on the
+next press. Found at the machine, since the pure scan looks right until the viewport is
+against an end.
+
+The end is counted rather than guessed. A clamped viewport reaches a buffer end, so every
+match between the selected one and that end is on screen, and the backend's index says how
+many those are: stepping toward newer matches clamps at the live end, where the selected
+match sits `selected` occurrences up from the bottom; stepping toward older ones clamps at
+the top, putting it `total - 1 - selected` down from the first. Direction alone cannot do
+this, and a first pass that took the bottom-most occurrence was right only while the
+clamped screen held one candidate. When the count does not land inside the screen the
+premise is off, most likely a soft-wrapped match the scan cannot see, and the fallback
+takes the direction's end rather than inventing a cell.
+
+**Search does not wrap, and that is libghostty's call**, not something the chrome hides:
+`search/screen.zig` says so where it stops ("We don't wrap or reset the match currently"),
+so stepping past the newest or oldest match does nothing. Nothing here should infer a wrap.
 
 **A needle is one line, and that is the chrome's limit rather than the engine's.**
 libghostty writes a `\n` between rows that are not soft-wrapped
@@ -1283,6 +1335,13 @@ it selected at the same time, so a disagreement is two markers on one screen and
 fixes it. A soft-wrapped match is not found by a per-row scan and the cursor stays put.
 Do not try to close this by tracking viewport offsets or forcing a scroll before every
 navigate; both were considered and neither makes the answer knowable.
+
+**The count reads in buffer order, and the backend's index does not.** libghostty walks
+matches newest to oldest, so its zero-based `selected` counts down the screen while the
+reader counts up it: reported straight through, the match a search first lands on read
+`1 / 3` while sitting at the bottom of three. `FindBarView.showCount` shows `total -
+selected`, so 1 is the match nearest the top of the scrollback, which is the one a reader
+picks out by eye.
 
 The four `search-*` colors are emitted from `Theme.current` by `AppTheme`'s init, so a
 terminal theme cannot reach a surface without them. Candidates sit back toward the

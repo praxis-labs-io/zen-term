@@ -484,12 +484,21 @@
 #
 # Stepping matches is `n` and `N` while the search holds the keyboard, not a chord,
 # so `find_next` and `find_previous` ship with no shortcut. Give them one here if you
-# want to step from anywhere: `keybind = find_next=cmd+opt+g` and its shifted pair.
+# would rather step on a chord: `keybind = find_next=cmd+opt+g` and its shifted pair.
+# With no bar up there is no search to step and the chord does nothing.
 #
 # Enter hands the keys back to the pane and puts you in scroll mode on the match,
 # where `n` and `N` step forward and back (Enter and shift+Enter do the same), and
 # `v` / `V` / `y` select and copy what you found. Esc closes the bar and leaves
 # scroll mode with it, unless you were already in scroll mode when you opened it.
+#
+# The count reads in the order you see on screen: match 1 is the one nearest the top
+# of your scrollback. Stepping does not wrap, so `n` on the oldest match and `N` on
+# the newest both stay where they are.
+#
+# The find bar and a live prompt never sit on screen together. So leaving scroll mode
+# any other way closes the bar too: `q`, `i`, and ⌘⇧S all end the search and give the
+# prompt back every key, `n` and `N` included.
 #
 # If the search scrolled you back through the buffer, closing it returns you to
 # where you were when you opened it, and so does typing past the last match. That is

@@ -75,7 +75,13 @@ final class FindBarView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// How the bar reads while typing (a total, or nothing yet) and after a commit (which match of
-    /// how many). `selected` is zero-based, as the backend reports it, and reads one-based.
+    /// how many).
+    ///
+    /// `selected` is zero-based **and newest-first**, which is the order libghostty walks matches
+    /// in. The count is shown in buffer order instead, oldest first, because that is the order the
+    /// reader sees on screen: the match nearest the top of the scrollback is 1. Reported straight
+    /// through, the first match a search lands on reads `1 / 3` while sitting at the *bottom* of
+    /// three, and stepping up the screen counts up while the index counts down.
     func showCount(total: Int?, selected: Int?) {
         switch (total, selected) {
         case (nil, _):
@@ -87,7 +93,11 @@ final class FindBarView: NSView {
         case (let total?, nil):
             count.stringValue = "\(total) matches"
         case (let total?, let selected?):
-            count.stringValue = "\(selected + 1) / \(total)"
+            // Clamped because the two arrive on separate reports. A selection still in flight for
+            // the previous needle can land after a shorter needle's total, and subtracting a stale
+            // index off a smaller total reads as `-6 / 3` where the old one-based form only read
+            // too large.
+            count.stringValue = "\(max(1, total - selected)) / \(total)"
         }
     }
 
@@ -96,8 +106,8 @@ final class FindBarView: NSView {
         field.applyThemedCaret()  // the editor exists only once the field has focus
     }
 
-    /// The count as rendered. Its wording carries meaning a state check cannot: "No matches" and
-    /// an index that reads one-based off a zero-based report are both only visible here.
+    /// The count as rendered. Its wording carries meaning a state check cannot: "No matches", and
+    /// an index reversed off a zero-based newest-first report, are both only visible here.
     var countTextForTesting: String { count.stringValue }
 
     var isFieldFirstResponder: Bool {
