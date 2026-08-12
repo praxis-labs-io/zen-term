@@ -18,6 +18,7 @@ final class GhosttyThemeParserTests: XCTestCase {
             foreground = #ffffff
             cursor-color = #ff0000
             selection-background = #00ff00
+            selection-foreground = #0000ff
             palette = 0=#111111
             palette = 15=#eeeeee
             """)
@@ -26,6 +27,7 @@ final class GhosttyThemeParserTests: XCTestCase {
         XCTAssertEqual(theme.foreground, TerminalColor(hex: "#ffffff"))
         XCTAssertEqual(theme.cursor, TerminalColor(hex: "#ff0000"))
         XCTAssertEqual(theme.selectionBackground, TerminalColor(hex: "#00ff00"))
+        XCTAssertEqual(theme.selectionForeground, TerminalColor(hex: "#0000ff"))
         XCTAssertEqual(theme.ansi[0], TerminalColor(hex: "#111111"))
         XCTAssertEqual(theme.ansi[15], TerminalColor(hex: "#eeeeee"))
     }
@@ -49,6 +51,13 @@ final class GhosttyThemeParserTests: XCTestCase {
         XCTAssertEqual(theme.background, fallback.background)  // bad value → fallback
         XCTAssertEqual(theme.ansi[2], TerminalColor(hex: "#abcdef"))  // valid palette line applied
         XCTAssertEqual(theme.ansi[0], fallback.ansi[0])  // out-of-range 99 ignored
+    }
+
+    func test_theConfigASurfaceIsHandedNamesAColorForSelectedText() {
+        // Silent when it is missing: libghostty leaves every cell its own color, which looks
+        // correct until the text you select happens to be dark.
+        let text = GhosttyConfigWriter.configText(for: AppTheme(terminal: fallback).terminal)
+        XCTAssertTrue(text.contains("selection-foreground = #e0def4"), "got: \(text)")
     }
 
     func test_roundTripsGhosttyConfigWriterOutput() {

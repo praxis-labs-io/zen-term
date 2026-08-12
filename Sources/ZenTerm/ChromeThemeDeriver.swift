@@ -32,16 +32,22 @@ enum ChromeThemeDeriver {
             synPunctuation: slot(1))
     }
 
-    /// Paint the search highlight colors onto a terminal theme from the chrome roles derived off it.
+    /// Fill in whatever a theme leaves unsaid about the two things drawn *over* its text: a
+    /// selection and a search match.
     ///
     /// Search matches are chrome telling you where something is, so they read in the accent the
     /// focus halo and every selected palette row already use. The pair splits by weight rather than
     /// by hue: candidates sit back toward the terminal's own background so a screenful of them is
     /// not a wall, and the selected one takes the accent at full strength and inverts its text.
     ///
-    /// Skipped for a theme that names its own, so a hand-written `search-background` wins.
-    static func withSearchColors(_ terminal: TerminalTheme, chrome: ChromeTheme) -> TerminalTheme {
+    /// A selection instead takes the theme's plain foreground, because it marks text the reader
+    /// already chose rather than pointing at something. Naming it at all is the point: left unset,
+    /// every cell keeps its own color and the dark ones disappear into the fill.
+    ///
+    /// Skipped for a theme that names its own, so a hand-written `selection-foreground` wins.
+    static func withHighlightColors(_ terminal: TerminalTheme, chrome: ChromeTheme) -> TerminalTheme {
         var theme = terminal
+        theme.selectionForeground = terminal.selectionForeground ?? terminal.foreground
         theme.searchForeground = terminal.searchForeground ?? terminal.foreground
         theme.searchBackground =
             terminal.searchBackground ?? blend(chrome.accent, terminal.background, 0.35)
