@@ -47,17 +47,24 @@ final class Dropdown: NSView {
     private let swatch = NSView()
     private var titleAfterSwatch = NSLayoutConstraint()
     private var titleAtLeading = NSLayoutConstraint()
-    private var listCard: NSView?
+    /// The floating list. Built lazily because it holds an `unowned` reference back to this view,
+    /// and because the self-close hook it carries reaches back through `self` too.
+    private lazy var popover: ListPopover = {
+        let popover = ListPopover(anchor: self)
+        // A window resize closes the list on its own; drop the lit border and the stale rows with it.
+        popover.onSelfClose = { [weak self] in
+            self?.rowViews = []
+            self?.restyle()
+        }
+        return popover
+    }()
     private var rowViews: [DropdownRowView] = []
     private var highlighted = 0
     private var isFocusedStop = false
 
-    private static var restFill: NSColor { Theme.current.chrome.ink(alpha: 0.06) }
-    private static var focusFill: NSColor { PaletteOverlay.selectionBackground }
     static let swatchSize: CGFloat = 10
     private static let rowHeight: CGFloat = 28
     private static let headerHeight: CGFloat = 20
-    private static let maxListHeight: CGFloat = 260
 
     /// Test hook: the button's current title.
     var buttonTitleForTesting: String { titleLabel.stringValue }
@@ -68,7 +75,10 @@ final class Dropdown: NSView {
     /// Test hooks: open the floating list and inspect it (there is no other public list API). The
     /// list open-path has no GUI test seam otherwise, and shipped once rendering at zero size.
     func openListForTesting() { openList() }
-    var listCardSizeForTesting: NSSize { listCard?.frame.size ?? .zero }
+    var listCardSizeForTesting: NSSize { popover.cardFrame.size }
+    /// Test hook: where the card landed in window coordinates. Size alone can't tell a card placed
+    /// below the button from one that ran off the bottom of the window.
+    var listCardFrameForTesting: NSRect { popover.cardFrame }
     /// Test hook: drive the highlight the way an arrow key would.
     func moveHighlightForTesting(_ delta: Int) { moveHighlight(delta) }
     /// Test hook: is the highlighted row within its scroll view's visible area right now?
@@ -88,7 +98,7 @@ final class Dropdown: NSView {
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
         layer?.cornerRadius = 6
-        layer?.backgroundColor = Self.restFill.cgColor
+        PopoverButtonStyle.applyRestFill(to: self)
         layer?.borderWidth = 1
         layer?.borderColor = Theme.current.chrome.ink(alpha: 0.10).cgColor
 
@@ -208,17 +218,13 @@ final class Dropdown: NSView {
     }
 
     private func restyle() {
-        let chrome = Theme.current.chrome
-        let open = listCard != nil
-        layer?.backgroundColor = (isFocusedStop || open ? Self.focusFill : Self.restFill).cgColor
-        layer?.borderColor = (isFocusedStop || open ? chrome.accent.nsColor : chrome.ink(alpha: 0.10)).cgColor
-        layer?.borderWidth = isFocusedStop || open ? 1.5 : 1
+        PopoverButtonStyle.apply(to: self, isFocused: isFocusedStop, isOpen: popover.isOpen)
     }
 
     // MARK: keyboard
 
     override func keyDown(with event: NSEvent) {
-        if listCard != nil {
+        if popover.isOpen {
             switch KeyboardFocus.key(for: event) {
             case .up: moveHighlight(-1)
             case .down: moveHighlight(1)
@@ -242,11 +248,11 @@ final class Dropdown: NSView {
     }
 
     /// Test hook: whether the floating list is open right now.
-    var isPopoverOpen: Bool { listCard != nil }
+    var isPopoverOpen: Bool { popover.isOpen }
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
-        listCard == nil ? openList() : closeList()
+        popover.isOpen ? closeList() : openList()
     }
 
     /// The whole control is one click target. Without this the title label and chevron subviews
@@ -260,19 +266,19 @@ final class Dropdown: NSView {
     // MARK: list
 
     private func openList() {
-        guard listCard == nil, window?.contentView != nil else { return }
+        // Guarded before `buildRows()`, which reassigns `rowViews`: a second open would leave those
+        // pointing at fresh views that are in no card, so the mounted rows stop repainting and the
+        // arrow keys move a highlight nobody can see.
+        guard !popover.isOpen, window?.contentView != nil else { return }
         highlighted = selectedIndex
-        let card = buildListCard()
-        window?.contentView?.addSubview(card)
-        listCard = card
-        positionList()
+        popover.open(rows: buildRows())
+        refreshListHighlight()
         scrollHighlightIntoView()  // open scrolled to the current selection when it's below the fold
         restyle()
     }
 
     private func closeList() {
-        listCard?.removeFromSuperview()
-        listCard = nil
+        popover.close()
         rowViews = []
         restyle()
     }
@@ -301,108 +307,29 @@ final class Dropdown: NSView {
         window?.makeFirstResponder(self)
     }
 
-    // Build + position + highlight helpers below mirror KeybindHintBubble's window-child pattern:
-    // a FloatShadow-chromed vertical stack of row views, each a themed control cell. Rows show an
-    // optional faint group header (chrome.ink(alpha:0.4), 10pt semibold), the title, a trailing
-    // note (chrome.ink(alpha:0.4)), and a check (SF "checkmark", chrome.accent) when isSelected.
-    // The highlighted row fills chrome.ink(alpha:0.10); clicking a row calls commit for its index.
-    // positionList(): frame below the button in window coords (convert self.bounds to contentView),
-    // width == self bounds width (min 180), capped height with an inner NSScrollView if it overflows.
-    private func buildListCard() -> NSView {
+    /// The list's contents, in order: a faint group header wherever the group changes, then the
+    /// rows. `ListPopover` sizes each line and assembles the card around them; a row draws an
+    /// optional leading swatch, the title, a trailing note, and a check when it is the selection.
+    private func buildRows() -> [ListPopover.Row] {
         let chrome = Theme.current.chrome
-        let width = max(bounds.width, 180)
-
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 2
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
         rowViews = []
+        var lines: [ListPopover.Row] = []
         var previousGroup: String?
-        var contentHeight: CGFloat = 0
         for (index, item) in items.enumerated() {
             if let group = item.group, group != previousGroup {
-                if contentHeight > 0 { contentHeight += stack.spacing }
-                stack.addArrangedSubview(Self.groupHeaderView(group, chrome: chrome))
-                contentHeight += Self.headerHeight
+                lines.append(
+                    ListPopover.Row(
+                        view: Self.groupHeaderView(group, chrome: chrome), height: Self.headerHeight))
             }
             previousGroup = item.group
-            if contentHeight > 0 { contentHeight += stack.spacing }
             let row = DropdownRowView(index: index, item: item, chrome: chrome) { [weak self] i in
                 self?.highlighted = i
                 self?.commitHighlight()
             }
-            // Add to the stack BEFORE relating row.width to stack.width — the cross-view constraint
-            // needs a common ancestor, and activating it first throws (aborting the whole list build).
-            stack.addArrangedSubview(row)
-            row.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
-            row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
             rowViews.append(row)
-            contentHeight += Self.rowHeight
+            lines.append(ListPopover.Row(view: row, height: Self.rowHeight))
         }
-
-        let doc = FlippedView()
-        doc.translatesAutoresizingMaskIntoConstraints = false
-        doc.addSubview(stack)
-
-        let scroll = NSScrollView()
-        scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
-        scroll.verticalScroller = SlimScroller()
-        scroll.scrollerStyle = .overlay
-        scroll.autohidesScrollers = true
-        scroll.documentView = doc
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-
-        let card = ShadowCardView()
-        card.wantsLayer = true
-        card.layer?.cornerRadius = 8
-        card.layer?.backgroundColor = chrome.background.nsColor.cgColor
-        card.layer?.borderWidth = 1
-        card.layer?.borderColor = FloatShadow.edge.cgColor
-        // Frame-driven: positioned AND sized by frame in positionList (the KeybindHintBubble
-        // pattern). An unconstrained origin under `false` can be dropped on a layout pass, so the
-        // card owns its own frame rather than relying on width/height constraints.
-        card.translatesAutoresizingMaskIntoConstraints = true
-        FloatShadow.applyShadow(to: card)
-        card.addSubview(scroll)
-
-        let insets: CGFloat = 6
-        let cardHeight = min(contentHeight + insets * 2, Self.maxListHeight)
-        NSLayoutConstraint.activate([
-            scroll.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: card.topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-            doc.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
-            doc.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
-            doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-            stack.topAnchor.constraint(equalTo: doc.topAnchor, constant: insets),
-            stack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 8),
-            stack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -8),
-            stack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -insets),
-        ])
-        card.frame = NSRect(x: 0, y: 0, width: width, height: cardHeight)
-        refreshListHighlight()
-        return card
-    }
-
-    private func positionList() {
-        guard let card = listCard, let contentView = window?.contentView else { return }
-        card.layoutSubtreeIfNeeded()
-        let size = card.frame.size
-        let origin = convert(bounds, to: contentView)
-        let x = max(8, min(origin.minX, contentView.bounds.width - size.width - 8))
-        // contentView is not flipped: below the button = a smaller y. Prefer below; if that runs
-        // off the bottom, flip above, then clamp so the card never draws outside the window.
-        let below = origin.minY - size.height - 4
-        let above = origin.maxY + 4
-        let maxY = max(8, contentView.bounds.height - size.height - 8)
-        var y = below
-        if y < 8 { y = above }
-        y = max(8, min(y, maxY))
-        card.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
+        return lines
     }
 
     private func refreshListHighlight() {
@@ -421,7 +348,6 @@ final class Dropdown: NSView {
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 8),
             label.centerYAnchor.constraint(equalTo: host.centerYAnchor),
-            host.heightAnchor.constraint(equalToConstant: Self.headerHeight),
         ])
         return host
     }

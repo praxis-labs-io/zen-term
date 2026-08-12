@@ -31,26 +31,33 @@ final class CheckboxDropdown: NSView {
     private let titleLabel = NSTextField(labelWithString: "")
     /// Retained (not a throwaway init-local) so `reapplyTheme()` can re-tint it on a theme swap.
     private let chevron = NSImageView()
-    private var listCard: NSView?
+    /// The floating list. Built lazily because it holds an `unowned` reference back to this view,
+    /// and because the self-close hook it carries reaches back through `self` too.
+    private lazy var popover: ListPopover = {
+        let popover = ListPopover(anchor: self)
+        // A window resize closes the list on its own; drop the lit border and the stale rows with it.
+        popover.onSelfClose = { [weak self] in
+            self?.rowViews = []
+            self?.restyle()
+        }
+        return popover
+    }()
     private var rowViews: [CheckboxRowView] = []
     private var highlighted = 0
     private var isFocusedStop = false
 
-    private static var restFill: NSColor { Theme.current.chrome.ink(alpha: 0.06) }
-    private static var focusFill: NSColor { PaletteOverlay.selectionBackground }
     private static let rowHeight: CGFloat = 28
-    private static let maxListHeight: CGFloat = 260
 
     // MARK: test hooks
 
     var buttonTitleForTesting: String { titleLabel.stringValue }
     var itemsForTesting: [CheckboxDropdownItem] { items }
-    var isPopoverOpen: Bool { listCard != nil }
+    var isPopoverOpen: Bool { popover.isOpen }
     var highlightedIndexForTesting: Int { highlighted }
     /// The open list's row views in list order, for click tests that drive a row's real `mouseDown`.
     var rowViewsForTesting: [NSView] { rowViews }
     func openListForTesting() { openList() }
-    var listCardSizeForTesting: NSSize { listCard?.frame.size ?? .zero }
+    var listCardSizeForTesting: NSSize { popover.cardFrame.size }
 
     init(title: String, items: [CheckboxDropdownItem], onToggle: @escaping (Int) -> Void) {
         self.items = items
@@ -60,7 +67,7 @@ final class CheckboxDropdown: NSView {
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
         layer?.cornerRadius = 6
-        layer?.backgroundColor = Self.restFill.cgColor
+        PopoverButtonStyle.applyRestFill(to: self)
         layer?.borderWidth = 1
         layer?.borderColor = Theme.current.chrome.ink(alpha: 0.10).cgColor
 
@@ -131,17 +138,13 @@ final class CheckboxDropdown: NSView {
     }
 
     private func restyle() {
-        let chrome = Theme.current.chrome
-        let open = listCard != nil
-        layer?.backgroundColor = (isFocusedStop || open ? Self.focusFill : Self.restFill).cgColor
-        layer?.borderColor = (isFocusedStop || open ? chrome.accent.nsColor : chrome.ink(alpha: 0.10)).cgColor
-        layer?.borderWidth = isFocusedStop || open ? 1.5 : 1
+        PopoverButtonStyle.apply(to: self, isFocused: isFocusedStop, isOpen: popover.isOpen)
     }
 
     // MARK: keyboard
 
     override func keyDown(with event: NSEvent) {
-        if listCard != nil {
+        if popover.isOpen {
             switch KeyboardFocus.key(for: event) {
             case .up: moveHighlight(-1)
             case .down: moveHighlight(1)
@@ -165,7 +168,7 @@ final class CheckboxDropdown: NSView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
-        listCard == nil ? openList() : closeList()
+        popover.isOpen ? closeList() : openList()
     }
 
     /// The whole control is one click target — without this the title label and chevron swallow
@@ -178,21 +181,19 @@ final class CheckboxDropdown: NSView {
     // MARK: list
 
     private func openList() {
-        guard listCard == nil, window?.contentView != nil else { return }
+        // Guarded before `buildRows()`, which reassigns `rowViews`: a second open would leave those
+        // pointing at fresh views that are in no card, so the mounted rows stop repainting.
+        guard !popover.isOpen, window?.contentView != nil else { return }
         highlighted = 0
-        let card = buildListCard()
-        window?.contentView?.addSubview(card)
-        listCard = card
-        // After the assignment: `refreshRows` gates the highlight on `listCard != nil`, so painting
-        // from inside `buildListCard` would leave the first row unhighlighted until an arrow moves.
+        popover.open(rows: buildRows())
+        // After the open: `refreshRows` gates the highlight on the list being up, so painting
+        // before it would leave the first row unhighlighted until an arrow moves.
         refreshRows()
-        positionList()
         restyle()
     }
 
     private func closeList() {
-        listCard?.removeFromSuperview()
-        listCard = nil
+        popover.close()
         rowViews = []
         restyle()
     }
@@ -222,94 +223,19 @@ final class CheckboxDropdown: NSView {
         for (index, row) in rowViews.enumerated() {
             guard items.indices.contains(index) else { continue }
             row.render(
-                item: items[index], isHighlighted: listCard != nil && index == highlighted,
+                item: items[index], isHighlighted: popover.isOpen && index == highlighted,
                 chrome: chrome)
         }
     }
 
-    // Build + position mirror `Dropdown`'s window-child pattern: a FloatShadow-chromed card
-    // holding a capped-height scroll of row views, framed below the button (flipping above when
-    // the window bottom is near).
-    private func buildListCard() -> NSView {
-        let chrome = Theme.current.chrome
-        let width = max(bounds.width, 180)
-
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 2
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
+    /// One row per item; `ListPopover` sizes them and assembles the card around them.
+    private func buildRows() -> [ListPopover.Row] {
         rowViews = []
-        var contentHeight: CGFloat = 0
-        for index in items.indices {
-            if contentHeight > 0 { contentHeight += stack.spacing }
+        return items.indices.map { index in
             let row = CheckboxRowView { [weak self] in self?.toggle(index) }
-            stack.addArrangedSubview(row)
-            row.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
-            row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
             rowViews.append(row)
-            contentHeight += Self.rowHeight
+            return ListPopover.Row(view: row, height: Self.rowHeight)
         }
-
-        let doc = FlippedView()
-        doc.translatesAutoresizingMaskIntoConstraints = false
-        doc.addSubview(stack)
-
-        let scroll = NSScrollView()
-        scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
-        scroll.verticalScroller = SlimScroller()
-        scroll.scrollerStyle = .overlay
-        scroll.autohidesScrollers = true
-        scroll.documentView = doc
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-
-        let card = ShadowCardView()
-        card.wantsLayer = true
-        card.layer?.cornerRadius = 8
-        card.layer?.backgroundColor = chrome.background.nsColor.cgColor
-        card.layer?.borderWidth = 1
-        card.layer?.borderColor = FloatShadow.edge.cgColor
-        // Frame-driven, like Dropdown's card: positioned AND sized by frame in positionList.
-        card.translatesAutoresizingMaskIntoConstraints = true
-        FloatShadow.applyShadow(to: card)
-        card.addSubview(scroll)
-
-        let insets: CGFloat = 6
-        let cardHeight = min(contentHeight + insets * 2, Self.maxListHeight)
-        NSLayoutConstraint.activate([
-            scroll.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: card.topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-            doc.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
-            doc.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
-            doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-            stack.topAnchor.constraint(equalTo: doc.topAnchor, constant: insets),
-            stack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 8),
-            stack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -8),
-            stack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -insets),
-        ])
-        card.frame = NSRect(x: 0, y: 0, width: width, height: cardHeight)
-        return card
-    }
-
-    private func positionList() {
-        guard let card = listCard, let contentView = window?.contentView else { return }
-        card.layoutSubtreeIfNeeded()
-        let size = card.frame.size
-        let origin = convert(bounds, to: contentView)
-        let x = max(8, min(origin.minX, contentView.bounds.width - size.width - 8))
-        // contentView is not flipped: below the button = a smaller y. Prefer below; if that runs
-        // off the bottom, flip above, then clamp so the card never draws outside the window.
-        let below = origin.minY - size.height - 4
-        let above = origin.maxY + 4
-        let maxY = max(8, contentView.bounds.height - size.height - 8)
-        var y = below
-        if y < 8 { y = above }
-        y = max(8, min(y, maxY))
-        card.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
     }
 
     /// One checkbox row in the open list: a fixed-width check slot (titles align whether checked

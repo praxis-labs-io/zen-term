@@ -132,4 +132,78 @@ final class DropdownTests: WindowTestCase {
         // Regression: the highlighted row must have been scrolled into view, not left below the fold.
         XCTAssertTrue(dropdown.isHighlightedRowVisibleForTesting)
     }
+
+    /// The list prefers to hang below the button, which is the case a reader checks by eye and the
+    /// one every picker in Settings hits.
+    func test_openList_hangsBelowTheButton() {
+        let dropdown = Self.dropdown(rows: 3)
+        let window = Self.window(height: 400)
+        window.contentView?.addSubview(dropdown)
+        dropdown.frame = NSRect(x: 20, y: 320, width: 220, height: 30)
+
+        dropdown.openListForTesting()
+
+        let card = dropdown.listCardFrameForTesting
+        XCTAssertLessThanOrEqual(
+            card.maxY, dropdown.frame.minY, "the list must hang below the button, not cover it")
+    }
+
+    /// A picker near the bottom of the window has no room below it, so the card flips above rather
+    /// than drawing off the window. Nothing covered this geometry, and it is the half of
+    /// `positionList` that only shows on a short window or a picker low in a long form.
+    func test_openList_nearTheWindowBottom_flipsAboveTheButton() {
+        let dropdown = Self.dropdown(rows: 8)
+        let window = Self.window(height: 400)
+        window.contentView?.addSubview(dropdown)
+        // 24pt off the bottom: less than the card's height, so "below" would run off the window.
+        dropdown.frame = NSRect(x: 20, y: 24, width: 220, height: 30)
+
+        dropdown.openListForTesting()
+
+        let card = dropdown.listCardFrameForTesting
+        XCTAssertGreaterThanOrEqual(
+            card.minY, dropdown.frame.maxY, "the list must flip above a button near the bottom")
+        XCTAssertLessThanOrEqual(
+            card.maxY, window.contentView!.bounds.height,
+            "the flipped list must stay inside the window")
+    }
+
+    /// The card is placed once, at open, so a resize leaves it stranded where the button used to be.
+    /// It closes instead, and the button has to stop wearing its open border with it: a lit button
+    /// under no list reads as a control that stopped responding.
+    func test_resizingTheWindow_closesTheListAndUnlightsTheButton() {
+        // Deliberately not the first responder: a focused button stays lit either way, which would
+        // make the border assertion below pass whether or not the close ran.
+        let dropdown = Self.dropdown(rows: 4)
+        let window = Self.window(height: 400)
+        window.contentView?.addSubview(dropdown)
+        dropdown.frame = NSRect(x: 20, y: 300, width: 220, height: 30)
+        dropdown.openListForTesting()
+        XCTAssertTrue(dropdown.isPopoverOpen, "precondition: the list is up before the resize")
+        XCTAssertEqual(dropdown.layer?.borderWidth, 1.5, "precondition: the button is lit while open")
+
+        window.setFrame(NSRect(x: 0, y: 0, width: 520, height: 300), display: false)
+
+        XCTAssertFalse(dropdown.isPopoverOpen, "the list must close rather than strand itself")
+        XCTAssertFalse(
+            window.contentView!.subviews.contains { $0 is ShadowCardView },
+            "no card left drawn on the content view after the resize")
+        XCTAssertEqual(
+            dropdown.layer?.borderWidth, 1, "the button is still lit under a list that is gone")
+    }
+
+    private static func dropdown(rows: Int) -> Dropdown {
+        let items = (0..<rows).map {
+            DropdownItem(title: "Theme \($0)", group: nil, note: nil, isSelected: $0 == 0)
+        }
+        let dropdown = Dropdown(items: items, selectedIndex: 0) { _ in }
+        dropdown.translatesAutoresizingMaskIntoConstraints = true
+        return dropdown
+    }
+
+    private static func window(height: CGFloat) -> NSWindow {
+        NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: height),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+    }
 }
