@@ -56,7 +56,14 @@ final class GhosttyConfigDiagnosticsTests: XCTestCase {
             foreground: TerminalColor(red: 0xE0, green: 0xDE, blue: 0xF4),
             cursor: TerminalColor(red: 0xEA, green: 0x9A, blue: 0x97),
             selectionBackground: TerminalColor(red: 0x39, green: 0x35, blue: 0x52),
-            ansi: (0..<16).map { TerminalColor(red: UInt8($0), green: UInt8($0), blue: UInt8($0)) }
+            ansi: (0..<16).map { TerminalColor(red: UInt8($0), green: UInt8($0), blue: UInt8($0)) },
+            // Every optional color is filled: the writer skips a nil one, and a key left out here
+            // is a key libghostty never finalizes, which is the whole point of this test.
+            selectionForeground: TerminalColor(red: 0xE0, green: 0xDE, blue: 0xF4),
+            searchForeground: TerminalColor(red: 0xE0, green: 0xDE, blue: 0xF4),
+            searchBackground: TerminalColor(red: 0x55, green: 0x49, blue: 0x68),
+            searchSelectedForeground: TerminalColor(red: 0x19, green: 0x17, blue: 0x24),
+            searchSelectedBackground: TerminalColor(red: 0xC4, green: 0xA7, blue: 0xE7)
         )
         let behavior = TerminalBehavior(
             cursorStyle: .bar, cursorBlink: false, cursorThickness: 4, optionAsAlt: false,
