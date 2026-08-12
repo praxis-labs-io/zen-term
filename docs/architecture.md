@@ -1291,20 +1291,30 @@ offset in hand when the selection lands is a frame or more behind, and comparing
 the offset at step time answered "did not move" for a step that plainly did, whenever no
 frame happened to land in between.
 
-`viewportMoved` reads the **cursor's own line** instead, which is synchronous with the
-selection: the search thread scrolls under the terminal mutex before it reports
-(`search/Thread.zig`), so the rows read back are already the ones on screen, and a line no
-longer where the cursor left it means the viewport moved beneath it. A blank line decides
-nothing and reads as no movement, which leaves the cursor where the reader left it rather
-than throwing it at the top of the screen.
+The screen itself answers synchronously instead: the search thread scrolls under the
+terminal mutex before it reports (`search/Thread.zig`), so the rows read back are already
+the ones on screen, and `rowsAtStep` holds the ones the step went out against. **The whole
+viewport rather than the cursor's line**, because a screen of repeated prompts or repeated
+log output can scroll onto text identical to the line the cursor left, and one line against
+one line calls that standing still. It also asks nothing of the cursor, which is what makes
+it right on the preview step, where scroll mode is not up yet and `scrollMode.cursor` is a
+leftover from whenever it last was.
 
 **A scroll parks the match at the top only when it can.** Against either end of the buffer
-it cannot, and nothing lands on row 0, so the direction of travel picks the end instead:
-stepping toward newer matches clamps at the live end and the answer is the last occurrence
-on screen, stepping toward older ones clamps at the top and it is the first. Taking the
-first in both cases is what left the cursor a step behind the highlight on every downward
-step, catching up only on the next press. Found at the machine, since the pure scan looks
-right until the viewport is against an end.
+it cannot, and nothing lands on row 0. Taking the first occurrence on screen there is what
+left the cursor a step behind the highlight on every downward step, catching up only on the
+next press. Found at the machine, since the pure scan looks right until the viewport is
+against an end.
+
+The end is counted rather than guessed. A clamped viewport reaches a buffer end, so every
+match between the selected one and that end is on screen, and the backend's index says how
+many those are: stepping toward newer matches clamps at the live end, where the selected
+match sits `selected` occurrences up from the bottom; stepping toward older ones clamps at
+the top, putting it `total - 1 - selected` down from the first. Direction alone cannot do
+this, and a first pass that took the bottom-most occurrence was right only while the
+clamped screen held one candidate. When the count does not land inside the screen the
+premise is off, most likely a soft-wrapped match the scan cannot see, and the fallback
+takes the direction's end rather than inventing a cell.
 
 **Search does not wrap, and that is libghostty's call**, not something the chrome hides:
 `search/screen.zig` says so where it stops ("We don't wrap or reset the match currently"),

@@ -93,7 +93,11 @@ final class FindBarView: NSView {
         case (let total?, nil):
             count.stringValue = "\(total) matches"
         case (let total?, let selected?):
-            count.stringValue = "\(total - selected) / \(total)"
+            // Clamped because the two arrive on separate reports. A selection still in flight for
+            // the previous needle can land after a shorter needle's total, and subtracting a stale
+            // index off a smaller total reads as `-6 / 3` where the old one-based form only read
+            // too large.
+            count.stringValue = "\(max(1, total - selected)) / \(total)"
         }
     }
 
@@ -102,8 +106,8 @@ final class FindBarView: NSView {
         field.applyThemedCaret()  // the editor exists only once the field has focus
     }
 
-    /// The count as rendered. Its wording carries meaning a state check cannot: "No matches" and
-    /// an index that reads one-based off a zero-based report are both only visible here.
+    /// The count as rendered. Its wording carries meaning a state check cannot: "No matches", and
+    /// an index reversed off a zero-based newest-first report, are both only visible here.
     var countTextForTesting: String { count.stringValue }
 
     var isFieldFirstResponder: Bool {
