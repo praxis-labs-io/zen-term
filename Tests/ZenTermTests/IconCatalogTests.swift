@@ -30,9 +30,12 @@ final class IconCatalogTests: XCTestCase {
     }
 
     /// The brand marks resolve through `BrandMark`, not SF Symbols, and must tint like a symbol
-    /// rather than render as a fixed-color bitmap.
+    /// rather than render as a fixed-color bitmap. Enumerated off the roster rather than a hand-kept
+    /// list, so a mark added to `all` can't skip the check.
     func test_brandMarks_loadAsTemplateImages() throws {
-        for symbol in ["git", "github", "linear"] {
+        let marks = IconCatalog.all.filter { BrandMark.image($0) != nil }
+        XCTAssertEqual(marks.count, 19, "the roster's brand marks")
+        for symbol in marks {
             XCTAssertNil(
                 NSImage(systemSymbolName: symbol, accessibilityDescription: nil),
                 "\(symbol) now collides with a real SF Symbol, which would win over the brand mark")
@@ -47,15 +50,30 @@ final class IconCatalogTests: XCTestCase {
         XCTAssertEqual(IconCatalog.displayName("note.text"), "Notes")
         XCTAssertEqual(IconCatalog.displayName("bubble.left.and.bubble.right"), "Chat")
         XCTAssertEqual(IconCatalog.displayName("envelope"), "Email", "the metaphor is mail, not the object")
+        XCTAssertEqual(IconCatalog.displayName("plus.forwardslash.minus"), "Diff")
+        XCTAssertEqual(IconCatalog.displayName("openai"), "OpenAI", "humanizes to \"Openai\" on its own")
+        XCTAssertEqual(IconCatalog.displayName("sqlite"), "SQLite")
+        XCTAssertEqual(IconCatalog.displayName("htop"), "htop", "the tool spells its own name lowercase")
         XCTAssertEqual(IconCatalog.displayName("terminal"), "Terminal", "no override → humanized")
     }
 
     /// A float pinned to a dropped icon keeps rendering it — `IconCatalog.image` resolves any SF
     /// Symbol whether or not it's still on the roster, so an existing user's config never breaks.
     func test_droppedIcons_stillResolve_soExistingFloatsKeepTheirGlyph() {
-        for dropped in ["speedometer", "ant", "cube", "cloud", "memorychip", "note.text", "puzzlepiece"] {
-            XCTAssertFalse(IconCatalog.all.contains(dropped), "\(dropped) was dropped from the roster")
-            XCTAssertNotNil(IconCatalog.image(dropped), "but a float still configured with it must render")
+        let dropped = [
+            "speedometer", "ant", "cube", "cloud", "memorychip", "note.text", "puzzlepiece",
+            "hammer", "key", "tray.full", "chart.bar", "shippingbox", "apple.terminal.on.rectangle",
+            "globe", "slider.horizontal.3",
+        ]
+        for symbol in dropped {
+            XCTAssertFalse(IconCatalog.all.contains(symbol), "\(symbol) was dropped from the roster")
+            XCTAssertNotNil(IconCatalog.image(symbol), "but a float still configured with it must render")
         }
+    }
+
+    /// Their labels are the reason the overrides for dropped symbols stay in the table.
+    func test_droppedIcons_keepTheirLabels() {
+        XCTAssertEqual(IconCatalog.displayName("apple.terminal.on.rectangle"), "Terminal window")
+        XCTAssertEqual(IconCatalog.displayName("slider.horizontal.3"), "Controls")
     }
 }
