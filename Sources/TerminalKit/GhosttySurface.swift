@@ -308,6 +308,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public func setFontSize(_ points: CGFloat) {
         lastFontSize = points
         performBindingAction("set_font_size:\(points)")
+        // libghostty resizes the cell inside that call, so the new grid is readable here.
+        adoptGridBaseline()
     }
 
     /// Perform one libghostty binding action on this surface by name. The action text is exactly
@@ -698,9 +700,26 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     func reportGridIfChanged() {
         guard let metrics = cellMetrics else { return }
         let grid = (columns: metrics.columns, rows: metrics.rows)
-        defer { lastGrid = grid }
-        guard let last = lastGrid, last != grid else { return }
+        let previous = lastGrid
+        // Before the dispatch, not after. The delegate reaches into the chrome and moves a header,
+        // which can drive another layout pass, and a push nested inside that one must not find the
+        // old baseline still standing and announce this same reflow a second time.
+        lastGrid = grid
+        guard let previous, previous != grid else { return }
         delegate?.surfaceGridDidReflow(self)
+    }
+
+    /// Take the current grid as the baseline without announcing anything, for a change that
+    /// reshapes it outside a size push.
+    ///
+    /// A font step is the one that does. It resizes the cell, so the same pixels hold a different
+    /// number of rows, and the chrome drives its own re-place because a step that leaves the row
+    /// count alone still has to redraw at the new cell height. Left stale, the next push that
+    /// changes nothing measures against the pre-step shape and announces a reflow that never
+    /// happened, which costs the reader their selection.
+    private func adoptGridBaseline() {
+        guard let metrics = cellMetrics else { return }
+        lastGrid = (columns: metrics.columns, rows: metrics.rows)
     }
 
     /// Translate an inbound libghostty action into a seam delegate event. Returns whether
