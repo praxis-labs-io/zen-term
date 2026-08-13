@@ -101,6 +101,11 @@ final class ScrollModeController {
         updateHeader()
         panel.layoutSubtreeIfNeeded()
         cursor = ScrollCell(row: Self.entryRow(of: surface), column: 0)
+        // That layout reflowed the grid, and the surface reports a reflow from inside its own
+        // `setFrameSize` — so `reportReflow` already ran, nested in this call, and armed an anchor
+        // against whatever row the *last* session left the cursor on. The entry row above is the
+        // answer to where the band goes; drop the anchor before a later report can act on it.
+        pendingAnchor = nil
         refreshCursor()
         onActiveChanged?(true)
     }
@@ -202,6 +207,11 @@ final class ScrollModeController {
     /// Nearest match wins: a prompt string repeats down the whole viewport, so a search from the top
     /// would drag the cursor to the first prompt on screen every time.
     private func exactRow(of line: String) -> Int? {
+        // The cursor's own row first. A match there is distance 0 and wins nearest outright, and a
+        // reflow that only gained or lost rows leaves most lines exactly where they were. The scan
+        // below is a `read_text` per row of the viewport, which libghostty asks callers to throttle.
+        let here = min(cursor.row, lastRow)
+        if rowText(here) == line { return here }
         var best: Int?
         for row in 0...lastRow where rowText(row) == line {
             if best.map({ abs(row - cursor.row) < abs($0 - cursor.row) }) ?? true { best = row }

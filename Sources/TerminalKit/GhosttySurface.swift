@@ -257,6 +257,10 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // whichever shape this surface is in, and the branch above is what decides it.
         syncColorScheme()
         if let surfacePtr { ghostty_surface_refresh(surfacePtr) }
+        // A theme carries a font, so a reload can reshape the grid with no size push behind it.
+        // Same reason as `setFontSize`, and not left to the `applySessionFontSize` that happens to
+        // follow this today: nothing enforces that pairing.
+        adoptGridBaseline()
     }
 
     /// Tell libghostty whether this surface reads as light or dark, so a program asking gets the
