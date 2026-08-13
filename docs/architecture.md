@@ -1363,11 +1363,24 @@ Anything that changes the grid's shape rewraps the text under that number: a fon
 step, the find bar taking a row, a window or divider drag. `surfaceGridDidReflow`
 is the resize half, emitted from `GhosttyHostView.syncSizeAndScale` when a size
 push actually moves rows or columns, and relayed to `ScrollModeController` per
-surface so a drag that reflows one pane leaves the others alone. It is deliberately
-early: libghostty derives the grid synchronously and mails the rewrap to its IO
-thread, so the event arrives while the old text is still readable. `refreshGeometry`
-therefore reads the cursor's line *then*, holds it, and re-finds it on the first
-`scrollPositionDidChange` after.
+surface so a drag that reflows one pane leaves the others alone. `refreshGeometry`
+arms an anchor from the line the cursor is on and re-finds it on the first
+`scrollPositionDidChange` after, then drops it: libghostty reports a scrollbar only
+from a draw and only when the value differs, so a resize that rewraps nothing reports
+nothing at all, and an anchor left armed fires on unrelated output much later.
+
+**The line is remembered when the cursor lands, not when the reflow asks for it.**
+libghostty derives the grid synchronously and mails the rewrap to its IO thread, so
+by the time the event arrives the grid has already changed shape while the text has
+not. A cursor sitting in the rows a shrink cut then names a row `text(viewportRow:)`
+refuses, and reading at that moment returned nothing to find the line by. Capturing
+it in `refreshCursor` instead means it is read while the grid still matches the row.
+A geometry refresh is excluded from that capture, since it re-places the band against
+a grid mid-reflow and a drag can fire several reflows before one report arrives. The
+trade is staleness: output that rewrites the row under a still cursor leaves the
+remembered line describing what used to be there. Refreshing it from the scroll report
+would put a `read_text` on the output path, and one `tick()` can drain many lines in a
+single turn, so that buys a main-thread stall instead.
 
 **The re-find runs in two passes, because a rewrap leaves no row holding the whole
 line.** `text(viewportRow:)` reads one row's cells, so a line that wrapped comes back
