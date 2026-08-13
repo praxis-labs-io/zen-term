@@ -101,6 +101,9 @@ final class TabController: NSObject {
 
     /// Any surface in this tab moved its scroll position, panes and drawers alike.
     var onScrollPosition: ((TerminalSurface, TerminalScrollPosition) -> Void)?
+
+    /// Any surface in this tab reflowed into a new grid, panes and drawers alike.
+    var onGridReflow: ((TerminalSurface) -> Void)?
     var onSearchEvent: ((TerminalSurface, SearchController.Event) -> Void)?
 
     /// The panel holding unified focus, as the pair scroll mode needs: the terminal to drive,
@@ -287,6 +290,7 @@ final class TabController: NSObject {
         paneCanvas.onScrollPosition = { [weak self] surface, position in
             self?.onScrollPosition?(surface, position)
         }
+        paneCanvas.onGridReflow = { [weak self] surface in self?.onGridReflow?(surface) }
         paneCanvas.onSearchEvent = { [weak self] surface, event in
             self?.onSearchEvent?(surface, event)
         }
@@ -1371,6 +1375,11 @@ extension TabController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {
         guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
         onScrollPosition?(s, position)
+    }
+    /// A drawer's grid changed shape, on the same guard and for the same reason.
+    func surfaceGridDidReflow(_ s: TerminalSurface) {
+        guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
+        onGridReflow?(s)
     }
     /// The same relay for a drawer's search, on the same guard: panes go through
     /// `PaneCanvasController` and both land on `onSearchEvent`.

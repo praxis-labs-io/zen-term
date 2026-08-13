@@ -2175,6 +2175,7 @@ final class WindowController: NSObject {
             // when the bar went up, so it can put it back there rather than at the live end.
             self?.search.report(position: position, from: surface)
         }
+        c.onGridReflow = { [weak self] surface in self?.scrollMode.reportReflow(from: surface) }
         c.onSearchEvent = { [weak self] surface, event in
             guard let self else { return }
             // The panel is resolved lazily: only the backend's own open-a-bar request needs one,

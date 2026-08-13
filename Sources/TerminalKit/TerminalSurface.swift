@@ -247,6 +247,13 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     /// The viewport moved within the buffer, or the buffer grew under it. Fires on output as well
     /// as on `scroll(_:)`. A backend with no scrollback viewport never sends it.
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition)
+    /// The grid changed shape, so the text is rewrapping into it. Sent from the size push, ahead of
+    /// the backend's reflow: a consumer has to remember what it needs by content now and re-read it
+    /// on the next `scrollPositionDidChange`, because measuring here reads the old text.
+    ///
+    /// Only a change in rows or columns fires it. A backend that resizes fluidly leaves the grid
+    /// alone for most pixel changes, and those are not reflows.
+    func surfaceGridDidReflow(_ s: TerminalSurface)
     /// How many matches the live needle has, or nil when the backend has none to report. Fires
     /// repeatedly as the engine works back through the buffer, so the count climbs.
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?)
@@ -275,6 +282,7 @@ public extension TerminalSurfaceDelegate {
     func surfaceWantsFocus(_ s: TerminalSurface) {}
     func surfaceDidFailToStart(_ s: TerminalSurface) {}
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {}
+    func surfaceGridDidReflow(_ s: TerminalSurface) {}
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {}
     func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?) {}
     func surfaceDidEndSearch(_ s: TerminalSurface) {}

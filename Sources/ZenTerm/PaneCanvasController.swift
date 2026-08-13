@@ -79,6 +79,10 @@ final class PaneCanvasController: NSObject {
     /// A pane's scroll position moved. Carries the surface so a consumer can match it against
     /// the one it cares about.
     var onScrollPosition: ((TerminalSurface, TerminalScrollPosition) -> Void)?
+
+    /// A pane's grid changed shape and its text is rewrapping into it. Same surface-attached shape
+    /// as `onScrollPosition`: a divider drag reflows some panes and leaves the rest alone.
+    var onGridReflow: ((TerminalSurface) -> Void)?
     var onSearchEvent: ((TerminalSurface, SearchController.Event) -> Void)?
 
     /// Fired when a socket `focus` command names one of this canvas's panes (an nvim split
@@ -572,6 +576,9 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     /// can ignore every pane but the one it is driving.
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {
         onScrollPosition?(s, position)
+    }
+    func surfaceGridDidReflow(_ s: TerminalSurface) {
+        onGridReflow?(s)
     }
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
         onSearchEvent?(s, .total(total))

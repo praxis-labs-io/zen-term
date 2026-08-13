@@ -160,8 +160,22 @@ final class ScrollModeController {
         refreshCursor()
     }
 
+    /// The grid this mode is driving changed shape. A resize rewraps the text under a cursor that is
+    /// a row number, exactly as a font step does, so it gets the same treatment. Scoped to the
+    /// driven surface: every surface in the window reports its own, and a divider drag reflows some
+    /// panes and leaves the rest alone.
+    func reportReflow(from s: AnyObject) {
+        guard isActive, isDriving(s) else { return }
+        refreshGeometry()
+    }
+
     /// Held until the terminal reports the grid it reflowed into. Nil for a blank row, which has no
     /// content to be found by.
+    ///
+    /// A window drag calls `refreshGeometry` once per row or column boundary it crosses, and the
+    /// repeat reads are safe because the row cache still holds the pre-reflow text: `refreshCursor`
+    /// re-caches the cursor's row on the way out, and every path that drops the cache clears or
+    /// consumes this first.
     private var pendingAnchorLine: String?
 
     /// Nearest match wins: a prompt string repeats down the whole viewport, so a search from the top

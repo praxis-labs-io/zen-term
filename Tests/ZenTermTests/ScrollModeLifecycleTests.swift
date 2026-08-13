@@ -737,11 +737,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         controller.applySessionFontSize()
 
         _ = handler(try keyDown("k"))  // the reader moves on, before any report arrives
-        var reflowed = Array(repeating: "", count: 24)
-        for (offset, text) in surface.rows.enumerated() where offset + 3 < 24 {
-            reflowed[offset + 3] = text
-        }
-        surface.rows = reflowed
+        surface.rows = Self.slidDown(surface.rows, by: 3)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
         XCTAssertEqual(
@@ -890,14 +886,8 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
         controller.applySessionFontSize()
         // The reflow: a smaller font fits three more rows, so everything on screen slid down.
-        var reflowed = Array(repeating: "", count: 24)
-        for (offset, text) in surface.rows.enumerated() where offset + 3 < 24 {
-            reflowed[offset + 3] = text
-        }
-        surface.rows = reflowed
-        surface.delegate?.surface(
-            surface,
-            scrollPositionDidChange: TerminalScrollPosition(total: 200, offset: 176, viewport: 24))
+        surface.rows = Self.slidDown(surface.rows, by: 3)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
         XCTAssertEqual(
             controller.scrollMode.cursorRow, 5, "the band follows the line, not the row number")
@@ -923,6 +913,83 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 2)
     }
 
+    func test_aResizeKeepsTheBandOnTheLineItWasReading() throws {
+        // The bug: the cursor is a viewport row number, a resize rewraps the text under it, and
+        // nothing re-numbered it. The band kept its row and the reader's line moved out from under.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the seq command")
+
+        surface.delegate?.surfaceGridDidReflow(surface)
+        // The reflow the resize asked for: a taller window fits three more rows, so the text slid
+        // down into them. Sent after the event, as libghostty does it: the grid resizes
+        // synchronously and the buffer rewraps on its IO thread afterwards.
+        surface.rows = Self.slidDown(surface.rows, by: 3)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertEqual(
+            controller.scrollMode.cursorRow, 5, "the band follows the line, not the row number")
+    }
+
+    func test_aResizeGivesTheAnchorBack() throws {
+        // Same rule the font step follows. Only the cursor can be found again by content; the
+        // anchor is a bare row index, so a selection kept across a resize covers other words.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let (handler, board) = try enterModeForYanking(controller)
+
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        surface.delegate?.surfaceGridDidReflow(surface)
+        _ = handler(try keyDown("y"))
+
+        XCTAssertNil(board.string(forType: .string))
+    }
+
+    func test_aReflowFromAnotherPaneLeavesTheModeAlone() throws {
+        // Every surface in the window reports its own reflow, and a divider drag reflows one side
+        // only. Unscoped, the untouched pane's mode dropped its selection and re-read its rows.
+        let controller = makeWindow()
+        let (handler, board) = try enterModeForYanking(controller)
+        let other = RecordingSurface()
+
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        controller.scrollMode.reportReflow(from: other)
+        _ = handler(try keyDown("y"))
+
+        XCTAssertNotNil(
+            board.string(forType: .string), "nothing this mode is driving reflowed")
+    }
+
+    func test_aSecondReflowInADragKeepsTheLineTheFirstOneRead() throws {
+        // A window drag fires one of these per row boundary it crosses. The repeat reads are only
+        // safe because `refreshGeometry` reads the line BEFORE it drops the row cache, so the
+        // second read is still served the pre-reflow text. Invalidate first and the second read
+        // remembers whatever the rewrap left behind, which is a line the reader never chose.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+        surface.delegate?.surfaceGridDidReflow(surface)
+        surface.rows = Self.slidDown(surface.rows, by: 3)  // the first reflow lands mid-drag
+        surface.delegate?.surfaceGridDidReflow(surface)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertEqual(
+            controller.scrollMode.cursorRow, 5, "the line the reader was on, not the blank row 2 left")
+    }
+
     func test_theModeRendersTheTerminalUnfocusedAndGivesItBackOnExit() throws {
         // The shell takes no keys while the mode is up, so its blinking cursor competes with the
         // mode's own. Left focused it blinks through the whole session; left unfocused after the
@@ -943,6 +1010,17 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     /// the rows on screen moved.
     private static func position(offset: Int) -> TerminalScrollPosition {
         TerminalScrollPosition(total: 200, offset: offset, viewport: 24)
+    }
+
+    /// A viewport whose text slid down by `count` rows, which is what a reflow into a grid that
+    /// fits more rows looks like. The rows pushed past the bottom are gone; the ones opened at the
+    /// top are blank.
+    private static func slidDown(_ rows: [String], by count: Int) -> [String] {
+        var reflowed = Array(repeating: "", count: rows.count)
+        for (offset, text) in rows.enumerated() where offset + count < rows.count {
+            reflowed[offset + count] = text
+        }
+        return reflowed
     }
 
     private func keyDown(

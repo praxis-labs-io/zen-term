@@ -686,6 +686,23 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
     func reportFocusWanted() { delegate?.surfaceWantsFocus(self) }
 
+    /// The grid libghostty last reported, so a size push that leaves it alone stays silent.
+    private var lastGrid: (columns: Int, rows: Int)?
+
+    /// Report a reflow if the size just pushed actually changed the grid. Called right after the
+    /// push, which is early enough on purpose: libghostty derives the grid synchronously and mails
+    /// only the buffer's rewrap to its IO thread, so the numbers here are new and the text is not.
+    ///
+    /// The first sizing is not a reflow. A surface has no grid until the chrome lays it out, and
+    /// announcing that first one would read as text moving under a reader who has not looked yet.
+    func reportGridIfChanged() {
+        guard let metrics = cellMetrics else { return }
+        let grid = (columns: metrics.columns, rows: metrics.rows)
+        defer { lastGrid = grid }
+        guard let last = lastGrid, last != grid else { return }
+        delegate?.surfaceGridDidReflow(self)
+    }
+
     /// Translate an inbound libghostty action into a seam delegate event. Returns whether
     /// it was consumed.
     func handle(_ action: ghostty_action_s) -> Bool {
