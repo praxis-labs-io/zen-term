@@ -967,6 +967,34 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             board.string(forType: .string), "nothing this mode is driving reflowed")
     }
 
+    func test_aResizeAfterAPageMoveDoesNotChaseTheLineTheReaderScrolledAwayFrom() throws {
+        // A page move slides the viewport under a cursor that stayed put, so the line the band is
+        // on changes with no cursor move to record it. The row read on that path describes the old
+        // screen by the code's own admission, so remembering it left a resize anchoring to a line
+        // the reader had already scrolled past, and the band chased it across the pane.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the seq command")
+
+        _ = handler(try keyDown("d", flags: .control))  // page down: the buffer moves, the band does not
+        // The frame that serves it: the seq command is now six rows further down the viewport.
+        var scrolled = Array(repeating: "", count: 24)
+        scrolled[8] = "❯ seq 1 3"
+        surface.rows = scrolled
+        surface.delegate?.surfaceGridDidReflow(surface)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertEqual(
+            controller.scrollMode.cursorRow, 2, "the band stays; that line is not the one it is on")
+    }
+
     func test_aShrinkThatCutsTheCursorsRowStillFindsTheLine() throws {
         // The grid changes shape before the reflow is announced, so a band sitting in the rows the
         // resize cut names a row the backend will not read by the time anyone asks. Read at that

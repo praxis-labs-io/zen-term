@@ -91,6 +91,7 @@ final class ScrollModeController {
         lastPosition = nil
         pendingAnchor = nil
         cursorLine = nil
+        cursor = .origin  // the entry row replaces it below; nothing should read the last session's
         isActive = true
         invalidateRows()
         Log.info("scroll mode entered", category: .panes)
@@ -336,7 +337,12 @@ final class ScrollModeController {
             default: break
             }
             surface?.scroll(move)
-            refreshCursor()
+            // The viewport moves under a cursor that stayed put, so the line the band is on is
+            // about to change with nothing to announce it, and the read below still describes the
+            // old screen. Forgotten rather than kept: a resize before the next cursor move would
+            // otherwise anchor to a line that has not been under the band since.
+            cursorLine = nil
+            refreshCursor(remembersLine: false)
             // After the read, not before it: a row read between the request and the frame that
             // serves it describes the old viewport, and cached under the new one it would send a
             // later `}` or `w` walking text that is no longer there.
@@ -355,7 +361,8 @@ final class ScrollModeController {
             move(to: ScrollCell(row: next, column: cursor.column))
         } else {
             surface?.scroll(.lines(delta))  // pinned at an edge: the buffer moves under the cursor
-            refreshCursor()
+            cursorLine = nil  // same as the page moves: the line changes under a cursor that did not
+            refreshCursor(remembersLine: false)
             invalidateRows()
         }
     }
