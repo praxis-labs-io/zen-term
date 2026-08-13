@@ -967,6 +967,33 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             board.string(forType: .string), "nothing this mode is driving reflowed")
     }
 
+    func test_aReportLongAfterTheReflowLeavesTheBandAlone() throws {
+        // libghostty emits a scrollbar only from a draw and only when the value differs, so a
+        // resize that rewraps nothing reports nothing at all. Left armed, the anchor fired on
+        // whatever came next: a background process printing one line minutes later moved the band
+        // off the row the reader had been sitting on without touching the keyboard.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        var clock = ContinuousClock.now
+        controller.scrollMode.now = { clock }
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the seq command")
+
+        surface.delegate?.surfaceGridDidReflow(surface)
+        clock = clock.advanced(by: .seconds(60))  // the report that never came, and then output
+        surface.rows = Self.slidDown(surface.rows, by: 3)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertEqual(
+            controller.scrollMode.cursorRow, 2, "that report belongs to a different event")
+    }
+
     func test_aNarrowerWindowFindsTheLineByTheFragmentLeftOfIt() throws {
         // A width change rewraps, and `text(viewportRow:)` reads one row's cells, so no row holds
         // the whole of what was remembered. Matching on exact text alone found nothing here, the

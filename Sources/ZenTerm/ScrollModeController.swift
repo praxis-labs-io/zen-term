@@ -89,7 +89,7 @@ final class ScrollModeController {
         sawG = false
         selection = nil
         lastPosition = nil
-        pendingAnchorLine = nil
+        pendingAnchor = nil
         isActive = true
         invalidateRows()
         Log.info("scroll mode entered", category: .panes)
@@ -118,7 +118,7 @@ final class ScrollModeController {
         sawG = false
         selection = nil
         lastPosition = nil
-        pendingAnchorLine = nil
+        pendingAnchor = nil
         invalidateRows()
         panel?.modeMeta = nil
         panel?.setScrollCursor(nil) { nil }
@@ -151,7 +151,7 @@ final class ScrollModeController {
     func refreshGeometry() {
         guard isActive else { return }
         let line = rowText(cursor.row)
-        pendingAnchorLine = Self.isBlank(line) ? nil : line
+        pendingAnchor = Self.isBlank(line) ? nil : (line: line, armedAt: now())
         // Only the cursor can be found again afterwards. The anchor is a fixed row index with no
         // content behind it, so a selection kept across the reflow would run from a row that now
         // holds something else.
@@ -169,14 +169,28 @@ final class ScrollModeController {
         refreshGeometry()
     }
 
-    /// Held until the terminal reports the grid it reflowed into. Nil for a blank row, which has no
-    /// content to be found by.
+    /// The line to re-find, held until the terminal reports the grid it reflowed into, with the
+    /// moment it was armed. Nil for a blank row, which has no content to be found by.
     ///
     /// A window drag calls `refreshGeometry` once per row or column boundary it crosses, and the
     /// repeat reads are safe because the row cache still holds the pre-reflow text: `refreshCursor`
     /// re-caches the cursor's row on the way out, and every path that drops the cache clears or
     /// consumes this first.
-    private var pendingAnchorLine: String?
+    private var pendingAnchor: (line: String, armedAt: ContinuousClock.Instant)?
+
+    /// How long an armed anchor stays good for. The reflow's own report follows the size push
+    /// within a frame or two, so anything this far behind belongs to a different event.
+    ///
+    /// It needs a bound because the report may never come: libghostty emits a scrollbar only from a
+    /// draw and only when the value differs, so a resize that rewraps nothing changes none of
+    /// `total`, `offset` or `viewport` and reports nothing at all. Left armed, the anchor fires on
+    /// whatever arrives next, which can be a background process printing a line minutes later, and
+    /// drags the band off the row the reader chose while they are only looking at it.
+    private static let anchorLifetime: Duration = .seconds(1)
+
+    /// The clock the anchor ages against. Injectable so a test can run the window out without
+    /// sleeping, the same seam `yankPasteboard` uses.
+    var now: () -> ContinuousClock.Instant = { ContinuousClock.now }
 
     /// Put the cursor back on the line it was reading, or leave it where it is when that line is no
     /// longer on screen. Exact match first, then the fragment pass below.
@@ -237,7 +251,7 @@ final class ScrollModeController {
     func land(on cell: ScrollCell) {
         guard isActive else { return }
         releaseSelection()
-        pendingAnchorLine = nil
+        pendingAnchor = nil
         move(to: cell)
     }
 
@@ -260,7 +274,7 @@ final class ScrollModeController {
         // The reader moved on their own, so a re-anchor still waiting on a report is moot. Left
         // armed it fires on whatever report comes next, minutes later, and drags the cursor off
         // the row they chose.
-        pendingAnchorLine = nil
+        pendingAnchor = nil
         switch command {
         case .pendingTop:
             sawG = true
@@ -586,9 +600,11 @@ final class ScrollModeController {
         lastPosition = position
         // The first report after a geometry change is the reflowed grid: libghostty emits the
         // scrollbar only from a draw, and only when it differs from the last one sent.
-        if let line = pendingAnchorLine {
-            pendingAnchorLine = nil
-            reanchor(to: line)
+        if let pending = pendingAnchor {
+            pendingAnchor = nil
+            if pending.armedAt.duration(to: now()) <= Self.anchorLifetime {
+                reanchor(to: pending.line)
+            }
         }
         updateHeader()
     }
