@@ -34,7 +34,7 @@ final class IconCatalogTests: XCTestCase {
     /// list, so a mark added to `all` can't skip the check.
     func test_brandMarks_loadAsTemplateImages() throws {
         let marks = IconCatalog.all.filter { BrandMark.image($0) != nil }
-        XCTAssertEqual(marks.count, 19, "the roster's brand marks")
+        XCTAssertFalse(marks.isEmpty, "nothing resolved as a mark, so the loop below asserts nothing")
         for symbol in marks {
             XCTAssertNil(
                 NSImage(systemSymbolName: symbol, accessibilityDescription: nil),

@@ -73,8 +73,8 @@ enum IconCatalog {
         "spotify": "Spotify",
     ]
 
-    /// Resolve a symbol to an image: an SF Symbol, else a bundled brand mark (every `.svg` in
-    /// `Resources/`). The one place this fallback lives — `IconButton` renders the same catalog and
+    /// Resolve a symbol to an image: an SF Symbol, else a brand mark bundled in `Resources/`. The
+    /// one place this fallback lives — `IconButton` renders the same catalog and
     /// used to carry its own copy. SF Symbol first, so a brand-mark name must never collide with a
     /// real symbol (`IconCatalogTests` holds the line).
     ///

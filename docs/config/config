@@ -240,8 +240,8 @@
 #   toolbar  (optional)  false = no toolbar button; the shortcut     (default true)
 #                        and palette entry stay live
 #   icon     (optional)  SF Symbol name, or a bundled brand mark    (default square.on.square)
-#                        (github, git, docker, claude, htop, and 14
-#                        more — the full set is the icon picker in
+#                        (github, git, docker, claude, htop and more:
+#                        the full set is the icon picker in
 #                        Settings → Tools)
 #   width    (optional)  width as a fraction of the tab              (default 0.85)
 #   height   (optional)  height as a fraction of the tab            (default 0.85)
