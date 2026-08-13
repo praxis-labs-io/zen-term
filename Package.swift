@@ -104,7 +104,7 @@ let package = Package(
                 .product(name: "CodeEditLanguages", package: "CodeEditLanguages"),
             ],
             resources: [
-                .copy("Resources"),  // brand marks (GitHub, git, Linear, Neovim, origami) SVGs for the dock + Settings
+                .copy("Resources"),  // brand-mark SVGs for the dock, the icon picker, and Settings
                 .copy("Themes"),  // bundled ghostty theme catalog for the Settings theme picker
                 .copy("Shaders"),  // bundled, vetted GLSL custom shaders selected by `custom-shader`
                 // Tree-sitter highlight queries per language (ZEN-239). Loaded via the app's own safe
