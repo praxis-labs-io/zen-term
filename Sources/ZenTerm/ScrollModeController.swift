@@ -89,7 +89,9 @@ final class ScrollModeController {
         sawG = false
         selection = nil
         lastPosition = nil
-        pendingAnchorLine = nil
+        pendingAnchor = nil
+        cursorLine = nil
+        cursor = .origin  // the entry row replaces it below; nothing should read the last session's
         isActive = true
         invalidateRows()
         Log.info("scroll mode entered", category: .panes)
@@ -101,6 +103,11 @@ final class ScrollModeController {
         updateHeader()
         panel.layoutSubtreeIfNeeded()
         cursor = ScrollCell(row: Self.entryRow(of: surface), column: 0)
+        // That layout reflowed the grid, and the surface reports a reflow from inside its own
+        // `setFrameSize` — so `reportReflow` already ran, nested in this call, and armed an anchor
+        // against whatever row the *last* session left the cursor on. The entry row above is the
+        // answer to where the band goes; drop the anchor before a later report can act on it.
+        pendingAnchor = nil
         refreshCursor()
         onActiveChanged?(true)
     }
@@ -118,7 +125,8 @@ final class ScrollModeController {
         sawG = false
         selection = nil
         lastPosition = nil
-        pendingAnchorLine = nil
+        pendingAnchor = nil
+        cursorLine = nil
         invalidateRows()
         panel?.modeMeta = nil
         panel?.setScrollCursor(nil) { nil }
@@ -150,30 +158,112 @@ final class ScrollModeController {
     /// coordinate survives that, absolute buffer rows included. The content does.
     func refreshGeometry() {
         guard isActive else { return }
-        let line = rowText(cursor.row)
-        pendingAnchorLine = Self.isBlank(line) ? nil : line
+        pendingAnchor = cursorLine.map { (line: $0, armedAt: now()) }
         // Only the cursor can be found again afterwards. The anchor is a fixed row index with no
         // content behind it, so a selection kept across the reflow would run from a row that now
         // holds something else.
         releaseSelection()
         invalidateRows()  // a different cell size means different rows
-        refreshCursor()
+        refreshCursor(remembersLine: false)
     }
 
-    /// Held until the terminal reports the grid it reflowed into. Nil for a blank row, which has no
-    /// content to be found by.
-    private var pendingAnchorLine: String?
+    /// The grid this mode is driving changed shape. A resize rewraps the text under a cursor that is
+    /// a row number, exactly as a font step does, so it gets the same treatment. Scoped to the
+    /// driven surface: every surface in the window reports its own, and a divider drag reflows some
+    /// panes and leaves the rest alone.
+    func reportReflow(from s: AnyObject) {
+        guard isActive, isDriving(s) else { return }
+        refreshGeometry()
+    }
+
+    /// The line to re-find, held until the terminal reports the grid it reflowed into, with the
+    /// moment it was armed. Nil for a blank row, which has no content to be found by.
+    private var pendingAnchor: (line: String, armedAt: ContinuousClock.Instant)?
+
+    /// The text of the row the cursor sits on, captured every time the cursor is placed rather than
+    /// read when a reflow arrives.
+    ///
+    /// It has to be read while the grid still has the shape the cursor's row was chosen against. A
+    /// reflow is announced *after* the new grid is in place, so a cursor on a row the resize cut is
+    /// already past the bottom edge by then: `text(viewportRow:)` refuses to read it, and the line
+    /// the reader was on is gone with nothing to find it by.
+    ///
+    /// The trade is staleness. Output that rewrites this row while the cursor sits still leaves it
+    /// describing what used to be there. Refreshing it from the scroll report instead would put a
+    /// `read_text` on the output path, and one `tick()` can drain many lines in a single turn, so
+    /// that buys a main-thread stall rather than a gradually worse number.
+    private var cursorLine: String?
+
+    /// How long an armed anchor stays good for. The reflow's own report follows the size push
+    /// within a frame or two, so anything this far behind belongs to a different event.
+    ///
+    /// It needs a bound because the report may never come: libghostty emits a scrollbar only from a
+    /// draw and only when the value differs, so a resize that rewraps nothing changes none of
+    /// `total`, `offset` or `viewport` and reports nothing at all. Left armed, the anchor fires on
+    /// whatever arrives next, which can be a background process printing a line minutes later, and
+    /// drags the band off the row the reader chose while they are only looking at it.
+    private static let anchorLifetime: Duration = .seconds(1)
+
+    /// The clock the anchor ages against. Injectable so a test can run the window out without
+    /// sleeping, the same seam `yankPasteboard` uses.
+    var now: () -> ContinuousClock.Instant = { ContinuousClock.now }
+
+    /// Put the cursor back on the line it was reading, or leave it where it is when that line is no
+    /// longer on screen. Exact match first, then the fragment pass below.
+    private func reanchor(to line: String) {
+        guard let best = exactRow(of: line) ?? fragmentRow(of: line) else { return }
+        move(to: ScrollCell(row: best, column: cursor.column))
+    }
 
     /// Nearest match wins: a prompt string repeats down the whole viewport, so a search from the top
     /// would drag the cursor to the first prompt on screen every time.
-    private func reanchor(to line: String) {
-        var best: Int?
-        for row in 0...lastRow where rowText(row) == line {
-            if best.map({ abs(row - cursor.row) < abs($0 - cursor.row) }) ?? true { best = row }
+    private func exactRow(of line: String) -> Int? {
+        // Outward from the cursor's own row, stopping at the first hit. Nearest is the rule anyway,
+        // so the first match in this order is the answer, and a reflow moves a line by a few rows
+        // rather than a screenful. Sweeping the viewport instead spent a `read_text` on every row
+        // of it, which libghostty asks callers to throttle.
+        let here = min(max(cursor.row, 0), lastRow)
+        if rowText(here) == line { return here }
+        for distance in 1...max(lastRow, 1) {
+            // Above before below, which is the tie-break a sweep up from row 0 used to give.
+            for row in [here - distance, here + distance] where row >= 0 && row <= lastRow {
+                if rowText(row) == line { return row }
+            }
         }
-        guard let best else { return }
-        move(to: ScrollCell(row: best, column: cursor.column))
+        return nil
     }
+
+    /// The row holding what is left of `line` after a reflow that changed the column count.
+    ///
+    /// `text(viewportRow:)` reads one row's cells, so a rewrapped line comes back split and no row
+    /// carries the whole of what was remembered: narrowing leaves the row holding a prefix of it,
+    /// widening leaves a row that has it as a prefix. Either way one text starts with the other.
+    ///
+    /// Longest shared prefix wins rather than nearest, because every line on screen starts with the
+    /// same prompt. Nearest would hand the anchor to a bare `❯` a row away instead of the fragment
+    /// fifty characters deep into the line the reader was actually on.
+    private func fragmentRow(of line: String) -> Int? {
+        var best: (row: Int, shared: Int)?
+        for row in 0...lastRow {
+            let text = rowText(row)
+            guard text.hasPrefix(line) || line.hasPrefix(text) else { continue }
+            let shared = min(text.count, line.count)
+            guard shared >= Self.minimumFragmentMatch else { continue }
+            let isBetter =
+                best.map {
+                    shared > $0.shared
+                        || (shared == $0.shared && abs(row - cursor.row) < abs($0.row - cursor.row))
+                } ?? true
+            if isBetter { best = (row, shared) }
+        }
+        return best?.row
+    }
+
+    /// How much of the remembered line a fragment has to share before it counts as the same line.
+    /// A rewrapped fragment shares most of it. A prompt row shares a sigil and maybe a short
+    /// command, and anchoring to that would jump the band to an unrelated prompt every time the
+    /// line the reader was on has left the screen entirely.
+    private static let minimumFragmentMatch = 8
 
     /// Whether `s` is the surface the mode is currently driving, so a caller holding a surface
     /// (a pane that just exited) can end only its own mode.
@@ -185,7 +275,7 @@ final class ScrollModeController {
     func land(on cell: ScrollCell) {
         guard isActive else { return }
         releaseSelection()
-        pendingAnchorLine = nil
+        pendingAnchor = nil
         move(to: cell)
     }
 
@@ -208,7 +298,7 @@ final class ScrollModeController {
         // The reader moved on their own, so a re-anchor still waiting on a report is moot. Left
         // armed it fires on whatever report comes next, minutes later, and drags the cursor off
         // the row they chose.
-        pendingAnchorLine = nil
+        pendingAnchor = nil
         switch command {
         case .pendingTop:
             sawG = true
@@ -247,7 +337,12 @@ final class ScrollModeController {
             default: break
             }
             surface?.scroll(move)
-            refreshCursor()
+            // The viewport moves under a cursor that stayed put, so the line the band is on is
+            // about to change with nothing to announce it, and the read below still describes the
+            // old screen. Forgotten rather than kept: a resize before the next cursor move would
+            // otherwise anchor to a line that has not been under the band since.
+            cursorLine = nil
+            refreshCursor(remembersLine: false)
             // After the read, not before it: a row read between the request and the frame that
             // serves it describes the old viewport, and cached under the new one it would send a
             // later `}` or `w` walking text that is no longer there.
@@ -266,7 +361,8 @@ final class ScrollModeController {
             move(to: ScrollCell(row: next, column: cursor.column))
         } else {
             surface?.scroll(.lines(delta))  // pinned at an edge: the buffer moves under the cursor
-            refreshCursor()
+            cursorLine = nil  // same as the page moves: the line changes under a cursor that did not
+            refreshCursor(remembersLine: false)
             invalidateRows()
         }
     }
@@ -445,13 +541,22 @@ final class ScrollModeController {
     private static let flashDuration: TimeInterval = 0.22
     private static let flashFrame: TimeInterval = 1.0 / 60
 
-    private func refreshCursor() {
+    /// `remembersLine` is false for a geometry refresh, which does not change which line the reader
+    /// is on: it re-places the band against a grid that is mid-reflow, so the text under the row
+    /// describes the rewrap in progress rather than anything they chose. A drag can fire several
+    /// reflows before a single scroll report arrives, and letting each one overwrite the remembered
+    /// line means the third arms against rewrapped text.
+    private func refreshCursor(remembersLine: Bool = true) {
         guard isActive, let surface else { return }
         let columns = surface.cellMetrics?.columns ?? 0
         // The row first, then the column against THAT row: a grid that lost rows leaves the cursor
         // naming one the backend will not read, and its empty text would collapse the column to 0.
         let row = min(cursor.row, lastRow)
-        cursor = ScrollCell(row: row, column: min(cursor.column, lastColumn(of: row)))
+        let text = rowText(row)
+        cursor = ScrollCell(row: row, column: min(cursor.column, max(text.count - 1, 0)))
+        // Remembered here, while the grid still has the shape this row was chosen against. See
+        // `cursorLine` for why it cannot wait until a reflow asks for it.
+        if remembersLine { cursorLine = Self.isBlank(text) ? nil : text }
         panel?.setScrollCursor(
             ScrollCursorView.State(
                 cursor: cursor,
@@ -534,9 +639,11 @@ final class ScrollModeController {
         lastPosition = position
         // The first report after a geometry change is the reflowed grid: libghostty emits the
         // scrollbar only from a draw, and only when it differs from the last one sent.
-        if let line = pendingAnchorLine {
-            pendingAnchorLine = nil
-            reanchor(to: line)
+        if let pending = pendingAnchor {
+            pendingAnchor = nil
+            if pending.armedAt.duration(to: now()) <= Self.anchorLifetime {
+                reanchor(to: pending.line)
+            }
         }
         updateHeader()
     }

@@ -2169,17 +2169,22 @@ final class WindowController: NSObject {
             self?.cancelConfirm()
             self?.endModes()
         }
-        c.onScrollPosition = { [weak self] surface, position in
-            self?.scrollMode.report(position: position, from: surface)
-            // Search reads the same report for a different reason: to know where the viewport sat
-            // when the bar went up, so it can put it back there rather than at the live end.
-            self?.search.report(position: position, from: surface)
-        }
-        c.onSearchEvent = { [weak self] surface, event in
+        c.onSurfaceEvent = { [weak self] surface, event in
             guard let self else { return }
-            // The panel is resolved lazily: only the backend's own open-a-bar request needs one,
-            // and every other event is for a bar that is already up.
-            search.handle(event, from: surface, panel: activeController?.focusedScrollTarget?.panel)
+            switch event {
+            case .scrollPosition(let position):
+                scrollMode.report(position: position, from: surface)
+                // Search reads the same report for a different reason: to know where the viewport
+                // sat when the bar went up, so it can put it back there rather than at the live end.
+                search.report(position: position, from: surface)
+            case .gridReflow:
+                scrollMode.reportReflow(from: surface)
+            case .search(let event):
+                // The panel is resolved lazily: only the backend's own open-a-bar request needs
+                // one, and every other event is for a bar that is already up.
+                search.handle(
+                    event, from: surface, panel: activeController?.focusedScrollTarget?.panel)
+            }
         }
         c.onNotification = { [weak self] n in self?.agentNotified(id: id, notification: n) }
         c.onCommandFinished = { [weak self] result in self?.commandFinished(id: id, result: result) }

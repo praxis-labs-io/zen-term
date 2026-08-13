@@ -76,10 +76,10 @@ final class PaneCanvasController: NSObject {
     /// routing) onto the pane canvas.
     var onFocusChanged: (() -> Void)?
 
-    /// A pane's scroll position moved. Carries the surface so a consumer can match it against
-    /// the one it cares about.
-    var onScrollPosition: ((TerminalSurface, TerminalScrollPosition) -> Void)?
-    var onSearchEvent: ((TerminalSurface, SearchController.Event) -> Void)?
+    /// A pane's surface reported something the window acts on. Carries the surface so a consumer
+    /// can match it against the one it cares about: a reflow or a search result from a background
+    /// pane must not move the focused pane's overlay.
+    var onSurfaceEvent: ((TerminalSurface, SurfaceEvent) -> Void)?
 
     /// Fired when a socket `focus` command names one of this canvas's panes (an nvim split
     /// at its edge handing off). `TabController` routes it into its unified `navigate(_:)`.
@@ -568,22 +568,25 @@ final class PaneCanvasController: NSObject {
 }
 
 extension PaneCanvasController: TerminalSurfaceDelegate {
-    /// A pane's viewport moved in its buffer. Relayed with the surface attached so scroll mode
-    /// can ignore every pane but the one it is driving.
+    /// Every pane surface is this controller's, so these relay unguarded. `TabController` carries
+    /// the mirror of this block for the two drawers, where the guard is the difference.
     func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {
-        onScrollPosition?(s, position)
+        onSurfaceEvent?(s, .scrollPosition(position))
+    }
+    func surfaceGridDidReflow(_ s: TerminalSurface) {
+        onSurfaceEvent?(s, .gridReflow)
     }
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
-        onSearchEvent?(s, .total(total))
+        onSurfaceEvent?(s, .search(.total(total)))
     }
     func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?) {
-        onSearchEvent?(s, .selected(index))
+        onSurfaceEvent?(s, .search(.selected(index)))
     }
     func surfaceDidEndSearch(_ s: TerminalSurface) {
-        onSearchEvent?(s, .ended)
+        onSurfaceEvent?(s, .search(.ended))
     }
     func surface(_ s: TerminalSurface, wantsSearchWithNeedle needle: String) {
-        onSearchEvent?(s, .wanted(needle: needle))
+        onSurfaceEvent?(s, .search(.wanted(needle: needle)))
     }
     func surface(_ s: TerminalSurface, cwdDidChange url: URL) {
         guard let id = leafID(of: s) else { return }

@@ -316,6 +316,9 @@ final class SearchController {
     /// reflowed into. Measuring first reads the grid that is about to change out from under it.
     private func settleLayout() {
         panel?.layoutSubtreeIfNeeded()
+        // The layout usually reports a reflow on its own, so this is the second call for one
+        // change. Kept anyway: a bar that costs the pane no whole row reshapes nothing, reports
+        // nothing, and the overlay still has to be re-placed against the grid it now sits in.
         scrollMode.refreshGeometry()
     }
 

@@ -90,6 +90,7 @@ final class GhosttyHostView: NSView {
         let backing = convertToBacking(bounds).size
         guard backing.width >= 1, backing.height >= 1 else { return }
         ghostty_surface_set_size(surfacePtr, UInt32(backing.width), UInt32(backing.height))
+        owner?.reportGridIfChanged()
     }
 
     override func setFrameSize(_ newSize: NSSize) {

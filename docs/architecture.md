@@ -27,7 +27,7 @@ API would leave the running size inside each surface where the chrome can't read
 back, and surfaces would drift apart at whatever bounds the backend enforces.
 
 Four types travel with it: `TerminalSurfaceConfig` (spawn params),
-`TerminalSurfaceDelegate` (ten events out, all defaulted to no-ops),
+`TerminalSurfaceDelegate` (seventeen events out, all defaulted to no-ops),
 `TerminalTheme`, and `TerminalBehavior`.
 
 **`disposition(of:)` asks the backend what it would do with a keystroke.** The
@@ -1357,6 +1357,45 @@ signs match (`TerminalScroll.lines(1)` is down, as `scroll_page_lines:1` is).
 `GHOSTTY_ACTION_SCROLLBAR` feeds `scrollPositionDidChange` back up, which is what
 puts a live count in the pane header. It fires on output too, so the count stays
 right while a pane keeps printing.
+
+**The cursor is a viewport row number, so a reflow has to re-find it by content.**
+Anything that changes the grid's shape rewraps the text under that number: a font
+step, the find bar taking a row, a window or divider drag. `surfaceGridDidReflow`
+is the resize half, emitted from `GhosttyHostView.syncSizeAndScale` when a size
+push actually moves rows or columns, and relayed to `ScrollModeController` per
+surface so a drag that reflows one pane leaves the others alone. `refreshGeometry`
+arms an anchor from the line the cursor is on and re-finds it on the first
+`scrollPositionDidChange` after, then drops it: libghostty reports a scrollbar only
+from a draw and only when the value differs, so a resize that rewraps nothing reports
+nothing at all, and an anchor left armed fires on unrelated output much later.
+
+**The line is remembered when the cursor lands, not when the reflow asks for it.**
+libghostty derives the grid synchronously and mails the rewrap to its IO thread, so
+by the time the event arrives the grid has already changed shape while the text has
+not. A cursor sitting in the rows a shrink cut then names a row `text(viewportRow:)`
+refuses, and reading at that moment returned nothing to find the line by. Capturing
+it in `refreshCursor` instead means it is read while the grid still matches the row.
+A geometry refresh is excluded from that capture, since it re-places the band against
+a grid mid-reflow and a drag can fire several reflows before one report arrives. The
+trade is staleness: output that rewrites the row under a still cursor leaves the
+remembered line describing what used to be there. Refreshing it from the scroll report
+would put a `read_text` on the output path, and one `tick()` can drain many lines in a
+single turn, so that buys a main-thread stall instead.
+
+**The re-find runs in two passes, because a rewrap leaves no row holding the whole
+line.** `text(viewportRow:)` reads one row's cells, so a line that wrapped comes back
+split. An exact match goes first, nearest to the old row winning because `❯ ` prefixes
+every prompt on screen. Failing that, a fragment pass takes the row where one text
+starts with the other: narrowing leaves a prefix of what was remembered, widening
+leaves a row that has it as a prefix. That pass ranks by longest shared prefix rather
+than nearest, or a bare prompt a row away would outrank the line the reader was on,
+and it ignores matches too short to mean anything. A height change needs none of this,
+which is why exact matching held up until a width change was tried.
+
+Only the cursor comes back. A selection is dropped, since its anchor is a bare row
+index with no content to be found by, and a viewport-relative cursor cannot follow a
+line off the screen at all: when the line is gone the band holds its row rather than
+jumping to an unrelated one.
 
 **The retractions are the load-bearing half.** The mode holds an app-global key
 handler, so one left up deafens whatever you switched to. It ends when pane focus

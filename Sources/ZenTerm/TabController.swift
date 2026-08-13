@@ -99,9 +99,8 @@ final class TabController: NSObject {
         }
     }
 
-    /// Any surface in this tab moved its scroll position, panes and drawers alike.
-    var onScrollPosition: ((TerminalSurface, TerminalScrollPosition) -> Void)?
-    var onSearchEvent: ((TerminalSurface, SearchController.Event) -> Void)?
+    /// Any surface in this tab reported something the window acts on, panes and drawers alike.
+    var onSurfaceEvent: ((TerminalSurface, SurfaceEvent) -> Void)?
 
     /// The panel holding unified focus, as the pair scroll mode needs: the terminal to drive,
     /// and the panel to hang its indicator on. Nil while the focused panel has no live surface
@@ -284,11 +283,8 @@ final class TabController: NSObject {
         paneCanvas.onZoomEnded = { [weak self] in self?.paneZoomEndedInternally() }
         paneCanvas.onNotification = { [weak self] n in self?.onNotification?(n) }
         paneCanvas.onCommandFinished = { [weak self] result in self?.onCommandFinished?(result) }
-        paneCanvas.onScrollPosition = { [weak self] surface, position in
-            self?.onScrollPosition?(surface, position)
-        }
-        paneCanvas.onSearchEvent = { [weak self] surface, event in
-            self?.onSearchEvent?(surface, event)
+        paneCanvas.onSurfaceEvent = { [weak self] surface, event in
+            self?.onSurfaceEvent?(surface, event)
         }
         paneCanvas.onSurfaceStartFailed = { [weak self] retry, close in self?.onPaneStartFailed?(retry, close) }
     }
@@ -1366,29 +1362,30 @@ final class TabController: NSObject {
 }
 
 extension TabController: TerminalSurfaceDelegate {
-    /// A drawer's viewport moved in its buffer. Panes relay the same event through
-    /// `PaneCanvasController`; both land on `onScrollPosition`.
-    func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {
+    /// Relay one of this tab's drawer surfaces upward. Panes reach the same closure through
+    /// `PaneCanvasController`, so anything that is not one of the two drawers is not ours to
+    /// forward: without the check a pane's event would arrive twice.
+    private func relay(_ s: TerminalSurface, _ event: SurfaceEvent) {
         guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
-        onScrollPosition?(s, position)
+        onSurfaceEvent?(s, event)
     }
-    /// The same relay for a drawer's search, on the same guard: panes go through
-    /// `PaneCanvasController` and both land on `onSearchEvent`.
+    func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {
+        relay(s, .scrollPosition(position))
+    }
+    func surfaceGridDidReflow(_ s: TerminalSurface) {
+        relay(s, .gridReflow)
+    }
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
-        guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
-        onSearchEvent?(s, .total(total))
+        relay(s, .search(.total(total)))
     }
     func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?) {
-        guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
-        onSearchEvent?(s, .selected(index))
+        relay(s, .search(.selected(index)))
     }
     func surfaceDidEndSearch(_ s: TerminalSurface) {
-        guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
-        onSearchEvent?(s, .ended)
+        relay(s, .search(.ended))
     }
     func surface(_ s: TerminalSurface, wantsSearchWithNeedle needle: String) {
-        guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
-        onSearchEvent?(s, .wanted(needle: needle))
+        relay(s, .search(.wanted(needle: needle)))
     }
     /// A click landed in one of the tab's drawer surfaces — give that drawer unified
     /// focus. A tool float is modal and already holds focus, so it's ignored.

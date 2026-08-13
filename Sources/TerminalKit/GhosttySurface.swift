@@ -257,6 +257,10 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         // whichever shape this surface is in, and the branch above is what decides it.
         syncColorScheme()
         if let surfacePtr { ghostty_surface_refresh(surfacePtr) }
+        // A theme carries a font, so a reload can reshape the grid with no size push behind it.
+        // Same reason as `setFontSize`, and not left to the `applySessionFontSize` that happens to
+        // follow this today: nothing enforces that pairing.
+        adoptGridBaseline()
     }
 
     /// Tell libghostty whether this surface reads as light or dark, so a program asking gets the
@@ -308,6 +312,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public func setFontSize(_ points: CGFloat) {
         lastFontSize = points
         performBindingAction("set_font_size:\(points)")
+        // libghostty resizes the cell inside that call, so the new grid is readable here.
+        adoptGridBaseline()
     }
 
     /// Perform one libghostty binding action on this surface by name. The action text is exactly
@@ -612,13 +618,21 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         return text(
             in: TerminalViewportRange(
                 startRow: row, startColumn: 0, endRow: row,
-                endColumn: max(metrics.columns - 1, 0)))
+                endColumn: max(metrics.columns - 1, 0)),
+            metrics: metrics)
     }
 
     /// A span of viewport cells, read in one call. The span cannot leave the grid and no argument
     /// here can make it: `Point.pin` clamps x to the column count and y to the grid height.
     public func text(in range: TerminalViewportRange) -> String? {
-        guard let surfacePtr, let metrics = cellMetrics else { return nil }
+        guard let metrics = cellMetrics else { return nil }
+        return text(in: range, metrics: metrics)
+    }
+
+    /// The grid comes in rather than being re-read. `cellMetrics` is a call into libghostty plus a
+    /// window lookup, and a caller reading one row has already paid for it once.
+    private func text(in range: TerminalViewportRange, metrics: TerminalCellMetrics) -> String? {
+        guard let surfacePtr else { return nil }
         let lastRow = max(metrics.rows - 1, 0)
         guard range.startRow >= 0, range.startRow <= lastRow, range.endRow <= lastRow else {
             return nil
@@ -685,6 +699,40 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     }
 
     func reportFocusWanted() { delegate?.surfaceWantsFocus(self) }
+
+    /// The grid libghostty last reported, so a size push that leaves it alone stays silent.
+    private var lastGrid: (columns: Int, rows: Int)?
+
+    /// Report a reflow if the size just pushed actually changed the grid. Called right after the
+    /// push, which is early enough on purpose: libghostty derives the grid synchronously and mails
+    /// only the buffer's rewrap to its IO thread, so the numbers here are new and the text is not.
+    ///
+    /// The first sizing is not a reflow. A surface has no grid until the chrome lays it out, and
+    /// announcing that first one would read as text moving under a reader who has not looked yet.
+    func reportGridIfChanged() {
+        guard let metrics = cellMetrics else { return }
+        let grid = (columns: metrics.columns, rows: metrics.rows)
+        let previous = lastGrid
+        // Before the dispatch, not after. The delegate reaches into the chrome and moves a header,
+        // which can drive another layout pass, and a push nested inside that one must not find the
+        // old baseline still standing and announce this same reflow a second time.
+        lastGrid = grid
+        guard let previous, previous != grid else { return }
+        delegate?.surfaceGridDidReflow(self)
+    }
+
+    /// Take the current grid as the baseline without announcing anything, for a change that
+    /// reshapes it outside a size push.
+    ///
+    /// A font step is the one that does. It resizes the cell, so the same pixels hold a different
+    /// number of rows, and the chrome drives its own re-place because a step that leaves the row
+    /// count alone still has to redraw at the new cell height. Left stale, the next push that
+    /// changes nothing measures against the pre-step shape and announces a reflow that never
+    /// happened, which costs the reader their selection.
+    private func adoptGridBaseline() {
+        guard let metrics = cellMetrics else { return }
+        lastGrid = (columns: metrics.columns, rows: metrics.rows)
+    }
 
     /// Translate an inbound libghostty action into a seam delegate event. Returns whether
     /// it was consumed.
