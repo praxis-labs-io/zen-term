@@ -967,6 +967,81 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             board.string(forType: .string), "nothing this mode is driving reflowed")
     }
 
+    func test_aNarrowerWindowFindsTheLineByTheFragmentLeftOfIt() throws {
+        // A width change rewraps, and `text(viewportRow:)` reads one row's cells, so no row holds
+        // the whole of what was remembered. Matching on exact text alone found nothing here, the
+        // band held its row, and the reader watched their line slide out from under it.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let long = "❯ tail -f /var/log/system.log | grep -i kernel | less -R"
+        surface.rows[2] = long
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the long command")
+
+        surface.delegate?.surfaceGridDidReflow(surface)
+        // The rewrap: the line no longer fits, so it takes two rows and row 2 holds neither whole.
+        var rewrapped = Array(repeating: "", count: 24)
+        rewrapped[6] = "❯ tail -f /var/log/system.log | grep"
+        rewrapped[7] = "-i kernel | less -R"
+        rewrapped[8] = "❯"
+        surface.rows = rewrapped
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertEqual(
+            controller.scrollMode.cursorRow, 6, "the row holding the front of the line it was on")
+    }
+
+    func test_aWiderWindowFindsTheLineThatAbsorbedTheFragment() throws {
+        // The same reflow the other way: two rows merge back into one, so the remembered text is
+        // now a prefix of the row rather than the row being a prefix of it.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[2] = "❯ tail -f /var/log/system.log | grep"
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+        surface.delegate?.surfaceGridDidReflow(surface)
+        var rewrapped = Array(repeating: "", count: 24)
+        rewrapped[4] = "❯ tail -f /var/log/system.log | grep -i kernel | less -R"
+        surface.rows = rewrapped
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 4)
+    }
+
+    func test_aPromptSigilIsNotEnoughSharedTextToMoveTheBand() throws {
+        // Every line on screen starts with the prompt. Without a floor on how much a fragment has
+        // to share, a reflow that lost the line entirely anchored the band to whichever bare
+        // prompt sat nearest, which is a jump to an unrelated row dressed up as a re-find.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[2] = "❯ seq 1 3"
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+        surface.delegate?.surfaceGridDidReflow(surface)
+        var scrolledAway = Array(repeating: "", count: 24)
+        scrolledAway[5] = "❯"  // shares the sigil and nothing else
+        surface.rows = scrolledAway
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2, "nothing worth calling the same line")
+    }
+
     func test_aSecondReflowInADragKeepsTheLineTheFirstOneRead() throws {
         // A window drag fires one of these per row boundary it crosses. The repeat reads are only
         // safe because `refreshGeometry` reads the line BEFORE it drops the row cache, so the

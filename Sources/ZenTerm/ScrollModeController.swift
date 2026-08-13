@@ -178,16 +178,54 @@ final class ScrollModeController {
     /// consumes this first.
     private var pendingAnchorLine: String?
 
+    /// Put the cursor back on the line it was reading, or leave it where it is when that line is no
+    /// longer on screen. Exact match first, then the fragment pass below.
+    private func reanchor(to line: String) {
+        guard let best = exactRow(of: line) ?? fragmentRow(of: line) else { return }
+        move(to: ScrollCell(row: best, column: cursor.column))
+    }
+
     /// Nearest match wins: a prompt string repeats down the whole viewport, so a search from the top
     /// would drag the cursor to the first prompt on screen every time.
-    private func reanchor(to line: String) {
+    private func exactRow(of line: String) -> Int? {
         var best: Int?
         for row in 0...lastRow where rowText(row) == line {
             if best.map({ abs(row - cursor.row) < abs($0 - cursor.row) }) ?? true { best = row }
         }
-        guard let best else { return }
-        move(to: ScrollCell(row: best, column: cursor.column))
+        return best
     }
+
+    /// The row holding what is left of `line` after a reflow that changed the column count.
+    ///
+    /// `text(viewportRow:)` reads one row's cells, so a rewrapped line comes back split and no row
+    /// carries the whole of what was remembered: narrowing leaves the row holding a prefix of it,
+    /// widening leaves a row that has it as a prefix. Either way one text starts with the other.
+    ///
+    /// Longest shared prefix wins rather than nearest, because every line on screen starts with the
+    /// same prompt. Nearest would hand the anchor to a bare `❯` a row away instead of the fragment
+    /// fifty characters deep into the line the reader was actually on.
+    private func fragmentRow(of line: String) -> Int? {
+        var best: (row: Int, shared: Int)?
+        for row in 0...lastRow {
+            let text = rowText(row)
+            guard text.hasPrefix(line) || line.hasPrefix(text) else { continue }
+            let shared = min(text.count, line.count)
+            guard shared >= Self.minimumFragmentMatch else { continue }
+            let isBetter =
+                best.map {
+                    shared > $0.shared
+                        || (shared == $0.shared && abs(row - cursor.row) < abs($0.row - cursor.row))
+                } ?? true
+            if isBetter { best = (row, shared) }
+        }
+        return best?.row
+    }
+
+    /// How much of the remembered line a fragment has to share before it counts as the same line.
+    /// A rewrapped fragment shares most of it. A prompt row shares a sigil and maybe a short
+    /// command, and anchoring to that would jump the band to an unrelated prompt every time the
+    /// line the reader was on has left the screen entirely.
+    private static let minimumFragmentMatch = 8
 
     /// Whether `s` is the surface the mode is currently driving, so a caller holding a surface
     /// (a pane that just exited) can end only its own mode.
