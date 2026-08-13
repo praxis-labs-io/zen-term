@@ -1,6 +1,6 @@
 import AppKit
 
-/// The curated set of tool-float icons — dev-tooling metaphors (shells, builds, VCS, metrics, infra,
+/// The curated set of tool-float icons: dev-tooling metaphors (shells, builds, VCS, metrics, infra,
 /// files) plus brand marks, laid out as an 8-wide grid by `IconPickerField`. `image` resolves a
 /// symbol the same way the dock does: an SF Symbol, else a bundled brand mark ("git", "docker",
 /// "claude", …).
@@ -16,7 +16,7 @@ enum IconCatalog {
     /// symbol is shown alongside these by the picker so editing never loses it.
     ///
     /// Grouped by metaphor, a row at a time: shell/code/build/run, config/metrics/infra,
-    /// data/docs/files, review/VCS, editors/agents, then services — brand marks last.
+    /// data/docs/files, review/VCS, editors/agents, then services. Brand marks last.
     static let all: [String] = [
         "square.on.square", "terminal", "chevron.left.forwardslash.chevron.right", "curlybraces",
         "wrench.and.screwdriver", "ladybug", "play.rectangle", "bolt",
@@ -74,9 +74,9 @@ enum IconCatalog {
     ]
 
     /// Resolve a symbol to an image: an SF Symbol, else a brand mark bundled in `Resources/`. The
-    /// one place this fallback lives — `IconButton` renders the same catalog and
-    /// used to carry its own copy. SF Symbol first, so a brand-mark name must never collide with a
-    /// real symbol (`IconCatalogTests` holds the line).
+    /// one place this fallback lives. `IconButton` renders the same catalog and used to carry its
+    /// own copy. SF Symbol first, so a brand-mark name must never collide with a real symbol
+    /// (`IconCatalogTests` holds the line).
     ///
     /// A brand mark is a plain SVG with no symbol metadata, so a `SymbolConfiguration` does nothing
     /// to it: `brandSize` sizes it explicitly, and leaving it nil keeps the SVG's natural size.
