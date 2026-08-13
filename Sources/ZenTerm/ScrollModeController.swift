@@ -217,16 +217,19 @@ final class ScrollModeController {
     /// Nearest match wins: a prompt string repeats down the whole viewport, so a search from the top
     /// would drag the cursor to the first prompt on screen every time.
     private func exactRow(of line: String) -> Int? {
-        // The cursor's own row first. A match there is distance 0 and wins nearest outright, and a
-        // reflow that only gained or lost rows leaves most lines exactly where they were. The scan
-        // below is a `read_text` per row of the viewport, which libghostty asks callers to throttle.
-        let here = min(cursor.row, lastRow)
+        // Outward from the cursor's own row, stopping at the first hit. Nearest is the rule anyway,
+        // so the first match in this order is the answer, and a reflow moves a line by a few rows
+        // rather than a screenful. Sweeping the viewport instead spent a `read_text` on every row
+        // of it, which libghostty asks callers to throttle.
+        let here = min(max(cursor.row, 0), lastRow)
         if rowText(here) == line { return here }
-        var best: Int?
-        for row in 0...lastRow where rowText(row) == line {
-            if best.map({ abs(row - cursor.row) < abs($0 - cursor.row) }) ?? true { best = row }
+        for distance in 1...max(lastRow, 1) {
+            // Above before below, which is the tie-break a sweep up from row 0 used to give.
+            for row in [here - distance, here + distance] where row >= 0 && row <= lastRow {
+                if rowText(row) == line { return row }
+            }
         }
-        return best
+        return nil
     }
 
     /// The row holding what is left of `line` after a reflow that changed the column count.

@@ -618,13 +618,21 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         return text(
             in: TerminalViewportRange(
                 startRow: row, startColumn: 0, endRow: row,
-                endColumn: max(metrics.columns - 1, 0)))
+                endColumn: max(metrics.columns - 1, 0)),
+            metrics: metrics)
     }
 
     /// A span of viewport cells, read in one call. The span cannot leave the grid and no argument
     /// here can make it: `Point.pin` clamps x to the column count and y to the grid height.
     public func text(in range: TerminalViewportRange) -> String? {
-        guard let surfacePtr, let metrics = cellMetrics else { return nil }
+        guard let metrics = cellMetrics else { return nil }
+        return text(in: range, metrics: metrics)
+    }
+
+    /// The grid comes in rather than being re-read. `cellMetrics` is a call into libghostty plus a
+    /// window lookup, and a caller reading one row has already paid for it once.
+    private func text(in range: TerminalViewportRange, metrics: TerminalCellMetrics) -> String? {
+        guard let surfacePtr else { return nil }
         let lastRow = max(metrics.rows - 1, 0)
         guard range.startRow >= 0, range.startRow <= lastRow, range.endRow <= lastRow else {
             return nil
