@@ -90,6 +90,7 @@ final class ScrollModeController {
         selection = nil
         lastPosition = nil
         pendingAnchor = nil
+        cursorLine = nil
         isActive = true
         invalidateRows()
         Log.info("scroll mode entered", category: .panes)
@@ -124,6 +125,7 @@ final class ScrollModeController {
         selection = nil
         lastPosition = nil
         pendingAnchor = nil
+        cursorLine = nil
         invalidateRows()
         panel?.modeMeta = nil
         panel?.setScrollCursor(nil) { nil }
@@ -155,14 +157,13 @@ final class ScrollModeController {
     /// coordinate survives that, absolute buffer rows included. The content does.
     func refreshGeometry() {
         guard isActive else { return }
-        let line = rowText(cursor.row)
-        pendingAnchor = Self.isBlank(line) ? nil : (line: line, armedAt: now())
+        pendingAnchor = cursorLine.map { (line: $0, armedAt: now()) }
         // Only the cursor can be found again afterwards. The anchor is a fixed row index with no
         // content behind it, so a selection kept across the reflow would run from a row that now
         // holds something else.
         releaseSelection()
         invalidateRows()  // a different cell size means different rows
-        refreshCursor()
+        refreshCursor(remembersLine: false)
     }
 
     /// The grid this mode is driving changed shape. A resize rewraps the text under a cursor that is
@@ -176,12 +177,21 @@ final class ScrollModeController {
 
     /// The line to re-find, held until the terminal reports the grid it reflowed into, with the
     /// moment it was armed. Nil for a blank row, which has no content to be found by.
-    ///
-    /// A window drag calls `refreshGeometry` once per row or column boundary it crosses, and the
-    /// repeat reads are safe because the row cache still holds the pre-reflow text: `refreshCursor`
-    /// re-caches the cursor's row on the way out, and every path that drops the cache clears or
-    /// consumes this first.
     private var pendingAnchor: (line: String, armedAt: ContinuousClock.Instant)?
+
+    /// The text of the row the cursor sits on, captured every time the cursor is placed rather than
+    /// read when a reflow arrives.
+    ///
+    /// It has to be read while the grid still has the shape the cursor's row was chosen against. A
+    /// reflow is announced *after* the new grid is in place, so a cursor on a row the resize cut is
+    /// already past the bottom edge by then: `text(viewportRow:)` refuses to read it, and the line
+    /// the reader was on is gone with nothing to find it by.
+    ///
+    /// The trade is staleness. Output that rewrites this row while the cursor sits still leaves it
+    /// describing what used to be there. Refreshing it from the scroll report instead would put a
+    /// `read_text` on the output path, and one `tick()` can drain many lines in a single turn, so
+    /// that buys a main-thread stall rather than a gradually worse number.
+    private var cursorLine: String?
 
     /// How long an armed anchor stays good for. The reflow's own report follows the size push
     /// within a frame or two, so anything this far behind belongs to a different event.
@@ -521,13 +531,22 @@ final class ScrollModeController {
     private static let flashDuration: TimeInterval = 0.22
     private static let flashFrame: TimeInterval = 1.0 / 60
 
-    private func refreshCursor() {
+    /// `remembersLine` is false for a geometry refresh, which does not change which line the reader
+    /// is on: it re-places the band against a grid that is mid-reflow, so the text under the row
+    /// describes the rewrap in progress rather than anything they chose. A drag can fire several
+    /// reflows before a single scroll report arrives, and letting each one overwrite the remembered
+    /// line means the third arms against rewrapped text.
+    private func refreshCursor(remembersLine: Bool = true) {
         guard isActive, let surface else { return }
         let columns = surface.cellMetrics?.columns ?? 0
         // The row first, then the column against THAT row: a grid that lost rows leaves the cursor
         // naming one the backend will not read, and its empty text would collapse the column to 0.
         let row = min(cursor.row, lastRow)
-        cursor = ScrollCell(row: row, column: min(cursor.column, lastColumn(of: row)))
+        let text = rowText(row)
+        cursor = ScrollCell(row: row, column: min(cursor.column, max(text.count - 1, 0)))
+        // Remembered here, while the grid still has the shape this row was chosen against. See
+        // `cursorLine` for why it cannot wait until a reflow asks for it.
+        if remembersLine { cursorLine = Self.isBlank(text) ? nil : text }
         panel?.setScrollCursor(
             ScrollCursorView.State(
                 cursor: cursor,

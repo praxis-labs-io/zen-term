@@ -967,6 +967,37 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             board.string(forType: .string), "nothing this mode is driving reflowed")
     }
 
+    func test_aShrinkThatCutsTheCursorsRowStillFindsTheLine() throws {
+        // The grid changes shape before the reflow is announced, so a band sitting in the rows the
+        // resize cut names a row the backend will not read by the time anyone asks. Read at that
+        // moment it came back empty, the anchor was never armed, and the band silently stopped
+        // following — the same failure this whole mechanism exists to prevent, in the one direction
+        // nothing covered.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[20] = "❯ make test"  // the reader's line, low enough to be cut
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        XCTAssertEqual(controller.scrollMode.cursorRow, 20, "precondition: opened on that line")
+        // Output lands before the resize, which drops the row cache. Without that the cache still
+        // holds row 20's text and hides the bug behind a lucky hit.
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 100))
+
+        // The resize lands: six rows fewer, and row 20 is past the bottom edge from here on.
+        surface.cellMetrics = TerminalCellMetrics(
+            columns: 80, rows: 18, cellWidth: 8, cellHeight: 16, gridInset: 2)
+        surface.delegate?.surfaceGridDidReflow(surface)
+        var reflowed = Array(repeating: "", count: 24)
+        reflowed[14] = "❯ make test"
+        surface.rows = reflowed
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertEqual(
+            controller.scrollMode.cursorRow, 14, "the line was remembered before the grid moved")
+    }
+
     func test_aReportLongAfterTheReflowLeavesTheBandAlone() throws {
         // libghostty emits a scrollbar only from a draw and only when the value differs, so a
         // resize that rewraps nothing reports nothing at all. Left armed, the anchor fired on
@@ -1069,11 +1100,11 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 2, "nothing worth calling the same line")
     }
 
-    func test_aSecondReflowInADragKeepsTheLineTheFirstOneRead() throws {
-        // A window drag fires one of these per row boundary it crosses. The repeat reads are only
-        // safe because `refreshGeometry` reads the line BEFORE it drops the row cache, so the
-        // second read is still served the pre-reflow text. Invalidate first and the second read
-        // remembers whatever the rewrap left behind, which is a line the reader never chose.
+    func test_aDragOfSeveralReflowsKeepsTheLineTheReaderChose() throws {
+        // A drag fires one reflow per boundary it crosses and can produce no scroll report at all
+        // along the way, so every one of them re-arms the anchor. Only a cursor move changes which
+        // line the reader is on: if a geometry refresh also re-reads the row, the second reflow
+        // records whatever the first one's rewrap left there and the third anchors to it.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let host = ModeHostSpy()
@@ -1083,13 +1114,16 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let handler = try XCTUnwrap(host.modeHandler)
 
         for _ in 0..<9 { _ = handler(try keyDown("k")) }
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the seq command")
+
         surface.delegate?.surfaceGridDidReflow(surface)
-        surface.rows = Self.slidDown(surface.rows, by: 3)  // the first reflow lands mid-drag
+        surface.rows = Self.slidDown(surface.rows, by: 3)  // that reflow lands, mid-drag
+        surface.delegate?.surfaceGridDidReflow(surface)
         surface.delegate?.surfaceGridDidReflow(surface)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
         XCTAssertEqual(
-            controller.scrollMode.cursorRow, 5, "the line the reader was on, not the blank row 2 left")
+            controller.scrollMode.cursorRow, 5, "the line the reader was on, not the blank it left")
     }
 
     func test_theModeRendersTheTerminalUnfocusedAndGivesItBackOnExit() throws {
