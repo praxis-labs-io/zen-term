@@ -53,7 +53,7 @@ final class IconCatalogTests: XCTestCase {
     /// A float pinned to a dropped icon keeps rendering it — `IconCatalog.image` resolves any SF
     /// Symbol whether or not it's still on the roster, so an existing user's config never breaks.
     func test_droppedIcons_stillResolve_soExistingFloatsKeepTheirGlyph() {
-        for dropped in ["speedometer", "ant", "cube", "cloud", "memorychip", "note.text"] {
+        for dropped in ["speedometer", "ant", "cube", "cloud", "memorychip", "note.text", "puzzlepiece"] {
             XCTAssertFalse(IconCatalog.all.contains(dropped), "\(dropped) was dropped from the roster")
             XCTAssertNotNil(IconCatalog.image(dropped), "but a float still configured with it must render")
         }
