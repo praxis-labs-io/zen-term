@@ -723,6 +723,23 @@ to take it down; a warning that outlives its cause costs the same trust as a dea
 control. When a command is gated off in some build configuration, make the off
 state say so. Inert is fine, silent is not.
 
+**A toast's keys live on the card root, never on a button.** A confirm claims Return,
+Delete and Esc in `ToastView.performKeyEquivalent` *and* `keyDown`, matched by keyCode
+through `KeyboardFocus`. Both entry points, because neither covers the other: AppKit
+skips the traversal for a bare key while some focused hosts hold it, and `keyDown` only
+arrives while the card holds first responder. Space is refused on purpose, though
+`KeyboardFocus.key(for:)` folds it into the same `.activate` as Return: a confirm's
+affirmative quits the app. A non-modal sticky card claims none of them, so the terminal
+under it keeps every key; `dismiss_toast` and `dismiss_all_toasts` are how those come
+down from the keyboard, and both run the card's own cancel action so a tab's attention
+marker clears with it.
+
+Whether the two notification cards wait or clear themselves is `attention-toast` and
+`completion-toast`; `toast-duration` is how long anything that clears itself stays up.
+The presenter holds the duration as a `var` re-pointed by `reapplyDuration`, because it
+is built lazily on a window's first toast and would otherwise bake the value for the
+life of the window.
+
 ### The interaction language
 
 New modal surfaces **compose the existing primitives** rather than re-implementing

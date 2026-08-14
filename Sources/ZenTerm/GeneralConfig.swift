@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import TerminalKit
 
 /// The resolved general configuration — everything the user can override in
@@ -9,6 +10,8 @@ import TerminalKit
 struct GeneralConfig: Equatable {
     enum ReduceMotion: Equatable { case system, on, off }
     enum DiffLayout: Equatable { case sideBySide, inline }
+    /// Whether a notification card waits to be answered or clears itself after `toastDuration`.
+    enum ToastDismissal: Equatable { case sticky, auto }
 
     // Terminal behavior (crosses the seam into TerminalKit).
     var cursorStyle: TerminalBehavior.CursorStyle
@@ -66,6 +69,15 @@ struct GeneralConfig: Equatable {
     // Notifications — fire a macOS banner when an agent needs attention while the app is unfocused
     // (the macOS permission is the real gate; this is the in-app opt-out).
     var agentNotifications: Bool
+
+    /// The in-app card for a background tab that needs you. Sticky by default: it states a
+    /// condition that is still true, so it waits to be answered.
+    var attentionToast: ToastDismissal
+    /// The in-app card a long command posts when it finishes in a background tab.
+    var completionToast: ToastDismissal
+    /// Seconds an auto-dismissing toast stays up. Governs every toast that clears itself, not only
+    /// the two notification kinds.
+    var toastDuration: TimeInterval
 
     // Updates — check for a new release in the background. On by default; this is the
     // off switch, driving Sparkle's automatic-check setting. Inert in an unpackaged dev build.
@@ -132,6 +144,9 @@ struct GeneralConfig: Equatable {
         reduceMotion: .system,
         diffLayout: .sideBySide,
         agentNotifications: true,
+        attentionToast: .sticky,
+        completionToast: .sticky,
+        toastDuration: 4,
         automaticUpdateChecks: true,
         debug: false,
         shell: nil,

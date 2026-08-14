@@ -93,6 +93,7 @@ final class ConfigChangeTests: XCTestCase {
         XCTAssertEqual(change(from: { $0.reduceMotion = .on }), .motion)
         XCTAssertEqual(change(from: { $0.automaticUpdateChecks.toggle() }), .updates)
         XCTAssertEqual(change(from: { $0.hiddenToolbarButtons = [.diffViewer] }), .toolbarButtons)
+        XCTAssertEqual(change(from: { $0.toastDuration = 9 }), .toasts)
         XCTAssertEqual(
             change(from: {
                 $0.configDiagnostics = [
@@ -149,10 +150,18 @@ final class ConfigChangeTests: XCTestCase {
 
     /// `.all` must actually contain every kind — a kind added to the type but left out of `.all`
     /// would make the fail-safe silently partial.
+    /// The two stickiness keys are read when a notification fires, so they deliberately light up
+    /// nothing: a live window has no state derived from them to re-point. Only the duration does,
+    /// because the presenter holds it.
+    func test_toastDismissalModes_yieldNoChange() {
+        XCTAssertEqual(change(from: { $0.attentionToast = .auto }), [])
+        XCTAssertEqual(change(from: { $0.completionToast = .auto }), [])
+    }
+
     func test_allContainsEveryKind() {
         for kind: ConfigChange in [
             .theme, .chromeLayout, .terminalBehavior, .floats, .keymap, .motion, .diagnostics, .updates,
-            .toolbarButtons,
+            .toolbarButtons, .toasts,
         ] {
             XCTAssertTrue(ConfigChange.all.contains(kind), "\(kind.rawValue) missing from .all")
         }

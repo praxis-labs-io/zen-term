@@ -106,6 +106,14 @@ enum GeneralConfigParser {
                 if let d = parseDiffLayout(value, &diagnostics) { config.diffLayout = d }
             case "agent-notifications":
                 if let b = parseBool(value, key, &diagnostics) { config.agentNotifications = b }
+            case "attention-toast":
+                if let t = parseToastDismissal(value, key, &diagnostics) { config.attentionToast = t }
+            case "completion-toast":
+                if let t = parseToastDismissal(value, key, &diagnostics) { config.completionToast = t }
+            case "toast-duration":
+                if let n = parseDouble(value, key, &diagnostics) {
+                    config.toastDuration = clamp(n, 1, 60, key, &diagnostics)
+                }
             case "automatic-update-checks":
                 if let b = parseBool(value, key, &diagnostics) { config.automaticUpdateChecks = b }
             case "debug":
@@ -316,6 +324,22 @@ enum GeneralConfigParser {
                 "GeneralConfig: `diff-layout` expected side-by-side/inline, got `\(value)` — using default",
                 category: .config)
             diagnostics.append(invalid("diff-layout", got: value, expected: "side-by-side or inline"))
+            return nil
+        }
+    }
+
+    /// Shared by `attention-toast` and `completion-toast`, so `key` names which one is at fault.
+    private static func parseToastDismissal(
+        _ value: String, _ key: String, _ diagnostics: inout [ConfigDiagnostic]
+    ) -> GeneralConfig.ToastDismissal? {
+        switch value.lowercased() {
+        case "sticky": return .sticky
+        case "auto": return .auto
+        default:
+            Log.warning(
+                "GeneralConfig: `\(key)` expected sticky/auto, got `\(value)` — using default",
+                category: .config)
+            diagnostics.append(invalid(key, got: value, expected: "sticky or auto"))
             return nil
         }
     }

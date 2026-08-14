@@ -34,6 +34,14 @@ enum LayoutFormat {
         }
     }
 
+    /// The `attention-toast` / `completion-toast` token for whether a notification card waits.
+    static func toastDismissalToken(_ dismissal: GeneralConfig.ToastDismissal) -> String {
+        switch dismissal {
+        case .sticky: return "sticky"
+        case .auto: return "auto"
+        }
+    }
+
     static func joinArgs(_ args: [String]) -> String { args.joined(separator: " ") }
 
     static func splitArgs(_ text: String) -> [String] {

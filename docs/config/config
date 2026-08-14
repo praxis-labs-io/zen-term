@@ -172,6 +172,22 @@
 # In-app Settings edit: applies live.
 # agent-notifications = true          # true | false
 
+# The in-app card for a background tab that needs you. Sticky waits to be
+# answered; auto clears itself after `toast-duration`. Either way the tab's
+# colored number stays until you visit the tab or press Dismiss.
+# In-app Settings edit: applies to the next notification.
+# attention-toast = sticky            # sticky | auto
+
+# The same, for the card a long command posts when it finishes in a background
+# tab.
+# In-app Settings edit: applies to the next notification.
+# completion-toast = sticky           # sticky | auto
+
+# Seconds a card that clears itself stays up. Covers every notice that clears
+# itself, not only the two above.
+# In-app Settings edit: applies to the next notice.
+# toast-duration = 4                  # 1-60
+
 # ─── Updates ─────────────────────────────────────────────────────────────────
 
 # Check for a new release in the background. On by default; turn it off to check
@@ -312,6 +328,7 @@
 #   search_selection
 #   find_next  find_previous  (no default; `n` and `N` step a live search)
 #   clear_screen  paste_selection
+#   dismiss_toast  dismiss_all_toasts
 #   select_all  (no default; Edit > Select All holds ⌘A)
 #   write_screen_file  write_screen_file_copy  write_screen_file_open
 #   toggle_workspace_picker  toggle_command_palette  diff_viewer
@@ -365,6 +382,8 @@
 # keybind = write_screen_file_open=cmd+shift+opt+j     # …opens the file instead
 # keybind = jump_to_previous_prompt=cmd+shift+up
 # keybind = jump_to_next_prompt=cmd+shift+down
+# keybind = dismiss_toast=cmd+shift+n            # the oldest notice; press again to walk down
+# keybind = dismiss_all_toasts=cmd+shift+opt+n
 # keybind = toggle_command_palette=cmd+shift+p
 # keybind = toggle_workspace_picker=cmd+p
 # keybind = diff_viewer=cmd+g                    # diff of the focused repo

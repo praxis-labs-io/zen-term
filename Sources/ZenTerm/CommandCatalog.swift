@@ -76,6 +76,8 @@ enum CommandCatalog {
         case .writeScreenFile: return pane("Write Screen to File", glyph, chord)
         case .copyScreenFilePath: return pane("Write Screen to File, Copy Path", glyph, chord)
         case .openScreenFile: return pane("Write Screen to File and Open", glyph, chord)
+        case .dismissToast: return window("Dismiss Notice", glyph, chord)
+        case .dismissAllToasts: return window("Dismiss All Notices", glyph, chord)
         // Present for exhaustiveness; all are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", glyph, chord)
         // Edit > Select All is the whole of how ⌘A is offered, the same as Copy and Paste. Listing
@@ -125,6 +127,7 @@ enum CommandCatalog {
             .closePane,
         ]
         chords += [.fillScreen, .increaseFontSize, .decreaseFontSize, .resetFontSize]
+        chords += [.dismissToast, .dismissAllToasts]
         return chords.map(spec(for:))
     }
 

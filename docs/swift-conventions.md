@@ -322,7 +322,8 @@ Three shipped instances, all the same shape wearing different clothes. `SplitCon
 `gutter: CGFloat = ChromeMetrics.panelGap` as a **default argument** and stored it, so `pane-gap`
 moved the canvas/drawer seam while the gap *between* panes stayed frozen. `ToastPresenter` pinned
 its stack at `init`, and the presenter is built on the first toast, so a later `window-gutter`
-change left an already-used window's toasts at the old offset. And `CommandPaletteOverlay` stored
+change left an already-used window's toasts at the old offset; `toast-duration` would have landed
+the same way, and rides the same `reapply` path for the same reason. And `CommandPaletteOverlay` stored
 the `[PaletteCommand]` array handed to `init`, where each command bakes its shortcut *glyph* in at
 catalog-build time: `reapplyTheme()` genuinely tore down and rebuilt every row, so it looked live,
 but the rebuilt rows replayed the snapshotted glyph and an open palette kept the old chord after a

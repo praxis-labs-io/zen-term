@@ -40,8 +40,8 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    /// Mount the section (section + window retained) and return its segmented controls in order —
-    /// [0] Notifications, [1] Updates, matching `populate()`.
+    /// Mount the section (section + window retained) and return its segmented controls in
+    /// `populate()` order, which `Segment` names.
     private func mountSegments() -> [SegmentedControl] {
         let section = SettingsGeneralSection()
         self.section = section
@@ -60,24 +60,51 @@ final class SettingsGeneralSectionTests: WindowTestCase {
             contentsOf: ConfigLoader.defaultRoot.appendingPathComponent("config"), encoding: .utf8)) ?? ""
     }
 
-    func test_bothToggles_arePresent_andDefaultOn() {
+    /// The segmented rows the section builds, in the order `populate()` adds them. Named rather
+    /// than indexed inline: a row added in the middle silently re-points every bare number.
+    private enum Segment: Int {
+        case notifications, attentionToast, completionToast, updates
+    }
+
+    private func segment(_ which: Segment) -> SegmentedControl {
+        mountSegments()[which.rawValue]
+    }
+
+    func test_everyToggle_isPresent_andDefaults() {
         let segments = mountSegments()
-        XCTAssertEqual(segments.count, 2, "General holds the Notifications and Updates toggles")
-        XCTAssertEqual(segments[0].selectedIndex, 0, "notifications default is On")
-        XCTAssertEqual(segments[1].selectedIndex, 0, "automatic updates default is On")
+        XCTAssertEqual(segments.count, 4, "notifications, the two toast rows, and updates")
+        XCTAssertEqual(segments[Segment.notifications.rawValue].selectedIndex, 0, "notifications On")
+        XCTAssertEqual(segments[Segment.attentionToast.rawValue].selectedIndex, 0, "attention Sticky")
+        XCTAssertEqual(segments[Segment.completionToast.rawValue].selectedIndex, 0, "completion Sticky")
+        XCTAssertEqual(segments[Segment.updates.rawValue].selectedIndex, 0, "automatic updates On")
     }
 
     func test_notifications_selectingOff_writesFalse() {
-        let notifications = mountSegments()[0]
-
-        notifications.select(1)  // drive the Off segment as a click would
+        segment(.notifications).select(1)  // drive the Off segment as a click would
 
         XCTAssertTrue(
             configText().contains("agent-notifications = false"), "got: \(configText())")
     }
 
+    /// The two toast rows share a parse helper and a token function, so each has to prove it writes
+    /// its own key: a copy-paste that pointed both at `attention-toast` would leave the completion
+    /// row silently editing the wrong setting.
+    func test_attentionToast_selectingAuto_writesItsOwnKey() {
+        segment(.attentionToast).select(1)
+
+        XCTAssertTrue(configText().contains("attention-toast = auto"), "got: \(configText())")
+        XCTAssertFalse(configText().contains("completion-toast"), "got: \(configText())")
+    }
+
+    func test_completionToast_selectingAuto_writesItsOwnKey() {
+        segment(.completionToast).select(1)
+
+        XCTAssertTrue(configText().contains("completion-toast = auto"), "got: \(configText())")
+        XCTAssertFalse(configText().contains("attention-toast"), "got: \(configText())")
+    }
+
     func test_updates_selectingOff_thenOn_writesFalseThenTrue() {
-        let updates = mountSegments()[1]
+        let updates = segment(.updates)
 
         updates.select(1)  // Off
         XCTAssertTrue(

@@ -67,6 +67,8 @@ extension KeyInterceptor.ReservedChord {
         case .jumpToPreviousPrompt: return "jump_to_previous_prompt"
         case .jumpToNextPrompt: return "jump_to_next_prompt"
         case .pasteSelection: return "paste_selection"
+        case .dismissToast: return "dismiss_toast"
+        case .dismissAllToasts: return "dismiss_all_toasts"
         }
     }
 
@@ -93,7 +95,11 @@ extension KeyInterceptor.ReservedChord {
             .toggleScrollMode, .toggleSearch, .scrollToTop, .scrollToBottom,
             .findNext, .findPrevious, .searchSelection,
             .clearScreen, .selectAll, .scrollToSelection, .pasteSelection, .writeScreenFile,
-            .copyScreenFilePath, .openScreenFile:
+            .copyScreenFilePath, .openScreenFile,
+            // Discrete on purpose, though the effect does accumulate: at the key-repeat rate a hold
+            // would clear a notice you hadn't read yet. Presses walk the stack; `dismissAllToasts`
+            // is the one for clearing it in a keystroke.
+            .dismissToast, .dismissAllToasts:
             return false
         }
     }
@@ -130,7 +136,8 @@ extension KeyInterceptor.ReservedChord {
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
             .newTab, .newWindow, .prevTab, .nextTab, .selectTab,
             .fillScreen, .toggleBottomDrawer, .toggleRightDrawer,
-            .toggleRepoPicker, .toggleCommandPalette, .openDiffViewer, .newTool, .openSettings:
+            .toggleRepoPicker, .toggleCommandPalette, .openDiffViewer, .newTool, .openSettings,
+            .dismissToast, .dismissAllToasts:
             return true
         }
     }
@@ -196,6 +203,8 @@ extension KeyInterceptor.ReservedChord {
         case "jump_to_previous_prompt": self = .jumpToPreviousPrompt
         case "jump_to_next_prompt": self = .jumpToNextPrompt
         case "paste_selection": self = .pasteSelection
+        case "dismiss_toast": self = .dismissToast
+        case "dismiss_all_toasts": self = .dismissAllToasts
         // ghostty's own spelling, so a config carried over from it binds our find bar rather than
         // failing to parse.
         case "start_search": self = .toggleSearch
@@ -333,6 +342,11 @@ enum KeymapDefaults {
         map[Chord(command: true, shift: true, key: "v")] = .pasteSelection
         map[Chord(command: true, shift: true, key: "↑")] = .jumpToPreviousPrompt
         map[Chord(command: true, shift: true, key: "↓")] = .jumpToNextPrompt
+
+        // Clearing notices. N for notice, beside ⌘N's window family rather than in it — the toast
+        // stack is the only thing in the app these two touch.
+        map[Chord(command: true, shift: true, key: "n")] = .dismissToast
+        map[Chord(command: true, shift: true, option: true, key: "n")] = .dismissAllToasts
 
         return map
     }()

@@ -65,6 +65,23 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
+    /// Drive the real keys at a non-modal card and assert it declines every one. Reading the
+    /// buttons' `keyEquivalent` used to stand in for this and no longer can: no toast button carries
+    /// one now, so that assertion holds for a confirm too and proves nothing about stickiness.
+    private func assertClaimsNoKeys(
+        _ toast: ToastView, _ message: String, file: StaticString = #filePath, line: UInt = #line
+    ) {
+        for keyCode: UInt16 in [36, 76, 51, 53, 49] {  // Return, keypad Enter, Delete, Esc, Space
+            let event = NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false,
+                keyCode: keyCode)!
+            XCTAssertFalse(
+                toast.performKeyEquivalent(with: event), "\(message) (keyCode \(keyCode))",
+                file: file, line: line)
+        }
+    }
+
     private func toastViews(in controller: WindowController) -> [ToastView] {
         guard let root = controller.window.contentView else { return [] }
         return descendants(of: root).compactMap { $0 as? ToastView }
@@ -159,9 +176,40 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         drainMainQueue()
 
         let toast = try XCTUnwrap(controller.waitingToastForTesting(tabIndex: 0))
-        let armed = descendants(of: toast).compactMap { ($0 as? AppButton)?.keyEquivalent }
-        XCTAssertEqual(armed, ["", ""], "a sticky toast arms no Return/Esc, keycap or not")
+        assertClaimsNoKeys(toast, "a sticky toast claims no Return/Esc, keycap or not")
         XCTAssertFalse(toast.acceptsFirstResponder, "and it never takes focus from the terminal")
+    }
+
+    /// `attention-toast = auto` arms the same timer a passive toast uses. Driven through the real
+    /// notification path and the real clock, since what could break is the card never being handed
+    /// a deadline at all.
+    func test_waitingToast_underAutoDismiss_clearsItself() throws {
+        try seed("attention-toast = auto\ntoast-duration = 1\n")
+        let controller = makeController()
+        controller.newTabForTesting()
+        controller.notifyAgentForTesting(tabIndex: 0, message: "needs your input")
+        drainMainQueue()
+        XCTAssertEqual(toastViews(in: controller).count, 1, "it still appears")
+
+        settle(1.5)
+
+        XCTAssertTrue(toastViews(in: controller).isEmpty, "and then clears itself")
+        XCTAssertEqual(
+            controller.attentionStateForTesting(tabIndex: 0), .waiting,
+            "but the tab keeps its number colored: the agent is still waiting")
+    }
+
+    /// The default. A card that states a condition still true has to wait to be answered.
+    func test_waitingToast_underSticky_staysUp() throws {
+        try seed("attention-toast = sticky\ntoast-duration = 1\n")
+        let controller = makeController()
+        controller.newTabForTesting()
+        controller.notifyAgentForTesting(tabIndex: 0, message: "needs your input")
+        drainMainQueue()
+
+        settle(1.5)
+
+        XCTAssertEqual(toastViews(in: controller).count, 1, "no timer was armed")
     }
 
     /// A sticky toast has no auto-dismiss, so one left up across a theme edit must recolor with the
@@ -289,8 +337,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         controller.showConfigDiagnosticsToast(
             ToastContent(variant: .warning, title: "t", message: "m"), landingScope: .keybindLine)
         let toast = toastViews(in: controller)[0]
-        let armed = descendants(of: toast).compactMap { ($0 as? AppButton)?.keyEquivalent }
-        XCTAssertEqual(armed, ["", ""], "a sticky toast arms no Return/Esc on either button")
+        assertClaimsNoKeys(toast, "a sticky toast claims no Return/Esc")
         XCTAssertFalse(toast.acceptsFirstResponder, "and it never takes focus from the terminal")
     }
 
@@ -390,6 +437,38 @@ final class WindowControllerToastSeamTests: WindowTestCase {
     /// The third exit. Answering writes; putting the card away must not, or a user tidying their
     /// screen would silently edit their config. Actionable toasts had no close affordance at all
     /// until this, so a conflict card could only be answered.
+    /// The dismiss chords run a card's `onClose`, never its `cancel` button. On a conflict card
+    /// `cancel` is "Revert", which rewrites the config, so treating the two as the same thing made
+    /// a dismiss key silently delete the user's keybind.
+    func test_dismissChord_takesTheConflictCardDown_withoutWriting() throws {
+        try seed("keybind = split_vertical=cmd+shift+p\n")
+        let before = try configText()
+        let controller = makeController()
+        controller.showConflictToasts(KeybindConflict.all(in: .current))
+        XCTAssertEqual(toastViews(in: controller).count, 1)
+
+        controller.handle(.dismissToast)
+
+        waitUntil(toastViews(in: controller).isEmpty, "the card comes down")
+        XCTAssertEqual(try configText(), before, "byte-identical: a dismiss key writes nothing")
+        XCTAssertEqual(
+            KeybindConflict.all(in: .current).map(\.loser), [.toggleCommandPalette],
+            "and the conflict is still outstanding, so the next launch raises it again")
+    }
+
+    /// Same guarantee for the bulk chord, which is where a single mistaken write becomes several.
+    func test_dismissAllChord_takesEveryConflictCardDown_withoutWriting() throws {
+        try seed("keybind = split_vertical=cmd+shift+p\n")
+        let before = try configText()
+        let controller = makeController()
+        controller.showConflictToasts(KeybindConflict.all(in: .current))
+
+        controller.handle(.dismissAllToasts)
+
+        waitUntil(toastViews(in: controller).isEmpty, "every card comes down")
+        XCTAssertEqual(try configText(), before, "byte-identical")
+    }
+
     func test_conflictToast_close_dismissesWithoutWriting() throws {
         try seed("keybind = split_vertical=cmd+shift+p\n")
         let before = try configText()
@@ -500,8 +579,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         ])
 
         let toast = toastViews(in: controller)[0]
-        let armed = descendants(of: toast).compactMap { ($0 as? AppButton)?.keyEquivalent }
-        XCTAssertEqual(armed, ["", ""], "neither button arms a key")
+        assertClaimsNoKeys(toast, "neither button arms a key")
         XCTAssertFalse(toast.acceptsFirstResponder, "and the card never takes focus from the terminal")
     }
 

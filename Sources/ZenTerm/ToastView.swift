@@ -22,14 +22,25 @@ struct ToastContent: Equatable {
 /// (`FloatShadow` bg + hairline edge + drop shadow). Fixed width; springs in/out on `Motion`.
 /// The `ToastPresenter` owns placement (top-right) and lifetime.
 final class ToastView: ShadowCardView {
-    /// The "×" (and, for a passive toast, a body click) fires this — the presenter dismisses,
-    /// or a confirm cancels.
+    /// This card's dismissal: the "×", a passive toast's body click, and the dismiss chords all
+    /// run it. A card that sets none is not dismissible from the keyboard either, which is the
+    /// point for the surface-failure notice, whose only ways out are Retry and Close Pane.
     var onClose: (() -> Void)?
-    private var isDismissing = false
+    /// Fired after the presenter has taken this card out of the stack, so an owner holding it by
+    /// id can drop its handle instead of keeping a detached view alive.
+    var onDismissed: (() -> Void)?
+    private(set) var isDismissing = false
     private let hasActions: Bool
     /// Only a modal confirm (actionable AND arming Return/Esc) should take first responder;
     /// a non-modal sticky toast must not, or it would steal input from the terminal.
     private let gatesFocus: Bool
+    /// The affirmative action (`primary` / `destructive`), answered by Return. Nil on a card with
+    /// no such button.
+    private let confirmAction: (() -> Void)?
+    /// The `cancel` action, answered by Delete and Esc on a confirm. Deliberately NOT what the
+    /// dismiss chords run: `cancel` is a card's negative *answer*, not a dismissal, and on a
+    /// keybind-conflict card it is "Revert", which rewrites the config. `onClose` is the dismissal.
+    private let cancelAction: (() -> Void)?
     /// The border tone (neutral for info, tinted for warning/destructive) — re-derived in
     /// `reapplyTheme()` since it's a `Theme.current.chrome`-sourced value baked at init.
     private let variant: ToastVariant
@@ -62,11 +73,13 @@ final class ToastView: ShadowCardView {
     private var shortcutSlots: [ShortcutSlot] = []
 
     init(
-        content: ToastContent, actions: [ToastAction], keyEquivalents: Bool = true,
+        content: ToastContent, actions: [ToastAction], armsKeys: Bool = true,
         showsClose: Bool = false
     ) {
         self.hasActions = !actions.isEmpty
-        self.gatesFocus = keyEquivalents && !actions.isEmpty
+        self.gatesFocus = armsKeys && !actions.isEmpty
+        self.confirmAction = actions.first { $0.kind != .cancel }?.run
+        self.cancelAction = actions.first { $0.kind == .cancel }?.run
         self.variant = content.variant
         self.titleLabel = NSTextField(labelWithString: content.title)
         self.messageLabel = NSTextField(wrappingLabelWithString: content.message)
@@ -154,8 +167,7 @@ final class ToastView: ShadowCardView {
             // Small buttons hugging the leading edge (a trailing spacer absorbs the slack).
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            let row = NSStackView(
-                views: actions.map { Self.button(for: $0, keyEquivalents: keyEquivalents) } + [spacer])
+            let row = NSStackView(views: actions.map(Self.button(for:)) + [spacer])
             row.orientation = .horizontal
             row.alignment = .centerY
             row.spacing = 6
@@ -188,18 +200,21 @@ final class ToastView: ShadowCardView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Build a toast action button on the shared `AppButton`: `cancel` → a muted `secondary`,
-    /// `destructive` → the destructive-tinted `destructive`, `primary` → the accent `primary`. The
-    /// affirmative kinds (primary/destructive) take Return and `cancel` takes Esc, unless
-    /// `keyEquivalents` is off (a non-modal toast that must not hijack those keys window-wide).
-    private static func button(for action: ToastAction, keyEquivalents: Bool) -> AppButton {
+    /// `destructive` → the destructive-tinted `destructive`, `primary` → the accent `primary`.
+    ///
+    /// Click-only, deliberately. Return and Esc used to ride here as `NSButton.keyEquivalent`s,
+    /// which answer only from a `performKeyEquivalent` traversal that reaches this button: it does
+    /// nothing when a view earlier in the subview order claims the key first, and nothing at all on
+    /// the paths where AppKit skips the traversal. The card owns those keys now, on both entry
+    /// points and by keyCode.
+    private static func button(for action: ToastAction) -> AppButton {
         let variant: AppButton.Variant
         switch action.kind {
         case .primary: variant = .primary
         case .destructive: variant = .destructive
         case .cancel: variant = .secondary
         }
-        let keyEquivalent = keyEquivalents ? (action.kind == .cancel ? "\u{1b}" : "\r") : ""
-        return AppButton(title: action.title, variant: variant, keyEquivalent: keyEquivalent, onTap: action.run)
+        return AppButton(title: action.title, variant: variant, onTap: action.run)
     }
 
     /// One action's keycap slot: the row it lives in and the query for its current glyph. The glyph
@@ -235,6 +250,40 @@ final class ToastView: ShadowCardView {
     /// A modal confirm takes keyboard focus so terminal input is gated while it's up; a
     /// non-modal sticky toast never does (its buttons are click-only).
     override var acceptsFirstResponder: Bool { gatesFocus }
+
+    /// A confirm answers from the card root, like every other modal card in the app. Both entry
+    /// points, because neither alone is enough: `performKeyEquivalent` isn't invoked for a bare key
+    /// while some focused hosts hold it (see `ModalEscape`), and `keyDown` only arrives while the
+    /// card actually holds first responder, which anything else in the window can take back.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if answer(event) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if !answer(event) { super.keyDown(with: event) }
+    }
+
+    /// Answer a confirm: Return runs the affirmative, Delete and Esc cancel. Returns whether the
+    /// key was claimed. Declines for anything that isn't a modal confirm, so a sticky notice keeps
+    /// arming nothing and the terminal keeps every key.
+    ///
+    /// Bare keys only. The buttons this replaced carried an empty `keyEquivalentModifierMask`, so
+    /// they answered an unmodified Return alone; matching on keyCode without the same guard would
+    /// let an unbound ⌥⏎ quit the app.
+    private func answer(_ event: NSEvent) -> Bool {
+        guard gatesFocus, !isDismissing, KeyboardFocus.isUnmodified(event) else { return false }
+        if KeyboardFocus.isReturn(event) {
+            confirmAction?()
+            return confirmAction != nil
+        }
+        if KeyboardFocus.key(for: event) == .delete {
+            cancelAction?()
+            return cancelAction != nil
+        }
+        guard let cancelAction else { return false }
+        return ModalEscape.handle(event, in: window, dismissing: isDismissing, close: cancelAction)
+    }
 
     /// A body click dismisses a passive toast; an actionable one ignores it, so a misclick can't
     /// answer a question. Its "×" and its buttons are the only ways out.

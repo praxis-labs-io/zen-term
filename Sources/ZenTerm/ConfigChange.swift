@@ -47,9 +47,13 @@ struct ConfigChange: OptionSet {
     /// The `hide-toolbar-buttons` set: which built-in footer-toolbar buttons are hidden.
     static let toolbarButtons = ConfigChange(rawValue: 1 << 8)
 
+    /// `toast-duration`. The two stickiness keys are read when a notification fires, so only the
+    /// duration needs re-pointing: the presenter is built once per window and outlives the edit.
+    static let toasts = ConfigChange(rawValue: 1 << 9)
+
     static let all: ConfigChange = [
         .theme, .chromeLayout, .terminalBehavior, .floats, .keymap, .motion, .diagnostics, .updates,
-        .toolbarButtons,
+        .toolbarButtons, .toasts,
     ]
 
     static let userInfoKey = "ZenTerm.configChange"
@@ -77,6 +81,7 @@ struct ConfigChange: OptionSet {
         if old.configDiagnostics != new.configDiagnostics { change.insert(.diagnostics) }
         if old.automaticUpdateChecks != new.automaticUpdateChecks { change.insert(.updates) }
         if old.hiddenToolbarButtons != new.hiddenToolbarButtons { change.insert(.toolbarButtons) }
+        if old.toastDuration != new.toastDuration { change.insert(.toasts) }
         return change
     }
 

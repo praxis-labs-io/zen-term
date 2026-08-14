@@ -334,6 +334,59 @@ final class GeneralConfigParserTests: XCTestCase {
             ])
     }
 
+    // MARK: toasts
+
+    func test_toastKeys_parse() {
+        let config = parse(
+            """
+            attention-toast = auto
+            completion-toast = auto
+            toast-duration = 8
+            """)
+        XCTAssertEqual(config.attentionToast, .auto)
+        XCTAssertEqual(config.completionToast, .auto)
+        XCTAssertEqual(config.toastDuration, 8)
+    }
+
+    /// Both notification cards wait by default, so nothing moves for anyone who sets neither.
+    func test_toastKeys_defaultToSticky() {
+        let config = parse("")
+        XCTAssertEqual(config.attentionToast, .sticky)
+        XCTAssertEqual(config.completionToast, .sticky)
+        XCTAssertEqual(config.toastDuration, 4)
+    }
+
+    /// The two share one parse helper, so the diagnostic has to name which key was wrong.
+    func test_invalidToastDismissal_namesTheKeyThatWasWrong() {
+        let diagnostics = parse(
+            """
+            attention-toast = forever
+            completion-toast = whenever
+            """
+        ).configDiagnostics
+        XCTAssertEqual(
+            diagnostics,
+            [
+                ConfigDiagnostic(
+                    scope: .setting(key: "attention-toast"),
+                    problem: .invalidValue(got: "forever", expected: "sticky or auto")),
+                ConfigDiagnostic(
+                    scope: .setting(key: "completion-toast"),
+                    problem: .invalidValue(got: "whenever", expected: "sticky or auto")),
+            ])
+    }
+
+    func test_toastDuration_clampsToItsRange() {
+        XCTAssertEqual(parse("toast-duration = 99\n").toastDuration, 60)
+        XCTAssertEqual(parse("toast-duration = 0\n").toastDuration, 1)
+        XCTAssertEqual(
+            parse("toast-duration = 99\n").configDiagnostics,
+            [
+                ConfigDiagnostic(
+                    scope: .setting(key: "toast-duration"), problem: .clamped(value: "99", to: "60"))
+            ])
+    }
+
     func test_outOfRangeNumber_collectsAClampedDiagnostic() {
         XCTAssertEqual(
             parse("font-size = 200\n").configDiagnostics,

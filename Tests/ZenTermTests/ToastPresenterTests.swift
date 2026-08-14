@@ -43,21 +43,36 @@ final class ToastPresenterTests: WindowTestCase {
         return descendants(of: host).compactMap { $0 as? ToastView }
     }
 
-    // MARK: key-equivalent guarantee
+    // MARK: which cards claim keys
+    //
+    // The keys live on the card root now, not on `NSButton.keyEquivalent`, so these press real
+    // events at it. Reading the buttons no longer distinguishes the two: no toast button carries a
+    // key equivalent, so that assertion would hold for a confirm as well and prove nothing.
 
-    func test_stickyToast_armsNoReturnOrEscKeyEquivalents() {
-        let presenter = ToastPresenter(host: makeHost(), topInset: 12, trailingInset: 12)
-        let toast = presenter.showSticky(content(), actions: actions())
-        let armed = buttons(in: toast).map(\.keyEquivalent)
-        XCTAssertEqual(armed, ["", ""], "a non-modal sticky toast must not hijack Return/Esc from the terminal")
+    private func keyEvent(_ keyCode: UInt16, _ characters: String) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: characters, charactersIgnoringModifiers: characters,
+            isARepeat: false, keyCode: keyCode)!
     }
 
-    func test_confirmToast_armsKeyEquivalents() {
+    func test_stickyToast_claimsNeitherReturnNorEsc() {
+        let presenter = ToastPresenter(host: makeHost(), topInset: 12, trailingInset: 12)
+        let toast = presenter.showSticky(content(), actions: actions())
+
+        XCTAssertFalse(
+            toast.performKeyEquivalent(with: keyEvent(36, "\r")),
+            "a non-modal sticky toast must not take Return from the terminal")
+        XCTAssertFalse(
+            toast.performKeyEquivalent(with: keyEvent(53, "\u{1b}")), "nor Esc, which vim wants")
+    }
+
+    func test_confirmToast_claimsReturnAndEsc() {
         let presenter = ToastPresenter(host: makeHost(), topInset: 12, trailingInset: 12)
         let toast = presenter.confirm(content(), actions: actions())
-        let armed = Set(buttons(in: toast).map(\.keyEquivalent))
-        XCTAssertTrue(armed.contains("\r"), "the destructive action arms Return")
-        XCTAssertTrue(armed.contains("\u{1b}"), "the cancel action arms Esc")
+
+        XCTAssertTrue(toast.performKeyEquivalent(with: keyEvent(36, "\r")), "Return answers")
+        XCTAssertTrue(toast.performKeyEquivalent(with: keyEvent(53, "\u{1b}")), "and Esc cancels")
     }
 
     // MARK: lifecycle
