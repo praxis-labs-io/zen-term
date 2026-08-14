@@ -121,38 +121,32 @@ final class ToastPresenter {
         }
     }
 
-    /// The toasts a dismiss chord can take down, oldest (topmost) first. Excludes the caller-owned
-    /// cards that share the stack (the update card, the font-size card) and anything already
-    /// springing out.
+    /// The toasts a dismiss chord can take down, oldest (topmost) first.
+    ///
+    /// A card qualifies only by declaring its own dismissal (`onClose`). That excludes the
+    /// caller-owned cards sharing the stack, anything already springing out, and — deliberately —
+    /// the surface-failure notice, whose only exits are Retry and Close Pane: dropping it from the
+    /// keyboard would strand a dead pane with nothing on screen saying so.
     private var dismissible: [ToastView] {
-        stack.arrangedSubviews.compactMap { $0 as? ToastView }.filter { !$0.isDismissing }
+        stack.arrangedSubviews
+            .compactMap { $0 as? ToastView }
+            .filter { !$0.isDismissing && $0.onClose != nil }
     }
 
-    /// Dismiss the oldest toast, answering it the way its own Dismiss button would. Returns whether
-    /// there was one, so repeated calls walk down the stack and the last is a no-op.
+    /// Dismiss the oldest toast through its own dismissal. Returns whether there was one, so
+    /// repeated calls walk down the stack and the last is a no-op.
     @discardableResult
     func dismissOldest() -> Bool {
         dispatchPrecondition(condition: .onQueue(.main))
         guard let toast = dismissible.first else { return false }
-        answerCancel(toast)
+        toast.onClose?()
         return true
     }
 
-    /// Clear every dismissible toast, each answered the way its own Dismiss button would.
+    /// Clear every dismissible toast through its own dismissal.
     func dismissAll() {
         dispatchPrecondition(condition: .onQueue(.main))
-        dismissible.forEach(answerCancel)
-    }
-
-    /// Run the card's cancel action when it has one, else just take it down. Routing through the
-    /// action matters: an attention card's Dismiss also clears the tab's colored number, so
-    /// removing the view alone would leave the tab flagged with nothing on screen explaining it.
-    private func answerCancel(_ toast: ToastView) {
-        guard let cancel = toast.cancelAction else {
-            dismiss(toast)
-            return
-        }
-        cancel()
+        dismissible.forEach { $0.onClose?() }
     }
 
     /// Dismiss a toast now (spring out + remove). Idempotent.
@@ -171,6 +165,7 @@ final class ToastPresenter {
     /// animation group and forcing the layout there is what turns that snap into a slide. Reduce
     /// motion takes the old path, unanimated, per the app's motion policy.
     private func removeCollapsing(_ toast: ToastView) {
+        defer { toast.onDismissed?() }  // both paths, so an owner's handle is dropped either way
         guard !Motion.isReduceMotionEnabled() else {
             stack.removeArrangedSubview(toast)
             toast.removeFromSuperview()

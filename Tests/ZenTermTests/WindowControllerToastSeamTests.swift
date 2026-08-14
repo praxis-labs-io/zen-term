@@ -437,6 +437,38 @@ final class WindowControllerToastSeamTests: WindowTestCase {
     /// The third exit. Answering writes; putting the card away must not, or a user tidying their
     /// screen would silently edit their config. Actionable toasts had no close affordance at all
     /// until this, so a conflict card could only be answered.
+    /// The dismiss chords run a card's `onClose`, never its `cancel` button. On a conflict card
+    /// `cancel` is "Revert", which rewrites the config, so treating the two as the same thing made
+    /// a dismiss key silently delete the user's keybind.
+    func test_dismissChord_takesTheConflictCardDown_withoutWriting() throws {
+        try seed("keybind = split_vertical=cmd+shift+p\n")
+        let before = try configText()
+        let controller = makeController()
+        controller.showConflictToasts(KeybindConflict.all(in: .current))
+        XCTAssertEqual(toastViews(in: controller).count, 1)
+
+        controller.handle(.dismissToast)
+
+        waitUntil(toastViews(in: controller).isEmpty, "the card comes down")
+        XCTAssertEqual(try configText(), before, "byte-identical: a dismiss key writes nothing")
+        XCTAssertEqual(
+            KeybindConflict.all(in: .current).map(\.loser), [.toggleCommandPalette],
+            "and the conflict is still outstanding, so the next launch raises it again")
+    }
+
+    /// Same guarantee for the bulk chord, which is where a single mistaken write becomes several.
+    func test_dismissAllChord_takesEveryConflictCardDown_withoutWriting() throws {
+        try seed("keybind = split_vertical=cmd+shift+p\n")
+        let before = try configText()
+        let controller = makeController()
+        controller.showConflictToasts(KeybindConflict.all(in: .current))
+
+        controller.handle(.dismissAllToasts)
+
+        waitUntil(toastViews(in: controller).isEmpty, "every card comes down")
+        XCTAssertEqual(try configText(), before, "byte-identical")
+    }
+
     func test_conflictToast_close_dismissesWithoutWriting() throws {
         try seed("keybind = split_vertical=cmd+shift+p\n")
         let before = try configText()

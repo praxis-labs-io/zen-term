@@ -160,6 +160,34 @@ final class ToastKeyboardTests: WindowTestCase {
         XCTAssertFalse(c.isConfirmOpen)
     }
 
+    /// The buttons this replaced carried an empty `keyEquivalentModifierMask`, so they answered a
+    /// bare Return alone. Matching on keyCode without the same guard let an unbound ⌥⏎ quit the app.
+    func test_modifiedReturn_doesNotConfirm() {
+        for flags: NSEvent.ModifierFlags in [.option, .command, .control, [.command, .shift]] {
+            let c = makeController()
+            var confirmed = 0
+            openConfirm(in: c, onConfirm: { confirmed += 1 })
+
+            press(Key.returnKey, flags: flags, in: c)
+
+            XCTAssertEqual(confirmed, 0, "a modified Return must not answer (\(flags.rawValue))")
+            XCTAssertTrue(c.isConfirmOpen)
+            c.windowWillClose(Notification(name: NSWindow.willCloseNotification))
+        }
+    }
+
+    func test_modifiedDeleteAndEscape_doNotCancel() {
+        let c = makeController()
+        var cancelled = 0
+        openConfirm(in: c, onCancel: { cancelled += 1 })
+
+        press(Key.delete, flags: .command, in: c)
+        press(Key.escape, flags: .option, in: c)
+
+        XCTAssertEqual(cancelled, 0, "a modified Delete or Esc is not the card's key")
+        XCTAssertTrue(c.isConfirmOpen)
+    }
+
     /// `KeyboardFocus.key(for:)` folds Space into the same `.activate` as Return. A confirm's
     /// affirmative closes tabs and quits the app, so it takes Return alone.
     func test_space_doesNotConfirm() {
@@ -276,6 +304,39 @@ final class ToastKeyboardTests: WindowTestCase {
 
         XCTAssertTrue(c.isConfirmOpen, "the confirm is still waiting to be answered")
         XCTAssertEqual(toastViews(in: c).count, 1)
+    }
+
+    /// The float gate's `default: return` swallows anything not named in its pass-through list.
+    /// Notices stack over an open float, so a chord dead there is dead exactly when the pile grows.
+    func test_dismissChords_workWhileAToolFloatIsOpen() {
+        let c = makeController()
+        c.showToast(ToastContent(variant: .info, title: "First", message: "one"))
+        c.showToast(ToastContent(variant: .info, title: "Second", message: "two"))
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+
+        c.handle(.dismissAllToasts)
+        settle()
+
+        XCTAssertTrue(toastViews(in: c).isEmpty, "the float must not swallow the dismiss chords")
+    }
+
+    /// A card's `cancel` button is its negative answer, not a dismissal. The surface-failure notice
+    /// offers only Retry and Close Pane, so a chord that took it down would strand a dead pane with
+    /// no way to retry and nothing on screen saying why.
+    func test_dismissChords_leaveACardThatDeclaresNoDismissal() {
+        let c = makeController()
+        var retried = 0
+        var closed = 0
+        c.presentSurfaceFailureToastForTesting(retry: { retried += 1 }, close: { closed += 1 })
+        XCTAssertEqual(toastViews(in: c).count, 1)
+
+        c.handle(.dismissToast)
+        c.handle(.dismissAllToasts)
+        settle()
+
+        XCTAssertEqual(toastViews(in: c).count, 1, "the card stays: its exits are Retry and Close")
+        XCTAssertEqual(retried, 0, "and neither chord answered it")
+        XCTAssertEqual(closed, 0)
     }
 
     /// Dismissing must never be what builds the stack: a window that has shown no notice has no

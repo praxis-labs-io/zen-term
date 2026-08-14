@@ -1405,6 +1405,8 @@ final class WindowController: NSObject {
             },
         ]
         let shown = toasts.showSticky(content, actions: actions)
+        // Its Dismiss writes nothing, so a dismiss chord can run the same closure safely.
+        shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
         toast = shown
         configDiagnosticsToast = shown
     }
@@ -1917,7 +1919,10 @@ final class WindowController: NSObject {
                 .newTool:
                 floats.close()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab, .fillScreen,
-                .increaseFontSize, .decreaseFontSize, .resetFontSize, .selectAll:
+                .increaseFontSize, .decreaseFontSize, .resetFontSize, .selectAll,
+                // Notices stack over an open float — the ⌘W-over-a-float notice is itself one — so
+                // swallowing these would kill them exactly when the pile is growing.
+                .dismissToast, .dismissAllToasts:
                 // Cross-tab/window chords still act; Fill Screen is window-level. Font size is
                 // app-wide and the float itself is a terminal surface, so resizing over an open
                 // float resizes the float too: blocking it here would be the bug again.
@@ -2280,10 +2285,9 @@ final class WindowController: NSObject {
             ) { [weak self] in self?.select(id) },
         ]
         attentionStates[id] = .completed
-        // A card that clears itself does not clear the tab's number: the result is still unseen,
-        // and only visiting the tab or pressing Dismiss says otherwise.
-        attentionToasts[id] = toasts.showSticky(
-            content, actions: actions, autoDismiss: GeneralConfig.current.completionToast == .auto)
+        attentionToasts[id] = mountAttentionToast(
+            for: id, content: content, actions: actions,
+            autoDismiss: GeneralConfig.current.completionToast == .auto)
     }
 
     static func commandResultMessage(_ result: TerminalCommandResult) -> String {
@@ -2325,8 +2329,33 @@ final class WindowController: NSObject {
             ) { [weak self] in self?.select(id) },
         ]
         attentionStates[id] = .waiting
-        attentionToasts[id] = toasts.showSticky(
-            content, actions: actions, autoDismiss: GeneralConfig.current.attentionToast == .auto)
+        attentionToasts[id] = mountAttentionToast(
+            for: id, content: content, actions: actions,
+            autoDismiss: GeneralConfig.current.attentionToast == .auto)
+    }
+
+    /// Mount an attention card for `id` and give it the two hooks the raw presenter can't know
+    /// about: `onClose` is what a dismiss chord runs (the same clearing its Dismiss button does),
+    /// and `onDismissed` drops this window's handle so an auto-dismissed card isn't left in
+    /// `attentionToasts` as a detached view the next reader trusts.
+    ///
+    /// A card that clears itself does NOT clear the tab's number: the notice is still unseen, and
+    /// only visiting the tab or pressing Dismiss says otherwise.
+    private func mountAttentionToast(
+        for id: TabID, content: ToastContent, actions: [ToastAction], autoDismiss: Bool
+    ) -> ToastView {
+        let toast = toasts.showSticky(content, actions: actions, autoDismiss: autoDismiss)
+        toast.onClose = { [weak self] in
+            guard let self else { return }
+            self.clearAttention(id)
+            self.renderTabBar()
+        }
+        toast.onDismissed = { [weak self, weak toast] in
+            // Only if it is still the current card: a replacement may already have taken the slot.
+            guard let self, let toast, self.attentionToasts[id] === toast else { return }
+            self.attentionToasts[id] = nil
+        }
+        return toast
     }
 
     /// A pane's surface failed to start: show a sticky, non-modal notice offering to retry the

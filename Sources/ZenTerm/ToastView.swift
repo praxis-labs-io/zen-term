@@ -22,9 +22,13 @@ struct ToastContent: Equatable {
 /// (`FloatShadow` bg + hairline edge + drop shadow). Fixed width; springs in/out on `Motion`.
 /// The `ToastPresenter` owns placement (top-right) and lifetime.
 final class ToastView: ShadowCardView {
-    /// The "×" (and, for a passive toast, a body click) fires this — the presenter dismisses,
-    /// or a confirm cancels.
+    /// This card's dismissal: the "×", a passive toast's body click, and the dismiss chords all
+    /// run it. A card that sets none is not dismissible from the keyboard either, which is the
+    /// point for the surface-failure notice, whose only ways out are Retry and Close Pane.
     var onClose: (() -> Void)?
+    /// Fired after the presenter has taken this card out of the stack, so an owner holding it by
+    /// id can drop its handle instead of keeping a detached view alive.
+    var onDismissed: (() -> Void)?
     private(set) var isDismissing = false
     private let hasActions: Bool
     /// Only a modal confirm (actionable AND arming Return/Esc) should take first responder;
@@ -33,9 +37,10 @@ final class ToastView: ShadowCardView {
     /// The affirmative action (`primary` / `destructive`), answered by Return. Nil on a card with
     /// no such button.
     private let confirmAction: (() -> Void)?
-    /// The `cancel` action, answered by Delete and Esc on a confirm, and run by the dismiss chords
-    /// on a sticky card so its side effects (clearing a tab's attention marker) happen too.
-    let cancelAction: (() -> Void)?
+    /// The `cancel` action, answered by Delete and Esc on a confirm. Deliberately NOT what the
+    /// dismiss chords run: `cancel` is a card's negative *answer*, not a dismissal, and on a
+    /// keybind-conflict card it is "Revert", which rewrites the config. `onClose` is the dismissal.
+    private let cancelAction: (() -> Void)?
     /// The border tone (neutral for info, tinted for warning/destructive) — re-derived in
     /// `reapplyTheme()` since it's a `Theme.current.chrome`-sourced value baked at init.
     private let variant: ToastVariant
@@ -262,8 +267,12 @@ final class ToastView: ShadowCardView {
     /// Answer a confirm: Return runs the affirmative, Delete and Esc cancel. Returns whether the
     /// key was claimed. Declines for anything that isn't a modal confirm, so a sticky notice keeps
     /// arming nothing and the terminal keeps every key.
+    ///
+    /// Bare keys only. The buttons this replaced carried an empty `keyEquivalentModifierMask`, so
+    /// they answered an unmodified Return alone; matching on keyCode without the same guard would
+    /// let an unbound ⌥⏎ quit the app.
     private func answer(_ event: NSEvent) -> Bool {
-        guard gatesFocus, !isDismissing else { return false }
+        guard gatesFocus, !isDismissing, KeyboardFocus.isUnmodified(event) else { return false }
         if KeyboardFocus.isReturn(event) {
             confirmAction?()
             return confirmAction != nil

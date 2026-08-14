@@ -21,7 +21,7 @@ final class AppButton: NSButton {
 
     /// Opt into the form keyboard flow: the button becomes a focus stop that shows an accent
     /// ring, moves focus on Up/Down (via the callbacks), and activates on Return/Space. Off by
-    /// default so toast buttons stay click-and-key-equivalent only.
+    /// default so toast buttons stay click-only; a toast's keys belong to its card root, not here.
     var isKeyboardFocusable = false
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?

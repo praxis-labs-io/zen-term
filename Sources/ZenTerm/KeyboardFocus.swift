@@ -37,10 +37,19 @@ enum KeyboardFocus {
         }
     }
 
-    /// Return or keypad Enter, and deliberately not Space, which `key(for:)` folds into the same
-    /// `.activate`. A confirm's affirmative is destructive (quit, close the tab), so a Space that
-    /// only meant to page the buffer must never give it.
-    static func isReturn(_ event: NSEvent) -> Bool { event.keyCode == 36 || event.keyCode == 76 }
+    /// An unmodified Return or keypad Enter. Not Space, which `key(for:)` folds into the same
+    /// `.activate`, and not a modified Return: a confirm's affirmative quits the app or closes a
+    /// tab, so only the bare key may give it. Mirrors `DiffPaneTable.isComposeKey`.
+    static func isReturn(_ event: NSEvent) -> Bool {
+        (event.keyCode == 36 || event.keyCode == 76) && isUnmodified(event)
+    }
+
+    /// Whether the event carries none of the reservable modifiers — the honest test for "a bare
+    /// key". Masking to that set rather than `deviceIndependentFlagsMask` is what keeps Caps Lock
+    /// and AppKit's `.function` / `.numericPad` noise from reading as a held modifier.
+    static func isUnmodified(_ event: NSEvent) -> Bool {
+        event.modifierFlags.intersection(reservableModifiers).isEmpty
+    }
 
     /// The modifiers a shortcut can be built from. The rest of `modifierFlags` is incidental to the
     /// physical key, so a comparison has to mask down to these before asking which modifier was held.
