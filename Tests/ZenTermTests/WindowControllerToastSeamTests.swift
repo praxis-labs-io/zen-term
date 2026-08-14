@@ -199,6 +199,47 @@ final class WindowControllerToastSeamTests: WindowTestCase {
             "but the tab keeps its number colored: the agent is still waiting")
     }
 
+    /// A card that clears itself has to take this window's handle to it with it. Nothing on screen
+    /// says otherwise when it doesn't, which is why it needs an assertion rather than a runbook
+    /// line: `attentionToasts` would keep a strong reference to a detached view for the tab's
+    /// lifetime, and `reapplyTheme` / `refreshShortcuts` would walk it.
+    func test_autoDismissedWaitingToast_dropsTheWindowsHandleToIt() throws {
+        try seed("attention-toast = auto\ntoast-duration = 1\n")
+        let controller = makeController()
+        controller.newTabForTesting()
+        controller.notifyAgentForTesting(tabIndex: 0, message: "needs your input")
+        drainMainQueue()
+        XCTAssertNotNil(controller.waitingToastForTesting(tabIndex: 0), "the handle is taken first")
+
+        settle(1.5)
+
+        XCTAssertNil(
+            controller.waitingToastForTesting(tabIndex: 0),
+            "the handle goes with the card, rather than pointing at a view that left the stack")
+    }
+
+    /// A replacement landing before the old card finishes springing out must keep the slot: the
+    /// outgoing card's `onDismissed` fires last and would otherwise clear the newcomer's handle.
+    func test_aReplacementSurvives_theOutgoingCardsDismissal() throws {
+        try seed("attention-toast = auto\ntoast-duration = 1\n")
+        let controller = makeController()
+        controller.newTabForTesting()
+        controller.notifyAgentForTesting(tabIndex: 0, message: "first")
+        drainMainQueue()
+        let first = try XCTUnwrap(controller.waitingToastForTesting(tabIndex: 0))
+
+        controller.notifyAgentForTesting(tabIndex: 0, message: "second")
+        drainMainQueue()
+        let second = try XCTUnwrap(controller.waitingToastForTesting(tabIndex: 0))
+        XCTAssertFalse(first === second, "the second notification replaces the card")
+
+        settle(0.6)  // past the first card's spring-out, before the second's deadline
+
+        XCTAssertTrue(
+            controller.waitingToastForTesting(tabIndex: 0) === second,
+            "the outgoing card must not clear the handle its replacement now owns")
+    }
+
     /// The default. A card that states a condition still true has to wait to be answered.
     func test_waitingToast_underSticky_staysUp() throws {
         try seed("attention-toast = sticky\ntoast-duration = 1\n")
