@@ -95,6 +95,12 @@ chain and no view-level test covers that.
   for the UI update.
 - Per global rules: no `TODO`/`FIXME`/`HACK` markers. Fix it now, or file a Linear
   ticket for genuinely out-of-scope work.
+- **Comments cap at 2 lines for `//` and 4 for `///`.** This repo writes far too
+  many: 21% of its Swift lines are comment, and 405 doc blocks run past 6 lines.
+  Nothing is exempt, file headers included. A block that wants more is the signal
+  the global rules already name, that the code needs the work instead of the
+  explanation. Long comments already in the tree come down as their files are
+  touched, not in a sweep.
 - **Read `docs/swift-conventions.md` before touching window sizing, event routing,
   layers, config live-apply, or interaction tests.** Add to it when a new trap bites.
 
