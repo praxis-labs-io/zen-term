@@ -37,6 +37,11 @@ enum KeyboardFocus {
         }
     }
 
+    /// Return or keypad Enter, and deliberately not Space, which `key(for:)` folds into the same
+    /// `.activate`. A confirm's affirmative is destructive (quit, close the tab), so a Space that
+    /// only meant to page the buffer must never give it.
+    static func isReturn(_ event: NSEvent) -> Bool { event.keyCode == 36 || event.keyCode == 76 }
+
     /// The modifiers a shortcut can be built from. The rest of `modifierFlags` is incidental to the
     /// physical key, so a comparison has to mask down to these before asking which modifier was held.
     private static let reservableModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]

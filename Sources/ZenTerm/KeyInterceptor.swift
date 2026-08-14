@@ -59,6 +59,9 @@ final class KeyInterceptor {
         case writeScreenFile, copyScreenFilePath, openScreenFile
         case selectAll, pasteSelection
         case jumpToPreviousPrompt, jumpToNextPrompt
+        // Clear the notice stack from the keyboard. `dismissToast` takes the oldest, so holding it
+        // walks down; `dismissAllToasts` takes the lot.
+        case dismissToast, dismissAllToasts
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?

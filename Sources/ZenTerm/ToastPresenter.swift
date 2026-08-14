@@ -5,7 +5,10 @@ import AppKit
 /// agnostic, so anything that needs to surface a brief notice can reuse it.
 final class ToastPresenter {
     private let stack = NSStackView()
-    private let dismissAfter: TimeInterval
+    /// How long an auto-dismissing toast stays up. A `var` because the presenter is built lazily on
+    /// the first toast and then lives for the window: baked at init, a `toast-duration` edit would
+    /// never reach a window that had already shown one.
+    private var dismissAfter: TimeInterval
     /// The two insets, held so a `window-gutter` / `window-chrome` change can re-point them. The
     /// presenter is built lazily on the first toast, so without this the stack keeps whatever the
     /// metrics were at that moment for the life of the window.
@@ -38,6 +41,11 @@ final class ToastPresenter {
         trailingConstraint.constant = -trailingInset
     }
 
+    /// Re-point how long an auto-dismissing toast stays up after a `toast-duration` edit. Takes the
+    /// resolved seconds rather than reading the config, keeping the presenter content-agnostic.
+    /// Applies to the next toast; one already counting down keeps the deadline it was armed with.
+    func reapplyDuration(_ seconds: TimeInterval) { dismissAfter = seconds }
+
     /// Show a passive toast (the variant colors the icon/badge). Mutates the view hierarchy,
     /// so it hops to the main thread when a caller surfaces a notice from a background queue.
     func show(_ content: ToastContent) {
@@ -52,26 +60,34 @@ final class ToastPresenter {
         }
         stack.addArrangedSubview(toast)
         toast.animateIn()
+        armAutoDismiss(toast)
+    }
+
+    /// Take `toast` down after `dismissAfter`. The deadline is read now, so a later
+    /// `reapplyDuration` moves the next toast rather than one already counting down.
+    private func armAutoDismiss(_ toast: ToastView) {
         DispatchQueue.main.asyncAfter(deadline: .now() + dismissAfter) { [weak self, weak toast] in
             guard let toast else { return }
             self?.dismiss(toast)
         }
     }
 
-    /// A sticky, non-modal actionable toast: it persists (no auto-dismiss), answers only
-    /// through its buttons (the body isn't clickable), and — unlike `confirm` — neither gates
-    /// keyboard focus nor arms its buttons' Return / Esc key equivalents, so it never steals
-    /// input from the terminal. Returns the view so the caller can dismiss it when the notice
-    /// stops being relevant. Call on the main thread.
+    /// A non-modal actionable toast: it answers only through its buttons (the body isn't
+    /// clickable) and — unlike `confirm` — neither gates keyboard focus nor claims Return / Esc,
+    /// so it never steals input from the terminal. `autoDismiss` arms the same timer `show()` uses;
+    /// without it the card persists until something dismisses it. Returns the view so the caller
+    /// can dismiss it when the notice stops being relevant. Call on the main thread.
     @discardableResult
     func showSticky(
-        _ content: ToastContent, actions: [ToastAction], showsClose: Bool = false
+        _ content: ToastContent, actions: [ToastAction], showsClose: Bool = false,
+        autoDismiss: Bool = false
     ) -> ToastView {
         dispatchPrecondition(condition: .onQueue(.main))  // fail fast on an accidental off-main call
         let toast = ToastView(
-            content: content, actions: actions, keyEquivalents: false, showsClose: showsClose)
+            content: content, actions: actions, armsKeys: false, showsClose: showsClose)
         stack.addArrangedSubview(toast)
         toast.animateIn()
+        if autoDismiss { armAutoDismiss(toast) }
         return toast
     }
 
@@ -103,6 +119,40 @@ final class ToastPresenter {
             self.stack.removeArrangedSubview(card)
             card.removeFromSuperview()
         }
+    }
+
+    /// The toasts a dismiss chord can take down, oldest (topmost) first. Excludes the caller-owned
+    /// cards that share the stack (the update card, the font-size card) and anything already
+    /// springing out.
+    private var dismissible: [ToastView] {
+        stack.arrangedSubviews.compactMap { $0 as? ToastView }.filter { !$0.isDismissing }
+    }
+
+    /// Dismiss the oldest toast, answering it the way its own Dismiss button would. Returns whether
+    /// there was one, so repeated calls walk down the stack and the last is a no-op.
+    @discardableResult
+    func dismissOldest() -> Bool {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard let toast = dismissible.first else { return false }
+        answerCancel(toast)
+        return true
+    }
+
+    /// Clear every dismissible toast, each answered the way its own Dismiss button would.
+    func dismissAll() {
+        dispatchPrecondition(condition: .onQueue(.main))
+        dismissible.forEach(answerCancel)
+    }
+
+    /// Run the card's cancel action when it has one, else just take it down. Routing through the
+    /// action matters: an attention card's Dismiss also clears the tab's colored number, so
+    /// removing the view alone would leave the tab flagged with nothing on screen explaining it.
+    private func answerCancel(_ toast: ToastView) {
+        guard let cancel = toast.cancelAction else {
+            dismiss(toast)
+            return
+        }
+        cancel()
     }
 
     /// Dismiss a toast now (spring out + remove). Idempotent.

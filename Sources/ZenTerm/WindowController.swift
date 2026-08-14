@@ -50,7 +50,7 @@ final class WindowController: NSObject {
         // lands above the stack on its own, being added at the front.
         let presenter = ToastPresenter(
             host: container, below: modal?.overlay, topInset: Self.toastTopInset,
-            trailingInset: Self.toastTrailingInset)
+            trailingInset: Self.toastTrailingInset, dismissAfter: GeneralConfig.current.toastDuration)
         builtToasts = presenter
         return presenter
     }
@@ -481,6 +481,9 @@ final class WindowController: NSObject {
                     // chrome until the user dismisses it.
                     self.attentionToasts.values.forEach { $0.reapplyTheme() }
                     self.fontSizeCard?.reapplyTheme()
+                }
+                if change.contains(.toasts) {
+                    self.builtToasts?.reapplyDuration(GeneralConfig.current.toastDuration)
                 }
                 if change.contains(.theme) || change.contains(.terminalBehavior) {
                     for surface in self.allTerminalSurfaces {
@@ -1305,7 +1308,8 @@ final class WindowController: NSObject {
             "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",
             "reduce-motion", "diff-layout", "hide-toolbar-buttons":
             return .appearance
-        case "agent-notifications", "automatic-update-checks":
+        case "agent-notifications", "attention-toast", "completion-toast", "toast-duration",
+            "automatic-update-checks":
             return .general
         default:
             return .top
@@ -1966,6 +1970,9 @@ final class WindowController: NSObject {
         case .toggleZoom:
             Log.info("zoom toggled", category: .panes)
             active?.toggleZoom()
+        // `builtToasts`, not `toasts`: dismissing must never be what constructs the stack.
+        case .dismissToast: builtToasts?.dismissOldest()
+        case .dismissAllToasts: builtToasts?.dismissAll()
         case .toggleScrollMode: toggleScrollMode()
         case .toggleSearch: toggleSearch()
         case .searchSelection: searchSelection()
@@ -2273,7 +2280,10 @@ final class WindowController: NSObject {
             ) { [weak self] in self?.select(id) },
         ]
         attentionStates[id] = .completed
-        attentionToasts[id] = toasts.showSticky(content, actions: actions)
+        // A card that clears itself does not clear the tab's number: the result is still unseen,
+        // and only visiting the tab or pressing Dismiss says otherwise.
+        attentionToasts[id] = toasts.showSticky(
+            content, actions: actions, autoDismiss: GeneralConfig.current.completionToast == .auto)
     }
 
     static func commandResultMessage(_ result: TerminalCommandResult) -> String {
@@ -2315,7 +2325,8 @@ final class WindowController: NSObject {
             ) { [weak self] in self?.select(id) },
         ]
         attentionStates[id] = .waiting
-        attentionToasts[id] = toasts.showSticky(content, actions: actions)
+        attentionToasts[id] = toasts.showSticky(
+            content, actions: actions, autoDismiss: GeneralConfig.current.attentionToast == .auto)
     }
 
     /// A pane's surface failed to start: show a sticky, non-modal notice offering to retry the
