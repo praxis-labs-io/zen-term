@@ -3163,7 +3163,7 @@ SOFTWARE.
 
 **CC0 1.0**
 
-The brand marks in the tool-float icon picker: `git.svg`, `github.svg`, `linear.svg`, `neovim.svg`, `vim.svg`, `emacs.svg`, `helix.svg`, `claude.svg`, `openai.svg`, `gemini.svg`, `copilot.svg`, `opencode.svg`, `ollama.svg`, `docker.svg`, `kubernetes.svg`, `postgres.svg`, `sqlite.svg`, `htop.svg`, and `spotify.svg`. CC0 waives attribution, so this entry is a courtesy rather than an obligation. It covers the artwork only, not the trademarks the marks depict.
+The brand marks in the tool-float icon picker: `git.svg`, `github.svg`, `linear.svg`, `neovim.svg`, `vim.svg`, `emacs.svg`, `helix.svg`, `claude.svg`, `openai.svg`, `gemini.svg`, `copilot.svg`, `opencode.svg`, `ollama.svg`, `docker.svg`, `kubernetes.svg`, `postgres.svg`, `sqlite.svg`, `htop.svg`, `slack.svg`, and `spotify.svg`. CC0 waives attribution, so this entry is a courtesy rather than an obligation. It covers the artwork only, not the trademarks the marks depict.
 
 ## Shaders
 

@@ -6,8 +6,9 @@ import AppKit
 /// "claude", …).
 ///
 /// A brand earns a cell by having a terminal UI behind it, first- or third-party: `docker` stands
-/// for lazydocker, `kubernetes` for k9s, `postgres` for pgcli. A brand whose only interface is a
-/// window (Zed, Obsidian) or a plain CLI (Homebrew, Tailscale) doesn't, because you can't float it.
+/// for lazydocker, `kubernetes` for k9s, `postgres` for pgcli, `slack` for wee-slack. A brand whose
+/// only interface is a window (Zed, Obsidian) or a plain CLI (Homebrew, Tailscale) doesn't, because
+/// you can't float it.
 enum IconCatalog {
     static let defaultSymbol = "square.on.square"
 
@@ -30,7 +31,7 @@ enum IconCatalog {
         "neovim", "vim", "emacs", "helix",
         "claude", "openai", "gemini", "copilot",
         "opencode", "ollama", "docker", "kubernetes",
-        "postgres", "sqlite", "htop", "spotify",
+        "postgres", "sqlite", "slack", "spotify",
     ]
 
     /// A humanized, sentence-case label for a symbol — the picker shows this instead of the raw
@@ -69,7 +70,8 @@ enum IconCatalog {
         "openai": "OpenAI",
         "opencode": "OpenCode",
         "sqlite": "SQLite",
-        "htop": "htop",  // lowercase is the tool's own name
+        "htop": "htop",  // dropped; lowercase is the tool's own name
+        "slack": "Slack",
         "spotify": "Spotify",
     ]
 
