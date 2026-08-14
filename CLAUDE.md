@@ -37,12 +37,15 @@ Terminal-native, no Xcode required (`open Package.swift` only for a
 debugger/Instruments session).
 
 - `swift build` / `swift run ZenTerm` / `swift test`
-- `bin/check` is **the full local gate** (mirrors CI): build, test,
+- `bin/check` is **the full local gate** (mirrors CI): comment cap, build, test,
   `swift format lint --strict`, `swiftlint --strict`. `bin/check --fix`
   auto-applies formatter and linter fixes. Requires `swiftlint`.
+- `bin/comment-cap` enforces the comment cap below. It reads the diff against
+  `main`, so it fires only on a block the branch added or grew. `--all` audits the
+  whole tree, which is a backlog report, not a gate.
 
 **Verify before claiming done:** `bin/check` fully green. Not just build and test:
-format-lint and swiftlint are part of the gate and CI enforces them.
+format-lint, swiftlint and the comment cap are part of the gate and CI enforces them.
 
 ### What to test, and what to show
 
@@ -95,6 +98,11 @@ chain and no view-level test covers that.
   for the UI update.
 - Per global rules: no `TODO`/`FIXME`/`HACK` markers. Fix it now, or file a Linear
   ticket for genuinely out-of-scope work.
+- **Comments cap at 2 lines for `//` and 4 for `///`, and `bin/comment-cap` enforces
+  it on the diff.** This repo writes far too many: 21% of its Swift lines are comment,
+  and 405 doc blocks run past 6 lines. There is no suppression. A block that wants
+  more is the signal Drew's rules already name, that the code needs the work instead
+  of the explanation. Existing long comments stay until the file is touched.
 - **Read `docs/swift-conventions.md` before touching window sizing, event routing,
   layers, config live-apply, or interaction tests.** Add to it when a new trap bites.
 

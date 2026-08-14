@@ -80,10 +80,19 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: macos-26
     steps:
+      # Full history so comment-cap can merge-base against origin/main.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Toolchain
         run: swift --version
+
+      # Diff-scoped: only fires on comment blocks this PR added or grew.
+      - name: Comment cap
+        run: |
+          bin/comment-cap --selftest
+          bin/comment-cap --base origin/main
 
       # Source-only — no build needed, so this runs fast and in parallel.
       - name: swift-format

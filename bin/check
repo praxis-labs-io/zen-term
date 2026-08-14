@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local mirror of CI: build → test → format-lint → lint. Run before shipping.
+# Local mirror of CI: comment cap → build → test → format-lint → lint. Run before shipping.
 # Pass --fix to auto-apply swift-format + swiftlint fixes instead of failing.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -36,6 +36,11 @@ if [[ "${1:-}" == "--fix" ]]; then
     echo "✓ fixes applied — re-run bin/check to verify"
     exit 0
 fi
+
+# First because it takes under a second: a violation here shouldn't cost a full build to hear about.
+echo "▸ comment cap"
+bin/comment-cap --selftest
+bin/comment-cap
 
 echo "▸ swift build"
 swift build 2>&1 | filter_noise

@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+"""Fail when a change adds an over-cap comment block.
+
+Scoped to the diff, never the corpus: a block is only reported when the change
+touched one of its lines, so existing long comments stay silent until edited.
+
+Usage: bin/comment-cap [--base REF] [--all]
+Exit 0 clean, 1 on a violation, 2 on a usage error.
+"""
+import argparse
+import os
+import re
+import subprocess
+import sys
+
+CAPS = {"line": 2, "doc": 4}
+ROOTS = ("Sources/", "Tests/")
+DIRECTIVE = re.compile(r"^(MARK\b|swiftlint:|swift-format-ignore|periphery:)")
+
+
+def git(*args):
+    out = subprocess.run(["git", *args], capture_output=True, text=True)
+    if out.returncode != 0:
+        sys.exit(f"✗ git {' '.join(args)} failed: {out.stderr.strip()}")
+    return out.stdout
+
+
+def comment_lines(src):
+    """Line index -> "line"|"doc" for every line carrying a comment, strings excluded."""
+    kinds = {}
+    depth, doc_block, in_string = 0, False, False
+    for n, line in enumerate(src.split("\n")):
+        i, width = 0, len(line)
+        while i < width:
+            if in_string:
+                if line.startswith('"""', i):
+                    in_string, i = False, i + 3
+                    continue
+                i += 1
+            elif depth:
+                kinds[n] = "doc" if doc_block else "line"
+                if line.startswith("*/", i):
+                    depth, i = depth - 1, i + 2
+                elif line.startswith("/*", i):
+                    depth, i = depth + 1, i + 2
+                else:
+                    i += 1
+            elif line.startswith('"""', i):
+                in_string, i = True, i + 3
+            elif line[i] == '"':
+                i = skip_string(line, i)
+            elif line.startswith("//", i):
+                kinds[n] = "doc" if re.match(r"///($|[^/])", line[i:]) else "line"
+                break
+            elif line.startswith("/*", i):
+                doc_block = bool(re.match(r"/\*\*($|[^*])", line[i:]))
+                depth, kinds[n], i = 1, "doc" if doc_block else "line", i + 2
+            else:
+                i += 1
+    return kinds
+
+
+def skip_string(line, i):
+    i += 1
+    while i < len(line):
+        if line[i] == "\\":
+            i += 2
+        elif line[i] == '"':
+            return i + 1
+        else:
+            i += 1
+    return i
+
+
+def blocks(src):
+    """Contiguous same-kind comment lines, minus lines that only carry a directive."""
+    kinds = comment_lines(src)
+    lines = src.split("\n")
+    found, run = [], None
+    for n in sorted(kinds):
+        text = lines[n].strip().lstrip("/*").strip()
+        if DIRECTIVE.match(text):
+            run = None
+            continue
+        if run and n == run["end"] + 1 and kinds[n] == run["kind"]:
+            run["end"] = n
+        else:
+            if run:
+                found.append(run)
+            run = {"start": n, "end": n, "kind": kinds[n]}
+    if run:
+        found.append(run)
+    return found
+
+
+def touched_lines(path, base, everything):
+    """0-based line numbers this change added, or every line for an untracked file."""
+    if everything or base is None:
+        return None
+    diff = git("diff", "--unified=0", base, "--", path)
+    hit = set()
+    for header in re.finditer(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@", diff, re.M):
+        start, count = int(header.group(1)), int(header.group(2) or 1)
+        hit.update(range(start - 1, start - 1 + count))
+    return hit
+
+
+def changed_files(base):
+    named = git("diff", "--name-only", base, "--", *ROOTS).split()
+    fresh = [
+        p
+        for p in git("ls-files", "--others", "--exclude-standard", "--", *ROOTS).split()
+        if p.endswith(".swift")
+    ]
+    return sorted({p for p in named if p.endswith(".swift")} | set(fresh)), set(fresh)
+
+
+def resolve_base(requested):
+    ref = requested or "main"
+    for candidate in (ref, f"origin/{ref}"):
+        merged = subprocess.run(
+            ["git", "merge-base", "HEAD", candidate], capture_output=True, text=True
+        )
+        if merged.returncode == 0:
+            return merged.stdout.strip()
+    return None
+
+
+def all_swift():
+    for root in ROOTS:
+        for folder, _, names in os.walk(root):
+            for name in names:
+                if name.endswith(".swift"):
+                    yield os.path.join(folder, name)
+
+
+CASES = [
+    ("// a\n// b\n// c\n", [("line", 3)]),
+    ("/// a\n/// b\n", [("doc", 2)]),
+    ('let s = "// a"\nlet t = "// b"\n', []),
+    ('let s = """\n// a\n// b\n"""\n', []),
+    ("// a\n\n// b\n", [("line", 1), ("line", 1)]),
+    ("/* a\n b */\ncode()\n", [("line", 2)]),
+    ("/** a\n b */\n", [("doc", 2)]),
+    ("// MARK: - x\n// a\n", [("line", 1)]),
+    ("code() // a\n// b\n", [("line", 2)]),
+    ("/// a\n///\n/// b\n", [("doc", 3)]),
+    ("//// a\n//// b\n//// c\n", [("line", 3)]),
+]
+
+
+def selftest():
+    failures = 0
+    for src, want in CASES:
+        got = [(b["kind"], b["end"] - b["start"] + 1) for b in blocks(src)]
+        if got != want:
+            failures += 1
+            print(f"✗ {src!r}\n    want {want}\n    got  {got}", file=sys.stderr)
+    if failures:
+        return 1
+    print(f"✓ comment-cap selftest ({len(CASES)} cases)")
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(add_help=True)
+    parser.add_argument("--base", help="ref to diff against (default: merge-base with main)")
+    parser.add_argument("--all", action="store_true", help="audit every file, ignoring the diff")
+    parser.add_argument("--selftest", action="store_true", help="check the scanner against fixtures")
+    args = parser.parse_args()
+
+    if args.selftest:
+        return selftest()
+
+    os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+    base = resolve_base(args.base)
+    if args.all:
+        paths, untracked = sorted(all_swift()), set()
+    elif base is None:
+        sys.exit(f"✗ no merge-base with {args.base or 'main'} — pass --base REF")
+    else:
+        paths, untracked = changed_files(base)
+
+    violations = []
+    for path in paths:
+        try:
+            src = open(path, encoding="utf-8").read()
+        except FileNotFoundError:
+            continue
+        added = touched_lines(path, base, args.all or path in untracked)
+        lines = src.split("\n")
+        for block in blocks(src):
+            size = block["end"] - block["start"] + 1
+            cap = CAPS[block["kind"]]
+            if size <= cap:
+                continue
+            if added is not None and not added & set(range(block["start"], block["end"] + 1)):
+                continue
+            violations.append((path, block["start"] + 1, size, cap, lines[block["start"]].strip()))
+
+    if not violations:
+        print(f"✓ comment cap ({CAPS['line']} for //, {CAPS['doc']} for ///)")
+        return 0
+
+    print(f"✗ {len(violations)} comment block(s) over cap:\n", file=sys.stderr)
+    for path, line, size, cap, first in violations:
+        print(f"  {path}:{line}  {size} lines, cap {cap}", file=sys.stderr)
+        print(f"    {first[:96]}\n", file=sys.stderr)
+    print("Cut it to the sentence that prevents the next mistake, or fix the code", file=sys.stderr)
+    print("so it needs no explanation. See CLAUDE.md.", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
