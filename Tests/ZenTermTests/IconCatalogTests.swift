@@ -47,6 +47,7 @@ final class IconCatalogTests: XCTestCase {
     /// The picker labels cells with these, so a raw `dotted.symbol.name` would leak to the UI.
     func test_displayName_humanizesOrOverrides() {
         XCTAssertEqual(IconCatalog.displayName("spotify"), "Spotify")
+        XCTAssertEqual(IconCatalog.displayName("slack"), "Slack")
         XCTAssertEqual(IconCatalog.displayName("note.text"), "Notes")
         XCTAssertEqual(IconCatalog.displayName("bubble.left.and.bubble.right"), "Chat")
         XCTAssertEqual(IconCatalog.displayName("envelope"), "Email", "the metaphor is mail, not the object")
@@ -59,11 +60,12 @@ final class IconCatalogTests: XCTestCase {
 
     /// A float pinned to a dropped icon keeps rendering it — `IconCatalog.image` resolves any SF
     /// Symbol whether or not it's still on the roster, so an existing user's config never breaks.
+    /// `htop` is why a dropped brand mark stays bundled: nothing else would resolve it.
     func test_droppedIcons_stillResolve_soExistingFloatsKeepTheirGlyph() {
         let dropped = [
             "speedometer", "ant", "cube", "cloud", "memorychip", "note.text", "puzzlepiece",
             "hammer", "key", "tray.full", "chart.bar", "shippingbox", "apple.terminal.on.rectangle",
-            "globe", "slider.horizontal.3",
+            "globe", "slider.horizontal.3", "htop",
         ]
         for symbol in dropped {
             XCTAssertFalse(IconCatalog.all.contains(symbol), "\(symbol) was dropped from the roster")
