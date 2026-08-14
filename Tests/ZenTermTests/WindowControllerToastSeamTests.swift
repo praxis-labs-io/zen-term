@@ -220,7 +220,14 @@ final class WindowControllerToastSeamTests: WindowTestCase {
 
     /// A replacement landing before the old card finishes springing out must keep the slot: the
     /// outgoing card's `onDismissed` fires last and would otherwise clear the newcomer's handle.
+    ///
+    /// Reduce Motion is pinned off, and that is the whole test. With it on, the spring-out
+    /// completes synchronously inside `dismiss`, so the outgoing card's `onDismissed` runs *before*
+    /// the replacement is assigned and the identity check is never reached: the assertion below
+    /// then holds with the check deleted. This suite pins nothing of its own and several others set
+    /// it true, so without this line the test's validity turns on file order.
     func test_aReplacementSurvives_theOutgoingCardsDismissal() throws {
+        Motion.isReduceMotionEnabled = { false }  // WindowTestCase restores it
         try seed("attention-toast = auto\ntoast-duration = 1\n")
         let controller = makeController()
         controller.newTabForTesting()
