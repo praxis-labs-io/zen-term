@@ -124,6 +124,10 @@ final class RecordingSurface: NSObject, TerminalSurface {
     var cellMetrics: TerminalCellMetrics? = TerminalCellMetrics(
         columns: 80, rows: 24, cellWidth: 8, cellHeight: 16, gridInset: 2)
 
+    /// Overrides the protocol extension's nil default so a test can stand a surface up with the
+    /// backend's own selection already made, which is what scroll mode opens onto.
+    var selectionOrigin: TerminalViewportCell?
+
     /// The screen this surface claims to show, one entry per viewport row. Defaults to two
     /// command blocks separated by a blank row, which is what paragraph motion moves between.
     var rows: [String] = {

@@ -1145,17 +1145,31 @@ the cursor moves for the height of the viewport and the buffer only moves once t
 cursor is pinned at an edge. Scrolling on every `j` would drag the whole screen to
 track a marker that never moved.
 
-**The mode opens on the last written row of the viewport**, found by reading rows from
-the bottom up. Not the bottom of the pane, which on a half-filled screen is empty space
-below everything there is to read, and not the shell's cursor: `ghostty_surface_ime_point`
-reports that against the *live* screen with no account of scrolling, so a viewport the
-reader had already scrolled with the wheel put the band on an unrelated row.
+**The mode opens on a mouse selection when there is one**, on its first cell, so a reader
+who selected something and then reached for the keyboard keeps their place.
+`ghostty_text_s` carries the selection's top-left in view points, which divides straight
+down into a cell. Only the near end: no backend here reports where a selection finishes.
 
-**The header goes up before the grid is measured.** A pane's header is hidden until a
-mode shows it, and showing it moves the content's top constraint down by its height, so
-the terminal loses a row or two and reflows. Measuring first put the band a row off the
-prompt, which is subtle enough to look like a rounding error in the cell math and is not
-one.
+**With nothing selected it opens on the last written row of the viewport**, found by
+reading rows from the bottom up. Not the bottom of the pane, which on a half-filled screen
+is empty space below everything there is to read, and not the shell's cursor:
+`ghostty_surface_ime_point` reports that against the *live* screen with no account of
+scrolling, so a viewport already scrolled with the wheel put the band on an unrelated row.
+
+**A mode never resizes the terminal.** A pane's header used to take its height off the
+grid, which pushed a new size into libghostty and SIGWINCHed the pty: a shell redrew its
+prompt invisibly, a TUI repainted its whole frame, and leaving did it again. The header
+floats over the terminal's top rows instead, opaque whatever `background-alpha` says, since
+the text behind it would otherwise read straight through.
+
+**So the reachable rows are the grid minus what the strips cover.** `firstRow` and
+`lastRow` come off `terminalTopOverlap`/`terminalBottomOverlap`, rounded up, with the
+grid's own inset taken off the top first. A row a strip covers any part of is one the
+reader cannot read, so the band never goes there and `gg` stops one row down.
+
+That also closed the entry row landing above the prompt: it was reading the grid in the
+frame between the size push and libghostty re-laying the content, so the bottom rows came
+back blank. With nothing pushed there is no such frame.
 
 **A move that names a destination puts the cursor on it**, rather than bringing it into
 view and leaving the cursor elsewhere. `gg`/`G` carry it to the ends.
@@ -1291,10 +1305,10 @@ claims `n`/`N`/⏎/⇧⏎/Esc through `SearchController.key(for:)` rather than t
 `ScrollModeController.Command`, which keeps that enum closed and lets search work whether
 or not scroll mode was ever entered. Both modes share the one `modeHandler` slot.
 
-The bar **displaces** the terminal the way the header does at the other end, so opening
-and closing it reflows the grid. Both paths run the same order: change the constraint,
-`layoutSubtreeIfNeeded`, then `refreshGeometry`. Measuring first reads the grid that is
-about to change out from under it.
+The bar **floats** over the terminal the way the header does at the other end, so opening
+and closing it resizes nothing. It covers the bottom rows instead, reported as
+`terminalBottomOverlap`, and both paths end in `scrollMode.reclampCursor()` to bring the
+band out from under it.
 
 **Why the cursor cell is inferred rather than read.** `SEARCH_SELECTED` carries an index
 and nothing else (`vendor/ghostty/src/Surface.zig`): the match's geometry goes to the
@@ -1385,7 +1399,7 @@ right while a pane keeps printing.
 
 **The cursor is a viewport row number, so a reflow has to re-find it by content.**
 Anything that changes the grid's shape rewraps the text under that number: a font
-step, the find bar taking a row, a window or divider drag. `surfaceGridDidReflow`
+step, a window or divider drag, Focus Mode's header. `surfaceGridDidReflow`
 is the resize half, emitted from `GhosttyHostView.syncSizeAndScale` when a size
 push actually moves rows or columns, and relayed to `ScrollModeController` per
 surface so a drag that reflows one pane leaves the others alone. `refreshGeometry`
@@ -1638,18 +1652,19 @@ those and no chrome surface repeats them.
 can show through, and `RingFillView` paints the padding at the pane's alpha. The chrome's
 tints are alpha inks tuned for an opaque background, so the find bar's accent-at-0.14
 composited onto whatever was behind the *window* and read grey. Every strip inside a
-pane now takes the same fill the ring paints, with its tint over it
+pane now takes the pane's own color with its tint over it
 (`ChromeTheme.surface(tint:over:)`), pushed down by `PanelHostView.applyBackground` so an OSC
-11 repaint carries into it too.
+11 repaint carries into it too. At **full** strength, not the ring's alpha: a strip floats
+over live cells, and the pane's alpha reaching it would let the text under it read through.
 
-**Showing a strip has to mark the ring for redisplay by hand**, and only translucency reveals
-it. The ring punches the terminal's frame out of the padding it paints, so a strip that resizes
-the terminal moves that hole. Flipping a constraint does not mark the panel as needing layout,
-and `layout()` is the only other thing that marks the ring, so the ring keeps the hole it
-punched for the full-height terminal: the strip's band goes unpainted and the window's backdrop
-shows straight through it. That band was the grey strip, measured off a screenshot as
-*exactly* the backdrop's color rather than a washed-out fill. Focus Mode never showed it because
-zooming resizes the panel itself, so `layout()` runs.
+**A header that displaces has to mark the ring for redisplay by hand**, and only translucency
+reveals it. The ring punches the terminal's frame out of the padding it paints, so a header
+that resizes the terminal moves that hole. Flipping a constraint does not mark the panel as
+needing layout, and `layout()` is the only other thing that marks the ring, so the ring keeps
+the hole it punched for the full-height terminal: the band goes unpainted and the window's
+backdrop shows straight through it, measured off a screenshot as *exactly* the backdrop's
+color rather than a washed-out fill. Only the drawer and Focus Mode headers reach this now;
+a mode's strips float, so the hole never moves.
 
 **The reported color is mirrored as-is, a reset included**, which is not the obvious choice.
 An OSC 111 reset arrives as an ordinary change carrying the theme's own background, so

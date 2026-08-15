@@ -36,12 +36,13 @@ final class PanelHostView: NSView {
     private var headerTopConstraints: [NSLayoutConstraint] = []
     private var contentTopToHeader: NSLayoutConstraint?
     private var contentTopToClip: NSLayoutConstraint?
+    /// Whether the header is painting over live terminal cells rather than sitting in space the
+    /// terminal gave up. Drives its fill and the rows scroll mode is allowed to reach.
+    private var headerFloats = false
     /// Built on the first search over this panel and kept for its life. A panel that never searches
     /// pays nothing; one that searches twice does not rebuild.
     private var findBar: FindBarView?
     private var findBarConstraints: [NSLayoutConstraint] = []
-    private var contentBottomToFindBar: NSLayoutConstraint?
-    private var contentBottomToClip: NSLayoutConstraint?
 
     var isFocused: Bool = false { didSet { if oldValue != isFocused { updateHalo() } } }
 
@@ -89,15 +90,28 @@ final class PanelHostView: NSView {
 
     var scrollCursorForTesting: ScrollCursorView { cursor }
 
-    /// Test hook: whether the padding ring is queued to repaint. Toggling a strip resizes the terminal,
-    /// which moves the hole the ring punches out of the padding, and nothing else in the panel marks it.
-    /// A rendered check can't stand in for this: `cacheDisplay` draws regardless of the flag,
-    /// so it paints the band correctly even when the app would not.
+    /// Test hook: whether the padding ring is queued to repaint. A displacing header moves the hole
+    /// the ring punches, nothing else marks it, and `cacheDisplay` draws regardless of the flag.
     var ringNeedsDisplayForTesting: Bool { ring.needsDisplay }
 
     /// Inner breathing room between the pane border and the terminal content, even on
     /// all sides so content (e.g. nvim) doesn't sit against the pane border.
     private let padding: CGFloat = 10
+
+    /// How far a chrome strip sits inside the clip's own edge. Tighter than `padding`, so a strip
+    /// reaches past the terminal it floats over rather than leaving a sliver of cells above it.
+    private static let stripInset: CGFloat = 8
+
+    /// Points of terminal the floating header covers off the top, zero while it displaces instead.
+    /// Scroll mode keeps its cursor out of them: a row it cannot show is one it must not use.
+    var terminalTopOverlap: CGFloat {
+        headerFloats ? Self.stripInset + PanelHeader.height - padding : 0
+    }
+
+    /// The same off the bottom, for the find bar. It always floats.
+    var terminalBottomOverlap: CGFloat {
+        findBar?.isHidden == false ? Self.stripInset + FindBarView.height - padding : 0
+    }
 
     /// The panel's rounded corner. Three layers have to agree on it — the bordered card, the
     /// clip that keeps content inside it, and the ring that fills the padding — so they read it
@@ -185,15 +199,12 @@ final class PanelHostView: NSView {
             ring.bottomAnchor.constraint(equalTo: clip.bottomAnchor),
             content.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
             content.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
+            content.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -padding),
             cursor.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             cursor.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             cursor.topAnchor.constraint(equalTo: content.topAnchor),
             cursor.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
-
-        contentBottomToClip = content.bottomAnchor.constraint(
-            equalTo: clip.bottomAnchor, constant: -padding)
-        contentBottomToClip?.isActive = true
 
         contentTopToClip = content.topAnchor.constraint(equalTo: clip.topAnchor, constant: padding)
         if let headerView {
@@ -202,7 +213,7 @@ final class PanelHostView: NSView {
             headerTopConstraints = [
                 headerView.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
                 headerView.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
-                headerView.topAnchor.constraint(equalTo: clip.topAnchor, constant: 8),
+                headerView.topAnchor.constraint(equalTo: clip.topAnchor, constant: Self.stripInset),
             ]
             contentTopToHeader = content.topAnchor.constraint(
                 equalTo: headerView.bottomAnchor, constant: padding)
@@ -284,32 +295,26 @@ final class PanelHostView: NSView {
     /// drawer shows its base header and swaps to the zoom variant while zoomed.
     private func updateHeader() {
         guard let headerView else { return }
-        if let meta = modeMeta ?? (isZoomed ? zoomMeta : nil) ?? baseMeta {
-            headerView.apply(meta)
-            setHeaderShown(true)
-        } else {
-            setHeaderShown(false)
-        }
+        let resting = (isZoomed ? zoomMeta : nil) ?? baseMeta
+        guard let meta = modeMeta ?? resting else { return setHeaderShown(false, displaces: false) }
+        headerView.apply(meta)
+        // A mode never moves the terminal: the header floats over the top row when nothing was
+        // displacing it, and rides the resting header's displacement when something was.
+        setHeaderShown(true, displaces: resting != nil)
     }
 
     /// Raise or lower the find bar, returning it while it is up so the caller can wire and drive it.
-    ///
-    /// The bar **displaces** the terminal rather than floating over it, exactly as the header does
-    /// at the other end, so the grid loses a row or two and reflows. The caller has to lay out and
-    /// re-measure after this: see `SearchController.settleLayout()`.
+    /// It **floats** over the terminal, so nothing resizes; it covers the bottom rows instead.
     @discardableResult
     func setFindBarShown(_ shown: Bool) -> FindBarView? {
-        defer { ring.needsDisplay = true }  // the terminal resized, so the ring's hole moved (see below)
         guard shown else {
             findBar?.isHidden = true
-            NSLayoutConstraint.deactivate(findBarConstraints + [contentBottomToFindBar].compactMap { $0 })
-            contentBottomToClip?.isActive = true
+            NSLayoutConstraint.deactivate(findBarConstraints)
             return nil
         }
         let bar = findBar ?? makeFindBar()
         bar.isHidden = false
-        contentBottomToClip?.isActive = false
-        NSLayoutConstraint.activate(findBarConstraints + [contentBottomToFindBar].compactMap { $0 })
+        NSLayoutConstraint.activate(findBarConstraints)
         return bar
     }
 
@@ -320,10 +325,8 @@ final class PanelHostView: NSView {
         findBarConstraints = [
             bar.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
             bar.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
-            bar.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -8),
+            bar.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -Self.stripInset),
         ]
-        contentBottomToFindBar = content.bottomAnchor.constraint(
-            equalTo: bar.topAnchor, constant: -padding)
         findBar = bar
         applyBackground()  // the bar is built on first ⌘/, long after the panel's background was set
         return bar
@@ -331,27 +334,37 @@ final class PanelHostView: NSView {
 
     var findBarForTesting: FindBarView? { findBar?.isHidden == false ? findBar : nil }
 
-    /// Swap between header-above-content and content-at-top, and hide/show the header.
-    ///
-    /// Marking the ring for redisplay is load-bearing, and only below `background-alpha` 1, where the
-    /// ring paints the padding with the terminal's frame punched out of it. Showing a strip resizes the
-    /// terminal, which moves that hole, but flipping a constraint does not mark this view as needing
-    /// layout, and `layout()` is the only thing that marks the ring. The ring then keeps the hole it
-    /// punched for the full-height terminal, the strip's band goes unpainted, and the window's backdrop
-    /// shows through it: the grey strip, measured as exactly the backdrop's color rather than a
-    /// washed-out fill. Focus Mode never showed it because zooming resizes the panel itself, so
-    /// `layout()` runs.
-    private func setHeaderShown(_ shown: Bool) {
+    /// Show or hide the header, taking its height off the terminal (`displaces`) or painting it
+    /// over the terminal's top rows.
+    private func setHeaderShown(_ shown: Bool, displaces: Bool) {
         guard let headerView, let contentTopToHeader, let contentTopToClip else { return }
+        // Displacing resizes the terminal, moving the hole the ring punches out of the padding, and
+        // flipping a constraint marks no layout pass. Below `background-alpha` 1 the band goes bare.
         defer { ring.needsDisplay = true }
         headerView.isHidden = !shown
-        if shown {
-            contentTopToClip.isActive = false
-            NSLayoutConstraint.activate(headerTopConstraints + [contentTopToHeader])
-        } else {
+        headerFloats = shown && !displaces
+        applyHeaderFill()
+        guard shown else {
             NSLayoutConstraint.deactivate(headerTopConstraints + [contentTopToHeader])
             contentTopToClip.isActive = true
+            return
         }
+        NSLayoutConstraint.activate(headerTopConstraints)
+        // One off before the other on: both live at once is a conflict the solver reports.
+        if displaces {
+            contentTopToClip.isActive = false
+            contentTopToHeader.isActive = true
+        } else {
+            contentTopToHeader.isActive = false
+            contentTopToClip.isActive = true
+        }
+    }
+
+    /// A floating header covers live cells, so it fills opaquely whatever `background-alpha` says.
+    /// A displacing one has only padding behind it and stays clear.
+    private func applyHeaderFill() {
+        headerView?.paneFill =
+            headerFloats ? (backgroundOverride ?? Theme.current.chrome.background).nsColor : nil
     }
 
     private static var idleBorder: NSColor { Theme.current.chrome.ink(alpha: 0.08) }
@@ -391,10 +404,10 @@ final class PanelHostView: NSView {
         clip.layer?.backgroundColor = isSolid ? background.cgColor : nil
         ring.isHidden = isSolid
         ring.color = background.withAlphaComponent(alpha)
-        // The chrome strips inside the pane paint their tint over this same fill, so they read at the
-        // pane's alpha rather than blending with the desktop. Solid or not: at alpha 1 this is
-        // the fill the clip already had behind them.
-        findBar?.paneFill = isSolid ? background : ring.color
+        // Both strips float over live cells, so their tint goes over the pane color at full
+        // strength. At alpha 1 that is the fill the clip already had behind them.
+        findBar?.paneFill = background
+        applyHeaderFill()
     }
 
     private func updateHalo() {
@@ -417,6 +430,16 @@ final class PanelHostView: NSView {
         private let titleField = NSTextField(labelWithString: "")
         private var keycap: KeycapView
         private static let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
+        static let height: CGFloat = 20
+
+        /// What the header paints behind its title while it floats over the terminal, or nil while
+        /// it displaces the terminal and has only the pane's padding behind it.
+        var paneFill: NSColor? {
+            didSet {
+                guard paneFill != oldValue else { return }
+                layer?.backgroundColor = paneFill?.cgColor
+            }
+        }
 
         /// Test hook: the header's current title text + resolved keycap shortcut, for
         /// asserting the drawer's resting → zoomed swap.
@@ -435,13 +458,14 @@ final class PanelHostView: NSView {
             action = meta.action
             keycap = KeycapView(shortcut: CommandCatalog.spec(for: meta.action).shortcut, showsBackground: false)
             super.init(frame: .zero)
+            wantsLayer = true
             titleField.translatesAutoresizingMaskIntoConstraints = false
             addSubview(titleField)
             addSubview(keycap)
             NSLayoutConstraint.activate([
                 titleField.leadingAnchor.constraint(equalTo: leadingAnchor),
                 titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
-                heightAnchor.constraint(equalToConstant: 20),
+                heightAnchor.constraint(equalToConstant: Self.height),
             ])
             activateKeycapConstraints()
             applyTitle()
