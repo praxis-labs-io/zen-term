@@ -41,6 +41,19 @@ Present from a control's action instead (an `NSButton`/`AppButton` fires on `mou
 `sendAction`), or defer to the next runloop turn. This is why the directory picker moved from a
 click-on-the-empty-field affordance to an explicit Choose button.
 
+**Some keys never reach `keyDown` at all, because AppKit's key-equivalent dispatch takes them
+first.** Ctrl-Return goes to a default context-menu equivalent, Ctrl-/ is offered to the first view
+in the *hierarchy* rather than to the first responder (and macOS beeps at it), and a command key
+can be redirected into `doCommand(by:)` with no `keyDown` behind it. `GhosttyHostView` overrides
+`performKeyEquivalent`, ported from ghostty's `SurfaceView`: it declines while unfocused, passes
+Ctrl-Return through verbatim, rewrites Ctrl-/ to Ctrl-_, and declines every other command or
+control key *once*, recording its timestamp so a menu item still wins. `doCommand`'s redispatch is
+what sends that event back to be claimed on the second pass, and `keyDown` clears the timestamp
+before `interpretKeyEvents` so the round trip cannot loop. Ghostty's `keyIsBinding` branch is
+dropped here: `KeyInterceptor` resolves chords at its monitor, ahead of all of this. The event
+identity is a timestamp because an `NSEvent` reference does not survive the round trip, and
+AppKit's zero-stamped synthetic events are declined outright for the same reason.
+
 **A consumed `keyDown` leaves its `keyUp` behind, so the surface pairs them itself.**
 `KeyInterceptor` is a local `NSEvent` monitor that resolves a chord *before* the responder chain,
 and it matches only `[.keyDown, .flagsChanged]`. Consuming a chord therefore consumes half a
