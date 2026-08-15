@@ -605,7 +605,7 @@ final class SearchController {
 
     /// Decode a phase-two keystroke, or nil for anything this mode does not claim.
     ///
-    /// Pure and static, the same seam `ScrollModeController.command(for:afterG:)` uses, and
+    /// Pure and static, the same seam `ScrollKeymap.command(for:pending:)` uses, and
     /// shiftedness comes from the modifier flags for the same reason: Caps Lock uppercases too, so
     /// reading the character's case would turn every `n` into an `N`.
     ///

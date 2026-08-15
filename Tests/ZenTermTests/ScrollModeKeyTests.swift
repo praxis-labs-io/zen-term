@@ -20,8 +20,8 @@ final class ScrollModeKeyTests: XCTestCase {
                 charactersIgnoringModifiers: unshifted ?? characters, isARepeat: false, keyCode: keyCode))
     }
 
-    private func decode(_ event: NSEvent, afterG: Bool = false) -> ScrollModeController.Command? {
-        ScrollModeController.command(for: event, afterG: afterG)
+    private func decode(_ event: NSEvent, afterG: Bool = false) -> ScrollKeymap.Command? {
+        ScrollKeymap.command(for: event, pending: .init(afterG: afterG))
     }
 
     // MARK: the moves
