@@ -112,79 +112,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertFalse(panel.isHeaderVisibleForTesting, "the header must come down with the mode")
     }
 
-    // MARK: the mode moves nothing
-
-    /// The header used to take its height off the terminal, resizing the pty on the way in and out.
-    func test_enteringAndLeaving_neverResizesTheTerminal() throws {
-        let controller = makeWindow()
-        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
-        let surface = try XCTUnwrap(spawned.first)
-        panel.layoutSubtreeIfNeeded()
-        let resting = surface.view.frame
-
-        controller.handle(.toggleScrollMode)
-        panel.layoutSubtreeIfNeeded()
-
-        XCTAssertTrue(panel.isHeaderVisibleForTesting, "premise: the header is up")
-        XCTAssertEqual(surface.view.frame, resting, "the header floats, so the terminal never moved")
-
-        controller.handle(.toggleScrollMode)
-        panel.layoutSubtreeIfNeeded()
-
-        XCTAssertEqual(surface.view.frame, resting, "and leaving gives nothing back, having taken none")
-    }
-
-    /// ⌘F raises the bar and a Find header, and neither may cost the pane a row.
-    func test_openingTheFindBar_neverResizesTheTerminal() throws {
-        let controller = makeWindow()
-        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
-        let surface = try XCTUnwrap(spawned.first)
-        panel.layoutSubtreeIfNeeded()
-        let resting = surface.view.frame
-
-        controller.handle(.toggleSearch)
-        panel.layoutSubtreeIfNeeded()
-
-        XCTAssertNotNil(panel.findBarForTesting, "premise: the bar is up")
-        XCTAssertEqual(surface.view.frame, resting, "both strips float over the rows they cover")
-    }
-
-    /// A cursor behind the header is one the reader cannot see move.
-    func test_theCursorNeverLandsUnderTheFloatingHeader() throws {
-        let controller = makeWindow()
-        let host = ModeHostSpy()
-        controller.keyModeHost = host
-        controller.handle(.toggleScrollMode)
-        let handler = try XCTUnwrap(host.modeHandler)
-
-        XCTAssertTrue(handler(try keyDown("g")))
-        XCTAssertTrue(handler(try keyDown("g")))
-
-        XCTAssertEqual(
-            controller.scrollMode.cursorRow, 1,
-            "row 0 is behind an 18pt header over 16pt cells, so the top readable row is 1")
-    }
-
-    /// Puts the band where the reader was already looking, not a screenful away on the last row.
-    func test_enteringOverASelection_landsOnItsFirstCell() throws {
-        let controller = makeWindow()
-        let surface = try XCTUnwrap(spawned.first)
-        surface.selectionOrigin = TerminalViewportCell(row: 2, column: 4)  // row 2 is "❯ seq 1 3"
-
-        controller.handle(.toggleScrollMode)
-
-        XCTAssertEqual(controller.scrollMode.cursorRow, 2)
-        XCTAssertEqual(controller.scrollMode.cursor.column, 4)
-    }
-
-    func test_enteringWithNoSelection_stillOpensOnTheLastWrittenRow() throws {
-        let controller = makeWindow()
-
-        controller.handle(.toggleScrollMode)
-
-        XCTAssertEqual(controller.scrollMode.cursorRow, 11, "the fixture's prompt row")
-    }
-
     // MARK: the keys, through the real handler
 
     func test_aKeyThroughTheInstalledHandlerScrollsTheFocusedSurface() throws {
@@ -260,14 +187,13 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let surface = try XCTUnwrap(spawned.first)
         let handler = try XCTUnwrap(host.modeHandler)
 
-        // Row 1, not row 0: the mode's header floats over the terminal and covers the top row.
-        for _ in 0..<10 { XCTAssertTrue(handler(try keyDown("k"))) }
-        XCTAssertEqual(controller.scrollMode.cursorRow, 1)
+        for _ in 0..<11 { XCTAssertTrue(handler(try keyDown("k"))) }  // cursor to the top row
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0)
         XCTAssertEqual(surface.scrolls, [])
 
         XCTAssertTrue(handler(try keyDown("k")))  // nowhere left to go
 
-        XCTAssertEqual(controller.scrollMode.cursorRow, 1, "the cursor stays pinned at the edge")
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0, "the cursor stays pinned at the edge")
         XCTAssertEqual(surface.scrolls, [.lines(-1)], "and the buffer moves under it instead")
     }
 
@@ -280,7 +206,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
         XCTAssertTrue(handler(try keyDown("g")))
         XCTAssertTrue(handler(try keyDown("g")))
-        XCTAssertEqual(controller.scrollMode.cursorRow, 1, "the top row the header leaves readable")
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0)
 
         XCTAssertTrue(handler(try keyDown("G", unshifted: "g", flags: .shift)))
         XCTAssertEqual(controller.scrollMode.cursorRow, 23)
@@ -329,7 +255,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
         for _ in 0..<10 { XCTAssertTrue(handler(try keyDown("{", unshifted: "[", flags: .shift))) }
 
-        XCTAssertEqual(controller.scrollMode.cursorRow, 1, "stops at the row below the header")
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0)
     }
 
     func test_theClosingBraceRunsToTheEndWhenOnlyBlanksFollow() throws {

@@ -42,13 +42,11 @@ enum ScrollWordMotion {
     /// A class so it can hold each row's characters once. A `w` along a long row asks for a
     /// character per step, and re-splitting the string each time makes one keystroke quadratic.
     final class Screen {
-        let firstRow: Int
         let lastRow: Int
         private let reader: (Int) -> String
         private var rows: [Int: [Character]] = [:]
 
-        init(firstRow: Int = 0, lastRow: Int, row: @escaping (Int) -> String) {
-            self.firstRow = firstRow
+        init(lastRow: Int, row: @escaping (Int) -> String) {
             self.lastRow = lastRow
             self.reader = row
         }
@@ -78,7 +76,7 @@ enum ScrollWordMotion {
         /// The previous cell, or nil at the top of the screen.
         func backward(_ cell: ScrollCell) -> ScrollCell? {
             if cell.column > 0 { return ScrollCell(row: cell.row, column: cell.column - 1) }
-            guard cell.row > firstRow else { return nil }
+            guard cell.row > 0 else { return nil }
             return ScrollCell(row: cell.row - 1, column: max(characters(cell.row - 1).count - 1, 0))
         }
     }

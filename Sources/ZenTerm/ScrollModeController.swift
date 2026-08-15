@@ -95,10 +95,19 @@ final class ScrollModeController {
         isActive = true
         invalidateRows()
         Log.info("scroll mode entered", category: .panes)
-        // The header goes up first because it floats over the terminal's top rows, and those are
-        // rows the cursor must not land on. It resizes nothing, so no reflow follows it.
+        // The header goes up FIRST, and the grid is measured only after it has. A pane's header is
+        // hidden until a mode shows it, and showing it moves the content's top constraint down by
+        // its height: the terminal loses a row or two and reflows. Reading the cursor row before
+        // that landed measured a grid that was about to change out from under it, which is what
+        // put the band a row off the prompt.
         updateHeader()
-        cursor = entryCell()
+        panel.layoutSubtreeIfNeeded()
+        cursor = ScrollCell(row: Self.entryRow(of: surface), column: 0)
+        // That layout reflowed the grid, and the surface reports a reflow from inside its own
+        // `setFrameSize` — so `reportReflow` already ran, nested in this call, and armed an anchor
+        // against whatever row the *last* session left the cursor on. The entry row above is the
+        // answer to where the band goes; drop the anchor before a later report can act on it.
+        pendingAnchor = nil
         refreshCursor()
         onActiveChanged?(true)
     }
@@ -127,21 +136,18 @@ final class ScrollModeController {
         onActiveChanged?(false)
     }
 
-    /// Where the mode opens: on a mouse selection if one is up, else the last reachable row with
-    /// anything written on it. Falls back to that row when nothing is readable.
-    private func entryCell() -> ScrollCell {
-        guard let surface else { return .origin }
-        if let origin = surface.selectionOrigin {
-            return ScrollCell(row: origin.row, column: origin.column)
+    /// The row the mode opens on: the last row of the viewport with anything written on it.
+    ///
+    /// Read off the screen rather than the terminal's cursor, which reports against the *live*
+    /// screen with no account of scrolling, so a viewport already scrolled with the trackpad put
+    /// the band on an unrelated row. Falls back to the bottom row when nothing is readable.
+    static func entryRow(of surface: TerminalSurface) -> Int {
+        let last = max((surface.cellMetrics?.rows ?? 1) - 1, 0)
+        for row in stride(from: last, through: 0, by: -1)
+        where !isBlank(surface.text(viewportRow: row)) {
+            return row
         }
-        // Read off the screen rather than the terminal's cursor, which reports against the *live*
-        // screen ignoring scrolling: a viewport scrolled with the trackpad put the band elsewhere.
-        let (first, last) = (firstRow, lastRow)
-        for row in stride(from: last, through: first, by: -1)
-        where !Self.isBlank(surface.text(viewportRow: row)) {
-            return ScrollCell(row: row, column: 0)
-        }
-        return ScrollCell(row: last, column: 0)
+        return last
     }
 
     /// Re-place the overlay against the grid's current geometry, for a change that moves the cell
@@ -159,13 +165,6 @@ final class ScrollModeController {
         releaseSelection()
         invalidateRows()  // a different cell size means different rows
         refreshCursor(remembersLine: false)
-    }
-
-    /// A strip covered or uncovered rows without the grid moving. Nothing rewrapped, so there is no
-    /// line to re-find and no selection to give back: the cursor only has to come out from under it.
-    func reclampCursor() {
-        guard isActive else { return }
-        refreshCursor()
     }
 
     /// The grid this mode is driving changed shape. A resize rewraps the text under a cursor that is
@@ -223,11 +222,11 @@ final class ScrollModeController {
         // so the first match in this order is the answer, and a reflow moves a line by a few rows
         // rather than a screenful. Sweeping the viewport instead spent a `read_text` on every row
         // of it, which libghostty asks callers to throttle.
-        let here = min(max(cursor.row, firstRow), lastRow)
+        let here = min(max(cursor.row, 0), lastRow)
         if rowText(here) == line { return here }
         for distance in 1...max(lastRow, 1) {
-            // Above before below, which is the tie-break a sweep down from the top row used to give.
-            for row in [here - distance, here + distance] where row >= firstRow && row <= lastRow {
+            // Above before below, which is the tie-break a sweep up from row 0 used to give.
+            for row in [here - distance, here + distance] where row >= 0 && row <= lastRow {
                 if rowText(row) == line { return row }
             }
         }
@@ -245,8 +244,7 @@ final class ScrollModeController {
     /// fifty characters deep into the line the reader was actually on.
     private func fragmentRow(of line: String) -> Int? {
         var best: (row: Int, shared: Int)?
-        guard firstRow <= lastRow else { return nil }
-        for row in firstRow...lastRow {
+        for row in 0...lastRow {
             let text = rowText(row)
             guard text.hasPrefix(line) || line.hasPrefix(text) else { continue }
             let shared = min(text.count, line.count)
@@ -334,7 +332,7 @@ final class ScrollModeController {
             // thing you asked for somewhere in view and leaving the cursor elsewhere makes the
             // cursor a decoration.
             switch move {
-            case .top: cursor = ScrollCell(row: firstRow, column: cursor.column)
+            case .top: cursor = ScrollCell(row: 0, column: cursor.column)
             case .bottom: cursor = ScrollCell(row: lastRow, column: cursor.column)
             default: break
             }
@@ -359,7 +357,7 @@ final class ScrollModeController {
     /// track a marker that never moved, which is a scrollbar with extra steps.
     private func step(_ delta: Int) {
         let next = cursor.row + delta
-        if next >= firstRow && next <= lastRow {
+        if next >= 0 && next <= lastRow {
             move(to: ScrollCell(row: next, column: cursor.column))
         } else {
             surface?.scroll(.lines(delta))  // pinned at an edge: the buffer moves under the cursor
@@ -371,32 +369,15 @@ final class ScrollModeController {
 
     /// Put the cursor on `cell`, clamped into the grid and onto the row's text.
     private func move(to cell: ScrollCell) {
-        let row = min(max(cell.row, firstRow), lastRow)
+        let row = min(max(cell.row, 0), lastRow)
         cursor = ScrollCell(row: row, column: min(max(cell.column, 0), lastColumn(of: row)))
         refreshCursor()
         if selection != nil { updateHeader() }  // the row count moved with the cursor
     }
 
-    /// The first row the cursor can reach, past every row the floating header covers. The grid's
-    /// own top inset comes off first: a strip covers that before it reaches any cell.
-    private var firstRow: Int {
-        guard let panel, let metrics = surface?.cellMetrics else { return 0 }
-        return min(rowsCovered(panel.terminalTopOverlap - metrics.gridInset), lastRow)
-    }
-
-    /// The last, past every row the find bar covers. Zero while the surface has no metrics to
-    /// report, which pins the cursor to the top rather than running it off a grid of unknown size.
-    private var lastRow: Int {
-        guard let rows = surface?.cellMetrics?.rows else { return 0 }
-        return max(rows - 1 - rowsCovered(panel?.terminalBottomOverlap ?? 0), 0)
-    }
-
-    /// Whole rows lost to a strip covering `points` of the grid. Rounded up: a row a strip covers
-    /// any part of is one the reader cannot read.
-    private func rowsCovered(_ points: CGFloat) -> Int {
-        guard points > 0, let height = surface?.cellMetrics?.cellHeight, height > 0 else { return 0 }
-        return Int((points / height).rounded(.up))
-    }
+    /// The bottom row of the viewport. Zero while the surface has no metrics to report, which
+    /// pins the cursor to the top row rather than letting it run off a grid of unknown size.
+    private var lastRow: Int { max((surface?.cellMetrics?.rows ?? 1) - 1, 0) }
 
     /// Zero on a blank row, so the cursor has somewhere to be.
     private func lastColumn(of row: Int) -> Int { max(rowText(row).count - 1, 0) }
@@ -411,19 +392,17 @@ final class ScrollModeController {
     /// Clamped to the viewport: a paragraph beyond the visible rows needs the buffer moved first.
     private func paragraphRow(from row: Int, delta: Int) -> Int {
         guard surface != nil, delta != 0 else { return row }
-        let (first, limit) = (firstRow, lastRow)
+        let limit = lastRow
         var next = row + delta
-        while next >= first && next <= limit && isBlankRow(next) { next += delta }
-        while next >= first && next <= limit && !isBlankRow(next) { next += delta }
-        return min(max(next, first), limit)
+        while next >= 0 && next <= limit && isBlankRow(next) { next += delta }
+        while next >= 0 && next <= limit && !isBlankRow(next) { next += delta }
+        return min(max(next, 0), limit)
     }
 
     /// Reads through the same cache as everything else, so a `w` across the viewport costs no more
     /// locked reads than a `}` over it.
     private func screen() -> ScrollWordMotion.Screen {
-        ScrollWordMotion.Screen(firstRow: firstRow, lastRow: lastRow) { [weak self] row in
-            self?.rowText(row) ?? ""
-        }
+        ScrollWordMotion.Screen(lastRow: lastRow) { [weak self] row in self?.rowText(row) ?? "" }
     }
 
     /// A viewport row's text, read at most once per viewport state.
@@ -572,7 +551,7 @@ final class ScrollModeController {
         let columns = surface.cellMetrics?.columns ?? 0
         // The row first, then the column against THAT row: a grid that lost rows leaves the cursor
         // naming one the backend will not read, and its empty text would collapse the column to 0.
-        let row = min(max(cursor.row, firstRow), lastRow)
+        let row = min(cursor.row, lastRow)
         let text = rowText(row)
         cursor = ScrollCell(row: row, column: min(cursor.column, max(text.count - 1, 0)))
         // Remembered here, while the grid still has the shape this row was chosen against. See

@@ -136,13 +136,18 @@ final class SearchController {
         bar?.needle = seed
         showCount()
 
-        // Reads FIND rather than SCROLL because the bar owns the keyboard through phase one and
-        // none of scroll mode's keys are live yet. A scroll mode already up owns its own header.
+        // Raised with the bar so the pane reflows once for the whole search: a second reflow at
+        // commit snaps the viewport toward the bottom and throws away the match being read.
+        //
+        // It reads FIND rather than SCROLL because the bar owns the keyboard through phase one and
+        // none of scroll mode's keys are live yet. Skipped when scroll mode is already up, where
+        // the header is its own and says so correctly.
         if !scrollMode.isActive { panel.modeMeta = PanelMeta(title: "Find", action: .toggleSearch) }
 
-        // The bar covers the bottom rows without resizing anything, so the band comes out from
-        // under it rather than the grid being re-measured.
-        scrollMode.reclampCursor()
+        // The bar displaces the terminal, so the grid loses a row or two and reflows. Lay out
+        // before anything measures it, for the reason `ScrollModeController.begin` spells out at
+        // the other end of the pane.
+        settleLayout()
 
         bar?.focusField()
         Log.info("search opened", category: .panes)
@@ -291,7 +296,9 @@ final class SearchController {
         // the header, and clearing it here would strip the indicator off a live mode.
         if !scrollMode.isActive { panel?.modeMeta = nil }
         panel?.setFindBarShown(false)
-        scrollMode.reclampCursor()  // the rows the bar covered are readable again
+        // The terminal takes its rows back, so the grid reflows again and scroll mode's cursor has
+        // to be re-placed against it. Same order as raising the bar.
+        settleLayout()
         bar = nil
         panel = nil
         surface = nil
@@ -304,6 +311,16 @@ final class SearchController {
     /// Whether `s` is the surface this search is running on, so a pane that just exited ends only
     /// its own bar.
     func isDriving(_ s: AnyObject) -> Bool { surface === (s as AnyObject) }
+
+    /// Land the layout the bar just changed, then let scroll mode re-measure against the grid it
+    /// reflowed into. Measuring first reads the grid that is about to change out from under it.
+    private func settleLayout() {
+        panel?.layoutSubtreeIfNeeded()
+        // The layout usually reports a reflow on its own, so this is the second call for one
+        // change. Kept anyway: a bar that costs the pane no whole row reshapes nothing, reports
+        // nothing, and the overlay still has to be re-placed against the grid it now sits in.
+        scrollMode.refreshGeometry()
+    }
 
     // MARK: the needle
 
