@@ -15,9 +15,16 @@ enum ScrollKeymap {
         case paragraph(Int)
         /// One cell left or right.
         case column(Int)
-        case word(ScrollWordMotion.Motion, times: Int)
+        /// `wide` is vim's WORD: whitespace-delimited, so `foo.bar` is one rather than three.
+        case word(ScrollWordMotion.Motion, wide: Bool, times: Int)
         case lineStart
         case lineEnd
+        /// `^`: the first cell on the row holding anything but whitespace.
+        case firstNonBlank
+        /// `H`/`M`/`L`: a row named by where it sits on screen rather than by a delta.
+        case viewportRow(ViewportPlace, offset: Int)
+        /// `*`: hand the word under the cursor to the find bar.
+        case searchWordUnderCursor
         /// `v` or `V`: open a selection here, swap its kind, or close the one that is up.
         case visual(ScrollSelection.Kind)
         case yank
@@ -28,6 +35,9 @@ enum ScrollKeymap {
         /// `q` or `i`: leave outright, selection or no selection.
         case exit
     }
+
+    /// Where on screen a row sits, for the motions that name one that way.
+    enum ViewportPlace: Equatable { case top, middle, bottom }
 
     /// A decoded keystroke: something to run, or a digit joining the count being typed. A digit is
     /// not a move, so it is not a `Command`.
@@ -85,6 +95,8 @@ enum ScrollKeymap {
         case "{": return .run(.paragraph(-times))
         case "}": return .run(.paragraph(times))
         case "$": return .run(.lineEnd)
+        case "^": return .run(.firstNonBlank)
+        case "*": return .run(.searchWordUnderCursor)
         default: break
         }
         let shift = held.contains(.shift)
@@ -93,9 +105,17 @@ enum ScrollKeymap {
         case ("k", false), (upArrow, false): return .run(.step(-times))
         case ("h", false), (leftArrow, false): return .run(.column(-times))
         case ("l", false), (rightArrow, false): return .run(.column(times))
-        case ("w", false): return .run(.word(.next, times: times))
-        case ("b", false): return .run(.word(.back, times: times))
-        case ("e", false): return .run(.word(.end, times: times))
+        case ("w", false): return .run(.word(.next, wide: false, times: times))
+        case ("b", false): return .run(.word(.back, wide: false, times: times))
+        case ("e", false): return .run(.word(.end, wide: false, times: times))
+        case ("w", true): return .run(.word(.next, wide: true, times: times))
+        case ("b", true): return .run(.word(.back, wide: true, times: times))
+        case ("e", true): return .run(.word(.end, wide: true, times: times))
+        // `3H` is the third row down, so the count is an offset from the edge it names. `M` has
+        // only one middle, and ignores it.
+        case ("h", true): return .run(.viewportRow(.top, offset: times - 1))
+        case ("m", true): return .run(.viewportRow(.middle, offset: 0))
+        case ("l", true): return .run(.viewportRow(.bottom, offset: times - 1))
         // Vim's own rule: `0` is a motion until a count is being typed, and a digit after that.
         case ("0", false): return pending.count == nil ? .run(.lineStart) : .count(0)
         case ("1"..."9", false): return digit(event).map(Key.count)

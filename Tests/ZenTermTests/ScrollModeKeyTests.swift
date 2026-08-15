@@ -125,9 +125,45 @@ final class ScrollModeKeyTests: XCTestCase {
     }
 
     func test_wbeAreTheWordMotions() throws {
-        XCTAssertEqual(decode(try keyDown("w")), .word(.next, times: 1))
-        XCTAssertEqual(decode(try keyDown("b")), .word(.back, times: 1))
-        XCTAssertEqual(decode(try keyDown("e")), .word(.end, times: 1))
+        XCTAssertEqual(decode(try keyDown("w")), .word(.next, wide: false, times: 1))
+        XCTAssertEqual(decode(try keyDown("b")), .word(.back, wide: false, times: 1))
+        XCTAssertEqual(decode(try keyDown("e")), .word(.end, wide: false, times: 1))
+    }
+
+    func test_shiftedWordMotionsAreWhitespaceDelimited() throws {
+        // Vim's WORD: `foo.bar` is one of them and three of the bare kind.
+        XCTAssertEqual(
+            decode(try keyDown("W", unshifted: "w", flags: .shift)),
+            .word(.next, wide: true, times: 1))
+        XCTAssertEqual(
+            decode(try keyDown("B", unshifted: "b", flags: .shift)),
+            .word(.back, wide: true, times: 1))
+        XCTAssertEqual(
+            decode(try keyDown("E", unshifted: "e", flags: .shift)),
+            .word(.end, wide: true, times: 1))
+    }
+
+    func test_hmlNameARowByWhereItSitsOnScreen() throws {
+        XCTAssertEqual(
+            decode(try keyDown("H", unshifted: "h", flags: .shift)),
+            .viewportRow(.top, offset: 0))
+        XCTAssertEqual(
+            decode(try keyDown("M", unshifted: "m", flags: .shift)),
+            .viewportRow(.middle, offset: 0))
+        XCTAssertEqual(
+            decode(try keyDown("L", unshifted: "l", flags: .shift)),
+            .viewportRow(.bottom, offset: 0))
+        XCTAssertEqual(
+            decode(try keyDown("H", unshifted: "h", flags: .shift), count: 3),
+            .viewportRow(.top, offset: 2), "`3H` is the third row down, so the count is an offset")
+    }
+
+    func test_caretAndStarAreTypedCharacters() throws {
+        // Both are shift-digit, so `charactersIgnoringModifiers` reports the digit and only the
+        // typed character names them. A layout that puts them elsewhere reports them here too.
+        XCTAssertEqual(decode(try keyDown("^", unshifted: "6", flags: .shift)), .firstNonBlank)
+        XCTAssertEqual(
+            decode(try keyDown("*", unshifted: "8", flags: .shift)), .searchWordUnderCursor)
     }
 
     func test_controlBStillPagesUpRatherThanMovingAWord() throws {
@@ -188,7 +224,7 @@ final class ScrollModeKeyTests: XCTestCase {
         XCTAssertEqual(decode(try keyDown("j"), count: 12), .step(12))
         XCTAssertEqual(decode(try keyDown("k"), count: 3), .step(-3))
         XCTAssertEqual(decode(try keyDown("l"), count: 4), .column(4))
-        XCTAssertEqual(decode(try keyDown("w"), count: 3), .word(.next, times: 3))
+        XCTAssertEqual(decode(try keyDown("w"), count: 3), .word(.next, wide: false, times: 3))
         XCTAssertEqual(
             decode(try keyDown("}", unshifted: "]", flags: .shift), count: 2), .paragraph(2))
     }

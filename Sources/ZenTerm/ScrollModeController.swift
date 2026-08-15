@@ -51,6 +51,10 @@ final class ScrollModeController {
     /// hook without this type reaching back into `KeyInterceptor`.
     var onActiveChanged: ((Bool) -> Void)?
 
+    /// `*` hands the word under the cursor to whoever owns the find bar. The mode knows nothing
+    /// about search, and the window wires the two together.
+    var onSearchWord: ((String) -> Void)?
+
     // MARK: lifecycle
 
     /// Enter the mode over `target`, or do nothing if it is already up over the same panel.
@@ -307,11 +311,17 @@ final class ScrollModeController {
                     row: paragraphRow(from: cursor.row, delta: delta), column: cursor.column))
         case .column(let delta):
             move(to: ScrollCell(row: cursor.row, column: cursor.column + delta))
-        case .word(let motion, let times):
-            let screen = screen()
+        case .word(let motion, let wide, let times):
+            let screen = screen(wide: wide)
             var destination = cursor
             for _ in 0..<times { destination = motion.destination(from: destination, on: screen) }
             move(to: destination)
+        case .firstNonBlank:
+            move(to: ScrollCell(row: cursor.row, column: firstNonBlankColumn(of: cursor.row)))
+        case .viewportRow(let place, let offset):
+            move(to: ScrollCell(row: viewportRow(place, offset: offset), column: cursor.column))
+        case .searchWordUnderCursor:
+            if let word = wordUnderCursor() { onSearchWord?(word) }
         case .lineStart:
             move(to: ScrollCell(row: cursor.row, column: 0))
         case .lineEnd:
@@ -397,8 +407,39 @@ final class ScrollModeController {
 
     /// Reads through the same cache as everything else, so a `w` across the viewport costs no more
     /// locked reads than a `}` over it.
-    private func screen() -> ScrollWordMotion.Screen {
-        ScrollWordMotion.Screen(lastRow: lastRow) { [weak self] row in self?.rowText(row) ?? "" }
+    private func screen(wide: Bool = false) -> ScrollWordMotion.Screen {
+        ScrollWordMotion.Screen(lastRow: lastRow, wide: wide) { [weak self] row in
+            self?.rowText(row) ?? ""
+        }
+    }
+
+    /// The first cell on the row holding anything but whitespace, or zero on a blank row.
+    private func firstNonBlankColumn(of row: Int) -> Int {
+        Array(rowText(row)).firstIndex { !$0.isWhitespace } ?? 0
+    }
+
+    /// The row `H`, `M` or `L` names. Reckoned from the last **written** row rather than the grid's
+    /// bottom, which on a half-filled screen is empty space below everything there is to read.
+    private func viewportRow(_ place: ScrollKeymap.ViewportPlace, offset: Int) -> Int {
+        let bottom = surface.map { Self.entryRow(of: $0) } ?? 0
+        switch place {
+        case .top: return min(offset, bottom)
+        case .middle: return bottom / 2
+        case .bottom: return max(bottom - offset, 0)
+        }
+    }
+
+    /// The keyword run the cursor sits in, or nil when it is not on one. What `*` searches for.
+    private func wordUnderCursor() -> String? {
+        let text = Array(rowText(cursor.row))
+        guard text.indices.contains(cursor.column),
+            ScrollWordMotion.classify(text[cursor.column]) == .keyword
+        else { return nil }
+        var start = cursor.column
+        while start > 0, ScrollWordMotion.classify(text[start - 1]) == .keyword { start -= 1 }
+        var end = cursor.column
+        while end + 1 < text.count, ScrollWordMotion.classify(text[end + 1]) == .keyword { end += 1 }
+        return String(text[start...end])
     }
 
     /// A viewport row's text, read at most once per viewport state.

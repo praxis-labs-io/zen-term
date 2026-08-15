@@ -191,6 +191,93 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.scrolls, [.pageFraction(0.5), .pageFraction(-0.5), .bottom])
     }
 
+    // MARK: the motions counts came with
+
+    func test_caretGoesToTheFirstCellHoldingSomething() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "    indented"
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("$", unshifted: "4", flags: .shift)))
+        XCTAssertTrue(handler(try keyDown("^", unshifted: "6", flags: .shift)))
+
+        XCTAssertEqual(controller.scrollMode.cursor.column, 4, "past the four spaces, not to 0")
+    }
+
+    func test_hmlLandOnTheTopMiddleAndLastWrittenRow() throws {
+        // `L` reckons from the last row with anything on it. The grid's own bottom is empty space
+        // below the prompt, and parking the band out there names nothing the reader can read.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("H", unshifted: "h", flags: .shift)))
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0)
+
+        XCTAssertTrue(handler(try keyDown("L", unshifted: "l", flags: .shift)))
+        XCTAssertEqual(controller.scrollMode.cursorRow, 11, "the prompt, not row 23")
+
+        XCTAssertTrue(handler(try keyDown("M", unshifted: "m", flags: .shift)))
+        XCTAssertEqual(controller.scrollMode.cursorRow, 5)
+    }
+
+    func test_aCountOffsetsHFromTheTopRow() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("3")))
+        XCTAssertTrue(handler(try keyDown("H", unshifted: "h", flags: .shift)))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2, "the third row down")
+    }
+
+    func test_shiftWCrossesPunctuationThatWStopsOn() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "foo.bar baz"
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("w")))
+        XCTAssertEqual(controller.scrollMode.cursor.column, 3, "bare `w` stops on the dot")
+
+        XCTAssertTrue(handler(try keyDown("0")))
+        XCTAssertTrue(handler(try keyDown("W", unshifted: "w", flags: .shift)))
+
+        XCTAssertEqual(controller.scrollMode.cursor.column, 8, "a WORD crosses it to `baz`")
+    }
+
+    func test_starOpensTheFindBarOnTheWordUnderTheBand() throws {
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<3 { XCTAssertTrue(handler(try keyDown("k"))) }  // onto "hi"
+        XCTAssertEqual(controller.scrollMode.cursorRow, 8, "precondition")
+        XCTAssertTrue(handler(try keyDown("*", unshifted: "8", flags: .shift)))
+
+        XCTAssertEqual(panel.findBarForTesting?.needle, "hi")
+    }
+
     // MARK: counts, through the real handler
 
     func test_aCountCarriesTheCursorThatManyRows() throws {

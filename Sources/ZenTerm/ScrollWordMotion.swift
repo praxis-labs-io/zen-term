@@ -30,9 +30,11 @@ enum ScrollWordMotion {
         case blank
     }
 
-    /// `iskeyword` at its default: letters, digits and underscore.
-    static func classify(_ character: Character) -> CharacterClass {
+    /// `iskeyword` at its default: letters, digits and underscore. A WORD (`wide`) has only the
+    /// one non-blank class, so `foo.bar` is one rather than three.
+    static func classify(_ character: Character, wide: Bool = false) -> CharacterClass {
         if character.isWhitespace { return .blank }
+        if wide { return .keyword }
         if character.isLetter || character.isNumber || character == "_" { return .keyword }
         return .punctuation
     }
@@ -43,11 +45,14 @@ enum ScrollWordMotion {
     /// character per step, and re-splitting the string each time makes one keystroke quadratic.
     final class Screen {
         let lastRow: Int
+        /// Whether the motions over this screen are WORD motions.
+        let wide: Bool
         private let reader: (Int) -> String
         private var rows: [Int: [Character]] = [:]
 
-        init(lastRow: Int, row: @escaping (Int) -> String) {
+        init(lastRow: Int, wide: Bool = false, row: @escaping (Int) -> String) {
             self.lastRow = lastRow
+            self.wide = wide
             self.reader = row
         }
 
@@ -61,7 +66,7 @@ enum ScrollWordMotion {
         func characterClass(at cell: ScrollCell) -> CharacterClass {
             let text = characters(cell.row)
             guard text.indices.contains(cell.column) else { return .blank }
-            return classify(text[cell.column])
+            return classify(text[cell.column], wide: wide)
         }
 
         /// The next cell, or nil at the end of the screen.
