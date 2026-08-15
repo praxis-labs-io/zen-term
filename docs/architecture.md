@@ -1412,20 +1412,28 @@ remembered line describing what used to be there. Refreshing it from the scroll 
 would put a `read_text` on the output path, and one `tick()` can drain many lines in a
 single turn, so that buys a main-thread stall instead.
 
-**The re-find runs in two passes, because a rewrap leaves no row holding the whole
+**The re-find runs in three passes, because a rewrap leaves no row holding the whole
 line.** `text(viewportRow:)` reads one row's cells, so a line that wrapped comes back
 split. An exact match goes first, nearest to the old row winning because `❯ ` prefixes
 every prompt on screen. Failing that, a fragment pass takes the row where one text
 starts with the other: narrowing leaves a prefix of what was remembered, widening
-leaves a row that has it as a prefix. That pass ranks by longest shared prefix rather
-than nearest, or a bare prompt a row away would outrank the line the reader was on,
-and it ignores matches too short to mean anything. A height change needs none of this,
-which is why exact matching held up until a width change was tried.
+leaves a row that has it as a prefix. Last, a containment pass, for a cursor parked on
+a **continuation** row: that row holds a *suffix* of its logical line, so widening
+merges it back in and the remembered text lands mid-row with neither string starting
+with the other. It goes last because containment matches far more loosely, and a wrong
+match moves the band where the stricter passes would have left it still.
+
+All three rank by longest shared run rather than nearest, or a bare prompt a row away
+would outrank the line the reader was on, and all three ignore matches too short to
+mean anything. A height change needs none of this, which is why exact matching held up
+until a width change was tried.
 
 Only the cursor comes back. A selection is dropped, since its anchor is a bare row
-index with no content to be found by, and a viewport-relative cursor cannot follow a
-line off the screen at all: when the line is gone the band holds its row rather than
-jumping to an unrelated one.
+index with no content to be found by, and the overlay is refreshed with it: it holds
+the rects it was last handed, so releasing without a redraw left the highlight painted
+over rows it no longer covered. A viewport-relative cursor cannot follow a line off the
+screen at all: when the line is gone the band holds its row rather than jumping to an
+unrelated one.
 
 **The retractions are the load-bearing half.** The mode holds an app-global key
 handler, so one left up deafens whatever you switched to. It ends when pane focus

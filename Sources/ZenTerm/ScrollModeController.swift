@@ -217,7 +217,8 @@ final class ScrollModeController {
     /// Put the cursor back on the line it was reading, or leave it where it is when that line is no
     /// longer on screen. Exact match first, then the fragment pass below.
     private func reanchor(to line: String) {
-        guard let best = exactRow(of: line) ?? fragmentRow(of: line) else { return }
+        guard let best = exactRow(of: line) ?? fragmentRow(of: line) ?? containedRow(of: line)
+        else { return }
         move(to: ScrollCell(row: best, column: cursor.column))
     }
 
@@ -239,21 +240,28 @@ final class ScrollModeController {
         return nil
     }
 
-    /// The row holding what is left of `line` after a reflow that changed the column count.
-    ///
-    /// `text(viewportRow:)` reads one row's cells, so a rewrapped line comes back split and no row
-    /// carries the whole of what was remembered: narrowing leaves the row holding a prefix of it,
-    /// widening leaves a row that has it as a prefix. Either way one text starts with the other.
-    ///
-    /// Longest shared prefix wins rather than nearest, because every line on screen starts with the
-    /// same prompt. Nearest would hand the anchor to a bare `❯` a row away instead of the fragment
-    /// fifty characters deep into the line the reader was actually on.
+    /// The row holding what is left of `line` after a rewrap: narrowing leaves a row holding a
+    /// prefix of it, widening leaves a row that has it as a prefix.
     private func fragmentRow(of line: String) -> Int? {
+        bestRow(matching: line) { text, line in text.hasPrefix(line) || line.hasPrefix(text) }
+    }
+
+    /// The same for a cursor on a **continuation** row, which holds a suffix of its logical line,
+    /// so widening merges it back in and neither string starts with the other.
+    private func containedRow(of line: String) -> Int? {
+        // Last, and only where both passes above give up: containment matches far more loosely, and
+        // a wrong match moves the band where the stricter passes would have left it still.
+        bestRow(matching: line) { text, line in text.contains(line) || line.contains(text) }
+    }
+
+    /// The row overlapping `line` most, nearest to the cursor on a tie. Longest run rather than
+    /// nearest, or a bare `❯` a row away beats the fragment fifty characters into the real line.
+    private func bestRow(matching line: String, overlaps: (String, String) -> Bool) -> Int? {
         var best: (row: Int, shared: Int)?
         for row in 0...lastRow {
             let text = rowText(row)
-            guard text.hasPrefix(line) || line.hasPrefix(text) else { continue }
-            let shared = min(text.count, line.count)
+            guard overlaps(text, line) else { continue }
+            let shared = min(text.count, line.count)  // the shorter one is the part they share
             guard shared >= Self.minimumFragmentMatch else { continue }
             let isBetter =
                 best.map {
@@ -474,6 +482,9 @@ final class ScrollModeController {
         guard selection != nil else { return }
         selection = nil
         updateHeader()
+        // The overlay holds the rects it was last handed, so without this the highlight stays
+        // painted over rows the selection no longer covers until some later move redraws it.
+        refreshCursor()
     }
 
     /// What a visual selection currently covers, or nil when there is none.

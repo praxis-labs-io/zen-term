@@ -1127,6 +1127,78 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 4)
     }
 
+    func test_theBufferMovingUnderASelection_stopsPaintingIt() throws {
+        // The anchor is given back whenever the rows move, but the overlay holds the rects it was
+        // last handed: the highlight stayed painted over rows it no longer covered.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("v")))
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+        XCTAssertNotNil(
+            panel.scrollCursorForTesting.state?.selection, "precondition: the rects are up")
+
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 160))
+
+        XCTAssertNil(controller.scrollMode.selection, "the anchor comes back when the rows move")
+        XCTAssertNil(
+            panel.scrollCursorForTesting.state?.selection, "and the overlay stops painting it")
+    }
+
+    func test_aWiderWindowFindsTheLineThatSwallowedAContinuationRow() throws {
+        // A cursor on the SECOND visual row of a wrapped line holds a suffix, not a prefix, so
+        // widening puts the remembered text mid-row and both the exact and prefix passes miss.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[2] = "-i kernel | less -R --quit-if-one-screen"
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the continuation row")
+
+        surface.delegate?.surfaceGridDidReflow(surface)
+        var rewrapped = Array(repeating: "", count: 24)
+        rewrapped[5] = "❯ tail -f /var/log/system.log | grep -i kernel | less -R --quit-if-one-screen"
+        surface.rows = rewrapped
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 5, "the row that absorbed the continuation")
+    }
+
+    func test_aContainedMatchStillNeedsEnoughSharedText() throws {
+        // Containment matches far more loosely than the passes above it, so the same floor applies:
+        // a short run inside an unrelated row must not drag the band to it.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[2] = "kernel"  // 6 characters, under minimumFragmentMatch
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<9 { _ = handler(try keyDown("k")) }
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition")
+
+        surface.delegate?.surfaceGridDidReflow(surface)
+        var rewrapped = Array(repeating: "", count: 24)
+        rewrapped[7] = "❯ tail -f /var/log/kernel.log | less"
+        surface.rows = rewrapped
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2, "six shared characters is not a re-find")
+    }
+
     func test_aPromptSigilIsNotEnoughSharedTextToMoveTheBand() throws {
         // Every line on screen starts with the prompt. Without a floor on how much a fragment has
         // to share, a reflow that lost the line entirely anchored the band to whichever bare
