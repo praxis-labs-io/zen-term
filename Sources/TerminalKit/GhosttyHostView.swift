@@ -265,6 +265,13 @@ final class GhosttyHostView: NSView {
     /// if AppKit sends it back. `NSEvent` identity does not survive that round trip.
     var lastPerformKeyEvent: TimeInterval?
 
+    /// The event `doCommand` has to send back through the event system, or nil. AppKit redirects
+    /// some command keys into a selector with no `keyDown` behind them, and this is the way back.
+    func eventToRedispatch(_ current: NSEvent?) -> NSEvent? {
+        guard let current, lastPerformKeyEvent == current.timestamp else { return nil }
+        return current
+    }
+
     /// AppKit's key-equivalent dispatch claims keys before `keyDown` runs: Ctrl-Return hits the
     /// context-menu equivalent, Ctrl-/ goes to the first view in the hierarchy and beeps.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {

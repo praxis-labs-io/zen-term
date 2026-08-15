@@ -67,18 +67,33 @@ final class GhosttyKeyEquivalentTests: XCTestCase {
             "the same event coming back is one nothing else claimed, so it is the pane's")
     }
 
+    /// What `doCommand` sends back, and only that. The redispatch itself needs a live
+    /// `NSApp.currentEvent`, which no test has, so the decision behind it is what is driven here.
+    func test_onlyThePendingEventIsSentBackThroughTheEventSystem() throws {
+        let event = try controlE()
+        XCTAssertNil(view.eventToRedispatch(event), "nothing is pending, so nothing goes back")
+
+        XCTAssertNil(view.keyEquivalentEvent(for: event), "the first pass records and declines")
+
+        XCTAssertTrue(view.eventToRedispatch(event) === event, "that one is owed a second pass")
+        XCTAssertNil(
+            view.eventToRedispatch(try controlE(timestamp: 99)),
+            "a selector fired by some other keystroke must not resend it")
+        XCTAssertNil(view.eventToRedispatch(nil))
+    }
+
     /// The pointer-less surfaces here return at `keyDown`'s `surfacePtr` guard, so none of them can
     /// see it run. This one starts a real surface and reads the ledger `recordKeyPress` writes.
     func test_aClaimedKeyEquivalentReachesKeyDown() throws {
-        let window = NSWindow(
+        let liveWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
             styleMask: [.titled], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        defer { window.close() }
+        liveWindow.isReleasedWhenClosed = false
+        defer { liveWindow.close() }
 
         let surface = GhosttySurface()
         surface.view.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
-        window.contentView?.addSubview(surface.view)
+        liveWindow.contentView?.addSubview(surface.view)
         surface.start(TerminalSurfaceConfig(command: "/bin/sh", args: ["-c", "sleep 100"]))
         defer {
             surface.view.removeFromSuperview()
@@ -86,10 +101,10 @@ final class GhosttyKeyEquivalentTests: XCTestCase {
         }
         try XCTSkipIf(surface.surfacePtr == nil, "ghostty_surface_new failed")
         let host = try XCTUnwrap(surface.view as? GhosttyHostView)
-        window.makeFirstResponder(host)
+        liveWindow.makeFirstResponder(host)
 
         let event = try key("\r", keyCode: 36, flags: .control)
-        XCTAssertTrue(window.performKeyEquivalent(with: event))
+        XCTAssertTrue(liveWindow.performKeyEquivalent(with: event))
 
         XCTAssertTrue(
             host.retireKeyPress(for: event),

@@ -112,9 +112,7 @@ extension GhosttyHostView: NSTextInputClient {
     override func doCommand(by selector: Selector) {
         // A command key AppKit redirected here instead of to `keyDown`: send it back through the
         // event system, where `performKeyEquivalent` knows the timestamp and routes it on.
-        if let current = NSApp.currentEvent, lastPerformKeyEvent == current.timestamp {
-            NSApp.sendEvent(current)
-        }
+        if let event = eventToRedispatch(NSApp.currentEvent) { NSApp.sendEvent(event) }
     }
 
     /// Push the current marked-text state into libghostty. When the preedit has just gone
