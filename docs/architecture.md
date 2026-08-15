@@ -1111,14 +1111,34 @@ in every pane, and libghostty's own ⌘Home/⌘PageUp defaults (live in ZenTerm,
 the chrome never claims those chords) are fn-chords on a laptop that nothing in the
 UI mentions. A mode borrows the keys while it is up and gives them back on exit.
 
-`command(for:afterG:)` is a pure static over `NSEvent`, the same testable seam as
-`DiffPaneTable.vimKey(for:)`, and it reads shiftedness from the modifier flags
-rather than character case for the same Caps Lock reason. j/k step the cursor, h/l move
-a column, w/b/e move by word, 0/$ reach the ends of a row, ⌃d/⌃u move a half page, ⌃f/⌃b
-and space a page, gg/G the ends, { and } move by paragraph, v/V select, y copies, and
-Esc/q/i leave. **Every key is consumed, mapped or not**: passing misses through would
-drop a stray keystroke into the shell behind the mode, which is worse than one that
-does nothing.
+**The keymap is its own file.** `ScrollKeymap.key(for:pending:hasSelection:)` is a pure
+static over `NSEvent`, the same testable seam as `DiffPaneTable.vimKey(for:)`, and it
+reads shiftedness from the modifier flags rather than character case for the same Caps
+Lock reason. j/k step the cursor, h/l move a column, w/b/e and W/B/E move by word and
+WORD, 0/^/$ reach the ends of a row, H/M/L name a row by where it sits, f/F/t/T find a
+character with ;/, repeating it, ⌃d/⌃u move a half page, ⌃f/⌃b and space a page, gg/G the
+ends, zt/zz/zb put the cursor's row at an edge or the middle, { and } move by paragraph,
+v/V select, y copies and yy takes rows, * searches the word under the band, and Esc/q/i
+leave. **Every key is consumed, mapped or not**: passing misses through would drop a stray
+keystroke into the shell behind the mode, which is worse than one that does nothing.
+
+**Counts and two-key commands come in as `Pending`, not off the controller**, so the
+decode stays a function of its arguments. A digit is not a move, so it comes back as
+`Key.count` rather than a `Command`, which keeps the run switch exhaustive with no
+unreachable branch. `0` is `lineStart` until a count is being typed and a digit after
+that, which is vim's own rule: without it `10j` is a column jump and one step. The count
+survives an arming key, since the `2` of `2yy` is typed before the first `y`.
+
+Three things the count does that are worth knowing. It folds into the command, so `12j`
+is one `.step(12)` rather than twelve of anything. It scales a page rather than repeating
+it, since libghostty takes the fraction as a float. And stepping past an edge moves the
+cursor as far as it goes and scrolls the remainder, so `15k` eleven rows down moves eleven
+and scrolls four rather than scrolling all fifteen.
+
+`G` takes no count, and cannot: `Point.pin` clamps every coordinate to the grid, so no
+number names a scrollback line for `30G` to reach. `H`/`M`/`L` reckon from the last
+**written** row instead of the grid's bottom, which on a half-filled screen is empty space
+below the prompt.
 
 **The cursor is the chrome's, drawn on the pane.** libghostty has no copy mode and no
 cursor outside the shell's own, so `ScrollCursorView` paints the band on the current row,

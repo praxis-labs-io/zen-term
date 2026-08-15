@@ -279,7 +279,8 @@ final class ScrollModeController {
     /// ⌘V and ⌘Q for as long as the mode is up.
     func handle(_ event: NSEvent) -> Bool {
         guard isActive else { return false }
-        guard let key = ScrollKeymap.key(for: event, pending: pending) else {
+        guard let key = ScrollKeymap.key(for: event, pending: pending, hasSelection: selection != nil)
+        else {
             pending = .init()
             return event.modifierFlags.intersection([.command, .option]).isEmpty
         }
@@ -288,7 +289,9 @@ final class ScrollModeController {
             if case .count(let digit) = key { pending.append(digit: digit) }
             return true
         }
-        // Running anything consumes what was armed. `g` re-arms itself below.
+        // Running anything consumes what was armed, except that the arming keys below carry the
+        // count on: the `2` of `2yy` is typed before the first `y`.
+        let carried = pending.count
         pending = .init()
         // The reader moved on their own, so a re-anchor still waiting on a report is moot. Left
         // armed it fires on whatever report comes next, minutes later, and drags the cursor off
@@ -296,7 +299,23 @@ final class ScrollModeController {
         pendingAnchor = nil
         switch command {
         case .pendingTop:
-            pending.afterG = true
+            pending = .init(afterG: true, count: carried)
+        case .pendingPlace:
+            pending = .init(afterZ: true, count: carried)
+        case .pendingYank:
+            pending = .init(afterY: true, count: carried)
+        case .pendingFind(let target):
+            pending = .init(awaitingFind: target, count: carried)
+        case .yankRow(let times):
+            yankRows(times)
+        case .placeCursorLine(let place):
+            placeCursorLine(place)
+        case .find(let find, let times):
+            lastFind = find
+            runFind(find, times: times, isRepeat: false)
+        case .repeatFind(let reversed, let times):
+            guard let find = lastFind else { break }
+            runFind(reversed ? find.reversed : find, times: times, isRepeat: true)
         case .exit:
             end()
         case .cancel:
@@ -538,6 +557,71 @@ final class ScrollModeController {
         self.selection = nil
         updateHeader()
         flash(range)
+    }
+
+    /// `yy`: copy whole rows without opening a selection first, and pulse what it took.
+    private func yankRows(_ times: Int) {
+        guard let surface, let columns = surface.cellMetrics?.columns else { return }
+        let range = TerminalViewportRange(
+            startRow: cursor.row, startColumn: 0,
+            endRow: min(cursor.row + times - 1, lastRow), endColumn: max(columns - 1, 0))
+        guard let text = surface.text(in: range) else {
+            Log.warning("scroll mode: the surface declined a yank read", category: .panes)
+            return
+        }
+        yankPasteboard.clearContents()
+        yankPasteboard.setString(text, forType: .string)
+        flash(range)
+    }
+
+    /// `zz`/`zt`/`zb`: move the viewport so the row the band is on ends up here.
+    ///
+    /// The line is what is being moved, so it is what the band is re-found by. A scroll the buffer
+    /// clamps at either end would otherwise leave the row index naming something else.
+    private func placeCursorLine(_ place: ScrollKeymap.ViewportPlace) {
+        let bottom = surface.map { Self.entryRow(of: $0) } ?? 0
+        let target: Int
+        switch place {
+        case .top: target = 0
+        case .middle: target = bottom / 2
+        case .bottom: target = bottom
+        }
+        let delta = cursor.row - target
+        guard delta != 0 else { return }
+        pendingAnchor = cursorLine.map { (line: $0, armedAt: now()) }
+        cursor = ScrollCell(row: target, column: cursor.column)
+        surface?.scroll(.lines(delta))
+        refreshCursor(remembersLine: false)
+        invalidateRows()
+    }
+
+    /// The last `f`/`F`/`t`/`T`, so `;` and `,` have something to run again.
+    private var lastFind: ScrollKeymap.Find?
+
+    /// `f`/`F`/`t`/`T`: land on, or just before, the next occurrence along this row.
+    private func runFind(_ find: ScrollKeymap.Find, times: Int, isRepeat: Bool) {
+        let text = Array(rowText(cursor.row))
+        var column = cursor.column
+        for step in 0..<times {
+            // A `t` sits next to its target, so repeating it from there finds the same cell and
+            // the cursor never moves. The first hop of a repeat starts one cell further along.
+            let skips = isRepeat && find.till && step == 0
+            let from = skips ? column + (find.direction == .forward ? 1 : -1) : column
+            guard let next = Self.findColumn(find, from: from, in: text) else { return }
+            column = next
+        }
+        move(to: ScrollCell(row: cursor.row, column: column))
+    }
+
+    /// Where `find` lands starting from `column`, or nil when the row holds no more of it.
+    static func findColumn(_ find: ScrollKeymap.Find, from column: Int, in text: [Character]) -> Int? {
+        let stride = find.direction == .forward ? 1 : -1
+        var index = column + stride
+        while text.indices.contains(index) {
+            if text[index] == find.character { return find.till ? index - stride : index }
+            index += stride
+        }
+        return nil
     }
 
     /// Pulse the yanked span and fade out, the way nvim's `on_yank` does.

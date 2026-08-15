@@ -129,10 +129,11 @@ hand an agent the exact lines you mean, and `⏎` opens a comment on them.
 ## Read back through a pane
 
 **⌘⇧S** puts the focused pane into scroll mode, and the keys are vim's again. `j` and
-`k` move a row, `h` and `l` a column, `w` `b` `e` a word, `0` and `$` reach the ends of
-a line, `{` and `}` jump between blocks of output, `⌃d` and `⌃u` move a half page, and
-`gg` and `G` go to the ends. The header tells you how far below you are, and a band
-marks the row you are reading. It opens on your selection if you have one.
+`k` move a row, `h` and `l` a column, `w` `b` `e` a word, `0` `^` and `$` reach the ends
+of a line, `{` and `}` jump between blocks of output, `f` finds a character on the row,
+`⌃d` and `⌃u` move a half page, and `gg` and `G` go to the ends. Counts work, so `12j`
+moves twelve rows. The header tells you how far below you are, and a band marks the row
+you are reading. It opens on your selection if you have one.
 
 `v` starts a selection and `V` takes whole lines. `y` copies it and flashes what it
 took. `q` leaves. Nothing you type reaches the shell while the mode is up, but your own

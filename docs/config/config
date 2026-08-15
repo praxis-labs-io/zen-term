@@ -458,11 +458,18 @@
 # shell:
 #
 #   j / k (or ↑ ↓)   move the cursor a row         { / }      move by paragraph
-#   h / l (or ← →)   move a column                 0 / $      ends of the row
+#   h / l (or ← →)   move a column                 0 / ^ / $  ends of the row
 #   w / b / e        move by word                  gg / G     top / bottom
-#   ctrl+d / ctrl+u  half a page                   v / V      select, by cell or row
-#   ctrl+f / ctrl+b  a full page (space = ctrl+f)  y          copy the selection
+#   W / B / E        move by WORD                  H / M / L  top / middle / last row
+#   f / F / t / T    find a character on the row   ; / ,      that find again, or back
+#   ctrl+d / ctrl+u  half a page                   zt/zz/zb   this row to top/middle/bottom
+#   ctrl+f / ctrl+b  a full page (space = ctrl+f)  v / V      select, by cell or row
+#   *                find this word in the buffer  y / yy     copy the selection, or rows
 #                                                  esc, q, i  leave
+#
+# Every motion takes a count, so `12j` moves twelve rows and `3yy` copies three.
+# `0` is the start of the row on its own and a digit once you are typing a count,
+# which is vim's rule: without it `10j` would jump to column 0 and step once.
 #
 # With text selected, the mode opens on the start of your selection. With nothing
 # selected it opens on the last line with anything written on it.

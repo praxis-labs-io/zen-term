@@ -25,6 +25,19 @@ enum ScrollKeymap {
         case viewportRow(ViewportPlace, offset: Int)
         /// `*`: hand the word under the cursor to the find bar.
         case searchWordUnderCursor
+        /// `yy`: copy whole rows without opening a selection first.
+        case yankRow(times: Int)
+        /// `zz`/`zt`/`zb`: move the viewport so the cursor's row sits here.
+        case placeCursorLine(ViewportPlace)
+        /// `f`/`F`/`t`/`T`: find a character along this row.
+        case find(Find, times: Int)
+        /// `;` and `,`: run the last find again, forward or the other way.
+        case repeatFind(reversed: Bool, times: Int)
+        /// First key of a two-key command: `z`, or a `y` with no selection to take.
+        case pendingPlace
+        case pendingYank
+        /// `f`/`F`/`t`/`T` before its character has been typed.
+        case pendingFind(Find.Target)
         /// `v` or `V`: open a selection here, swap its kind, or close the one that is up.
         case visual(ScrollSelection.Kind)
         case yank
@@ -39,6 +52,33 @@ enum ScrollKeymap {
     /// Where on screen a row sits, for the motions that name one that way.
     enum ViewportPlace: Equatable { case top, middle, bottom }
 
+    /// A character search along the cursor's own row. A word never spans a row break here, and
+    /// neither does this.
+    struct Find: Equatable {
+        enum Direction: Equatable { case forward, backward }
+        var direction: Direction
+        /// `t`/`T` stop one cell short of the character rather than on it.
+        var till: Bool
+        var character: Character
+
+        /// The same find the other way, which is what `,` runs.
+        var reversed: Find {
+            Find(
+                direction: direction == .forward ? .backward : .forward, till: till,
+                character: character)
+        }
+
+        /// An `f`/`F`/`t`/`T` that has not been given its character yet.
+        struct Target: Equatable {
+            var direction: Direction
+            var till: Bool
+
+            func find(_ character: Character) -> Find {
+                Find(direction: direction, till: till, character: character)
+            }
+        }
+    }
+
     /// A decoded keystroke: something to run, or a digit joining the count being typed. A digit is
     /// not a move, so it is not a `Command`.
     enum Key: Equatable {
@@ -51,6 +91,12 @@ enum ScrollKeymap {
     struct Pending: Equatable {
         /// Whether a `g` is armed, so a second one tops out.
         var afterG = false
+        /// Whether a `z` is armed and the next key names where to put the cursor's row.
+        var afterZ = false
+        /// Whether a `y` is armed and a second one takes the row.
+        var afterY = false
+        /// An `f`/`F`/`t`/`T` waiting for the character to find.
+        var awaitingFind: Find.Target?
         /// The count typed so far, or nil for none. `12j` is twelve rows.
         var count: Int?
 
@@ -69,7 +115,9 @@ enum ScrollKeymap {
 
     /// Decode a `keyDown`, or nil for a key the mode does not map. Shiftedness comes from the
     /// modifier flags, never the character's case: Caps Lock would make `g` top out and `j` dead.
-    static func key(for event: NSEvent, pending: Pending) -> Key? {
+    static func key(for event: NSEvent, pending: Pending, hasSelection: Bool = false)
+        -> Key?
+    {
         let held = event.modifierFlags.intersection([.command, .shift, .option, .control])
         // ⌃d/⌃u/⌃f/⌃b are the vim half- and full-page keys. Match Control exactly so ⌘⌃d and
         // friends fall through to whoever owns them.
@@ -87,7 +135,16 @@ enum ScrollKeymap {
         }
         // Everything else is bare or shifted. ⌘ and ⌥ belong to another handler.
         guard held.isSubset(of: .shift) else { return nil }
-        if event.keyCode == escapeKeyCode { return .run(.cancel) }
+        if event.keyCode == escapeKeyCode {
+            // An Esc waiting on a find character cancels that, not the mode: nil is consumed by the
+            // caller, which drops everything armed.
+            return pending.awaitingFind == nil ? .run(.cancel) : nil
+        }
+        // A find takes whatever character comes next, `j` and `0` included, so it runs first.
+        if let target = pending.awaitingFind {
+            guard let character = event.characters?.first else { return nil }
+            return .run(.find(target.find(character), times: pending.times))
+        }
         // Matched on the typed character, the only form that arrives: `charactersIgnoringModifiers`
         // applies Shift, so a US shift+[ reports "{" in both fields.
         let times = pending.times
@@ -101,6 +158,10 @@ enum ScrollKeymap {
         }
         let shift = held.contains(.shift)
         switch (event.charactersIgnoringModifiers?.lowercased() ?? "", shift) {
+        // `z`'s second key first: `t` and `b` are a find and a word motion on their own.
+        case ("z", false) where pending.afterZ: return .run(.placeCursorLine(.middle))
+        case ("t", false) where pending.afterZ: return .run(.placeCursorLine(.top))
+        case ("b", false) where pending.afterZ: return .run(.placeCursorLine(.bottom))
         case ("j", false), (downArrow, false): return .run(.step(times))
         case ("k", false), (upArrow, false): return .run(.step(-times))
         case ("h", false), (leftArrow, false): return .run(.column(-times))
@@ -121,10 +182,21 @@ enum ScrollKeymap {
         case ("1"..."9", false): return digit(event).map(Key.count)
         case ("v", false): return .run(.visual(.character))
         case ("v", true): return .run(.visual(.line))
-        case ("y", false): return .run(.yank)
+        // `y` takes a selection when there is one, the way vim's visual mode does, and otherwise
+        // waits for the second `y` that names whole rows.
+        case ("y", false) where hasSelection: return .run(.yank)
+        case ("y", false) where pending.afterY: return .run(.yankRow(times: times))
+        case ("y", false): return .run(.pendingYank)
         case (" ", false): return .run(.scroll(.pageFraction(Double(times))))
         case ("g", false): return .run(pending.afterG ? .scroll(.top) : .pendingTop)
         case ("g", true): return .run(.scroll(.bottom))
+        case ("f", false): return .run(.pendingFind(.init(direction: .forward, till: false)))
+        case ("f", true): return .run(.pendingFind(.init(direction: .backward, till: false)))
+        case ("t", false): return .run(.pendingFind(.init(direction: .forward, till: true)))
+        case ("t", true): return .run(.pendingFind(.init(direction: .backward, till: true)))
+        case (";", false): return .run(.repeatFind(reversed: false, times: times))
+        case (",", false): return .run(.repeatFind(reversed: true, times: times))
+        case ("z", false): return .run(.pendingPlace)
         case ("q", false), ("i", false): return .run(.exit)
         default: return nil
         }

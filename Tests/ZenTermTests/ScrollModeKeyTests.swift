@@ -22,12 +22,15 @@ final class ScrollModeKeyTests: XCTestCase {
 
     /// The command a keystroke runs, or nil for a key the mode does not map. A digit is not a
     /// command, so it reads as nil here; `count(_:)` below is what asserts on those.
-    private func decode(_ event: NSEvent, afterG: Bool = false, count: Int? = nil)
-        -> ScrollKeymap.Command?
-    {
+    private func decode(
+        _ event: NSEvent, afterG: Bool = false, afterZ: Bool = false, afterY: Bool = false,
+        awaitingFind: ScrollKeymap.Find.Target? = nil, count: Int? = nil, hasSelection: Bool = false
+    ) -> ScrollKeymap.Command? {
+        let pending = ScrollKeymap.Pending(
+            afterG: afterG, afterZ: afterZ, afterY: afterY, awaitingFind: awaitingFind, count: count)
         guard
             case .run(let command) =
-                ScrollKeymap.key(for: event, pending: .init(afterG: afterG, count: count))
+                ScrollKeymap.key(for: event, pending: pending, hasSelection: hasSelection)
         else { return nil }
         return command
     }
@@ -185,8 +188,61 @@ final class ScrollModeKeyTests: XCTestCase {
         XCTAssertEqual(decode(try keyDown("V", unshifted: "v", flags: .shift)), .visual(.line))
     }
 
-    func test_yYanks() throws {
-        XCTAssertEqual(decode(try keyDown("y")), .yank)
+    func test_yTakesASelectionAndOtherwiseWaitsForASecondY() throws {
+        // Vim's rule: `y` in visual mode takes what is selected, and in normal mode it is the
+        // first half of `yy`.
+        XCTAssertEqual(decode(try keyDown("y"), hasSelection: true), .yank)
+        XCTAssertEqual(decode(try keyDown("y")), .pendingYank)
+        XCTAssertEqual(decode(try keyDown("y"), afterY: true), .yankRow(times: 1))
+        XCTAssertEqual(decode(try keyDown("y"), afterY: true, count: 3), .yankRow(times: 3))
+    }
+
+    // MARK: the two-key commands
+
+    func test_zPlacesTheCursorLineAndShadowsTheKeysItsSecondHalfUses() throws {
+        // `t` is a find and `b` a word motion on their own, so `z`'s second key has to be read
+        // before either of them.
+        XCTAssertEqual(decode(try keyDown("z")), .pendingPlace)
+        XCTAssertEqual(decode(try keyDown("z"), afterZ: true), .placeCursorLine(.middle))
+        XCTAssertEqual(decode(try keyDown("t"), afterZ: true), .placeCursorLine(.top))
+        XCTAssertEqual(decode(try keyDown("b"), afterZ: true), .placeCursorLine(.bottom))
+    }
+
+    func test_ftArmAFindAndTheNextKeyIsItsCharacter() throws {
+        XCTAssertEqual(
+            decode(try keyDown("f")), .pendingFind(.init(direction: .forward, till: false)))
+        XCTAssertEqual(
+            decode(try keyDown("F", unshifted: "f", flags: .shift)),
+            .pendingFind(.init(direction: .backward, till: false)))
+        XCTAssertEqual(
+            decode(try keyDown("t")), .pendingFind(.init(direction: .forward, till: true)))
+        XCTAssertEqual(
+            decode(try keyDown("T", unshifted: "t", flags: .shift)),
+            .pendingFind(.init(direction: .backward, till: true)))
+    }
+
+    func test_theCharacterAfterAFindIsTakenWholeSale() throws {
+        // Whatever comes next is the target, `j` and `0` included, or `fj` would step a row.
+        let forward = ScrollKeymap.Find.Target(direction: .forward, till: false)
+        XCTAssertEqual(
+            decode(try keyDown("j"), awaitingFind: forward),
+            .find(.init(direction: .forward, till: false, character: "j"), times: 1))
+        XCTAssertEqual(
+            decode(try keyDown("0"), awaitingFind: forward),
+            .find(.init(direction: .forward, till: false, character: "0"), times: 1))
+    }
+
+    func test_escapeWaitingOnAFindCancelsTheFindRatherThanTheMode() throws {
+        let forward = ScrollKeymap.Find.Target(direction: .forward, till: false)
+        XCTAssertEqual(decode(try keyDown("\u{1b}", keyCode: 53)), .cancel)
+        XCTAssertNil(
+            decode(try keyDown("\u{1b}", keyCode: 53), awaitingFind: forward),
+            "unmapped, so the caller drops what was armed and does nothing else")
+    }
+
+    func test_semicolonAndCommaRepeatTheLastFind() throws {
+        XCTAssertEqual(decode(try keyDown(";")), .repeatFind(reversed: false, times: 1))
+        XCTAssertEqual(decode(try keyDown(",")), .repeatFind(reversed: true, times: 1))
     }
 
     // MARK: leaving

@@ -278,6 +278,123 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(panel.findBarForTesting?.needle, "hi")
     }
 
+    // MARK: the two-key commands, through the real handler
+
+    func test_yyTakesWholeRowsWithoutAVisualFirst() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let board = NSPasteboard(name: NSPasteboard.Name("zenterm-yank-\(UUID().uuidString)"))
+        controller.handle(.toggleScrollMode)
+        controller.scrollMode.yankPasteboard = board
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<4 { XCTAssertTrue(handler(try keyDown("k"))) }  // onto "❯ echo hi"
+        XCTAssertTrue(handler(try keyDown("y")))
+        XCTAssertTrue(handler(try keyDown("y")))
+
+        XCTAssertEqual(board.string(forType: .string), "❯ echo hi")
+        XCTAssertNil(controller.scrollMode.selection, "no selection was opened to take it")
+    }
+
+    func test_aCountOnYYTakesThatManyRows() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let board = NSPasteboard(name: NSPasteboard.Name("zenterm-yank-\(UUID().uuidString)"))
+        controller.handle(.toggleScrollMode)
+        controller.scrollMode.yankPasteboard = board
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        for _ in 0..<9 { XCTAssertTrue(handler(try keyDown("k"))) }  // onto "❯ seq 1 3"
+        XCTAssertTrue(handler(try keyDown("2")))
+        XCTAssertTrue(handler(try keyDown("y")))
+        XCTAssertTrue(handler(try keyDown("y")))
+
+        XCTAssertEqual(board.string(forType: .string), "❯ seq 1 3\n1")
+    }
+
+    func test_ztScrollsTheCursorLineToTheTop() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        let handler = try XCTUnwrap(host.modeHandler)
+        XCTAssertEqual(controller.scrollMode.cursorRow, 11, "precondition")
+
+        XCTAssertTrue(handler(try keyDown("z")))
+        XCTAssertTrue(handler(try keyDown("t")))
+
+        XCTAssertEqual(surface.scrolls, [.lines(11)], "eleven rows of buffer move under it")
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0, "and the band ends up on top")
+    }
+
+    func test_fLandsOnTheCharacterAndTStopsShortOfIt() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "alpha beta gamma"
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("f")))
+        XCTAssertTrue(handler(try keyDown("g")), "the target, not the gg prefix")
+        XCTAssertEqual(controller.scrollMode.cursor.column, 11)
+
+        XCTAssertTrue(handler(try keyDown("0")))
+        XCTAssertTrue(handler(try keyDown("t")))
+        XCTAssertTrue(handler(try keyDown("g")))
+        XCTAssertEqual(controller.scrollMode.cursor.column, 10, "one cell short")
+    }
+
+    func test_semicolonRepeatsAFindAndCommaReversesIt() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "a.b.c.d"
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("f")))
+        XCTAssertTrue(handler(try keyDown(".")))
+        XCTAssertEqual(controller.scrollMode.cursor.column, 1)
+
+        XCTAssertTrue(handler(try keyDown(";")))
+        XCTAssertEqual(controller.scrollMode.cursor.column, 3)
+
+        XCTAssertTrue(handler(try keyDown(",")))
+        XCTAssertEqual(controller.scrollMode.cursor.column, 1, "the same find, the other way")
+    }
+
+    func test_repeatingATillFindClearsTheCellItIsAlreadySittingOn() throws {
+        // A `t` parks one cell short of its target, so repeating from there finds that same target
+        // and the cursor never moves. Vim special-cases it; so does this.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "abc.def.ghi"
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("t")))
+        XCTAssertTrue(handler(try keyDown(".")))
+        XCTAssertEqual(controller.scrollMode.cursor.column, 2, "one short of the first dot")
+
+        XCTAssertTrue(handler(try keyDown(";")))
+
+        XCTAssertEqual(controller.scrollMode.cursor.column, 6, "one short of the second, not stuck")
+    }
+
     // MARK: counts, through the real handler
 
     func test_aCountCarriesTheCursorThatManyRows() throws {
