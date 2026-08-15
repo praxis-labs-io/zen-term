@@ -191,6 +191,73 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.scrolls, [.pageFraction(0.5), .pageFraction(-0.5), .bottom])
     }
 
+    // MARK: counts, through the real handler
+
+    func test_aCountCarriesTheCursorThatManyRows() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+        XCTAssertEqual(controller.scrollMode.cursorRow, 11, "precondition: the prompt row")
+
+        XCTAssertTrue(handler(try keyDown("9")))
+        XCTAssertTrue(handler(try keyDown("k")))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2, "nine rows up in one keystroke")
+    }
+
+    func test_aTwoDigitCountAccumulatesRatherThanRunningTwice() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("1")))
+        XCTAssertTrue(handler(try keyDown("0")), "the second key of `10`, not a jump to column 0")
+        XCTAssertTrue(handler(try keyDown("k")))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 1)
+    }
+
+    func test_aCountRunsOutAtTheEdge_movingTheCursorThenTheBuffer() throws {
+        // Vim clamps and beeps. Here the cursor takes what it can and the buffer takes the rest, so
+        // nothing the reader asked for is silently thrown away.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("1")))
+        XCTAssertTrue(handler(try keyDown("5")))
+        XCTAssertTrue(handler(try keyDown("k")))  // eleven rows of room, fifteen asked for
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0)
+        XCTAssertEqual(surface.scrolls, [.lines(-4)], "the four rows the cursor could not take")
+    }
+
+    func test_aCountIsSpentByTheMotionItPrefixes() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("3")))
+        XCTAssertTrue(handler(try keyDown("k")))
+        XCTAssertEqual(controller.scrollMode.cursorRow, 8)
+        XCTAssertTrue(handler(try keyDown("k")))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 7, "one row, not another three")
+    }
+
     // MARK: the cursor
 
     func test_theModeOpensOnTheLastWrittenLineNotTheBottomOfThePane() throws {

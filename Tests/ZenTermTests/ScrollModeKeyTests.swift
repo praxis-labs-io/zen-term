@@ -20,8 +20,25 @@ final class ScrollModeKeyTests: XCTestCase {
                 charactersIgnoringModifiers: unshifted ?? characters, isARepeat: false, keyCode: keyCode))
     }
 
-    private func decode(_ event: NSEvent, afterG: Bool = false) -> ScrollKeymap.Command? {
-        ScrollKeymap.command(for: event, pending: .init(afterG: afterG))
+    /// The command a keystroke runs, or nil for a key the mode does not map. A digit is not a
+    /// command, so it reads as nil here; `count(_:)` below is what asserts on those.
+    private func decode(_ event: NSEvent, afterG: Bool = false, count: Int? = nil)
+        -> ScrollKeymap.Command?
+    {
+        guard
+            case .run(let command) =
+                ScrollKeymap.key(for: event, pending: .init(afterG: afterG, count: count))
+        else { return nil }
+        return command
+    }
+
+    /// The digit a keystroke folds into the count, or nil when it is not a digit.
+    private func count(_ event: NSEvent, count: Int? = nil) -> Int? {
+        guard
+            case .count(let digit) =
+                ScrollKeymap.key(for: event, pending: .init(count: count))
+        else { return nil }
+        return digit
     }
 
     // MARK: the moves
@@ -108,9 +125,9 @@ final class ScrollModeKeyTests: XCTestCase {
     }
 
     func test_wbeAreTheWordMotions() throws {
-        XCTAssertEqual(decode(try keyDown("w")), .word(.next))
-        XCTAssertEqual(decode(try keyDown("b")), .word(.back))
-        XCTAssertEqual(decode(try keyDown("e")), .word(.end))
+        XCTAssertEqual(decode(try keyDown("w")), .word(.next, times: 1))
+        XCTAssertEqual(decode(try keyDown("b")), .word(.back, times: 1))
+        XCTAssertEqual(decode(try keyDown("e")), .word(.end, times: 1))
     }
 
     func test_controlBStillPagesUpRatherThanMovingAWord() throws {
@@ -157,7 +174,36 @@ final class ScrollModeKeyTests: XCTestCase {
 
     func test_unmappedKeysDecodeToNothing() throws {
         XCTAssertNil(decode(try keyDown("x")))
-        XCTAssertNil(decode(try keyDown("5")))
+    }
+
+    // MARK: counts
+
+    func test_digitsFoldIntoTheCountRatherThanRunning() throws {
+        XCTAssertEqual(count(try keyDown("5")), 5)
+        XCTAssertNil(decode(try keyDown("5")), "a digit is not a move")
+        XCTAssertEqual(count(try keyDown("2"), count: 1), 2, "the caller folds it into 12")
+    }
+
+    func test_aCountMultipliesTheMotionItPrefixes() throws {
+        XCTAssertEqual(decode(try keyDown("j"), count: 12), .step(12))
+        XCTAssertEqual(decode(try keyDown("k"), count: 3), .step(-3))
+        XCTAssertEqual(decode(try keyDown("l"), count: 4), .column(4))
+        XCTAssertEqual(decode(try keyDown("w"), count: 3), .word(.next, times: 3))
+        XCTAssertEqual(
+            decode(try keyDown("}", unshifted: "]", flags: .shift), count: 2), .paragraph(2))
+    }
+
+    func test_aCountScalesThePageRatherThanRepeatingIt() throws {
+        // libghostty takes the fraction as a float, so one scroll does the work of three.
+        XCTAssertEqual(
+            decode(try keyDown("d", flags: .control), count: 3), .scroll(.pageFraction(1.5)))
+    }
+
+    func test_zeroIsTheLineStartUntilACountIsBeingTyped() throws {
+        // Vim's own rule. Without it `10j` is a jump to column 0 followed by a single step.
+        XCTAssertEqual(decode(try keyDown("0")), .lineStart)
+        XCTAssertEqual(count(try keyDown("0"), count: 1), 0, "the second key of `10`")
+        XCTAssertNil(decode(try keyDown("0"), count: 1), "and it runs nothing")
     }
 }
 

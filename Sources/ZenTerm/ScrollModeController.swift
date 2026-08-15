@@ -19,7 +19,8 @@ final class ScrollModeController {
 
     private weak var surface: (AnyObject & TerminalSurface)?
     private weak var panel: PanelHostView?
-    private var sawG = false
+    /// What earlier keystrokes left armed: the `g` prefix and the count being typed.
+    private var pending = ScrollKeymap.Pending()
 
     /// The cell the cursor sits on, 0,0 at the top left. Viewport-relative rather than absolute in
     /// the buffer, so it survives output arriving underneath without any bookkeeping: the row on
@@ -60,7 +61,7 @@ final class ScrollModeController {
         guard !isActive else { return }
         self.surface = surface
         self.panel = panel
-        sawG = false
+        pending = .init()
         selection = nil
         lastPosition = nil
         pendingAnchor = nil
@@ -92,7 +93,7 @@ final class ScrollModeController {
         flashLevel = 0
         flashRange = nil
         isActive = false
-        sawG = false
+        pending = .init()
         selection = nil
         lastPosition = nil
         pendingAnchor = nil
@@ -274,18 +275,24 @@ final class ScrollModeController {
     /// ⌘V and ⌘Q for as long as the mode is up.
     func handle(_ event: NSEvent) -> Bool {
         guard isActive else { return false }
-        guard let command = ScrollKeymap.command(for: event, pending: .init(afterG: sawG)) else {
-            sawG = false
+        guard let key = ScrollKeymap.key(for: event, pending: pending) else {
+            pending = .init()
             return event.modifierFlags.intersection([.command, .option]).isEmpty
         }
-        if command != .pendingTop { sawG = false }
+        // A digit joins the count and runs nothing, so everything armed stays armed.
+        guard case .run(let command) = key else {
+            if case .count(let digit) = key { pending.append(digit: digit) }
+            return true
+        }
+        // Running anything consumes what was armed. `g` re-arms itself below.
+        pending = .init()
         // The reader moved on their own, so a re-anchor still waiting on a report is moot. Left
         // armed it fires on whatever report comes next, minutes later, and drags the cursor off
         // the row they chose.
         pendingAnchor = nil
         switch command {
         case .pendingTop:
-            sawG = true
+            pending.afterG = true
         case .exit:
             end()
         case .cancel:
@@ -300,8 +307,11 @@ final class ScrollModeController {
                     row: paragraphRow(from: cursor.row, delta: delta), column: cursor.column))
         case .column(let delta):
             move(to: ScrollCell(row: cursor.row, column: cursor.column + delta))
-        case .word(let motion):
-            move(to: motion.destination(from: cursor, on: screen()))
+        case .word(let motion, let times):
+            let screen = screen()
+            var destination = cursor
+            for _ in 0..<times { destination = motion.destination(from: destination, on: screen) }
+            move(to: destination)
         case .lineStart:
             move(to: ScrollCell(row: cursor.row, column: 0))
         case .lineEnd:
@@ -340,15 +350,17 @@ final class ScrollModeController {
     /// This is what makes it a cursor. Scrolling on every `j` would move the whole screen to
     /// track a marker that never moved, which is a scrollbar with extra steps.
     private func step(_ delta: Int) {
-        let next = cursor.row + delta
-        if next >= 0 && next <= lastRow {
-            move(to: ScrollCell(row: next, column: cursor.column))
-        } else {
-            surface?.scroll(.lines(delta))  // pinned at an edge: the buffer moves under the cursor
-            cursorLine = nil  // same as the page moves: the line changes under a cursor that did not
-            refreshCursor(remembersLine: false)
-            invalidateRows()
-        }
+        let target = cursor.row + delta
+        let landed = min(max(target, 0), lastRow)
+        // The cursor takes what it can and the buffer takes the rest, so `12k` eleven rows from the
+        // top moves eleven and scrolls one rather than scrolling all twelve.
+        if landed != cursor.row { move(to: ScrollCell(row: landed, column: cursor.column)) }
+        let overshoot = target - landed
+        guard overshoot != 0 else { return }
+        surface?.scroll(.lines(overshoot))  // pinned at an edge: the buffer moves under the cursor
+        cursorLine = nil  // same as the page moves: the line changes under a cursor that did not
+        refreshCursor(remembersLine: false)
+        invalidateRows()
     }
 
     /// Put the cursor on `cell`, clamped into the grid and onto the row's text.
