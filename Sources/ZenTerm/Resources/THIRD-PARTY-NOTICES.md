@@ -24,7 +24,7 @@ Ghostty pin at the time of this audit: `v1.3.1` (332b2ae). See
 
 **MIT**
 
-The terminal engine ZenTerm embeds. Everything below reaches ZenTerm through it except the icons and the cursor shaders. The chrome also ports parts of Ghostty's own macOS app: key event translation, IME composition, accessibility, and keyboard-layout detection.
+The terminal engine ZenTerm embeds, and the route by which most entries below arrive: everything from FreeType through utfcpp, both fonts, the themes, and the shell integration. Sparkle, tree-sitter, SwiftTreeSitter, CodeEditLanguages, the icons, and the cursor shaders are the chrome's own and reach the app directly. The chrome also ports parts of Ghostty's macOS app: key event translation, IME composition, accessibility, and keyboard-layout detection.
 
 ```text
 MIT License
@@ -3172,7 +3172,7 @@ The brand marks in the tool-float icon picker: `git.svg`, `github.svg`, `linear.
 
 **MIT**
 
-The 463 bundled themes in Settings → Appearance, reaching ZenTerm through Ghostty, which converts the collection to its own theme format and ships it as `ghostty-resources/ghostty/themes`. At the `v1.3.1` pin they come from the `ghostty-themes-release-20260216-151611-fc73ce3` tarball. Each theme's own copyright stays with its author, as the license below says.
+463 themes Ghostty converts to its own format and ships in the resource tree `GHOSTTY_RESOURCES_DIR` points at, which ZenTerm copies whole for the shell integration and terminfo alongside them. They are not the catalog in Settings → Appearance. At the `v1.3.1` pin they come from the `ghostty-themes-release-20260216-151611-fc73ce3` tarball. Each theme's own copyright stays with its author, as the license below says.
 
 ```text
 MIT License
