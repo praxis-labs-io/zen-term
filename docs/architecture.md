@@ -1156,11 +1156,18 @@ is empty space below everything there is to read, and not the shell's cursor:
 `ghostty_surface_ime_point` reports that against the *live* screen with no account of
 scrolling, so a viewport already scrolled with the wheel put the band on an unrelated row.
 
-**The header goes up before the grid is measured.** A pane's header is hidden until a
-mode shows it, and showing it moves the content's top constraint down by its height, so
-the terminal loses a row or two and reflows. Measuring first put the band a row off the
-prompt, which is subtle enough to look like a rounding error in the cell math and is not
-one.
+**The entry row is read before the header goes up, and remembered by its text.** A pane's
+header is hidden until a mode shows it, and showing it moves the content's top constraint
+down by its height: the terminal loses a row or two, reflows, and the pty gets a SIGWINCH.
+A shell redrawing a multi-line prompt **clears those rows first**, so a read taken after
+the header finds them blank, and the walk-up skips the prompt and stops on the last line
+of the previous command's output. Reading first is the only moment the prompt is
+guaranteed painted.
+
+The row index does not survive that resize, so it is not what is kept. The line's text is,
+and `refreshGeometry` runs nested inside the layout to arm it: the first scroll report
+after puts the band back on that line wherever the shell repainted it. This is the same
+machinery a font step and a divider drag use, pointed at entry.
 
 **A move that names a destination puts the cursor on it**, rather than bringing it into
 view and leaving the cursor elsewhere. `gg`/`G` carry it to the ends.

@@ -95,20 +95,16 @@ final class ScrollModeController {
         isActive = true
         invalidateRows()
         Log.info("scroll mode entered", category: .panes)
-        // The header goes up FIRST, and the grid is measured only after it has. A pane's header is
-        // hidden until a mode shows it, and showing it moves the content's top constraint down by
-        // its height: the terminal loses a row or two and reflows. Reading the cursor row before
-        // that landed measured a grid that was about to change out from under it, which is what
-        // put the band a row off the prompt.
-        updateHeader()
-        panel.layoutSubtreeIfNeeded()
+        // Read BEFORE the header goes up, and remember the row by its text: the header SIGWINCHes
+        // the pty, and a shell redrawing its prompt blanks those rows for a frame.
         cursor = Self.entryCell(of: surface)
-        // That layout reflowed the grid, and the surface reports a reflow from inside its own
-        // `setFrameSize` — so `reportReflow` already ran, nested in this call, and armed an anchor
-        // against whatever row the *last* session left the cursor on. The entry row above is the
-        // answer to where the band goes; drop the anchor before a later report can act on it.
-        pendingAnchor = nil
-        refreshCursor()
+        let entryText = rowText(cursor.row)
+        cursorLine = Self.isBlank(entryText) ? nil : entryText
+        updateHeader()
+        // The reflow reports from inside the surface's own `setFrameSize`, so `refreshGeometry` runs
+        // nested here and arms that line. The first scroll report after puts the band back on it.
+        panel.layoutSubtreeIfNeeded()
+        refreshCursor(remembersLine: false)
         onActiveChanged?(true)
     }
 

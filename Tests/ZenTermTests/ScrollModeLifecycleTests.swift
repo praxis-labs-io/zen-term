@@ -134,6 +134,45 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 11, "the fixture's prompt row")
     }
 
+    func test_theEntryRowIsReadBeforeTheHeaderBlanksThePrompt() throws {
+        // The header costs the grid rows and SIGWINCHes the pty, and a shell redrawing a multi-line
+        // prompt clears it first. Read after that, the walk-up skips it and stops on older output.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "❯ echo hello"
+        surface.resizingView.onResize = { [weak surface] in
+            guard let surface, !surface.rows[11].isEmpty else { return }
+            surface.rows[10] = ""
+            surface.rows[11] = ""
+        }
+
+        controller.handle(.toggleScrollMode)
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 11, "the prompt, not the output above it")
+    }
+
+    func test_theEntryRowFollowsThePromptTheResizeMoved() throws {
+        // The whole sequence the app runs: the header resizes the surface, the reflow reports from
+        // inside that resize, and the shell repaints its prompt elsewhere a frame later.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "❯ echo hello"
+        surface.resizingView.onResize = { [weak surface] in
+            guard let surface, !surface.rows[11].isEmpty else { return }
+            surface.rows[10] = ""
+            surface.rows[11] = ""
+            surface.delegate?.surfaceGridDidReflow(surface)
+        }
+
+        controller.handle(.toggleScrollMode)
+        var repainted = Array(repeating: "", count: 24)
+        repainted[9] = "❯ echo hello"  // two rows up, the grid having lost two
+        surface.rows = repainted
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 9, "the band followed the prompt")
+    }
+
     // MARK: the keys, through the real handler
 
     func test_aKeyThroughTheInstalledHandlerScrollsTheFocusedSurface() throws {

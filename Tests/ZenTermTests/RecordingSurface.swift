@@ -4,7 +4,18 @@ import TerminalKit
 /// A seam-conforming fake for tests that need a `TerminalSurface` without a real
 /// backend, recording the config it was started with and whether it was terminated.
 final class RecordingSurface: NSObject, TerminalSurface {
-    let view = NSView()
+    /// Reports its own resizes, the way `GhosttyHostView` does: the real backend pushes the new
+    /// size from `setFrameSize` and the grid reflows inside that call, before it returns.
+    final class ResizingView: NSView {
+        var onResize: (() -> Void)?
+        override func setFrameSize(_ newSize: NSSize) {
+            super.setFrameSize(newSize)
+            onResize?()
+        }
+    }
+
+    let resizingView = ResizingView()
+    var view: NSView { resizingView }
     weak var delegate: TerminalSurfaceDelegate?
     var title = ""
     /// Driven by `focus()`, so a test can assert who the chrome actually handed focus to (matching
