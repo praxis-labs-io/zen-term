@@ -579,20 +579,18 @@ final class ScrollModeController {
     /// The line is what is being moved, so it is what the band is re-found by. A scroll the buffer
     /// clamps at either end would otherwise leave the row index naming something else.
     private func placeCursorLine(_ place: ScrollKeymap.ViewportPlace) {
-        let bottom = surface.map { Self.entryRow(of: $0) } ?? 0
         let target: Int
         switch place {
         case .top: target = 0
-        case .middle: target = bottom / 2
-        case .bottom: target = bottom
+        case .middle: target = lastRow / 2
+        case .bottom: target = lastRow
         }
         let delta = cursor.row - target
         guard delta != 0 else { return }
+        // The band follows the line by content rather than being put where the scroll was asked to
+        // land it. At either end of the buffer that scroll is clamped and the line never arrives.
         pendingAnchor = cursorLine.map { (line: $0, armedAt: now()) }
-        cursor = ScrollCell(row: target, column: cursor.column)
         surface?.scroll(.lines(delta))
-        refreshCursor(remembersLine: false)
-        invalidateRows()
     }
 
     /// The last `f`/`F`/`t`/`T`, so `;` and `,` have something to run again.

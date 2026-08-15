@@ -1140,6 +1140,13 @@ number names a scrollback line for `30G` to reach. `H`/`M`/`L` reckon from the l
 **written** row instead of the grid's bottom, which on a half-filled screen is empty space
 below the prompt.
 
+`zt`/`zz`/`zb` reckon the other way, from the **viewport**, since that is what they move
+the line into. They also do not move the band themselves: they arm the re-anchor and let
+the scroll report put it back on its line. A terminal cannot scroll past the end of its
+buffer the way vim scrolls past the end of a file, so at the bottom `zt` asks and gets
+nothing, and a band moved to where the line was meant to land would name a row it is not
+on.
+
 **The cursor is the chrome's, drawn on the pane.** libghostty has no copy mode and no
 cursor outside the shell's own, so `ScrollCursorView` paints the band on the current row,
 a stroked cell where the cursor is, the selection rects, and the yank pulse, added last

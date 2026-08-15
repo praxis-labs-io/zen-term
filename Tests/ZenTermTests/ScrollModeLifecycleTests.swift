@@ -321,8 +321,9 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let host = ModeHostSpy()
         hosts.append(host)
         controller.keyModeHost = host
-        controller.handle(.toggleScrollMode)
         let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "❯ distinctive"
+        controller.handle(.toggleScrollMode)
         let handler = try XCTUnwrap(host.modeHandler)
         XCTAssertEqual(controller.scrollMode.cursorRow, 11, "precondition")
 
@@ -330,7 +331,47 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertTrue(handler(try keyDown("t")))
 
         XCTAssertEqual(surface.scrolls, [.lines(11)], "eleven rows of buffer move under it")
-        XCTAssertEqual(controller.scrollMode.cursorRow, 0, "and the band ends up on top")
+        var scrolled = Array(repeating: "", count: 24)
+        scrolled[0] = "❯ distinctive"
+        surface.rows = scrolled
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 165))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0, "the band followed the line up")
+    }
+
+    /// At the end of the buffer nothing is below to scroll into view, so the scroll is clamped and
+    /// the line never arrives. A band moved on faith would name a row it is not on.
+    func test_aClampedPlaceLeavesTheBandOnItsLine() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("z")))
+        XCTAssertTrue(handler(try keyDown("t")))
+        // Nothing moved, so no scroll report follows and nothing re-places the band.
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 11, "still on the line it was reading")
+    }
+
+    /// The middle of the screen, not half of the last written row: on a half-filled pane those are
+    /// different rows, and only one of them is the middle of anything.
+    func test_zzCentresInTheViewportNotInWhatIsWritten() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+        XCTAssertEqual(controller.scrollMode.cursorRow, 11, "precondition")
+
+        XCTAssertTrue(handler(try keyDown("z")))
+        XCTAssertTrue(handler(try keyDown("z")))
+
+        XCTAssertEqual(surface.scrolls, [], "row 11 is already the middle of a 24 row grid")
     }
 
     func test_fLandsOnTheCharacterAndTStopsShortOfIt() throws {
@@ -444,6 +485,21 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
         XCTAssertEqual(controller.scrollMode.cursorRow, 0)
         XCTAssertEqual(surface.scrolls, [.lines(-4)], "the four rows the cursor could not take")
+    }
+
+    func test_aCountReachesTheControlPageKeys() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("3")))
+        XCTAssertTrue(handler(try keyDown("d", flags: .control)))
+
+        XCTAssertEqual(surface.scrolls, [.pageFraction(1.5)], "three half pages in one scroll")
     }
 
     func test_aCountIsSpentByTheMotionItPrefixes() throws {
