@@ -832,6 +832,14 @@ than reserved chords. A mode that consumed every unmapped key killed Copy and Qu
 for as long as it was up. A mode consumes an unmapped key only when it carries no
 ⌘ or ⌥, which is exactly the set that would otherwise reach the shell as input.
 
+**Past the monitor, AppKit still claims keys before `keyDown` runs**, so
+`GhosttyHostView.performKeyEquivalent` takes the ones a pane needs back: Ctrl-Return, which the
+default context-menu equivalent would eat, and Ctrl-/, which macOS routes to the first view in the
+hierarchy and beeps at (rewritten to Ctrl-_). Every other ⌘ or ⌃ key is declined once and its
+timestamp recorded, so a menu item still wins the first pass; `doCommand`'s redispatch is what
+sends one back to be claimed on the second. Ported from ghostty, minus its binding branch, which
+`KeyInterceptor` already covers. The failure modes are in `docs/swift-conventions.md`.
+
 **`Chord` canonicalization** is the sharpest rule in the codebase. A shifted glyph
 folds onto its base key **only when Shift is set**, because
 `charactersIgnoringModifiers` applies Shift: a live ⌘⇧- arrives as `_` while the

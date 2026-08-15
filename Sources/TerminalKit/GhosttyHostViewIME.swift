@@ -109,7 +109,11 @@ extension GhosttyHostView: NSTextInputClient {
     /// stand for (Return, Backspace, arrows, …) are still encoded by libghostty from the
     /// raw key event back in `keyDown` after `interpretKeyEvents` returns, so swallowing
     /// the selector here only suppresses AppKit's default text-field behavior.
-    override func doCommand(by selector: Selector) {}
+    override func doCommand(by selector: Selector) {
+        // A command key AppKit redirected here instead of to `keyDown`: send it back through the
+        // event system, where `performKeyEquivalent` knows the timestamp and routes it on.
+        if let event = eventToRedispatch(NSApp.currentEvent) { NSApp.sendEvent(event) }
+    }
 
     /// Push the current marked-text state into libghostty. When the preedit has just gone
     /// empty (a composition ended), clear it so no stale underline lingers.

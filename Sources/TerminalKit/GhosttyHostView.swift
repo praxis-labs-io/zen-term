@@ -261,6 +261,73 @@ final class GhosttyHostView: NSView {
 
     // MARK: Keyboard
 
+    /// Timestamp of the last command- or control-modded event this view declined, to recognize it
+    /// if AppKit sends it back. `NSEvent` identity does not survive that round trip.
+    var lastPerformKeyEvent: TimeInterval?
+
+    /// The event `doCommand` has to send back through the event system, or nil. AppKit redirects
+    /// some command keys into a selector with no `keyDown` behind them, and this is the way back.
+    func eventToRedispatch(_ current: NSEvent?) -> NSEvent? {
+        guard let current, lastPerformKeyEvent == current.timestamp else { return nil }
+        return current
+    }
+
+    /// AppKit's key-equivalent dispatch claims keys before `keyDown` runs: Ctrl-Return hits the
+    /// context-menu equivalent, Ctrl-/ goes to the first view in the hierarchy and beeps.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown else { return false }
+        // Unfocused this is not ours to take: macOS sends Ctrl-/ to the first view in the
+        // hierarchy rather than to the first responder, and other panes are listening too.
+        guard window?.firstResponder === self else { return false }
+        guard let equivalent = keyEquivalentEvent(for: event) else { return false }
+        keyDown(with: equivalent)
+        return true
+    }
+
+    /// The event to hand `keyDown` for a key equivalent, or nil to leave it to AppKit. A command
+    /// or control key is declined once and recorded, so a menu item still wins the first pass.
+    func keyEquivalentEvent(for event: NSEvent) -> NSEvent? {
+        let equivalent: String
+        switch event.charactersIgnoringModifiers {
+        case "\r":
+            // Verbatim, so the default context-menu equivalent doesn't take it first.
+            guard event.modifierFlags.contains(.control) else { return nil }
+            equivalent = "\r"
+
+        case "/":
+            // Ctrl-/ as Ctrl-_, which is the one macOS doesn't beep at.
+            guard event.modifierFlags.contains(.control),
+                event.modifierFlags.isDisjoint(with: [.shift, .command, .option])
+            else { return nil }
+            equivalent = "_"
+
+        default:
+            // AppKit synthesizes zero-stamped events (the escape behind ⌘.), and a zero stamp is
+            // no identity, so one could never be matched on the way back.
+            guard event.timestamp != 0 else { return nil }
+            guard event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control)
+            else {
+                lastPerformKeyEvent = nil
+                return nil
+            }
+            if let lastPerformKeyEvent {
+                self.lastPerformKeyEvent = nil
+                if lastPerformKeyEvent == event.timestamp {
+                    equivalent = event.characters ?? ""
+                    break
+                }
+            }
+            lastPerformKeyEvent = event.timestamp
+            return nil
+        }
+
+        return NSEvent.keyEvent(
+            with: .keyDown, location: event.locationInWindow, modifierFlags: event.modifierFlags,
+            timestamp: event.timestamp, windowNumber: event.windowNumber, context: nil,
+            characters: equivalent, charactersIgnoringModifiers: equivalent,
+            isARepeat: event.isARepeat, keyCode: event.keyCode)
+    }
+
     override func keyDown(with event: NSEvent) {
         guard let surfacePtr else { return }
         // Shift+Enter sends LF so multiline-aware CLIs read a soft newline while plain Enter
@@ -306,6 +373,10 @@ final class GhosttyHostView: NSView {
         // in — a key that switches layout (some IMEs) shouldn't reach the terminal.
         let markedTextBefore = markedText.length > 0
         let keyboardIdBefore: String? = markedTextBefore ? nil : KeyboardLayout.id
+
+        // Inside a keyDown nothing needs sending back, and `interpretKeyEvents` is what dispatches
+        // `doCommand`, so clearing here is also what keeps the round trip from looping.
+        lastPerformKeyEvent = nil
 
         interpretKeyEvents([translationEvent])
 
