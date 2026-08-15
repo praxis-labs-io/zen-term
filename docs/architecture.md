@@ -1145,11 +1145,16 @@ the cursor moves for the height of the viewport and the buffer only moves once t
 cursor is pinned at an edge. Scrolling on every `j` would drag the whole screen to
 track a marker that never moved.
 
-**The mode opens on the last written row of the viewport**, found by reading rows from
-the bottom up. Not the bottom of the pane, which on a half-filled screen is empty space
-below everything there is to read, and not the shell's cursor: `ghostty_surface_ime_point`
-reports that against the *live* screen with no account of scrolling, so a viewport the
-reader had already scrolled with the wheel put the band on an unrelated row.
+**The mode opens on a mouse selection when there is one**, on its first cell, so a reader
+who selected something and then reached for the keyboard keeps their place. `ghostty_text_s`
+carries the selection's top-left in view points, which divides straight down into a cell.
+Only the near end: no backend here reports where a selection finishes.
+
+**With nothing selected it opens on the last written row of the viewport**, found by
+reading rows from the bottom up. Not the bottom of the pane, which on a half-filled screen
+is empty space below everything there is to read, and not the shell's cursor:
+`ghostty_surface_ime_point` reports that against the *live* screen with no account of
+scrolling, so a viewport already scrolled with the wheel put the band on an unrelated row.
 
 **The header goes up before the grid is measured.** A pane's header is hidden until a
 mode shows it, and showing it moves the content's top constraint down by its height, so

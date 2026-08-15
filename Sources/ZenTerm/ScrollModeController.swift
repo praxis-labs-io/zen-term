@@ -102,7 +102,7 @@ final class ScrollModeController {
         // put the band a row off the prompt.
         updateHeader()
         panel.layoutSubtreeIfNeeded()
-        cursor = ScrollCell(row: Self.entryRow(of: surface), column: 0)
+        cursor = Self.entryCell(of: surface)
         // That layout reflowed the grid, and the surface reports a reflow from inside its own
         // `setFrameSize` — so `reportReflow` already ran, nested in this call, and armed an anchor
         // against whatever row the *last* session left the cursor on. The entry row above is the
@@ -136,11 +136,17 @@ final class ScrollModeController {
         onActiveChanged?(false)
     }
 
-    /// The row the mode opens on: the last row of the viewport with anything written on it.
-    ///
-    /// Read off the screen rather than the terminal's cursor, which reports against the *live*
-    /// screen with no account of scrolling, so a viewport already scrolled with the trackpad put
-    /// the band on an unrelated row. Falls back to the bottom row when nothing is readable.
+    /// Where the mode opens: on the backend's own selection if one is up, so a reader who selected
+    /// something and then reached for the keyboard keeps their place. Else `entryRow`, at column 0.
+    static func entryCell(of surface: TerminalSurface) -> ScrollCell {
+        if let origin = surface.selectionOrigin {
+            return ScrollCell(row: origin.row, column: origin.column)
+        }
+        return ScrollCell(row: entryRow(of: surface), column: 0)
+    }
+
+    /// Otherwise the last row with anything written on it, read off the screen rather than the
+    /// terminal's cursor: that reports against the *live* screen with no account of scrolling.
     static func entryRow(of surface: TerminalSurface) -> Int {
         let last = max((surface.cellMetrics?.rows ?? 1) - 1, 0)
         for row in stride(from: last, through: 0, by: -1)

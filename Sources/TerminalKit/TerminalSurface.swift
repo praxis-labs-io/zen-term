@@ -158,6 +158,18 @@ public struct TerminalViewportRange: Equatable {
     public var rowCount: Int { endRow - startRow + 1 }
 }
 
+/// One cell on the **viewport**, row 0 at the top of the visible grid. A cell index, never a
+/// character offset into the row's text.
+public struct TerminalViewportCell: Equatable {
+    public var row: Int
+    public var column: Int
+
+    public init(row: Int, column: Int) {
+        self.row = row
+        self.column = column
+    }
+}
+
 /// One step through a live search's matches.
 public enum TerminalSearchStep: Equatable { case next, previous }
 
@@ -346,6 +358,10 @@ public protocol TerminalSurface: AnyObject {
     func paste(_ text: String)
     func copySelection() -> String?
 
+    /// The viewport cell the backend's own selection starts on, or nil when nothing is selected.
+    /// Only the near end: no backend here reports where a selection finishes.
+    var selectionOrigin: TerminalViewportCell? { get }
+
     /// Move the viewport through the scrollback.
     func scroll(_ command: TerminalScroll)
 
@@ -417,6 +433,9 @@ public extension TerminalSurface {
 
     /// Default nil: a backend that can't report its grid geometry gets no chrome drawn on it.
     var cellMetrics: TerminalCellMetrics? { nil }
+
+    /// Default nil: a backend that can't place its selection is treated as having none.
+    var selectionOrigin: TerminalViewportCell? { nil }
 
     /// Default nil: a backend that can't read its own screen supports no motion over its content.
     func text(viewportRow row: Int) -> String? { nil }

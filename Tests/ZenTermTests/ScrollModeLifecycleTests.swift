@@ -112,6 +112,28 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertFalse(panel.isHeaderVisibleForTesting, "the header must come down with the mode")
     }
 
+    // MARK: where it opens
+
+    /// Puts the band where the reader was already looking, not a screenful away on the last row.
+    func test_enteringOverASelection_landsOnItsFirstCell() throws {
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.selectionOrigin = TerminalViewportCell(row: 2, column: 4)  // row 2 is "❯ seq 1 3"
+
+        controller.handle(.toggleScrollMode)
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 2)
+        XCTAssertEqual(controller.scrollMode.cursor.column, 4)
+    }
+
+    func test_enteringWithNoSelection_stillOpensOnTheLastWrittenRow() throws {
+        let controller = makeWindow()
+
+        controller.handle(.toggleScrollMode)
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 11, "the fixture's prompt row")
+    }
+
     // MARK: the keys, through the real handler
 
     func test_aKeyThroughTheInstalledHandlerScrollsTheFocusedSurface() throws {

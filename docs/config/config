@@ -464,6 +464,9 @@
 #   ctrl+f / ctrl+b  a full page (space = ctrl+f)  y          copy the selection
 #                                                  esc, q, i  leave
 #
+# With text selected, the mode opens on the start of your selection. With nothing
+# selected it opens on the last line with anything written on it.
+#
 # Your own chords still work inside it, so ⌘T and pane nav are never swallowed.
 # `{` and `}` are vim's paragraph motion: they move the cursor to the next blank
 # line, which in a terminal is what separates one command's output from the next.
