@@ -1,8 +1,8 @@
 # Third-party notices
 
 ZenTerm is built on [Ghostty](https://ghostty.org) and ships the libraries,
-fonts, icons, and shaders below. This file carries their copyright and license
-text, which is what each of these licenses asks for.
+fonts, icons, themes, shaders, and shell integration below. This file carries their
+copyright and license text, which is what each of these licenses asks for.
 
 Every library listed here was confirmed present in the shipped app, not read off a
 dependency manifest. What gets linked is a property of the build: a manifest lists
@@ -12,7 +12,8 @@ where tree-sitter (311 symbols) and its 40 grammars (186 symbols) show up. Spark
 is the exception: it ships as a framework under `Contents/Frameworks` rather than
 linked into the executable, so it is confirmed there instead. Fonts are embedded
 data with no symbols, so they were found by parsing sfnt table directories out of
-the same executable.
+the same executable. Icons, themes, shaders, and shell integration are plain files
+copied into the resource bundle, so they were found by listing it.
 
 Ghostty pin at the time of this audit: `v1.3.1` (332b2ae). See
 `docs/third-party-notices.md` for how to re-probe when the pin moves.
@@ -23,7 +24,7 @@ Ghostty pin at the time of this audit: `v1.3.1` (332b2ae). See
 
 **MIT**
 
-The terminal engine ZenTerm embeds. Everything below this entry, except the icons, reaches ZenTerm through it.
+The terminal engine ZenTerm embeds. Everything below reaches ZenTerm through it except the icons and the cursor shaders. The chrome also ports parts of Ghostty's own macOS app: key event translation, IME composition, accessibility, and keyboard-layout detection.
 
 ```text
 MIT License
@@ -3165,6 +3166,42 @@ SOFTWARE.
 
 The brand marks in the tool-float icon picker: `git.svg`, `github.svg`, `linear.svg`, `neovim.svg`, `vim.svg`, `emacs.svg`, `helix.svg`, `claude.svg`, `openai.svg`, `gemini.svg`, `copilot.svg`, `opencode.svg`, `ollama.svg`, `docker.svg`, `kubernetes.svg`, `postgres.svg`, `sqlite.svg`, `htop.svg`, `slack.svg`, and `spotify.svg`. CC0 waives attribution, so this entry is a courtesy rather than an obligation. It covers the artwork only, not the trademarks the marks depict.
 
+## Themes
+
+### iTerm2-Color-Schemes
+
+**MIT**
+
+The 463 bundled themes in Settings → Appearance, reaching ZenTerm through Ghostty, which converts the collection to its own theme format and ships it as `ghostty-resources/ghostty/themes`. At the `v1.3.1` pin they come from the `ghostty-themes-release-20260216-151611-fc73ce3` tarball. Each theme's own copyright stays with its author, as the license below says.
+
+```text
+MIT License
+
+Copyright (c) 2011 to Present Mark Badolato
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+This license covers the iTerm-Color-Schemes repository collection of themes. 
+
+The copyright/license for each individual theme belongs to the author of that theme.
+```
+
 ## Shaders
 
 ### ghostty-cursor-shaders
@@ -3195,6 +3232,38 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
+
+## Shell integration
+
+### bash-preexec
+
+**MIT**
+
+Ghostty's bash integration sources `bash-preexec.sh` to get zsh-style `preexec` and `precmd` hooks, and the file ships verbatim in the resource bundle under `ghostty-resources/ghostty/shell-integration/bash/`. The vendored copy reports V0.6.0, from Ryan Caloras' [bash-preexec](https://github.com/rcaloras/bash-preexec). It is a separate project from Ghostty and carries its own copyright.
+
+```text
+The MIT License
+
+Copyright (c) 2017 Ryan Caloras and contributors (see https://github.com/rcaloras/bash-preexec)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 ```
 
 ## Apache License 2.0

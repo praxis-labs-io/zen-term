@@ -5,7 +5,7 @@ property of the build, not of `build.zig.zon`**, so the pin moving is what makes
 wrong. Run this pass whenever `vendor/ghostty` changes, and fold any difference into the
 notices before tagging.
 
-Two rules learned the hard way:
+Three rules learned the hard way:
 
 - **Probe the linked executable, not `libghostty-fat.a`.** The archive is a bag of object
   files the linker draws from selectively: it is ~141 MB against a ~16 MB binary. The
@@ -14,6 +14,10 @@ Two rules learned the hard way:
 - **Symbols cannot see data.** Fonts are embedded bytes with no symbols, so a symbol probe
   misses every one of them. That gap is why v0.1.0 shipped three unattributed fonts while
   the bundle contained zero `.ttf` files and looked clean.
+- **Neither probe sees a plain file.** Artwork, themes, shaders, and shell integration are
+  copied into the resource bundle whole, and a symbol or sfnt scan walks straight past them.
+  That is how 463 iTerm2 themes and a vendored `bash-preexec.sh` shipped unattributed, and
+  why section 4 runs whenever a resource lands, not only when the pin moves.
 
 ## 1. Build what you are going to probe
 
@@ -103,17 +107,36 @@ At the `v1.3.1` pin this reports exactly three fonts: JetBrains Mono (variable r
 variable italic) and Symbols Nerd Font. More than three means ghostty started embedding
 something new and it needs an OFL/MIT notice.
 
-## 4. Regenerate and diff
+## 4. Bundled resources: list the files
+
+Symbols and sfnt headers both miss these, so the probe is a directory listing. It collapses
+ghostty's shell-integration and themes trees to one line each; everything else is named.
+
+```sh
+find Sources -path '*/Resources/*' -type f -o -name '*.glsl' \
+    | sed 's|\(ghostty-resources/ghostty/[a-z-]*\)/.*|\1/…|' | sort -u
+```
+
+Every file here owes a notice unless we authored it, and so does artwork with no file of its
+own: the app icon is Lucide's `origami` pasted into `icon/make-icon.swift` as SVG path data.
+Read the list against the Icons, Themes, Shaders, and Shell integration sections of the
+notices. Ghostty's terminfo is ghostty's own and rides its MIT entry; `bash-preexec.sh` sits
+inside the same tree and does not.
+
+## 5. Regenerate and diff
 
 License texts come from the Zig dependency cache (`~/.cache/zig/p/<hash>/`), keyed by the
 hashes in `vendor/ghostty/pkg/*/build.zig.zon`. Copy them verbatim: do not retype or
 summarize a license. Check the copyright years moved too, not just the terms.
 
+Section 4's resources are not in that cache. The themes tarball ghostty pins carries no
+license file at all, so take those texts from the upstream repository instead.
+
 One exception to "verbatim": decode any stray HTML entities. Breakpad's vendored copy of the
 APSL block carries `&apos;` where the published license has an apostrophe; a `grep -n '&[a-z]*;'`
 over the result catches these, and they should read as the plain character.
 
-## 5. Confirm the notices still open
+## 6. Confirm the notices still open
 
 The file is a SwiftPM resource loaded via `Bundle.module`, so it resolves in both a dev and a
 packaged build. **zen-term → Acknowledgements…** (under About) opens it in its own themed,
