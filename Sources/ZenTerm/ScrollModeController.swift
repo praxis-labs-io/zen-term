@@ -832,9 +832,11 @@ final class ScrollModeController {
     /// the driven surface, so the count tracks output as well as keys.
     func report(position: TerminalScrollPosition, from s: AnyObject) {
         guard isActive, isDriving(s) else { return }
+        // Before the hold, which returns: the same burst can rewrite a visible cell as well as
+        // push the view, and the pull back restores the viewport but not what the rows now say.
+        invalidateRows()
         if holdViewport(against: position) { return }
         reflowArmedAt = nil
-        invalidateRows()  // output arrived, or a scroll landed
         if let last = lastPosition, position.offset != last.offset {
             releaseSelection()
             // The reader, or the find bar, put the viewport here. Leaving hands back only what the

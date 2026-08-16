@@ -1274,6 +1274,29 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.scrolls, [.lines(-3)], "no `.bottom`: they are where they chose to be")
     }
 
+    func test_aHeldPushStillDropsTheRowCache() throws {
+        // One burst can rewrite a visible cell as well as push the view. The pull back restores the
+        // viewport, so the rows are the same rows, but not the same text.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+        let surface = try XCTUnwrap(spawned.first)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+        XCTAssertTrue(handler(try keyDown("L", unshifted: "l", flags: .shift)))
+        XCTAssertEqual(controller.scrollMode.cursorRow, 11, "precondition: the prompt row")
+
+        surface.rows[12] = "❯ printed by the same burst"
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 179, viewport: 24))
+
+        XCTAssertTrue(handler(try keyDown("L", unshifted: "l", flags: .shift)))
+        XCTAssertEqual(controller.scrollMode.cursorRow, 12, "the row the burst wrote")
+    }
+
     func test_aRewrapAtTheLiveEndIsNotReadAsOutput() throws {
         // A narrowing drag rewraps rows into the buffer and, resting at the bottom, moves the
         // viewport by exactly as many. That is the signature output has.
