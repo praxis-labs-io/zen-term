@@ -1260,11 +1260,22 @@ moves the viewport with no key at all, and a `j` at the end of the buffer moves 
 exactly like one that does. A reflow releases it directly, since the cursor can be found again by its
 line and a fixed anchor cannot.
 
-The other limit is columns. `read_text` hands back a string with no per-character cell
-mapping, so a column is a character offset into the row's text. A wide character (CJK, an
-emoji) fills two cells while counting as one offset, so the cursor cell sits one to the left
-of true for each one earlier in the row and a yank ending past one stops short of what was
-highlighted. A width-aware model would close both.
+**A column is a character offset, and every consumer wants a cell.** The motions all move by
+character, which is what vim means by a column, so the offset stays. The two places that need
+cells convert: the rects `ScrollCursorView` draws, and the range a yank reads. A wide character
+(CJK, an emoji) is two cells for one offset, and before the conversion the band drew a cell left
+of true for each one earlier in the row while a yank ending past one stopped short.
+
+`read_text` hands back a string with no per-character mapping, and there is no pin map to ask, so
+`ScrollModeController.cells(of:)` finds it by binary search: reading cells 0 through *c* gives the
+characters they hold, so the count says how many fit by that cell. libghostty does the widths, so
+this cannot disagree with what its renderer drew, which re-deriving them in Swift eventually would.
+A character counts as present once the span touches any cell it occupies, which is what ghostty's
+own `selectionString wide char` test pins down: selecting either half of a wide character returns
+the whole of it.
+
+Roughly seven reads, and only on a row that needs them: ASCII is single width by definition, so an
+all-ASCII row maps straight through and costs nothing, which is almost every row a terminal shows.
 
 A row's trailing blanks come off in `rowText`, not in the backend. `Surface.dumpTextLocked`
 reads with `.trim = false` and the formatter keeps every cell a program actually painted, so a

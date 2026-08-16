@@ -10,7 +10,9 @@ import TerminalKit
 /// the font size and the row count with every resize.
 final class ScrollCursorView: NSView {
     struct State: Equatable {
-        var cursor: ScrollCell
+        var cursorRow: Int
+        /// The cells the cursor's character occupies, so a wide one is outlined whole.
+        var cursorCells: ClosedRange<Int>
         /// The visual selection, or nil in normal mode.
         var selection: TerminalViewportRange?
         /// The span a yank just took, held only for the length of the pulse.
@@ -59,10 +61,10 @@ final class ScrollCursorView: NSView {
             accent.withAlphaComponent(Self.selectionAlpha).setFill()
             fill(Self.rects(for: selection, metrics: metrics))
         } else {
-            drawBand(metrics: metrics, row: state.cursor.row)
+            drawBand(metrics: metrics, row: state.cursorRow)
         }
 
-        drawCursorCell(metrics: metrics, cursor: state.cursor)
+        drawCursorCell(metrics: metrics, row: state.cursorRow, cells: state.cursorCells)
 
         if let flash = state.flash, state.flashLevel > 0 {
             accent.withAlphaComponent(Self.flashPeakAlpha * min(1, state.flashLevel)).setFill()
@@ -102,10 +104,10 @@ final class ScrollCursorView: NSView {
     /// character it names. An outline is the way out of that trade: it carries the full color and
     /// touches no part of the cell the glyph occupies. It is also what ghostty itself draws for an
     /// unfocused cursor, which is the state the surface is in while the mode holds the keyboard.
-    private func drawCursorCell(metrics: TerminalCellMetrics, cursor: ScrollCell) {
+    private func drawCursorCell(metrics: TerminalCellMetrics, row: Int, cells: ClosedRange<Int>) {
         let cell = bounds.intersection(
             metrics.cellFrame(
-                row: cursor.row, columns: Self.columns(cursor.column, cursor.column, metrics)))
+                row: row, columns: Self.columns(cells.lowerBound, cells.upperBound, metrics)))
         guard !cell.isEmpty else { return }
         Self.lifted(Theme.current.terminal.cursor.nsColor).setStroke()
         let path = NSBezierPath(

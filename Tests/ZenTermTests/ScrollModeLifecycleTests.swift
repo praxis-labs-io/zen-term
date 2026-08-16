@@ -279,6 +279,67 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(panel.findBarForTesting?.needle, "hi")
     }
 
+    // MARK: wide characters
+
+    /// A column is a character offset and every consumer wants a cell, so a wide character was one
+    /// cell of drift for each one earlier in the row: the band drew left of true and a yank that
+    /// ended past one stopped short of what was highlighted.
+    func test_aYankPastAWideCharacterTakesTheWholeOfIt() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "你好 world"  // 11 cells, 9 characters
+        let board = NSPasteboard(name: NSPasteboard.Name("zenterm-yank-\(UUID().uuidString)"))
+        controller.handle(.toggleScrollMode)
+        controller.scrollMode.yankPasteboard = board
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("0")))
+        XCTAssertTrue(handler(try keyDown("v")))
+        XCTAssertTrue(handler(try keyDown("$", unshifted: "4", flags: .shift)))
+        XCTAssertTrue(handler(try keyDown("y")))
+
+        XCTAssertEqual(board.string(forType: .string), "你好 world", "not `你好 worl`")
+    }
+
+    func test_theBandCoversBothCellsOfAWideCharacter() throws {
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "ab你cd"
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("0")))
+        for _ in 0..<2 { XCTAssertTrue(handler(try keyDown("l"))) }  // onto 你
+
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(state.cursorCells, 2...3, "the cursor outlines the whole character")
+    }
+
+    func test_aCellAfterAWideCharacterIsNotDrawnLeftOfTrue() throws {
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "ab你cd"
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("0")))
+        for _ in 0..<3 { XCTAssertTrue(handler(try keyDown("l"))) }  // onto the `c` after it
+
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(state.cursorCells, 4...4, "offset 3, but cell 4: 你 took two")
+    }
+
     // MARK: the two-key commands, through the real handler
 
     func test_yyTakesWholeRowsWithoutAVisualFirst() throws {

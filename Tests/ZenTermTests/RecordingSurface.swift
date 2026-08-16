@@ -168,18 +168,28 @@ final class RecordingSurface: NSObject, TerminalSurface {
     ///
     /// It does **not** model the backend's soft-wrap unwrapping. A fake that joined rows would make
     /// a test's expected string depend on where the fixture wrapped.
+    /// Cells wide. Anything non-ASCII counts as two here, which is the case the column-to-cell
+    /// mapping exists for; libghostty does the real widths.
+    private static func width(_ character: Character) -> Int { character.isASCII ? 1 : 2 }
+
+    /// Reads by **cell**, not by character index, and takes a character whose cells the span
+    /// touches at either end. That is what ghostty's `selectionString wide char` test asserts, and
+    /// it is the behavior the chrome's offset-to-cell search is built on.
     func text(in range: TerminalViewportRange) -> String? {
         guard rows.indices.contains(range.startRow), rows.indices.contains(range.endRow) else {
             return nil
         }
         let sliced = (range.startRow...range.endRow).map { row -> String in
-            let text = rows[row]
             let from = row == range.startRow ? range.startColumn : 0
-            let through = row == range.endRow ? range.endColumn : text.count - 1
-            guard from <= through, from < text.count else { return "" }
-            let start = text.index(text.startIndex, offsetBy: from)
-            let end = text.index(text.startIndex, offsetBy: min(through + 1, text.count))
-            return String(text[start..<end])
+            let through = row == range.endRow ? range.endColumn : Int.max
+            var cell = 0
+            var taken = ""
+            for character in rows[row] {
+                let last = cell + Self.width(character) - 1
+                if cell <= through && last >= from { taken.append(character) }
+                cell = last + 1
+            }
+            return taken
         }
         return sliced.joined(separator: "\n")
     }

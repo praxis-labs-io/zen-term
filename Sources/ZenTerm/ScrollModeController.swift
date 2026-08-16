@@ -412,6 +412,54 @@ final class ScrollModeController {
     /// Zero on a blank row, so the cursor has somewhere to be.
     private func lastColumn(of row: Int) -> Int { max(rowText(row).count - 1, 0) }
 
+    /// The live selection's span, in cells. Nil in normal mode.
+    private func selectionRange() -> TerminalViewportRange? {
+        guard let selection, let columns = surface?.cellMetrics?.columns else { return nil }
+        return selection.range(to: cursor, columns: columns) { [weak self] in
+            self?.cells(of: $0) ?? $0.column...$0.column
+        }
+    }
+
+    /// The cells the character at `cell.column` occupies. A column is an offset into the row's
+    /// text, and every consumer wants cells: a wide character is two of them for the one offset.
+    ///
+    /// ASCII is single width by definition, so the overwhelming majority of rows map straight
+    /// through and cost nothing. Only a row holding something else pays for the search below.
+    func cells(of cell: ScrollCell) -> ClosedRange<Int> {
+        let text = rowText(cell.row)
+        let offset = min(max(cell.column, 0), max(text.count - 1, 0))
+        guard !text.allSatisfy(\.isASCII) else { return offset...offset }
+        let first = cellStart(ofOffset: offset, on: cell.row)
+        // The next character's first cell is one past this one's last. A row filled edge to edge
+        // has no next, and the search says so by running off the end.
+        let next = cellStart(ofOffset: offset + 1, on: cell.row)
+        return first...max(next - 1, first)
+    }
+
+    /// The first cell holding the character at `offset`, by binary search over the row.
+    ///
+    /// Reading cells 0 through c back gives the characters they hold, so the count is how many
+    /// characters fit by that cell. libghostty does the widths, so this cannot disagree with what
+    /// its renderer drew, which re-deriving them in Swift eventually would.
+    private func cellStart(ofOffset offset: Int, on row: Int) -> Int {
+        guard offset > 0 else { return 0 }
+        guard let surface, let columns = surface.cellMetrics?.columns, columns > 0 else {
+            return offset
+        }
+        var low = 0
+        var high = columns  // one past the grid, which is what "no such character" reads as
+        while low < high {
+            let mid = (low + high) / 2
+            let prefix = surface.text(
+                in: TerminalViewportRange(
+                    startRow: row, startColumn: 0, endRow: row, endColumn: mid))
+            // A character counts as present once the span touches any cell it occupies, which is
+            // what ghostty's own `selectionString wide char` test pins down.
+            if (prefix?.count ?? 0) >= offset + 1 { high = mid } else { low = mid + 1 }
+        }
+        return low
+    }
+
     /// Vim's paragraph motion over the viewport: step past any blank rows, cross the block of
     /// text, land on the blank row after it.
     ///
@@ -536,16 +584,15 @@ final class ScrollModeController {
     /// it: that reads `Screen.selection`, which the mouse drives, and scroll mode's selection is
     /// the chrome's own overlay that the backend knows nothing about.
     var selectedText: String? {
-        guard let surface, let selection, let columns = surface.cellMetrics?.columns else { return nil }
-        let text = surface.text(in: selection.range(to: cursor, columns: columns))
+        guard let surface, let range = selectionRange() else { return nil }
+        let text = surface.text(in: range)
         return (text?.isEmpty ?? true) ? nil : text
     }
 
     /// The pulse comes after the write, not on the keystroke: a yank leaves nothing on screen, so a
     /// copy that silently didn't take would look exactly like one that did.
     private func yank() {
-        guard let surface, let selection, let columns = surface.cellMetrics?.columns else { return }
-        let range = selection.range(to: cursor, columns: columns)
+        guard let surface, let range = selectionRange() else { return }
         // An empty span still completes the gesture, blank row and all: dropping out here would
         // leave the screen identical to before the keystroke, which is the confirmation gap the
         // pulse exists to close. Only a read the backend refuses has nothing to confirm.
@@ -706,8 +753,9 @@ final class ScrollModeController {
         if remembersLine { cursorLine = Self.isBlank(text) ? nil : text }
         panel?.setScrollCursor(
             ScrollCursorView.State(
-                cursor: cursor,
-                selection: selection?.range(to: cursor, columns: columns),
+                cursorRow: cursor.row,
+                cursorCells: cells(of: cursor),
+                selection: selectionRange(),
                 flash: flashRange,
                 flashLevel: flashLevel)
         ) { [weak surface] in surface?.cellMetrics }
