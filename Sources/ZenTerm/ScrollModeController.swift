@@ -39,8 +39,12 @@ final class ScrollModeController {
     /// See `rowText`.
     private var rowCache: [Int: String] = [:]
 
-    /// The last painted cell per row, alongside `rowCache` and dropped with it.
-    private var cellExtentCache: [Int: Int] = [:]
+    /// The untrimmed read behind `rowCache`, which is what the cell search counts against.
+    private var rawCache: [Int: String] = [:]
+
+    /// Offset to cells, per row, alongside `rowCache` and dropped with it. Each miss is a dozen
+    /// renderer-mutex reads, and the yank pulse refreshes the band sixty times a second.
+    private var cellCache: [Int: [Int: ClosedRange<Int>]] = [:]
 
     /// The last position reported, so the header can be rewritten between reports without inventing
     /// a count.
@@ -432,61 +436,34 @@ final class ScrollModeController {
         let text = rowText(cell.row)
         let offset = min(max(cell.column, 0), max(text.count - 1, 0))
         guard !text.allSatisfy(\.isASCII) else { return offset...offset }
+        if let known = cellCache[cell.row]?[offset] { return known }
         let first = cellStart(ofOffset: offset, on: cell.row)
-        // One past this character's last cell is where the next one starts, padding included. With
-        // nothing after it at all the row's own painted extent ends it; running to the grid's edge
-        // instead drew the selection clean across the pane.
+        // Where the next character starts, padding included. Past the last one that is a cell past
+        // what the row paints, so a span ends at the text rather than at the grid's edge.
         let next = cellStart(ofOffset: offset + 1, on: cell.row)
-        let columns = surface?.cellMetrics?.columns ?? 0
-        guard next < columns else { return first...max(lastPaintedCell(on: cell.row), first) }
-        return first...max(next - 1, first)
+        let span = first...max(next - 1, first)
+        cellCache[cell.row, default: [:]][offset] = span
+        return span
     }
 
-    /// The last cell on the row a program painted, by binary search on where the row runs out.
-    ///
-    /// Reading from a cell to the grid's edge comes back empty once nothing is painted from there
-    /// on. A trailing wide character answers at either of its cells, so this lands on its last.
-    private func lastPaintedCell(on row: Int) -> Int {
-        if let known = cellExtentCache[row] { return known }
-        let extent = searchLastPaintedCell(on: row)
-        cellExtentCache[row] = extent
-        return extent
-    }
-
-    private func searchLastPaintedCell(on row: Int) -> Int {
-        guard let surface, let columns = surface.cellMetrics?.columns, columns > 0 else { return 0 }
-        var low = 0
-        var high = columns
-        while low < high {
-            let mid = (low + high) / 2
-            let rest = surface.text(
-                in: TerminalViewportRange(
-                    startRow: row, startColumn: mid, endRow: row, endColumn: columns - 1))
-            if rest?.isEmpty ?? true { high = mid } else { low = mid + 1 }
-        }
-        return max(low - 1, 0)
-    }
-
-    /// The first cell holding the character at `offset`, by binary search over the row.
-    ///
-    /// Reading cells 0 through c back gives the characters they hold, so the count is how many
-    /// characters fit by that cell. libghostty does the widths, so this cannot disagree with what
-    /// its renderer drew, which re-deriving them in Swift eventually would.
+    /// The first cell holding the character at `offset`, searched from the right: reading cell c to
+    /// the edge gives every character from c on, so the row's count less that is how many precede c.
     private func cellStart(ofOffset offset: Int, on row: Int) -> Int {
         guard offset > 0 else { return 0 }
         guard let surface, let columns = surface.cellMetrics?.columns, columns > 0 else {
             return offset
         }
+        // From the right because the formatter drops a run of never-written cells at the end of a
+        // read, so a prefix stopping inside a cursor-positioned gap comes back short.
+        let total = rawRow(row).count
         var low = 0
         var high = columns  // one past the grid, which is what "no such character" reads as
         while low < high {
             let mid = (low + high) / 2
-            let prefix = surface.text(
+            let rest = surface.text(
                 in: TerminalViewportRange(
-                    startRow: row, startColumn: 0, endRow: row, endColumn: mid))
-            // A character counts as present once the span touches any cell it occupies, which is
-            // what ghostty's own `selectionString wide char` test pins down.
-            if (prefix?.count ?? 0) >= offset + 1 { high = mid } else { low = mid + 1 }
+                    startRow: row, startColumn: mid, endRow: row, endColumn: columns - 1))
+            if total - (rest?.count ?? 0) >= offset { high = mid } else { low = mid + 1 }
         }
         return low
     }
@@ -555,9 +532,18 @@ final class ScrollModeController {
     /// arrives padded to the grid width, and `$` would park the cursor out in the padding.
     private func rowText(_ row: Int) -> String {
         if let known = rowCache[row] { return known }
-        var text = surface?.text(viewportRow: row) ?? ""
+        var text = rawRow(row)
         while let last = text.last, last.isWhitespace { text.removeLast() }
         rowCache[row] = text
+        return text
+    }
+
+    /// The row as the backend hands it over, padding and all. `cellStart` counts against this, not
+    /// the trimmed text, or a row ending in written spaces maps every cell short by that many.
+    private func rawRow(_ row: Int) -> String {
+        if let known = rawCache[row] { return known }
+        let text = surface?.text(viewportRow: row) ?? ""
+        rawCache[row] = text
         return text
     }
 
@@ -566,7 +552,8 @@ final class ScrollModeController {
     /// Drop the read-row cache. Called wherever the visible rows can have changed underneath it.
     private func invalidateRows() {
         rowCache.removeAll(keepingCapacity: true)
-        cellExtentCache.removeAll(keepingCapacity: true)
+        rawCache.removeAll(keepingCapacity: true)
+        cellCache.removeAll(keepingCapacity: true)
     }
 
     /// A row counts as blank when it holds no non-whitespace. A row the backend cannot read is
@@ -776,7 +763,6 @@ final class ScrollModeController {
     /// line means the third arms against rewrapped text.
     private func refreshCursor(remembersLine: Bool = true) {
         guard isActive, let surface else { return }
-        let columns = surface.cellMetrics?.columns ?? 0
         // The row first, then the column against THAT row: a grid that lost rows leaves the cursor
         // naming one the backend will not read, and its empty text would collapse the column to 0.
         let row = min(cursor.row, lastRow)

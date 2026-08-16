@@ -161,8 +161,15 @@ final class RecordingSurface: NSObject, TerminalSurface {
     /// what a caller does with a row the grid has shrunk out from under.
     func text(viewportRow row: Int) -> String? {
         guard row < (cellMetrics?.rows ?? rows.count), rows.indices.contains(row) else { return nil }
-        return rows[row]
+        return text(
+            in: TerminalViewportRange(
+                startRow: row, startColumn: 0, endRow: row,
+                endColumn: max((cellMetrics?.columns ?? rows[row].count) - 1, 0)))
     }
+
+    /// A cell no program ever wrote, one cell wide. Distinct from a written space: libghostty's
+    /// formatter drops a run of these at the end of a read and only fills one that has text after.
+    static let unwritten: Character = "\0"
 
     /// Slices `rows`: first and last cut at their columns, everything between them whole.
     ///
@@ -184,10 +191,18 @@ final class RecordingSurface: NSObject, TerminalSurface {
             let through = row == range.endRow ? range.endColumn : Int.max
             var cell = 0
             var taken = ""
+            var blanks = 0
             for character in rows[row] {
                 let last = cell + Self.width(character) - 1
-                if cell <= through && last >= from { taken.append(character) }
-                cell = last + 1
+                defer { cell = last + 1 }
+                guard cell <= through, last >= from else { continue }
+                guard character != Self.unwritten else {
+                    blanks += 1
+                    continue
+                }
+                taken += String(repeating: " ", count: blanks)
+                blanks = 0
+                taken.append(character)
             }
             return taken
         }

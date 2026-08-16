@@ -1267,15 +1267,23 @@ cells convert: the rects `ScrollCursorView` draws, and the range a yank reads. A
 of true for each one earlier in the row while a yank ending past one stopped short.
 
 `read_text` hands back a string with no per-character mapping, and there is no pin map to ask, so
-`ScrollModeController.cells(of:)` finds it by binary search: reading cells 0 through *c* gives the
-characters they hold, so the count says how many fit by that cell. libghostty does the widths, so
-this cannot disagree with what its renderer drew, which re-deriving them in Swift eventually would.
-A character counts as present once the span touches any cell it occupies, which is what ghostty's
-own `selectionString wide char` test pins down: selecting either half of a wide character returns
-the whole of it.
+`ScrollModeController.cells(of:)` finds it by binary search, and the search runs from the **right**:
+reading cell *c* to the grid's edge gives every character from *c* on, so the row's own count less
+that is how many sit before it. libghostty does the widths, so this cannot disagree with what its
+renderer drew, which re-deriving them in Swift eventually would. A character counts as present once
+the span touches any cell it occupies, which is what ghostty's own `selectionString wide char` test
+pins down: selecting either half of a wide character returns the whole of it.
 
-Roughly seven reads, and only on a row that needs them: ASCII is single width by definition, so an
-all-ASCII row maps straight through and costs nothing, which is almost every row a terminal shows.
+**Counting a prefix instead does not work**, and the first attempt did. The formatter drops a run of
+never-written cells at the end of a read (`formatter.zig`: blanks accumulate and flush only when
+something written follows), so a span stopping inside a cursor-positioned gap comes back short and
+the search runs clean past it. A right-aligned prompt segment leaves exactly that gap, and the band
+drew across the whole of it. Searching from the right is monotone whether or not blanks are dropped.
+
+About seven reads per search, two searches per lookup, and only on a row that needs them: ASCII is
+single width by definition, so an all-ASCII row maps straight through and costs nothing, which is
+almost every row a terminal shows. Results cache per row beside `rowCache` and drop with it, because
+the yank pulse refreshes the band sixty times a second and every read takes the renderer mutex.
 
 A row's trailing blanks come off in `rowText`, not in the backend. `Surface.dumpTextLocked`
 reads with `.trim = false` and the formatter keeps every cell a program actually painted, so a

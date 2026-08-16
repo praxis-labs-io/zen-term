@@ -290,7 +290,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         hosts.append(host)
         controller.keyModeHost = host
         let surface = try XCTUnwrap(spawned.first)
-        surface.rows[11] = "你好 world"  // 11 cells, 9 characters
+        surface.rows[11] = "你好 world"  // 10 cells, 8 characters
         let board = NSPasteboard(name: NSPasteboard.Name("zenterm-yank-\(UUID().uuidString)"))
         controller.handle(.toggleScrollMode)
         controller.scrollMode.yankPasteboard = board
@@ -378,6 +378,42 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
         let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
         XCTAssertEqual(state.cursorCells, 4...4, "offset 3, but cell 4: 你 took two")
+    }
+
+    func test_theBandStopsAtACharacterAGapFollows() throws {
+        // A right-aligned segment leaves cells no program wrote, and libghostty drops a run of
+        // those at the end of a read. A search counting a prefix reads that as no character.
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "你" + String(repeating: RecordingSurface.unwritten, count: 8) + "12:00"
+        controller.handle(.toggleScrollMode)
+
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(state.cursorCells, 0...1, "the 你, not it and the gap after it")
+    }
+
+    func test_aColumnInsideAGapIsTheCellItSitsOn() throws {
+        // The gap reads back as spaces once something written follows, so the motions walk it. Each
+        // one has to land on its own cell rather than on wherever the gap ends.
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "你" + String(repeating: RecordingSurface.unwritten, count: 8) + "12:00"
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("0")))
+        XCTAssertTrue(handler(try keyDown("l")))  // the first space of the gap
+
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(state.cursorCells, 2...2, "cell 2, the first of the gap")
     }
 
     // MARK: the two-key commands, through the real handler
