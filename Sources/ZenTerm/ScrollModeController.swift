@@ -432,23 +432,23 @@ final class ScrollModeController {
     /// The live selection's span, in cells. Nil in normal mode.
     private func selectionRange() -> TerminalViewportRange? {
         guard let selection, let columns = surface?.cellMetrics?.columns else { return nil }
-        return selection.range(to: cursor, columns: columns) { [weak self] in
-            self?.cells(of: $0) ?? $0.column...$0.column
-        }
+        // Strongly captured: the closure is called before this returns, and a nil fallback here
+        // would quietly hand back offsets as cells, which is the bug the mapping exists to fix.
+        return selection.range(to: cursor, columns: columns) { self.cells(of: $0) }
     }
 
     /// The cells the character at `cell.column` occupies: a wide character is two for the one
     /// offset. ASCII is single width, so an all-ASCII row maps straight through and costs nothing.
-    func cells(of cell: ScrollCell) -> ClosedRange<Int> {
+    private func cells(of cell: ScrollCell) -> ClosedRange<Int> {
         let text = rowText(cell.row)
         let offset = min(max(cell.column, 0), max(text.count - 1, 0))
         guard !text.allSatisfy(\.isASCII) else { return offset...offset }
         if let known = cellCache[cell.row]?[offset] { return known }
         let first = cellStart(ofOffset: offset, on: cell.row)
-        // Where the next character starts, padding included. Past the last one that is a cell past
-        // what the row paints, so a span ends at the text rather than at the grid's edge.
-        let next = cellStart(ofOffset: offset + 1, on: cell.row)
-        let span = first...max(next - 1, first)
+        // A character is one cell or two, so one probe past its first settles which. A second
+        // binary search would cost seven reads to answer the same question.
+        let isWide = self.offset(ofCell: first + 1, on: cell.row) == offset
+        let span = first...(isWide ? first + 1 : first)
         cellCache[cell.row, default: [:]][offset] = span
         return span
     }
