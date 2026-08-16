@@ -47,3 +47,79 @@ final class SizeSyncHoldTests: XCTestCase {
         XCTAssertFalse(view.isSizeSyncSuspended)
     }
 }
+
+/// Auto Layout walks a view through intermediate frames before the one it settles on, and each one
+/// reached libghostty, which rewrapped the whole buffer for it. A frame a few pixels wide rewraps
+/// the scrollback into a column or two, and libghostty evicts by bytes, so history went and never
+/// came back. Silent while it happens: the damage is missing lines afterwards.
+final class SizePushCoalescingTests: XCTestCase {
+    /// Windowless and pointer-less, like the suite above: hosting this view in a real window wants
+    /// a Metal layer and crashes. So `sizePushesForTesting` counts the pushes coalescing *allows*,
+    /// stopping short of the window, size and surface guards below it. Those are out of a unit
+    /// test's reach here, and this counter does not pretend to cover them.
+    private func hostedView() -> GhosttyHostView { GhosttyHostView() }
+
+    private func settleRunloop() {
+        let turned = expectation(description: "the queued push ran")
+        DispatchQueue.main.async { turned.fulfill() }
+        wait(for: [turned], timeout: 1)
+    }
+
+    func test_aBurstOfFramesInOnePassLandsAsOneGrid() {
+        let view = hostedView()
+
+        for width in stride(from: 800, through: 100, by: -50) {
+            view.setFrameSize(NSSize(width: CGFloat(width), height: 400))
+        }
+
+        XCTAssertEqual(view.sizePushesForTesting, 0, "nothing goes down from inside the pass")
+
+        settleRunloop()
+
+        XCTAssertEqual(view.sizePushesForTesting, 1, "fifteen frames, one grid")
+        XCTAssertEqual(
+            view.lastPushedFrameForTesting, NSSize(width: 100, height: 400),
+            "and it is the frame the pass settled on, not one it passed through")
+    }
+
+    /// A later pass is a later turn, so it gets its own push. Coalescing that would freeze the grid
+    /// at whatever the first pass produced, which is a different bug wearing this fix's clothes.
+    func test_aLaterPassPushesAgain() {
+        let view = hostedView()
+
+        view.setFrameSize(NSSize(width: 800, height: 400))
+        settleRunloop()
+        view.setFrameSize(NSSize(width: 600, height: 400))
+        settleRunloop()
+
+        XCTAssertEqual(view.sizePushesForTesting, 2)
+    }
+
+    /// The drawer slide and the split-in lay out at the geometry the animation lands on and freeze
+    /// in the same turn, so that layout's push has to land *before* the freeze. Dropped instead, the
+    /// terminals hold their pre-animation grid for the whole slide and reflow after it — the jank
+    /// both callers were written to avoid.
+    func test_aHoldFlushesTheQueuedPushRatherThanDroppingIt() {
+        let view = hostedView()
+
+        view.setFrameSize(NSSize(width: 800, height: 400))
+        view.setSizeSyncSuspended(true)
+
+        XCTAssertEqual(view.sizePushesForTesting, 1, "the final geometry landed before the freeze")
+
+        settleRunloop()
+
+        XCTAssertEqual(view.sizePushesForTesting, 1, "and the turn does not push it a second time")
+    }
+
+    /// Frames that arrive while frozen are what the freeze is for, and must not queue up behind it.
+    func test_framesDuringAHoldPushNothing() {
+        let view = hostedView()
+        view.setSizeSyncSuspended(true)
+
+        view.setFrameSize(NSSize(width: 400, height: 400))
+        settleRunloop()
+
+        XCTAssertEqual(view.sizePushesForTesting, 0, "the grid is frozen for the animation's length")
+    }
+}

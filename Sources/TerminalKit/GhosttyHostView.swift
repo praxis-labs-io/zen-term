@@ -67,6 +67,9 @@ final class GhosttyHostView: NSView {
     /// mid-animation never took the hold, and leaving it unfrozen is the safe direction.
     func setSizeSyncSuspended(_ suspended: Bool) {
         if suspended {
+            // The callers lay out at the geometry the animation lands on and freeze in the same
+            // turn, so a push that layout queued has to land before the freeze, not be dropped by it.
+            flushPendingSizePush()
             sizeSyncHolds += 1
             return
         }
@@ -75,20 +78,64 @@ final class GhosttyHostView: NSView {
         if sizeSyncHolds == 0 { syncSizeAndScale() }
     }
 
-    /// Push the current backing size and content scale into libghostty. Called on every
-    /// geometry or backing-store change; libghostty tolerates a zero size until the first
-    /// real layout.
+    /// Push the content scale now and queue the grid for the end of the turn. Called on every
+    /// geometry or backing-store change.
     func syncSizeAndScale() {
-        guard let surfacePtr else { return }
-        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
-        ghostty_surface_set_content_scale(surfacePtr, scale, scale)
-        // The scale above still tracks (a display change mid-animation is not a reflow), but the
-        // grid is frozen for the length of the chrome's animation — see `isSizeSyncSuspended`.
+        if let surfacePtr {
+            let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+            ghostty_surface_set_content_scale(surfacePtr, scale, scale)
+        }
+        // The scale still tracks while frozen (a display change mid-animation is not a reflow).
         guard !isSizeSyncSuspended else { return }
+        scheduleSizePush()
+    }
+
+    /// Whether a size push is already queued for the end of this runloop turn.
+    private var hasPendingSizePush = false
+
+    /// Test hook: grids actually pushed. Counts the coalesced pushes rather than the C calls, so a
+    /// test can prove a burst of frames lands as one without standing up a real surface.
+    private(set) var sizePushesForTesting = 0
+
+    /// Test hook: the frame the last push read, so a test can prove it carried the size the pass
+    /// settled on rather than one it went through. Points, since the C call is out of reach here.
+    private(set) var lastPushedFrameForTesting: NSSize?
+
+    /// Queue the grid rather than pushing it from inside the layout pass, so only the frame the
+    /// pass settles on lands. Ghostty's own view says the same: push the size you are going for.
+    private func scheduleSizePush() {
+        guard !hasPendingSizePush else { return }
+        hasPendingSizePush = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.hasPendingSizePush else { return }
+            self.hasPendingSizePush = false
+            self.pushSize()
+        }
+    }
+
+    /// Run a queued push now. Nothing to do when the turn already ran it.
+    private func flushPendingSizePush() {
+        guard hasPendingSizePush else { return }
+        hasPendingSizePush = false
+        pushSize()
+    }
+
+    /// A narrow intermediate frame rewraps the whole scrollback into a column or two, and
+    /// libghostty evicts by bytes, so widening back cannot bring the dropped history home.
+    private func pushSize() {
+        // Re-checked here rather than only when queued: a hold taken in between flushes this push
+        // ahead of itself, and anything still frozen at the turn's end has nothing to say yet.
+        guard !isSizeSyncSuspended else { return }
+        // Detached from its window, `convertToBacking` is the identity, so the push would land at
+        // half size on Retina. `viewDidMoveToWindow` re-syncs, so skipping loses nothing.
+        sizePushesForTesting += 1
+        lastPushedFrameForTesting = bounds.size
+        guard window != nil else { return }
         // Skip zero sizes: the view has no bounds until the chrome lays it out, and
         // pushing 0×0 would collapse libghostty's sensible default grid to nothing.
         let backing = convertToBacking(bounds).size
         guard backing.width >= 1, backing.height >= 1 else { return }
+        guard let surfacePtr else { return }
         ghostty_surface_set_size(surfacePtr, UInt32(backing.width), UInt32(backing.height))
         owner?.reportGridIfChanged()
     }
