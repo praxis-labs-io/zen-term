@@ -27,14 +27,11 @@ enum ScrollKeymap {
         case searchWordUnderCursor
         /// `yy`: copy whole rows without opening a selection first.
         case yankRow(times: Int)
-        /// `zz`/`zt`/`zb`: move the viewport so the cursor's row sits here.
-        case placeCursorLine(ViewportPlace)
         /// `f`/`F`/`t`/`T`: find a character along this row.
         case find(Find, times: Int)
         /// `;` and `,`: run the last find again, forward or the other way.
         case repeatFind(reversed: Bool, times: Int)
-        /// First key of a two-key command: `z`, or a `y` with no selection to take.
-        case pendingPlace
+        /// First key of `yy`, when there is no selection for a bare `y` to take.
         case pendingYank
         /// `f`/`F`/`t`/`T` before its character has been typed.
         case pendingFind(Find.Target)
@@ -91,8 +88,6 @@ enum ScrollKeymap {
     struct Pending: Equatable {
         /// Whether a `g` is armed, so a second one tops out.
         var afterG = false
-        /// Whether a `z` is armed and the next key names where to put the cursor's row.
-        var afterZ = false
         /// Whether a `y` is armed and a second one takes the row.
         var afterY = false
         /// An `f`/`F`/`t`/`T` waiting for the character to find.
@@ -158,10 +153,6 @@ enum ScrollKeymap {
         }
         let shift = held.contains(.shift)
         switch (event.charactersIgnoringModifiers?.lowercased() ?? "", shift) {
-        // `z`'s second key first: `t` and `b` are a find and a word motion on their own.
-        case ("z", false) where pending.afterZ: return .run(.placeCursorLine(.middle))
-        case ("t", false) where pending.afterZ: return .run(.placeCursorLine(.top))
-        case ("b", false) where pending.afterZ: return .run(.placeCursorLine(.bottom))
         case ("j", false), (downArrow, false): return .run(.step(times))
         case ("k", false), (upArrow, false): return .run(.step(-times))
         case ("h", false), (leftArrow, false): return .run(.column(-times))
@@ -196,7 +187,6 @@ enum ScrollKeymap {
         case ("t", true): return .run(.pendingFind(.init(direction: .backward, till: true)))
         case (";", false): return .run(.repeatFind(reversed: false, times: times))
         case (",", false): return .run(.repeatFind(reversed: true, times: times))
-        case ("z", false): return .run(.pendingPlace)
         case ("q", false), ("i", false): return .run(.exit)
         default: return nil
         }

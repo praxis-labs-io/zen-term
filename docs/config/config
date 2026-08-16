@@ -462,10 +462,13 @@
 #   w / b / e        move by word                  gg / G     top / bottom
 #   W / B / E        move by WORD                  H / M / L  top / middle / last row
 #   f / F / t / T    find a character on the row   ; / ,      that find again, or back
-#   ctrl+d / ctrl+u  half a page                   zt/zz/zb   this row to top/middle/bottom
-#   ctrl+f / ctrl+b  a full page (space = ctrl+f)  v / V      select, by cell or row
-#   *                find this word in the buffer  y / yy     copy the selection, or rows
-#                                                  esc, q, i  leave
+#   ctrl+d / ctrl+u  half a page                   v / V      select, by cell or row
+#   ctrl+f / ctrl+b  a full page (space = ctrl+f)  y / yy     copy the selection, or rows
+#   *                find this word in the buffer  esc, q, i  leave
+#
+# A page moves the cursor, not just the view: it walks half a screen down the buffer
+# and the view follows, so the band sits in the middle while the text runs past it.
+# At the end of the buffer the view stops and the band carries on to the last line.
 #
 # Every motion takes a count, so `12j` moves twelve rows and `3yy` copies three.
 # `0` is the start of the row on its own and a digit once you are typing a count,

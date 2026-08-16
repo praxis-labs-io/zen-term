@@ -300,16 +300,12 @@ final class ScrollModeController {
         switch command {
         case .pendingTop:
             pending = .init(afterG: true, count: carried)
-        case .pendingPlace:
-            pending = .init(afterZ: true, count: carried)
         case .pendingYank:
             pending = .init(afterY: true, count: carried)
         case .pendingFind(let target):
             pending = .init(awaitingFind: target, count: carried)
         case .yankRow(let times):
             yankRows(times)
-        case .placeCursorLine(let place):
-            placeCursorLine(place)
         case .find(let find, let times):
             lastFind = find
             runFind(find, times: times, isRepeat: false)
@@ -605,26 +601,6 @@ final class ScrollModeController {
         yankPasteboard.clearContents()
         yankPasteboard.setString(text, forType: .string)
         flash(range)
-    }
-
-    /// `zz`/`zt`/`zb`: move the viewport so the row the band is on ends up here.
-    ///
-    /// The line is what is being moved, so it is what the band is re-found by. A scroll the buffer
-    /// clamps at either end would otherwise leave the row index naming something else.
-    private func placeCursorLine(_ place: ScrollKeymap.ViewportPlace) {
-        let target: Int
-        switch place {
-        case .top: target = 0
-        case .middle: target = lastRow / 2
-        case .bottom: target = lastRow
-        }
-        let delta = cursor.row - target
-        guard delta != 0 else { return }
-        // The band follows the line by content, not by being put where the scroll was asked to land
-        // it: at either end that scroll is clamped and the line never arrives.
-        let line = rowText(cursor.row)  // read here; a page move clears `cursorLine` on purpose
-        pendingAnchor = Self.isBlank(line) ? nil : (line: line, armedAt: now())
-        surface?.scroll(.lines(delta))
     }
 
     /// The last `f`/`F`/`t`/`T`, so `;` and `,` have something to run again.

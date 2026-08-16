@@ -23,11 +23,11 @@ final class ScrollModeKeyTests: XCTestCase {
     /// The command a keystroke runs, or nil for a key the mode does not map. A digit is not a
     /// command, so it reads as nil here; `count(_:)` below is what asserts on those.
     private func decode(
-        _ event: NSEvent, afterG: Bool = false, afterZ: Bool = false, afterY: Bool = false,
+        _ event: NSEvent, afterG: Bool = false, afterY: Bool = false,
         awaitingFind: ScrollKeymap.Find.Target? = nil, count: Int? = nil, hasSelection: Bool = false
     ) -> ScrollKeymap.Command? {
         let pending = ScrollKeymap.Pending(
-            afterG: afterG, afterZ: afterZ, afterY: afterY, awaitingFind: awaitingFind, count: count)
+            afterG: afterG, afterY: afterY, awaitingFind: awaitingFind, count: count)
         guard
             case .run(let command) =
                 ScrollKeymap.key(for: event, pending: pending, hasSelection: hasSelection)
@@ -198,15 +198,6 @@ final class ScrollModeKeyTests: XCTestCase {
     }
 
     // MARK: the two-key commands
-
-    func test_zPlacesTheCursorLineAndShadowsTheKeysItsSecondHalfUses() throws {
-        // `t` is a find and `b` a word motion on their own, so `z`'s second key has to be read
-        // before either of them.
-        XCTAssertEqual(decode(try keyDown("z")), .pendingPlace)
-        XCTAssertEqual(decode(try keyDown("z"), afterZ: true), .placeCursorLine(.middle))
-        XCTAssertEqual(decode(try keyDown("t"), afterZ: true), .placeCursorLine(.top))
-        XCTAssertEqual(decode(try keyDown("b"), afterZ: true), .placeCursorLine(.bottom))
-    }
 
     func test_ftArmAFindAndTheNextKeyIsItsCharacter() throws {
         XCTAssertEqual(

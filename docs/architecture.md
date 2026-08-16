@@ -1117,9 +1117,8 @@ reads shiftedness from the modifier flags rather than character case for the sam
 Lock reason. j/k step the cursor, h/l move a column, w/b/e and W/B/E move by word and
 WORD, 0/^/$ reach the ends of a row, H/M/L name a row by where it sits, f/F/t/T find a
 character with ;/, repeating it, ⌃d/⌃u move a half page, ⌃f/⌃b and space a page, gg/G the
-ends, zt/zz/zb put the cursor's row at an edge or the middle, { and } move by paragraph,
-v/V select, y copies and yy takes rows, * searches the word under the band, and Esc/q/i
-leave. **Every key is consumed, mapped or not**: passing misses through would drop a stray
+ends, { and } move by paragraph, v/V select, y copies and yy takes rows, * searches the
+word under the band, and Esc/q/i leave. **Every key is consumed, mapped or not**: passing misses through would drop a stray
 keystroke into the shell behind the mode, which is worse than one that does nothing.
 
 **Counts and two-key commands come in as `Pending`, not off the controller**, so the
@@ -1140,12 +1139,17 @@ number names a scrollback line for `30G` to reach. `H`/`M`/`L` reckon from the l
 **written** row instead of the grid's bottom, which on a half-filled screen is empty space
 below the prompt.
 
-`zt`/`zz`/`zb` reckon the other way, from the **viewport**, since that is what they move
-the line into. They also do not move the band themselves: they arm the re-anchor and let
-the scroll report put it back on its line. A terminal cannot scroll past the end of its
-buffer the way vim scrolls past the end of a file, so at the bottom `zt` asks and gets
-nothing, and a band moved to where the line was meant to land would name a row it is not
-on.
+**A page move advances the cursor and the viewport follows.** `⌃d` moves the band half a
+screen through the buffer; the viewport takes as much of that as it can, so the band parks
+at the middle of the screen while the text runs under it; and where the viewport cannot
+take it all, the cursor makes the rest of the trip. That last clause is the only way to
+reach the last half page of a buffer by paging, since a page that only moved the viewport
+stopped dead at the end with the band still mid-screen.
+
+The distance is worked out here and sent as **rows**, not as a fraction, so the mode knows
+where the band lands rather than finding out from the next report. `linesBelow` and
+`offset` say how far the buffer can still go, which is what makes the split between the
+two exact.
 
 **The cursor is the chrome's, drawn on the pane.** libghostty has no copy mode and no
 cursor outside the shell's own, so `ScrollCursorView` paints the band on the current row,
