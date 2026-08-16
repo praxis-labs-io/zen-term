@@ -14,6 +14,14 @@ final class SurfaceTeardownLeakTests: XCTestCase {
             "needs a window server and real shells — skipped on CI")
     }
 
+    /// A locked or sleeping screen takes the window server away, and `ghostty_surface_new` then
+    /// returns nil. Skipping says so; failing looks exactly like the teardown bug under test.
+    private func skipUnlessStarted(_ what: String, _ surfaces: GhosttySurface...) throws {
+        try XCTSkipIf(
+            surfaces.contains { $0.surfacePtr == nil },
+            "\(what) did not start: no window server, which a locked or sleeping screen does")
+    }
+
     private func pump(_ seconds: TimeInterval) {
         RunLoop.current.run(until: Date().addingTimeInterval(seconds))
     }
@@ -157,19 +165,14 @@ final class SurfaceTeardownLeakTests: XCTestCase {
     private func assertNoLeak(
         script: String, marker: String, file: StaticString = #filePath,
         line: UInt = #line
-    ) {
+    ) throws {
         let window = makeWindow()
         defer { window.close() }
 
         let surface = startSurface(script: script, in: window)
-        // Returns rather than asserting and falling through. `XCTAssertNotNil` is not fatal and
-        // nothing here sets `continueAfterFailure = false`, so without this a surface that never
-        // came up still waited out the full marker ceiling and then reported a second failure
-        // about the shell, blaming the half that never got a chance to run.
-        guard surface.surfacePtr != nil else {
-            XCTFail("surface failed to start", file: file, line: line)
-            return
-        }
+        // Throws rather than asserting and falling through: a surface that never came up would
+        // otherwise wait out the whole marker ceiling and then blame the shell half for it.
+        try skipUnlessStarted("the surface", surface)
 
         // So this is reachable only with a live surface, and a failure here is the shell half.
         let spawned = waitForPids(matching: marker)
@@ -210,12 +213,7 @@ final class SurfaceTeardownLeakTests: XCTestCase {
         // bail-outs below: returning early without it would leave real shells running, which is
         // the leak this suite is here to catch.
         defer { [first, second].forEach { $0.terminate() } }
-        guard first.surfacePtr != nil, second.surfacePtr != nil else {
-            XCTFail(
-                "surface failed to start (first: \(first.surfacePtr != nil), "
-                    + "second: \(second.surfacePtr != nil))")
-            return
-        }
+        try skipUnlessStarted("both surfaces", first, second)
 
         let firstWorker = waitForPids(matching: "^/bin/sleep 945$")
         defer { firstWorker.forEach { kill($0, SIGKILL) } }
@@ -258,14 +256,14 @@ final class SurfaceTeardownLeakTests: XCTestCase {
     func test_backgroundJobDoesNotSurviveTeardown() throws {
         try skipOnCI()
         _ = NSApplication.shared
-        assertNoLeak(script: "/bin/sleep 941 & /bin/sleep 999", marker: "^/bin/sleep 941$")
+        try assertNoLeak(script: "/bin/sleep 941 & /bin/sleep 999", marker: "^/bin/sleep 941$")
     }
 
     func test_childInItsOwnProcessGroupDoesNotSurviveTeardown() throws {
         try skipOnCI()
         _ = NSApplication.shared
         // The dev-server shape: a foreground job that puts its real worker in a new group.
-        assertNoLeak(
+        try assertNoLeak(
             script: "/usr/bin/perl -e 'if (fork==0) { setpgrp(0,0); exec \"/bin/sleep 942\" } sleep 999'",
             marker: "^/bin/sleep 942$")
     }
@@ -290,12 +288,7 @@ final class SurfaceTeardownLeakTests: XCTestCase {
         let closing = startSurface(script: "/bin/sleep 944 & /bin/sleep 999", in: window)
         // Idempotent; see the same defer in `test_staggeredTeardownsBothGetSwept`.
         defer { [staying, closing].forEach { $0.terminate() } }
-        guard staying.surfacePtr != nil, closing.surfacePtr != nil else {
-            XCTFail(
-                "surface failed to start (sibling: \(staying.surfacePtr != nil), "
-                    + "closing: \(closing.surfacePtr != nil))")
-            return
-        }
+        try skipUnlessStarted("the sibling and closing surfaces", staying, closing)
 
         let stayingWorker = waitForPids(matching: "^/bin/sleep 943$")
         defer { stayingWorker.forEach { kill($0, SIGKILL) } }
