@@ -354,13 +354,10 @@ final class ScrollModeController {
             // The moves that name a destination put the cursor ON it instead, because landing the
             // thing you asked for somewhere in view and leaving the cursor elsewhere makes the
             // cursor a decoration.
+            if case .pageFraction(let fraction) = move { return page(fraction) }
             switch move {
             case .top: cursor = ScrollCell(row: 0, column: cursor.column)
             case .bottom: cursor = ScrollCell(row: lastRow, column: cursor.column)
-            case .pageFraction(let fraction) where isPinned(scrollingDown: fraction > 0):
-                // The buffer has nowhere left to go, so the page carries the cursor instead. Vim
-                // does the same, and without it `⌃u` at the top can never reach the first line.
-                return carryCursorToEdge(scrollingDown: fraction > 0)
             default: break
             }
             surface?.scroll(move)
@@ -444,7 +441,7 @@ final class ScrollModeController {
     /// The row `H`, `M` or `L` names. Reckoned from the last **written** row rather than the grid's
     /// bottom, which on a half-filled screen is empty space below everything there is to read.
     private func viewportRow(_ place: ScrollKeymap.ViewportPlace, offset: Int) -> Int {
-        let bottom = surface.map { Self.entryRow(of: $0) } ?? 0
+        let bottom = lastWrittenRow
         switch place {
         case .top: return min(offset, bottom)
         case .middle: return bottom / 2
@@ -563,18 +560,35 @@ final class ScrollModeController {
         flash(range)
     }
 
-    /// Whether the buffer is already resting against the end a page move is headed for. Nil
-    /// position means nothing has been reported yet, so assume there is room.
-    private func isPinned(scrollingDown: Bool) -> Bool {
-        guard let position = lastPosition else { return false }
-        return scrollingDown ? position.linesBelow == 0 : position.offset == 0
-    }
+    /// The last row with anything written on it. Below it is empty space, and no move should land
+    /// the band out there.
+    private var lastWrittenRow: Int { surface.map { Self.entryRow(of: $0) } ?? 0 }
 
-    /// Put the cursor on the row the page move could not reach by scrolling. The bottom is the last
-    /// **written** row: below it is empty space, and no page move should land the band out there.
-    private func carryCursorToEdge(scrollingDown: Bool) -> Bool {
-        let row = scrollingDown ? surface.map { Self.entryRow(of: $0) } ?? 0 : 0
-        move(to: ScrollCell(row: row, column: cursor.column))
+    /// A page move: the cursor advances by the fraction, and the viewport takes as much of that as
+    /// it can, so the band parks at the middle of the screen while the buffer runs under it.
+    ///
+    /// Against either end the viewport takes nothing and the cursor makes the rest of the trip.
+    /// Without that the last half page cannot be reached by paging at all.
+    @discardableResult
+    private func page(_ fraction: Double) -> Bool {
+        let rows = max(surface?.cellMetrics?.rows ?? 1, 1)
+        let advance = Int((fraction * Double(rows)).rounded(.towardZero))
+        guard advance != 0 else { return true }
+        let down = advance > 0
+        let want = cursor.row + advance
+        // How far the buffer can still go this way. Unknown before the first report, where
+        // assuming room is the better guess: the backend clamps what it cannot do.
+        let room = (down ? lastPosition?.linesBelow : lastPosition?.offset) ?? .max
+        let ideal = want - lastRow / 2
+        let taken = down ? min(max(ideal, 0), room) : max(min(ideal, 0), -room)
+        if taken != 0 { surface?.scroll(.lines(taken)) }
+        let landed = down ? min(want - taken, lastWrittenRow) : want - taken
+        cursor = ScrollCell(row: min(max(landed, 0), lastRow), column: cursor.column)
+        // The buffer moved under the band, so the line it names is about to change with nothing to
+        // announce it, and the read below still describes the old screen.
+        cursorLine = nil
+        refreshCursor(remembersLine: false)
+        invalidateRows()  // after the read, never before: see the named scrolls above
         return true
     }
 

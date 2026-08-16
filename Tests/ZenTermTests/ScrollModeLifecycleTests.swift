@@ -188,7 +188,8 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertTrue(handler(try keyDown("u", flags: .control)))
         XCTAssertTrue(handler(try keyDown("G", unshifted: "g", flags: .shift)))
 
-        XCTAssertEqual(surface.scrolls, [.pageFraction(0.5), .pageFraction(-0.5), .bottom])
+        // Rows, not a fraction: the mode works out the distance so it knows where the band lands.
+        XCTAssertEqual(surface.scrolls, [.lines(12), .lines(-12), .bottom])
     }
 
     // MARK: the motions counts came with
@@ -568,7 +569,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertTrue(handler(try keyDown("3")))
         XCTAssertTrue(handler(try keyDown("d", flags: .control)))
 
-        XCTAssertEqual(surface.scrolls, [.pageFraction(1.5)], "three half pages in one scroll")
+        XCTAssertEqual(surface.scrolls, [.lines(36)], "three half pages of a 24 row grid")
     }
 
     func test_aCountIsSpentByTheMotionItPrefixes() throws {
@@ -752,20 +753,38 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertFalse(ScrollModeController.isBlank(" x "))
     }
 
-    func test_aPageMoveLeavesTheCursorWhereItIsOnScreen() throws {
-        // A page move carries the cursor with the viewport, so your place on screen is kept.
+    /// A page move advances the cursor, and the viewport takes as much of that as it can so the
+    /// band parks at the middle of the screen. The first press has nowhere to park from, so it
+    /// walks the cursor down to the middle without moving the buffer at all.
+    func test_aPageMoveWalksToTheMiddleBeforeItMovesTheBuffer() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
+        hosts.append(host)
         controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        // An odd grid, so half a page and the middle row are the same number and the first press
+        // needs no scroll at all.
+        surface.cellMetrics = TerminalCellMetrics(
+            columns: 80, rows: 25, cellWidth: 8, cellHeight: 16, gridInset: 2)
+        surface.rows = (0..<25).map { "line \($0)" }  // a full screen, so the middle is reachable
         controller.handle(.toggleScrollMode)
         let handler = try XCTUnwrap(host.modeHandler)
+        XCTAssertTrue(handler(try keyDown("g")))
+        XCTAssertTrue(handler(try keyDown("g")))
+        let afterGG = surface.scrolls.count
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 200, offset: 20, viewport: 25))
 
-        for _ in 0..<5 { XCTAssertTrue(handler(try keyDown("k"))) }
-        XCTAssertEqual(controller.scrollMode.cursorRow, 6)
+        XCTAssertTrue(handler(try keyDown("d", flags: .control)))
 
-        XCTAssertTrue(handler(try keyDown("u", flags: .control)))
+        XCTAssertEqual(surface.scrolls.count, afterGG, "the band had room to walk into")
+        XCTAssertEqual(controller.scrollMode.cursorRow, 12, "the middle of a 25 row grid")
 
-        XCTAssertEqual(controller.scrollMode.cursorRow, 6)
+        XCTAssertTrue(handler(try keyDown("d", flags: .control)))
+
+        XCTAssertEqual(surface.scrolls.last, .lines(12), "now the buffer moves instead")
+        XCTAssertEqual(controller.scrollMode.cursorRow, 12, "and the band is parked")
     }
 
     func test_theCursorIsClampedToAShrunkenGrid() throws {
@@ -1448,8 +1467,10 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         surface.delegate?.surfaceGridDidReflow(surface)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
+        XCTAssertNotEqual(
+            controller.scrollMode.cursorRow, 8, "row 8 holds the line the reader paged away from")
         XCTAssertEqual(
-            controller.scrollMode.cursorRow, 2, "the band stays; that line is not the one it is on")
+            controller.scrollMode.cursorRow, 11, "the band stays where the page put it")
     }
 
     func test_aShrinkThatCutsTheCursorsRowStillFindsTheLine() throws {
