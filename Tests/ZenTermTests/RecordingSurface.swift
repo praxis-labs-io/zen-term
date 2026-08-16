@@ -4,7 +4,18 @@ import TerminalKit
 /// A seam-conforming fake for tests that need a `TerminalSurface` without a real
 /// backend, recording the config it was started with and whether it was terminated.
 final class RecordingSurface: NSObject, TerminalSurface {
-    let view = NSView()
+    /// Reports its own resizes, the way `GhosttyHostView` does: the real backend pushes the new
+    /// size from `setFrameSize` and the grid reflows inside that call, before it returns.
+    final class ResizingView: NSView {
+        var onResize: (() -> Void)?
+        override func setFrameSize(_ newSize: NSSize) {
+            super.setFrameSize(newSize)
+            onResize?()
+        }
+    }
+
+    let resizingView = ResizingView()
+    var view: NSView { resizingView }
     weak var delegate: TerminalSurfaceDelegate?
     var title = ""
     /// Driven by `focus()`, so a test can assert who the chrome actually handed focus to (matching
@@ -123,6 +134,10 @@ final class RecordingSurface: NSObject, TerminalSurface {
     /// one-row grid and every step scrolls, which passes while proving nothing.
     var cellMetrics: TerminalCellMetrics? = TerminalCellMetrics(
         columns: 80, rows: 24, cellWidth: 8, cellHeight: 16, gridInset: 2)
+
+    /// Overrides the protocol extension's nil default so a test can stand a surface up with the
+    /// backend's own selection already made, which is what scroll mode opens onto.
+    var selectionOrigin: TerminalViewportCell?
 
     /// The screen this surface claims to show, one entry per viewport row. Defaults to two
     /// command blocks separated by a blank row, which is what paragraph motion moves between.

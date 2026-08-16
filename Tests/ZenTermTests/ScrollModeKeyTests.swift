@@ -20,8 +20,28 @@ final class ScrollModeKeyTests: XCTestCase {
                 charactersIgnoringModifiers: unshifted ?? characters, isARepeat: false, keyCode: keyCode))
     }
 
-    private func decode(_ event: NSEvent, afterG: Bool = false) -> ScrollModeController.Command? {
-        ScrollModeController.command(for: event, afterG: afterG)
+    /// The command a keystroke runs, or nil for a key the mode does not map. A digit is not a
+    /// command, so it reads as nil here; `count(_:)` below is what asserts on those.
+    private func decode(
+        _ event: NSEvent, afterG: Bool = false, afterY: Bool = false,
+        awaitingFind: ScrollKeymap.Find.Target? = nil, count: Int? = nil, hasSelection: Bool = false
+    ) -> ScrollKeymap.Command? {
+        let pending = ScrollKeymap.Pending(
+            afterG: afterG, afterY: afterY, awaitingFind: awaitingFind, count: count)
+        guard
+            case .run(let command) =
+                ScrollKeymap.key(for: event, pending: pending, hasSelection: hasSelection)
+        else { return nil }
+        return command
+    }
+
+    /// The digit a keystroke folds into the count, or nil when it is not a digit.
+    private func count(_ event: NSEvent, count: Int? = nil) -> Int? {
+        guard
+            case .count(let digit) =
+                ScrollKeymap.key(for: event, pending: .init(count: count))
+        else { return nil }
+        return digit
     }
 
     // MARK: the moves
@@ -52,8 +72,8 @@ final class ScrollModeKeyTests: XCTestCase {
     func test_bracesAreTheParagraphMotion() throws {
         // Vim's paragraph motion, and the same keys the diff viewer jumps changes with. Matched
         // on the typed character, so a layout that doesn't put braces on shift-bracket works.
-        XCTAssertEqual(decode(try keyDown("{", unshifted: "[", flags: .shift)), .paragraph(-1))
-        XCTAssertEqual(decode(try keyDown("}", unshifted: "]", flags: .shift)), .paragraph(1))
+        XCTAssertEqual(decode(try keyDown("{", unshifted: "[", flags: .shift)), .paragraph(-1, times: 1))
+        XCTAssertEqual(decode(try keyDown("}", unshifted: "]", flags: .shift)), .paragraph(1, times: 1))
     }
 
     func test_aShiftBracketThatReportsNoBraceIsNotAMotion() throws {
@@ -108,9 +128,45 @@ final class ScrollModeKeyTests: XCTestCase {
     }
 
     func test_wbeAreTheWordMotions() throws {
-        XCTAssertEqual(decode(try keyDown("w")), .word(.next))
-        XCTAssertEqual(decode(try keyDown("b")), .word(.back))
-        XCTAssertEqual(decode(try keyDown("e")), .word(.end))
+        XCTAssertEqual(decode(try keyDown("w")), .word(.next, wide: false, times: 1))
+        XCTAssertEqual(decode(try keyDown("b")), .word(.back, wide: false, times: 1))
+        XCTAssertEqual(decode(try keyDown("e")), .word(.end, wide: false, times: 1))
+    }
+
+    func test_shiftedWordMotionsAreWhitespaceDelimited() throws {
+        // Vim's WORD: `foo.bar` is one of them and three of the bare kind.
+        XCTAssertEqual(
+            decode(try keyDown("W", unshifted: "w", flags: .shift)),
+            .word(.next, wide: true, times: 1))
+        XCTAssertEqual(
+            decode(try keyDown("B", unshifted: "b", flags: .shift)),
+            .word(.back, wide: true, times: 1))
+        XCTAssertEqual(
+            decode(try keyDown("E", unshifted: "e", flags: .shift)),
+            .word(.end, wide: true, times: 1))
+    }
+
+    func test_hmlNameARowByWhereItSitsOnScreen() throws {
+        XCTAssertEqual(
+            decode(try keyDown("H", unshifted: "h", flags: .shift)),
+            .viewportRow(.top, offset: 0))
+        XCTAssertEqual(
+            decode(try keyDown("M", unshifted: "m", flags: .shift)),
+            .viewportRow(.middle, offset: 0))
+        XCTAssertEqual(
+            decode(try keyDown("L", unshifted: "l", flags: .shift)),
+            .viewportRow(.bottom, offset: 0))
+        XCTAssertEqual(
+            decode(try keyDown("H", unshifted: "h", flags: .shift), count: 3),
+            .viewportRow(.top, offset: 2), "`3H` is the third row down, so the count is an offset")
+    }
+
+    func test_caretAndStarAreTypedCharacters() throws {
+        // Both are shift-digit, so `charactersIgnoringModifiers` reports the digit and only the
+        // typed character names them. A layout that puts them elsewhere reports them here too.
+        XCTAssertEqual(decode(try keyDown("^", unshifted: "6", flags: .shift)), .firstNonBlank)
+        XCTAssertEqual(
+            decode(try keyDown("*", unshifted: "8", flags: .shift)), .searchWordUnderCursor)
     }
 
     func test_controlBStillPagesUpRatherThanMovingAWord() throws {
@@ -132,8 +188,52 @@ final class ScrollModeKeyTests: XCTestCase {
         XCTAssertEqual(decode(try keyDown("V", unshifted: "v", flags: .shift)), .visual(.line))
     }
 
-    func test_yYanks() throws {
-        XCTAssertEqual(decode(try keyDown("y")), .yank)
+    func test_yTakesASelectionAndOtherwiseWaitsForASecondY() throws {
+        // Vim's rule: `y` in visual mode takes what is selected, and in normal mode it is the
+        // first half of `yy`.
+        XCTAssertEqual(decode(try keyDown("y"), hasSelection: true), .yank)
+        XCTAssertEqual(decode(try keyDown("y")), .pendingYank)
+        XCTAssertEqual(decode(try keyDown("y"), afterY: true), .yankRow(times: 1))
+        XCTAssertEqual(decode(try keyDown("y"), afterY: true, count: 3), .yankRow(times: 3))
+    }
+
+    // MARK: the two-key commands
+
+    func test_ftArmAFindAndTheNextKeyIsItsCharacter() throws {
+        XCTAssertEqual(
+            decode(try keyDown("f")), .pendingFind(.init(direction: .forward, till: false)))
+        XCTAssertEqual(
+            decode(try keyDown("F", unshifted: "f", flags: .shift)),
+            .pendingFind(.init(direction: .backward, till: false)))
+        XCTAssertEqual(
+            decode(try keyDown("t")), .pendingFind(.init(direction: .forward, till: true)))
+        XCTAssertEqual(
+            decode(try keyDown("T", unshifted: "t", flags: .shift)),
+            .pendingFind(.init(direction: .backward, till: true)))
+    }
+
+    func test_theCharacterAfterAFindIsTakenWholeSale() throws {
+        // Whatever comes next is the target, `j` and `0` included, or `fj` would step a row.
+        let forward = ScrollKeymap.Find.Target(direction: .forward, till: false)
+        XCTAssertEqual(
+            decode(try keyDown("j"), awaitingFind: forward),
+            .find(.init(direction: .forward, till: false, character: "j"), times: 1))
+        XCTAssertEqual(
+            decode(try keyDown("0"), awaitingFind: forward),
+            .find(.init(direction: .forward, till: false, character: "0"), times: 1))
+    }
+
+    func test_escapeWaitingOnAFindCancelsTheFindRatherThanTheMode() throws {
+        let forward = ScrollKeymap.Find.Target(direction: .forward, till: false)
+        XCTAssertEqual(decode(try keyDown("\u{1b}", keyCode: 53)), .cancel)
+        XCTAssertNil(
+            decode(try keyDown("\u{1b}", keyCode: 53), awaitingFind: forward),
+            "unmapped, so the caller drops what was armed and does nothing else")
+    }
+
+    func test_semicolonAndCommaRepeatTheLastFind() throws {
+        XCTAssertEqual(decode(try keyDown(";")), .repeatFind(reversed: false, times: 1))
+        XCTAssertEqual(decode(try keyDown(",")), .repeatFind(reversed: true, times: 1))
     }
 
     // MARK: leaving
@@ -157,7 +257,37 @@ final class ScrollModeKeyTests: XCTestCase {
 
     func test_unmappedKeysDecodeToNothing() throws {
         XCTAssertNil(decode(try keyDown("x")))
-        XCTAssertNil(decode(try keyDown("5")))
+    }
+
+    // MARK: counts
+
+    func test_digitsFoldIntoTheCountRatherThanRunning() throws {
+        XCTAssertEqual(count(try keyDown("5")), 5)
+        XCTAssertNil(decode(try keyDown("5")), "a digit is not a move")
+        XCTAssertEqual(count(try keyDown("2"), count: 1), 2, "the caller folds it into 12")
+    }
+
+    func test_aCountMultipliesTheMotionItPrefixes() throws {
+        XCTAssertEqual(decode(try keyDown("j"), count: 12), .step(12))
+        XCTAssertEqual(decode(try keyDown("k"), count: 3), .step(-3))
+        XCTAssertEqual(decode(try keyDown("l"), count: 4), .column(4))
+        XCTAssertEqual(decode(try keyDown("w"), count: 3), .word(.next, wide: false, times: 3))
+        XCTAssertEqual(
+            decode(try keyDown("}", unshifted: "]", flags: .shift), count: 2),
+            .paragraph(1, times: 2), "the count repeats the motion; it never becomes the stride")
+    }
+
+    func test_aCountScalesThePageRatherThanRepeatingIt() throws {
+        // libghostty takes the fraction as a float, so one scroll does the work of three.
+        XCTAssertEqual(
+            decode(try keyDown("d", flags: .control), count: 3), .scroll(.pageFraction(1.5)))
+    }
+
+    func test_zeroIsTheLineStartUntilACountIsBeingTyped() throws {
+        // Vim's own rule. Without it `10j` is a jump to column 0 followed by a single step.
+        XCTAssertEqual(decode(try keyDown("0")), .lineStart)
+        XCTAssertEqual(count(try keyDown("0"), count: 1), 0, "the second key of `10`")
+        XCTAssertNil(decode(try keyDown("0"), count: 1), "and it runs nothing")
     }
 }
 

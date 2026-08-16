@@ -594,6 +594,27 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         return String(cString: ptr)
     }
 
+    /// libghostty reports the selection's start in view points, padding in and content scale out.
+    /// The y is the text **baseline**, not the cell's top, so it floors onto the right row for any
+    /// font whose baseline sits inside the cell (`Surface.zig`'s `y + height - cell_baseline`).
+    public var selectionOrigin: TerminalViewportCell? {
+        guard let surfacePtr, ghostty_surface_has_selection(surfacePtr) else { return nil }
+        guard let metrics = cellMetrics, metrics.cellWidth > 0, metrics.cellHeight > 0 else {
+            return nil
+        }
+        var text = ghostty_text_s()
+        guard ghostty_surface_read_selection(surfacePtr, &text) else { return nil }
+        defer { ghostty_surface_free_text(surfacePtr, &text) }
+        // A selection scrolled clean out of the viewport reports -1, -1 rather than a point
+        // (`readTextLocked`). Clamped it would read as cell 0,0 and open the mode at the top left.
+        guard text.tl_px_x >= 0, text.tl_px_y >= 0 else { return nil }
+        let x = (CGFloat(text.tl_px_x) - metrics.gridInset) / metrics.cellWidth
+        let y = (CGFloat(text.tl_px_y) - metrics.gridInset) / metrics.cellHeight
+        return TerminalViewportCell(
+            row: min(max(Int(y.rounded(.down)), 0), max(metrics.rows - 1, 0)),
+            column: min(max(Int(x.rounded(.down)), 0), max(metrics.columns - 1, 0)))
+    }
+
     /// The grid's geometry, converted out of libghostty's backing pixels into points. A zero cell
     /// height means the surface has not been sized yet, and reporting it would put a zero-height
     /// band on the pane.

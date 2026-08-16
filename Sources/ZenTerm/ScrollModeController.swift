@@ -14,38 +14,13 @@ import TerminalKit
 /// is a trap.
 @MainActor
 final class ScrollModeController {
-    /// One move through the buffer, decoded from a keystroke. Separate from `TerminalScroll` so
-    /// the exits and the `g` prefix (neither of which is a scroll) live in the same decode.
-    enum Command: Equatable {
-        case scroll(TerminalScroll)
-        /// A one-line step, which moves the cursor rather than the viewport until the cursor is
-        /// pinned at an edge. Kept apart from `.scroll(.lines(±1))` because that distinction is
-        /// the whole difference between a cursor and a scrollbar.
-        case step(Int)
-        /// Vim's paragraph motion: move the cursor to the next blank row in this direction.
-        case paragraph(Int)
-        /// One cell left or right.
-        case column(Int)
-        case word(ScrollWordMotion.Motion)
-        case lineStart
-        case lineEnd
-        /// `v` or `V`: open a selection here, swap which kind it is, or close the one that is up.
-        case visual(ScrollSelection.Kind)
-        case yank
-        /// First `g` of `gg`. Arms the prefix; a second `g` tops out.
-        case pendingTop
-        /// Esc: hand back the selection if there is one, and leave the mode if there is not.
-        case cancel
-        /// `q` or `i`: leave outright, selection or no selection.
-        case exit
-    }
-
     /// Whether the mode is up. The single source of truth for both the key hook and the header.
     private(set) var isActive = false
 
     private weak var surface: (AnyObject & TerminalSurface)?
     private weak var panel: PanelHostView?
-    private var sawG = false
+    /// What earlier keystrokes left armed: the `g` prefix and the count being typed.
+    private var pending = ScrollKeymap.Pending()
 
     /// The cell the cursor sits on, 0,0 at the top left. Viewport-relative rather than absolute in
     /// the buffer, so it survives output arriving underneath without any bookkeeping: the row on
@@ -76,6 +51,10 @@ final class ScrollModeController {
     /// hook without this type reaching back into `KeyInterceptor`.
     var onActiveChanged: ((Bool) -> Void)?
 
+    /// `*` hands the word under the cursor to whoever owns the find bar. The mode knows nothing
+    /// about search, and the window wires the two together.
+    var onSearchWord: ((String) -> Void)?
+
     // MARK: lifecycle
 
     /// Enter the mode over `target`, or do nothing if it is already up over the same panel.
@@ -86,7 +65,7 @@ final class ScrollModeController {
         guard !isActive else { return }
         self.surface = surface
         self.panel = panel
-        sawG = false
+        pending = .init()
         selection = nil
         lastPosition = nil
         pendingAnchor = nil
@@ -95,20 +74,16 @@ final class ScrollModeController {
         isActive = true
         invalidateRows()
         Log.info("scroll mode entered", category: .panes)
-        // The header goes up FIRST, and the grid is measured only after it has. A pane's header is
-        // hidden until a mode shows it, and showing it moves the content's top constraint down by
-        // its height: the terminal loses a row or two and reflows. Reading the cursor row before
-        // that landed measured a grid that was about to change out from under it, which is what
-        // put the band a row off the prompt.
+        // Read BEFORE the header goes up, and remember the row by its text: the header SIGWINCHes
+        // the pty, and a shell redrawing its prompt blanks those rows for a frame.
+        cursor = Self.entryCell(of: surface)
+        let entryText = rowText(cursor.row)
+        cursorLine = Self.isBlank(entryText) ? nil : entryText
         updateHeader()
+        // The reflow reports from inside the surface's own `setFrameSize`, so `refreshGeometry` runs
+        // nested here and arms that line. The first scroll report after puts the band back on it.
         panel.layoutSubtreeIfNeeded()
-        cursor = ScrollCell(row: Self.entryRow(of: surface), column: 0)
-        // That layout reflowed the grid, and the surface reports a reflow from inside its own
-        // `setFrameSize` — so `reportReflow` already ran, nested in this call, and armed an anchor
-        // against whatever row the *last* session left the cursor on. The entry row above is the
-        // answer to where the band goes; drop the anchor before a later report can act on it.
-        pendingAnchor = nil
-        refreshCursor()
+        refreshCursor(remembersLine: false)
         onActiveChanged?(true)
     }
 
@@ -122,7 +97,7 @@ final class ScrollModeController {
         flashLevel = 0
         flashRange = nil
         isActive = false
-        sawG = false
+        pending = .init()
         selection = nil
         lastPosition = nil
         pendingAnchor = nil
@@ -136,11 +111,17 @@ final class ScrollModeController {
         onActiveChanged?(false)
     }
 
-    /// The row the mode opens on: the last row of the viewport with anything written on it.
-    ///
-    /// Read off the screen rather than the terminal's cursor, which reports against the *live*
-    /// screen with no account of scrolling, so a viewport already scrolled with the trackpad put
-    /// the band on an unrelated row. Falls back to the bottom row when nothing is readable.
+    /// Where the mode opens: on the backend's own selection if one is up, so a reader who selected
+    /// something and then reached for the keyboard keeps their place. Else `entryRow`, at column 0.
+    static func entryCell(of surface: TerminalSurface) -> ScrollCell {
+        if let origin = surface.selectionOrigin {
+            return ScrollCell(row: origin.row, column: origin.column)
+        }
+        return ScrollCell(row: entryRow(of: surface), column: 0)
+    }
+
+    /// Otherwise the last row with anything written on it, read off the screen rather than the
+    /// terminal's cursor: that reports against the *live* screen with no account of scrolling.
     static func entryRow(of surface: TerminalSurface) -> Int {
         let last = max((surface.cellMetrics?.rows ?? 1) - 1, 0)
         for row in stride(from: last, through: 0, by: -1)
@@ -211,7 +192,8 @@ final class ScrollModeController {
     /// Put the cursor back on the line it was reading, or leave it where it is when that line is no
     /// longer on screen. Exact match first, then the fragment pass below.
     private func reanchor(to line: String) {
-        guard let best = exactRow(of: line) ?? fragmentRow(of: line) else { return }
+        guard let best = exactRow(of: line) ?? fragmentRow(of: line) ?? containedRow(of: line)
+        else { return }
         move(to: ScrollCell(row: best, column: cursor.column))
     }
 
@@ -233,21 +215,28 @@ final class ScrollModeController {
         return nil
     }
 
-    /// The row holding what is left of `line` after a reflow that changed the column count.
-    ///
-    /// `text(viewportRow:)` reads one row's cells, so a rewrapped line comes back split and no row
-    /// carries the whole of what was remembered: narrowing leaves the row holding a prefix of it,
-    /// widening leaves a row that has it as a prefix. Either way one text starts with the other.
-    ///
-    /// Longest shared prefix wins rather than nearest, because every line on screen starts with the
-    /// same prompt. Nearest would hand the anchor to a bare `❯` a row away instead of the fragment
-    /// fifty characters deep into the line the reader was actually on.
+    /// The row holding what is left of `line` after a rewrap: narrowing leaves a row holding a
+    /// prefix of it, widening leaves a row that has it as a prefix.
     private func fragmentRow(of line: String) -> Int? {
+        bestRow(matching: line) { text, line in text.hasPrefix(line) || line.hasPrefix(text) }
+    }
+
+    /// The same for a cursor on a **continuation** row, which holds a suffix of its logical line,
+    /// so widening merges it back in and neither string starts with the other.
+    private func containedRow(of line: String) -> Int? {
+        // Last, and only where both passes above give up: containment matches far more loosely, and
+        // a wrong match moves the band where the stricter passes would have left it still.
+        bestRow(matching: line) { text, line in text.contains(line) || line.contains(text) }
+    }
+
+    /// The row overlapping `line` most, nearest to the cursor on a tie. Longest run rather than
+    /// nearest, or a bare `❯` a row away beats the fragment fifty characters into the real line.
+    private func bestRow(matching line: String, overlaps: (String, String) -> Bool) -> Int? {
         var best: (row: Int, shared: Int)?
         for row in 0...lastRow {
             let text = rowText(row)
-            guard text.hasPrefix(line) || line.hasPrefix(text) else { continue }
-            let shared = min(text.count, line.count)
+            guard overlaps(text, line) else { continue }
+            let shared = min(text.count, line.count)  // the shorter one is the part they share
             guard shared >= Self.minimumFragmentMatch else { continue }
             let isBetter =
                 best.map {
@@ -290,18 +279,39 @@ final class ScrollModeController {
     /// ⌘V and ⌘Q for as long as the mode is up.
     func handle(_ event: NSEvent) -> Bool {
         guard isActive else { return false }
-        guard let command = Self.command(for: event, afterG: sawG) else {
-            sawG = false
+        guard let key = ScrollKeymap.key(for: event, pending: pending, hasSelection: selection != nil)
+        else {
+            pending = .init()
             return event.modifierFlags.intersection([.command, .option]).isEmpty
         }
-        if command != .pendingTop { sawG = false }
+        // A digit joins the count and runs nothing, so everything armed stays armed.
+        guard case .run(let command) = key else {
+            if case .count(let digit) = key { pending.append(digit: digit) }
+            return true
+        }
+        // Running anything consumes what was armed, except that the arming keys below carry the
+        // count on: the `2` of `2yy` is typed before the first `y`.
+        let carried = pending.count
+        pending = .init()
         // The reader moved on their own, so a re-anchor still waiting on a report is moot. Left
         // armed it fires on whatever report comes next, minutes later, and drags the cursor off
         // the row they chose.
         pendingAnchor = nil
         switch command {
         case .pendingTop:
-            sawG = true
+            pending = .init(afterG: true, count: carried)
+        case .pendingYank:
+            pending = .init(afterY: true, count: carried)
+        case .pendingFind(let target):
+            pending = .init(awaitingFind: target, count: carried)
+        case .yankRow(let times):
+            yankRows(times)
+        case .find(let find, let times):
+            lastFind = find
+            runFind(find, times: times, isRepeat: false)
+        case .repeatFind(let reversed, let times):
+            guard let find = lastFind else { break }
+            runFind(reversed ? find.reversed : find, times: times, isRepeat: true)
         case .exit:
             end()
         case .cancel:
@@ -310,14 +320,31 @@ final class ScrollModeController {
             if selection != nil { closeSelection() } else { end() }
         case .step(let delta):
             step(delta)
-        case .paragraph(let delta):
-            move(
-                to: ScrollCell(
-                    row: paragraphRow(from: cursor.row, delta: delta), column: cursor.column))
+        case .paragraph(let delta, let times):
+            var row = cursor.row
+            for _ in 0..<times {
+                let next = paragraphRow(from: row, delta: delta)
+                if next == row { break }  // parked at an end; the rest of the count is spent
+                row = next
+            }
+            move(to: ScrollCell(row: row, column: cursor.column))
         case .column(let delta):
             move(to: ScrollCell(row: cursor.row, column: cursor.column + delta))
-        case .word(let motion):
-            move(to: motion.destination(from: cursor, on: screen()))
+        case .word(let motion, let wide, let times):
+            let screen = screen(wide: wide)
+            var destination = cursor
+            for _ in 0..<times {
+                let next = motion.destination(from: destination, on: screen)
+                if next == destination { break }  // parked at an end; a big count must not spin
+                destination = next
+            }
+            move(to: destination)
+        case .firstNonBlank:
+            move(to: ScrollCell(row: cursor.row, column: firstNonBlankColumn(of: cursor.row)))
+        case .viewportRow(let place, let offset):
+            move(to: ScrollCell(row: viewportRow(place, offset: offset), column: cursor.column))
+        case .searchWordUnderCursor:
+            if let word = wordUnderCursor() { onSearchWord?(word) }
         case .lineStart:
             move(to: ScrollCell(row: cursor.row, column: 0))
         case .lineEnd:
@@ -331,6 +358,7 @@ final class ScrollModeController {
             // The moves that name a destination put the cursor ON it instead, because landing the
             // thing you asked for somewhere in view and leaving the cursor elsewhere makes the
             // cursor a decoration.
+            if case .pageFraction(let fraction) = move { return page(fraction) }
             switch move {
             case .top: cursor = ScrollCell(row: 0, column: cursor.column)
             case .bottom: cursor = ScrollCell(row: lastRow, column: cursor.column)
@@ -356,15 +384,17 @@ final class ScrollModeController {
     /// This is what makes it a cursor. Scrolling on every `j` would move the whole screen to
     /// track a marker that never moved, which is a scrollbar with extra steps.
     private func step(_ delta: Int) {
-        let next = cursor.row + delta
-        if next >= 0 && next <= lastRow {
-            move(to: ScrollCell(row: next, column: cursor.column))
-        } else {
-            surface?.scroll(.lines(delta))  // pinned at an edge: the buffer moves under the cursor
-            cursorLine = nil  // same as the page moves: the line changes under a cursor that did not
-            refreshCursor(remembersLine: false)
-            invalidateRows()
-        }
+        let target = cursor.row + delta
+        let landed = min(max(target, 0), lastRow)
+        // The cursor takes what it can and the buffer takes the rest, so `12k` eleven rows from the
+        // top moves eleven and scrolls one rather than scrolling all twelve.
+        if landed != cursor.row { move(to: ScrollCell(row: landed, column: cursor.column)) }
+        let overshoot = target - landed
+        guard overshoot != 0 else { return }
+        surface?.scroll(.lines(overshoot))  // pinned at an edge: the buffer moves under the cursor
+        cursorLine = nil  // same as the page moves: the line changes under a cursor that did not
+        refreshCursor(remembersLine: false)
+        invalidateRows()
     }
 
     /// Put the cursor on `cell`, clamped into the grid and onto the row's text.
@@ -401,8 +431,39 @@ final class ScrollModeController {
 
     /// Reads through the same cache as everything else, so a `w` across the viewport costs no more
     /// locked reads than a `}` over it.
-    private func screen() -> ScrollWordMotion.Screen {
-        ScrollWordMotion.Screen(lastRow: lastRow) { [weak self] row in self?.rowText(row) ?? "" }
+    private func screen(wide: Bool = false) -> ScrollWordMotion.Screen {
+        ScrollWordMotion.Screen(lastRow: lastRow, wide: wide) { [weak self] row in
+            self?.rowText(row) ?? ""
+        }
+    }
+
+    /// The first cell on the row holding anything but whitespace, or zero on a blank row.
+    private func firstNonBlankColumn(of row: Int) -> Int {
+        Array(rowText(row)).firstIndex { !$0.isWhitespace } ?? 0
+    }
+
+    /// The row `H`, `M` or `L` names. Reckoned from the last **written** row rather than the grid's
+    /// bottom, which on a half-filled screen is empty space below everything there is to read.
+    private func viewportRow(_ place: ScrollKeymap.ViewportPlace, offset: Int) -> Int {
+        let bottom = lastWrittenRow
+        switch place {
+        case .top: return min(offset, bottom)
+        case .middle: return bottom / 2
+        case .bottom: return max(bottom - offset, 0)
+        }
+    }
+
+    /// The keyword run the cursor sits in, or nil when it is not on one. What `*` searches for.
+    private func wordUnderCursor() -> String? {
+        let text = Array(rowText(cursor.row))
+        guard text.indices.contains(cursor.column),
+            ScrollWordMotion.classify(text[cursor.column]) == .keyword
+        else { return nil }
+        var start = cursor.column
+        while start > 0, ScrollWordMotion.classify(text[start - 1]) == .keyword { start -= 1 }
+        var end = cursor.column
+        while end + 1 < text.count, ScrollWordMotion.classify(text[end + 1]) == .keyword { end += 1 }
+        return String(text[start...end])
     }
 
     /// A viewport row's text, read at most once per viewport state.
@@ -454,20 +515,19 @@ final class ScrollModeController {
         refreshCursor()
     }
 
-    /// Give the anchor back once the rows under it have moved.
+    /// Give the anchor back once the rows under it have moved. A selection cannot leave the
+    /// viewport, so one that outlived a scroll would highlight rows it no longer covers.
     ///
-    /// A selection is viewport-bounded because `Point.pin` clamps an exact coordinate's y to the
-    /// grid height for every point tag, so no coordinate names a scrollback row. One that outlived a
-    /// scroll would highlight rows it no longer covers and yank text the reader never saw.
-    ///
-    /// A scroll is driven by the report rather than by the key that asked, because the two do not
-    /// line up in either direction: output moves the viewport with no key at all, and a `j` at the
-    /// end of the buffer moves nothing while looking exactly like one that does. A reflow calls it
-    /// straight, since the cursor can be found again by its line and a fixed anchor cannot.
+    /// Driven by the report, not the key: output moves the viewport with no key at all, and a `j`
+    /// at the end of the buffer moves nothing while looking exactly like one that does.
     private func releaseSelection() {
         guard selection != nil else { return }
         selection = nil
         updateHeader()
+        // The overlay holds the rects it was last handed, so without this the highlight stays
+        // painted over rows the selection no longer covers. Remembers nothing: this is not a
+        // placement, and `refreshGeometry` calls it before invalidating the rows it would read.
+        refreshCursor(remembersLine: false)
     }
 
     /// What a visual selection currently covers, or nil when there is none.
@@ -498,6 +558,93 @@ final class ScrollModeController {
         self.selection = nil
         updateHeader()
         flash(range)
+    }
+
+    /// The last row with anything written on it. Below it is empty space, and no move should land
+    /// the band out there. Reads through the cache: `H`/`L` and every page move ask for it.
+    private var lastWrittenRow: Int {
+        let last = lastRow
+        for row in stride(from: last, through: 0, by: -1) where !Self.isBlank(rowText(row)) {
+            return row
+        }
+        return last
+    }
+
+    /// A page move: the cursor advances by the fraction and the viewport takes what it can, so the
+    /// band parks mid-screen while the buffer runs under it. Against either end the viewport takes
+    /// nothing and the cursor makes the rest of the trip, which is the only way to reach the last
+    /// half page by paging.
+    @discardableResult
+    private func page(_ fraction: Double) -> Bool {
+        let rows = max(surface?.cellMetrics?.rows ?? 1, 1)
+        let advance = Int((fraction * Double(rows)).rounded(.towardZero))
+        guard advance != 0 else { return true }
+        let down = advance > 0
+        let want = cursor.row + advance
+        // How far the buffer can still go this way. Unknown before the first report, where
+        // assuming room is the better guess: the backend clamps what it cannot do.
+        let room = (down ? lastPosition?.linesBelow : lastPosition?.offset) ?? .max
+        let ideal = want - lastRow / 2
+        let taken = down ? min(max(ideal, 0), room) : max(min(ideal, 0), -room)
+        if taken != 0 { surface?.scroll(.lines(taken)) }
+        // A page that spends the last of the room lands on a screen this one cannot see yet, so the
+        // bottom it clamps to is the old one. The report that follows re-clamps against the new.
+        clampsToWrittenRows = down && taken == room
+        let landed = down ? min(want - taken, lastWrittenRow) : want - taken
+        cursor = ScrollCell(row: min(max(landed, 0), lastRow), column: cursor.column)
+        // The buffer moved under the band, so the line it names is about to change with nothing to
+        // announce it, and the read below still describes the old screen.
+        cursorLine = nil
+        refreshCursor(remembersLine: false)
+        invalidateRows()  // after the read, never before: see the named scrolls above
+        return true
+    }
+
+    /// `yy`: copy whole rows without opening a selection first, and pulse what it took.
+    private func yankRows(_ times: Int) {
+        guard let surface, let columns = surface.cellMetrics?.columns else { return }
+        let range = TerminalViewportRange(
+            startRow: cursor.row, startColumn: 0,
+            endRow: min(cursor.row + times - 1, lastRow), endColumn: max(columns - 1, 0))
+        guard let text = surface.text(in: range) else {
+            Log.warning("scroll mode: the surface declined a yank read", category: .panes)
+            return
+        }
+        yankPasteboard.clearContents()
+        yankPasteboard.setString(text, forType: .string)
+        flash(range)
+    }
+
+    /// Set by a page that scrolled to the end of the buffer, and spent by the next report.
+    private var clampsToWrittenRows = false
+
+    /// The last `f`/`F`/`t`/`T`, so `;` and `,` have something to run again.
+    private var lastFind: ScrollKeymap.Find?
+
+    /// `f`/`F`/`t`/`T`: land on, or just before, the next occurrence along this row.
+    private func runFind(_ find: ScrollKeymap.Find, times: Int, isRepeat: Bool) {
+        let text = Array(rowText(cursor.row))
+        var column = cursor.column
+        for step in 0..<times {
+            // A `t` parks next to its target, so searching again from there finds the same cell.
+            // Every hop after the landing starts one further along, counted or repeated.
+            let skips = find.till && (isRepeat || step > 0)
+            let from = skips ? column + (find.direction == .forward ? 1 : -1) : column
+            guard let next = Self.findColumn(find, from: from, in: text) else { return }
+            column = next
+        }
+        move(to: ScrollCell(row: cursor.row, column: column))
+    }
+
+    /// Where `find` lands starting from `column`, or nil when the row holds no more of it.
+    static func findColumn(_ find: ScrollKeymap.Find, from column: Int, in text: [Character]) -> Int? {
+        let stride = find.direction == .forward ? 1 : -1
+        var index = column + stride
+        while text.indices.contains(index) {
+            if text[index] == find.character { return find.till ? index - stride : index }
+            index += stride
+        }
+        return nil
     }
 
     /// Pulse the yanked span and fade out, the way nvim's `on_yank` does.
@@ -566,68 +713,6 @@ final class ScrollModeController {
         ) { [weak surface] in surface?.cellMetrics }
     }
 
-    /// Decode a `keyDown` into a scroll-mode command, or nil for a key the mode does not map.
-    ///
-    /// Pure and static so the whole keymap is testable without a window or an event loop, the
-    /// same seam `DiffPaneTable.vimKey(for:)` uses. `afterG` is the `gg` prefix, passed in rather
-    /// than read off the instance for the same reason.
-    ///
-    /// Shiftedness comes from the modifier flags, never from the character's case: Caps Lock
-    /// uppercases too, so reading case would make a single `g` jump to the top whenever Caps Lock
-    /// was on, and turn `j` into a dead key.
-    static func command(for event: NSEvent, afterG: Bool) -> Command? {
-        let held = event.modifierFlags.intersection([.command, .shift, .option, .control])
-        // ⌃d/⌃u/⌃f/⌃b are the vim half- and full-page keys. Match Control exactly so ⌘⌃d and
-        // friends fall through to whoever owns them.
-        if held == .control {
-            switch event.charactersIgnoringModifiers?.lowercased() {
-            case "d": return .scroll(.pageFraction(0.5))
-            case "u": return .scroll(.pageFraction(-0.5))
-            case "f": return .scroll(.pageFraction(1))
-            case "b": return .scroll(.pageFraction(-1))
-            default: return nil
-            }
-        }
-        // Everything else is bare or shifted. ⌘ and ⌥ belong to another handler.
-        guard held.isSubset(of: .shift) else { return nil }
-        if event.keyCode == Self.escapeKeyCode { return .cancel }
-        // Matched on the typed character, the only form that arrives: `charactersIgnoringModifiers`
-        // applies Shift, so a US shift+[ reports "{" in both fields.
-        switch event.characters {
-        case "{": return .paragraph(-1)
-        case "}": return .paragraph(1)
-        case "$": return .lineEnd
-        default: break
-        }
-        let shift = held.contains(.shift)
-        switch (event.charactersIgnoringModifiers?.lowercased() ?? "", shift) {
-        case ("j", false), (Self.downArrow, false): return .step(1)
-        case ("k", false), (Self.upArrow, false): return .step(-1)
-        case ("h", false), (Self.leftArrow, false): return .column(-1)
-        case ("l", false), (Self.rightArrow, false): return .column(1)
-        case ("w", false): return .word(.next)
-        case ("b", false): return .word(.back)
-        case ("e", false): return .word(.end)
-        case ("0", false): return .lineStart
-        case ("v", false): return .visual(.character)
-        case ("v", true): return .visual(.line)
-        case ("y", false): return .yank
-        case (" ", false): return .scroll(.pageFraction(1))
-        case ("g", false): return afterG ? .scroll(.top) : .pendingTop
-        case ("g", true): return .scroll(.bottom)
-        case ("q", false), ("i", false): return .exit
-        default: return nil
-        }
-    }
-
-    private static let escapeKeyCode: UInt16 = 53
-    /// Arrow keys arrive as private-use scalars in `charactersIgnoringModifiers`, matched here so
-    /// the arrows work without a second keyCode branch.
-    private static let upArrow = String(UnicodeScalar(NSUpArrowFunctionKey)!)
-    private static let downArrow = String(UnicodeScalar(NSDownArrowFunctionKey)!)
-    private static let leftArrow = String(UnicodeScalar(NSLeftArrowFunctionKey)!)
-    private static let rightArrow = String(UnicodeScalar(NSRightArrowFunctionKey)!)
-
     // MARK: the header
 
     /// Refresh the indicator from a live scroll position. Called on every `SCROLLBAR` report for
@@ -644,6 +729,11 @@ final class ScrollModeController {
             if pending.armedAt.duration(to: now()) <= Self.anchorLifetime {
                 reanchor(to: pending.line)
             }
+        }
+        if clampsToWrittenRows {
+            clampsToWrittenRows = false
+            let bottom = lastWrittenRow
+            if cursor.row > bottom { move(to: ScrollCell(row: bottom, column: cursor.column)) }
         }
         updateHeader()
     }

@@ -603,15 +603,10 @@ final class SearchController {
         return true
     }
 
-    /// Decode a phase-two keystroke, or nil for anything this mode does not claim.
-    ///
-    /// Pure and static, the same seam `ScrollModeController.command(for:afterG:)` uses, and
-    /// shiftedness comes from the modifier flags for the same reason: Caps Lock uppercases too, so
-    /// reading the character's case would turn every `n` into an `N`.
-    ///
-    /// A ⌘ or ⌥ chord is declined, and that is the line that matters. `KeyInterceptor` is a local
-    /// monitor running ahead of menu key equivalents, so claiming one here would kill ⌘N, ⌘W and
-    /// ⌘Q for as long as the bar is up.
+    /// Decode a phase-two keystroke, or nil for anything this mode does not claim. Pure and static,
+    /// the same seam `ScrollKeymap.key(for:pending:hasSelection:)` uses, and shiftedness comes from
+    /// the modifier flags for the same Caps Lock reason. Declining a ⌘ or ⌥ chord is the line that
+    /// matters: this runs ahead of menu key equivalents, so claiming one would kill ⌘N, ⌘W and ⌘Q.
     static func key(for event: NSEvent) -> Key? {
         let held = event.modifierFlags.intersection([.command, .shift, .option, .control])
         guard held.isSubset(of: .shift) else { return nil }

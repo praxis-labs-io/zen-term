@@ -646,6 +646,11 @@ final class WindowController: NSObject {
     /// it. Both halves live here because the controllers own their modes, not the window's
     /// plumbing.
     private func wireModes() {
+        // `*` opens the find bar on the word the band is on, the same entry ⌘F uses on a selection.
+        scrollMode.onSearchWord = { [weak self] word in
+            guard let target = self?.activeController?.focusedScrollTarget else { return }
+            self?.search.begin(surface: target.surface, panel: target.panel, seed: word)
+        }
         scrollMode.onActiveChanged = { [weak self] active in
             guard let self else { return }
             // The bar up means the keyboard belongs to the search: to the field while the needle is

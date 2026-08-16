@@ -1111,14 +1111,49 @@ in every pane, and libghostty's own ⌘Home/⌘PageUp defaults (live in ZenTerm,
 the chrome never claims those chords) are fn-chords on a laptop that nothing in the
 UI mentions. A mode borrows the keys while it is up and gives them back on exit.
 
-`command(for:afterG:)` is a pure static over `NSEvent`, the same testable seam as
-`DiffPaneTable.vimKey(for:)`, and it reads shiftedness from the modifier flags
-rather than character case for the same Caps Lock reason. j/k step the cursor, h/l move
-a column, w/b/e move by word, 0/$ reach the ends of a row, ⌃d/⌃u move a half page, ⌃f/⌃b
-and space a page, gg/G the ends, { and } move by paragraph, v/V select, y copies, and
-Esc/q/i leave. **Every key is consumed, mapped or not**: passing misses through would
-drop a stray keystroke into the shell behind the mode, which is worse than one that
-does nothing.
+**The keymap is its own file.** `ScrollKeymap.key(for:pending:hasSelection:)` is a pure
+static over `NSEvent`, the same testable seam as `DiffPaneTable.vimKey(for:)`, and it
+reads shiftedness from the modifier flags rather than character case for the same Caps
+Lock reason. j/k step the cursor, h/l move a column, w/b/e and W/B/E move by word and
+WORD, 0/^/$ reach the ends of a row, H/M/L name a row by where it sits, f/F/t/T find a
+character with ;/, repeating it, ⌃d/⌃u move a half page, ⌃f/⌃b and space a page, gg/G the
+ends, { and } move by paragraph, v/V select, y copies and yy takes rows, * searches the
+word under the band, and Esc/q/i leave. **Every key is consumed, mapped or not**: passing misses through would drop a stray
+keystroke into the shell behind the mode, which is worse than one that does nothing.
+
+**Counts and two-key commands come in as `Pending`, not off the controller**, so the
+decode stays a function of its arguments. A digit is not a move, so it comes back as
+`Key.count` rather than a `Command`, which keeps the run switch exhaustive with no
+unreachable branch. `0` is `lineStart` until a count is being typed and a digit after
+that, which is vim's own rule: without it `10j` is a column jump and one step. The count
+survives an arming key, since the `2` of `2yy` is typed before the first `y`.
+
+Three things the count does that are worth knowing. It folds into the command where the
+command carries a magnitude, so `12j` is one `.step(12)` rather than twelve of anything.
+It scales a page rather than repeating it. And stepping past an edge moves the cursor as
+far as it goes and scrolls the remainder, so `15k` eleven rows down moves eleven and
+scrolls four rather than scrolling all fifteen.
+
+`{`/`}` are the exception, and deliberately: the count repeats the motion rather than
+folding in, because `paragraphRow` uses the delta as its row-by-row stride and a folded
+count would step the scan over the blank lines it is looking for.
+
+`G` takes no count, and cannot: `Point.pin` clamps every coordinate to the grid, so no
+number names a scrollback line for `30G` to reach. `H`/`M`/`L` reckon from the last
+**written** row instead of the grid's bottom, which on a half-filled screen is empty space
+below the prompt.
+
+**A page move advances the cursor and the viewport follows.** `⌃d` moves the band half a
+screen through the buffer; the viewport takes as much of that as it can, so the band parks
+at the middle of the screen while the text runs under it; and where the viewport cannot
+take it all, the cursor makes the rest of the trip. That last clause is the only way to
+reach the last half page of a buffer by paging, since a page that only moved the viewport
+stopped dead at the end with the band still mid-screen.
+
+The distance is worked out here and sent as **rows**, not as a fraction, so the mode knows
+where the band lands rather than finding out from the next report. `linesBelow` and
+`offset` say how far the buffer can still go, which is what makes the split between the
+two exact.
 
 **The cursor is the chrome's, drawn on the pane.** libghostty has no copy mode and no
 cursor outside the shell's own, so `ScrollCursorView` paints the band on the current row,
@@ -1145,17 +1180,29 @@ the cursor moves for the height of the viewport and the buffer only moves once t
 cursor is pinned at an edge. Scrolling on every `j` would drag the whole screen to
 track a marker that never moved.
 
-**The mode opens on the last written row of the viewport**, found by reading rows from
-the bottom up. Not the bottom of the pane, which on a half-filled screen is empty space
-below everything there is to read, and not the shell's cursor: `ghostty_surface_ime_point`
-reports that against the *live* screen with no account of scrolling, so a viewport the
-reader had already scrolled with the wheel put the band on an unrelated row.
+**The mode opens on a mouse selection when there is one**, on its first cell, so a reader
+who selected something and then reached for the keyboard keeps their place. `ghostty_text_s`
+carries the selection's top-left in view points, which divides straight down into a cell.
+Only the near end: no backend here reports where a selection finishes.
 
-**The header goes up before the grid is measured.** A pane's header is hidden until a
-mode shows it, and showing it moves the content's top constraint down by its height, so
-the terminal loses a row or two and reflows. Measuring first put the band a row off the
-prompt, which is subtle enough to look like a rounding error in the cell math and is not
-one.
+**With nothing selected it opens on the last written row of the viewport**, found by
+reading rows from the bottom up. Not the bottom of the pane, which on a half-filled screen
+is empty space below everything there is to read, and not the shell's cursor:
+`ghostty_surface_ime_point` reports that against the *live* screen with no account of
+scrolling, so a viewport already scrolled with the wheel put the band on an unrelated row.
+
+**The entry row is read before the header goes up, and remembered by its text.** A pane's
+header is hidden until a mode shows it, and showing it moves the content's top constraint
+down by its height: the terminal loses a row or two, reflows, and the pty gets a SIGWINCH.
+A shell redrawing a multi-line prompt **clears those rows first**, so a read taken after
+the header finds them blank, and the walk-up skips the prompt and stops on the last line
+of the previous command's output. Reading first is the only moment the prompt is
+guaranteed painted.
+
+The row index does not survive that resize, so it is not what is kept. The line's text is,
+and `refreshGeometry` runs nested inside the layout to arm it: the first scroll report
+after puts the band back on that line wherever the shell repainted it. This is the same
+machinery a font step and a divider drag use, pointed at entry.
 
 **A move that names a destination puts the cursor on it**, rather than bringing it into
 view and leaving the cursor elsewhere. `gg`/`G` carry it to the ends.
@@ -1407,20 +1454,28 @@ remembered line describing what used to be there. Refreshing it from the scroll 
 would put a `read_text` on the output path, and one `tick()` can drain many lines in a
 single turn, so that buys a main-thread stall instead.
 
-**The re-find runs in two passes, because a rewrap leaves no row holding the whole
+**The re-find runs in three passes, because a rewrap leaves no row holding the whole
 line.** `text(viewportRow:)` reads one row's cells, so a line that wrapped comes back
 split. An exact match goes first, nearest to the old row winning because `❯ ` prefixes
 every prompt on screen. Failing that, a fragment pass takes the row where one text
 starts with the other: narrowing leaves a prefix of what was remembered, widening
-leaves a row that has it as a prefix. That pass ranks by longest shared prefix rather
-than nearest, or a bare prompt a row away would outrank the line the reader was on,
-and it ignores matches too short to mean anything. A height change needs none of this,
-which is why exact matching held up until a width change was tried.
+leaves a row that has it as a prefix. Last, a containment pass, for a cursor parked on
+a **continuation** row: that row holds a *suffix* of its logical line, so widening
+merges it back in and the remembered text lands mid-row with neither string starting
+with the other. It goes last because containment matches far more loosely, and a wrong
+match moves the band where the stricter passes would have left it still.
+
+All three rank by longest shared run rather than nearest, or a bare prompt a row away
+would outrank the line the reader was on, and all three ignore matches too short to
+mean anything. A height change needs none of this, which is why exact matching held up
+until a width change was tried.
 
 Only the cursor comes back. A selection is dropped, since its anchor is a bare row
-index with no content to be found by, and a viewport-relative cursor cannot follow a
-line off the screen at all: when the line is gone the band holds its row rather than
-jumping to an unrelated one.
+index with no content to be found by, and the overlay is refreshed with it: it holds
+the rects it was last handed, so releasing without a redraw left the highlight painted
+over rows it no longer covered. A viewport-relative cursor cannot follow a line off the
+screen at all: when the line is gone the band holds its row rather than jumping to an
+unrelated one.
 
 **The retractions are the load-bearing half.** The mode holds an app-global key
 handler, so one left up deafens whatever you switched to. It ends when pane focus
