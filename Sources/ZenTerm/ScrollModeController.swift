@@ -23,8 +23,7 @@ final class ScrollModeController {
     private var pending = ScrollKeymap.Pending()
 
     /// The cell the cursor sits on, 0,0 at the top left. Viewport-relative rather than absolute in
-    /// the buffer, so it survives output arriving underneath without any bookkeeping: the row on
-    /// screen is the row you are looking at.
+    /// the buffer, which holds only while the screen does: see `holdViewport`.
     private(set) var cursor = ScrollCell.origin
 
     var cursorRow: Int { cursor.row }
@@ -77,6 +76,8 @@ final class ScrollModeController {
         lastPosition = nil
         pendingAnchor = nil
         cursorLine = nil
+        holdsViewport = false
+        reflowArmedAt = nil
         cursor = .origin  // the entry row replaces it below; nothing should read the last session's
         isActive = true
         invalidateRows()
@@ -113,6 +114,11 @@ final class ScrollModeController {
         pendingAnchor = nil
         cursorLine = nil
         invalidateRows()
+        // The mode took the viewport off the live end, so leaving hands it back. A reader who
+        // entered already scrolled back never held it, and keeps the place they chose.
+        if holdsViewport { surface?.scroll(.bottom) }
+        holdsViewport = false
+        reflowArmedAt = nil
         panel?.modeMeta = nil
         panel?.setScrollCursor(nil) { nil }
         panel = nil
@@ -150,6 +156,7 @@ final class ScrollModeController {
     func refreshGeometry() {
         guard isActive else { return }
         pendingAnchor = cursorLine.map { (line: $0, armedAt: now()) }
+        reflowArmedAt = now()  // armed even with no line to re-find: the hold reads the same report
         // Only the cursor can be found again afterwards. The anchor is a fixed row index with no
         // content behind it, so a selection kept across the reflow would run from a row that now
         // holds something else.
@@ -792,14 +799,50 @@ final class ScrollModeController {
         ) { [weak surface] in surface?.cellMetrics }
     }
 
+    /// Whether the mode pulled the viewport off the live end, so leaving can hand it back.
+    private var holdsViewport = false
+
+    /// Put the viewport back when output pushed it under the band, and say whether it did.
+    /// libghostty pins any viewport above the active area, so one pull holds the whole visit.
+    private func holdViewport(against position: TerminalScrollPosition) -> Bool {
+        guard !awaitsReflow, position.linesBelow == 0, let last = lastPosition else { return false }
+        // Output at the live end grows the buffer and moves the viewport by the same rows, where a
+        // scroll the reader asked for moves the viewport alone. A rewrap does both: hence the guard.
+        let growth = position.total - last.total
+        guard growth > 0, position.offset - last.offset == growth else { return false }
+        holdsViewport = true
+        surface?.scroll(.lines(-growth))
+        return true
+    }
+
+    /// When the grid last reflowed. A narrowing drag rewraps rows into the buffer and, at the live
+    /// end, moves the viewport by exactly as many, which is the signature output has.
+    private var reflowArmedAt: ContinuousClock.Instant?
+
+    /// Bounded like `pendingAnchor`, and for the same reason: the report may never come, because
+    /// libghostty emits a scrollbar only when the value differs from the last one sent.
+    private var awaitsReflow: Bool {
+        guard let armed = reflowArmedAt else { return false }
+        return armed.duration(to: now()) <= Self.anchorLifetime
+    }
+
     // MARK: the header
 
     /// Refresh the indicator from a live scroll position. Called on every `SCROLLBAR` report for
     /// the driven surface, so the count tracks output as well as keys.
     func report(position: TerminalScrollPosition, from s: AnyObject) {
         guard isActive, isDriving(s) else { return }
-        invalidateRows()  // output arrived, or a scroll landed
-        if let last = lastPosition, position.offset != last.offset { releaseSelection() }
+        // Before the hold, which returns: the same burst can rewrite a visible cell as well as
+        // push the view, and the pull back restores the viewport but not what the rows now say.
+        invalidateRows()
+        if holdViewport(against: position) { return }
+        reflowArmedAt = nil
+        if let last = lastPosition, position.offset != last.offset {
+            releaseSelection()
+            // The reader, or the find bar, put the viewport here. Leaving hands back only what the
+            // mode itself took, so a place they chose survives `q`.
+            holdsViewport = false
+        }
         lastPosition = position
         // The first report after a geometry change is the reflowed grid: libghostty emits the
         // scrollbar only from a draw, and only when it differs from the last one sent.
