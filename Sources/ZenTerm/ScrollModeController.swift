@@ -606,9 +606,10 @@ final class ScrollModeController {
         }
         let delta = cursor.row - target
         guard delta != 0 else { return }
-        // The band follows the line by content rather than being put where the scroll was asked to
-        // land it. At either end of the buffer that scroll is clamped and the line never arrives.
-        pendingAnchor = cursorLine.map { (line: $0, armedAt: now()) }
+        // The band follows the line by content, not by being put where the scroll was asked to land
+        // it: at either end that scroll is clamped and the line never arrives.
+        let line = rowText(cursor.row)  // read here; a page move clears `cursorLine` on purpose
+        pendingAnchor = Self.isBlank(line) ? nil : (line: line, armedAt: now())
         surface?.scroll(.lines(delta))
     }
 
