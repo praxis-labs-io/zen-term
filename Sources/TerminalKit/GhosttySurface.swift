@@ -605,6 +605,9 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         var text = ghostty_text_s()
         guard ghostty_surface_read_selection(surfacePtr, &text) else { return nil }
         defer { ghostty_surface_free_text(surfacePtr, &text) }
+        // A selection scrolled clean out of the viewport reports -1, -1 rather than a point
+        // (`readTextLocked`). Clamped it would read as cell 0,0 and open the mode at the top left.
+        guard text.tl_px_x >= 0, text.tl_px_y >= 0 else { return nil }
         let x = (CGFloat(text.tl_px_x) - metrics.gridInset) / metrics.cellWidth
         let y = (CGFloat(text.tl_px_y) - metrics.gridInset) / metrics.cellHeight
         return TerminalViewportCell(
