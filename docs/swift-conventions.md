@@ -166,6 +166,20 @@ the *final* frame on every resize and on first layout. The diff viewer's auto-fo
 (green in tests) until it moved off a `layout()` width read onto the pane's frame notification
 .
 
+**Anything driven from `setFrameSize` sees every frame the layout passes through, not the one it
+lands on.** Auto Layout walks a view through intermediate frames while it solves, and a few of them
+are nonsense: a pane briefly a handful of pixels wide, a zero-height strip mid-animation. Work
+triggered from inside that override runs for all of them. The terminal pushed each intermediate
+frame into libghostty, which rewrapped the whole scrollback for every one, and a rewrap into one or
+two columns evicted history that no later width brought back: **dragging a window narrow and back
+destroyed scrollback**. Ghostty's own `SurfaceView_AppKit` says the rule in a comment we had not
+followed, that it is very important to use the size you are going for and *not* the view frame.
+The fix is to queue the work to the end of the runloop turn (`GhosttyHostView.scheduleSizePush`),
+so a pass lands as one push at the size it settled on. That is not the same as debouncing: a drag
+delivers one turn per event, so live reflow is unchanged and only the garbage inside a single pass
+is dropped. Any state guarding the work (here the `setSizeSyncSuspended` hold) has to be re-read
+when the queued work runs, not only when it was queued.
+
 **An `NSTextField` label sized to the exact glyph advances truncates to `…`.** A label insets its text
 a couple of points inside its frame, so a column sized to `characters * digitWidth` is a hair too
 narrow and clips even a single digit. Size a content-fit label to its string plus a few points of
