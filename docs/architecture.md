@@ -1183,12 +1183,25 @@ track a marker that never moved.
 **Live output does not move the screen out from under the band.** libghostty's viewport
 follows the active area only while it rests at the live end, so a `tail -f` under an open
 mode scrolls away the line being read. A report whose buffer grew by exactly as many rows
-as the viewport moved is that push and nothing else: a scroll the reader asked for leaves
-the buffer's size alone, and a reflow moves the two out of step. The mode pulls the
-viewport back by that many rows. One pull is the whole fix, because above the active area
-libghostty pins the viewport itself and output accumulates below, which is what the
-header's growing count then reads. Leaving hands the live end back; a reader who entered
-already scrolled back never held it and keeps their place.
+as the viewport moved is that push: a scroll the reader asked for leaves the buffer's size
+alone. The mode pulls the viewport back by that many rows. One pull is the whole fix,
+because above the active area libghostty pins the viewport itself and output accumulates
+below, which is what the header's growing count then reads.
+
+**A rewrap has the same signature**, and this is the trap. Narrowing a pane pushes rows into
+the buffer and, resting at the bottom, moves the viewport by exactly as many. `refreshGeometry`
+arms a stamp that suppresses the hold until the report answering the reflow arrives, bounded
+like `pendingAnchor` and for the same reason. It cannot key off `pendingAnchor` itself, which
+is nil whenever the band has no line to re-find, which is every page move.
+
+Leaving hands the live end back, but only what the mode took: a report that moves the viewport
+without the hold behind it is the reader or the find bar choosing a place, and that place
+survives `q`. A reader who entered already scrolled back never held anything.
+
+**At the scrollback cap the band drifts as it did before.** ghostty trims from the top rather
+than growing, so `total` and `offset` both stand still, the report is identical to the last one
+and is therefore never emitted, and no signal reaches the chrome at all. Nothing at the seam can
+see it.
 
 It cannot pin on entry instead. `PageList.scroll` turns any pin inside the active area
 back into a follow, so the only way to be pinned is to sit a row above the end, and moving

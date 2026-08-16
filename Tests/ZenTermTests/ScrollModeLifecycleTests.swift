@@ -1251,6 +1251,45 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.scrolls, [], "nothing was held, so there is nothing to hand back")
     }
 
+    func test_leavingKeepsAPlaceTheReaderChoseAfterAHold() throws {
+        // The hold is the mode's doing and leaving undoes it, but only until the reader moves the
+        // viewport themselves. Snapping them to the live end throws away where they went to read.
+        let controller = makeWindow()
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 179, viewport: 24))
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 176, viewport: 24))
+
+        // The find bar steps back to a match, or the reader scrolls there themselves.
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 40, viewport: 24))
+        controller.handle(.toggleScrollMode)
+
+        XCTAssertEqual(surface.scrolls, [.lines(-3)], "no `.bottom`: they are where they chose to be")
+    }
+
+    func test_aRewrapAtTheLiveEndIsNotReadAsOutput() throws {
+        // A narrowing drag rewraps rows into the buffer and, resting at the bottom, moves the
+        // viewport by exactly as many. That is the signature output has.
+        let controller = makeWindow()
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        controller.scrollMode.refreshGeometry()  // what a divider drag reports, before the report
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 179, viewport: 24))
+
+        XCTAssertEqual(surface.scrolls, [], "the rewrap put those rows there; nothing pushed a screen")
+    }
+
     func test_aSelectionSurvivesOutputAtTheLiveEnd() throws {
         // The push and the pull back are one event. Read as two scrolls it drops the selection the
         // reader is holding, which is the thing they opened the mode to take.
