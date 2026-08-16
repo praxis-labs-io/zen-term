@@ -91,8 +91,8 @@ final class ScrollModeController {
         let entryText = rowText(cursor.row)
         cursorLine = Self.isBlank(entryText) ? nil : entryText
         updateHeader()
-        // The reflow reports from inside the surface's own `setFrameSize`, so `refreshGeometry` runs
-        // nested here and arms that line. The first scroll report after puts the band back on it.
+        // Lays out now so the size push is queued against the settled frame. The reflow, and the
+        // `refreshGeometry` that arms the line above, land on the next turn.
         panel.layoutSubtreeIfNeeded()
         refreshCursor(remembersLine: false)
         onActiveChanged?(true)
@@ -280,6 +280,9 @@ final class ScrollModeController {
     /// they were only looking for would select everything in between.
     func land(on cell: ScrollCell) {
         guard isActive else { return }
+        // A search step moves the viewport, and the cell was worked out from a fresh read of it.
+        // Clamping it against cached rows would bound the match by the screen it replaced.
+        invalidateRows()
         releaseSelection()
         pendingAnchor = nil
         move(to: cell)
@@ -314,6 +317,8 @@ final class ScrollModeController {
         // armed it fires on whatever report comes next, minutes later, and drags the cursor off
         // the row they chose.
         pendingAnchor = nil
+        // Nothing announces a repaint, so the row cache cannot outlive one key. See `rowText`.
+        invalidateRows()
         switch command {
         case .pendingTop:
             pending = .init(afterG: true, count: carried)
@@ -540,14 +545,8 @@ final class ScrollModeController {
         return String(text[start...end])
     }
 
-    /// A viewport row's text, read at most once per viewport state.
-    ///
-    /// Each miss is a renderer-mutex-locked read, and a held `}` at key-repeat would multiply one
-    /// per row by the repeat rate against the main thread. A row the backend declines caches as
-    /// empty. Every path that can move the viewport or resize the grid clears this.
-    ///
-    /// Trailing blanks come off here: the backend reads untrimmed, so a row filled edge to edge
-    /// arrives padded to the grid width, and `$` would park the cursor out in the padding.
+    /// A row's text, once per keystroke: nothing announces a repaint, so a cache outliving the key
+    /// answered from a screen that was gone. Trailing blanks come off, so `$` skips a row's padding.
     private func rowText(_ row: Int) -> String {
         if let known = rowCache[row] { return known }
         var text = rawRow(row)
