@@ -395,6 +395,29 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(state.cursorCells, 4...4, "offset 3, but cell 4: 你 took two")
     }
 
+    func test_aSelectionDraggedBackwardsStillCoversWholeCharacters() throws {
+        // Ordered before converting, or the anchor's last cell becomes the span's start and the
+        // cursor's first becomes its end, halving a wide character at both ends.
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "你好世界"  // four wide characters, cells 0 through 7
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("$", unshifted: "4", flags: .shift)))  // anchor on 界
+        XCTAssertTrue(handler(try keyDown("v")))
+        for _ in 0..<2 { XCTAssertTrue(handler(try keyDown("h"))) }  // back to 好
+
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(
+            state.selection?.startColumn, 2, "the first cell of 好, not the last of 界")
+        XCTAssertEqual(state.selection?.endColumn, 7, "the last cell of 界, not the first of 好")
+    }
+
     func test_theBandStopsAtACharacterAGapFollows() throws {
         // A right-aligned segment leaves cells no program wrote, and libghostty drops a run of
         // those at the end of a read. A search counting a prefix reads that as no character.
