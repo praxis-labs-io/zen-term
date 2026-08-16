@@ -67,6 +67,9 @@ final class GhosttyHostView: NSView {
     /// mid-animation never took the hold, and leaving it unfrozen is the safe direction.
     func setSizeSyncSuspended(_ suspended: Bool) {
         if suspended {
+            // The callers lay out at the geometry the animation lands on and freeze in the same
+            // turn, so a push that layout queued has to land before the freeze, not be dropped by it.
+            flushPendingSizePush()
             sizeSyncHolds += 1
             return
         }
@@ -94,30 +97,45 @@ final class GhosttyHostView: NSView {
     /// test can prove a burst of frames lands as one without standing up a real surface.
     private(set) var sizePushesForTesting = 0
 
+    /// Test hook: the frame the last push read, so a test can prove it carried the size the pass
+    /// settled on rather than one it went through. Points, since the C call is out of reach here.
+    private(set) var lastPushedFrameForTesting: NSSize?
+
     /// Queue the grid rather than pushing it from inside the layout pass, so only the frame the
     /// pass settles on lands. Ghostty's own view says the same: push the size you are going for.
     private func scheduleSizePush() {
         guard !hasPendingSizePush else { return }
         hasPendingSizePush = true
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self, self.hasPendingSizePush else { return }
             self.hasPendingSizePush = false
             self.pushSize()
         }
     }
 
+    /// Run a queued push now. Nothing to do when the turn already ran it.
+    private func flushPendingSizePush() {
+        guard hasPendingSizePush else { return }
+        hasPendingSizePush = false
+        pushSize()
+    }
+
     /// A narrow intermediate frame rewraps the whole scrollback into a column or two, and
     /// libghostty evicts by bytes, so widening back cannot bring the dropped history home.
     private func pushSize() {
-        // The hold is re-checked here, not only when the push was queued: a chrome animation can
-        // start after a frame change and before the turn ends, and it outranks the queued push.
+        // Re-checked here rather than only when queued: a hold taken in between flushes this push
+        // ahead of itself, and anything still frozen at the turn's end has nothing to say yet.
         guard !isSizeSyncSuspended else { return }
+        // Detached from its window, `convertToBacking` is the identity, so the push would land at
+        // half size on Retina. `viewDidMoveToWindow` re-syncs, so skipping loses nothing.
         sizePushesForTesting += 1
-        guard let surfacePtr else { return }
+        lastPushedFrameForTesting = bounds.size
+        guard window != nil else { return }
         // Skip zero sizes: the view has no bounds until the chrome lays it out, and
         // pushing 0×0 would collapse libghostty's sensible default grid to nothing.
         let backing = convertToBacking(bounds).size
         guard backing.width >= 1, backing.height >= 1 else { return }
+        guard let surfacePtr else { return }
         ghostty_surface_set_size(surfacePtr, UInt32(backing.width), UInt32(backing.height))
         owner?.reportGridIfChanged()
     }
