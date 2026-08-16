@@ -1180,6 +1180,20 @@ the cursor moves for the height of the viewport and the buffer only moves once t
 cursor is pinned at an edge. Scrolling on every `j` would drag the whole screen to
 track a marker that never moved.
 
+**Live output does not move the screen out from under the band.** libghostty's viewport
+follows the active area only while it rests at the live end, so a `tail -f` under an open
+mode scrolls away the line being read. A report whose buffer grew by exactly as many rows
+as the viewport moved is that push and nothing else: a scroll the reader asked for leaves
+the buffer's size alone, and a reflow moves the two out of step. The mode pulls the
+viewport back by that many rows. One pull is the whole fix, because above the active area
+libghostty pins the viewport itself and output accumulates below, which is what the
+header's growing count then reads. Leaving hands the live end back; a reader who entered
+already scrolled back never held it and keeps their place.
+
+It cannot pin on entry instead. `PageList.scroll` turns any pin inside the active area
+back into a follow, so the only way to be pinned is to sit a row above the end, and moving
+the screen on entry is the one thing the mode promises not to do.
+
 **The mode opens on a mouse selection when there is one**, on its first cell, so a reader
 who selected something and then reached for the keyboard keeps their place. `ghostty_text_s`
 carries the selection's top-left in view points, which divides straight down into a cell.

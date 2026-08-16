@@ -23,8 +23,7 @@ final class ScrollModeController {
     private var pending = ScrollKeymap.Pending()
 
     /// The cell the cursor sits on, 0,0 at the top left. Viewport-relative rather than absolute in
-    /// the buffer, so it survives output arriving underneath without any bookkeeping: the row on
-    /// screen is the row you are looking at.
+    /// the buffer, which holds only while the screen does: see `holdViewport`.
     private(set) var cursor = ScrollCell.origin
 
     var cursorRow: Int { cursor.row }
@@ -77,6 +76,7 @@ final class ScrollModeController {
         lastPosition = nil
         pendingAnchor = nil
         cursorLine = nil
+        holdsViewport = false
         cursor = .origin  // the entry row replaces it below; nothing should read the last session's
         isActive = true
         invalidateRows()
@@ -113,6 +113,10 @@ final class ScrollModeController {
         pendingAnchor = nil
         cursorLine = nil
         invalidateRows()
+        // The mode took the viewport off the live end, so leaving hands it back. A reader who
+        // entered already scrolled back never held it, and keeps the place they chose.
+        if holdsViewport { surface?.scroll(.bottom) }
+        holdsViewport = false
         panel?.modeMeta = nil
         panel?.setScrollCursor(nil) { nil }
         panel = nil
@@ -792,12 +796,31 @@ final class ScrollModeController {
         ) { [weak surface] in surface?.cellMetrics }
     }
 
+    /// Whether the mode pulled the viewport off the live end, so leaving can hand it back.
+    private var holdsViewport = false
+
+    /// Put the viewport back when output pushed it under the band, and say whether it did.
+    /// libghostty pins any viewport above the active area, so one pull holds the whole visit.
+    private func holdViewport(against position: TerminalScrollPosition) -> Bool {
+        guard pendingAnchor == nil, position.linesBelow == 0, let last = lastPosition else {
+            return false
+        }
+        // Output at the live end grows the buffer and moves the viewport by the same rows. A scroll
+        // the reader asked for moves the viewport alone, and a reflow moves the two out of step.
+        let growth = position.total - last.total
+        guard growth > 0, position.offset - last.offset == growth else { return false }
+        holdsViewport = true
+        surface?.scroll(.lines(-growth))
+        return true
+    }
+
     // MARK: the header
 
     /// Refresh the indicator from a live scroll position. Called on every `SCROLLBAR` report for
     /// the driven surface, so the count tracks output as well as keys.
     func report(position: TerminalScrollPosition, from s: AnyObject) {
         guard isActive, isDriving(s) else { return }
+        if holdViewport(against: position) { return }
         invalidateRows()  // output arrived, or a scroll landed
         if let last = lastPosition, position.offset != last.offset { releaseSelection() }
         lastPosition = position

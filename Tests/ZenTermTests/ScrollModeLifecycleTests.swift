@@ -1176,6 +1176,102 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             "a busy sibling pane must not rewrite the header of the pane being read")
     }
 
+    // MARK: holding the screen against live output
+
+    func test_outputAtTheLiveEndIsPulledBackOffTheBand() throws {
+        // Resting at the bottom, the viewport follows the active area, so a `tail -f` under the
+        // band scrolls every line it is reading out from under it.
+        let controller = makeWindow()
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+        let row = controller.scrollMode.cursorRow
+
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 179, viewport: 24))
+
+        XCTAssertEqual(surface.scrolls, [.lines(-3)], "the three rows the output pushed")
+        XCTAssertEqual(controller.scrollMode.cursorRow, row, "and the band keeps its line")
+    }
+
+    func test_aReaderReachingTheLiveEndIsLeftThere() throws {
+        // A scroll the reader asked for moves the viewport and leaves the buffer's size alone,
+        // which is what tells it from output.
+        let controller = makeWindow()
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 100))
+
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertEqual(surface.scrolls, [], "the buffer never grew, so nothing pushed the screen")
+    }
+
+    func test_outputUnderAScrolledBackReaderMovesNothing() throws {
+        // Above the active area libghostty pins the viewport itself. One pull is the whole fix.
+        let controller = makeWindow()
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 100))
+
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 210, offset: 100, viewport: 24))
+
+        XCTAssertEqual(surface.scrolls, [])
+    }
+
+    func test_leavingHandsBackTheLiveEndItHeld() throws {
+        // A pane still frozen with no header over it reads as a hung shell.
+        let controller = makeWindow()
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 179, viewport: 24))
+
+        controller.handle(.toggleScrollMode)
+
+        XCTAssertEqual(surface.scrolls, [.lines(-3), .bottom])
+    }
+
+    func test_leavingAScrolledBackReaderKeepsTheirPlace() throws {
+        let controller = makeWindow()
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 100))
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 210, offset: 100, viewport: 24))
+
+        controller.handle(.toggleScrollMode)
+
+        XCTAssertEqual(surface.scrolls, [], "nothing was held, so there is nothing to hand back")
+    }
+
+    func test_aSelectionSurvivesOutputAtTheLiveEnd() throws {
+        // The push and the pull back are one event. Read as two scrolls it drops the selection the
+        // reader is holding, which is the thing they opened the mode to take.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+        let surface = try XCTUnwrap(spawned.first)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+        XCTAssertTrue(handler(try keyDown("v")))
+
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 179, viewport: 24))
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertNotNil(controller.scrollMode.selection, "the screen came back to where it was")
+    }
+
     // MARK: selection and yank
 
     /// A key handler and a pasteboard of its own, so a yank in the suite never clobbers the
