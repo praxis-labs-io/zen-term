@@ -357,6 +357,10 @@ final class ScrollModeController {
             switch move {
             case .top: cursor = ScrollCell(row: 0, column: cursor.column)
             case .bottom: cursor = ScrollCell(row: lastRow, column: cursor.column)
+            case .pageFraction(let fraction) where isPinned(scrollingDown: fraction > 0):
+                // The buffer has nowhere left to go, so the page carries the cursor instead. Vim
+                // does the same, and without it `⌃u` at the top can never reach the first line.
+                return carryCursorToEdge(scrollingDown: fraction > 0)
             default: break
             }
             surface?.scroll(move)
@@ -557,6 +561,21 @@ final class ScrollModeController {
         self.selection = nil
         updateHeader()
         flash(range)
+    }
+
+    /// Whether the buffer is already resting against the end a page move is headed for. Nil
+    /// position means nothing has been reported yet, so assume there is room.
+    private func isPinned(scrollingDown: Bool) -> Bool {
+        guard let position = lastPosition else { return false }
+        return scrollingDown ? position.linesBelow == 0 : position.offset == 0
+    }
+
+    /// Put the cursor on the row the page move could not reach by scrolling. The bottom is the last
+    /// **written** row: below it is empty space, and no page move should land the band out there.
+    private func carryCursorToEdge(scrollingDown: Bool) -> Bool {
+        let row = scrollingDown ? surface.map { Self.entryRow(of: $0) } ?? 0 : 0
+        move(to: ScrollCell(row: row, column: cursor.column))
+        return true
     }
 
     /// `yy`: copy whole rows without opening a selection first, and pulse what it took.

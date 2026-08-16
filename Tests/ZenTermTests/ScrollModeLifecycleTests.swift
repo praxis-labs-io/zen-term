@@ -487,6 +487,45 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.scrolls, [.lines(-4)], "the four rows the cursor could not take")
     }
 
+    /// Vim's rule. Without it the last half page of a buffer is unreachable by paging: the viewport
+    /// stops, the cursor is left mid-screen, and only `gg` or a run of `k` finishes the journey.
+    func test_aPageMoveAgainstTheEndCarriesTheCursorToIt() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        let handler = try XCTUnwrap(host.modeHandler)
+        // Resting at the top of the buffer: nothing above to scroll into view.
+        surface.delegate?.surface(
+            surface, scrollPositionDidChange: TerminalScrollPosition(total: 100, offset: 0, viewport: 24))
+
+        XCTAssertTrue(handler(try keyDown("u", flags: .control)))
+
+        XCTAssertEqual(surface.scrolls, [], "the buffer had nowhere to go")
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0, "so the cursor made the trip")
+    }
+
+    func test_aPageMoveAgainstTheBottomLandsOnTheLastWrittenRow() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(spawned.first)
+        let handler = try XCTUnwrap(host.modeHandler)
+        for _ in 0..<9 { XCTAssertTrue(handler(try keyDown("k"))) }
+        // Resting at the bottom: `linesBelow` is zero.
+        surface.delegate?.surface(
+            surface, scrollPositionDidChange: TerminalScrollPosition(total: 24, offset: 0, viewport: 24))
+
+        XCTAssertTrue(handler(try keyDown("d", flags: .control)))
+
+        XCTAssertEqual(surface.scrolls, [])
+        XCTAssertEqual(controller.scrollMode.cursorRow, 11, "the prompt, not row 23's empty space")
+    }
+
     func test_aCountReachesTheControlPageKeys() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
