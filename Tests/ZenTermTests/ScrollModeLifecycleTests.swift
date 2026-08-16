@@ -265,6 +265,24 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 12, "the screen it has now, not the cached one")
     }
 
+    func test_landingOnAMatchReadsTheViewportItLandedOn() throws {
+        // A search step moves the viewport before its scroll report arrives, and the find bar works
+        // the match's cell out from a fresh read. Clamping against cached rows undoes that.
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+        let surface = try XCTUnwrap(spawned.first)
+        XCTAssertTrue(handler(try keyDown("L", unshifted: "l", flags: .shift)))  // caches the screen
+
+        surface.rows[12] = "❯ rg needle"  // the step scrolled a new screen in
+        controller.scrollMode.land(on: ScrollCell(row: 12, column: 10))
+
+        XCTAssertEqual(controller.scrollMode.cursor.column, 10, "not clamped to the old row's end")
+    }
+
     func test_theEndOfLineReadsTheRowAgainAfterARepaint() throws {
         // `$` off a cached row parks the band where the text used to end, which is what a prompt
         // blanked by the entry SIGWINCH and then redrawn leaves behind.

@@ -280,6 +280,9 @@ final class ScrollModeController {
     /// they were only looking for would select everything in between.
     func land(on cell: ScrollCell) {
         guard isActive else { return }
+        // A search step moves the viewport, and the cell was worked out from a fresh read of it.
+        // Clamping it against cached rows would bound the match by the screen it replaced.
+        invalidateRows()
         releaseSelection()
         pendingAnchor = nil
         move(to: cell)
