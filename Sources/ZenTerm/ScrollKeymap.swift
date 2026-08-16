@@ -11,8 +11,8 @@ enum ScrollKeymap {
         /// A one-line step, moving the cursor rather than the viewport until it is pinned at an
         /// edge. Apart from `.scroll(.lines(±1))` because that is a cursor versus a scrollbar.
         case step(Int)
-        /// Vim's paragraph motion: the next blank row in this direction.
-        case paragraph(Int)
+        /// Vim's paragraph motion: the next blank row in this direction, `times` over.
+        case paragraph(Int, times: Int)
         /// One cell left or right.
         case column(Int)
         /// `wide` is vim's WORD: whitespace-delimited, so `foo.bar` is one rather than three.
@@ -117,8 +117,8 @@ enum ScrollKeymap {
         // ⌃d/⌃u/⌃f/⌃b are the vim half- and full-page keys. Match Control exactly so ⌘⌃d and
         // friends fall through to whoever owns them.
         if held == .control {
-            // A count multiplies the page rather than repeating it: libghostty takes the fraction
-            // as a float, so `3⌃d` is one scroll of one and a half pages.
+            // A count multiplies the page rather than repeating it, so `3⌃d` is one move of one
+            // and a half screens. `ScrollModeController.page` turns the fraction into rows.
             let pages = Double(pending.times)
             switch event.charactersIgnoringModifiers?.lowercased() {
             case "d": return .run(.scroll(.pageFraction(0.5 * pages)))
@@ -144,8 +144,10 @@ enum ScrollKeymap {
         // applies Shift, so a US shift+[ reports "{" in both fields.
         let times = pending.times
         switch event.characters {
-        case "{": return .run(.paragraph(-times))
-        case "}": return .run(.paragraph(times))
+        // Direction and repetition stay apart: the count repeats the motion, and folding it into
+        // the delta would stride the row scan and skip the blank lines it is looking for.
+        case "{": return .run(.paragraph(-1, times: times))
+        case "}": return .run(.paragraph(1, times: times))
         case "$": return .run(.lineEnd)
         case "^": return .run(.firstNonBlank)
         case "*": return .run(.searchWordUnderCursor)

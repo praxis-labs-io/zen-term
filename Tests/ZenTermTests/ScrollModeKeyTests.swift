@@ -72,8 +72,8 @@ final class ScrollModeKeyTests: XCTestCase {
     func test_bracesAreTheParagraphMotion() throws {
         // Vim's paragraph motion, and the same keys the diff viewer jumps changes with. Matched
         // on the typed character, so a layout that doesn't put braces on shift-bracket works.
-        XCTAssertEqual(decode(try keyDown("{", unshifted: "[", flags: .shift)), .paragraph(-1))
-        XCTAssertEqual(decode(try keyDown("}", unshifted: "]", flags: .shift)), .paragraph(1))
+        XCTAssertEqual(decode(try keyDown("{", unshifted: "[", flags: .shift)), .paragraph(-1, times: 1))
+        XCTAssertEqual(decode(try keyDown("}", unshifted: "]", flags: .shift)), .paragraph(1, times: 1))
     }
 
     func test_aShiftBracketThatReportsNoBraceIsNotAMotion() throws {
@@ -273,7 +273,8 @@ final class ScrollModeKeyTests: XCTestCase {
         XCTAssertEqual(decode(try keyDown("l"), count: 4), .column(4))
         XCTAssertEqual(decode(try keyDown("w"), count: 3), .word(.next, wide: false, times: 3))
         XCTAssertEqual(
-            decode(try keyDown("}", unshifted: "]", flags: .shift), count: 2), .paragraph(2))
+            decode(try keyDown("}", unshifted: "]", flags: .shift), count: 2),
+            .paragraph(1, times: 2), "the count repeats the motion; it never becomes the stride")
     }
 
     func test_aCountScalesThePageRatherThanRepeatingIt() throws {

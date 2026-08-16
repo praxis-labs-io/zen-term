@@ -594,8 +594,9 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         return String(cString: ptr)
     }
 
-    /// libghostty reports the selection's top-left in view points, padding already added and the
-    /// content scale already divided out, so it divides straight back down into a cell.
+    /// libghostty reports the selection's start in view points, padding in and content scale out.
+    /// The y is the text **baseline**, not the cell's top, so it floors onto the right row for any
+    /// font whose baseline sits inside the cell (`Surface.zig`'s `y + height - cell_baseline`).
     public var selectionOrigin: TerminalViewportCell? {
         guard let surfacePtr, ghostty_surface_has_selection(surfacePtr) else { return nil }
         guard let metrics = cellMetrics, metrics.cellWidth > 0, metrics.cellHeight > 0 else {

@@ -1128,11 +1128,15 @@ unreachable branch. `0` is `lineStart` until a count is being typed and a digit 
 that, which is vim's own rule: without it `10j` is a column jump and one step. The count
 survives an arming key, since the `2` of `2yy` is typed before the first `y`.
 
-Three things the count does that are worth knowing. It folds into the command, so `12j`
-is one `.step(12)` rather than twelve of anything. It scales a page rather than repeating
-it, since libghostty takes the fraction as a float. And stepping past an edge moves the
-cursor as far as it goes and scrolls the remainder, so `15k` eleven rows down moves eleven
-and scrolls four rather than scrolling all fifteen.
+Three things the count does that are worth knowing. It folds into the command where the
+command carries a magnitude, so `12j` is one `.step(12)` rather than twelve of anything.
+It scales a page rather than repeating it. And stepping past an edge moves the cursor as
+far as it goes and scrolls the remainder, so `15k` eleven rows down moves eleven and
+scrolls four rather than scrolling all fifteen.
+
+`{`/`}` are the exception, and deliberately: the count repeats the motion rather than
+folding in, because `paragraphRow` uses the delta as its row-by-row stride and a folded
+count would step the scan over the blank lines it is looking for.
 
 `G` takes no count, and cannot: `Point.pin` clamps every coordinate to the grid, so no
 number names a scrollback line for `30G` to reach. `H`/`M`/`L` reckon from the last

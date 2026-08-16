@@ -379,6 +379,86 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursor.column, 6, "one short of the second, not stuck")
     }
 
+    /// A count on `{`/`}` repeats the motion. Folded into the delta it became the row scan's
+    /// stride, which steps straight over the blank lines the motion is looking for.
+    func test_aCountOnAParagraphMotionRepeatsItRatherThanStriding() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+        XCTAssertEqual(controller.scrollMode.cursorRow, 11, "precondition: the prompt")
+
+        XCTAssertTrue(handler(try keyDown("2")))
+        XCTAssertTrue(handler(try keyDown("{", unshifted: "[", flags: .shift)))
+
+        // One `{` lands on the blank at 9, a second on the blank at 6. Striding by two skips both.
+        XCTAssertEqual(controller.scrollMode.cursorRow, 6)
+    }
+
+    func test_aParagraphCountSpentAtTheTopStopsRatherThanSpinning() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("9")))
+        XCTAssertTrue(handler(try keyDown("9")))
+        XCTAssertTrue(handler(try keyDown("{", unshifted: "[", flags: .shift)))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 0, "parked at the top, not still walking")
+    }
+
+    /// A `t` parks next to its target, so every hop after the first has to clear it. Without that
+    /// `2t.` finds the same dot twice and behaves exactly like `t.`.
+    func test_aCountedTillFindClearsEachTargetItParksBeside() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "abc.def.ghi.jkl"
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("2")))
+        XCTAssertTrue(handler(try keyDown("t")))
+        XCTAssertTrue(handler(try keyDown(".")))
+
+        XCTAssertEqual(controller.scrollMode.cursor.column, 6, "one short of the second dot")
+    }
+
+    /// A page that spends the last of the buffer lands on a screen it cannot see yet, so its own
+    /// clamp uses the old bottom. The report that follows re-clamps against the new one.
+    func test_aPageOntoTheLastScreenReclampsWhenTheNewRowsArrive() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows = (0..<24).map { "line \($0)" }  // a full screen, so the old clamp allows 23
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+        XCTAssertTrue(handler(try keyDown("G", unshifted: "g", flags: .shift)))
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 30, offset: 4, viewport: 24))
+
+        XCTAssertTrue(handler(try keyDown("d", flags: .control)))
+        // The last screen of the buffer: the prompt sits at row 5 with blank space under it.
+        var atEnd = Array(repeating: "", count: 24)
+        for row in 0...5 { atEnd[row] = "tail \(row)" }
+        surface.rows = atEnd
+        surface.delegate?.surface(
+            surface,
+            scrollPositionDidChange: TerminalScrollPosition(total: 30, offset: 6, viewport: 24))
+
+        XCTAssertEqual(controller.scrollMode.cursorRow, 5, "the last written row of the new screen")
+    }
+
     // MARK: counts, through the real handler
 
     func test_aCountCarriesTheCursorThatManyRows() throws {
@@ -1417,10 +1497,8 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aReportLongAfterTheReflowLeavesTheBandAlone() throws {
-        // libghostty emits a scrollbar only from a draw and only when the value differs, so a
-        // resize that rewraps nothing reports nothing at all. Left armed, the anchor fired on
-        // whatever came next: a background process printing one line minutes later moved the band
-        // off the row the reader had been sitting on without touching the keyboard.
+        // A resize that rewraps nothing reports nothing, so an anchor left armed fired on whatever
+        // came next: a background line minutes later moved the band off the row the reader chose.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         var clock = ContinuousClock.now
@@ -1444,9 +1522,8 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aNarrowerWindowFindsTheLineByTheFragmentLeftOfIt() throws {
-        // A width change rewraps, and `text(viewportRow:)` reads one row's cells, so no row holds
-        // the whole of what was remembered. Matching on exact text alone found nothing here, the
-        // band held its row, and the reader watched their line slide out from under it.
+        // A width change rewraps and rows are read one at a time, so none holds the whole of what
+        // was remembered. Exact matching found nothing, and the line slid out from under the band.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let long = "❯ tail -f /var/log/system.log | grep -i kernel | less -R"

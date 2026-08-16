@@ -320,16 +320,24 @@ final class ScrollModeController {
             if selection != nil { closeSelection() } else { end() }
         case .step(let delta):
             step(delta)
-        case .paragraph(let delta):
-            move(
-                to: ScrollCell(
-                    row: paragraphRow(from: cursor.row, delta: delta), column: cursor.column))
+        case .paragraph(let delta, let times):
+            var row = cursor.row
+            for _ in 0..<times {
+                let next = paragraphRow(from: row, delta: delta)
+                if next == row { break }  // parked at an end; the rest of the count is spent
+                row = next
+            }
+            move(to: ScrollCell(row: row, column: cursor.column))
         case .column(let delta):
             move(to: ScrollCell(row: cursor.row, column: cursor.column + delta))
         case .word(let motion, let wide, let times):
             let screen = screen(wide: wide)
             var destination = cursor
-            for _ in 0..<times { destination = motion.destination(from: destination, on: screen) }
+            for _ in 0..<times {
+                let next = motion.destination(from: destination, on: screen)
+                if next == destination { break }  // parked at an end; a big count must not spin
+                destination = next
+            }
             move(to: destination)
         case .firstNonBlank:
             move(to: ScrollCell(row: cursor.row, column: firstNonBlankColumn(of: cursor.row)))
@@ -507,23 +515,19 @@ final class ScrollModeController {
         refreshCursor()
     }
 
-    /// Give the anchor back once the rows under it have moved.
+    /// Give the anchor back once the rows under it have moved. A selection cannot leave the
+    /// viewport, so one that outlived a scroll would highlight rows it no longer covers.
     ///
-    /// A selection is viewport-bounded because `Point.pin` clamps an exact coordinate's y to the
-    /// grid height for every point tag, so no coordinate names a scrollback row. One that outlived a
-    /// scroll would highlight rows it no longer covers and yank text the reader never saw.
-    ///
-    /// A scroll is driven by the report rather than by the key that asked, because the two do not
-    /// line up in either direction: output moves the viewport with no key at all, and a `j` at the
-    /// end of the buffer moves nothing while looking exactly like one that does. A reflow calls it
-    /// straight, since the cursor can be found again by its line and a fixed anchor cannot.
+    /// Driven by the report, not the key: output moves the viewport with no key at all, and a `j`
+    /// at the end of the buffer moves nothing while looking exactly like one that does.
     private func releaseSelection() {
         guard selection != nil else { return }
         selection = nil
         updateHeader()
         // The overlay holds the rects it was last handed, so without this the highlight stays
-        // painted over rows the selection no longer covers until some later move redraws it.
-        refreshCursor()
+        // painted over rows the selection no longer covers. Remembers nothing: this is not a
+        // placement, and `refreshGeometry` calls it before invalidating the rows it would read.
+        refreshCursor(remembersLine: false)
     }
 
     /// What a visual selection currently covers, or nil when there is none.
@@ -557,14 +561,19 @@ final class ScrollModeController {
     }
 
     /// The last row with anything written on it. Below it is empty space, and no move should land
-    /// the band out there.
-    private var lastWrittenRow: Int { surface.map { Self.entryRow(of: $0) } ?? 0 }
+    /// the band out there. Reads through the cache: `H`/`L` and every page move ask for it.
+    private var lastWrittenRow: Int {
+        let last = lastRow
+        for row in stride(from: last, through: 0, by: -1) where !Self.isBlank(rowText(row)) {
+            return row
+        }
+        return last
+    }
 
-    /// A page move: the cursor advances by the fraction, and the viewport takes as much of that as
-    /// it can, so the band parks at the middle of the screen while the buffer runs under it.
-    ///
-    /// Against either end the viewport takes nothing and the cursor makes the rest of the trip.
-    /// Without that the last half page cannot be reached by paging at all.
+    /// A page move: the cursor advances by the fraction and the viewport takes what it can, so the
+    /// band parks mid-screen while the buffer runs under it. Against either end the viewport takes
+    /// nothing and the cursor makes the rest of the trip, which is the only way to reach the last
+    /// half page by paging.
     @discardableResult
     private func page(_ fraction: Double) -> Bool {
         let rows = max(surface?.cellMetrics?.rows ?? 1, 1)
@@ -578,6 +587,9 @@ final class ScrollModeController {
         let ideal = want - lastRow / 2
         let taken = down ? min(max(ideal, 0), room) : max(min(ideal, 0), -room)
         if taken != 0 { surface?.scroll(.lines(taken)) }
+        // A page that spends the last of the room lands on a screen this one cannot see yet, so the
+        // bottom it clamps to is the old one. The report that follows re-clamps against the new.
+        clampsToWrittenRows = down && taken == room
         let landed = down ? min(want - taken, lastWrittenRow) : want - taken
         cursor = ScrollCell(row: min(max(landed, 0), lastRow), column: cursor.column)
         // The buffer moved under the band, so the line it names is about to change with nothing to
@@ -603,6 +615,9 @@ final class ScrollModeController {
         flash(range)
     }
 
+    /// Set by a page that scrolled to the end of the buffer, and spent by the next report.
+    private var clampsToWrittenRows = false
+
     /// The last `f`/`F`/`t`/`T`, so `;` and `,` have something to run again.
     private var lastFind: ScrollKeymap.Find?
 
@@ -611,9 +626,9 @@ final class ScrollModeController {
         let text = Array(rowText(cursor.row))
         var column = cursor.column
         for step in 0..<times {
-            // A `t` sits next to its target, so repeating it from there finds the same cell and
-            // the cursor never moves. The first hop of a repeat starts one cell further along.
-            let skips = isRepeat && find.till && step == 0
+            // A `t` parks next to its target, so searching again from there finds the same cell.
+            // Every hop after the landing starts one further along, counted or repeated.
+            let skips = find.till && (isRepeat || step > 0)
             let from = skips ? column + (find.direction == .forward ? 1 : -1) : column
             guard let next = Self.findColumn(find, from: from, in: text) else { return }
             column = next
@@ -714,6 +729,11 @@ final class ScrollModeController {
             if pending.armedAt.duration(to: now()) <= Self.anchorLifetime {
                 reanchor(to: pending.line)
             }
+        }
+        if clampsToWrittenRows {
+            clampsToWrittenRows = false
+            let bottom = lastWrittenRow
+            if cursor.row > bottom { move(to: ScrollCell(row: bottom, column: cursor.column)) }
         }
         updateHeader()
     }
