@@ -47,3 +47,54 @@ final class SizeSyncHoldTests: XCTestCase {
         XCTAssertFalse(view.isSizeSyncSuspended)
     }
 }
+
+/// Auto Layout walks a view through intermediate frames before the one it settles on, and each one
+/// reached libghostty, which rewrapped the whole buffer for it. A frame a few pixels wide rewraps
+/// the scrollback into a column or two, and libghostty evicts by bytes, so history went and never
+/// came back. Nothing on screen says so while it happens: the damage is missing lines afterwards.
+final class SizePushCoalescingTests: XCTestCase {
+    private func settleRunloop() {
+        let turned = expectation(description: "the queued push ran")
+        DispatchQueue.main.async { turned.fulfill() }
+        wait(for: [turned], timeout: 1)
+    }
+
+    func test_aBurstOfFramesInOnePassLandsAsOneGrid() {
+        let view = GhosttyHostView()
+
+        for width in stride(from: 800, through: 100, by: -50) {
+            view.setFrameSize(NSSize(width: CGFloat(width), height: 400))
+        }
+
+        XCTAssertEqual(view.sizePushesForTesting, 0, "nothing goes down from inside the pass")
+
+        settleRunloop()
+
+        XCTAssertEqual(view.sizePushesForTesting, 1, "fifteen frames, one grid: the one it landed on")
+    }
+
+    /// A later pass is a later turn, so it gets its own push. Coalescing that would freeze the grid
+    /// at whatever the first pass produced, which is a different bug wearing this fix's clothes.
+    func test_aLaterPassPushesAgain() {
+        let view = GhosttyHostView()
+
+        view.setFrameSize(NSSize(width: 800, height: 400))
+        settleRunloop()
+        view.setFrameSize(NSSize(width: 600, height: 400))
+        settleRunloop()
+
+        XCTAssertEqual(view.sizePushesForTesting, 2)
+    }
+
+    /// A hold taken mid-pass has to survive to the queued push, or the freeze the chrome asked for
+    /// lands one turn late and the frames it was protecting go down anyway.
+    func test_aHoldTakenBeforeTheTurnEndsStopsTheQueuedPush() {
+        let view = GhosttyHostView()
+
+        view.setFrameSize(NSSize(width: 800, height: 400))
+        view.setSizeSyncSuspended(true)
+        settleRunloop()
+
+        XCTAssertEqual(view.sizePushesForTesting, 0, "the hold outranks a push already queued")
+    }
+}
