@@ -304,6 +304,46 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(board.string(forType: .string), "你好 world", "not `你好 worl`")
     }
 
+    /// `$` sits on the last character, which has no next character to end it. Ended at the grid's
+    /// edge instead, the selection drew clean across the pane while the yank still read correctly.
+    func test_aSelectionToTheEndOfTheRowStopsAtTheText() throws {
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "你好 world"  // 10 cells, so the last one is 9
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("0")))
+        XCTAssertTrue(handler(try keyDown("v")))
+        XCTAssertTrue(handler(try keyDown("$", unshifted: "4", flags: .shift)))
+
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(state.selection?.endColumn, 9, "the row's last painted cell, not the grid's")
+    }
+
+    func test_aSelectionEndingOnATrailingWideCharacterCoversBothCells() throws {
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "ab你"  // cells 0, 1, then 2 and 3
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("0")))
+        XCTAssertTrue(handler(try keyDown("v")))
+        XCTAssertTrue(handler(try keyDown("$", unshifted: "4", flags: .shift)))
+
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(state.selection?.endColumn, 3, "through the far half of the wide character")
+    }
+
     func test_theBandCoversBothCellsOfAWideCharacter() throws {
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)

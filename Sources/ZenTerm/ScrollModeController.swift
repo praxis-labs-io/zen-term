@@ -39,6 +39,9 @@ final class ScrollModeController {
     /// See `rowText`.
     private var rowCache: [Int: String] = [:]
 
+    /// The last painted cell per row, alongside `rowCache` and dropped with it.
+    private var cellExtentCache: [Int: Int] = [:]
+
     /// The last position reported, so the header can be rewritten between reports without inventing
     /// a count.
     private var lastPosition: TerminalScrollPosition?
@@ -430,10 +433,38 @@ final class ScrollModeController {
         let offset = min(max(cell.column, 0), max(text.count - 1, 0))
         guard !text.allSatisfy(\.isASCII) else { return offset...offset }
         let first = cellStart(ofOffset: offset, on: cell.row)
-        // The next character's first cell is one past this one's last. A row filled edge to edge
-        // has no next, and the search says so by running off the end.
+        // One past this character's last cell is where the next one starts, padding included. With
+        // nothing after it at all the row's own painted extent ends it; running to the grid's edge
+        // instead drew the selection clean across the pane.
         let next = cellStart(ofOffset: offset + 1, on: cell.row)
+        let columns = surface?.cellMetrics?.columns ?? 0
+        guard next < columns else { return first...max(lastPaintedCell(on: cell.row), first) }
         return first...max(next - 1, first)
+    }
+
+    /// The last cell on the row a program painted, by binary search on where the row runs out.
+    ///
+    /// Reading from a cell to the grid's edge comes back empty once nothing is painted from there
+    /// on. A trailing wide character answers at either of its cells, so this lands on its last.
+    private func lastPaintedCell(on row: Int) -> Int {
+        if let known = cellExtentCache[row] { return known }
+        let extent = searchLastPaintedCell(on: row)
+        cellExtentCache[row] = extent
+        return extent
+    }
+
+    private func searchLastPaintedCell(on row: Int) -> Int {
+        guard let surface, let columns = surface.cellMetrics?.columns, columns > 0 else { return 0 }
+        var low = 0
+        var high = columns
+        while low < high {
+            let mid = (low + high) / 2
+            let rest = surface.text(
+                in: TerminalViewportRange(
+                    startRow: row, startColumn: mid, endRow: row, endColumn: columns - 1))
+            if rest?.isEmpty ?? true { high = mid } else { low = mid + 1 }
+        }
+        return max(low - 1, 0)
     }
 
     /// The first cell holding the character at `offset`, by binary search over the row.
@@ -533,7 +564,10 @@ final class ScrollModeController {
     private func isBlankRow(_ row: Int) -> Bool { Self.isBlank(rowText(row)) }
 
     /// Drop the read-row cache. Called wherever the visible rows can have changed underneath it.
-    private func invalidateRows() { rowCache.removeAll(keepingCapacity: true) }
+    private func invalidateRows() {
+        rowCache.removeAll(keepingCapacity: true)
+        cellExtentCache.removeAll(keepingCapacity: true)
+    }
 
     /// A row counts as blank when it holds no non-whitespace. A row the backend cannot read is
     /// treated as blank so a motion terminates rather than running to the edge of the grid.
