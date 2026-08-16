@@ -161,25 +161,55 @@ final class RecordingSurface: NSObject, TerminalSurface {
     /// what a caller does with a row the grid has shrunk out from under.
     func text(viewportRow row: Int) -> String? {
         guard row < (cellMetrics?.rows ?? rows.count), rows.indices.contains(row) else { return nil }
-        return rows[row]
+        return text(
+            in: TerminalViewportRange(
+                startRow: row, startColumn: 0, endRow: row,
+                endColumn: max((cellMetrics?.columns ?? rows[row].count) - 1, 0)))
     }
 
-    /// Slices `rows`: first and last cut at their columns, everything between them whole.
-    ///
-    /// It does **not** model the backend's soft-wrap unwrapping. A fake that joined rows would make
-    /// a test's expected string depend on where the fixture wrapped.
+    /// A cell no program ever wrote, one cell wide. Distinct from a written space: libghostty's
+    /// formatter drops a run of these at the end of a read and only fills one that has text after.
+    static let unwritten: Character = "\0"
+
+    /// Cells wide: the CJK and emoji ranges are two, everything else is one. libghostty owns the
+    /// real table, and this only has to agree with it on the characters fixtures use.
+    private static func width(_ character: Character) -> Int {
+        guard let scalar = character.unicodeScalars.first else { return 1 }
+        switch scalar.value {
+        case 0x1100...0x115F, 0x2E80...0x303E, 0x3041...0x33FF, 0x3400...0x4DBF, 0x4E00...0x9FFF,
+            0xA000...0xA4CF, 0xAC00...0xD7A3, 0xF900...0xFAFF, 0xFE30...0xFE6F, 0xFF00...0xFF60,
+            0xFFE0...0xFFE6, 0x1F300...0x1F64F, 0x1F900...0x1F9FF, 0x20000...0x3FFFD:
+            return 2
+        default:
+            return 1
+        }
+    }
+
+    /// Reads by **cell**, taking a character whose cells the span touches at either end, which is
+    /// what ghostty's `selectionString wide char` test asserts. Soft wrap is not modelled.
     func text(in range: TerminalViewportRange) -> String? {
         guard rows.indices.contains(range.startRow), rows.indices.contains(range.endRow) else {
             return nil
         }
         let sliced = (range.startRow...range.endRow).map { row -> String in
-            let text = rows[row]
             let from = row == range.startRow ? range.startColumn : 0
-            let through = row == range.endRow ? range.endColumn : text.count - 1
-            guard from <= through, from < text.count else { return "" }
-            let start = text.index(text.startIndex, offsetBy: from)
-            let end = text.index(text.startIndex, offsetBy: min(through + 1, text.count))
-            return String(text[start..<end])
+            let through = row == range.endRow ? range.endColumn : Int.max
+            var cell = 0
+            var taken = ""
+            var blanks = 0
+            for character in rows[row] {
+                let last = cell + Self.width(character) - 1
+                defer { cell = last + 1 }
+                guard cell <= through, last >= from else { continue }
+                guard character != Self.unwritten else {
+                    blanks += 1
+                    continue
+                }
+                taken += String(repeating: " ", count: blanks)
+                blanks = 0
+                taken.append(character)
+            }
+            return taken
         }
         return sliced.joined(separator: "\n")
     }

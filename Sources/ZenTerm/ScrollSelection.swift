@@ -17,13 +17,21 @@ struct ScrollSelection: Equatable {
     var anchor: ScrollCell
 
     /// The span to draw and to yank, ordered so it reads forwards however the motions left it.
-    /// `columns` is the grid width, which only `.line` needs.
-    func range(to cursor: ScrollCell, columns: Int) -> TerminalViewportRange {
+    /// `cells` maps an offset to the cells it covers: near end takes its first, far end its last.
+    func range(
+        to cursor: ScrollCell, columns: Int, cells: (ScrollCell) -> ClosedRange<Int>
+    ) -> TerminalViewportRange {
         switch kind {
         case .character:
+            // Ordered before converting, so the far end is the one that takes its last cell and a
+            // span stopping on a wide character covers the whole of it rather than half.
+            let startsAtAnchor =
+                anchor.row < cursor.row
+                || (anchor.row == cursor.row && anchor.column <= cursor.column)
+            let (first, last) = startsAtAnchor ? (anchor, cursor) : (cursor, anchor)
             return TerminalViewportRange(
-                startRow: anchor.row, startColumn: anchor.column,
-                endRow: cursor.row, endColumn: cursor.column)
+                startRow: first.row, startColumn: cells(first).lowerBound,
+                endRow: last.row, endColumn: cells(last).upperBound)
         case .line:
             // Ordered here, not by the range's own init: that pairs each row with its column, so
             // (row 10, col 0) and (row 5, col 79) would come back starting at the last column.

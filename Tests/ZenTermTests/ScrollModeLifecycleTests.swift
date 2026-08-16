@@ -126,6 +126,22 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursor.column, 4)
     }
 
+    func test_enteringOverASelectionOnAWideRowLandsOnTheCharacterNotTheOffset() throws {
+        // The backend reports the selection's start in pixels, so it arrives as a cell. A column is
+        // an offset, and on a wide row the two are different characters.
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[3] = "你ab"  // 你 takes cells 0 and 1
+        surface.selectionOrigin = TerminalViewportCell(row: 3, column: 2)  // the `a`
+
+        controller.handle(.toggleScrollMode)
+
+        XCTAssertEqual(controller.scrollMode.cursor.column, 1, "offset 1 is the `a`")
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(state.cursorCells, 2...2, "and it is drawn on the cell the reader selected")
+    }
+
     func test_enteringWithNoSelection_stillOpensOnTheLastWrittenRow() throws {
         let controller = makeWindow()
 
@@ -277,6 +293,142 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertTrue(handler(try keyDown("*", unshifted: "8", flags: .shift)))
 
         XCTAssertEqual(panel.findBarForTesting?.needle, "hi")
+    }
+
+    // MARK: wide characters
+
+    /// A column is an offset and every consumer wants a cell, so each wide character earlier in the
+    /// row was a cell of drift: the band drew left of true and a yank stopped short of the band.
+    func test_aYankPastAWideCharacterTakesTheWholeOfIt() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "你好 world"  // 10 cells, 8 characters
+        let board = NSPasteboard(name: NSPasteboard.Name("zenterm-yank-\(UUID().uuidString)"))
+        controller.handle(.toggleScrollMode)
+        controller.scrollMode.yankPasteboard = board
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("0")))
+        XCTAssertTrue(handler(try keyDown("v")))
+        XCTAssertTrue(handler(try keyDown("$", unshifted: "4", flags: .shift)))
+        XCTAssertTrue(handler(try keyDown("y")))
+
+        XCTAssertEqual(board.string(forType: .string), "你好 world", "not `你好 worl`")
+    }
+
+    /// `$` sits on the last character, which has no next character to end it. Ended at the grid's
+    /// edge instead, the selection drew clean across the pane while the yank still read correctly.
+    func test_aSelectionToTheEndOfTheRowStopsAtTheText() throws {
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "你好 world"  // 10 cells, so the last one is 9
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("0")))
+        XCTAssertTrue(handler(try keyDown("v")))
+        XCTAssertTrue(handler(try keyDown("$", unshifted: "4", flags: .shift)))
+
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(state.selection?.endColumn, 9, "the row's last painted cell, not the grid's")
+    }
+
+    func test_aSelectionEndingOnATrailingWideCharacterCoversBothCells() throws {
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "ab你"  // cells 0, 1, then 2 and 3
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("0")))
+        XCTAssertTrue(handler(try keyDown("v")))
+        XCTAssertTrue(handler(try keyDown("$", unshifted: "4", flags: .shift)))
+
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(state.selection?.endColumn, 3, "through the far half of the wide character")
+    }
+
+    func test_theBandCoversBothCellsOfAWideCharacter() throws {
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "ab你cd"
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("0")))
+        for _ in 0..<2 { XCTAssertTrue(handler(try keyDown("l"))) }  // onto 你
+
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(state.cursorCells, 2...3, "the cursor outlines the whole character")
+    }
+
+    func test_aCellAfterAWideCharacterIsNotDrawnLeftOfTrue() throws {
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "ab你cd"
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("0")))
+        for _ in 0..<3 { XCTAssertTrue(handler(try keyDown("l"))) }  // onto the `c` after it
+
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(state.cursorCells, 4...4, "offset 3, but cell 4: 你 took two")
+    }
+
+    func test_theBandStopsAtACharacterAGapFollows() throws {
+        // A right-aligned segment leaves cells no program wrote, and libghostty drops a run of
+        // those at the end of a read. A search counting a prefix reads that as no character.
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "你" + String(repeating: RecordingSurface.unwritten, count: 8) + "12:00"
+        controller.handle(.toggleScrollMode)
+
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(state.cursorCells, 0...1, "the 你, not it and the gap after it")
+    }
+
+    func test_aColumnInsideAGapIsTheCellItSitsOn() throws {
+        // The gap reads back as spaces once something written follows, so the motions walk it. Each
+        // one has to land on its own cell rather than on wherever the gap ends.
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let host = ModeHostSpy()
+        hosts.append(host)
+        controller.keyModeHost = host
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[11] = "你" + String(repeating: RecordingSurface.unwritten, count: 8) + "12:00"
+        controller.handle(.toggleScrollMode)
+        let handler = try XCTUnwrap(host.modeHandler)
+
+        XCTAssertTrue(handler(try keyDown("0")))
+        XCTAssertTrue(handler(try keyDown("l")))  // the first space of the gap
+
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(state.cursorCells, 2...2, "cell 2, the first of the gap")
     }
 
     // MARK: the two-key commands, through the real handler
