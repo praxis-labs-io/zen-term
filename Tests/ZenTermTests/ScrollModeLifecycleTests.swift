@@ -126,6 +126,22 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursor.column, 4)
     }
 
+    func test_enteringOverASelectionOnAWideRowLandsOnTheCharacterNotTheOffset() throws {
+        // The backend reports the selection's start in pixels, so it arrives as a cell. A column is
+        // an offset, and on a wide row the two are different characters.
+        let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows[3] = "你ab"  // 你 takes cells 0 and 1
+        surface.selectionOrigin = TerminalViewportCell(row: 3, column: 2)  // the `a`
+
+        controller.handle(.toggleScrollMode)
+
+        XCTAssertEqual(controller.scrollMode.cursor.column, 1, "offset 1 is the `a`")
+        let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
+        XCTAssertEqual(state.cursorCells, 2...2, "and it is drawn on the cell the reader selected")
+    }
+
     func test_enteringWithNoSelection_stillOpensOnTheLastWrittenRow() throws {
         let controller = makeWindow()
 
@@ -281,9 +297,8 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
     // MARK: wide characters
 
-    /// A column is a character offset and every consumer wants a cell, so a wide character was one
-    /// cell of drift for each one earlier in the row: the band drew left of true and a yank that
-    /// ended past one stopped short of what was highlighted.
+    /// A column is an offset and every consumer wants a cell, so each wide character earlier in the
+    /// row was a cell of drift: the band drew left of true and a yank stopped short of the band.
     func test_aYankPastAWideCharacterTakesTheWholeOfIt() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()

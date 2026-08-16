@@ -83,7 +83,10 @@ final class ScrollModeController {
         Log.info("scroll mode entered", category: .panes)
         // Read BEFORE the header goes up, and remember the row by its text: the header SIGWINCHes
         // the pty, and a shell redrawing its prompt blanks those rows for a frame.
-        cursor = Self.entryCell(of: surface)
+        // `entryCell` reports the backend's own cell, worked out from pixels. A column is an offset
+        // into the row's text, and on a row with a wide character the two name different ones.
+        let entry = Self.entryCell(of: surface)
+        cursor = ScrollCell(row: entry.row, column: offset(ofCell: entry.column, on: entry.row))
         let entryText = rowText(cursor.row)
         cursorLine = Self.isBlank(entryText) ? nil : entryText
         updateHeader()
@@ -427,11 +430,8 @@ final class ScrollModeController {
         }
     }
 
-    /// The cells the character at `cell.column` occupies. A column is an offset into the row's
-    /// text, and every consumer wants cells: a wide character is two of them for the one offset.
-    ///
-    /// ASCII is single width by definition, so the overwhelming majority of rows map straight
-    /// through and cost nothing. Only a row holding something else pays for the search below.
+    /// The cells the character at `cell.column` occupies: a wide character is two for the one
+    /// offset. ASCII is single width, so an all-ASCII row maps straight through and costs nothing.
     func cells(of cell: ScrollCell) -> ClosedRange<Int> {
         let text = rowText(cell.row)
         let offset = min(max(cell.column, 0), max(text.count - 1, 0))
@@ -444,6 +444,17 @@ final class ScrollModeController {
         let span = first...max(next - 1, first)
         cellCache[cell.row, default: [:]][offset] = span
         return span
+    }
+
+    /// The character offset at a cell, which is how a backend reports where a selection starts.
+    /// One read: the row's count less what the cell to the edge holds is how many precede it.
+    private func offset(ofCell cell: Int, on row: Int) -> Int {
+        guard cell > 0, let surface, let columns = surface.cellMetrics?.columns, cell < columns
+        else { return max(cell, 0) }
+        let rest = surface.text(
+            in: TerminalViewportRange(
+                startRow: row, startColumn: cell, endRow: row, endColumn: columns - 1))
+        return max(rawRow(row).count - (rest?.count ?? 0), 0)
     }
 
     /// The first cell holding the character at `offset`, searched from the right: reading cell c to

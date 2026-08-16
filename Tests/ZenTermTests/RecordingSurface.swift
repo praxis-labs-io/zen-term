@@ -171,17 +171,22 @@ final class RecordingSurface: NSObject, TerminalSurface {
     /// formatter drops a run of these at the end of a read and only fills one that has text after.
     static let unwritten: Character = "\0"
 
-    /// Slices `rows`: first and last cut at their columns, everything between them whole.
-    ///
-    /// It does **not** model the backend's soft-wrap unwrapping. A fake that joined rows would make
-    /// a test's expected string depend on where the fixture wrapped.
-    /// Cells wide. Anything non-ASCII counts as two here, which is the case the column-to-cell
-    /// mapping exists for; libghostty does the real widths.
-    private static func width(_ character: Character) -> Int { character.isASCII ? 1 : 2 }
+    /// Cells wide: the CJK and emoji ranges are two, everything else is one. libghostty owns the
+    /// real table, and this only has to agree with it on the characters fixtures use.
+    private static func width(_ character: Character) -> Int {
+        guard let scalar = character.unicodeScalars.first else { return 1 }
+        switch scalar.value {
+        case 0x1100...0x115F, 0x2E80...0x303E, 0x3041...0x33FF, 0x3400...0x4DBF, 0x4E00...0x9FFF,
+            0xA000...0xA4CF, 0xAC00...0xD7A3, 0xF900...0xFAFF, 0xFE30...0xFE6F, 0xFF00...0xFF60,
+            0xFFE0...0xFFE6, 0x1F300...0x1F64F, 0x1F900...0x1F9FF, 0x20000...0x3FFFD:
+            return 2
+        default:
+            return 1
+        }
+    }
 
-    /// Reads by **cell**, not by character index, and takes a character whose cells the span
-    /// touches at either end. That is what ghostty's `selectionString wide char` test asserts, and
-    /// it is the behavior the chrome's offset-to-cell search is built on.
+    /// Reads by **cell**, taking a character whose cells the span touches at either end, which is
+    /// what ghostty's `selectionString wide char` test asserts. Soft wrap is not modelled.
     func text(in range: TerminalViewportRange) -> String? {
         guard rows.indices.contains(range.startRow), rows.indices.contains(range.endRow) else {
             return nil
