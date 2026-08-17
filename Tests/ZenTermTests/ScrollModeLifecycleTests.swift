@@ -1477,6 +1477,17 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         return (try XCTUnwrap(host.modeHandler), board)
     }
 
+    /// The yanking harness over a screen of distinctly numbered rows, so an assertion on yanked text
+    /// names the rows it covered. Every row is written, so the mode opens on the last one.
+    private func enterModeOverNumberedRows(_ controller: WindowController) throws -> (
+        surface: RecordingSurface, handler: (NSEvent) -> Bool, board: NSPasteboard
+    ) {
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows = (0..<24).map { "row \($0)" }
+        let (handler, board) = try enterModeForYanking(controller)
+        return (surface, handler, board)
+    }
+
     func test_aCharacterSelectionYanksExactlyWhatItCovers() throws {
         let controller = makeWindow()
         let (handler, board) = try enterModeForYanking(controller)
@@ -1562,9 +1573,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         // The anchor names a place in the text, so a scroll moves it by exactly the offset delta and
         // the selection grows by the rows that arrived. Releasing it here cost the reader the drag.
         let controller = makeWindow()
-        let surface = try XCTUnwrap(spawned.first)
-        surface.rows = (0..<24).map { "row \($0)" }
-        let (handler, board) = try enterModeForYanking(controller)
+        let (surface, handler, board) = try enterModeOverNumberedRows(controller)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 100))
 
         for _ in 0..<3 { _ = handler(try keyDown("k")) }  // off the last row, onto row 20
@@ -1581,10 +1590,8 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         // The one case that still has to release: a selection is viewport-bounded, so an anchor
         // scrolled past the edge would highlight rows it no longer covers.
         let controller = makeWindow()
-        let surface = try XCTUnwrap(spawned.first)
-        surface.rows = (0..<24).map { "row \($0)" }
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
-        let (handler, board) = try enterModeForYanking(controller)
+        let (surface, handler, board) = try enterModeOverNumberedRows(controller)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 100))
 
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
@@ -1878,9 +1885,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         // Both ends are re-found by content, so a rewrap that moves every row three down leaves the
         // selection covering the words it covered before, not the row numbers.
         let controller = makeWindow()
-        let surface = try XCTUnwrap(spawned.first)
-        surface.rows = (0..<24).map { "row \($0)" }
-        let (handler, board) = try enterModeForYanking(controller)
+        let (surface, handler, board) = try enterModeOverNumberedRows(controller)
 
         for _ in 0..<3 { _ = handler(try keyDown("k")) }  // anchor on row 20
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
@@ -1894,25 +1899,45 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(board.string(forType: .string), "row 18\nrow 19\nrow 20")
     }
 
-    func test_aReflowThatNeverReportsGivesTheSelectionBackOnTheNextKey() throws {
-        // libghostty emits a scrollbar only from a draw and only when it differs, so a reflow that
-        // rewraps nothing never reports. The anchor would sit on a row whose text had moved.
+    func test_aReflowLeavesTheSpanUnresolvedUntilTheReportFindsIt() throws {
+        // The reflow may never report: libghostty emits a scrollbar only from a draw and only when
+        // it differs. Until the anchor is placed, the span is off the screen rather than wrong.
         let controller = makeWindow()
-        let surface = try XCTUnwrap(spawned.first)
-        surface.rows = (0..<24).map { "row \($0)" }
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
-        let (handler, board) = try enterModeForYanking(controller)
+        let (_, handler, board) = try enterModeOverNumberedRows(controller)
 
         for _ in 0..<3 { _ = handler(try keyDown("k")) }
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        XCTAssertEqual(panel.headerContentForTesting?.title, "VISUAL: 1 LINE")
+
         controller.applySessionFontSize()
-        surface.rows = Self.slidDown(surface.rows, by: 2)
 
-        _ = handler(try keyDown("k"))
-
-        XCTAssertEqual(panel.headerContentForTesting?.title, "SCROLL")
+        XCTAssertNil(
+            panel.scrollCursorForTesting.state?.selection,
+            "an unresolved span still painted covers rows whose text has moved")
+        XCTAssertEqual(
+            panel.headerContentForTesting?.title, "SCROLL",
+            "the header counts a span the reader can no longer see")
         _ = handler(try keyDown("y"))
         XCTAssertNil(board.string(forType: .string))
+    }
+
+    func test_anUnresolvedSpanIsGoneBeforeTheKeyThatFollowsIsRead() throws {
+        // The keymap is asked whether a selection exists. Releasing after it decoded turns the next
+        // `y` into a yank of a span that is not on the screen, which writes nothing and says nothing.
+        let controller = makeWindow()
+        let (_, handler, board) = try enterModeOverNumberedRows(controller)
+
+        for _ in 0..<3 { _ = handler(try keyDown("k")) }  // cursor onto row 20
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        controller.applySessionFontSize()
+
+        _ = handler(try keyDown("y"))
+        _ = handler(try keyDown("y"))
+
+        XCTAssertEqual(
+            board.string(forType: .string), "row 20",
+            "with no span on screen `yy` takes the cursor's row, as it does in normal mode")
     }
 
     func test_aResizeThatCrossesTheTwoEndsGivesTheSelectionBack() throws {

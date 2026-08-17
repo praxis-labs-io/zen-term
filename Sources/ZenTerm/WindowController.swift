@@ -1979,6 +1979,9 @@ final class WindowController: NSObject {
             active?.toggleRightDrawer()
         case .toggleZoom:
             Log.info("zoom toggled", category: .panes)
+            // The zoom takes first responder off the find field without the bar hearing it, leaving
+            // it up with a dead caret. A scroll mode the reader opened is untouched: see `teardown`.
+            search.end()
             active?.toggleZoom()
             // A multi-pane zoom reparents the canvas, so the pane takes first responder again and
             // paints a live cursor back over a mode that is still up. Re-assert the mode's render.

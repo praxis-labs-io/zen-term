@@ -381,6 +381,26 @@ final class SearchLifecycleTests: WindowTestCase {
     /// being typed, to scroll mode once ⏎ hands it over. There is no third state, and every way out
     /// of scroll mode has to hold that.
     ///
+    /// Focus Mode steals first responder off the find field without the bar hearing it, and nothing
+    /// clears `isEditing` on a lost responder, so the bar would sit there swallowing every key.
+    func test_focusModeTakesTheFindBarDownWithIt() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        controller.handle(.splitVertical)
+        controller.window.contentView?.layoutSubtreeIfNeeded()
+        controller.handle(.toggleSearch)
+        controller.search.beginNeedleForTesting("error")
+        XCTAssertTrue(controller.search.isEditing, "precondition: the caret is in the field")
+
+        controller.handle(.toggleZoom)
+
+        XCTAssertFalse(controller.search.isEditing, "a bar left editing declines every key")
+        XCTAssertFalse(controller.search.isActive)
+        XCTAssertNil(panel.findBarForTesting)
+    }
+
     /// Left open, the hole is worse than a stray bar. `search.isActive` keeps the app-global
     /// handler installed, `SearchController.handle` still claims `n` and `N`, and
     /// `ScrollModeController.handle` declines everything once inactive. So the prompt goes live

@@ -1295,8 +1295,20 @@ blank anchor row has nothing to be found by and goes immediately, exactly as `cu
 
 Both ends are re-found independently, and "nearest match" can settle on a repeated prompt, so a pair
 that comes back **crossed** is dropped rather than painted: it would cover text nobody dragged over.
-The armed line is bounded by `anchorLifetime` for the same reason the cursor's is, since a reflow
-that rewraps nothing produces no report at all.
+It is armed only when the cursor's own line is armed too, since a pair where one end moves and the
+other holds changes the span without ever looking crossed.
+
+**Between arming and the report the span is unresolved, and unresolved means gone from the screen.**
+`selectionRange()` returns nil and the header stops counting, so nothing is painted and nothing can
+be yanked off an anchor whose row may have moved. A reflow that rewraps nothing produces no report
+at all, so the resolution may never come: the reader's next key releases the selection outright, and
+that release runs *before* the keymap is asked whether a selection exists. Ordered the other way, the
+keymap answers `y` with a yank of a span that is not on screen, which writes nothing and says
+nothing, and reads `Esc` as "close the selection" when the screen shows none.
+
+The four ways a selection is given back: its row leaves the grid, its row was blank so there is
+nothing to find it by, the two re-found ends come back crossed, or the reflow never reported and the
+reader pressed a key.
 
 **A column is a character offset, and every consumer wants a cell.** The motions all move by
 character, which is what vim means by a column, so the offset stays. The two places that need
@@ -1528,7 +1540,7 @@ mean anything. A height change needs none of this, which is why exact matching h
 until a width change was tried.
 
 A selection's anchor comes back the same way, searching from its own row instead of the
-cursor's, and is dropped when its line is gone or the two ends come back crossed. The
+cursor's, and is dropped on any of the four conditions above. The
 overlay is refreshed either way: it holds the rects it was last handed, so releasing
 without a redraw left the highlight painted over rows it no longer covered. A
 viewport-relative cursor cannot follow a line off the screen at all: when the line is
@@ -1544,11 +1556,16 @@ resigns key. `end()` is idempotent, so overlapping triggers are free.
 **Focus Mode is the counter-case, and it caught us.** Zoom re-takes first responder after
 the canvas reparents, and doing that through `focus(_:)` announced a focus move over the
 pane the reader never left, ending the mode on every `⌘⏎`. `PaneCanvasController` gives
-zoom its own `reassertFocus()` instead. Narrowing `focus(_:)` itself to "the leaf id
-changed" does **not** work: pane close and tab switch both reassign `tree.focusedLeaf`
-before calling it, and a drawer handing focus back names the leaf it left. The zoom path
-also has to re-assert the mode's unfocused render, since taking first responder paints the
-shell's live cursor back underneath it.
+zoom `focus(_:announces:)` with the announcement off instead. Narrowing `focus(_:)` itself
+to "the leaf id changed" does **not** work: pane close and tab switch both reassign
+`tree.focusedLeaf` before calling it, and a drawer handing focus back names the leaf it
+left.
+
+Two things ride on that announcement that the zoom path then has to do itself. It re-asserts
+the mode's unfocused render, since taking first responder paints the shell's live cursor back
+underneath it. And it ends the find bar: the zoom pulls first responder off the field without
+the bar hearing, nothing clears `isEditing` on a lost responder, and a bar left editing makes
+the mode handler decline every key, so the whole keyboard goes to the shell behind it.
 
 ## Config
 
