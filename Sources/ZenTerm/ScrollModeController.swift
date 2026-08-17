@@ -163,7 +163,6 @@ final class ScrollModeController {
         armSelectionAnchor()
         invalidateRows()  // a different cell size means different rows
         refreshCursor(remembersLine: false)
-        updateHeader()  // the span stops counting while it is unresolved
     }
 
     /// Hold the selection's anchor over the reflow by the line it opened on, the way the cursor is
@@ -326,9 +325,19 @@ final class ScrollModeController {
     /// ⌘V and ⌘Q for as long as the mode is up.
     func handle(_ event: NSEvent) -> Bool {
         guard isActive else { return false }
-        // Before the key is read, not after: an unresolved span is already off the screen, and a
-        // keymap told it still exists answers `y` with silence and `Esc` by ending the mode.
-        if pendingSelectionAnchor != nil { releaseSelection() }
+        // Before the key is read: a key arriving means the grid has settled, so the span resolves
+        // against it now. Left pending, the keymap would answer `y` with a yank of nothing.
+        if let pendingSpan = pendingSelectionAnchor {
+            pendingSelectionAnchor = nil
+            invalidateRows()  // read the settled grid, not the copy from before the reflow
+            // Both ends, cursor first: moving one and holding the other resizes the span silently,
+            // and the crossing test below reads where the cursor landed.
+            if let pendingCursor = pendingAnchor {
+                pendingAnchor = nil
+                reanchor(to: pendingCursor.line)
+            }
+            reanchorSelection(pendingSpan)
+        }
         guard let key = ScrollKeymap.key(for: event, pending: pending, hasSelection: selection != nil)
         else {
             pending = .init()
@@ -466,9 +475,15 @@ final class ScrollModeController {
 
     /// The live selection's span, in cells. Nil in normal mode.
     private func selectionRange() -> TerminalViewportRange? {
-        // Nothing while the anchor is unresolved: a reflow may never report, and a span drawn or
-        // yanked off a row whose text has moved covers words the reader never dragged over.
+        // Nothing to read while the anchor is unresolved: `⌘E` and `⌘F` are reserved chords that
+        // never reach `handle`, so they can arrive before anything has resolved it.
         guard pendingSelectionAnchor == nil else { return nil }
+        return paintedSelectionRange()
+    }
+
+    /// The span as drawn, which keeps its last anchor while a re-find is pending. Hiding it for the
+    /// frame between a reflow and its report strobes the highlight through a held resize.
+    private func paintedSelectionRange() -> TerminalViewportRange? {
         guard let selection, let columns = surface?.cellMetrics?.columns else { return nil }
         // Strongly captured: the closure is called before this returns, and a nil fallback here
         // would quietly hand back offsets as cells, which is the bug the mapping exists to fix.
@@ -860,7 +875,7 @@ final class ScrollModeController {
             ScrollCursorView.State(
                 cursorRow: cursor.row,
                 cursorCells: cells(of: cursor),
-                selection: selectionRange(),
+                selection: paintedSelectionRange(),
                 flash: flashRange,
                 flashLevel: flashLevel)
         ) { [weak surface] in surface?.cellMetrics }
@@ -940,9 +955,8 @@ final class ScrollModeController {
     }
 
     private func updateHeader() {
-        let live = pendingSelectionAnchor == nil ? selection : nil
         let title =
-            live.map {
+            selection.map {
                 Self.visualTitle(kind: $0.kind, rows: abs(cursor.row - $0.anchor.row) + 1)
             } ?? Self.headerTitle(lastPosition)
         panel?.modeMeta = PanelMeta(title: title, action: .toggleScrollMode)

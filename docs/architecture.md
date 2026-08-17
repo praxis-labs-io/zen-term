@@ -1298,17 +1298,23 @@ that comes back **crossed** is dropped rather than painted: it would cover text 
 It is armed only when the cursor's own line is armed too, since a pair where one end moves and the
 other holds changes the span without ever looking crossed.
 
-**Between arming and the report the span is unresolved, and unresolved means gone from the screen.**
-`selectionRange()` returns nil and the header stops counting, so nothing is painted and nothing can
-be yanked off an anchor whose row may have moved. A reflow that rewraps nothing produces no report
-at all, so the resolution may never come: the reader's next key releases the selection outright, and
-that release runs *before* the keymap is asked whether a selection exists. Ordered the other way, the
-keymap answers `y` with a yank of a span that is not on screen, which writes nothing and says
-nothing, and reads `Esc` as "close the selection" when the screen shows none.
+**Between arming and the resolution the span stays painted, but cannot be read.** Those are separate
+questions and the code answers them separately: `paintedSelectionRange()` keeps the last anchor so the
+overlay and the header do not blink, while `selectionRange()` returns nil so nothing is yanked off a
+row whose text may have moved. Hiding it instead was tried and reverted the same day: a held resize
+reflows on every step, and the highlight strobed in and out under the reader's hands.
 
-The four ways a selection is given back: its row leaves the grid, its row was blank so there is
-nothing to find it by, the two re-found ends come back crossed, or the reflow never reported and the
-reader pressed a key.
+The read guard is not theoretical. `⌘E` and `⌘F` are reserved chords that never reach `handle`, so
+they can ask for the selection before anything has placed its anchor.
+
+**A key resolves the span, it does not drop it.** A reflow that rewraps nothing produces no report at
+all, so the resolution may never arrive on its own; a keystroke is proof the grid has settled, so
+both ends are re-found against it right there, before the keymap is asked whether a selection exists.
+Both ends, never one: moving the anchor while the cursor holds its pending line resizes the span
+silently, which no crossing test can see.
+
+The three ways a selection is given back: its row leaves the grid, its row was blank so there is
+nothing to find it by, or the two re-found ends come back crossed.
 
 **A column is a character offset, and every consumer wants a cell.** The motions all move by
 character, which is what vim means by a column, so the offset stays. The two places that need
@@ -1540,7 +1546,7 @@ mean anything. A height change needs none of this, which is why exact matching h
 until a width change was tried.
 
 A selection's anchor comes back the same way, searching from its own row instead of the
-cursor's, and is dropped on any of the four conditions above. The
+cursor's, and is dropped on any of the three conditions above. The
 overlay is refreshed either way: it holds the rects it was last handed, so releasing
 without a redraw left the highlight painted over rows it no longer covered. A
 viewport-relative cursor cannot follow a line off the screen at all: when the line is

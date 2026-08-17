@@ -1899,45 +1899,58 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(board.string(forType: .string), "row 18\nrow 19\nrow 20")
     }
 
-    func test_aReflowLeavesTheSpanUnresolvedUntilTheReportFindsIt() throws {
-        // The reflow may never report: libghostty emits a scrollbar only from a draw and only when
-        // it differs. Until the anchor is placed, the span is off the screen rather than wrong.
+    func test_aReflowKeepsTheHighlightPaintedWhileTheAnchorIsUnresolved() throws {
+        // A held resize reflows on every step. Hiding the span until each report resolved it made
+        // the highlight strobe in and out under the reader's hands.
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
-        let (_, handler, board) = try enterModeOverNumberedRows(controller)
+        let (_, handler, _) = try enterModeOverNumberedRows(controller)
 
         for _ in 0..<3 { _ = handler(try keyDown("k")) }
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+
+        controller.applySessionFontSize()  // arms the re-find; no report follows
+
+        XCTAssertNotNil(
+            panel.scrollCursorForTesting.state?.selection, "the highlight blinked off mid-resize")
         XCTAssertEqual(panel.headerContentForTesting?.title, "VISUAL: 1 LINE")
+    }
+
+    func test_anUnresolvedSpanIsNotReadableUntilSomethingResolvesIt() throws {
+        // `⌘E` and `⌘F` are reserved chords and never reach `handle`, so they can read the span
+        // before anything has placed its anchor. Painted is not the same as readable.
+        let controller = makeWindow()
+        let (_, handler, _) = try enterModeOverNumberedRows(controller)
+
+        for _ in 0..<3 { _ = handler(try keyDown("k")) }
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        XCTAssertNotNil(controller.scrollMode.selectedText, "precondition: readable while resolved")
 
         controller.applySessionFontSize()
 
         XCTAssertNil(
-            panel.scrollCursorForTesting.state?.selection,
-            "an unresolved span still painted covers rows whose text has moved")
-        XCTAssertEqual(
-            panel.headerContentForTesting?.title, "SCROLL",
-            "the header counts a span the reader can no longer see")
-        _ = handler(try keyDown("y"))
-        XCTAssertNil(board.string(forType: .string))
+            controller.scrollMode.selectedText,
+            "a read off an anchor whose row may have moved takes words nobody dragged over")
     }
 
-    func test_anUnresolvedSpanIsGoneBeforeTheKeyThatFollowsIsRead() throws {
-        // The keymap is asked whether a selection exists. Releasing after it decoded turns the next
-        // `y` into a yank of a span that is not on the screen, which writes nothing and says nothing.
+    func test_aKeyAfterAReflowThatNeverReportedResolvesTheSpanRatherThanDropIt() throws {
+        // The key itself is the proof the grid settled, so the anchor is placed against it there and
+        // then. Dropping instead answered the `y` the reader was in the middle of with nothing.
         let controller = makeWindow()
-        let (_, handler, board) = try enterModeOverNumberedRows(controller)
+        let (surface, handler, board) = try enterModeOverNumberedRows(controller)
 
-        for _ in 0..<3 { _ = handler(try keyDown("k")) }  // cursor onto row 20
+        for _ in 0..<3 { _ = handler(try keyDown("k")) }  // anchor on row 20
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
-        controller.applySessionFontSize()
+        for _ in 0..<2 { _ = handler(try keyDown("k")) }  // cursor up to row 18
 
-        _ = handler(try keyDown("y"))
+        controller.applySessionFontSize()  // arms the re-find; no report follows
+        surface.rows = Self.slidDown(surface.rows, by: 3)
+
         _ = handler(try keyDown("y"))
 
         XCTAssertEqual(
-            board.string(forType: .string), "row 20",
-            "with no span on screen `yy` takes the cursor's row, as it does in normal mode")
+            board.string(forType: .string), "row 18\nrow 19\nrow 20",
+            "the span covers the words it covered, re-found on the settled grid")
     }
 
     func test_aResizeThatCrossesTheTwoEndsGivesTheSelectionBack() throws {
