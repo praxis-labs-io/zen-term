@@ -513,6 +513,16 @@ The pin is one-way. AppKit exposes no way to clear `currentEvent`, and SwiftPM r
 one process, so once a case dequeues an event, nothing after it in the run sees nil. Write the key
 tests to hold on either branch rather than to nil, which is what the escape key buys above.
 
+**A wait that pumps the run loop also lands the work dispatched from the block it waited on.** A
+drain processes blocks enqueued during it, so anything a completion kicked off can finish before the
+wait re-checks its condition. `SettingsWorkspacesSectionTests` mounted, waited for the workspaces
+load, then asserted the git badge was still hidden: `GitRepoStatus.refresh` is called inside the same
+block that delivers the load, and a `fileExists` on a local temp dir beats the re-check. An assertion
+about the state *before* async work lands has to sit where nothing has turned the run loop at all,
+which usually means building the view directly instead of mounting it. Removing such an assertion
+without replacing it loses real coverage: with `applyGitStatus()` deleted from `WorkspaceRow.init`,
+the mounted test still passed.
+
 **Tests must not mutate real OS state.** They run on the developer's machine. Do not clobber
 `NSPasteboard.general` (snapshot it in `setUp`, restore in `tearDown`), and do not present a real
 `NSOpenPanel` (inject a present-panel seam so the test asserts the wiring without a sheet). Both leak
