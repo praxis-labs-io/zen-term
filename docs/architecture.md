@@ -1281,11 +1281,22 @@ libghostty resolves an exact coordinate through `Point.pin`
 for **every** point tag, `screen` included, and `pages.rows` is the grid height rather than
 the scrollback total. So no coordinate names a scrollback row, and text off screen cannot be
 read. A selection that outlived a scroll would highlight rows it no longer covers and yank text the
-reader never saw, so the anchor comes back the moment the rows move. That is driven by the scrollbar
-report rather than by the key that asked, because the two do not line up in either direction: output
-moves the viewport with no key at all, and a `j` at the end of the buffer moves nothing while looking
-exactly like one that does. A reflow releases it directly, since the cursor can be found again by its
-line and a fixed anchor cannot.
+reader never saw, so the anchor is given back the moment its row leaves the grid. That is driven by
+the scrollbar report rather than by the key that asked, because the two do not line up in either
+direction: output moves the viewport with no key at all, and a `j` at the end of the buffer moves
+nothing while looking exactly like one that does.
+
+**Inside the viewport the anchor is carried, not dropped.** A scroll moves every row by the offset
+delta the report already carries, so the anchor rides it with no read at all, and the selection grows
+by the rows that arrived. A reflow rewraps instead of scrolling, so the anchor is re-found by content
+the way the cursor is: `ScrollSelection.anchorLine` is the anchor row's text, captured when `v`/`V`
+opened it, and the re-find searches outward from the anchor's own row rather than the cursor's. A
+blank anchor row has nothing to be found by and goes immediately, exactly as `cursorLine` does.
+
+Both ends are re-found independently, and "nearest match" can settle on a repeated prompt, so a pair
+that comes back **crossed** is dropped rather than painted: it would cover text nobody dragged over.
+The armed line is bounded by `anchorLifetime` for the same reason the cursor's is, since a reflow
+that rewraps nothing produces no report at all.
 
 **A column is a character offset, and every consumer wants a cell.** The motions all move by
 character, which is what vim means by a column, so the offset stays. The two places that need
@@ -1516,12 +1527,12 @@ would outrank the line the reader was on, and all three ignore matches too short
 mean anything. A height change needs none of this, which is why exact matching held up
 until a width change was tried.
 
-Only the cursor comes back. A selection is dropped, since its anchor is a bare row
-index with no content to be found by, and the overlay is refreshed with it: it holds
-the rects it was last handed, so releasing without a redraw left the highlight painted
-over rows it no longer covered. A viewport-relative cursor cannot follow a line off the
-screen at all: when the line is gone the band holds its row rather than jumping to an
-unrelated one.
+A selection's anchor comes back the same way, searching from its own row instead of the
+cursor's, and is dropped when its line is gone or the two ends come back crossed. The
+overlay is refreshed either way: it holds the rects it was last handed, so releasing
+without a redraw left the highlight painted over rows it no longer covered. A
+viewport-relative cursor cannot follow a line off the screen at all: when the line is
+gone the band holds its row rather than jumping to an unrelated one.
 
 **The retractions are the load-bearing half.** The mode holds an app-global key
 handler, so one left up deafens whatever you switched to. It ends when pane focus
@@ -1529,6 +1540,15 @@ moves (which covers pane close, split and tab switch, since all of them route
 through `restoreUnifiedFocus`), when a tool float or modal card takes the keyboard
 (neither moves pane focus, so neither fires the focus relay), and when the window
 resigns key. `end()` is idempotent, so overlapping triggers are free.
+
+**Focus Mode is the counter-case, and it caught us.** Zoom re-takes first responder after
+the canvas reparents, and doing that through `focus(_:)` announced a focus move over the
+pane the reader never left, ending the mode on every `⌘⏎`. `PaneCanvasController` gives
+zoom its own `reassertFocus()` instead. Narrowing `focus(_:)` itself to "the leaf id
+changed" does **not** work: pane close and tab switch both reassign `tree.focusedLeaf`
+before calling it, and a drawer handing focus back names the leaf it left. The zoom path
+also has to re-assert the mode's unfocused render, since taking first responder paints the
+shell's live cursor back underneath it.
 
 ## Config
 

@@ -1558,18 +1558,44 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertNil(board.string(forType: .string))
     }
 
-    func test_outputThatScrollsThePaneGivesTheAnchorBack() throws {
-        // No key is involved: a running build moves the viewport on its own, and a selection left
-        // anchored to rows that slid up highlights output the reader never chose and yanks it.
+    func test_aScrollCarriesTheAnchorWithTheTextUnderIt() throws {
+        // The anchor names a place in the text, so a scroll moves it by exactly the offset delta and
+        // the selection grows by the rows that arrived. Releasing it here cost the reader the drag.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
+        surface.rows = (0..<24).map { "row \($0)" }
+        let (handler, board) = try enterModeForYanking(controller)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 100))
+
+        for _ in 0..<3 { _ = handler(try keyDown("k")) }  // off the last row, onto row 20
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        // Scrolled back two, so every row slid down two and the anchor rode with "row 20".
+        surface.rows = Self.slidDown(surface.rows, by: 2)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 98))
+        _ = handler(try keyDown("y"))
+
+        XCTAssertEqual(board.string(forType: .string), "row 18\nrow 19\nrow 20")
+    }
+
+    func test_aScrollThatTakesTheAnchorOffScreenGivesItBack() throws {
+        // The one case that still has to release: a selection is viewport-bounded, so an anchor
+        // scrolled past the edge would highlight rows it no longer covers.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows = (0..<24).map { "row \($0)" }
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         let (handler, board) = try enterModeForYanking(controller)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 100))
 
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
-        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 101))
-        _ = handler(try keyDown("y"))
+        XCTAssertEqual(panel.headerContentForTesting?.title, "VISUAL: 1 LINE")
 
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 130))
+
+        XCTAssertEqual(
+            panel.headerContentForTesting?.title, "SCROLL: 46 BELOW",
+            "the header still reading Visual means a span nothing on screen backs")
+        _ = handler(try keyDown("y"))
         XCTAssertNil(board.string(forType: .string))
     }
 
@@ -1612,16 +1638,21 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             controller.scrollMode.cursor.column, 27, "the row was re-read, not served from before the scroll")
     }
 
-    func test_aFontStepGivesTheAnchorBack() throws {
-        // The cursor can be found again by the line it was reading. The anchor is a bare row index
-        // with no content behind it, so a reflow leaves it naming something else.
+    func test_aFontStepOverABlankAnchorRowGivesItBack() throws {
+        // A blank row has no content to be found by, exactly as the cursor's own line does not. The
+        // selection goes now rather than coming back anchored to whatever took that row number.
         let controller = makeWindow()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         let (handler, board) = try enterModeForYanking(controller)
 
+        for _ in 0..<5 { _ = handler(try keyDown("k")) }  // row 6, the blank between blocks
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
-        controller.applySessionFontSize()
-        _ = handler(try keyDown("y"))
+        XCTAssertEqual(panel.headerContentForTesting?.title, "VISUAL: 1 LINE")
 
+        controller.applySessionFontSize()
+
+        XCTAssertEqual(panel.headerContentForTesting?.title, "SCROLL")
+        _ = handler(try keyDown("y"))
         XCTAssertNil(board.string(forType: .string))
     }
 
@@ -1843,17 +1874,55 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             controller.scrollMode.cursorRow, 5, "the band follows the line, not the row number")
     }
 
-    func test_aResizeGivesTheAnchorBack() throws {
-        // Same rule the font step follows. Only the cursor can be found again by content; the
-        // anchor is a bare row index, so a selection kept across a resize covers other words.
+    func test_aResizeKeepsTheSelectionOverTheSameText() throws {
+        // Both ends are re-found by content, so a rewrap that moves every row three down leaves the
+        // selection covering the words it covered before, not the row numbers.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
+        surface.rows = (0..<24).map { "row \($0)" }
         let (handler, board) = try enterModeForYanking(controller)
 
+        for _ in 0..<3 { _ = handler(try keyDown("k")) }  // anchor on row 20
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        for _ in 0..<2 { _ = handler(try keyDown("k")) }  // cursor up to row 18
+
         surface.delegate?.surfaceGridDidReflow(surface)
+        surface.rows = Self.slidDown(surface.rows, by: 3)
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
         _ = handler(try keyDown("y"))
 
+        XCTAssertEqual(board.string(forType: .string), "row 18\nrow 19\nrow 20")
+    }
+
+    func test_aResizeThatCrossesTheTwoEndsGivesTheSelectionBack() throws {
+        // Each end is re-found on its own and "nearest match" can settle on a repeated prompt. A
+        // pair that comes back crossed covers text the reader never dragged over, so it goes.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        var rows = (0..<24).map { "filler \($0)" }
+        rows[20] = "❯ ls the anchor"
+        rows[10] = "the cursor line"
+        surface.rows = rows
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let (handler, board) = try enterModeForYanking(controller)
+
+        for _ in 0..<3 { _ = handler(try keyDown("k")) }  // anchor on row 20
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        for _ in 0..<10 { _ = handler(try keyDown("k")) }  // cursor up to row 10, above the anchor
+
+        // The rewrap leaves a second copy of the anchor's line above the cursor, nearer to nothing
+        // in particular, and the cursor's own line below it.
+        surface.delegate?.surfaceGridDidReflow(surface)
+        var reflowed = (0..<24).map { "filler \($0)" }
+        reflowed[5] = "❯ ls the anchor"
+        reflowed[22] = "the cursor line"
+        surface.rows = reflowed
+        surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
+
+        XCTAssertEqual(
+            panel.headerContentForTesting?.title, "SCROLL: AT BOTTOM",
+            "a crossed pair left up would paint a span the reader never dragged")
+        _ = handler(try keyDown("y"))
         XCTAssertNil(board.string(forType: .string))
     }
 
