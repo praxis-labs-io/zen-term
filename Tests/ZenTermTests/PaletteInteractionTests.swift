@@ -16,8 +16,16 @@ final class PaletteInteractionTests: WindowTestCase {
     /// Retained so a mounted overlay's window outlives the mount call (Esc is dispatched through it).
     private var window: NSWindow?
 
+    override func setUp() {
+        super.setUp()
+        GitRepoStatus.resetForTesting()
+    }
+
     override func tearDown() {
         window = nil
+        // Empties the cache; it does not cancel probes already in flight. Enough here because no
+        // assertion depends on a path another case also probes.
+        GitRepoStatus.resetForTesting()
         super.tearDown()
     }
 
@@ -511,7 +519,6 @@ final class PaletteInteractionTests: WindowTestCase {
     /// The badge asks a filesystem question that can't be answered on the main thread, so the row
     /// renders first and the badge lands when the probe does.
     func test_repoPicker_gitBadgeAppearsWhenTheBackgroundProbeLands() throws {
-        GitRepoStatus.resetForTesting()
         let repo = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-picker-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
