@@ -1980,6 +1980,9 @@ final class WindowController: NSObject {
         case .toggleZoom:
             Log.info("zoom toggled", category: .panes)
             active?.toggleZoom()
+            // A multi-pane zoom reparents the canvas, so the pane takes first responder again and
+            // paints a live cursor back over a mode that is still up. Re-assert the mode's render.
+            updateModeHandler()
         // `builtToasts`, not `toasts`: dismissing must never be what constructs the stack.
         case .dismissToast: builtToasts?.dismissOldest()
         case .dismissAllToasts: builtToasts?.dismissAll()

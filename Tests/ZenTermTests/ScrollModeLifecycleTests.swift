@@ -1151,6 +1151,54 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertFalse(panel.isHeaderVisibleForTesting)
     }
 
+    /// The counter-case to every test above it: Focus Mode zooms the pane the reader is already in,
+    /// so the mode has to survive it. Same panel, same buffer, nothing to point somewhere else.
+    func test_focusModeKeepsTheModeUpOverTheSamePane() throws {
+        let controller = makeWindow()
+        let host = ModeHostSpy()
+        controller.keyModeHost = host
+        controller.handle(.splitVertical)
+        controller.window.contentView?.layoutSubtreeIfNeeded()
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        controller.handle(.toggleScrollMode)
+        XCTAssertTrue(controller.scrollMode.isActive)
+
+        controller.handle(.toggleZoom)
+
+        XCTAssertTrue(controller.scrollMode.isActive, "zooming is not leaving the pane")
+        XCTAssertTrue(host.isInstalled)
+        XCTAssertIdentical(controller.focusedPanelForTesting, panel)
+        XCTAssertTrue(panel.isHeaderVisibleForTesting)
+    }
+
+    func test_leavingFocusModeKeepsTheModeUpToo() throws {
+        let controller = makeWindow()
+        controller.handle(.splitVertical)
+        controller.window.contentView?.layoutSubtreeIfNeeded()
+        controller.handle(.toggleScrollMode)
+
+        controller.handle(.toggleZoom)
+        controller.handle(.toggleZoom)
+
+        XCTAssertTrue(controller.scrollMode.isActive, "unzoom re-focuses the same leaf as the zoom did")
+    }
+
+    func test_focusModeLeavesTheShellsCursorDark() throws {
+        // A multi-pane zoom reparents the canvas, so the pane takes first responder again and the
+        // live cursor comes back under a mode that is still holding the keyboard.
+        let controller = makeWindow()
+        controller.handle(.splitVertical)
+        controller.window.contentView?.layoutSubtreeIfNeeded()
+        controller.handle(.toggleScrollMode)
+        let surface = try XCTUnwrap(
+            controller.focusedScrollTargetForTesting?.surface as? RecordingSurface)
+        XCTAssertEqual(surface.focusRenders.last, false)
+
+        controller.handle(.toggleZoom)
+
+        XCTAssertEqual(surface.focusRenders.last, false, "the shell is still not taking keys")
+    }
+
     func test_closingThePaneEndsTheMode() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()

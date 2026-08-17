@@ -283,4 +283,30 @@ final class PaneCanvasControllerTests: WindowTestCase {
 
         XCTAssertEqual(surface.focusRenders.last, false, "the mode still holds the keyboard")
     }
+
+    func test_zoomingTheFocusedLeafAnnouncesNoFocusMove() {
+        controller.split(.vertical)
+        layout()
+        var moves = 0
+        controller.onFocusChanged = { moves += 1 }
+
+        controller.zoomFocusedLeaf()
+        layout()
+
+        XCTAssertEqual(
+            moves, 0,
+            "a zoom re-focuses the leaf it already held; announcing it ends every mode over that pane")
+    }
+
+    func test_focusComingBackFromADrawerAnnouncesTheMove() {
+        // Same leaf id either side, so narrowing `focus` to an id comparison would swallow this.
+        // The tab's focus is on the drawer, and only this announcement puts it back on the pane.
+        controller.setPanesFocused(false)
+        var moves = 0
+        controller.onFocusChanged = { moves += 1 }
+
+        controller.focusActivePane()
+
+        XCTAssertEqual(moves, 1, "focus returning from a drawer is a real move")
+    }
 }
