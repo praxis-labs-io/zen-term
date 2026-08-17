@@ -1894,6 +1894,27 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(board.string(forType: .string), "row 18\nrow 19\nrow 20")
     }
 
+    func test_aReflowThatNeverReportsGivesTheSelectionBackOnTheNextKey() throws {
+        // libghostty emits a scrollbar only from a draw and only when it differs, so a reflow that
+        // rewraps nothing never reports. The anchor would sit on a row whose text had moved.
+        let controller = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        surface.rows = (0..<24).map { "row \($0)" }
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        let (handler, board) = try enterModeForYanking(controller)
+
+        for _ in 0..<3 { _ = handler(try keyDown("k")) }
+        _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
+        controller.applySessionFontSize()
+        surface.rows = Self.slidDown(surface.rows, by: 2)
+
+        _ = handler(try keyDown("k"))
+
+        XCTAssertEqual(panel.headerContentForTesting?.title, "SCROLL")
+        _ = handler(try keyDown("y"))
+        XCTAssertNil(board.string(forType: .string))
+    }
+
     func test_aResizeThatCrossesTheTwoEndsGivesTheSelectionBack() throws {
         // Each end is re-found on its own and "nearest match" can settle on a repeated prompt. A
         // pair that comes back crossed covers text the reader never dragged over, so it goes.

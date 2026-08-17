@@ -342,6 +342,9 @@ final class ScrollModeController {
         // armed it fires on whatever report comes next, minutes later, and drags the cursor off
         // the row they chose.
         pendingAnchor = nil
+        // The anchor cannot simply stand down the same way: a reflow that rewraps nothing reports
+        // nothing, and a row whose text moved under it would yank words nobody dragged over.
+        if pendingSelectionAnchor != nil { releaseSelection() }
         // Nothing announces a repaint, so the row cache cannot outlive one key. See `rowText`.
         invalidateRows()
         switch command {
