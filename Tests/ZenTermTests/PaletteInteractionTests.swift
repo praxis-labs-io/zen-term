@@ -23,7 +23,9 @@ final class PaletteInteractionTests: WindowTestCase {
 
     override func tearDown() {
         window = nil
-        GitRepoStatus.resetForTesting()  // bracketed like GitRepoStatusTests: leave the cache as found
+        // Empties the cache; it does not cancel probes already in flight. Enough here because no
+        // assertion depends on a path another case also probes.
+        GitRepoStatus.resetForTesting()
         super.tearDown()
     }
 
