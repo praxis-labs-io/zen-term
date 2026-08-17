@@ -13,8 +13,12 @@ struct ScrollSelection: Equatable {
     }
 
     var kind: Kind
-    /// Fixed for the selection's life: motions move the cursor, never this.
+    /// Moved only by a reflow or a scroll, never by a motion: those move the cursor.
     var anchor: ScrollCell
+
+    /// The text of the anchor's row when the selection opened, so a rewrap can find the row again.
+    /// Nil for a blank row, which has nothing to be found by, and a selection off one cannot survive.
+    var anchorLine: String?
 
     /// The span to draw and to yank, ordered so it reads forwards however the motions left it.
     /// `cells` maps an offset to the cells it covers: near end takes its first, far end its last.

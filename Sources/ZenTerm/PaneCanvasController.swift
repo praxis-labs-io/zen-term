@@ -354,7 +354,7 @@ final class PaneCanvasController: NSObject {
         guard zoomedLeaf == nil else { return }
         zoomedLeaf = tree.focusedLeaf
         rebuildIfCollapsing()
-        focusActivePane()
+        focus(tree.focusedLeaf, announces: false)
         popZoomTransition(resizesCanvas: resizesCanvas, growing: true)
     }
 
@@ -363,7 +363,7 @@ final class PaneCanvasController: NSObject {
         guard zoomedLeaf != nil else { return }
         zoomedLeaf = nil
         rebuildIfCollapsing()
-        focusActivePane()
+        focus(tree.focusedLeaf, announces: false)
         popZoomTransition(resizesCanvas: resizesCanvas, growing: false)
     }
 
@@ -392,13 +392,17 @@ final class PaneCanvasController: NSObject {
     }
 
     // Focus routing (fleshed out in Task 10).
-    func focus(_ id: PaneID) {
+    func focus(_ id: PaneID) { focus(id, announces: true) }
+
+    /// `announces: false` re-takes first responder without reporting a move, for a zoom: it
+    /// reparents the canvas, so the surface needs re-asserting while focus itself never moved.
+    private func focus(_ id: PaneID, announces: Bool) {
         guard tree.contains(id) else { return }
         tree.focusedLeaf = id
         updateHalo()
         onTitleChanged?()
         registry.surface(for: id)?.focus()
-        onFocusChanged?()
+        if announces { onFocusChanged?() }
     }
 
     private func focusFrontmost() { focus(tree.focusedLeaf) }

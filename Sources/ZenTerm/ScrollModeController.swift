@@ -75,6 +75,7 @@ final class ScrollModeController {
         selection = nil
         lastPosition = nil
         pendingAnchor = nil
+        pendingSelectionAnchor = nil
         cursorLine = nil
         holdsViewport = false
         reflowArmedAt = nil
@@ -112,6 +113,7 @@ final class ScrollModeController {
         selection = nil
         lastPosition = nil
         pendingAnchor = nil
+        pendingSelectionAnchor = nil
         cursorLine = nil
         invalidateRows()
         // The mode took the viewport off the live end, so leaving hands it back. A reader who
@@ -155,15 +157,27 @@ final class ScrollModeController {
     /// coordinate survives that, absolute buffer rows included. The content does.
     func refreshGeometry() {
         guard isActive else { return }
-        pendingAnchor = cursorLine.map { (line: $0, armedAt: now()) }
-        reflowArmedAt = now()  // armed even with no line to re-find: the hold reads the same report
-        // Only the cursor can be found again afterwards. The anchor is a fixed row index with no
-        // content behind it, so a selection kept across the reflow would run from a row that now
-        // holds something else.
-        releaseSelection()
+        let armedAt = now()  // one instant for all three: they are the same event
+        pendingAnchor = cursorLine.map { (line: $0, armedAt: armedAt) }
+        reflowArmedAt = armedAt  // armed even with no line to re-find: the hold reads the same report
+        armSelectionAnchor()
         invalidateRows()  // a different cell size means different rows
         refreshCursor(remembersLine: false)
     }
+
+    /// Hold the selection's anchor over the reflow by the line it opened on, the way the cursor is
+    /// held. Neither end re-findable means the span cannot be, so that selection goes now.
+    private func armSelectionAnchor() {
+        guard let selection else { return }
+        // Both ends or none: only the cursor is re-found from `cursorLine`, and a pair where one end
+        // moves and the other holds changes the span without ever looking crossed.
+        guard let line = selection.anchorLine, pendingAnchor != nil else { return releaseSelection() }
+        pendingSelectionAnchor = (line: line, anchorWasFirst: selection.anchor.row <= cursor.row)
+    }
+
+    /// The anchor's line held across a reflow, and which end the anchor was. While this is set the
+    /// span is unresolved: not painted, not counted, not yankable.
+    private var pendingSelectionAnchor: (line: String, anchorWasFirst: Bool)?
 
     /// The grid this mode is driving changed shape. A resize rewraps the text under a cursor that is
     /// a row number, exactly as a font step does, so it gets the same treatment. Scoped to the
@@ -209,19 +223,25 @@ final class ScrollModeController {
     /// Put the cursor back on the line it was reading, or leave it where it is when that line is no
     /// longer on screen. Exact match first, then the fragment pass below.
     private func reanchor(to line: String) {
-        guard let best = exactRow(of: line) ?? fragmentRow(of: line) ?? containedRow(of: line)
-        else { return }
+        guard let best = row(matching: line, near: cursor.row) else { return }
         move(to: ScrollCell(row: best, column: cursor.column))
+    }
+
+    /// The row `line` rewrapped onto: exact match, then a fragment of it, then containment. `near`
+    /// is where the search starts, so each end of a selection is re-found from where it was.
+    private func row(matching line: String, near origin: Int) -> Int? {
+        exactRow(of: line, near: origin) ?? fragmentRow(of: line, near: origin)
+            ?? containedRow(of: line, near: origin)
     }
 
     /// Nearest match wins: a prompt string repeats down the whole viewport, so a search from the top
     /// would drag the cursor to the first prompt on screen every time.
-    private func exactRow(of line: String) -> Int? {
+    private func exactRow(of line: String, near origin: Int) -> Int? {
         // Outward from the cursor's own row, stopping at the first hit. Nearest is the rule anyway,
         // so the first match in this order is the answer, and a reflow moves a line by a few rows
         // rather than a screenful. Sweeping the viewport instead spent a `read_text` on every row
         // of it, which libghostty asks callers to throttle.
-        let here = min(max(cursor.row, 0), lastRow)
+        let here = min(max(origin, 0), lastRow)
         if rowText(here) == line { return here }
         for distance in 1...max(lastRow, 1) {
             // Above before below, which is the tie-break a sweep up from row 0 used to give.
@@ -234,21 +254,27 @@ final class ScrollModeController {
 
     /// The row holding what is left of `line` after a rewrap: narrowing leaves a row holding a
     /// prefix of it, widening leaves a row that has it as a prefix.
-    private func fragmentRow(of line: String) -> Int? {
-        bestRow(matching: line) { text, line in text.hasPrefix(line) || line.hasPrefix(text) }
+    private func fragmentRow(of line: String, near origin: Int) -> Int? {
+        bestRow(matching: line, near: origin) { text, line in
+            text.hasPrefix(line) || line.hasPrefix(text)
+        }
     }
 
     /// The same for a cursor on a **continuation** row, which holds a suffix of its logical line,
     /// so widening merges it back in and neither string starts with the other.
-    private func containedRow(of line: String) -> Int? {
+    private func containedRow(of line: String, near origin: Int) -> Int? {
         // Last, and only where both passes above give up: containment matches far more loosely, and
         // a wrong match moves the band where the stricter passes would have left it still.
-        bestRow(matching: line) { text, line in text.contains(line) || line.contains(text) }
+        bestRow(matching: line, near: origin) { text, line in
+            text.contains(line) || line.contains(text)
+        }
     }
 
     /// The row overlapping `line` most, nearest to the cursor on a tie. Longest run rather than
     /// nearest, or a bare `❯` a row away beats the fragment fifty characters into the real line.
-    private func bestRow(matching line: String, overlaps: (String, String) -> Bool) -> Int? {
+    private func bestRow(
+        matching line: String, near origin: Int, overlaps: (String, String) -> Bool
+    ) -> Int? {
         var best: (row: Int, shared: Int)?
         for row in 0...lastRow {
             let text = rowText(row)
@@ -258,7 +284,7 @@ final class ScrollModeController {
             let isBetter =
                 best.map {
                     shared > $0.shared
-                        || (shared == $0.shared && abs(row - cursor.row) < abs($0.row - cursor.row))
+                        || (shared == $0.shared && abs(row - origin) < abs($0.row - origin))
                 } ?? true
             if isBetter { best = (row, shared) }
         }
@@ -299,6 +325,19 @@ final class ScrollModeController {
     /// ⌘V and ⌘Q for as long as the mode is up.
     func handle(_ event: NSEvent) -> Bool {
         guard isActive else { return false }
+        // Before the key is read: a key arriving means the grid has settled, so the span resolves
+        // against it now. Left pending, the keymap would answer `y` with a yank of nothing.
+        if let pendingSpan = pendingSelectionAnchor {
+            pendingSelectionAnchor = nil
+            invalidateRows()  // read the settled grid, not the copy from before the reflow
+            // Both ends, cursor first: moving one and holding the other resizes the span silently,
+            // and the crossing test below reads where the cursor landed.
+            if let pendingCursor = pendingAnchor {
+                pendingAnchor = nil
+                reanchor(to: pendingCursor.line)
+            }
+            reanchorSelection(pendingSpan)
+        }
         guard let key = ScrollKeymap.key(for: event, pending: pending, hasSelection: selection != nil)
         else {
             pending = .init()
@@ -436,6 +475,15 @@ final class ScrollModeController {
 
     /// The live selection's span, in cells. Nil in normal mode.
     private func selectionRange() -> TerminalViewportRange? {
+        // Nothing to read while the anchor is unresolved: `⌘E` and `⌘F` are reserved chords that
+        // never reach `handle`, so they can arrive before anything has resolved it.
+        guard pendingSelectionAnchor == nil else { return nil }
+        return paintedSelectionRange()
+    }
+
+    /// The span as drawn, which keeps its last anchor while a re-find is pending. Hiding it for the
+    /// frame between a reflow and its report strobes the highlight through a held resize.
+    private func paintedSelectionRange() -> TerminalViewportRange? {
         guard let selection, let columns = surface?.cellMetrics?.columns else { return nil }
         // Strongly captured: the closure is called before this returns, and a nil fallback here
         // would quietly hand back offsets as cells, which is the bug the mapping exists to fix.
@@ -589,7 +637,11 @@ final class ScrollModeController {
             current.kind = kind
             selection = current
         } else {
-            selection = ScrollSelection(kind: kind, anchor: cursor)
+            // Read here rather than reusing `cursorLine`, which is nulled whenever the buffer moved
+            // under the band as well as for a blank row, and only blankness should cost the anchor.
+            let text = rowText(cursor.row)
+            selection = ScrollSelection(
+                kind: kind, anchor: cursor, anchorLine: Self.isBlank(text) ? nil : text)
         }
         updateHeader()
         refreshCursor()
@@ -597,16 +649,46 @@ final class ScrollModeController {
 
     private func closeSelection() {
         selection = nil
+        pendingSelectionAnchor = nil
         updateHeader()
         refreshCursor()
     }
 
-    /// Give the anchor back once the rows under it have moved. A selection cannot leave the
-    /// viewport, so one that outlived a scroll would highlight rows it no longer covers.
-    ///
-    /// Driven by the report, not the key: output moves the viewport with no key at all, and a `j`
-    /// at the end of the buffer moves nothing while looking exactly like one that does.
+    /// Put the anchor on `row`, or give the selection back when `row` is nil. The single writer:
+    /// both the scroll's arithmetic and the reflow's re-find land here.
+    private func moveAnchor(toRow row: Int?) {
+        guard var current = selection else { return }
+        guard let row, row >= 0, row <= lastRow else { return releaseSelection() }
+        current.anchor = ScrollCell(row: row, column: current.anchor.column)
+        selection = current
+        pendingSelectionAnchor = nil  // resolved, so the span is live again
+        refreshCursor(remembersLine: false)
+        updateHeader()
+    }
+
+    /// Carry the anchor with the text under it when the viewport scrolls: every row moves by the
+    /// offset delta, so this costs no reads.
+    private func shiftSelection(byRows rows: Int) {
+        guard let current = selection else { return }
+        moveAnchor(toRow: current.anchor.row + rows)
+    }
+
+    /// Put the anchor back on the line it opened over after a rewrap moved it.
+    private func reanchorSelection(_ pending: (line: String, anchorWasFirst: Bool)) {
+        guard let current = selection else { return }
+        guard let row = row(matching: pending.line, near: current.anchor.row) else {
+            return releaseSelection()
+        }
+        // Each end is re-found on its own, and "nearest match" can settle on a repeated prompt, so
+        // a pair that comes back crossed is painting a span the reader never made.
+        guard pending.anchorWasFirst == (row <= cursor.row) else { return releaseSelection() }
+        moveAnchor(toRow: row)
+    }
+
+    /// Drop the selection where the anchor cannot be carried: a selection is viewport-bounded, so
+    /// one that outlived the rows under it would highlight text it no longer covers.
     private func releaseSelection() {
+        pendingSelectionAnchor = nil
         guard selection != nil else { return }
         selection = nil
         updateHeader()
@@ -641,6 +723,7 @@ final class ScrollModeController {
         yankPasteboard.clearContents()
         yankPasteboard.setString(text, forType: .string)
         self.selection = nil
+        pendingSelectionAnchor = nil
         updateHeader()
         flash(range)
     }
@@ -792,7 +875,7 @@ final class ScrollModeController {
             ScrollCursorView.State(
                 cursorRow: cursor.row,
                 cursorCells: cells(of: cursor),
-                selection: selectionRange(),
+                selection: paintedSelectionRange(),
                 flash: flashRange,
                 flashLevel: flashLevel)
         ) { [weak surface] in surface?.cellMetrics }
@@ -835,9 +918,16 @@ final class ScrollModeController {
         // push the view, and the pull back restores the viewport but not what the rows now say.
         invalidateRows()
         if holdViewport(against: position) { return }
+        // Bounded, not a bare nil test: an arming that never got its report would otherwise read
+        // every later report as the reflow, for as long as the mode stayed up.
+        let isReflow = awaitsReflow
         reflowArmedAt = nil
         if let last = lastPosition, position.offset != last.offset {
-            releaseSelection()
+            // Not while a re-find is pending either: that anchor is about to be placed by content,
+            // and a rewrap's offset delta is not a row translation, so shifting lands it anywhere.
+            if !isReflow, pendingSelectionAnchor == nil {
+                shiftSelection(byRows: last.offset - position.offset)
+            }
             // The reader, or the find bar, put the viewport here. Leaving hands back only what the
             // mode itself took, so a place they chose survives `q`.
             holdsViewport = false
@@ -850,6 +940,11 @@ final class ScrollModeController {
             if pending.armedAt.duration(to: now()) <= Self.anchorLifetime {
                 reanchor(to: pending.line)
             }
+        }
+        // After the cursor: the crossing test below reads where the cursor ended up.
+        if let pending = pendingSelectionAnchor {
+            pendingSelectionAnchor = nil
+            if isReflow { reanchorSelection(pending) } else { releaseSelection() }
         }
         if clampsToWrittenRows {
             clampsToWrittenRows = false

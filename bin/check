@@ -37,11 +37,15 @@ if [[ "${1:-}" == "--fix" ]]; then
     exit 0
 fi
 
+# SwiftPM defaults --jobs to the core count. On a 4P/6E machine that is 10 swift-frontend processes
+# at ~500MB each, and paired with any other build it swaps the machine out. Cap it.
+JOBS="${SWIFT_BUILD_JOBS:-4}"
+
 echo "▸ swift build"
-swift build 2>&1 | filter_noise
+swift build --jobs "$JOBS" 2>&1 | filter_noise
 
 echo "▸ swift test"
-swift test 2>&1 | filter_noise
+swift test --jobs "$JOBS" 2>&1 | filter_noise
 
 echo "▸ swift format lint"
 swift format lint --strict --recursive Sources Tests
