@@ -29,6 +29,8 @@ final class SettingsFormCommitTests: WindowTestCase {
     }
 
     override func tearDownWithError() throws {
+        // Must precede clearing the override: an in-flight debounce then fires into a released
+        // section (`[weak self]`) rather than into the real `~/.config/zen-term/config`.
         section = nil
         hostWindow = nil
         ConfigLoader.defaultRootOverrideForTesting = nil

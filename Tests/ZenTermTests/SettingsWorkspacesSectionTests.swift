@@ -25,11 +25,13 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
             .appendingPathComponent("zenterm-workspaces-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
+        GitRepoStatus.resetForTesting()
     }
 
     override func tearDownWithError() throws {
         window = nil
         section = nil
+        GitRepoStatus.resetForTesting()  // bracketed like GitRepoStatusTests: leave the cache as found
         ConfigLoader.defaultRootOverrideForTesting = nil
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
@@ -116,12 +118,19 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         XCTAssertNil(sink.calls.first ?? nil, "the add button adds a new workspace (nil)")
     }
 
-    /// The git probe runs off the main thread, so a row mounts with its badge hidden and
-    /// turns it on when the answer lands. That fill is exactly the kind of thing that can go
-    /// silently dead — the probe returns and nothing updates — so the test observes the transition
-    /// rather than priming the cache first.
+    /// A row builds its badge from the cache, not from a hidden-by-default view. Deterministic
+    /// where the mounted test below cannot be: nothing turns the run loop, so no probe can land.
+    func test_row_buildsWithItsBadgeHidden_whenNothingHasProbedTheFolder() {
+        let row = WorkspaceRow(
+            workspace: Workspace(
+                title: "Repo", path: tempRoot, main: nil, right: nil, bottom: nil, focus: .main, env: [:]))
+        let badge = descendants(of: row).compactMap { $0 as? NSImageView }.first
+        XCTAssertEqual(badge?.isHidden, true, "nothing has probed the folder yet")
+    }
+
+    /// The probe is off-main, so the badge fills in when the answer lands. That fill can go
+    /// silently dead, so this observes the transition rather than priming the cache first.
     func test_gitRepoWorkspace_showsGitBadge_plainDoesNot() throws {
-        GitRepoStatus.resetForTesting()
         // A real repo dir (has `.git`) and a plain dir, so `GitRepo.isGitRepo` is genuinely exercised.
         let repo = tempRoot.appendingPathComponent("repo", isDirectory: true)
         let plain = tempRoot.appendingPathComponent("plain", isDirectory: true)
@@ -135,8 +144,6 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
             let row = rows(in: detail).first { $0.workspace.title == title }!
             return descendants(of: row).compactMap { $0 as? NSImageView }.first
         }
-        XCTAssertEqual(badge(inRowTitled: "Repo")?.isHidden, true, "nothing has probed the folder yet")
-
         // Each path is probed on its own, so wait for BOTH answers: a still-hidden badge on the plain
         // row would otherwise pass whether it had been answered or simply not reached yet.
         waitUntil(badge(inRowTitled: "Repo")?.isHidden == false, "the repo's git badge to land")
