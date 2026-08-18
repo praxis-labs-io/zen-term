@@ -87,16 +87,18 @@ final class ThemeCatalogTests: XCTestCase {
         }
     }
 
-    /// The compiled-in fallback is what an unset `theme` key resolves to, and the bundled file is
-    /// what the picker writes. They are the same theme, so a hex edit to one has to reach the other.
+    /// Compiled fallback and shipped file are one theme, so a hex edit to either has to reach the
+    /// other. Through `AppTheme`: the file names keys the fallback leaves to derivation.
     func test_bundledDefault_matchesTheCompiledInFallback() throws {
-        let theme = try parseBundled(ThemeCatalog.defaultThemeName)
-        let expected = Theme.rosePineZen
-        XCTAssertEqual(theme.background, expected.background)
-        XCTAssertEqual(theme.foreground, expected.foreground)
-        XCTAssertEqual(theme.cursor, expected.cursor)
-        XCTAssertEqual(theme.selectionBackground, expected.selectionBackground)
-        XCTAssertEqual(theme.ansi, expected.ansi)
+        let fromFile = AppTheme(terminal: try parseBundled(ThemeCatalog.defaultThemeName)).terminal
+        let compiled = AppTheme(terminal: Theme.rosePineZen).terminal
+        XCTAssertEqual(fromFile.background, compiled.background)
+        XCTAssertEqual(fromFile.foreground, compiled.foreground)
+        XCTAssertEqual(fromFile.cursor, compiled.cursor)
+        XCTAssertEqual(fromFile.selectionBackground, compiled.selectionBackground)
+        XCTAssertEqual(fromFile.selectionForeground, compiled.selectionForeground)
+        XCTAssertEqual(fromFile.searchBackground, compiled.searchBackground)
+        XCTAssertEqual(fromFile.ansi, compiled.ansi)
     }
 
     /// Main and Moon must carry their own upstream values, and Zen must be the blend it claims:

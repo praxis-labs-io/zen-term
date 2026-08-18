@@ -1,7 +1,7 @@
 #!/usr/bin/env swift
 // Renders the DMG installer window background as a PNG.
 // Source of truth for the installer art: regenerate with `icon/make-dmg-background.sh`.
-// Palette is Rosé Pine Moon (the app's theme), matching icon/make-icon.swift so the
+// Palette is Rosé Pine Zen (the app's theme), matching icon/make-icon.swift so the
 // installer window reads as the same surface as the app icon it hands over.
 //
 //   swift make-dmg-background.swift <output.png> [scale]   scale 1 (default) or 2
@@ -17,11 +17,11 @@ func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
         srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
         blue: CGFloat(hex & 0xFF) / 255, alpha: a)
 }
-let iris = rgb(0xC4A7E7)  // release mark accent (Rosé Pine Moon iris)
+let iris = rgb(0xC4A7E7)  // release mark accent (Rosé Pine Zen iris)
 let bgTop = rgb(0x221E33)  // deep-indigo tile top, the icon's background
 let bgBottom = rgb(0x141120)  // tile bottom, the darker gradient end
-let textColor = rgb(0xE0DEF4)  // Rosé Pine Moon text: the wordmark
-let mutedColor = rgb(0x908CAA)  // Rosé Pine Moon subtle: the instruction line
+let textColor = rgb(0xE0DEF4)  // Rosé Pine Zen text: the wordmark
+let mutedColor = rgb(0x908CAA)  // Rosé Pine Zen subtle: the instruction line
 
 // MARK: - Layout (1x design space; the window content is BASE_W × BASE_H points)
 // Positions authored top-down (y grows downward, Finder's convention) so the icon

@@ -5,7 +5,7 @@ import XCTest
 @testable import ZenTerm
 
 final class SyntaxRoleTests: XCTestCase {
-    // Rosé Pine Moon maps each role to a distinct palette hue, so a mis-wired case (keyword resolving
+    // Rosé Pine Zen maps each role to a distinct palette hue, so a mis-wired case (keyword resolving
     // to the string color, say) would fail rather than pass by coincidence.
     private let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
 

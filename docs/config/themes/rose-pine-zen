@@ -1,4 +1,4 @@
-# Rosé Pine Zen: the theme zen-term ships with, written out in full.
+# Rosé Pine Zen: the theme ZenTerm ships with, written out in full.
 #
 # Ours, not an upstream variant: Rosé Pine Moon's pine and rose over Rosé Pine's
 # darker base. The app bundles it, so `theme = rose-pine-zen` in `config` works

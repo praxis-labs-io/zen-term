@@ -1,7 +1,7 @@
 #!/usr/bin/env swift
 // Renders the ZenTerm app icon into a .iconset directory, one PNG per size.
 // Source of truth for the icon: regenerate with `icon/make-icon.sh`.
-// Palette is Rosé Pine Moon (the app's theme): deep indigo tile, iris accent.
+// Palette is Rosé Pine Zen (the app's theme): deep indigo tile, iris accent.
 import AppKit
 
 // MARK: - Palette (sRGB)
@@ -15,12 +15,12 @@ func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
 // with a small "Dev" chip in the top-right. Same style as the release, different
 // accent, so the two are unmistakable side by side.
 let isDev = CommandLine.arguments.dropFirst().contains("--dev")
-let iris = rgb(0xC4A7E7)  // release mark accent (Rosé Pine Moon iris)
-let rose = rgb(0xEA9A97)  // dev mark accent (Rosé Pine Moon rose)
+let iris = rgb(0xC4A7E7)  // release mark accent (Rosé Pine Zen iris)
+let rose = rgb(0xEA9A97)  // dev mark accent (Rosé Pine Zen rose)
 let markColor = isDev ? rose : iris
 let bgTop = rgb(0x221E33)  // deep-indigo tile, both variants
 let bgBottom = rgb(0x141120)
-let badgeSurface = rgb(0x393552)  // Rosé Pine Moon overlay: the "Dev" chip fill
+let badgeSurface = rgb(0x393552)  // Rosé Pine Zen overlay: the "Dev" chip fill
 
 // MARK: - Squircle (superellipse, n≈5, the Apple corner feel)
 func squircle(center c: CGPoint, radius a: CGFloat) -> CGPath {
