@@ -536,6 +536,14 @@ not anything asked for one, so a test asserting it passes with the bug reinstate
 ask to repaint" is the thing under test, route the request through a method that counts its calls
 (`ScrollCursorView.redraw()`) and assert the count moved.
 
+**A hidden view drops a redisplay request, so unhiding it has to come first.** `PanelHostView`'s
+padding ring is hidden while the background is solid, and setting `needsDisplay` on it there does not
+stick. A strip that marks the ring before the panel re-reads its alpha marks a view that is still
+hidden, and the mark evaporates. In the app a config change fans out through `reapplyTheme` first, so
+this is a stale-state hazard rather than something a user sees; a test that moves the alpha without
+that fan-out is where it shows. Both hosts funnel every strip through one `stripsMoved()`: re-read
+the background, which unhides the ring, then mark. Never the other order, and never once at build.
+
 **A redraw keyed off an `Equatable` view-state is a trap for anything the state cannot see.**
 Folding an overlay's fields into one value and repainting on `didSet` looks tidy and silently drops
 every change that lives outside it: a font step moves the cell size without moving the view's frame

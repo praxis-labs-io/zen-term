@@ -10,38 +10,29 @@ struct PanelMeta {
     let action: KeyInterceptor.ReservedChord
 }
 
-/// Hosts one terminal surface (a pane leaf or a drawer) inside the shared rounded/bordered
-/// chrome: the iris focus halo (accent border + soft glow) and an inner clip that keeps
-/// content within the corner radius. A drawer passes `meta` for an always-on header, and may
-/// also pass `zoomMeta`: the header content it swaps to while zoomed (its title reading
-/// "<panel>: Focus Mode" and the keybind replaced by ⌘F). A pane passes only `zoomMeta` for a
-/// header that appears only while the pane is zoomed (Focus Mode). Panes with neither
-/// look/behave exactly as the original pane-only chrome. Clicking anywhere in the panel
-/// requests focus.
-final class PanelHostView: NSView {
+/// Hosts one terminal surface (a pane leaf or a drawer) in the shared rounded chrome: the iris
+/// focus halo and an inner clip that keeps content inside the radius. A drawer passes `meta` for
+/// an always-on header and `zoomMeta` for the variant it wears while zoomed; a pane passes only
+/// `zoomMeta`, and either may be nil. Clicking anywhere in the panel requests focus.
+final class PanelHostView: NSView, TerminalModeHost {
     private let onFocusRequest: () -> Void
     private let pane = NSView()  // the bordered card; the glow is cast by `halo`, not by a shadow
     private let clip = NSView()  // inner clip so terminal content stays inside the radius
     private let content: NSView  // the terminal surface's own view
     private let ring = RingFillView()  // paints the padding ring once the clip stops filling it
-    private let cursor = ScrollCursorView()  // scroll mode's row band, hidden until the mode is up
     private let halo = OutsideShadowView()  // the focus glow, cast around the card from beneath it
-    private let headerView: PanelHeader?
     /// The header content for the resting vs zoomed state. A pane has only `zoomMeta` (header hidden
     /// until zoomed); a drawer has both (its base header ⇄ the zoom variant). `updateHeader` picks
     /// the meta for the current state, `modeMeta ?? (isZoomed ? zoomMeta : nil) ?? baseMeta`, where a
     /// nil result hides the header. One rule covers all three cases.
     private let baseMeta: PanelMeta?
     private let zoomMeta: PanelMeta?
-    private var headerTopConstraints: [NSLayoutConstraint] = []
-    private var contentTopToHeader: NSLayoutConstraint?
-    private var contentTopToClip: NSLayoutConstraint?
-    /// Built on the first search over this panel and kept for its life. A panel that never searches
-    /// pays nothing; one that searches twice does not rebuild.
-    private var findBar: FindBarView?
-    private var findBarConstraints: [NSLayoutConstraint] = []
-    private var contentBottomToFindBar: NSLayoutConstraint?
-    private var contentBottomToClip: NSLayoutConstraint?
+
+    /// The mode strips: the header, the find bar and scroll mode's cursor. Lazy because it mounts
+    /// into `clip` around `content`, so it cannot be built before `self` is.
+    private lazy var chrome = ModeChrome(
+        container: clip, content: content, padding: padding, header: baseMeta ?? zoomMeta,
+        onStripsChanged: { [weak self] in self?.stripsMoved() })
 
     var isFocused: Bool = false { didSet { if oldValue != isFocused { updateHalo() } } }
 
@@ -68,26 +59,24 @@ final class PanelHostView: NSView {
         }
     }
 
-    /// Show scroll mode's overlay in `state`, or nil to take it down. `metrics` is asked for on
-    /// every layout pass, so a resize or a font step moves the band without a second call.
     func setScrollCursor(
         _ state: ScrollCursorView.State?, metrics: @escaping () -> TerminalCellMetrics?
     ) {
-        guard let state else {
-            cursor.isHidden = true
-            cursor.metrics = nil
-            cursor.state = nil
-            return
-        }
-        cursor.metrics = metrics
-        cursor.state = state
-        cursor.isHidden = false
-        // Unconditional. See `ScrollCursorView.redraw()` for why an equality check on `state` is
-        // the wrong guard.
-        cursor.redraw()
+        chrome.setScrollCursor(state, metrics: metrics)
     }
 
-    var scrollCursorForTesting: ScrollCursorView { cursor }
+    @discardableResult
+    func setFindBarShown(_ shown: Bool) -> FindBarView? { chrome.setFindBarShown(shown) }
+
+    /// A strip moved the terminal, so the hole the ring punches for it moved too. Re-read the
+    /// background first: below alpha 1 that is what unhides the ring, and a hidden view drops a
+    /// redisplay request rather than holding it until it is shown.
+    private func stripsMoved() {
+        applyBackground()
+        ring.needsDisplay = true
+    }
+
+    var scrollCursorForTesting: ScrollCursorView { chrome.scrollCursorForTesting }
 
     /// Test hook: whether the padding ring is queued to repaint. Toggling a strip resizes the terminal,
     /// which moves the hole the ring punches out of the padding, and nothing else in the panel marks it.
@@ -126,8 +115,6 @@ final class PanelHostView: NSView {
         self.content = content
         self.baseMeta = meta
         self.zoomMeta = zoomMeta
-        // Construct with whichever meta exists; `updateHeader()` below sets the state-correct one.
-        headerView = (meta ?? zoomMeta).map(PanelHeader.init)
         super.init(frame: .zero)
 
         wantsLayer = true
@@ -158,12 +145,7 @@ final class PanelHostView: NSView {
         ring.contentView = content
         clip.addSubview(ring)  // bottom of the clip: content and header draw over it
         clip.addSubview(content)
-        // Above the terminal, pinned to it rather than to `clip`, so its row math is in the
-        // surface's own coordinates and the pane's padding is already out of the way.
-        cursor.translatesAutoresizingMaskIntoConstraints = false
-        cursor.isHidden = true
-        clip.addSubview(cursor)
-        applyBackground()
+        applyBackground()  // also the first touch of `chrome`, which mounts the strips over `content`
 
         pane.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -185,32 +167,9 @@ final class PanelHostView: NSView {
             ring.bottomAnchor.constraint(equalTo: clip.bottomAnchor),
             content.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
             content.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
-            cursor.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            cursor.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            cursor.topAnchor.constraint(equalTo: content.topAnchor),
-            cursor.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
 
-        contentBottomToClip = content.bottomAnchor.constraint(
-            equalTo: clip.bottomAnchor, constant: -padding)
-        contentBottomToClip?.isActive = true
-
-        contentTopToClip = content.topAnchor.constraint(equalTo: clip.topAnchor, constant: padding)
-        if let headerView {
-            headerView.translatesAutoresizingMaskIntoConstraints = false
-            clip.addSubview(headerView)
-            headerTopConstraints = [
-                headerView.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
-                headerView.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
-                headerView.topAnchor.constraint(equalTo: clip.topAnchor, constant: 8),
-            ]
-            contentTopToHeader = content.topAnchor.constraint(
-                equalTo: headerView.bottomAnchor, constant: padding)
-            updateHeader()  // drawer shows its base header now; a pane's stays hidden until zoom
-        } else {
-            contentTopToClip?.isActive = true
-        }
-
+        updateHeader()  // drawer shows its base header now; a pane's stays hidden until zoom
         updateHalo()
     }
 
@@ -259,15 +218,17 @@ final class PanelHostView: NSView {
     }
 
     /// Test hook: whether the header is present and currently shown.
-    var isHeaderVisibleForTesting: Bool { headerView.map { !$0.isHidden } ?? false }
+    var isHeaderVisibleForTesting: Bool { chrome.isHeaderVisibleForTesting }
 
     /// Test hook: the header's current title + resolved keycap shortcut, for asserting
     /// the zoom content swap. Nil when there's no header.
-    var headerContentForTesting: (title: String, shortcut: String)? { headerView?.contentForTesting }
+    var headerContentForTesting: (title: String, shortcut: String)? { chrome.headerContentForTesting }
 
     /// Test hook: the shortcut the mounted header keycap was built with — stale unless the
     /// header actually rebuilt.
-    var builtHeaderKeycapForTesting: String? { headerView?.builtKeycapShortcutForTesting }
+    var builtHeaderKeycapForTesting: String? { chrome.builtHeaderKeycapForTesting }
+
+    var findBarForTesting: FindBarView? { chrome.findBarForTesting }
 
     /// When true the panel is transparent to the pointer — set while it dissolves out on close, so a
     /// click in the vacated region reaches the surviving pane beneath instead of this dead overlay.
@@ -283,75 +244,7 @@ final class PanelHostView: NSView {
     /// One rule for both kinds: a pane (base nil) hides until zoomed, then shows its zoom meta; a
     /// drawer shows its base header and swaps to the zoom variant while zoomed.
     private func updateHeader() {
-        guard let headerView else { return }
-        if let meta = modeMeta ?? (isZoomed ? zoomMeta : nil) ?? baseMeta {
-            headerView.apply(meta)
-            setHeaderShown(true)
-        } else {
-            setHeaderShown(false)
-        }
-    }
-
-    /// Raise or lower the find bar, returning it while it is up so the caller can wire and drive it.
-    ///
-    /// The bar **displaces** the terminal rather than floating over it, exactly as the header does
-    /// at the other end, so the grid loses a row or two and reflows. The caller has to lay out and
-    /// re-measure after this: see `SearchController.settleLayout()`.
-    @discardableResult
-    func setFindBarShown(_ shown: Bool) -> FindBarView? {
-        defer { ring.needsDisplay = true }  // the terminal resized, so the ring's hole moved (see below)
-        guard shown else {
-            findBar?.isHidden = true
-            NSLayoutConstraint.deactivate(findBarConstraints + [contentBottomToFindBar].compactMap { $0 })
-            contentBottomToClip?.isActive = true
-            return nil
-        }
-        let bar = findBar ?? makeFindBar()
-        bar.isHidden = false
-        contentBottomToClip?.isActive = false
-        NSLayoutConstraint.activate(findBarConstraints + [contentBottomToFindBar].compactMap { $0 })
-        return bar
-    }
-
-    private func makeFindBar() -> FindBarView {
-        let bar = FindBarView()
-        bar.translatesAutoresizingMaskIntoConstraints = false
-        clip.addSubview(bar)
-        findBarConstraints = [
-            bar.leadingAnchor.constraint(equalTo: clip.leadingAnchor, constant: padding),
-            bar.trailingAnchor.constraint(equalTo: clip.trailingAnchor, constant: -padding),
-            bar.bottomAnchor.constraint(equalTo: clip.bottomAnchor, constant: -8),
-        ]
-        contentBottomToFindBar = content.bottomAnchor.constraint(
-            equalTo: bar.topAnchor, constant: -padding)
-        findBar = bar
-        applyBackground()  // the bar is built on first ⌘/, long after the panel's background was set
-        return bar
-    }
-
-    var findBarForTesting: FindBarView? { findBar?.isHidden == false ? findBar : nil }
-
-    /// Swap between header-above-content and content-at-top, and hide/show the header.
-    ///
-    /// Marking the ring for redisplay is load-bearing, and only below `background-alpha` 1, where the
-    /// ring paints the padding with the terminal's frame punched out of it. Showing a strip resizes the
-    /// terminal, which moves that hole, but flipping a constraint does not mark this view as needing
-    /// layout, and `layout()` is the only thing that marks the ring. The ring then keeps the hole it
-    /// punched for the full-height terminal, the strip's band goes unpainted, and the window's backdrop
-    /// shows through it: the grey strip, measured as exactly the backdrop's color rather than a
-    /// washed-out fill. Focus Mode never showed it because zooming resizes the panel itself, so
-    /// `layout()` runs.
-    private func setHeaderShown(_ shown: Bool) {
-        guard let headerView, let contentTopToHeader, let contentTopToClip else { return }
-        defer { ring.needsDisplay = true }
-        headerView.isHidden = !shown
-        if shown {
-            contentTopToClip.isActive = false
-            NSLayoutConstraint.activate(headerTopConstraints + [contentTopToHeader])
-        } else {
-            NSLayoutConstraint.deactivate(headerTopConstraints + [contentTopToHeader])
-            contentTopToClip.isActive = true
-        }
+        chrome.setHeader(modeMeta ?? (isZoomed ? zoomMeta : nil) ?? baseMeta)
     }
 
     private static var idleBorder: NSColor { Theme.current.chrome.ink(alpha: 0.08) }
@@ -365,8 +258,7 @@ final class PanelHostView: NSView {
     func reapplyTheme() {
         halo.color = Theme.current.chrome.accent.nsColor
         applyBackground()
-        headerView?.reapplyTheme()
-        findBar?.reapplyTheme()
+        chrome.reapplyTheme()
         updateHalo()
     }
 
@@ -394,7 +286,7 @@ final class PanelHostView: NSView {
         // The chrome strips inside the pane paint their tint over this same fill, so they read at the
         // pane's alpha rather than blending with the desktop. Solid or not: at alpha 1 this is
         // the fill the clip already had behind them.
-        findBar?.paneFill = isSolid ? background : ring.color
+        chrome.findBarFill = isSolid ? background : ring.color
     }
 
     private func updateHalo() {
@@ -406,94 +298,5 @@ final class PanelHostView: NSView {
             layer, keyPath: "borderColor",
             to: (isFocused ? Theme.current.chrome.accent.nsColor : Self.idleBorder).cgColor)
         Motion.ease(haloLayer, keyPath: "opacity", to: isFocused ? Self.haloOpacity : 0)
-    }
-
-    /// A muted small-caps title (left) and its live keybind chip (right), e.g. `BOTTOM DRAWER ⌘B`,
-    /// or `TERMINAL PANE: FOCUS MODE ⌘F` while zoomed. The keybind resolves from the live keymap via
-    /// `CommandCatalog`, so it tracks user rebinds.
-    private final class PanelHeader: NSView {
-        private var title: String
-        private var action: KeyInterceptor.ReservedChord
-        private let titleField = NSTextField(labelWithString: "")
-        private var keycap: KeycapView
-        private static let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
-
-        /// Test hook: the header's current title text + resolved keycap shortcut, for
-        /// asserting the drawer's resting → zoomed swap.
-        var contentForTesting: (title: String, shortcut: String) {
-            (titleField.stringValue, CommandCatalog.spec(for: action).shortcut)
-        }
-
-        /// Test hook: the shortcut the MOUNTED keycap was built with. Unlike `contentForTesting`,
-        /// which re-resolves against the live keymap on every read, this is the value actually on
-        /// screen — so it goes stale if the rebuild is skipped, which is what makes it usable for
-        /// asserting that a rebind reached this header.
-        var builtKeycapShortcutForTesting: String { keycap.shortcut }
-
-        init(_ meta: PanelMeta) {
-            title = meta.title
-            action = meta.action
-            keycap = KeycapView(shortcut: CommandCatalog.spec(for: meta.action).shortcut, showsBackground: false)
-            super.init(frame: .zero)
-            titleField.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(titleField)
-            addSubview(keycap)
-            NSLayoutConstraint.activate([
-                titleField.leadingAnchor.constraint(equalTo: leadingAnchor),
-                titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
-                heightAnchor.constraint(equalToConstant: 20),
-            ])
-            activateKeycapConstraints()
-            applyTitle()
-        }
-
-        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-        /// Swap the header to a new title + keybind (a drawer's resting → zoomed transition).
-        ///
-        /// The keycap is rebuilt only when the action moves. A mode header re-applies on every
-        /// scroll report to update its count, and tearing down and re-adding a view per keystroke
-        /// to redraw an unchanged ⌘⇧S is churn for nothing.
-        func apply(_ meta: PanelMeta) {
-            let actionMoved = action != meta.action
-            title = meta.title
-            action = meta.action
-            applyTitle()
-            if actionMoved { rebuildKeycap() }
-        }
-
-        /// Re-apply the live title ink and rebuild the keybind chip — its shortcut is fixed at
-        /// build time, so a rebind (or theme swap) is reflected by re-resolving from the keymap.
-        func reapplyTheme() {
-            applyTitle()
-            rebuildKeycap()
-        }
-
-        /// Rebuild the keycap from the current `action` against the live keymap.
-        private func rebuildKeycap() {
-            keycap.removeFromSuperview()
-            keycap = KeycapView(shortcut: CommandCatalog.spec(for: action).shortcut, showsBackground: false)
-            addSubview(keycap)
-            activateKeycapConstraints()
-        }
-
-        private func activateKeycapConstraints() {
-            keycap.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                keycap.trailingAnchor.constraint(equalTo: trailingAnchor),
-                keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
-                keycap.leadingAnchor.constraint(greaterThanOrEqualTo: titleField.trailingAnchor, constant: 8),
-            ])
-        }
-
-        private func applyTitle() {
-            titleField.attributedStringValue = NSAttributedString(
-                string: title.uppercased(),
-                attributes: [
-                    .font: Self.font,
-                    .foregroundColor: Theme.current.chrome.ink(alpha: 0.4),
-                    .kern: 1.2,
-                ])
-        }
     }
 }

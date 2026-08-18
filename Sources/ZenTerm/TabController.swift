@@ -593,7 +593,7 @@ final class TabController: NSObject {
             ? PanelMeta(title: "Bottom drawer", action: .toggleBottomDrawer)
             : PanelMeta(title: "Right drawer", action: .toggleRightDrawer)
         // While zoomed the header title reads "<drawer>: Focus Mode" and the toggle keybind is
-        // replaced by ⌘F, matching the pane's Focus Mode header.
+        // replaced by ⌘⇧⏎, matching the pane's Focus Mode header.
         let zoomMeta =
             edge == .bottom
             ? PanelMeta(title: "Bottom drawer: Focus Mode", action: .toggleZoom)

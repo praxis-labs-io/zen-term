@@ -37,6 +37,17 @@ final class KeybindParserTests: XCTestCase {
         XCTAssertEqual(action(from: "toggle_zoom"), .toggleZoom)  // legacy alias
     }
 
+    func test_findStepping_tokens_andLegacyFindAliases() {
+        // The config file speaks `search`, so the two stepping actions moved to match
+        // `toggle_search`. The `find_` tokens still parse so an existing config keeps its binding.
+        XCTAssertEqual(KeyInterceptor.ReservedChord.findNext.actionToken, "search_next")
+        XCTAssertEqual(KeyInterceptor.ReservedChord.findPrevious.actionToken, "search_previous")
+        XCTAssertEqual(action(from: "search_next"), .findNext)
+        XCTAssertEqual(action(from: "search_previous"), .findPrevious)
+        XCTAssertEqual(action(from: "find_next"), .findNext)  // legacy alias
+        XCTAssertEqual(action(from: "find_previous"), .findPrevious)  // legacy alias
+    }
+
     func test_fillScreen_token() {
         XCTAssertEqual(KeyInterceptor.ReservedChord.fillScreen.actionToken, "fill_screen")
         XCTAssertEqual(action(from: "fill_screen"), .fillScreen)

@@ -28,7 +28,7 @@ selection-background = #403d52
 #
 #   selection-foreground = #e0def4
 #
-# Scrollback search highlights (⌘F), derived from the accent. The first pair paints
+# Find highlights (⌘F), derived from the accent. The first pair paints
 # every match, the second the one you're currently on.
 #
 #   search-foreground = #e0def4

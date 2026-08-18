@@ -196,6 +196,10 @@ person downloading, not for the person who wrote the patch.
 
 One word per concept. The audit found four concepts with two or three words each.
 
+Find is the one row where the two vocabularies deliberately differ, and the seam
+below is why: every label a user reads says Find, every token they type says
+`search`. `toggle_search`, `search_selection`, `search_next`, `search_previous`.
+
 | Concept                               | Use                                                  | Not                                                        |
 | ------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------- |
 | The product                           | **ZenTerm**                                          | zen-term (that's the repo, the binary, and the config dir) |
@@ -207,6 +211,7 @@ One word per concept. The audit found four concepts with two or three words each
 | The whole window filling the desktop  | **Fill Screen**                                      | full screen, fullscreen, maximize                          |
 | Version control                       | **Git repository**, or **Git repo**                  | repo, git repository (lowercase)                           |
 | The footer button row                 | **toolbar**                                          | dock (that's macOS's; the type name `ToggleDock` is code)  |
+| Looking through the scrollback        | **Find** in UI, `search` in config                   | search in UI, scrollback search, find in config            |
 
 Apostrophes: straight (`'`), matching the bulk of the codebase. Two form overlays
 use curly (`’`) and should be reconciled.

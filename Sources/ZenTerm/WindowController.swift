@@ -183,6 +183,8 @@ final class WindowController: NSObject {
                 self?.endModes()
                 self?.activeController?.yieldFocusToFloat()
             },
+            // No `endModes()` to mirror `yieldFocus`: restoring unified focus announces the move,
+            // and that relay already ends both modes. Opening is the asymmetric one.
             restoreFocus: { [weak self] in self?.activeController?.restoreUnifiedFocus() },
             // Guarded like `activeController`: `TabList.activeID` preconditions on a non-empty list,
             // and `closeTab` empties it before the teardown that re-renders the dock through here.
@@ -195,6 +197,7 @@ final class WindowController: NSObject {
         controller.onNotification = { [weak self] n, spec, owner in
             self?.floatNotified(n, from: spec, owner: owner)
         }
+        controller.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
         return controller
     }()
 
@@ -274,7 +277,7 @@ final class WindowController: NSObject {
     /// panel, and the key handler it installs is app-global, so only the key window's can be up.
     let scrollMode = ScrollModeController()
 
-    /// Scrollback search over the same panel. Per window for the same reasons, and it
+    /// Find over the same panel. Per window for the same reasons, and it
     /// drives scroll mode on commit, so it holds the one above.
     lazy var search = SearchController(scrollMode: scrollMode)
 
@@ -587,8 +590,8 @@ final class WindowController: NSObject {
             scrollMode.end()
             return
         }
-        guard let target = activeController?.focusedScrollTarget else { return }
-        scrollMode.begin(surface: target.surface, panel: target.panel)
+        guard let target = modeTarget else { return }
+        scrollMode.begin(surface: target.surface, panel: target.host)
     }
 
     /// Open the find bar over the focused panel, or put the caret back in it if it is already up.
@@ -596,29 +599,37 @@ final class WindowController: NSObject {
     /// A panel with no live surface has nothing to search, so the chord does nothing rather than
     /// putting a bar over an empty panel.
     private func toggleSearch() {
-        guard let target = activeController?.focusedScrollTarget else { return }
+        guard let target = modeTarget else { return }
         // Seeded from whichever selection model is live: scroll mode's `v` is the chrome's own
         // overlay, which the backend cannot see, and a mouse drag is libghostty's. `copySelection`
         // is a pure read despite the name, and touches no pasteboard.
         let selected = scrollMode.selectedText ?? target.surface.copySelection()
-        search.begin(surface: target.surface, panel: target.panel, seed: selected ?? "")
+        search.begin(surface: target.surface, panel: target.host, seed: selected ?? "")
     }
 
     /// Open the find bar on the selection, and do nothing when there is none. That last clause is
     /// the whole difference from `toggle_search`, which reads the same two selection models but
     /// opens on an empty needle rather than declining.
     private func searchSelection() {
-        guard let target = activeController?.focusedScrollTarget else { return }
+        guard let target = modeTarget else { return }
         guard let selected = scrollMode.selectedText ?? target.surface.copySelection(),
             !selected.isEmpty
         else { return }
-        search.begin(surface: target.surface, panel: target.panel, seed: selected)
+        search.begin(surface: target.surface, panel: target.host, seed: selected)
+    }
+
+    /// The surface a reading chord acts on, and the card to hang its strips off. A shown float owns
+    /// both while it is up, because it is modal over the panes behind it.
+    private var modeTarget: (surface: TerminalSurface, host: TerminalModeHost)? {
+        if let shown = floats.shownTarget { return shown }
+        guard let panel = activeController?.focusedScrollTarget else { return nil }
+        return (panel.surface, panel.panel)
     }
 
     /// Move the focused pane or drawer's viewport, leaving the keyboard where it is. Scroll mode is
     /// the other way to read back through a buffer; this is one press and no mode.
     private func scrollFocusedPane(_ command: TerminalScroll) {
-        activeController?.focusedScrollTarget?.surface.scroll(command)
+        modeTarget?.surface.scroll(command)
     }
 
     /// Paste what is selected back into the pane it came from, and do nothing when nothing is.
@@ -628,11 +639,29 @@ final class WindowController: NSObject {
     /// selection clipboard, which macOS does not have, so on this platform that chord would paste
     /// exactly what ⌘V does.
     private func pasteSelection() {
-        guard let target = activeController?.focusedScrollTarget else { return }
+        guard let target = modeTarget else { return }
         guard let selected = scrollMode.selectedText ?? target.surface.copySelection(),
             !selected.isEmpty
         else { return }
         target.surface.paste(selected)
+    }
+
+    /// Feed one surface report to whichever mode wants it. A pane, a drawer and a tool float all
+    /// reach this, so the three relays cannot drift apart.
+    private func report(_ surface: TerminalSurface, _ event: SurfaceEvent) {
+        switch event {
+        case .scrollPosition(let position):
+            scrollMode.report(position: position, from: surface)
+            // Search reads the same report for a different reason: to know where the viewport
+            // sat when the bar went up, so it can put it back there rather than at the live end.
+            search.report(position: position, from: surface)
+        case .gridReflow:
+            scrollMode.reportReflow(from: surface)
+        case .search(let event):
+            // The host is resolved lazily: only the backend's own open-a-bar request needs one,
+            // and every other event is for a bar that is already up.
+            search.handle(event, from: surface, panel: modeTarget?.host)
+        }
     }
 
     /// End both modes, in the order their layout changes have to unwind: the bar comes down first,
@@ -648,8 +677,8 @@ final class WindowController: NSObject {
     private func wireModes() {
         // `*` opens the find bar on the word the band is on, the same entry ⌘F uses on a selection.
         scrollMode.onSearchWord = { [weak self] word in
-            guard let target = self?.activeController?.focusedScrollTarget else { return }
-            self?.search.begin(surface: target.surface, panel: target.panel, seed: word)
+            guard let target = self?.modeTarget else { return }
+            self?.search.begin(surface: target.surface, panel: target.host, seed: word)
         }
         scrollMode.onActiveChanged = { [weak self] active in
             guard let self else { return }
@@ -1925,6 +1954,12 @@ final class WindowController: NSObject {
                 floats.close()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab, .fillScreen,
                 .increaseFontSize, .decreaseFontSize, .resetFontSize, .selectAll,
+                // Reading the card's own buffer. `modeTarget` resolves the shown float ahead of the
+                // panel behind it, so all of these act on the terminal you are looking at.
+                .toggleScrollMode, .toggleSearch, .searchSelection, .findNext, .findPrevious,
+                .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown, .scrollToSelection,
+                .jumpToPreviousPrompt, .jumpToNextPrompt, .pasteSelection, .clearScreen,
+                .writeScreenFile, .copyScreenFilePath, .openScreenFile,
                 // Notices stack over an open float — the ⌘W-over-a-float notice is itself one — so
                 // swallowing these would kill them exactly when the pile is growing.
                 .dismissToast, .dismissAllToasts:
@@ -2002,13 +2037,13 @@ final class WindowController: NSObject {
         // Negative is up the buffer, toward older output, the same sign every other scroll takes.
         case .jumpToPreviousPrompt: scrollFocusedPane(.prompt(-1))
         case .jumpToNextPrompt: scrollFocusedPane(.prompt(1))
-        case .clearScreen: activeController?.focusedScrollTarget?.surface.clearScreen()
+        case .clearScreen: modeTarget?.surface.clearScreen()
         // The Edit menu serves ⌘A; this is whatever chord a config rebinds the action to, routed
         // through the same endpoint so the two spellings cannot drift.
         case .selectAll: selectAll(nil)
-        case .writeScreenFile: activeController?.focusedScrollTarget?.surface.writeScreenToFile(.paste)
-        case .copyScreenFilePath: activeController?.focusedScrollTarget?.surface.writeScreenToFile(.copy)
-        case .openScreenFile: activeController?.focusedScrollTarget?.surface.writeScreenToFile(.open)
+        case .writeScreenFile: modeTarget?.surface.writeScreenToFile(.paste)
+        case .copyScreenFilePath: modeTarget?.surface.writeScreenToFile(.copy)
+        case .openScreenFile: modeTarget?.surface.writeScreenToFile(.open)
         case .pasteSelection: pasteSelection()
         case .fillScreen: toggleFillScreen()
         case .toggleToolFloat(let id):
@@ -2192,23 +2227,7 @@ final class WindowController: NSObject {
             self?.cancelConfirm()
             self?.endModes()
         }
-        c.onSurfaceEvent = { [weak self] surface, event in
-            guard let self else { return }
-            switch event {
-            case .scrollPosition(let position):
-                scrollMode.report(position: position, from: surface)
-                // Search reads the same report for a different reason: to know where the viewport
-                // sat when the bar went up, so it can put it back there rather than at the live end.
-                search.report(position: position, from: surface)
-            case .gridReflow:
-                scrollMode.reportReflow(from: surface)
-            case .search(let event):
-                // The panel is resolved lazily: only the backend's own open-a-bar request needs
-                // one, and every other event is for a bar that is already up.
-                search.handle(
-                    event, from: surface, panel: activeController?.focusedScrollTarget?.panel)
-            }
-        }
+        c.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
         c.onNotification = { [weak self] n in self?.agentNotified(id: id, notification: n) }
         c.onCommandFinished = { [weak self] result in self?.commandFinished(id: id, result: result) }
     }

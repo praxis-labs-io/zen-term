@@ -148,7 +148,7 @@ final class ConfigWriterTests: XCTestCase {
         desired.unbind(.findNext)
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
         let text = try read(dir)
-        XCTAssertTrue(text.contains("keybind = find_next=none"), text)
+        XCTAssertTrue(text.contains("keybind = search_next=none"), text)
         XCTAssertEqual(text.components(separatedBy: "\n").filter { $0.hasPrefix("keybind = ") }.count, 1)
     }
 
@@ -170,7 +170,7 @@ final class ConfigWriterTests: XCTestCase {
             configRoot: dir)
 
         let rewritten = try read(dir)
-        XCTAssertTrue(rewritten.contains("keybind = find_next=none"), rewritten)
+        XCTAssertTrue(rewritten.contains("keybind = search_next=none"), rewritten)
     }
 
     /// The ticket's "done when", spelled as the user hits it: Find Next is unbound in the file, then
@@ -186,7 +186,9 @@ final class ConfigWriterTests: XCTestCase {
 
         let text = try read(dir)
         XCTAssertTrue(text.contains("keybind = split_vertical=cmd+shift+u"), text)
-        XCTAssertTrue(text.contains("keybind = find_next=none"), text)
+        // Seeded with the legacy `find_next`, rewritten as the canonical `search_next`: the
+        // unbind survives the rewrite, which is what this is about, and the token canonicalizes.
+        XCTAssertTrue(text.contains("keybind = search_next=none"), text)
     }
 
     /// Binding an unbound action back has to take the line away, or the file says both things and
