@@ -1,4 +1,5 @@
 import Foundation
+import TerminalKit
 import XCTest
 
 @testable import ZenTerm
@@ -19,14 +20,13 @@ final class ThemeCatalogTests: XCTestCase {
         return dir
     }
 
-    func test_entries_startWithBuiltInDefault() throws {
+    func test_entries_areTheBundledCatalog_whenTheUserDirIsEmpty() throws {
         let root = try makeTempRoot()
         let entries = ThemeCatalog.entries(configRoot: root)
-        XCTAssertEqual(entries.first?.source, .builtIn)
-        XCTAssertNil(entries.first?.name)  // built-in = no theme key
-        // With an empty user dir, the rest are bundled.
-        XCTAssertTrue(entries.dropFirst().allSatisfy { $0.source == .bundled })
-        XCTAssertEqual(entries.dropFirst().count, ThemeCatalog.bundled.count)
+        XCTAssertEqual(entries.map(\.name), ThemeCatalog.bundled.map(\.token))
+        XCTAssertTrue(entries.allSatisfy { $0.source == .bundled })
+        // The default is a real token now, so an unset `theme` key has something to select.
+        XCTAssertEqual(entries.first?.name, ThemeCatalog.defaultThemeName)
     }
 
     func test_userFile_shadowsBundledName_asUserSource() throws {
@@ -56,23 +56,63 @@ final class ThemeCatalogTests: XCTestCase {
         XCTAssertFalse(entries.contains { $0.name == "a-folder" })
     }
 
-    func test_everyBundledTheme_parsesToNonDefaultColors() throws {
-        let builtIn = Theme.rosePineMoon
+    /// A fallback no real theme could coincide with, so "equals the fallback" means "not parsed".
+    /// Comparing against the built-in instead would let a file that shares its hexes pass empty.
+    private var sentinelFallback: TerminalTheme {
+        let magenta = TerminalColor(red: 0xFF, green: 0x00, blue: 0xFF)
+        return TerminalTheme(
+            fontName: "Menlo", fontSize: 12, background: magenta, foreground: magenta,
+            cursor: magenta, selectionBackground: magenta, ansi: Array(repeating: magenta, count: 16))
+    }
+
+    private func parseBundled(_ token: String) throws -> TerminalTheme {
+        let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: token), "missing bundled theme \(token)")
+        let fallback = sentinelFallback
+        return GhosttyThemeParser.parse(
+            try String(contentsOf: url, encoding: .utf8),
+            fontName: fallback.fontName, fontSize: fallback.fontSize, fallback: fallback)
+    }
+
+    func test_everyBundledTheme_setsEveryColorItShips() throws {
+        let sentinel = sentinelFallback
         for entry in ThemeCatalog.bundled {
-            let url = try XCTUnwrap(
-                ThemeCatalog.bundledURL(for: entry.token), "missing bundled theme \(entry.token)")
-            let text = try String(contentsOf: url, encoding: .utf8)
-            let theme = GhosttyThemeParser.parse(
-                text, fontName: builtIn.fontName, fontSize: builtIn.fontSize, fallback: builtIn)
-            // A real theme file overrides all 16 palette slots, so the ansi array won't equal the
-            // fallback's. (Checking `background` alone isn't safe here: the built-in "Rosé Pine
-            // Moon" default deliberately uses Rosé Pine Main's background hex, which coincides
-            // with the bundled `rose-pine` [Main] file's background - see Theme.swift.)
-            if entry.token != "rose-pine" {
-                XCTAssertNotEqual(theme.background, builtIn.background, "\(entry.token) bg not set")
-            }
-            XCTAssertNotEqual(theme.ansi, builtIn.ansi, "\(entry.token) palette not set")
+            let theme = try parseBundled(entry.token)
+            XCTAssertNotEqual(theme.background, sentinel.background, "\(entry.token) bg not set")
+            XCTAssertNotEqual(theme.foreground, sentinel.foreground, "\(entry.token) fg not set")
+            XCTAssertNotEqual(theme.cursor, sentinel.cursor, "\(entry.token) cursor not set")
+            XCTAssertNotEqual(
+                theme.selectionBackground, sentinel.selectionBackground, "\(entry.token) selection not set")
+            XCTAssertNotEqual(theme.ansi, sentinel.ansi, "\(entry.token) palette not set")
             XCTAssertEqual(theme.ansi.count, 16)
         }
+    }
+
+    /// Compiled fallback and shipped file are one theme, so a hex edit to either has to reach the
+    /// other. Through `AppTheme`: the file names keys the fallback leaves to derivation.
+    func test_bundledDefault_matchesTheCompiledInFallback() throws {
+        let fromFile = AppTheme(terminal: try parseBundled(ThemeCatalog.defaultThemeName)).terminal
+        let compiled = AppTheme(terminal: Theme.rosePineZen).terminal
+        XCTAssertEqual(fromFile.background, compiled.background)
+        XCTAssertEqual(fromFile.foreground, compiled.foreground)
+        XCTAssertEqual(fromFile.cursor, compiled.cursor)
+        XCTAssertEqual(fromFile.selectionBackground, compiled.selectionBackground)
+        XCTAssertEqual(fromFile.selectionForeground, compiled.selectionForeground)
+        XCTAssertEqual(fromFile.searchBackground, compiled.searchBackground)
+        XCTAssertEqual(fromFile.ansi, compiled.ansi)
+    }
+
+    /// Main and Moon must carry their own upstream values, and Zen must be the blend it claims:
+    /// Moon's palette on Main's base. Shipping Moon under Main's name is the bug this catalog had.
+    func test_theRosePines_carryTheirOwnUpstreamValues() throws {
+        let main = try parseBundled("rose-pine")
+        let moon = try parseBundled("rose-pine-moon")
+        let zen = try parseBundled(ThemeCatalog.defaultThemeName)
+
+        XCTAssertEqual(main.background, TerminalColor(red: 0x19, green: 0x17, blue: 0x24))
+        XCTAssertEqual(main.ansi[2], TerminalColor(red: 0x31, green: 0x74, blue: 0x8F))  // Main's pine
+        XCTAssertEqual(moon.background, TerminalColor(red: 0x23, green: 0x21, blue: 0x36))
+        XCTAssertEqual(moon.ansi[2], TerminalColor(red: 0x3E, green: 0x8F, blue: 0xB0))  // Moon's pine
+        XCTAssertEqual(zen.background, main.background)
+        XCTAssertEqual(zen.ansi, moon.ansi)
     }
 }

@@ -1,10 +1,10 @@
 import TerminalKit
 
-/// zen-term's built-in terminal theme — Rosé Pine Moon (JetBrainsMono Nerd Font Mono,
-/// faithful bg/fg/palette) — and `current`, the resolved appearance loaded from
-/// `~/.config/zen-term/theme` when present.
+/// The built-in theme, Rosé Pine Zen (Moon's palette on Main's darker base), and `current`, the
+/// appearance resolved from config at launch. Mirrors `Themes/rose-pine-zen.ghostty`.
 enum Theme {
-    static let rosePineMoon = TerminalTheme(
+    /// Kept byte-identical to the bundled `rose-pine-zen` file, which `ThemeCatalogTests` locks.
+    static let rosePineZen = TerminalTheme(
         // Font is single-sourced on GeneralConfig.builtIn (it's a general-config knob, not a
         // theme key). Safe reference: GeneralConfig.builtIn never touches Theme.
         fontName: GeneralConfig.builtIn.fontName,
@@ -23,7 +23,7 @@ enum Theme {
 
     /// The built-in appearance, and the value `current` holds until launch resolves the config.
     static let builtIn = AppTheme(
-        terminal: rosePineMoon, chrome: ChromeThemeDeriver.derive(from: rosePineMoon))
+        terminal: rosePineZen, chrome: ChromeThemeDeriver.derive(from: rosePineZen))
 
     /// The resolved appearance for this launch, re-resolvable via `reloadCurrent()`. Reads the
     /// general config for the font, so `GeneralConfig.reloadCurrent()` must run first.

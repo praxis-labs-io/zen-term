@@ -5,7 +5,7 @@ import XCTest
 @testable import ZenTerm
 
 final class SyntaxAttributedTextTests: XCTestCase {
-    private let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
+    private let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
     private let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
 
     private func color(_ attributed: NSAttributedString, at index: Int) -> NSColor? {

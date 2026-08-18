@@ -1,23 +1,27 @@
 import Foundation
 
-/// One selectable theme in the picker: the built-in default (nil name = no `theme` key), a
-/// bundled catalog entry, or a user file in `~/.config/zen-term/themes/`.
+/// One selectable theme in the picker: a bundled catalog entry or a user file in
+/// `~/.config/zen-term/themes/`.
 struct ThemeEntry: Equatable {
-    enum Source: Equatable { case builtIn, bundled, user }
-    /// Config token written as `theme = <name>`; nil for the built-in default (clears the key).
-    let name: String?
+    enum Source: Equatable { case bundled, user }
+    /// Config token written as `theme = <name>`.
+    let name: String
     let displayName: String
     let isDark: Bool
     let source: Source
 }
 
-/// The theme picker's model: the built-in default, the bundled ghostty catalog (shipped as
-/// resources), and any files the user dropped in `themes/`. A user file shadows a bundled entry
-/// of the same token so a user can override a shipped theme.
+/// The theme picker's model: the bundled ghostty catalog plus the user's `themes/` files. A user
+/// file shadows a bundled entry of the same token.
 enum ThemeCatalog {
-    /// Bundled catalog. Each token has a `Themes/<token>.ghostty` resource (see Task 2 manifest).
+    /// What an absent `theme` key resolves to. Stays in step with `Theme.rosePineZen`.
+    static let defaultThemeName = "rose-pine-zen"
+
+    /// Bundled catalog. Each token has a `Themes/<token>.ghostty` resource.
     static let bundled: [(token: String, displayName: String, isDark: Bool)] = [
+        (defaultThemeName, "Rosé Pine Zen", true),
         ("rose-pine", "Rosé Pine", true),
+        ("rose-pine-moon", "Rosé Pine Moon", true),
         ("rose-pine-dawn", "Rosé Pine Dawn", false),
         ("catppuccin-latte", "Catppuccin Latte", false),
         ("catppuccin-frappe", "Catppuccin Frappé", true),
@@ -34,11 +38,9 @@ enum ThemeCatalog {
         ("kanagawa", "Kanagawa", true),
     ]
 
-    /// Built-in default, then bundled entries (minus any shadowed by a user file), then user files.
+    /// Bundled entries (minus any shadowed by a user file), then the user's own files.
     static func entries(configRoot: URL = ConfigLoader.defaultRoot) -> [ThemeEntry] {
-        var entries: [ThemeEntry] = [
-            ThemeEntry(name: nil, displayName: "Rosé Pine Moon", isDark: true, source: .builtIn)
-        ]
+        var entries: [ThemeEntry] = []
         let userTokens = userThemeTokens(configRoot: configRoot)
         let userSet = Set(userTokens)
         for entry in bundled where !userSet.contains(entry.token) {

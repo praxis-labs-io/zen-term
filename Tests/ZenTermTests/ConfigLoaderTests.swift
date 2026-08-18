@@ -15,7 +15,7 @@ final class ConfigLoaderTests: XCTestCase {
     func test_missingFileYieldsBuiltInDefault() throws {
         let root = try makeTempDir()  // empty — no `theme` file
         let app = ConfigLoader.loadAppTheme(configRoot: root, general: .builtIn)
-        XCTAssertEqual(app.terminal.background, Theme.rosePineMoon.background)
+        XCTAssertEqual(app.terminal.background, Theme.rosePineZen.background)
         XCTAssertEqual(app.chrome.destructive, TerminalColor(hex: "#eb6f92"))
     }
 
@@ -35,7 +35,7 @@ final class ConfigLoaderTests: XCTestCase {
         try FileManager.default.createDirectory(
             at: root.appendingPathComponent("theme"), withIntermediateDirectories: true)
         let app = ConfigLoader.loadAppTheme(configRoot: root, general: .builtIn)
-        XCTAssertEqual(app.terminal.background, Theme.rosePineMoon.background)
+        XCTAssertEqual(app.terminal.background, Theme.rosePineZen.background)
     }
 
     // MARK: - General config
@@ -151,7 +151,7 @@ final class ConfigLoaderTests: XCTestCase {
         var general = GeneralConfig.builtIn
         general.themeName = "nope"
         let app = ConfigLoader.loadAppTheme(configRoot: root, general: general)
-        XCTAssertEqual(app.terminal.background, Theme.rosePineMoon.background)
+        XCTAssertEqual(app.terminal.background, Theme.rosePineZen.background)
     }
 
     func test_namedTheme_winsOverLegacyThemeFile() throws {

@@ -36,7 +36,7 @@ enum ConfigLoader {
     /// `loadGeneralConfig`'s problem — see there.
     @MainActor
     static func loadAppTheme(configRoot: URL = defaultRoot, general: GeneralConfig = .current) -> AppTheme {
-        let builtIn = Theme.rosePineMoon
+        let builtIn = Theme.rosePineZen
 
         var terminal: TerminalTheme
         if let themeURL = resolveThemeURL(configRoot: configRoot, general: general) {
@@ -62,24 +62,30 @@ enum ConfigLoader {
         return AppTheme(terminal: terminal, accent: general.accentColor)
     }
 
-    /// Locate the active theme file, or nil to use the built-in default. A `theme = <name>`
-    /// config key selects `themes/<name>`; with no key we fall back to a legacy single `theme`
-    /// file. A named theme that doesn't exist warns and falls back to the built-in.
+    /// Locate the active theme file, or nil for the compiled-in default. No key means the legacy
+    /// single `theme` file if present, else the default token resolved like any other.
     private static func resolveThemeURL(configRoot: URL, general: GeneralConfig) -> URL? {
         if let name = general.themeName {
-            let userURL = configRoot.appendingPathComponent("themes").appendingPathComponent(name)
-            var isDir: ObjCBool = false
-            if FileManager.default.fileExists(atPath: userURL.path, isDirectory: &isDir), !isDir.boolValue {
-                return userURL
-            }
-            if let bundled = ThemeCatalog.bundledURL(for: name) { return bundled }
+            if let url = namedThemeURL(configRoot: configRoot, name: name) { return url }
             Log.warning(
                 "ConfigLoader: theme `\(name)` not found in user themes/ or the bundled catalog — using built-in theme",
                 category: .config)
             return nil
         }
         let legacy = configRoot.appendingPathComponent("theme")
-        return FileManager.default.fileExists(atPath: legacy.path) ? legacy : nil
+        if FileManager.default.fileExists(atPath: legacy.path) { return legacy }
+        // Same path a named theme takes, so the picker can't show a theme that isn't active.
+        return namedThemeURL(configRoot: configRoot, name: ThemeCatalog.defaultThemeName)
+    }
+
+    /// A user `themes/<name>` file, else the bundled resource of that token. nil if neither exists.
+    private static func namedThemeURL(configRoot: URL, name: String) -> URL? {
+        let userURL = configRoot.appendingPathComponent("themes").appendingPathComponent(name)
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: userURL.path, isDirectory: &isDir), !isDir.boolValue {
+            return userURL
+        }
+        return ThemeCatalog.bundledURL(for: name)
     }
 
     /// Main-thread-only, and the annotation is load-bearing rather than documentary: parsing the

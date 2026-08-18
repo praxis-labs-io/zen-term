@@ -6,7 +6,7 @@ import XCTest
 
 final class ChromeThemeDeriverTests: XCTestCase {
     func test_derivesRolesFromPaletteMatchingLegacyToastColors() {
-        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
+        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
         XCTAssertEqual(chrome.background, TerminalColor(hex: "#191724"))
         XCTAssertEqual(chrome.foreground, TerminalColor(hex: "#e0def4"))
         XCTAssertEqual(chrome.info, TerminalColor(hex: "#9ccfd8"))  // foam / palette[4]
@@ -24,7 +24,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
     }
 
     func test_derivesAllSevenSyntaxRolesFromPalette() {
-        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
+        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
         XCTAssertEqual(chrome.synKeyword, TerminalColor(hex: "#c4a7e7"))  // iris / palette[5]
         XCTAssertEqual(chrome.synString, TerminalColor(hex: "#3e8fb0"))  // pine / palette[2]
         XCTAssertEqual(chrome.synNumber, TerminalColor(hex: "#f6c177"))  // gold / palette[3]
@@ -43,12 +43,12 @@ final class ChromeThemeDeriverTests: XCTestCase {
         // A round-trip equality that touches every stored field, including the seven new syntax roles —
         // guards the synthesized `Equatable` conformance the row model relies on.
         XCTAssertEqual(
-            ChromeThemeDeriver.derive(from: Theme.rosePineMoon),
-            ChromeThemeDeriver.derive(from: Theme.rosePineMoon))
-        var recolored = Theme.rosePineMoon
+            ChromeThemeDeriver.derive(from: Theme.rosePineZen),
+            ChromeThemeDeriver.derive(from: Theme.rosePineZen))
+        var recolored = Theme.rosePineZen
         recolored.ansi[5] = TerminalColor(red: 255, green: 255, blue: 255)  // shifts synKeyword (slot 5) alone
         XCTAssertNotEqual(
-            ChromeThemeDeriver.derive(from: Theme.rosePineMoon),
+            ChromeThemeDeriver.derive(from: Theme.rosePineZen),
             ChromeThemeDeriver.derive(from: recolored))
     }
 
@@ -56,8 +56,8 @@ final class ChromeThemeDeriverTests: XCTestCase {
     /// is the one that can rot silently: accent is aliased to a slot other roles also read, so a
     /// deriver change could drag `info` or `attention` along with it and still look plausible.
     func test_accentOverride_movesOnlyTheAccentRole() {
-        let base = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
-        let overridden = ChromeThemeDeriver.derive(from: Theme.rosePineMoon, accent: .brightGreen)
+        let base = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
+        let overridden = ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: .brightGreen)
 
         XCTAssertEqual(overridden.accent, TerminalColor(hex: "#3e8fb0"))  // palette[10]
         XCTAssertNotEqual(overridden.accent, base.accent)
@@ -77,8 +77,8 @@ final class ChromeThemeDeriverTests: XCTestCase {
     /// recolor code: a keyword is a token role, not a taste. This is the assertion that makes the
     /// coincidence deliberate, and it can only be written on a branch that has the syntax roles.
     func test_accentOverride_leavesTheSyntaxRolesWhereTheyAre() {
-        let base = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
-        let overridden = ChromeThemeDeriver.derive(from: Theme.rosePineMoon, accent: .brightGreen)
+        let base = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
+        let overridden = ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: .brightGreen)
 
         XCTAssertEqual(overridden.synKeyword, base.synKeyword)
         XCTAssertEqual(overridden.synKeyword, TerminalColor(hex: "#c4a7e7"))  // still iris / palette[5]
@@ -94,8 +94,8 @@ final class ChromeThemeDeriverTests: XCTestCase {
     /// chrome for every user who never opened it.
     func test_noAccentOverride_derivesTheHistoricalSlotFive() {
         XCTAssertEqual(
-            ChromeThemeDeriver.derive(from: Theme.rosePineMoon, accent: nil).accent,
-            ChromeThemeDeriver.derive(from: Theme.rosePineMoon, accent: .magenta).accent)
+            ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: nil).accent,
+            ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: .magenta).accent)
     }
 
     /// Every slot has to name the ANSI entry the palette actually put there — an off-by-one here
@@ -103,8 +103,8 @@ final class ChromeThemeDeriverTests: XCTestCase {
     func test_everySlotResolvesToItsPaletteEntry() {
         for slot in AccentSlot.allCases {
             XCTAssertEqual(
-                ChromeThemeDeriver.derive(from: Theme.rosePineMoon, accent: slot).accent,
-                Theme.rosePineMoon.ansi[slot.ansiIndex],
+                ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: slot).accent,
+                Theme.rosePineZen.ansi[slot.ansiIndex],
                 "\(slot.rawValue) resolved to the wrong palette entry")
         }
     }
@@ -112,29 +112,29 @@ final class ChromeThemeDeriverTests: XCTestCase {
     /// A hand-written theme file may declare fewer than 16 entries; a high slot must fall back, not
     /// trap. `slot(_:)` already did this for the fixed roles — the override must not bypass it.
     func test_slotBeyondAShortPalette_fallsBackToForeground() {
-        var short = Theme.rosePineMoon
+        var short = Theme.rosePineZen
         short.ansi = Array(short.ansi.prefix(8))
         XCTAssertEqual(
             ChromeThemeDeriver.derive(from: short, accent: .brightWhite).accent, short.foreground)
     }
 
     func test_inkIsThemeForegroundAtBoostedAlpha() {
-        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
+        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
         let expected = min(1, 0.55 * ChromeTheme.inkBoost)
         assertEqualRGBA(
             chrome.ink(alpha: 0.55),
-            Theme.rosePineMoon.foreground.nsColor.withAlphaComponent(expected))
+            Theme.rosePineZen.foreground.nsColor.withAlphaComponent(expected))
     }
 
     func test_aThemeSilentOnSelectedTextGetsItsOwnForeground() {
-        XCTAssertNil(Theme.rosePineMoon.selectionForeground)  // the file names no such key
+        XCTAssertNil(Theme.rosePineZen.selectionForeground)  // the file names no such key
         XCTAssertEqual(
-            AppTheme(terminal: Theme.rosePineMoon).terminal.selectionForeground,
-            Theme.rosePineMoon.foreground)
+            AppTheme(terminal: Theme.rosePineZen).terminal.selectionForeground,
+            Theme.rosePineZen.foreground)
     }
 
     func test_aThemeThatNamesSelectedTextKeepsWhatItNamed() {
-        var named = Theme.rosePineMoon
+        var named = Theme.rosePineZen
         named.selectionForeground = TerminalColor(hex: "#abcdef")
         XCTAssertEqual(
             AppTheme(terminal: named).terminal.selectionForeground, TerminalColor(hex: "#abcdef"))
