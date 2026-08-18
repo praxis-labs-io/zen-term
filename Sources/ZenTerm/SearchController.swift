@@ -2,15 +2,10 @@ import AppKit
 import AppLog
 import TerminalKit
 
-/// Find: the bar, the match count, and the keys that step through matches. The
-/// searching itself is libghostty's; this owns the bar, the needle, and the two-phase keyboard
-/// handoff around them.
-///
-/// **Phase one** is typing: the bar holds first responder and the needle goes down on a debounce.
-/// **Phase two** starts at ⏎: first responder returns to the pane, scroll mode comes up, and
-/// `n`/`N` step through matches with the cursor following.
-///
-/// Per window and pointed at one panel, like scroll mode, and it ends for the same reasons.
+/// Find: the bar, the needle, and the two-phase keyboard handoff. The searching is libghostty's.
+/// Phase one is typing, with the bar holding first responder and the needle going down on a
+/// debounce. Phase two starts at ⏎: first responder returns to the pane, scroll mode comes up, and
+/// `n`/`N` step matches. Per window and pointed at one host, like scroll mode, ending as it does.
 @MainActor
 final class SearchController {
     /// A phase-two keystroke. Phase one has no decoder: the field owns every key it gets.

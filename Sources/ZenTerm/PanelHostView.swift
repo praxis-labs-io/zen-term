@@ -10,14 +10,10 @@ struct PanelMeta {
     let action: KeyInterceptor.ReservedChord
 }
 
-/// Hosts one terminal surface (a pane leaf or a drawer) inside the shared rounded/bordered
-/// chrome: the iris focus halo (accent border + soft glow) and an inner clip that keeps
-/// content within the corner radius. A drawer passes `meta` for an always-on header, and may
-/// also pass `zoomMeta`: the header content it swaps to while zoomed (its title reading
-/// "<panel>: Focus Mode" and the keybind replaced by ⌘⇧⏎). A pane passes only `zoomMeta` for a
-/// header that appears only while the pane is zoomed (Focus Mode). Panes with neither
-/// look/behave exactly as the original pane-only chrome. Clicking anywhere in the panel
-/// requests focus.
+/// Hosts one terminal surface (a pane leaf or a drawer) in the shared rounded chrome: the iris
+/// focus halo and an inner clip that keeps content inside the radius. A drawer passes `meta` for
+/// an always-on header and `zoomMeta` for the variant it wears while zoomed; a pane passes only
+/// `zoomMeta`, and either may be nil. Clicking anywhere in the panel requests focus.
 final class PanelHostView: NSView, TerminalModeHost {
     private let onFocusRequest: () -> Void
     private let pane = NSView()  // the bordered card; the glow is cast by `halo`, not by a shadow

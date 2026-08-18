@@ -94,11 +94,10 @@ final class ModeChrome {
         cursor.redraw()
     }
 
-    /// Raise or lower the find bar, returning it while it is up so the caller can wire and drive it.
-    ///
-    /// The bar **displaces** the terminal rather than floating over it, exactly as the header does
-    /// at the other end, so the grid loses a row or two and reflows. The caller has to lay out and
-    /// re-measure after this: see `SearchController.settleLayout()`.
+    /// Raise or lower the find bar, returning it while it is up so the caller can wire it.
+    /// The bar displaces the terminal rather than floating over it, exactly as the header does at
+    /// the other end, so the grid reflows and the caller has to lay out and re-measure after this.
+    /// See `SearchController.settleLayout()`.
     @discardableResult
     func setFindBarShown(_ shown: Bool) -> FindBarView? {
         defer { onStripsChanged() }
@@ -183,7 +182,7 @@ final class ModeChrome {
 }
 
 /// A muted small-caps title (left) and its live keybind chip (right), e.g. `BOTTOM DRAWER ⌘B`, or
-/// `TERMINAL PANE: FOCUS MODE ⌘F` while zoomed. The keybind resolves from the live keymap via
+/// `TERMINAL PANE: FOCUS MODE ⌘⇧⏎` while zoomed. The chip resolves from the live keymap via
 /// `CommandCatalog`, so it tracks user rebinds.
 private final class PanelHeader: NSView {
     private var title: String
@@ -224,10 +223,8 @@ private final class PanelHeader: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Swap the header to a new title + keybind (a drawer's resting → zoomed transition).
-    ///
-    /// The keycap is rebuilt only when the action moves. A mode header re-applies on every
-    /// scroll report to update its count, and tearing down and re-adding a view per keystroke
-    /// to redraw an unchanged ⌘⇧S is churn for nothing.
+    /// The keycap rebuilds only when the action moves: a mode header re-applies on every scroll
+    /// report, and re-adding a view per keystroke to redraw an unchanged ⌘⇧S is churn for nothing.
     func apply(_ meta: PanelMeta) {
         let actionMoved = action != meta.action
         title = meta.title

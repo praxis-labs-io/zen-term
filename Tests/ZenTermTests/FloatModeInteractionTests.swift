@@ -5,11 +5,9 @@ import XCTest
 @testable import ZenTerm
 
 /// Reading back through a tool float's own buffer.
-///
-/// Every chord here was swallowed over an open card: the float gate listed what a float allows and
-/// none of them were on it, and a float had no `PanelHostView` for a mode to hang its strips off.
-/// A swallowed chord looks exactly like a chord wired to nothing, so each case drives the real
-/// action and asserts it landed on the card's surface rather than the pane behind it.
+/// Every chord here was swallowed over an open card, and a swallowed chord looks exactly like one
+/// wired to nothing, so each case drives the real action and asserts it landed on the card's
+/// surface rather than on the pane behind it.
 @MainActor
 final class FloatModeInteractionTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -186,16 +184,39 @@ final class FloatModeInteractionTests: WindowTestCase {
 
     // MARK: the one-press verbs
 
-    func test_theScrollChordsMoveTheCardsViewport() throws {
+    /// The gate's allow-list is a hand-written table, and the switch beside it is exhaustive over
+    /// the enum rather than over the list. Every admitted scroll chord is driven here, so a line
+    /// dropped from the list fails something instead of passing quietly.
+    func test_everyScrollChordInTheGate_movesTheCardsViewport() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(spawned.first)
         let float = try openScratch(c)
+        let admitted: [(KeyInterceptor.ReservedChord, TerminalScroll)] = [
+            (.scrollToTop, .top), (.scrollToBottom, .bottom),
+            (.scrollPageUp, .pageFraction(-1)), (.scrollPageDown, .pageFraction(1)),
+            (.scrollToSelection, .selection),
+            (.jumpToPreviousPrompt, .prompt(-1)), (.jumpToNextPrompt, .prompt(1)),
+        ]
 
-        c.handle(.scrollToTop)
-        c.handle(.jumpToPreviousPrompt)
+        for (chord, _) in admitted { c.handle(chord) }
 
-        XCTAssertEqual(float.scrolls, [.top, .prompt(-1)])
-        XCTAssertTrue(pane.scrolls.isEmpty)
+        XCTAssertEqual(float.scrolls, admitted.map(\.1))
+        XCTAssertTrue(pane.scrolls.isEmpty, "the pane behind the card is not what is being read")
+    }
+
+    /// `n` and `N` step a live search, so these two mean nothing without the bar up. They route
+    /// through the controller rather than `modeTarget`, and the gate is all that stands between
+    /// them and the card.
+    func test_theSteppingChordsOverAFloat_walkTheCardsMatches() throws {
+        let c = makeWindow()
+        let float = try openScratch(c)
+        float.selectionText = "hi"
+        c.handle(.searchSelection)
+
+        c.handle(.findNext)
+        c.handle(.findPrevious)
+
+        XCTAssertEqual(float.searchSteps, [.next, .previous])
     }
 
     /// The wrong target here is invisible rather than wrong-looking: the text lands in the pane
@@ -223,14 +244,17 @@ final class FloatModeInteractionTests: WindowTestCase {
         XCTAssertEqual(pane.clearScreenCount, 0)
     }
 
-    func test_writingTheScreenToAFileTakesTheCardsScreen() throws {
+    /// All three dispositions, for the same reason the scroll table covers all seven.
+    func test_everyScreenFileChordInTheGate_takesTheCardsScreen() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(spawned.first)
         let float = try openScratch(c)
 
         c.handle(.writeScreenFile)
+        c.handle(.copyScreenFilePath)
+        c.handle(.openScreenFile)
 
-        XCTAssertEqual(float.screenFileDispositions, [.paste])
+        XCTAssertEqual(float.screenFileDispositions, [.paste, .copy, .open])
         XCTAssertEqual(pane.writeScreenFileCount, 0)
     }
 }
