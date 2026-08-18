@@ -1076,7 +1076,10 @@ comes back where that tab left off.
 
 **The float stage speaks rather than swallowing.** A pane command (nav, split,
 resize, drawer, Focus Mode) pressed over an open float has nowhere to go, so it
-raises a notice naming the float instead of doing nothing at all. Held
+raises a notice naming the float instead of doing nothing at all. The reading
+chords do have somewhere to go and pass straight through: scroll mode, find, the
+scroll and prompt-jump chords, clear screen and the screen-to-file verbs all act on
+the card's own buffer, because `modeTarget` resolves the shown float first. Held
 chords auto-repeat, so it coalesces on a 3-second throttle, the same shape as the
 zoom-block and no-neighbor toasts. It is not keyed by chord: the notice reads the
 same whichever was pressed, so a second chord inside the window would only repeat a
@@ -1104,6 +1107,13 @@ surface with nowhere to hand off to.
 ⌘⇧S reads back through the focused panel's scrollback from the keyboard.
 `ScrollModeController` owns it, one per window, and it targets whichever panel held
 unified focus when it opened. It does not follow focus afterward.
+
+**Its target is a `TerminalModeHost`, not a pane.** A shown tool float is modal over the
+panes behind it, so `WindowController.modeTarget` resolves the card ahead of the focused
+panel and every reading chord acts on the terminal you are looking at.
+`PanelHostView` and `SurfaceFloatOverlay` both answer the protocol, and `ModeChrome`
+holds the three strips a mode hangs off them: the header, the find bar and the cursor. A
+float wears no header at rest and grows one only while a mode is up.
 
 **It exists because the keys that should scroll a buffer are the shell's.** `j`,
 `k`, `⌃d` and `⌃u` cannot be reserved chords without taking them from every program
@@ -1157,9 +1167,9 @@ two exact.
 
 **The cursor is the chrome's, drawn on the pane.** libghostty has no copy mode and no
 cursor outside the shell's own, so `ScrollCursorView` paints the band on the current row,
-a stroked cell where the cursor is, the selection rects, and the yank pulse, added last
-inside `PanelHostView.clip` and pinned to the terminal view rather than to the clip, so
-its row math is in the surface's own coordinates. It returns nil from `hitTest`, because
+a stroked cell where the cursor is, the selection rects, and the yank pulse, added by
+`ModeChrome` inside the host's card and pinned to the terminal view rather than to the
+card, so its row math is in the surface's own coordinates. It returns nil from `hitTest`, because
 the thing behind it is a live terminal that still has to take clicks and drag-selection.
 The cursor cell is stroked rather than filled: a real terminal cursor inverts its cell,
 an overlay cannot, and a fill solid enough to read as a cursor takes the character with
@@ -1348,15 +1358,17 @@ width. Left on, `$` parks the cursor out in the padding and `v$y` copies a run o
 
 ### Scrollback search
 
-⌘F opens a find bar along the bottom of the focused panel. **The searching is
-libghostty's**: it matches, counts, tracks which match is selected, and its renderer
-paints every highlight. `SearchController` owns the bar, the needle, and the keys, and
-that is all the chrome does here.
+⌘F opens a find bar along the bottom of whatever `modeTarget` resolves, a shown tool
+float ahead of the focused panel. **The searching is libghostty's**: it matches, counts,
+tracks which match is selected, and its renderer paints every highlight.
+`SearchController` owns the bar, the needle, and the keys, and that is all the chrome
+does here.
 
 Three binding actions go down (`search:<needle>`, `navigate_search:next|previous`,
 `end_search`) and four actions come back up (`START_SEARCH`, `SEARCH_TOTAL`,
 `SEARCH_SELECTED`, `END_SEARCH`), relayed through one `onSearchEvent` closure rather
-than four so the walk through the pane and tab controllers stays one line. The needle
+than four so the walk through the pane, tab and tool-float controllers stays one line.
+All three land on `WindowController.report`, so the relays cannot drift apart. The needle
 needs no escaping: libghostty splits a binding action on its **first** colon and takes
 the rest verbatim. `performBindingAction` grew a `logsFailure` flag because three of
 these legitimately return false, meaning "there was nothing to do" rather than

@@ -96,6 +96,10 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// agent has no on-screen trace at all.
     var onNotification: ((TerminalNotification, ToolFloat, TabID?) -> Void)?
 
+    /// The shown card's surface reported something the window acts on. The same relay a pane and a
+    /// drawer have, so scroll mode and the find bar read a float the way they read a panel.
+    var onSurfaceEvent: ((TerminalSurface, SurfaceEvent) -> Void)?
+
     init(
         presentOverlay: @escaping (SurfaceFloatOverlay) -> Void,
         focusedCWD: @escaping () -> URL?,
@@ -461,7 +465,40 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         activeFloat?.surface.selectAll()
     }
 
+    /// The surface a reading chord acts on and the card to hang its strips off, or nil when no card
+    /// is up. Gated on the shown card rather than the registry: a persistent float's surface
+    /// outlives its card, and a mode has nowhere to draw once the card is gone.
+    var shownTarget: (surface: TerminalSurface, host: TerminalModeHost)? {
+        guard let active = activeFloat else { return nil }
+        return (active.surface, active.overlay)
+    }
+
     // MARK: TerminalSurfaceDelegate
+
+    /// Relay the shown card's surface upward. A hidden persistent float still runs and still
+    /// reports, and a mode has no card of its own to draw on, so only the shown one forwards.
+    private func relay(_ s: TerminalSurface, _ event: SurfaceEvent) {
+        guard let active = activeFloat, s === active.surface else { return }
+        onSurfaceEvent?(s, event)
+    }
+    func surface(_ s: TerminalSurface, scrollPositionDidChange position: TerminalScrollPosition) {
+        relay(s, .scrollPosition(position))
+    }
+    func surfaceGridDidReflow(_ s: TerminalSurface) {
+        relay(s, .gridReflow)
+    }
+    func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
+        relay(s, .search(.total(total)))
+    }
+    func surface(_ s: TerminalSurface, searchSelectionDidChange index: Int?) {
+        relay(s, .search(.selected(index)))
+    }
+    func surfaceDidEndSearch(_ s: TerminalSurface) {
+        relay(s, .search(.ended))
+    }
+    func surface(_ s: TerminalSurface, wantsSearchWithNeedle needle: String) {
+        relay(s, .search(.wanted(needle: needle)))
+    }
 
     /// A float's tool posted a desktop notification (a `claude` float asking for input) — relay it
     /// as this window's attention signal, same as a pane or a drawer.

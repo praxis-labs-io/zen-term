@@ -483,6 +483,9 @@
 # The mode ends on its own when focus moves, the pane closes, you change tab, or a
 # tool float or palette opens.
 #
+# With a tool float open, ⌘⇧S reads the float's buffer instead of the pane behind it.
+# The card wears the header while the mode is up, and closing the card ends the mode.
+#
 # `v` starts a selection at the cursor and `V` takes whole rows; motions grow it, `y`
 # copies it and pulses what it took, and Esc hands it back without leaving the mode.
 # A selection stays on screen: the terminal core can only read text you can see, so
@@ -510,7 +513,8 @@
 # searches its whole scrollback, not just what's on screen. Every match is
 # highlighted as you type and the bar counts them. If what you typed is only in
 # history, the pane scrolls to it so you can see it while you type; if a match is
-# already on screen, nothing moves.
+# already on screen, nothing moves. With a tool float open the bar opens in the card
+# and searches the float's scrollback.
 #
 # ⌘F opens on whatever you have selected, so searching a word you can see never
 # means retyping it. Either kind counts: a mouse selection, or a `v` selection made
@@ -577,7 +581,7 @@
 #
 # `clear_screen` (⌘K) wipes the screen and the scrollback with it, the way `clear`
 # does. It leaves a full-screen program alone: vim and its kind draw on a second screen
-# that has no scrollback to clear.
+# that has no scrollback to clear. Over an open tool float it clears the card.
 #
 # `write_screen_file` (⌘⇧J) writes what is on screen to a file and types the path at
 # your prompt, so the next command has something to point at. Reach for it when a wall

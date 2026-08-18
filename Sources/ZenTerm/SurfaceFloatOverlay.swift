@@ -10,14 +10,23 @@ import TerminalKit
 /// gutters or the tab bar. Hosts (the tool floats)
 /// supply the content view and the card metrics — the base owns all the float chrome and
 /// the enter/exit motion.
-class SurfaceFloatOverlay: NSView {
+class SurfaceFloatOverlay: NSView, TerminalModeHost {
     private let onDismiss: () -> Void
+    private let content: NSView  // the terminal surface's own view
+    private let contentInset: CGFloat
     // ShadowCardView (not CardView) — the hosted terminal must receive mouseDown.
     private let card = ShadowCardView()
     private let ring = RingFillView()  // paints the inset once the card fill stops covering it
     private let elevation = OutsideShadowView()  // the elevation shadow, drawn around the card
     private let blur = NSVisualEffectView()  // frosts the panes behind a translucent card
     private var dismiss = DismissGate()
+
+    /// The mode strips: the header, the find bar and scroll mode's cursor. A float wears no header
+    /// at rest, so this builds one only if a mode asks for it. Lazy because it mounts into `card`
+    /// around `content`, so it cannot be built before `self` is.
+    private lazy var chrome = ModeChrome(
+        container: card, content: content, padding: contentInset, header: nil,
+        onStripsChanged: { [weak self] in self?.ring.needsDisplay = true })
 
     /// The background a program set in this float's own terminal with OSC 11, or nil while the
     /// float is on the theme's. Reaches the card's interior fill alone; the card edge,
@@ -68,6 +77,8 @@ class SurfaceFloatOverlay: NSView {
         onDismiss: @escaping () -> Void
     ) {
         self.onDismiss = onDismiss
+        self.content = content
+        self.contentInset = contentInset
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -155,11 +166,9 @@ class SurfaceFloatOverlay: NSView {
             ring.bottomAnchor.constraint(equalTo: card.bottomAnchor),
             content.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: contentInset),
             content.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -contentInset),
-            content.topAnchor.constraint(equalTo: card.topAnchor, constant: contentInset),
-            content.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -contentInset),
         ])
 
-        applyBackground()
+        applyBackground()  // also the first touch of `chrome`, which mounts the strips over `content`
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -202,6 +211,9 @@ class SurfaceFloatOverlay: NSView {
         ring.isHidden = isSolid
         blur.isHidden = isSolid
         ring.color = background.withAlphaComponent(alpha)
+        // The strips paint their tint over this same fill, so they read at the card's alpha rather
+        // than blending with the panes behind it. The rule a pane follows, for the same reason.
+        chrome.findBarFill = isSolid ? background : ring.color
     }
 
     /// Re-apply the card's theme-dependent colors after a live theme change, and re-read
@@ -211,7 +223,37 @@ class SurfaceFloatOverlay: NSView {
     func reapplyTheme() {
         CardChrome.reapplyEdge(to: card, halo: true)
         applyBackground()
+        chrome.reapplyTheme()
     }
+
+    /// The header this card wears while a mode is up over its terminal, and nothing at rest: a
+    /// float has no title bar of its own, so this is the only chrome it ever grows.
+    var modeMeta: PanelMeta? {
+        didSet {
+            guard oldValue?.title != modeMeta?.title || oldValue?.action != modeMeta?.action else { return }
+            chrome.setHeader(modeMeta)
+        }
+    }
+
+    func setScrollCursor(
+        _ state: ScrollCursorView.State?, metrics: @escaping () -> TerminalCellMetrics?
+    ) {
+        chrome.setScrollCursor(state, metrics: metrics)
+    }
+
+    /// `applyBackground` re-reads the live alpha, which the bar is built long after the card first
+    /// read: below alpha 1 it also unhides the ring, and a hidden ring drops its redisplay flag.
+    @discardableResult
+    func setFindBarShown(_ shown: Bool) -> FindBarView? {
+        let bar = chrome.setFindBarShown(shown)
+        applyBackground()
+        return bar
+    }
+
+    var findBarForTesting: FindBarView? { chrome.findBarForTesting }
+    var scrollCursorForTesting: ScrollCursorView { chrome.scrollCursorForTesting }
+    var isHeaderVisibleForTesting: Bool { chrome.isHeaderVisibleForTesting }
+    var headerContentForTesting: (title: String, shortcut: String)? { chrome.headerContentForTesting }
 
     /// Spring the card in (fade + subtle scale about its center). Call after presenting.
     func animateIn() {
