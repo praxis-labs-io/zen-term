@@ -91,7 +91,7 @@ final class ThemeCatalogTests: XCTestCase {
     /// what the picker writes. They are the same theme, so a hex edit to one has to reach the other.
     func test_bundledDefault_matchesTheCompiledInFallback() throws {
         let theme = try parseBundled(ThemeCatalog.defaultThemeName)
-        let expected = Theme.rosePineDarker
+        let expected = Theme.rosePineZen
         XCTAssertEqual(theme.background, expected.background)
         XCTAssertEqual(theme.foreground, expected.foreground)
         XCTAssertEqual(theme.cursor, expected.cursor)
@@ -99,18 +99,18 @@ final class ThemeCatalogTests: XCTestCase {
         XCTAssertEqual(theme.ansi, expected.ansi)
     }
 
-    /// The three Rosé Pines are distinct upstream themes, and shipping Moon's palette under Main's
-    /// name is the bug this catalog once had.
+    /// Main and Moon must carry their own upstream values, and Zen must be the blend it claims:
+    /// Moon's palette on Main's base. Shipping Moon under Main's name is the bug this catalog had.
     func test_theRosePines_carryTheirOwnUpstreamValues() throws {
         let main = try parseBundled("rose-pine")
         let moon = try parseBundled("rose-pine-moon")
-        let darker = try parseBundled(ThemeCatalog.defaultThemeName)
+        let zen = try parseBundled(ThemeCatalog.defaultThemeName)
 
         XCTAssertEqual(main.background, TerminalColor(red: 0x19, green: 0x17, blue: 0x24))
         XCTAssertEqual(main.ansi[2], TerminalColor(red: 0x31, green: 0x74, blue: 0x8F))  // Main's pine
         XCTAssertEqual(moon.background, TerminalColor(red: 0x23, green: 0x21, blue: 0x36))
         XCTAssertEqual(moon.ansi[2], TerminalColor(red: 0x3E, green: 0x8F, blue: 0xB0))  // Moon's pine
-        XCTAssertEqual(darker.background, main.background)
-        XCTAssertEqual(darker.ansi, moon.ansi)
+        XCTAssertEqual(zen.background, main.background)
+        XCTAssertEqual(zen.ansi, moon.ansi)
     }
 }

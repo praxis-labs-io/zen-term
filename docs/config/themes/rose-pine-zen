@@ -1,9 +1,9 @@
-# Rosé Pine Darker: the theme zen-term ships with, written out in full.
+# Rosé Pine Zen: the theme zen-term ships with, written out in full.
 #
-# It's Rosé Pine Moon's palette on Rosé Pine's darker base. The app bundles it,
-# so `theme = rose-pine-darker` in `config` already works without this file. Copy
-# it to ~/.config/zen-term/themes/rose-pine-darker to edit the values: a file
-# there shadows the bundled one under the same name.
+# Ours, not an upstream variant: Rosé Pine Moon's pine and rose over Rosé Pine's
+# darker base. The app bundles it, so `theme = rose-pine-zen` in `config` works
+# without this file. Copy it to ~/.config/zen-term/themes/rose-pine-zen to edit
+# the values: a file there shadows the bundled one under the same name.
 #
 # Drop any number of theme files in that directory and switch between them with
 # that one `theme` line.

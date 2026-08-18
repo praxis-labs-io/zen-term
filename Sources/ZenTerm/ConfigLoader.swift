@@ -36,7 +36,7 @@ enum ConfigLoader {
     /// `loadGeneralConfig`'s problem — see there.
     @MainActor
     static func loadAppTheme(configRoot: URL = defaultRoot, general: GeneralConfig = .current) -> AppTheme {
-        let builtIn = Theme.rosePineDarker
+        let builtIn = Theme.rosePineZen
 
         var terminal: TerminalTheme
         if let themeURL = resolveThemeURL(configRoot: configRoot, general: general) {

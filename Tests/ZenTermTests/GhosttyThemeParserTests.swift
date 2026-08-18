@@ -4,7 +4,7 @@ import XCTest
 @testable import ZenTerm
 
 final class GhosttyThemeParserTests: XCTestCase {
-    private var fallback: TerminalTheme { Theme.rosePineDarker }
+    private var fallback: TerminalTheme { Theme.rosePineZen }
 
     private func parse(_ text: String) -> TerminalTheme {
         GhosttyThemeParser.parse(text, fontName: "TestFont", fontSize: 12, fallback: fallback)

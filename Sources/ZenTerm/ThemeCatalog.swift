@@ -14,12 +14,12 @@ struct ThemeEntry: Equatable {
 /// The theme picker's model: the bundled ghostty catalog plus the user's `themes/` files. A user
 /// file shadows a bundled entry of the same token.
 enum ThemeCatalog {
-    /// What an absent `theme` key resolves to. Stays in step with `Theme.rosePineDarker`.
-    static let defaultThemeName = "rose-pine-darker"
+    /// What an absent `theme` key resolves to. Stays in step with `Theme.rosePineZen`.
+    static let defaultThemeName = "rose-pine-zen"
 
     /// Bundled catalog. Each token has a `Themes/<token>.ghostty` resource.
     static let bundled: [(token: String, displayName: String, isDark: Bool)] = [
-        (defaultThemeName, "Rosé Pine Darker", true),
+        (defaultThemeName, "Rosé Pine Zen", true),
         ("rose-pine", "Rosé Pine", true),
         ("rose-pine-moon", "Rosé Pine Moon", true),
         ("rose-pine-dawn", "Rosé Pine Dawn", false),
