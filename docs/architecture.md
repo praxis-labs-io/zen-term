@@ -949,8 +949,8 @@ Esc would close the viewer instead of collapsing, and the next `j` would snap th
 away. `DiffTableView.selectAll(_:)` routes out to the pane instead of calling `super`, the same
 way it routes every other key it owns.
 
-Stepping a search is `n` and `N` while the search holds the keyboard, so `find_next` and
-`find_previous` ship with no chord and `SearchController.key(for:)` reads them. They stay
+Stepping a search is `n` and `N` while the search holds the keyboard, so `search_next` and
+`search_previous` ship with no chord and `SearchController.key(for:)` reads them. They stay
 rebindable, and they stay out of the palette: opening it tears the find bar down, which
 would make the row a no-op every time.
 
@@ -995,7 +995,7 @@ the machine, not by a test, which is what the runbook is for.
 keybinds, later winning. **A user keybind moves its action**: the action's default
 chords are dropped first, so the old key is freed rather than both firing.
 
-**Unbound is a value, not an absence.** `keybind = find_next=none` drops
+**Unbound is a value, not an absence.** `keybind = search_next=none` drops
 the action's defaults and puts nothing back, so the chord reaches the program. The
 drop happens in the same filter a rebind uses, ahead of every write, and that is the
 whole mechanism behind an unbind being silent: the chord is free by the time a float

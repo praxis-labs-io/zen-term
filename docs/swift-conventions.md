@@ -538,9 +538,11 @@ ask to repaint" is the thing under test, route the request through a method that
 
 **A hidden view drops a redisplay request, so unhiding it has to come first.** `PanelHostView`'s
 padding ring is hidden while the background is solid, and setting `needsDisplay` on it there does not
-stick. The find bar's constraint swap marked the ring and the mark evaporated, leaving the strip's
-band unpainted at any alpha the panel had not re-read since it was built. Re-apply the background
-(which unhides the ring and sets its color) on the same call that moves a strip, not once at build.
+stick. A strip that marks the ring before the panel re-reads its alpha marks a view that is still
+hidden, and the mark evaporates. In the app a config change fans out through `reapplyTheme` first, so
+this is a stale-state hazard rather than something a user sees; a test that moves the alpha without
+that fan-out is where it shows. Both hosts funnel every strip through one `stripsMoved()`: re-read
+the background, which unhides the ring, then mark. Never the other order, and never once at build.
 
 **A redraw keyed off an `Equatable` view-state is a trap for anything the state cannot see.**
 Folding an overlay's fields into one value and repainting on `didSet` looks tidy and silently drops

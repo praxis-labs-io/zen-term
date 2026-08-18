@@ -26,7 +26,7 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost {
     /// around `content`, so it cannot be built before `self` is.
     private lazy var chrome = ModeChrome(
         container: card, content: content, padding: contentInset, header: nil,
-        onStripsChanged: { [weak self] in self?.ring.needsDisplay = true })
+        onStripsChanged: { [weak self] in self?.stripsMoved() })
 
     /// The background a program set in this float's own terminal with OSC 11, or nil while the
     /// float is on the theme's. Reaches the card's interior fill alone; the card edge,
@@ -241,13 +241,15 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost {
         chrome.setScrollCursor(state, metrics: metrics)
     }
 
-    /// `applyBackground` re-reads the live alpha, which the bar is built long after the card first
-    /// read: below alpha 1 it also unhides the ring, and a hidden ring drops its redisplay flag.
     @discardableResult
-    func setFindBarShown(_ shown: Bool) -> FindBarView? {
-        let bar = chrome.setFindBarShown(shown)
+    func setFindBarShown(_ shown: Bool) -> FindBarView? { chrome.setFindBarShown(shown) }
+
+    /// A strip moved the terminal, so the hole the ring punches for it moved too. Re-read the
+    /// background first: below alpha 1 that is what unhides the ring, and a hidden view drops a
+    /// redisplay request rather than holding it until it is shown.
+    private func stripsMoved() {
         applyBackground()
-        return bar
+        ring.needsDisplay = true
     }
 
     var findBarForTesting: FindBarView? { chrome.findBarForTesting }

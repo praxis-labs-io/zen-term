@@ -140,6 +140,25 @@ final class PaneChromeSurfaceTests: WindowTestCase {
     /// strip resizes the terminal, so that hole moves, but flipping a constraint doesn't mark the panel
     /// as needing layout and `layout()` is the only other thing that marks the ring. The band the strip
     /// sits in then goes unpainted and the window's backdrop shows through it.
+    /// The header displaces the terminal exactly as the find bar does, and it had no re-read of
+    /// its own: it marked a ring that was still hidden from the alpha the panel was built at, and
+    /// a hidden view drops the request. Only the find bar's path happened to unhide first.
+    func test_showingTheModeHeader_repaintsTheRing() throws {
+        let host = try focusedHost()  // built under builtIn, alpha 1, so the ring is hidden
+        var config = GeneralConfig.builtIn
+        config.backgroundAlpha = 0.5
+        GeneralConfig.setCurrentForTesting(config)
+        host.layoutSubtreeIfNeeded()
+        host.displayIfNeeded()  // clear the flag, so what it says next came from the header
+        XCTAssertFalse(host.ringNeedsDisplayForTesting, "premise: nothing is queued before the header")
+
+        host.modeMeta = PanelMeta(title: "Scroll", action: .toggleScrollMode)
+
+        XCTAssertTrue(
+            host.ringNeedsDisplayForTesting,
+            "the header shrank the terminal, so the ring's hole is stale until it repaints")
+    }
+
     func test_togglingTheFindBar_repaintsTheRing() throws {
         var config = GeneralConfig.builtIn
         config.backgroundAlpha = 0.5

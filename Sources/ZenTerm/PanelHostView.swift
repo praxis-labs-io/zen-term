@@ -36,7 +36,7 @@ final class PanelHostView: NSView, TerminalModeHost {
     /// into `clip` around `content`, so it cannot be built before `self` is.
     private lazy var chrome = ModeChrome(
         container: clip, content: content, padding: padding, header: baseMeta ?? zoomMeta,
-        onStripsChanged: { [weak self] in self?.ring.needsDisplay = true })
+        onStripsChanged: { [weak self] in self?.stripsMoved() })
 
     var isFocused: Bool = false { didSet { if oldValue != isFocused { updateHalo() } } }
 
@@ -69,13 +69,15 @@ final class PanelHostView: NSView, TerminalModeHost {
         chrome.setScrollCursor(state, metrics: metrics)
     }
 
-    /// `applyBackground` re-reads the live alpha, which the bar is built long after the panel first
-    /// read: below alpha 1 it also unhides the ring, and a hidden ring drops its redisplay flag.
     @discardableResult
-    func setFindBarShown(_ shown: Bool) -> FindBarView? {
-        let bar = chrome.setFindBarShown(shown)
+    func setFindBarShown(_ shown: Bool) -> FindBarView? { chrome.setFindBarShown(shown) }
+
+    /// A strip moved the terminal, so the hole the ring punches for it moved too. Re-read the
+    /// background first: below alpha 1 that is what unhides the ring, and a hidden view drops a
+    /// redisplay request rather than holding it until it is shown.
+    private func stripsMoved() {
         applyBackground()
-        return bar
+        ring.needsDisplay = true
     }
 
     var scrollCursorForTesting: ScrollCursorView { chrome.scrollCursorForTesting }
