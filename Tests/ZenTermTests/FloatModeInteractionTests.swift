@@ -198,6 +198,20 @@ final class FloatModeInteractionTests: WindowTestCase {
         XCTAssertTrue(pane.scrolls.isEmpty)
     }
 
+    /// The wrong target here is invisible rather than wrong-looking: the text lands in the pane
+    /// behind the card, where nothing on screen shows it going astray.
+    func test_pasteSelectionOverAFloat_typesBackIntoTheCard() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(spawned.first)
+        let float = try openScratch(c)
+        float.selectionText = "seq 1 3"
+
+        c.handle(.pasteSelection)
+
+        XCTAssertEqual(float.pastes, ["seq 1 3"])
+        XCTAssertTrue(pane.pastes.isEmpty)
+    }
+
     func test_clearScreenOverAFloat_clearsTheCard() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(spawned.first)
