@@ -30,7 +30,7 @@ brew install --cask font-jetbrains-mono-nerd-font
 
 ## First launch
 
-One window, one pane, your shell, in the Rosé Pine Moon theme.
+One window, one pane, your shell, in the Rosé Pine Darker theme.
 
 ZenTerm ships with nothing configured. There are no workspaces, no tool floats,
 and no config file on disk. It stays that way until you add something, and the

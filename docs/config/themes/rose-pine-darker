@@ -1,9 +1,12 @@
-# Rosé Pine Moon: zen-term's built-in default, as a named theme.
+# Rosé Pine Darker: the theme zen-term ships with, written out in full.
 #
-# Drop files like this into ~/.config/zen-term/themes/ and select one from your
-# `config` with `theme = rose-pine-moon`. Keep as many as you like; switch with
-# that one line. Every value below is the built-in default, so selecting this is
-# identical to selecting nothing.
+# It's Rosé Pine Moon's palette on Rosé Pine's darker base. The app bundles it,
+# so `theme = rose-pine-darker` in `config` already works without this file. Copy
+# it to ~/.config/zen-term/themes/rose-pine-darker to edit the values: a file
+# there shadows the bundled one under the same name.
+#
+# Drop any number of theme files in that directory and switch between them with
+# that one `theme` line.
 #
 # This is a ghostty-format theme file, the SAME format as any theme from
 # ghostty's theme repo, so you can drop one in unchanged. Only the color keys

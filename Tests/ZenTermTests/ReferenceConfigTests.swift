@@ -5,8 +5,8 @@ import XCTest
 
 /// Guards the shipped reference files in `docs/config/` against drifting from the real
 /// defaults: the annotated `config` is all-commented, so it must parse to `.builtIn`, and
-/// `themes/rose-pine-moon` carries the Rosé Pine Moon values, so it must parse to
-/// `Theme.rosePineMoon`.
+/// `themes/rose-pine-darker` carries the shipped default's values, so it must parse to
+/// `Theme.rosePineDarker`.
 final class ReferenceConfigTests: XCTestCase {
     /// `<package root>/docs/config`, located relative to this source file.
     private var docsConfig: URL {
@@ -29,9 +29,10 @@ final class ReferenceConfigTests: XCTestCase {
 
     func test_referenceTheme_matchesBuiltInDefault() {
         var general = GeneralConfig.builtIn
-        general.themeName = "rose-pine-moon"  // resolves docs/config/themes/rose-pine-moon
+        // The user path wins, so this resolves docs/config/themes/, not the bundled file.
+        general.themeName = ThemeCatalog.defaultThemeName
         let terminal = ConfigLoader.loadAppTheme(configRoot: docsConfig, general: general).terminal
-        let expected = Theme.rosePineMoon
+        let expected = Theme.rosePineDarker
         XCTAssertEqual(terminal.background, expected.background)
         XCTAssertEqual(terminal.foreground, expected.foreground)
         XCTAssertEqual(terminal.cursor, expected.cursor)

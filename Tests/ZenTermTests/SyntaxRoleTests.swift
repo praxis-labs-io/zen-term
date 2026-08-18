@@ -7,7 +7,7 @@ import XCTest
 final class SyntaxRoleTests: XCTestCase {
     // Rosé Pine Moon maps each role to a distinct palette hue, so a mis-wired case (keyword resolving
     // to the string color, say) would fail rather than pass by coincidence.
-    private let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineMoon)
+    private let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineDarker)
 
     func test_eachRoleResolvesToItsChromeField() {
         XCTAssertEqual(SyntaxRole.keyword.color(chrome), chrome.synKeyword.nsColor)

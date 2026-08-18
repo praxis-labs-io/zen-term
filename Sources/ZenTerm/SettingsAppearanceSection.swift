@@ -145,25 +145,20 @@ final class SettingsAppearanceSection: SettingsFormSection {
         themeEntries.enumerated().map { index, entry in
             DropdownItem(
                 title: entry.displayName,
-                group: entry.source == .user ? "Your themes" : (entry.source == .bundled ? "Bundled" : nil),
+                group: entry.source == .user ? "Your themes" : "Bundled",
                 note: entry.isDark ? "Dark" : "Light",
                 isSelected: index == selected)
         }
     }
 
     private func currentThemeIndex() -> Int {
-        let name = GeneralConfig.current.themeName
+        let name = GeneralConfig.current.themeName ?? ThemeCatalog.defaultThemeName
         return themeEntries.firstIndex { $0.name == name } ?? 0
     }
 
     private func selectTheme(_ index: Int) {
         guard themeEntries.indices.contains(index) else { return }
-        let entry = themeEntries[index]
-        if let name = entry.name {
-            write("theme", name, row: "theme")
-        } else {
-            writeOrRemove("theme", nil, row: "theme")  // built-in default clears the key
-        }
+        write("theme", themeEntries[index].name, row: "theme")
     }
 
     private func refreshThemeRow() {

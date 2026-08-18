@@ -16,15 +16,15 @@
 # Select a named theme from ~/.config/zen-term/themes/. Keep a library there and
 # switch with this one line. Each file is ghostty-format (drop in any ghostty
 # theme unchanged); it recolors both the terminal and the chrome. Unset → a
-# legacy single ~/.config/zen-term/theme file if present, else the built-in
-# Rosé Pine Moon. A name that doesn't exist warns and falls back to the default.
-# See docs/config/themes/ for an example.
+# legacy single ~/.config/zen-term/theme file if present, else Rosé Pine Darker.
+# A name that doesn't exist warns and falls back to that default. See
+# docs/config/themes/ for an example.
 #
 # The app also ships a bundled theme catalog, selectable in Settings →
 # Appearance → Theme without hand-editing this file. A name resolves a user
 # themes/<name> file first, else a bundled theme. The picker writes this same
 # key; restart the app to apply the change.
-# theme = rose-pine-moon
+# theme = rose-pine-darker
 
 # The chrome's accent: the color for focus, active state, and confirm. It paints
 # the focused pane's glow and border, focus rings, the active tab's underline, a
@@ -33,7 +33,7 @@
 # program printing in that color is unaffected.
 #
 # The names are the usual ANSI hues, so what you get is whatever your theme put in
-# that slot: on Rosé Pine Moon, magenta is iris. Settings → Appearance → Accent
+# that slot: on Rosé Pine Darker, magenta is iris. Settings → Appearance → Accent
 # color shows each one's swatch and hex. Unset → magenta (palette 5).
 #
 #   black    red    green    yellow    blue    magenta    cyan    white
