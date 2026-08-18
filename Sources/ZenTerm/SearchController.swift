@@ -32,7 +32,7 @@ final class SearchController {
 
     /// Route one event to the right handler. Guarded on the reporting surface throughout, so a
     /// background pane cannot move the focused pane's bar.
-    func handle(_ event: Event, from s: AnyObject & TerminalSurface, panel: @autoclosure () -> PanelHostView?) {
+    func handle(_ event: Event, from s: AnyObject & TerminalSurface, panel: @autoclosure () -> TerminalModeHost?) {
         switch event {
         case .total(let total): report(total: total, from: s)
         case .selected(let index): report(selected: index, from: s)
@@ -54,7 +54,7 @@ final class SearchController {
     private(set) var isEditing = false
 
     private weak var surface: (AnyObject & TerminalSurface)?
-    private weak var panel: PanelHostView?
+    private weak var panel: TerminalModeHost?
     private weak var bar: FindBarView?
 
     private var needle = ""
@@ -110,7 +110,7 @@ final class SearchController {
 
     /// Raise the bar over `panel` and take the keyboard, seeded with `seed` when the caller has a
     /// needle to offer. Already up: put the caret back in the field rather than mounting a second.
-    func begin(surface: AnyObject & TerminalSurface, panel: PanelHostView, seed rawSeed: String = "") {
+    func begin(surface: AnyObject & TerminalSurface, panel: TerminalModeHost, seed rawSeed: String = "") {
         let seed = Self.cleaned(rawSeed)
         guard !isActive else {
             isEditing = true

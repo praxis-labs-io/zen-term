@@ -18,7 +18,7 @@ final class ScrollModeController {
     private(set) var isActive = false
 
     private weak var surface: (AnyObject & TerminalSurface)?
-    private weak var panel: PanelHostView?
+    private weak var panel: TerminalModeHost?
     /// What earlier keystrokes left armed: the `g` prefix and the count being typed.
     private var pending = ScrollKeymap.Pending()
 
@@ -67,7 +67,7 @@ final class ScrollModeController {
     ///
     /// Entering scrolls nothing. A reader who opened the mode by accident sees only the header
     /// appear, and `q` puts it back.
-    func begin(surface: AnyObject & TerminalSurface, panel: PanelHostView) {
+    func begin(surface: AnyObject & TerminalSurface, panel: TerminalModeHost) {
         guard !isActive else { return }
         self.surface = surface
         self.panel = panel
