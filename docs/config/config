@@ -488,9 +488,9 @@
 #
 # `v` starts a selection at the cursor and `V` takes whole rows; motions grow it, `y`
 # copies it and pulses what it took, and Esc hands it back without leaving the mode.
-# A selection stays on screen: the terminal core can only read text you can see, so
-# you get the anchor back whenever the buffer moves under it, whether you scrolled or
-# a running command printed. Scroll to the block you want first, then select it.
+# A selection follows its text: scrolling grows it by the rows that arrive, and a resize
+# re-finds it where the rewrap put it. It goes when the row you started on leaves the
+# screen, because the terminal core can only read text you can see.
 #
 # Some chords move the viewport without the mode, for when you want a look rather
 # than a read: ⌘Home and ⌘End go to the ends of the buffer, ⌘Page Up and ⌘Page Down

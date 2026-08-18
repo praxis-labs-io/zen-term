@@ -147,9 +147,12 @@ drops you on the match in scroll mode, where `n` and `N` step through the rest a
 copies what you came for. `Esc` closes the bar and hands the pane back where you were
 before you opened it.
 
-A selection stays on the screen you can see. Scroll to the block you want first, then
-select it: you get the selection back whenever the buffer moves under it, whether you
-scrolled or a running command printed.
+Both read a tool float too. With a card open, `⌘⇧S` and `⌘F` work on the float's buffer
+instead of the pane behind it, and the card wears the header while they are up.
+
+A selection follows its text. Scrolling grows it by the rows that arrive, and a resize
+re-finds it where the rewrap put it. It goes when the row you started on leaves the
+screen, because the terminal core can only read text you can see.
 
 ## Neovim: one motion across splits and panes
 
