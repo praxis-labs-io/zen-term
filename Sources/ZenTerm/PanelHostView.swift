@@ -14,7 +14,7 @@ struct PanelMeta {
 /// chrome: the iris focus halo (accent border + soft glow) and an inner clip that keeps
 /// content within the corner radius. A drawer passes `meta` for an always-on header, and may
 /// also pass `zoomMeta`: the header content it swaps to while zoomed (its title reading
-/// "<panel>: Focus Mode" and the keybind replaced by ⌘F). A pane passes only `zoomMeta` for a
+/// "<panel>: Focus Mode" and the keybind replaced by ⌘⇧⏎). A pane passes only `zoomMeta` for a
 /// header that appears only while the pane is zoomed (Focus Mode). Panes with neither
 /// look/behave exactly as the original pane-only chrome. Clicking anywhere in the panel
 /// requests focus.

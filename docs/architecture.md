@@ -1356,7 +1356,7 @@ reads with `.trim = false` and the formatter keeps every cell a program actually
 row filled edge to edge (a prompt with a right segment, a status bar) arrives padded to the grid
 width. Left on, `$` parks the cursor out in the padding and `v$y` copies a run of spaces.
 
-### Scrollback search
+### Find
 
 ⌘F opens a find bar along the bottom of whatever `modeTarget` resolves, a shown tool
 float ahead of the focused panel. **The searching is libghostty's**: it matches, counts,

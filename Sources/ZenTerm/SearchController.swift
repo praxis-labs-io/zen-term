@@ -2,7 +2,7 @@ import AppKit
 import AppLog
 import TerminalKit
 
-/// Scrollback search: the find bar, the match count, and the keys that step through matches. The
+/// Find: the bar, the match count, and the keys that step through matches. The
 /// searching itself is libghostty's; this owns the bar, the needle, and the two-phase keyboard
 /// handoff around them.
 ///

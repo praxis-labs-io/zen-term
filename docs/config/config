@@ -326,7 +326,7 @@
 #   scroll_to_top  scroll_to_bottom  scroll_page_up  scroll_page_down
 #   jump_to_previous_prompt  jump_to_next_prompt  scroll_to_selection
 #   search_selection
-#   find_next  find_previous  (no default; `n` and `N` step a live search)
+#   search_next  search_previous  (no default; `n` and `N` step a live search)
 #   clear_screen  paste_selection
 #   dismiss_toast  dismiss_all_toasts
 #   select_all  (no default; Edit > Select All holds ⌘A)
@@ -522,8 +522,9 @@
 # is the same thing except that with nothing selected it does nothing at all.
 #
 # Stepping matches is `n` and `N` while the search holds the keyboard, not a chord,
-# so `find_next` and `find_previous` ship with no shortcut. Give them one here if you
-# would rather step on a chord: `keybind = find_next=cmd+opt+g` and its shifted pair.
+# so `search_next` and `search_previous` ship with no shortcut. Give them one here if
+# you would rather step on a chord: `keybind = search_next=cmd+opt+g` and its shifted
+# pair. The old `find_next` and `find_previous` still parse.
 # With no bar up there is no search to step and the chord does nothing.
 #
 # Enter hands the keys back to the pane and puts you in scroll mode on the match,

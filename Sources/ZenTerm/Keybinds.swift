@@ -51,8 +51,8 @@ extension KeyInterceptor.ReservedChord {
         case .scrollPageDown: return "scroll_page_down"
         // Ours: ghostty spells these `navigate_search:next` and `navigate_search:previous`, and no
         // token here carries an argument.
-        case .findNext: return "find_next"
-        case .findPrevious: return "find_previous"
+        case .findNext: return "search_next"
+        case .findPrevious: return "search_previous"
         case .searchSelection: return "search_selection"
         // ghostty's own spelling for the four it has one for.
         case .clearScreen: return "clear_screen"
@@ -191,6 +191,10 @@ extension KeyInterceptor.ReservedChord {
         case "scroll_to_bottom": self = .scrollToBottom
         case "scroll_page_up": self = .scrollPageUp
         case "scroll_page_down": self = .scrollPageDown
+        case "search_next": self = .findNext
+        case "search_previous": self = .findPrevious
+        // Back-compat: the config file speaks `search` throughout, so the two stepping actions
+        // moved to match `toggle_search`. The `find_` tokens still resolve.
         case "find_next": self = .findNext
         case "find_previous": self = .findPrevious
         case "search_selection": self = .searchSelection

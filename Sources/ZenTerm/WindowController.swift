@@ -277,7 +277,7 @@ final class WindowController: NSObject {
     /// panel, and the key handler it installs is app-global, so only the key window's can be up.
     let scrollMode = ScrollModeController()
 
-    /// Scrollback search over the same panel. Per window for the same reasons, and it
+    /// Find over the same panel. Per window for the same reasons, and it
     /// drives scroll mode on commit, so it holds the one above.
     lazy var search = SearchController(scrollMode: scrollMode)
 
