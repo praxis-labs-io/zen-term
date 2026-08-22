@@ -133,7 +133,7 @@ done
 # while THIRD-PARTY-NOTICES.md no longer discloses it. Probing the linked binary here is the
 # gate a stale artifact cannot pass. Symbols like _libintl_*, _bindtextdomain, __nl_msg_cat_cntr.
 if nm "$BIN" 2>/dev/null | grep -qiE 'libintl|bindtextdomain|nl_msg_cat_cntr'; then
-    echo "✗ $BIN statically links GNU libintl (LGPL-2.1), not shippable in a closed-source app" >&2
+    echo "✗ $BIN statically links GNU libintl (LGPL-2.1), and the notices do not disclose it" >&2
     echo "  rebuild GhosttyKit with bin/build-ghosttykit (it passes -Di18n=false), then re-probe" >&2
     echo "  per docs/third-party-notices.md" >&2
     exit 1
@@ -163,6 +163,15 @@ NOTICES="Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md"
     exit 1
 }
 cp "$NOTICES" "$STAGE/Contents/Resources/THIRD-PARTY-NOTICES.md"
+
+# ZenTerm's own grant, beside the third-party one. MIT asks for the notice to travel with
+# the software, and a downloader who never clones the repo only ever sees the bundle.
+[[ -f LICENSE ]] || {
+    echo "✗ LICENSE is missing" >&2
+    echo "  MIT asks for the notice to ship with the app" >&2
+    exit 1
+}
+cp LICENSE "$STAGE/Contents/Resources/LICENSE"
 
 for bundle in "${EXPECTED_BUNDLES[@]}"; do
     cp -R ".build/release/$bundle" "$STAGE/Contents/Resources/"
@@ -217,6 +226,7 @@ cat > "$STAGE/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
+  <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Praxis Labs. MIT licensed.</string>
 ${SPARKLE_KEYS}
 </dict>
 </plist>
