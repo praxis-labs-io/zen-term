@@ -12,14 +12,13 @@ enum ToolbarButton: String, CaseIterable {
     case scratch = "scratch"
     case focusMode = "focus-mode"
     case commandPalette = "command-palette"
-    case diffViewer = "diff-viewer"
 
     /// The divider grouping: create │ layout │ overlays. The tool-float group is not here —
     /// `ToggleDock` appends it from the float catalog, since its membership is config-driven.
     static let groups: [[ToolbarButton]] = [
         [.newTab],
         [.splitHorizontal, .splitVertical, .bottomDrawer, .rightDrawer, .scratch, .focusMode],
-        [.commandPalette, .diffViewer],
+        [.commandPalette],
     ]
 
     /// The Settings checkbox label.
@@ -33,7 +32,6 @@ enum ToolbarButton: String, CaseIterable {
         case .scratch: return "Scratch"
         case .focusMode: return "Focus mode"
         case .commandPalette: return "Command palette"
-        case .diffViewer: return "Diff viewer"
         }
     }
 }

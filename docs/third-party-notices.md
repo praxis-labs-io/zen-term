@@ -115,24 +115,21 @@ declared resource roots, because a glob over `Sources` is what lets a new one hi
 ```sh
 grep -n 'copy(' Package.swift   # the authority; add any root missing below
 find -L Sources/ZenTerm/Resources Sources/ZenTerm/Themes Sources/ZenTerm/Shaders \
-        Sources/ZenTerm/SyntaxQueries Sources/TerminalKit/Resources -type f \
-    | sed -e 's|\(ghostty-resources/ghostty/[a-z-]*\)/.*|\1/…|' \
-          -e 's|\(SyntaxQueries/[^/]*\)/.*|\1|' | sort -u
+        Sources/TerminalKit/Resources -type f \
+    | sed -e 's|\(ghostty-resources/ghostty/[a-z-]*\)/.*|\1/…|' | sort -u
 ```
 
 `-L` is load-bearing: a worktree reaches `ghostty-resources` through a symlink, and without it
 the themes and shell integration vanish from the output there. The `sed` collapses ghostty's
-shell-integration and themes trees to one line each and each grammar's queries to its
-directory, so a new grammar still shows up. About 84 lines at the `v1.3.1` pin.
+shell-integration and themes trees to one line each.
 
 Every file here owes a notice unless we authored it, and so does artwork with no file of its
 own: the app icon is Lucide's `origami` pasted into `icon/make-icon.swift` as SVG path data.
 Ghostty's terminfo is ghostty's own and rides its MIT entry; `bash-preexec.sh` sits inside the
 same tree and does not.
 
-Two roots are known-uncovered as of this writing: `Sources/ZenTerm/Themes`, the 15 separately
-licensed themes in the Settings picker, and `SyntaxQueries`, whose `.scm` files come from 38
-individual grammar repositories. Both are tracked and neither is in the notices yet.
+One root is known-uncovered as of this writing: `Sources/ZenTerm/Themes`, the 15 separately
+licensed themes in the Settings picker. It is tracked and is not in the notices yet.
 
 ## 5. Regenerate and diff
 

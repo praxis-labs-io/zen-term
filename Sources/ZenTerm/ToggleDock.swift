@@ -9,7 +9,6 @@ import AppKit
 /// all); a divider only renders between two groups that both show something.
 final class ToggleDock: NSView {
     private let paletteBtn: IconButton
-    private let diffBtn: IconButton
     private let bottomBtn: IconButton
     private let rightBtn: IconButton
     /// The built-in Scratch float's button. Fixed rather than one of the `toolFloatBtns` below,
@@ -47,7 +46,6 @@ final class ToggleDock: NSView {
         onSplitH: @escaping () -> Void, onSplitV: @escaping () -> Void,
         onPalette: @escaping () -> Void, onBottom: @escaping () -> Void,
         onRight: @escaping () -> Void, onZoom: @escaping () -> Void,
-        onDiffViewer: @escaping () -> Void,
         toolFloats: [ToolFloat], onToolFloat: @escaping (ToolFloat) -> Void,
         hiddenButtons: Set<ToolbarButton> = []
     ) {
@@ -66,7 +64,6 @@ final class ToggleDock: NSView {
         let splitH = button("rectangle.split.1x2", "Split horizontally", .splitHorizontal, onSplitH)
         let splitV = button("rectangle.split.2x1", "Split vertically", .splitVertical, onSplitV)
         paletteBtn = button("command", "Command palette", .toggleCommandPalette, onPalette)
-        diffBtn = button("plus.forwardslash.minus", "Diff viewer", .openDiffViewer, onDiffViewer)
         bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", .toggleBottomDrawer, onBottom)
         rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", .toggleRightDrawer, onRight)
         // Wired off the `onToolFloat` parameter, not the stored property: this runs before
@@ -81,7 +78,7 @@ final class ToggleDock: NSView {
             .newTab: newTab, .splitHorizontal: splitH, .splitVertical: splitV,
             .bottomDrawer: bottomBtn, .rightDrawer: rightBtn, .scratch: scratchBtn,
             .focusMode: zoomBtn,
-            .commandPalette: paletteBtn, .diffViewer: diffBtn,
+            .commandPalette: paletteBtn,
         ]
         // Derived from the map, never restated: recolor order tracks `allCases`, and the stack
         // interleaves each `ToolbarButton.groups` group with its trailing divider — dividers[i]
@@ -226,11 +223,10 @@ final class ToggleDock: NSView {
     /// the only trace a hidden persistent float has. Passed as a query rather than a set so the
     /// "live but not shown" rule keeps one definition, on the controller that owns the registry.
     func render(
-        overlay: OverlayState, floatID: String?, paletteOpen: Bool, diffViewerOpen: Bool = false,
+        overlay: OverlayState, floatID: String?, paletteOpen: Bool,
         isLiveInBackground: (String) -> Bool = { _ in false }
     ) {
         paletteBtn.isActive = paletteOpen
-        diffBtn.isActive = diffViewerOpen
         for (id, btn) in toolFloatBtns {
             let isLive = isLiveInBackground(id)
             btn.isActive = floatID == id

@@ -16,7 +16,7 @@ final class KeybindParserTests: XCTestCase {
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
             .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
             .toggleRepoPicker, .toggleCommandPalette, .openSettings, .reloadConfig, .checkForUpdates,
-            .reportIssue, .openDiffViewer, .toggleScrollMode, .toggleSearch,
+            .reportIssue, .toggleScrollMode, .toggleSearch,
             .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown,
             .findNext, .findPrevious, .searchSelection,
             .clearScreen, .selectAll, .scrollToSelection, .writeScreenFile,

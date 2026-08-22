@@ -56,7 +56,6 @@ enum CommandCatalog {
         case .reloadConfig: return config("Reload Config", glyph, chord)
         case .checkForUpdates: return config("Check for Updates", glyph, chord)
         case .reportIssue: return help("Report an Issue…", glyph, chord)
-        case .openDiffViewer: return tool("Diff Viewer", glyph, chord)
         case .newTool: return tool("New Tool Float…", glyph, chord)
         case .increaseFontSize: return window("Increase Font Size", glyph, chord)
         case .decreaseFontSize: return window("Decrease Font Size", glyph, chord)
@@ -104,7 +103,7 @@ enum CommandCatalog {
     /// Screen. `.selectTab` expands to one entry per open tab (capped at the bound ⌘1–⌘9). The
     /// command palette itself and New Window aren't shown.
     static func commands(tabCount: Int) -> [PaletteCommand] {
-        var chords: [KeyInterceptor.ReservedChord] = [.toggleRepoPicker, .openDiffViewer]
+        var chords: [KeyInterceptor.ReservedChord] = [.toggleRepoPicker]
         chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
         chords += [.newTool]  // Settings was the only way to create one
         chords += [.openSettings, .reloadConfig, .checkForUpdates, .reportIssue]

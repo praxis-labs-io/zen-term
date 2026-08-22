@@ -102,8 +102,6 @@ enum GeneralConfigParser {
                 config.hiddenToolbarButtons = parseHiddenToolbarButtons(value, &diagnostics)
             case "reduce-motion":
                 if let r = parseReduceMotion(value, &diagnostics) { config.reduceMotion = r }
-            case "diff-layout":
-                if let d = parseDiffLayout(value, &diagnostics) { config.diffLayout = d }
             case "agent-notifications":
                 if let b = parseBool(value, key, &diagnostics) { config.agentNotifications = b }
             case "attention-toast":
@@ -309,21 +307,6 @@ enum GeneralConfigParser {
                 "GeneralConfig: `reduce-motion` expected system/on/off, got `\(value)` — using default",
                 category: .config)
             diagnostics.append(invalid("reduce-motion", got: value, expected: "system, on, or off"))
-            return nil
-        }
-    }
-
-    private static func parseDiffLayout(
-        _ value: String, _ diagnostics: inout [ConfigDiagnostic]
-    ) -> GeneralConfig.DiffLayout? {
-        switch value.lowercased() {
-        case "side-by-side": return .sideBySide
-        case "inline": return .inline
-        default:
-            Log.warning(
-                "GeneralConfig: `diff-layout` expected side-by-side/inline, got `\(value)` — using default",
-                category: .config)
-            diagnostics.append(invalid("diff-layout", got: value, expected: "side-by-side or inline"))
             return nil
         }
     }

@@ -133,8 +133,8 @@ triangle pokes left of a selection pill: shift level-0 cells right by one `inden
 **`NSTableView` shares the same `.automatic` inset trap.** Left at the default style, a plain
 `NSTableView` reserves a source-list-style horizontal row inset, so its rows, and any full-row
 selection or background, sit off the pane's leading and trailing edges by a fixed margin you never
-asked for. The diff pane read as gapped from the tree divider on the left and the card edge on the
-right until `table.style = .plain` removed it. Once it's `.plain`, add whatever margin you *do* want
+asked for. A pane hosting a table reads as gapped from its container's edges until
+`table.style = .plain` removes it. Once it's `.plain`, add whatever margin you *do* want
 explicitly (a leading/trailing constant on the table, or the row content's own insets) so the amount
 is yours, not the framework's, and a full-row pill takes no extra inset of its own on top of that
 margin, or it nests a second gap inside the first.
@@ -148,9 +148,8 @@ for visual breathing room); no amount of recomputing the column's width against
 `contentView.bounds` could cancel it, because the pannable range is additive on top of the
 document/clip width relationship, not derived from it. Reserve `contentInsets` for axes that are
 actually meant to scroll (e.g. `top`/`bottom` breathing room above/below the first/last row); get
-edge padding on a non-scrolling axis from the row content's own insets instead (`DiffTreeRowView`,
-`DiffTreeOutlineController.swift`), which affect where content draws/truncates, never the
-document's reported frame width.
+edge padding on a non-scrolling axis from the row content's own insets instead, which affect
+where content draws/truncates, never the document's reported frame width.
 
 ## Auto Layout, resize, and text sizing
 
@@ -162,9 +161,9 @@ inside `layout()`.** AppKit resolves a view's own frame before its `layout()` ru
 `layoutSubtreeIfNeeded()` flushes the whole subtree first, which the app's incremental passes don't.
 For "do X when this view's width crosses a threshold," observe the view itself:
 `view.postsFrameChangedNotifications = true` + `NSView.frameDidChangeNotification`, which fires with
-the *final* frame on every resize and on first layout. The diff viewer's auto-fold was dead in the app
-(green in tests) until it moved off a `layout()` width read onto the pane's frame notification
-.
+the *final* frame on every resize and on first layout. A width-threshold auto-fold shipped dead in
+the app (green in tests) until it moved off a `layout()` width read onto the pane's frame
+notification.
 
 **Anything driven from `setFrameSize` sees every frame the layout passes through, not the one it
 lands on.** Auto Layout walks a view through intermediate frames while it solves, and a few of them
@@ -183,8 +182,8 @@ when the queued work runs, not only when it was queued.
 **An `NSTextField` label sized to the exact glyph advances truncates to `…`.** A label insets its text
 a couple of points inside its frame, so a column sized to `characters * digitWidth` is a hair too
 narrow and clips even a single digit. Size a content-fit label to its string plus a few points of
-padding (`DiffCellMetrics.numberColumnWidth`), or measure the actual string with the label's own
-attributes and pad, never the raw advance sum.
+padding, or measure the actual string with the label's own attributes and pad, never the raw
+advance sum.
 
 **A non-truncating label holds its container, and the window, open.** A label defaults to a high
 horizontal compression resistance and no truncation, so its intrinsic width becomes a hard floor for
@@ -195,12 +194,12 @@ through the card's proportional width constraint and *stopped the window from re
 (`setContentCompressionResistancePriority(.defaultLow, for: .horizontal)`) fixes it; setting it on the
 enclosing `NSStackView` is not enough; the child label resists on its own.
 
-**Two optional constraints at the same priority do not have a stable winner.** The diff tree's
-proportional width and its branch title's compression resistance were both priority 250. Either
-truncating the title or widening the tree satisfied an equal amount of optional pressure, so a
-key-window relayout could choose the other solution and make the tree jump wider. Give the intended
-winner a strict ordering while keeping both below any window-sizing boundary: the tree proportion is
-251, title compression is 250, and the window stay-put constraint is 500.
+**Two optional constraints at the same priority do not have a stable winner.** A sidebar's
+proportional width and a title label's compression resistance both sat at priority 250. Either
+truncating the title or widening the sidebar satisfied an equal amount of optional pressure, so a
+key-window relayout could choose the other solution and make the sidebar jump wider. Give the
+intended winner a strict ordering while keeping both below any window-sizing boundary: the
+proportion at 251, the compression at 250, and the window stay-put constraint at 500.
 
 **A custom `NSView` with no `intrinsicContentSize` cannot resist stretching in a stack, at any
 priority.** Content-hugging and compression-resistance only install their constraints on an axis where
@@ -238,9 +237,9 @@ line in a label with `maximumNumberOfLines = 1` draws only its first wrapped lin
 whole words off the end. That is far more destructive than the `.byClipping` the label declared, which
 would merely cut mid-glyph. Whenever a view can render either a plain or an attributed string, put
 every layout-affecting attribute (paragraph style and font) on the attributed string so both paths
-behave alike (`SyntaxAttributedText`). The diff viewer shipped this: highlighted lines rendered
-`] as const;` as `] as`, and short lines vanished entirely, while the same diff was complete before
-highlighting existed.
+behave alike. A syntax-highlighted table shipped this: highlighted lines rendered `] as const;`
+as `] as`, and short lines vanished entirely, while the same rows were complete before
+highlighting was applied.
 
 **Asserting a label's frame width does not prove its text is drawn.** The bug above passed every test,
 including window-based ones through the real table, because they measured `frame.width` against the
@@ -527,8 +526,8 @@ the mounted test still passed.
 `NSPasteboard.general` (snapshot it in `setUp`, restore in `tearDown`), and do not present a real
 `NSOpenPanel` (inject a present-panel seam so the test asserts the wiring without a sheet). Both leak
 into the machine on every `swift test` otherwise. A feature that writes to the pasteboard
-takes it as an injectable property (`ScrollModeController.yankPasteboard`,
-`DiffViewerOverlay.yankPasteboard`) so a test can point it at a board of its own.
+takes it as an injectable property (`ScrollModeController.yankPasteboard`) so a test can point it
+at a board of its own.
 
 **`needsDisplay` cannot tell you a redraw was requested.** AppKit holds it *true* on a view that has
 never drawn, and setting it false on one does not stick, so it reads as a pending repaint whether or
@@ -634,23 +633,6 @@ pre-existing.
 finishes in about 5s, so minutes means hung, not slow. Two shell traps around that: swift test
 processes are named `swift-test` with a hyphen, so `pkill -f "swift test"` matches nothing, and
 concurrent `swift test` runs deadlock on the SwiftPM lock.
-
-### A path is not a diff row identity
-
-A repo-relative path can appear in more than one diff scope at once. For example,
-the staged version and a later working-tree edit both produce rows for the same
-path with different content. Diff selection and render deduplication must include
-the scope and content represented by `FileDiff`, not only the path. That was exposed
-this when switching between Staged and Unstaged kept the previously rendered diff.
-
-### Event debounce does not provide load backpressure
-
-A trailing filesystem debounce limits one burst, but separate settled bursts can arrive while
-the work triggered by the first is still running. A watcher-driven subprocess path must also be
-single-flight and retain one pending request. Rejecting stale completions only protects the UI;
-it does not recover the CPU, disk work, or subprocesses already spent producing them. The watcher
-must also follow any root the reader retargets to and stop on both card and window teardown
-.
 
 ### An exhaustive switch does not cover the data table beside it
 

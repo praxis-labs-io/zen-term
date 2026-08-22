@@ -19,7 +19,7 @@ final class ToggleDockTests: XCTestCase {
     private func makeDock(_ floats: [ToolFloat]) -> ToggleDock {
         ToggleDock(
             onNewTab: {}, onSplitH: {}, onSplitV: {}, onPalette: {}, onBottom: {}, onRight: {},
-            onZoom: {}, onDiffViewer: {}, toolFloats: floats, onToolFloat: { _ in })
+            onZoom: {}, toolFloats: floats, onToolFloat: { _ in })
     }
 
     func test_setToolFloats_rebuildsButtonsForCatalog() {
@@ -131,7 +131,7 @@ final class ToggleDockTests: XCTestCase {
         var toggled: [String] = []
         let dock = ToggleDock(
             onNewTab: {}, onSplitH: {}, onSplitV: {}, onPalette: {}, onBottom: {}, onRight: {},
-            onZoom: {}, onDiffViewer: {}, toolFloats: [], onToolFloat: { toggled.append($0.id) })
+            onZoom: {}, toolFloats: [], onToolFloat: { toggled.append($0.id) })
 
         press("Scratch", in: dock)
 
@@ -187,7 +187,7 @@ final class ToggleDockTests: XCTestCase {
         "New tab", "│",
         "Split horizontally", "Split vertically", "Toggle bottom drawer", "Toggle right drawer",
         "Scratch", "Focus mode", "│",
-        "Command palette", "Diff viewer",
+        "Command palette",
     ]
 
     func test_defaultLayout_groupsWithTwoDividers_noTrailingDivider() {
@@ -203,12 +203,12 @@ final class ToggleDockTests: XCTestCase {
 
     func test_setHiddenButtons_hidesAndRestores() {
         let dock = makeDock([])
-        dock.setHiddenButtons([.diffViewer, .splitVertical])
+        dock.setHiddenButtons([.scratch, .splitVertical])
         XCTAssertEqual(
             dock.visibleLayoutForTesting,
             [
                 "New tab", "│",
-                "Split horizontally", "Toggle bottom drawer", "Toggle right drawer", "Scratch",
+                "Split horizontally", "Toggle bottom drawer", "Toggle right drawer",
                 "Focus mode", "│", "Command palette",
             ])
 
@@ -222,7 +222,7 @@ final class ToggleDockTests: XCTestCase {
             .splitHorizontal, .splitVertical, .bottomDrawer, .rightDrawer, .scratch, .focusMode,
         ])
         XCTAssertEqual(
-            dock.visibleLayoutForTesting, ["New tab", "│", "Command palette", "Diff viewer"])
+            dock.visibleLayoutForTesting, ["New tab", "│", "Command palette"])
     }
 
     func test_hiddenFirstGroup_leavesNoLeadingDivider() {
@@ -233,7 +233,6 @@ final class ToggleDockTests: XCTestCase {
             [
                 "Split horizontally", "Split vertically", "Toggle bottom drawer",
                 "Toggle right drawer", "Scratch", "Focus mode", "│", "Command palette",
-                "Diff viewer",
             ])
     }
 

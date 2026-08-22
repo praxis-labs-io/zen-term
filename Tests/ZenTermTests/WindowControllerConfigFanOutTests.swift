@@ -110,10 +110,10 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         let dock = try XCTUnwrap(
             descendants(of: controller.window.contentView!).compactMap { $0 as? ToggleDock }.first,
             "expected the footer toolbar mounted in the window")
-        XCTAssertTrue(dock.visibleLayoutForTesting.contains("Diff viewer"))
+        XCTAssertTrue(dock.visibleLayoutForTesting.contains("Command palette"))
 
         var config = GeneralConfig.builtIn
-        config.hiddenToolbarButtons = [.diffViewer]
+        config.hiddenToolbarButtons = [.commandPalette]
         GeneralConfig.setCurrentForTesting(config)
         NotificationCenter.default.post(
             name: .configDidChange, object: nil,
@@ -122,7 +122,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         OperationQueue.main.addOperation { drained.fulfill() }
         wait(for: [drained], timeout: 5)
 
-        XCTAssertFalse(dock.visibleLayoutForTesting.contains("Diff viewer"))
+        XCTAssertFalse(dock.visibleLayoutForTesting.contains("Command palette"))
     }
 
     func test_configDidChange_appliesWindowChromeThroughTheFanOut() throws {

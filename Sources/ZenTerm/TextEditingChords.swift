@@ -30,9 +30,9 @@ enum TextEditingChords {
     /// them here would suggest this set is the whole of what macOS owns.
     ///
     /// The Return pair is here for a different reason from the arrows. AppKit turns every Return
-    /// into `insertNewline(_:)` whatever modifiers ride along, so a box that reads them off the raw
-    /// event is how the diff comment composer tells send from queue from new line. Fill Screen is
-    /// ⌘⏎ and Focus Mode ⌘⇧⏎, which is right for a window and wrong for a caret.
+    /// into `insertNewline(_:)` whatever modifiers ride along, so a composer reading them off the
+    /// raw event needs them intact. Fill Screen is ⌘⏎ and Focus Mode ⌘⇧⏎, which is right for a
+    /// window and wrong for a caret.
     private static let owned: Set<Chord> = [
         Chord(command: true, shift: true, key: "↑"),
         Chord(command: true, shift: true, key: "↓"),

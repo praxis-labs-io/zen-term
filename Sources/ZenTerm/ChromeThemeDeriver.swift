@@ -22,14 +22,7 @@ enum ChromeThemeDeriver {
             accent: (accent ?? .themeDefault).color(in: terminal),
             attention: slot(6),
             muted: blend(terminal.foreground, terminal.background, 0.55),
-            positive: slot(2),
-            synKeyword: slot(5),
-            synString: slot(2),
-            synComment: blend(terminal.foreground, terminal.background, 0.45),
-            synNumber: slot(3),
-            synType: slot(6),
-            synFunction: slot(4),
-            synPunctuation: slot(1))
+            positive: slot(2))
     }
 
     /// Fill in whatever a theme leaves unsaid about the two things drawn *over* its text: a

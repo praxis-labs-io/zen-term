@@ -29,7 +29,7 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(
             names,
             [
-                "Open Workspace Picker", "Diff Viewer", "New Tool Float…", "Settings…", "Reload Config",
+                "Open Workspace Picker", "New Tool Float…", "Settings…", "Reload Config",
                 "Check for Updates",
                 "Report an Issue…",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",

@@ -88,13 +88,6 @@ final class SettingsConfigDiagnosticRenderTests: WindowTestCase {
             ["hide-toolbar-buttons: zoom isn't valid (\(expected)). Ignoring it; the rest still applies."])
     }
 
-    func test_diffLayout_showsOnTheAppearanceRow() {
-        loadConfig("diff-layout = sideways\n")
-        let messages = rowMessages(mount(SettingsAppearanceSection()))
-        XCTAssertEqual(
-            messages, ["diff-layout = sideways isn't valid (side-by-side or inline). Using the default."])
-    }
-
     func test_cleanConfig_showsNoRowMessages() {
         loadConfig("font-size = 16\ncursor-style = bar\n")
         XCTAssertTrue(rowMessages(mount(SettingsTerminalSection())).isEmpty)

@@ -43,7 +43,7 @@ final class SettingsKeybindsSection: SettingsSection {
             "Surfaces & Tools",
             [
                 .toggleToolFloat(ToolFloat.scratch.id), .toggleRepoPicker, .toggleCommandPalette,
-                .openDiffViewer, .newTool, .openSettings,
+                .newTool, .openSettings,
             ]
         ),
     ]

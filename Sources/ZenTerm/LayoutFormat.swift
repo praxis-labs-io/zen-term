@@ -26,14 +26,6 @@ enum LayoutFormat {
         }
     }
 
-    /// The `diff-layout` config token for the native diff viewer's default layout.
-    static func diffLayoutToken(_ layout: GeneralConfig.DiffLayout) -> String {
-        switch layout {
-        case .sideBySide: return "side-by-side"
-        case .inline: return "inline"
-        }
-    }
-
     /// The `attention-toast` / `completion-toast` token for whether a notification card waits.
     static func toastDismissalToken(_ dismissal: GeneralConfig.ToastDismissal) -> String {
         switch dismissal {

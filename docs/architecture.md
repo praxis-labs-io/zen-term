@@ -539,164 +539,6 @@ fullscreen (no space switch, the menu bar stays).
 for a different card closes the current one and falls through, so cards switch
 live.
 
-**The diff viewer is the first chrome subsystem to shell out.** ⌘G opens
-`DiffViewerOverlay`, a modal card over the focused tile: a single file tree on the
-left split into three status sections (Unstaged → Staged → Committed, empty ones
-hidden, each header carrying its slice's `+n −m` total), the diff of the selected file
-on the right, and a full-width footer carrying the repo name + checked-out branch on the
-left and the focus-scoped key hints (compact `KeycapView`s, the set narrowed to the pane
-that holds focus) on the right. The diff renders in one of two layouts (`SideBySideDiff`
-old │ new, or the inline `UnifiedDiff`), toggled by bare `\` and defaulted by the
-`diff-layout` config key; both transforms feed one `DiffPaneTable` behind the
-layout-agnostic `DiffRow` model. A narrow pane force-folds to inline (two columns stop
-reading as code), where the `\` toggle is disabled and its footer hint hidden; a `\` pin
-governs only the wide state. The committed slice forks from the repo's default branch
-(`origin/HEAD`, else main/master; git records no parent, so a stacked branch's parent
-isn't guessed). A static header above the tree carries two stacked `Dropdown`s (the same
-control the theme picker uses). They stack, so focus steps through them vertically: Up
-from the tree's top row reaches the lower of the two, Up again reaches the upper, and
-Down walks back. Bare `b` still lands on the base picker and Tab still steps between
-them. Each hop falls through to whatever is actually showing, so a repo with no resolved
-base doesn't swallow Up and strand the branch picker on the mouse.
-`Base: <branch>` re-runs the committed slice against the chosen
-branch, ordered default-first then by recency. `Branch: <name>` picks what is being
-*read* rather than what it is measured against, ordered checked-out-first.
-They stack rather than sharing a row because both hold unbounded branch names: split one
-row between them and both truncate while the card is held open. Both set
-`titleTruncatesUnderPressure`, so the pickers yield their width instead of driving the
-tree column's.
-
-**Neither picker offers the other's selection.** A branch is never comparable to itself,
-so the base list hides the selected head and the head list hides the selected base, each
-keeping its own selection so picking can't remove what you just picked. Both exclusions
-live in `DiffViewerOverlay` because only it knows both, and both move as you pick.
-`GitDiffRunner.orderedBranches` used to drop the checked-out branch for this reason; it
-excludes nothing now, since once a head is selectable it is the *selection* that decides,
-not the checkout. Picking rebuilds the header immediately rather than waiting for the
-load, because a reload landing an identical status is a deliberate no-op and
-would otherwise strand both pickers on the old pair.
-
-**A picked branch is read two different ways.** One with a worktree is a real checkout on
-disk, so `WindowController` builds a second `GitDiffRunner` rooted at that path and all
-three slices stay live. One without exists only as commits, so the pinned runner answers
-with the branch as its head, the two working-tree slices come back empty by definition,
-and the list marks it `committed only`. Which case applies is the host's call, not the
-overlay's, which is why the whole `BranchOption` crosses the loader seam rather than a
-name.
-
-**Two different things move, and both have to.** For a branch with no worktree the *ref*
-moves: `FileDiff.headRef` carries it down so a committed-slice blob is fetched from the
-branch the diff was computed against. For a branch with one, the *root* moves instead, and
-the highlighter reads blobs on its own path (`DiffHighlighter.enrich` plus the prefetcher's
-background pass) rather than through the loader. So `DiffViewerOverlay.retargetRepoRoot`
-repoints its root and rebuilds the prefetcher on every pick, and clears
-`DiffHighlightStore`, whose keys carry no notion of which root produced them. Miss that and
-the diff is right while its colours come from another branch's file contents, and a file
-added on the picked branch caches a nil span set and renders plain forever.
-
-**The branch lists refresh on every load, ahead of the unchanged-status guard.** That guard
-exists so an identical diff repaints nothing, but it says nothing about whether
-branches were created or deleted. Gated behind it, a picker could name a branch that no
-longer existed until some unrelated edit happened to change the diff. A refresh also
-re-resolves any override by name, so a deleted branch or a moved worktree drops the
-selection rather than leaving the picker showing one branch while the loader is asked for
-another. An empty listing is treated as a failed read, not as proof the branch is gone. Navigation is vim-native and
-local to the card. ⌘h/⌘l move focus between the tree and the diff (the app's
-own pane chords, forwarded from `WindowController.handle` since `KeyInterceptor` consumes
-chords before the responder chain); everything else is a bare key the panes handle in
-`keyDown`. In the tree, j/k step files, h/l (and ←/→) fold a directory or open a file into
-the diff, Ctrl-j/k and Ctrl-↑/↓ jump the file selection half a page (centered), Ctrl-D/U
-scroll the diff without leaving the tree, and b focuses the base. In the diff, j/k move the
-cursor, {/} jump changes, 0/$ pan to the start/end of the line, Ctrl-D/U half-page, V
-selects, y/Y yank, ⏎ comments, and h returns to the tree. `\` toggles the layout and q/esc
-close from either pane. Because the bare keys aren't reserved, they pass through to the
-terminal when the viewer is closed, and the
-comment composer captures them as text while it's open, so no global chord is spent on a
-view-only command. The footer legend scopes to the focused pane and leaves pane-switching
-off (it's natural and discoverable, and it was the crowding the trim removed); bare `?` opens
-the full key reference, so the legend can stay lean. That reference is a `ChromePopover` (a
-composable primitive: caller supplies the trigger and the content, the popover owns the
-themed chrome, the fade, and a click-outside backdrop) holding `DiffKeymapSheet`'s three
-grouped columns, floated above the footer's trailing edge. The card wears the accent halo and the pane behind
-yields focus, the way a configured tool float does.
-
-**Selection is linewise, and vim-flavored.** Nothing typed inside the card reaches a
-terminal, so the plain letters are free: `j`/`k` move, `V` starts a visual selection
-anchored on the cursor, `gg`/`G` go to the ends, `{`/`}` reuse the change jump, and
-`y`/`Y` (or ⌘C/⌘⇧C) yank the selected code or an `@path:42-44` reference (the `@` is the
-file-mention token Claude Code resolves, so a pasted reference reads as an attachment). `DiffPaneTable`
-tracks the cursor and the visual anchor itself rather than reading `NSTableView`'s
-`selectedRow`, which reports the *last* index in the set: the anchor, not the cursor,
-whenever a selection was extended upward. Esc is two-stage: it collapses a selection
-before it closes the viewer. Character-level selection is deliberately absent: each line
-renders as its own `NSTextField` inside a panned clip view, so charwise would mean
-replacing that render path, and a diff reference is a line range regardless. Resolving a
-selection is pure. `DiffSelection` reads the rendered `[DiffRow]` (either layout) into
-the selected text plus a line range per side, and `DiffReference` renders the string. A
-yank pulses the yanked rows and fades, the way nvim's `on_yank` does: a copy leaves
-nothing on screen, so one that silently didn't take would look identical to one that did.
-A re-render of the *same* file (the `\` toggle, or a resize crossing the fold band) carries the cursor
-and selection over by their **line numbers**, never by row index: the two layouts index
-differently, since side-by-side pairs the +/− lines inline lists separately.
-Only the *new* side can be named, since that's the file on disk: a selection of pure
-deletions references the new-side line it follows, and a deleted file gets a bare path.
-The keys are view-local, not `ReservedChord`s, so they never enter the keymap and never
-compete with a terminal binding.
-
-**A selection becomes a comment, and the comment lands in a terminal.** ⏎ on the diff opens
-`DiffCommentComposer`, an inline box that drops *into* the diff under the last selected line
-(the anchor row grows by the box's height and the lines below shift down, a PR review comment)
-so the code stays readable above it. It's a child of the pane, not a second `WindowController`
-modal, which holds one slot. The box carries the `@`-reference implicitly, a `Dropdown` of the
-tab's terminals (panes plus open drawers, focused one first so index 0 is where you were
-working), and a note. ⏎ **submits** (paste the `@ref note` then a real Return, and the viewer
-closes), ⌘⏎ **queues** (paste plus a newline, no submit, no focus steal, viewer stays open) so
-several comments stack in one input before a final submit fires them together; ⇧⏎ is a literal
-newline and esc closes just the box. Submit is a real Return keypress through the new
-`TerminalSurface.submitLine()` seam, **not** a pasted `"\r"`: a pasted carriage return lands
-inside bracketed paste, where a TUI reads it as a newline and never sends. The chrome never
-reaches for a controller: the overlay takes the target list and the send as injected closures,
-`TabController` owns `sendTargets()`/`send(_:to:action:)`, and the box hands back a finished
-message and a chosen target. The note grows a line at a time past its default up to eight, then
-scrolls; Tab walks note → Submit → Queue → target (right to left, so the first Tab lands on the
-primary), while the footer claims no arrows so Left/Right keep panning the diff behind it.
-
-**The viewer keeps your place.** A background refresh and a base switch both rebuild the
-tree, and the `NSOutlineView` holds its rows by object identity, so the new objects can't
-inherit the old ones' folds or selection. `DiffOutlineItem` carries a value `identity`
-(section title + path) that survives the rebuild, and `apply` captures where the reader was
-(folded rows, open file, cursor line) before the rebuild and restores it after: folds
-re-close, the selection follows its file even when a `git add` moves it Unstaged → Staged,
-and the cursor lands back on its line by number (never index). A directory a load is the
-first to show comes up expanded, like any first-seen row. `DiffViewerSession` holds that
-place plus the status cache, the highlight cache, and the picked base for the repo the
-viewer last opened, so ⌘G reopens where you left off; it lives as long as the tab and is
-never written to disk, and a different repo starts fresh. The overlay snapshots the place
-into the session on teardown (`viewDidMoveToWindow` with no window), not per keystroke.
-
-While the card is open, `WindowController` owns a recursive `RepoWatcher` on the effective
-repository root. Picking a branch in another worktree retargets the stream along with the
-loader and highlighter. A linked worktree's `.git` pointer does not sit above its index,
-`HEAD`, or shared refs, so the watcher resolves its `gitdir` and `commondir` and adds both
-external metadata roots to the stream. FSEvents delivers working-tree and Git metadata changes
-on the watcher's utility queue; a trailing debounce coalesces each write burst, then the settled
-edge asks the overlay to refresh on main. Status loading is single-flight: events during an
-active load collapse into one trailing load instead of stacking Git subprocesses. Each current
-result refreshes branch metadata once and treats an unchanged status as a no-op, so ignored-file
-churn costs a Git read but no rebuild. If the selected worktree disappears, branch reconciliation
-returns the watcher and reader to the original checkout, then reloads there so the base, tree, and
-footer cannot remain stranded on the deleted branch. Closing the card or its window stops the
-stream and invalidates any pending edge before teardown continues.
-
-Its git work is `GitDiffRunner`, the app's first real subprocess: `git diff` runs off
-the main thread on a global queue, both pipes drained to EOF before `waitUntilExit`,
-then back to main with a parsed `[FileDiff]`. The model half (`DiffParser`, `DiffTree`,
-`SideBySideDiff`) is pure and renderer-agnostic; the overlay takes an injected loader,
-so the chrome never touches `Process` and the whole surface is drivable in a test
-without a repo. Opening is guarded upstream: a non-repo directory shows a toast and the
-overlay never mounts, so it always has a repo. Like the palette and floats it has no
-menu entry: chord + ⌘⇧P + toolbar.
-
 **Tool floats are window-level, not app-level**, because a surface is one `NSView`
 and can live in one view hierarchy: an app-global instance would physically yank
 the float out of window A when opened in window B. `ToolFloatController` holds no
@@ -860,7 +702,7 @@ rebind onto one.
 Defaults (`KeymapDefaults.map`): ⌘D and ⌘⇧D split, ⌘⌥arrows nav, ⌘⌃arrows resize, ⌘W
 close pane, ⌘T new tab, ⌘N new window, ⌘[ ⌘] tabs, ⌘1-9 select, ⌘B bottom drawer,
 ⌘\ right drawer, ⌘⇧⏎ Focus Mode, ⌘⏎ Fill Screen, ⌘⇧S scroll mode, ⌘F find, ⌘⇧P command
-palette, ⌘P workspace picker, ⌘G diff viewer, ⌘, settings, ⌘⇧, reload, ⌘= and ⌘+ and
+palette, ⌘P workspace picker, ⌘, settings, ⌘⇧, reload, ⌘= and ⌘+ and
 ⌘- font size, ⌘0 reset it. Five more sit on the chords libghostty already used
 for them: ⌘Home, ⌘End, ⌘PageUp, ⌘PageDown scroll the viewport and ⌘E finds the selection.
 Then ⌘K clear screen, ⌘J scroll to the selection, ⌘⇧J and its
@@ -941,13 +783,10 @@ refused, not just `select_all`, so a config that had `clear_screen=cmd+a` loses 
 And `select_all=none` no longer hands ⌘A to the program in the pane, because a key equivalent
 is not the keymap's to unbind.
 
-**A responder that keeps its own selection has to answer `selectAll:` itself.** The diff pane
-is the one that does. `NSTableView` implements the selector, so a nil-target menu item reaches
-it ahead of the window, and `DiffPaneTable` deliberately does not read `NSTableView.selectedRow`
-back: the table would light every row while the pane's cursor and anchor still pointed at one,
-Esc would close the viewer instead of collapsing, and the next `j` would snap the highlight
-away. `DiffTableView.selectAll(_:)` routes out to the pane instead of calling `super`, the same
-way it routes every other key it owns.
+**A responder that keeps its own selection has to answer `selectAll:` itself.** `NSTableView`
+implements the selector, so a nil-target menu item reaches a table ahead of the window. A view
+that tracks its own cursor and anchor must route `selectAll(_:)` out to that model rather than
+calling `super`, or the table lights every row while the model still points at one.
 
 Stepping a search is `n` and `N` while the search holds the keyboard, so `search_next` and
 `search_previous` ship with no chord and `SearchController.key(for:)` reads them. They stay
@@ -964,14 +803,11 @@ the predicate. A guard that answers "yes, defer" for a chord nothing downstream
 implements hands the keystroke to nobody, which looks identical to working.
 
 **⌘⏎ and ⌘⇧⏎ are in the same set for a different reason.** Not because macOS binds them,
-but because the diff comment composer does: ⏎ sends, ⌘⏎ queues, ⇧⏎ takes a new line, all
-decoded off the raw event in `DiffCommentComposer.sendShortcut`. Fill Screen and Focus Mode
-sitting on those two chords is right for a window and wrong for a caret, and the composer
-lives inside a modal card, so an unguarded ⌘⏎ would be swallowed by
-`WindowController.handle` and do nothing at all. The test routes the event through
-`KeyInterceptor` and feeds what comes back to `sendShortcut`, because the guard returning
-`true` proves nothing about whether the event that survived is still one the composer can
-read.
+but because AppKit turns every Return into `insertNewline(_:)` whatever modifiers ride along,
+so a composer that tells send from new line reads them off the raw event. Fill Screen and Focus
+Mode sitting on those two chords is right for a window and wrong for a caret. The test routes
+the event through `KeyInterceptor` and asserts the same event comes back, because the guard
+returning `true` proves nothing about whether what survived is still readable.
 
 **Increase ships two chords, and the second is load-bearing.** ⌘+ on a US layout is
 physically ⌘⇧=, which `Chord` folds onto `=` because Shift is set, making it a
@@ -1068,11 +904,7 @@ paste take a third path through the responder chain.
 **The modal-card stage swallows, with one exception.** A card takes the window, so
 every chord that is not its own toggle or another surface's toggle is dropped: a
 palette, a form, or a confirm is mid-question, and acting on a chord behind it would
-answer by walking away. The diff viewer is the exception for tab chords (⌘1-9, ⌘[,
-⌘]), because it is a reading surface you live in rather than a question. It cannot
-ride the switch the way a tool float does: the diff it shows belongs to the tab it
-was opened from, so `closeModal()` takes it down and the switch happens. Each tab keeps its own `DiffViewerSession`, so ⌘D on the far side
-comes back where that tab left off.
+answer by walking away.
 
 **The float stage speaks rather than swallowing.** A pane command (nav, split,
 resize, drawer, Focus Mode) pressed over an open float has nowhere to go, so it
@@ -1122,7 +954,7 @@ the chrome never claims those chords) are fn-chords on a laptop that nothing in 
 UI mentions. A mode borrows the keys while it is up and gives them back on exit.
 
 **The keymap is its own file.** `ScrollKeymap.key(for:pending:hasSelection:)` is a pure
-static over `NSEvent`, the same testable seam as `DiffPaneTable.vimKey(for:)`, and it
+static over `NSEvent`, and it
 reads shiftedness from the modifier flags rather than character case for the same Caps
 Lock reason. j/k step the cursor, h/l move a column, w/b/e and W/B/E move by word and
 WORD, 0/^/$ reach the ends of a row, H/M/L name a row by where it sits, f/F/t/T find a
@@ -1269,10 +1101,9 @@ screen is kept.
 #### Selection and yank
 
 `v` and `V` anchor a selection at the cursor; motions grow it; `y` copies it, drops back
-to normal mode, and pulses what it took the way `DiffPaneTable.flashYank` does. The pulse
-runs after the write, not on the keystroke, because a yank leaves nothing on screen and a
-copy that silently didn't take looks identical to one that did. `Esc` hands the selection
-back before it closes anything, which is the diff viewer's rule too.
+to normal mode, and pulses what it took. The pulse runs after the write, not on the keystroke,
+because a yank leaves nothing on screen and a copy that silently didn't take looks identical to
+one that did. `Esc` hands the selection back before it closes anything.
 
 `ScrollSelection` holds the **anchor only**. The cursor lives on the controller, which owns
 it in normal mode as well, and a second copy would be one to drift: every motion would have
@@ -1765,14 +1596,10 @@ comments, blank lines, and unknown keys verbatim.
 **Theming is derived, never hardcoded.** `ChromeThemeDeriver` maps ANSI slots onto
 sixteen chrome roles. Nine carry chrome meaning: background and foreground come from
 the theme's own, info is ansi[4], warning ansi[3], destructive ansi[1], accent ansi[5],
-attention ansi[6], positive ansi[2], and muted a blend of fg and bg. The other seven
-are the diff viewer's syntax roles, resolved through `SyntaxRole`: synKeyword ansi[5],
-synString ansi[2], synNumber ansi[3], synType ansi[6], synFunction ansi[4],
-synPunctuation ansi[1], and synComment a fainter fg/bg blend than muted.
+attention ansi[6], positive ansi[2], and muted a blend of fg and bg.
 
-Roles are named for meaning, not hue, so several share a slot: accent and synKeyword
-are both ansi[5], info and synFunction both ansi[4]. That is why the roles are
-separate fields rather than one alias, and why repointing one leaves the others alone.
+Roles are named for meaning, not hue, which is why they are separate fields rather than
+aliases onto a slot: repointing one leaves the others alone.
 Fifteen themes ship bundled; a user file shadows a bundled one of the same name. See
 CLAUDE.md for the rule that the chrome never hardcodes a color.
 
@@ -1830,12 +1657,6 @@ that carry meaning stay put: a warning is not a taste. What makes this work with
 call-site changes is that nothing caches the color: `ConfigChange.between` sets
 `.theme` from a whole-value `AppTheme` diff, and the existing `reapplyTheme()` fan-out
 repaints even the sites that bake their color at init, like the tab bar's tracer.
-
-The syntax roles do not follow it. `synKeyword` derives from the same
-`slot(5)` the accent defaults to, so out of the box the chrome's primary and the diff
-viewer's keywords are the same color by coincidence. Repointing the accent leaves the
-code where it is: a keyword is a token role, not a taste. `ChromeThemeDeriverTests`
-asserts it, because the coupling is otherwise invisible.
 
 ## Invariants that will bite you
 

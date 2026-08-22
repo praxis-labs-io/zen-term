@@ -28,11 +28,6 @@ final class LayoutFormatTests: XCTestCase {
         XCTAssertEqual(LayoutFormat.reduceMotionToken(.off), "off")
     }
 
-    func test_diffLayout_tokens() {
-        XCTAssertEqual(LayoutFormat.diffLayoutToken(.sideBySide), "side-by-side")
-        XCTAssertEqual(LayoutFormat.diffLayoutToken(.inline), "inline")
-    }
-
     func test_args_joinSplitRoundTrips() {
         XCTAssertEqual(LayoutFormat.joinArgs(["-l", "--login"]), "-l --login")
         XCTAssertEqual(LayoutFormat.splitArgs("  -l   --login "), ["-l", "--login"])
@@ -43,8 +38,8 @@ final class LayoutFormatTests: XCTestCase {
     /// same file text.
     func test_hideToolbarButtons_token_ordersByToolbarPosition() {
         XCTAssertEqual(
-            LayoutFormat.hideToolbarButtonsToken([.diffViewer, .newTab, .bottomDrawer]),
-            "new-tab,bottom-drawer,diff-viewer")
+            LayoutFormat.hideToolbarButtonsToken([.commandPalette, .newTab, .bottomDrawer]),
+            "new-tab,bottom-drawer,command-palette")
         XCTAssertEqual(LayoutFormat.hideToolbarButtonsToken([]), "")
     }
 }

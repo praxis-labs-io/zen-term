@@ -36,7 +36,6 @@ extension KeyInterceptor.ReservedChord {
         case .checkForUpdates: return "check_for_updates"
         case .reportIssue: return "report_issue"
         case .newTool: return "new_tool_float"
-        case .openDiffViewer: return "diff_viewer"
         // ghostty's own spelling for these three, so a keybind line pasted from a ghostty config
         // resolves rather than being dropped as unknown.
         case .increaseFontSize: return "increase_font_size"
@@ -91,7 +90,7 @@ extension KeyInterceptor.ReservedChord {
             .prevTab, .nextTab, .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
             .prevPane, .nextPane,
             .toggleToolFloat, .toggleRepoPicker, .toggleCommandPalette, .openSettings,
-            .reloadConfig, .checkForUpdates, .reportIssue, .openDiffViewer, .newTool, .resetFontSize,
+            .reloadConfig, .checkForUpdates, .reportIssue, .newTool, .resetFontSize,
             .toggleScrollMode, .toggleSearch, .scrollToTop, .scrollToBottom,
             .findNext, .findPrevious, .searchSelection,
             .clearScreen, .selectAll, .scrollToSelection, .pasteSelection, .writeScreenFile,
@@ -136,7 +135,7 @@ extension KeyInterceptor.ReservedChord {
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
             .newTab, .newWindow, .prevTab, .nextTab, .selectTab,
             .fillScreen, .toggleBottomDrawer, .toggleRightDrawer,
-            .toggleRepoPicker, .toggleCommandPalette, .openDiffViewer, .newTool, .openSettings,
+            .toggleRepoPicker, .toggleCommandPalette, .newTool, .openSettings,
             .dismissToast, .dismissAllToasts:
             return true
         }
@@ -181,7 +180,6 @@ extension KeyInterceptor.ReservedChord {
         case "check_for_updates": self = .checkForUpdates
         case "report_issue": self = .reportIssue
         case "new_tool_float": self = .newTool
-        case "diff_viewer": self = .openDiffViewer
         case "increase_font_size": self = .increaseFontSize
         case "decrease_font_size": self = .decreaseFontSize
         case "reset_font_size": self = .resetFontSize
@@ -295,7 +293,6 @@ enum KeymapDefaults {
         // app-level monitor runs, so a chord bound there is dead and every test of it passes.
         map[Chord(command: true, shift: true, key: "p")] = .toggleCommandPalette
         map[Chord(command: true, key: "p")] = .toggleRepoPicker
-        map[Chord(command: true, key: "g")] = .openDiffViewer
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer
         map[Chord(command: true, key: "b")] = .toggleBottomDrawer
         // The one built-in float, beside the two drawers it behaves like. Read off the spec so the

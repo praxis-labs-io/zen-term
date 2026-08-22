@@ -62,12 +62,6 @@ final class SettingsAppearanceSection: SettingsFormSection {
                 read: { Self.reduceMotionIndex($0) },
                 token: { LayoutFormat.reduceMotionToken($0 == 0 ? .on : .off) }, notifiesOnReselect: true)
         }
-        addGroup("Diff viewer") {
-            self.addSegmentedRow(
-                key: "diff-layout", caption: "Layout", blurb: "Layout a diff opens with",
-                options: ["Side by side", "Inline"], read: { Self.diffLayoutIndex($0) },
-                token: { LayoutFormat.diffLayoutToken(Self.diffLayouts[$0]) }, notifiesOnReselect: false)
-        }
     }
 
     private weak var toolbarList: CheckboxDropdown?
@@ -117,14 +111,6 @@ final class SettingsAppearanceSection: SettingsFormSection {
     private static func toolbarSummary() -> String {
         let hidden = GeneralConfig.current.hiddenToolbarButtons.count
         return hidden == 0 ? "All shown" : "\(hidden) hidden"
-    }
-
-    private static let diffLayouts: [GeneralConfig.DiffLayout] = [.sideBySide, .inline]
-
-    /// Diff layout shown by index; static so the `read` closure doesn't capture `self` (which would
-    /// retain-cycle through the section's refreshers).
-    private static func diffLayoutIndex(_ config: GeneralConfig) -> Int {
-        diffLayouts.firstIndex(of: config.diffLayout) ?? 0
     }
 
     private func addThemeRow() {

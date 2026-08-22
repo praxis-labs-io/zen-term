@@ -69,12 +69,12 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
     /// three conflicts opened to nothing.
     func test_aChordConflict_getsACardAndNotTheSharedNotice() throws {
         let applier = makeApplier()
-        try seed("float = title:lazygit command:lazygit key:cmd+g\n")
+        try seed("float = title:lazygit command:lazygit key:cmd+j\n")
 
         applier.surfaceConfigNotices()
 
         XCTAssertEqual(announced, [], "nothing joins the shared list")
-        XCTAssertEqual(carded.map(\.loser), [.openDiffViewer])
+        XCTAssertEqual(carded.map(\.loser), [.scrollToSelection])
         XCTAssertFalse(carded[0].isRevertable, "a float's key: has nothing to back out to")
     }
 
@@ -84,7 +84,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
         let applier = makeApplier()
         try seed(
             """
-            float = order:1 title:lazygit command:lazygit key:cmd+g
+            float = order:1 title:lazygit command:lazygit key:cmd+j
             float = order:2 title:gitdash command:gd key:cmd+k
             float = order:3 title:nvim command:nvim key:cmd+e
             """)
@@ -153,7 +153,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
     /// on a card that then lists one, and the user would go looking for a second thing to fix.
     func test_aMixedConfig_announcesOnlyTheProblem() throws {
         let applier = makeApplier()
-        try seed("float = title:lazygit command:lazygit key:cmd+g\nkeybind = frobnicate=cmd+f\n")
+        try seed("float = title:lazygit command:lazygit key:cmd+j\nkeybind = frobnicate=cmd+f\n")
 
         applier.surfaceConfigNotices()
 
@@ -168,11 +168,11 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
     /// exists.
     func test_fixingTheProblem_retractsEvenWithAnExplanationLeft() throws {
         let applier = makeApplier()
-        try seed("float = title:lazygit command:lazygit key:cmd+g\nkeybind = frobnicate=cmd+f\n")
+        try seed("float = title:lazygit command:lazygit key:cmd+j\nkeybind = frobnicate=cmd+f\n")
         applier.surfaceConfigNotices()
         XCTAssertNotNil(showing)
 
-        try seed("float = title:lazygit command:lazygit key:cmd+g\n")
+        try seed("float = title:lazygit command:lazygit key:cmd+j\n")
         applier.surfaceConfigNotices()
 
         XCTAssertNil(showing, "the notice has to come down, not linger behind the explanation")

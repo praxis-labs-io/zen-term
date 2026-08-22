@@ -111,14 +111,9 @@ final class TextEditingChordsTests: WindowTestCase {
 
     // MARK: Return belongs to the box you are typing in
 
-    /// ⌘⏎ is the diff comment composer's queue chord and Fill Screen is bound to it. The
-    /// interceptor resolves ahead of the responder chain, so without the guard the composer's own
-    /// decoder never sees the keystroke — and the card that hosts it swallows Fill Screen anyway,
-    /// so the chord does nothing at all rather than doing the wrong thing.
-    ///
-    /// The event goes through `route` and out the other side into `sendShortcut`, which is the
-    /// function the composer really calls. Asserting the guard's `true` alone would pass while the
-    /// event that came back was no longer one the composer could read.
+    /// Fill Screen is ⌘⏎, and the interceptor resolves ahead of the responder chain, so without
+    /// the guard a composer's own decoder never sees the keystroke. `route` has to hand the real
+    /// event back, not merely answer true: an event the composer can no longer read is no use.
     func test_commandReturnReachesTheComposersOwnDecoder() throws {
         window.makeFirstResponder(view)
         let keys = interceptor()
@@ -128,13 +123,12 @@ final class TextEditingChordsTests: WindowTestCase {
         let event = try returnKeyDown(flags: .command)
         let passed = try XCTUnwrap(keys.route(event), "the guard has to hand the real event back")
 
-        XCTAssertEqual(DiffCommentComposer.sendShortcut(for: passed), .queue)
+        XCTAssertIdentical(passed, event)
         XCTAssertEqual(fired, [], "and Fill Screen must not have run behind it")
     }
 
-    /// ⇧⏎ is the same box's new-line escape hatch, so ⌘⇧⏎ has to reach the text view too rather than
-    /// firing Focus Mode over an open composer. `sendShortcut` answers nil for it by design, which
-    /// is the composer letting the keystroke fall through, so the claim here is that it arrives.
+    /// ⇧⏎ is a composer's new-line escape hatch, so ⌘⇧⏎ has to reach the text view too rather than
+    /// firing Focus Mode over it.
     func test_commandShiftReturnReachesItAsWell() throws {
         window.makeFirstResponder(view)
         let keys = interceptor()

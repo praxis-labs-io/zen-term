@@ -7,8 +7,7 @@ copyright and license text, which is what each of these licenses asks for.
 Every library listed here was confirmed present in the shipped app, not read off a
 dependency manifest. What gets linked is a property of the build: a manifest lists
 what could be linked, and `libghostty-fat.a` is an archive the linker draws from
-selectively. Most were found by probing `Contents/MacOS/ZenTerm` itself, which is
-where tree-sitter (311 symbols) and its 40 grammars (186 symbols) show up. Sparkle
+selectively. Most were found by probing `Contents/MacOS/ZenTerm` itself. Sparkle
 is the exception: it ships as a framework under `Contents/Frameworks` rather than
 linked into the executable, so it is confirmed there instead. Fonts are embedded
 data with no symbols, so they were found by parsing sfnt table directories out of
@@ -24,7 +23,7 @@ Ghostty pin at the time of this audit: `v1.3.1` (332b2ae). See
 
 **MIT**
 
-The terminal engine ZenTerm embeds, and the route by which most entries below arrive: everything from FreeType through utfcpp, both fonts, the themes, and the shell integration. Sparkle, tree-sitter, SwiftTreeSitter, CodeEditLanguages, the icons, and the cursor shaders are the chrome's own and reach the app directly. The chrome also ports parts of Ghostty's macOS app: key event translation, IME composition, accessibility, and keyboard-layout detection.
+The terminal engine ZenTerm embeds, and the route by which most entries below arrive: everything from FreeType through utfcpp, both fonts, the themes, and the shell integration. Sparkle, the icons, and the cursor shaders are the chrome's own and reach the app directly. The chrome also ports parts of Ghostty's macOS app: key event translation, IME composition, accessibility, and keyboard-layout detection.
 
 ```text
 MIT License
@@ -2748,84 +2747,6 @@ FOR ANY DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE,
 ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
-
-### tree-sitter
-
-**MIT**
-
-The incremental parser behind the diff viewer's syntax highlighting. Its runtime is compiled into the shipped executable; version 0.25.10.
-
-```text
-The MIT License (MIT)
-
-Copyright (c) 2018-2024 Max Brunsfeld
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-### SwiftTreeSitter
-
-**BSD 3-Clause**
-
-The Swift bindings ZenTerm calls tree-sitter through, and the query engine that runs each language's `highlights.scm`. Version 0.25.0.
-
-```text
-BSD 3-Clause License
-
-Copyright (c) 2021, Chime
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice, this
-   list of conditions and the following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-
-3. Neither the name of the copyright holder nor the names of its
-   contributors may be used to endorse or promote products derived from
-   this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-```
-
-### CodeEditLanguages
-
-**No license declared upstream**
-
-Supplies the 40 compiled tree-sitter grammars the diff viewer highlights with: Agda, Bash, C, C#, C++, CSS, Dart, Dockerfile, Elixir, Go, Go module, Haskell, HTML, Java, JavaScript, JSDoc, JSON, Julia, Kotlin, Lua, Markdown, Markdown (inline), Objective-C, OCaml, OCaml interface, Perl, PHP, Python, Regex, Ruby, Rust, Scala, SQL, Swift, TOML, TSX, TypeScript, Verilog, YAML, Zig.
-
-The upstream repository (`CodeEditApp/CodeEditLanguages`, version 0.1.21) publishes no `LICENSE` file and GitHub reports no license for it, so there is no license text to reproduce here and no grant to cite. The grammars it packages originate from their own upstream projects, each under that project's own license; because they arrive as a prebuilt binary framework, those individual licenses are not recoverable from the dependency and are not reproduced here either. This entry records what ships rather than asserting a permission that has not been granted.
-
-The `highlights.scm` query files under `Sources/ZenTerm/SyntaxQueries` come from the same grammar projects and are redistributed in the app bundle on the same footing.
 
 ### Sparkle
 

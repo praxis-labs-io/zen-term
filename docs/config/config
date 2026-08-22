@@ -102,9 +102,9 @@
 # Comma-separated, any order. Hiding is visual only: every hidden button's
 # shortcut and palette entry stay live. Buttons, in toolbar order:
 #   new-tab, split-h, split-v, bottom-drawer, right-drawer, scratch, focus-mode,
-#   command-palette, diff-viewer
+#   command-palette
 # In-app Settings edit: applies live.
-# hide-toolbar-buttons =              # e.g. split-h,split-v,diff-viewer
+# hide-toolbar-buttons =              # e.g. split-h,split-v
 
 # Opacity of the on-brand tint over the behind-window blur. 1 = solid shell,
 # 0 = raw system blur showing your desktop through the whole window.
@@ -136,14 +136,6 @@
 # setting; `on`/`off` force it regardless.
 # In-app Settings edit: applies live.
 # reduce-motion = system              # system | on | off
-
-# Layout the diff viewer opens with. `side-by-side` shows old and new in two
-# columns; `inline` shows one column with +/- lines. The in-viewer toggle (bare `\`,
-# handled by the viewer itself, not a global shortcut) overrides it for the session. A
-# narrow pane always shows inline (two columns stop reading as code); the toggle returns
-# when it's wide again.
-# In-app Settings edit: applies live.
-# diff-layout = side-by-side          # side-by-side | inline
 
 # Shell for new panes. Unset → $SHELL, then /bin/zsh. When set, it launches
 # login+interactive by default; override the flags with shell-args.
@@ -273,6 +265,10 @@
 #
 # Example: a system monitor kept alive for the window, reachable from every tab:
 # float = order:4 title:BTop command:"btop" key:cmd+shift+b persist:window icon:gauge
+#
+# Example: zen-review, the standalone review tool, on ⌘G. It keeps a session per repo,
+# so `persist:dir` picks the reading back up where you left it.
+# float = order:5 title:Review command:"zen-review" key:cmd+g git:true persist:dir icon:checklist
 
 # ─── Keybinds ────────────────────────────────────────────────────────────────
 #
@@ -331,7 +327,7 @@
 #   dismiss_toast  dismiss_all_toasts
 #   select_all  (no default; Edit > Select All holds ⌘A)
 #   write_screen_file  write_screen_file_copy  write_screen_file_open
-#   toggle_workspace_picker  toggle_command_palette  diff_viewer
+#   toggle_workspace_picker  toggle_command_palette
 #   open_settings  reload_config
 #   increase_font_size  decrease_font_size  reset_font_size
 #   check_for_updates   (no default binding; bind a chord to reach it by keyboard)
@@ -386,7 +382,6 @@
 # keybind = dismiss_all_toasts=cmd+shift+opt+n
 # keybind = toggle_command_palette=cmd+shift+p
 # keybind = toggle_workspace_picker=cmd+p
-# keybind = diff_viewer=cmd+g                    # diff of the focused repo
 # keybind = open_settings=cmd+,
 # keybind = reload_config=cmd+shift+,
 # keybind = increase_font_size=cmd+=             # ⌘+ (cmd+shift+=) does this too

@@ -52,12 +52,12 @@ final class KeybindConflictTests: XCTestCase {
     /// A float's chord is the `key:` on its own line and `key:` is required, so there is nothing to
     /// back out to. The surfaces read this to decide whether to offer Revert at all.
     func test_aFloatTakingAChord_isNotRevertable() throws {
-        let config = try load("float = title:lazygit command:lazygit key:cmd+g\n")
+        let config = try load("float = title:lazygit command:lazygit key:cmd+j\n")
 
         let conflicts = KeybindConflict.all(in: config)
 
         XCTAssertEqual(conflicts.count, 1, "\(conflicts)")
-        XCTAssertEqual(conflicts[0].loser, .openDiffViewer)
+        XCTAssertEqual(conflicts[0].loser, .scrollToSelection)
         XCTAssertFalse(conflicts[0].isRevertable)
     }
 
@@ -65,14 +65,14 @@ final class KeybindConflictTests: XCTestCase {
     func test_threeConflicts_readAsThree() throws {
         let config = try load(
             """
-            float = order:1 title:lazygit command:lazygit key:cmd+g
+            float = order:1 title:lazygit command:lazygit key:cmd+j
             float = order:2 title:gitdash command:gd key:cmd+k
             float = order:3 title:nvim command:nvim key:cmd+e
             """)
 
         XCTAssertEqual(
             Set(KeybindConflict.all(in: config).map(\.loser)),
-            [.openDiffViewer, .clearScreen, .searchSelection])
+            [.scrollToSelection, .clearScreen, .searchSelection])
     }
 
     /// An action that merely moved is not a conflict. Only losing the last chord is.
@@ -117,11 +117,11 @@ final class KeybindConflictTests: XCTestCase {
     func test_acceptingOne_leavesTheOthersReported() throws {
         let config = try load(
             """
-            float = order:1 title:lazygit command:lazygit key:cmd+g
+            float = order:1 title:lazygit command:lazygit key:cmd+j
             float = order:2 title:nvim command:nvim key:cmd+e
             """)
         let viewer = try XCTUnwrap(
-            KeybindConflict.all(in: config).first { $0.loser == .openDiffViewer })
+            KeybindConflict.all(in: config).first { $0.loser == .scrollToSelection })
 
         _ = try write(viewer.accepting(KeymapOverrides(config: config)))
 
