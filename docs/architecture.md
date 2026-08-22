@@ -733,8 +733,8 @@ entry in `Chord.specialKeyGlyphs` that types a real character: `\t` draws as not
 keycap and reads as a stray blank in a config file.
 
 **macOS takes some chords before any app sees them, and a chord bound there is dead while
-every test of it passes.** ⌘⌥D is the Dock toggle and ⌃⌘D is Look Up, which is why the diff
-viewer is on ⌘G. The keymap is an event monitor, so there is nothing to catch this below
+every test of it passes.** ⌘⌥D is the Dock toggle and ⌃⌘D is Look Up, so nothing may reach
+for a spare D. The keymap is an event monitor, so there is nothing to catch this below
 the machine: it takes a person pressing the key. ⌃⌘F is not this case. It is ghostty's
 second spelling of fullscreen and stays unbound because it is macOS's *native* fullscreen
 chord, and Fill Screen is a maximize, so answering it would promise a space switch it does

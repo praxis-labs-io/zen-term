@@ -159,7 +159,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
 
         XCTAssertEqual(announced.count, 1, "\(announced)")
         XCTAssertTrue(announced[0].message.contains("frobnicate"), announced[0].message)
-        XCTAssertFalse(announced[0].message.contains("find_next"), announced[0].message)
+        XCTAssertFalse(announced[0].message.contains("scroll_to_selection"), announced[0].message)
     }
 
     /// The retraction path, which is why the filter sits ahead of the empty check rather than inside
