@@ -25,6 +25,18 @@ one-time hand-off rather than anything `bin/release` carries.
 hand. It needs no DMG: the enclosure inside already points at the asset here, the
 bytes are identical, and `SUPublicEDKey` never changed, so the signature verifies.
 
+**Pin the enclosure to the tag before uploading it.** `bin/release` writes the live
+appcast with a `releases/latest/download/` URL, which is right for a feed that is
+regenerated every release. The hand-off copy is written once and never again, so
+`latest` stops meaning 1.0.0 the moment 1.0.1 ships and the download 404s. Edit
+`dist/appcast.xml` to the tagged form first:
+
+```
+https://github.com/praxis-labs-io/zen-term/releases/download/v1.0.0/ZenTerm-1.0.0-arm64.dmg
+```
+
+Then publish it:
+
 ```
 gh release create v1.0.0 --repo zen-term/zen-term-releases \
     --title "ZenTerm 1.0.0" \
@@ -36,9 +48,13 @@ Every install picks 1.0.0 up on its next check and lands on the new feed. Give i
 week, compare the 1.0.0 download count against the 0.10.0 one, message whoever has
 not moved, then delete the repo and the `zen-term` org.
 
-**Before deleting anything**, `zen-term-website` has to move first:
-`scripts/sync-docs.mjs` reads both the docs and the releases API from the old repo,
-and it fails by syncing nothing rather than by erroring.
+## The website reads the repo, and it has already moved
+
+`zen-term-website`'s `scripts/sync-docs.mjs` still pulls the docs and the releases
+API from `zen-term/zen-term-releases`. **Repoint it before the first release cut from
+this repo, not before deleting the old one.** It fails by syncing nothing rather than
+by erroring, so a v1.0.0 cut against the old path publishes no release notes to the
+site and every check in the flow still passes. Tracked as ZEN-423.
 
 ## Versioning
 

@@ -8,7 +8,7 @@ final class SupportLinksTests: XCTestCase {
             .queryItems?.first { $0.name == name }?.value
     }
 
-    func test_newIssueURL_pointsAtTheReleasesRepoNewIssue() {
+    func test_newIssueURL_pointsAtThisReposNewIssue() {
         let url = SupportLinks.newIssueURL(title: "hi", body: "there")
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         XCTAssertEqual(components?.scheme, "https")
