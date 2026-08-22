@@ -130,7 +130,7 @@ own: the app icon is Lucide's `origami` pasted into `icon/make-icon.swift` as SV
 Ghostty's terminfo is ghostty's own and rides its MIT entry; `bash-preexec.sh` sits inside the
 same tree and does not.
 
-One root is known-uncovered as of this writing: `Sources/ZenTerm/Themes`, the 15 separately
+One root is known-uncovered as of this writing: `Sources/ZenTerm/Themes`, the 17 separately
 licensed themes in the Settings picker. It is tracked and is not in the notices yet.
 
 ## 5. Regenerate and diff

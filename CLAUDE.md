@@ -109,7 +109,7 @@ chain and no view-level test covers that.
 **Any word a person outside the project reads is governed by
 `docs/brand-voice.md`.** In-app copy (toasts, empty states, button labels, Settings
 captions, errors), `docs/config/*`, the README, release notes, and anything in
-`zen-term-website` or `zen-term-releases`. Read it before writing, not after.
+`zen-term-website`. Read it before writing, not after.
 
 The rules that get violated most:
 
@@ -126,9 +126,9 @@ The rules that get violated most:
 - Confirmations state the consequence and never ask "Are you sure?".
 
 `docs/brand-voice.md` is the source here and is mirrored into the website repo. Edit
-it here, then copy it out. **It does not go in `zen-term-releases`**: that repo is
-public, and how we talk about ZenTerm is guidance for whoever writes the copy, not
-something a user downloading the app should be handed.
+it here, then copy it out. It is public along with the rest of this repo, which is
+right: it is the standard a contributor's copy is reviewed against, so it has to be
+readable by the person writing that copy.
 
 ## Colors: always theme-driven
 
@@ -181,6 +181,18 @@ key `ZEN`). Status ladder: Backlog, Todo, In Progress, In Review, Done.
   a title and a short goal or scope line. The exception is a
   tightly-coupled foundational stack where nothing is separately mergeable; when
   that happens, still create a ticket per task afterward so each keeps its history.
+
+## Contributors
+
+The repo is public and MIT (`LICENSE`, `Copyright (c) 2026 Praxis Labs`).
+`docs/CONTRIBUTING.md` is what an outside contributor reads: it is a subset of this
+file plus the things only they need. **Keep the two agreeing.** Where they overlap,
+this file is the authority; where they disagree, one of them is a bug.
+
+Linear is private, so a `ZEN-` reference is maintainer bookkeeping. Never write copy
+or a doc that asks a contributor to look at a ticket, and never gate a contribution
+on one existing. An outside pull request gets a ticket created for it, not the other
+way round.
 
 ## Shipping
 

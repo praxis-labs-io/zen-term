@@ -109,6 +109,23 @@ does not ascend past the last tag, including one named by hand.
 - **The version resolves after `git fetch --tags`.** A stale local tag set otherwise
   publishes below what is already released.
 
+Two rules are not negotiable, because a published tag is permanent: never reuse a
+version, even after a release that failed halfway, and never go backwards.
+
+**What each component means**, for an app rather than a library. Breaking is about
+the things someone built a habit or a config around: a chord that no longer does
+what it did, a config key renamed or dropped, a default that flipped.
+
+| Bump | Example | Means |
+|---|---|---|
+| **patch** | `1.0.0` → `1.0.1` | Fixes only. Nothing new, nothing moved. |
+| **minor** | `1.0.0` → `1.1.0` | New features, nothing existing broke. |
+| **major** | `1.0.0` → `2.0.0` | Something people relied on changed or went away. |
+
+New features are a minor bump no matter how large they are. v1.0.0 is where the
+0.x freedom to move chords and config keys without a major bump ended: from here,
+breaking someone's config costs a major.
+
 ## Notes
 
 Notes live in `docs/release-notes/vX.Y.Z.md`, one file per version, curated from the

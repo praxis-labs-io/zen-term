@@ -14,8 +14,8 @@ libghostty core, which renders the text and runs the shell.
 3. Launch it.
 
 You should not see an "unidentified developer" warning. The app is signed and
-notarized, so macOS opens it normally. If you get one, tell Drew. That is a real
-problem, not something to click through.
+notarized, so macOS opens it normally. If you get one, open an issue. That is a
+real problem, not something to click through.
 
 Apple Silicon, macOS 14 or later. There is no Intel build.
 
@@ -158,7 +158,7 @@ Out of the box these are two separate motions. `⌘⌥` and an arrow moves betwe
 ZenTerm panes, and Neovim's own `Ctrl-hjkl` moves between Neovim splits. You
 switch between two sets of keys depending on where focus happens to be.
 
-[zen-navigator.nvim](https://github.com/zen-term/zen-navigator.nvim) joins them.
+[zen-navigator.nvim](https://github.com/praxis-labs-io/zen-navigator.nvim) joins them.
 Press `Ctrl-h` at the left edge of your Neovim splits and focus crosses into the
 ZenTerm pane beside it. From a shell pane, `Ctrl-h` walks back into Neovim and
 keeps going through its splits. It is the `vim-tmux-navigator` idea, without
@@ -170,7 +170,7 @@ diverts a chord ZenTerm already treats as pane nav.
 **1. Install the plugin.** With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
-{ "zen-term/zen-navigator.nvim", event = "VeryLazy", opts = {} }
+{ "praxis-labs-io/zen-navigator.nvim", event = "VeryLazy", opts = {} }
 ```
 
 **2. Give ZenTerm the chord to hand off.** Add these to
@@ -192,7 +192,7 @@ config works anywhere.
 
 ## Change how it looks
 
-**Themes:** press ⌘, and choose **Appearance**. Fifteen ship with the app,
+**Themes:** press ⌘, and choose **Appearance**. Seventeen ship with the app,
 including Rosé Pine, Catppuccin, Tokyo Night, Nord, Gruvbox, and Dracula. A theme
 colors the whole app, not only the terminal text.
 
@@ -210,14 +210,15 @@ click should not open your browser.
 
 ## When something breaks
 
-It will. This build goes to a handful of people, so you will hit things nobody
-has hit yet.
+**Help → Report an Issue** opens a GitHub issue with your version, macOS build,
+and a system report already filled in. Add what you did and send it unpolished.
 
-Tell Drew, and include:
+If you would rather file it by hand, go to
+[the issue tracker](https://github.com/praxis-labs-io/zen-term/issues) and include:
 
 - **The version.** Press ⌘, and read the bottom of the left column.
 - **What you did.** "I split a pane and the arrow keys went weird" is a useful
-  report. Send it unpolished.
+  report.
 - A screenshot if it is visual.
 
 If something felt awkward rather than broken, say that too.

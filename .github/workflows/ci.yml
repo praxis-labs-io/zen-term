@@ -8,6 +8,11 @@ on:
   push:
     branches: [main]
 
+# The workflow reads the repo and nothing else. Spelled out rather than inherited so a
+# fork PR, which runs with the base repo's default token scope, cannot be handed write.
+permissions:
+  contents: read
+
 # A newer push to the same branch/PR supersedes an in-flight run.
 concurrency:
   group: ci-${{ github.ref }}

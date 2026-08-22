@@ -57,7 +57,7 @@ Five heuristics carry most of it:
 2. **A heading names an outcome**, usually verb-first. "Split a pane without
    leaving home row" over "Panes", and over "Supercharge your workflow".
 3. **Specificity replaces description.** A number beats an adjective every time.
-   "Fifteen built-in themes" does work that "beautifully themed" does not.
+   "Seventeen built-in themes" does work that "beautifully themed" does not.
 4. **A button is a verb.** "Download". "Quit". "Retry". Never "Get started for
    free today".
 5. **Confidence lives in the claim, not the adjectives.** If the claim is true,
