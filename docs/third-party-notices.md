@@ -45,9 +45,11 @@ name that appears owes a notice.
 `libintl` must stay at zero. `bin/build-ghosttykit` builds ghostty with `-Di18n=false`, so
 nothing references the GNU libintl it bundles on Apple platforms (Apple's libc omits it).
 `SharedDeps.zig` still links the archive, but with no references the release linker dead-strips
-it, so it leaves the shipped binary (the same mechanism that drops `mpack`). That is what keeps
-this closed-source app clear of libintl's LGPL-2.1 static-linking relink obligation, which
-attribution alone does not discharge. `bin/package-app` runs this same probe on the
+it, so it leaves the shipped binary (the same mechanism that drops `mpack`). That keeps the app
+clear of libintl's LGPL-2.1 static-linking relink obligation, which attribution alone does not
+discharge. ZenTerm being MIT makes that obligation cheap to satisfy rather than impossible, but
+the guard stays: i18n off is the shipped behavior either way, and a notice deleted from a build
+that still links libintl is the failure mode. `bin/package-app` runs this same probe on the
 linked binary and refuses to package a build where libintl survived, so a stale GhosttyKit
 cannot ship the violation with the notice already deleted. A nonzero count means i18n came back
 on: the flag was dropped, or ghostty started pulling libintl another way, and the obligation

@@ -625,7 +625,7 @@ nothing; a real config running `background-alpha = 0` made those suites mount a 
 suites failing a dismiss assertion roughly 2 runs in 5, while CI stayed green. **Widen the
 search whenever a change makes a type newly read `GeneralConfig.current`**: grep every suite that
 constructs it, not just the one you edited. Suspect this class immediately when a test passes
-locally and fails on CI, or fails only on Drew's machine. When an intermittent failure appears in a
+locally and fails on CI, or fails only on one machine. When an intermittent failure appears in a
 suite you did not touch, run it on the base branch a few times first to establish whether it is
 pre-existing.
 

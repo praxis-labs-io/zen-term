@@ -38,9 +38,12 @@ keycap, and the manual-check toasts are here, by eye.
   on by default). It applies live: `AppDelegate` re-points Sparkle on `.configDidChange`.
   Inert in dev (no feed), like everything else here.
 
-## One-time setup (Drew's machine)
+## One-time setup, on the release machine
 
-The EdDSA signing key lives in the login keychain. Generate it once:
+Cutting a release needs the EdDSA signing key, so this section is for whoever
+publishes builds. It is not part of contributing: a dev build carries no feed.
+
+The key lives in the login keychain. Generate it once:
 
 ```
 swift package resolve
