@@ -45,8 +45,9 @@ through the first hour.
   `hjkl`, `w`/`b`/`e`, and `{`/`}`; `v` and `V` select, `y` copies.
 - **Seventeen themes**, and a bring-your-own theme file. A theme colors the whole
   app, not the terminal text alone.
-- **Nothing leaves your machine.** No telemetry, no analytics, no account. The
-  update check asks GitHub for a version number and sends nothing about you.
+- **No telemetry, no analytics, no account.** The only request ZenTerm makes on its
+  own is an update check, which asks GitHub for a version number and sends nothing
+  about you.
 
 ## Configure it
 
