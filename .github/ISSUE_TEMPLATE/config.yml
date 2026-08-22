@@ -1,0 +1,12 @@
+# Blank issues stay on. The in-app reporter (Help → Report an Issue) builds a
+# prefilled GitHub URL with the version, macOS build, and a system report already
+# in the body. A required-field form template would discard all of it, so the
+# blank path has to remain reachable.
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/praxis-labs-io/zen-term/security/advisories/new
+    about: Report privately instead. See SECURITY.md.
+  - name: Question about using ZenTerm
+    url: https://github.com/praxis-labs-io/zen-term/blob/main/docs/onboarding.md
+    about: The onboarding doc covers install, shortcuts, and configuration.

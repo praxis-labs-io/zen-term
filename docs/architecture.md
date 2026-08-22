@@ -917,7 +917,7 @@ zoom-block and no-neighbor toasts. It is not keyed by chord: the notice reads th
 same whichever was pressed, so a second chord inside the window would only repeat a
 card already on screen.
 
-**The nav socket** backs [zen-navigator.nvim](https://github.com/zen-term/zen-navigator.nvim).
+**The nav socket** backs [zen-navigator.nvim](https://github.com/praxis-labs-io/zen-navigator.nvim).
 `NavSocketServer` listens on `~/Library/Application Support/ZenTerm/nav.<pid>.sock`
 and exports it as `$ZEN_SOCK`. **Per-pid, not a well-known path**: a shared path let
 a dev build bind over the installed app's socket and delete it on quit, leaving
@@ -1600,7 +1600,7 @@ attention ansi[6], positive ansi[2], and muted a blend of fg and bg.
 
 Roles are named for meaning, not hue, which is why they are separate fields rather than
 aliases onto a slot: repointing one leaves the others alone.
-Fifteen themes ship bundled; a user file shadows a bundled one of the same name. See
+Seventeen themes ship bundled; a user file shadows a bundled one of the same name. See
 CLAUDE.md for the rule that the chrome never hardcodes a color.
 
 **A program can move one color, and only inside its own pane.** OSC 11 (and OSC 4/10/12) is

@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in ZenTerm does not work
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Help → Report an Issue** inside the app fills most of this in for you.
+        Use it when you can. This form is for filing by hand.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, and what the app did instead. Unpolished is fine.
+      placeholder: I split a pane and the arrow keys stopped moving between them.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ZenTerm version
+      description: Press ⌘, and read the bottom of the left column.
+      placeholder: 1.0.0 (412)
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: 15.2 (24C101)
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config
+      description: >
+        Any lines from ~/.config/zen-term/config that touch this. Leave it out if
+        you are on defaults.
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: A screenshot if it is visual, or a screen recording if it is motion.
+    validations:
+      required: false
