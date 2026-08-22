@@ -30,12 +30,17 @@ appcast with a `releases/latest/download/` URL, which is right for a feed that i
 regenerated every release. The hand-off copy is written once and never again, so
 `latest` stops meaning 1.0.0 the moment 1.0.1 ships and the download 404s.
 
-Work on a copy, never `dist/appcast.xml` itself: rerunning `bin/release` for the same
-tag uploads that path with `--clobber`, which would push the tag-pinned version over
-the live feed and freeze it on 1.0.0.
+Work on a copy, not `dist/appcast.xml` itself: a `bin/release` rerun regenerates that
+file from a heredoc and your edit is gone without a word.
+
+**The copy has to keep the name `appcast.xml`,** so put it in a subdirectory rather
+than renaming it. `gh release create` names each asset by its basename, and the feed
+every pre-1.0.0 build polls is literally `latest/download/appcast.xml`. Upload it as
+`appcast-handoff.xml` and that URL 404s, which is the one thing this hand-off exists
+to prevent.
 
 ```
-cp dist/appcast.xml dist/appcast-handoff.xml
+mkdir -p dist/handoff && cp dist/appcast.xml dist/handoff/appcast.xml
 ```
 
 Then edit the copy's enclosure to the tagged form:
@@ -50,8 +55,15 @@ Then publish it:
 gh release create v1.0.0 --repo zen-term/zen-term-releases \
     --title "ZenTerm 1.0.0" \
     --notes "ZenTerm moved to https://github.com/praxis-labs-io/zen-term. Releases are published there." \
-    dist/appcast-handoff.xml
+    dist/handoff/appcast.xml
 ```
+
+**Publishing this release moves `latest` on the old repo off v0.10.0**, so the asset
+above becomes the feed for every pre-1.0.0 install the moment it lands. That is the
+intent, and it is also why a wrong filename here breaks the working feed rather than
+merely failing to add a new one. Fetch
+`https://github.com/zen-term/zen-term-releases/releases/latest/download/appcast.xml`
+after uploading and confirm it returns the 1.0.0 item before you walk away.
 
 Every install picks 1.0.0 up on its next check and lands on the new feed. Give it a
 week, compare the 1.0.0 download count against the 0.10.0 one, message whoever has
@@ -133,7 +145,7 @@ A "Developer ID Application" cert in the keychain, and:
 xcrun notarytool store-credentials zenterm-notary --apple-id <id> --team-id <team>
 ```
 
-with an app-specific password.
+with an app-specific password, plus `gh auth login` with push access to this repo.
 
 Keychain reachability from the tool shell is not a fixed property: password items
 are ACL-gated to the requesting context and the grant persists once made. Run the
