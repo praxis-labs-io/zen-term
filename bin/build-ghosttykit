@@ -45,7 +45,8 @@ fi
 #    i18n=false compiles out ghostty's gettext call sites so nothing references the LGPL
 #    libintl ghostty bundles on Apple platforms (Apple libc omits it). SharedDeps.zig still
 #    links it, but the release linker then dead-strips the now-unreferenced archive, so it
-#    leaves the shipped binary and the app stays clear of LGPL static-linking obligations. bin/package-app probes the linked binary to enforce that it dropped. One
+#    leaves the shipped binary and the app stays clear of LGPL static-linking obligations.
+#    bin/package-app probes the linked binary to enforce that it dropped. One
 #    behavior tradeoff (not zero): it also disables ghostty's macOS locale canonicalization,
 #    so a non-English macOS user's child shell gets a non-canonical LANGUAGE (LANG is
 #    unaffected). We ship no translations, so app-side copy is unchanged. See
