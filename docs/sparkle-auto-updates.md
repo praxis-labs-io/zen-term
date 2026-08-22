@@ -38,18 +38,43 @@ keycap, and the manual-check toasts are here, by eye.
   on by default). It applies live: `AppDelegate` re-points Sparkle on `.configDidChange`.
   Inert in dev (no feed), like everything else here.
 
-## One-time setup (Drew's machine)
+## Setting up a release machine
 
-The EdDSA signing key lives in the login keychain. Generate it once:
+Cutting a release needs the EdDSA signing key, so this section is for whoever
+publishes builds. It is not part of contributing: a dev build carries no feed.
+
+**The key already exists. A new machine imports it, never generates one.** Every
+shipped build has that key's public half frozen in its Info.plist as
+`SUPublicEDKey`, so a second key signs updates the installed base rejects, and no
+amount of fixing the plist later reaches a copy already on someone's disk. There
+is one key for the project, not one per machine.
+
+Export it from the machine that has it, import it on the one that does not, then
+delete the file:
 
 ```
-swift package resolve
-.build/artifacts/sparkle/Sparkle/bin/generate_keys
+.build/artifacts/sparkle/Sparkle/bin/generate_keys -x zenterm-eddsa.key   # old machine
+.build/artifacts/sparkle/Sparkle/bin/generate_keys -f zenterm-eddsa.key   # new machine
 ```
 
-It prints the `SUPublicEDKey` that is already baked into `bin/package-app`'s
-Info.plist. If the key is ever regenerated, that plist value must change to match,
-or installed copies reject the update's signature.
+That file is the private key in plain text. Move it over a channel you trust and
+shred it after, on both ends.
+
+Then confirm the machine holds the right one:
+
+```
+.build/artifacts/sparkle/Sparkle/bin/generate_keys -p
+```
+
+It must print the `SUPublicEDKey` already baked into `bin/package-app`. If it
+prints anything else, that machine cannot cut a release: signing with it ships an
+update every installed copy refuses.
+
+**Generation is for the first key only.** A bare `generate_keys` reuses an existing
+keychain entry rather than replacing it, so it is safe to run where the key is
+already present, and it is exactly the wrong command on a fresh machine. If a key
+is ever deliberately rotated, `SUPublicEDKey` has to change with it, and everyone
+running an older build is stranded on the version they have.
 
 ## The known one-time gap
 
