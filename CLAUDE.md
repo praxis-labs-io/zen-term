@@ -23,7 +23,7 @@ where a past failure explains why the code is shaped the way it is.
 | `docs/sparkle-auto-updates.md` | how updates ship, and how to verify one |
 | `docs/nvim-navigator-protocol.md` | the nav socket wire contract |
 | `docs/config/*` | the reference config files users open |
-| `docs/onboarding.md` | the install and first-run narrative, published by `bin/release` |
+| `docs/onboarding.md` | the install and first-run narrative |
 | `docs/CONTRIBUTING.md` | what an outside contributor reads: setup, the gate, the boundaries |
 
 A spec or plan is **scratch**, not a doc. It lives in `docs/` while an epic is in

@@ -109,6 +109,12 @@ does not ascend past the last tag, including one named by hand.
 - **The version resolves after `git fetch --tags`.** A stale local tag set otherwise
   publishes below what is already released.
 
+**Rerun a failed run the way you invoked it**, `bin/release minor` again rather than
+bare. Until the tag exists nothing records which bump an interrupted run intended, so
+a run that died in notarization and is restarted bare resolves to a patch: `0.10.1`
+where `0.11.0` was meant, published and permanent. Once the tag is there, any
+invocation resumes it.
+
 Two rules are not negotiable, because a published tag is permanent: never reuse a
 version, even after a release that failed halfway, and never go backwards.
 

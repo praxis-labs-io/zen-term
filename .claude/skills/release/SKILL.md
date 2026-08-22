@@ -29,7 +29,7 @@ artifacts are verified and the website carries the new version.
 - A commit is user-facing if someone who only runs the app would notice, or if it
   changes what they download, install, or read.
 
-Then propose the semver bump (the README's "Version numbers" governs which) and
+Then propose the semver bump (`docs/releasing.md` under "Versioning" governs which) and
 **get Drew's confirmation before going further**. The version becomes a permanent
 public tag and cannot be walked back, so it is never chosen silently.
 
