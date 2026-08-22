@@ -13,7 +13,7 @@ final class SupportLinksTests: XCTestCase {
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         XCTAssertEqual(components?.scheme, "https")
         XCTAssertEqual(components?.host, "github.com")
-        XCTAssertEqual(components?.path, "/zen-term/zen-term-releases/issues/new")
+        XCTAssertEqual(components?.path, "/praxis-labs-io/zen-term/issues/new")
         XCTAssertEqual(query(url, "title"), "hi")
         XCTAssertEqual(query(url, "body"), "there")
     }

@@ -30,7 +30,7 @@ final class IssueReportTests: XCTestCase {
         let issue = IssueReport(title: "My title", whatHappened: "details", report: report)
         let components = URLComponents(url: issue.url, resolvingAgainstBaseURL: false)
 
-        XCTAssertEqual(components?.path, "/zen-term/zen-term-releases/issues/new")
+        XCTAssertEqual(components?.path, "/praxis-labs-io/zen-term/issues/new")
         XCTAssertEqual(components?.queryItems?.first { $0.name == "title" }?.value, "My title")
         XCTAssertEqual(components?.queryItems?.first { $0.name == "body" }?.value, issue.body)
     }

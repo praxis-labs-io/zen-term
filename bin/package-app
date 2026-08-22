@@ -198,7 +198,10 @@ rm -rf "$SPARKLE/Versions/B/XPCServices" "$SPARKLE/XPCServices"
 # The framework is still embedded and signed below; only the feed config differs.
 SPARKLE_KEYS=""
 if [[ "$VARIANT" == "release" ]]; then
-    SPARKLE_KEYS='  <key>SUFeedURL</key><string>https://github.com/zen-term/zen-term-releases/releases/latest/download/appcast.xml</string>
+    # v1.0.0 moved this off zen-term-releases, which existed only because a private repo's
+    # Releases are not downloadable. A build older than 1.0.0 has the old URL frozen in its
+    # own plist; docs/releasing.md covers the one-time hand-off that brings those across.
+    SPARKLE_KEYS='  <key>SUFeedURL</key><string>https://github.com/praxis-labs-io/zen-term/releases/latest/download/appcast.xml</string>
   <key>SUPublicEDKey</key><string>M0c0MPZrd8TSeoMNjZi+sNBpEi7t5nYnB6t41Bsm/TU=</string>
   <key>SUEnableAutomaticChecks</key><true/>
   <key>SUScheduledCheckInterval</key><integer>3600</integer>'

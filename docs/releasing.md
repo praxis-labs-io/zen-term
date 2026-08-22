@@ -5,11 +5,40 @@ load-bearing. The `release` skill drives the flow; this file is the reference
 behind it.
 
 Public releases are cut locally with `bin/release`: preflight (clean main, cert,
-notary profile, releases repo) → `bin/check` → assemble and Developer ID sign
-(`bin/package-app`) → notarize and staple app and DMG → verify gates → curated
-notes → tag `vX.Y.Z` on this repo → publish the DMG to the **public**
-`zen-term/zen-term-releases` repo. This repo is private, so its own Releases are
-not downloadable. arm64-only. The version's source of truth is the git tag.
+notary profile) → `bin/check` → assemble and Developer ID sign (`bin/package-app`)
+→ notarize and staple app and DMG → verify gates → curated notes → tag `vX.Y.Z` →
+publish the DMG and the appcast to this repo's Releases. arm64-only. The version's
+source of truth is the git tag.
+
+## Retiring zen-term-releases
+
+Through v0.10.0 the downloads lived in a second repo, `zen-term/zen-term-releases`,
+because a private repo's Releases are not downloadable. v1.0.0 moved them here.
+
+`SUFeedURL` is frozen into each build's Info.plist, so a copy installed before 1.0.0
+polls the old appcast forever and no change to `bin/package-app` reaches it. At the
+1.0.0 cut that was **7 downloads of the 0.10.0 DMG** and around 18 appcast polls a
+day: three to five machines, all of them people we can message. So this is a
+one-time hand-off rather than anything `bin/release` carries.
+
+**When 1.0.0 publishes**, upload that release's `dist/appcast.xml` to the old repo by
+hand. It needs no DMG: the enclosure inside already points at the asset here, the
+bytes are identical, and `SUPublicEDKey` never changed, so the signature verifies.
+
+```
+gh release create v1.0.0 --repo zen-term/zen-term-releases \
+    --title "ZenTerm 1.0.0" \
+    --notes "ZenTerm moved to https://github.com/praxis-labs-io/zen-term. Releases are published there." \
+    dist/appcast.xml
+```
+
+Every install picks 1.0.0 up on its next check and lands on the new feed. Give it a
+week, compare the 1.0.0 download count against the 0.10.0 one, message whoever has
+not moved, then delete the repo and the `zen-term` org.
+
+**Before deleting anything**, `zen-term-website` has to move first:
+`scripts/sync-docs.mjs` reads both the docs and the releases API from the old repo,
+and it fails by syncing nothing rather than by erroring.
 
 ## Versioning
 
