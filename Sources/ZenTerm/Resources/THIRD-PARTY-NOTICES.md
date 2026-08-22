@@ -3174,7 +3174,7 @@ SOFTWARE.
 `dracula`, from `dracula/dracula-theme`.
 
 ```text
-MIT License
+The MIT License (MIT)
 
 Copyright (c) 2023 Dracula Theme
 
@@ -3201,12 +3201,13 @@ SOFTWARE.
 
 **MIT**
 
-`everforest`, the Dark Hard variant. The palette originates with `sainnhe/everforest` and reached Ghostty through an iTerm2 port, `icewind/everforest.iterm2` (MIT, Copyright (c) 2021 Nikolai Osaulenko).
+`everforest`, the Dark Hard variant. The palette originates with `sainnhe/everforest` and reached Ghostty through an iTerm2 port, `icewind/everforest.iterm2`. Both are MIT and both copyrights are reproduced: the values that ship are the port's.
 
 ```text
 MIT License
 
 Copyright (c) 2019 sainnhe
+Copyright (c) 2021 Nikolai Osaulenko
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -33,6 +33,13 @@ Then propose the semver bump (`docs/releasing.md` under "Versioning" governs whi
 **get Drew's confirmation before going further**. The version becomes a permanent
 public tag and cannot be walked back, so it is never chosen silently.
 
+**Check the release-blocking tickets in the same breath, before anything publishes.**
+A blocker found in phase 7 is found after the tag, the DMG and the appcast are public
+and permanent. As of v1.0.0 that means ZEN-423, the website's `sync-docs` paths: it
+fails by syncing nothing rather than by erroring, so a cut against the old paths ships
+a release the site never shows, with every check in this flow green. If it is open,
+stop and say so.
+
 ## 2. Check the docs that ship with it
 
 Run the `update-documentation` skill across the release range.
