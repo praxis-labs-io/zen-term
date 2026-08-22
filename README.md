@@ -8,7 +8,7 @@ libghostty core, which renders the text and runs the shell. ZenTerm is
 everything around that.
 
 The chrome is the product. libghostty sits behind a `TerminalSurface` seam that
-one target owns, and the other 200 files are panes, tabs, drawers, floats,
+one target owns, and the 142 files above it are panes, tabs, drawers, floats,
 themes, and the keyboard that reaches them.
 
 ## Install
