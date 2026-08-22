@@ -58,24 +58,6 @@ final class KeycapViewTests: XCTestCase {
             "the glyph resolves once and is shared, not re-resolved per keycap")
     }
 
-    /// The cache is keyed by symbol AND point size, so the two footprints don't share one image.
-    /// Keyed by symbol alone, whichever size rendered first would be handed to every later keycap,
-    /// and the diff viewer's compact legend would silently wear the palette's 10pt glyphs
-    /// at 9pt metrics. Nothing about that reads as broken on screen, which is why it's asserted here.
-    func test_compactAndRegular_resolveTheirOwnGlyph() throws {
-        let regular = KeycapView(shortcut: "⌘", size: .regular)
-        let compact = KeycapView(shortcut: "⌘", size: .compact)
-
-        let regularImage = try XCTUnwrap(glyphs(in: regular)[0].image)
-        let compactImage = try XCTUnwrap(glyphs(in: compact)[0].image)
-        XCTAssertFalse(
-            regularImage === compactImage,
-            "a compact keycap must not be handed the regular keycap's glyph")
-        XCTAssertLessThan(
-            compactImage.size.height, regularImage.size.height,
-            "the compact glyph renders at the smaller point size it asked for")
-    }
-
     /// The tint lives on the image view, which is what makes sharing one image safe — a keycap
     /// recolored by a theme swap must not recolor every other keycap.
     func test_reapplyTheme_recolorsWithoutDisturbingAnotherKeycap() {

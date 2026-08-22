@@ -11,8 +11,7 @@ cd "$(dirname "$0")/.."
 # than a guarantee. `|| true` so a read-only checkout can never fail a run over a cache hint.
 mkdir -p .build 2>/dev/null && touch .build/.metadata_never_index 2>/dev/null || true
 
-# Harmless linker noise from the prebuilt CodeEditLanguages xcframework (debug info pointing at its
-# maintainer's build paths) and libghostty-fat.a — filtered out so real output stands out.
+# Harmless linker noise from libghostty-fat.a — filtered out so real output stands out.
 # `-Xlinker -w` doesn't suppress these on the current linker.
 #
 # Filtered through a pipeline, not a `> >(…)` process substitution: bash doesn't wait on a
@@ -20,7 +19,7 @@ mkdir -p .build 2>/dev/null && touch .build/.metadata_never_index 2>/dev/null ||
 # diagnostics explaining the failure. A pipeline waits. `set -o pipefail` (above) is what keeps the
 # compiler's exit status rather than the filter's; `|| true` only neutralises grep's "matched
 # nothing" 1 so it can't fail an otherwise-clean run.
-LINKER_NOISE='unable to open object file|could not find symbol .* in object file'
+LINKER_NOISE='could not find symbol .* in object file'
 filter_noise() { grep --line-buffered -vE "$LINKER_NOISE" || true; }
 
 if ! command -v swiftlint >/dev/null 2>&1; then

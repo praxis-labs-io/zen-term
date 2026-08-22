@@ -636,7 +636,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertEqual(row(for: .resizeLeft).chip.renderedShortcutForTesting, "⌘⌃←")
         XCTAssertEqual(row(for: .toggleSearch).chip.renderedShortcutForTesting, "⌘F")
         XCTAssertEqual(row(for: .fillScreen).chip.renderedShortcutForTesting, "⌘⏎")
-        XCTAssertEqual(row(for: .openDiffViewer).chip.renderedShortcutForTesting, "⌘G")
+        XCTAssertEqual(row(for: .scrollToSelection).chip.renderedShortcutForTesting, "⌘J")
     }
 
     /// And a rebound action's chip names whatever chord it holds now, not the default it left.

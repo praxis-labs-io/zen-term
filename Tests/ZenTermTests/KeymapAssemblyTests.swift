@@ -39,7 +39,7 @@ final class KeymapAssemblyTests: XCTestCase {
     func test_theMovedChords_areOnlyAtTheirNewHomes() {
         let map = assemble()
         XCTAssertEqual(map[Chord(command: true, shift: true, key: "d")], .splitHorizontal)
-        XCTAssertEqual(map[Chord(command: true, key: "g")], .openDiffViewer)
+        XCTAssertEqual(map[Chord(command: true, key: "j")], .scrollToSelection)
         XCTAssertEqual(map[Chord(command: true, shift: true, key: "⏎")], .toggleZoom)
         XCTAssertEqual(map[Chord(command: true, key: "p")], .toggleRepoPicker)
         XCTAssertEqual(map[Chord(command: true, shift: true, key: "p")], .toggleCommandPalette)
@@ -81,12 +81,18 @@ final class KeymapAssemblyTests: XCTestCase {
     }
 
     /// Stepping a search is `n` and `N` while the search holds the keyboard, not a chord, so both
-    /// actions ship without one and ⌘G is the diff viewer's.
+    /// actions ship without one.
     func test_findStepping_holdsNoChord() {
         let map = assemble()
         XCTAssertEqual(map.filter { $0.value == .findNext }, [:])
         XCTAssertEqual(map.filter { $0.value == .findPrevious }, [:])
-        XCTAssertEqual(map[Chord(command: true, key: "g")], .openDiffViewer)
+    }
+
+    /// ⌘G belongs to no default, and `docs/config/config` and `docs/onboarding.md` both hand it to
+    /// a zen-review float. A new default landing there would break the documented recipe silently,
+    /// so the chord being free is asserted rather than left as an absence nobody watches.
+    func test_commandG_isLeftFree() {
+        XCTAssertNil(assemble()[Chord(command: true, key: "g")])
     }
 
     /// The chords that would be a second spelling of something already bound. ghostty's is the one
@@ -244,26 +250,26 @@ final class KeymapAssemblyTests: XCTestCase {
 
     // MARK: unbinding
 
-    /// The whole point of the feature. A float on ⌘G takes the diff viewer's only chord, which
+    /// The whole point of the feature. A float on ⌘J takes scroll-to-selection's only chord, which
     /// warns at every launch with no way to say "yes, I meant that". The `= none` line is that way,
     /// and the silence is the assertion: a config the user wrote on purpose must not tell them off.
     func test_unbindLine_leavesTheActionChordless_andSaysNothing() {
         let assembled = KeymapAssembler.assemble(
-            floats: [float(id: "x", key: "cmd+g")], keybinds: [.unbind(.openDiffViewer)])
+            floats: [float(id: "x", key: "cmd+j")], keybinds: [.unbind(.scrollToSelection)])
 
-        XCTAssertEqual(assembled.map[Chord(command: true, key: "g")], .toggleToolFloat("x"))
-        XCTAssertFalse(assembled.map.values.contains(.openDiffViewer))
+        XCTAssertEqual(assembled.map[Chord(command: true, key: "j")], .toggleToolFloat("x"))
+        XCTAssertFalse(assembled.map.values.contains(.scrollToSelection))
         XCTAssertEqual(assembled.diagnostics, [], "an unbind the user asked for is not a problem")
-        XCTAssertEqual(assembled.unbound, [.openDiffViewer])
+        XCTAssertEqual(assembled.unbound, [.scrollToSelection])
     }
 
     /// The same config without the line, so the silence above is the line's doing and not the
     /// float's. The assembler records the fact either way, since the Shortcuts row renders it.
     /// Only the unbind keeps it out of `unbound`, which is what the writer emits from.
     func test_theSameCollisionWithoutTheLine_stillRecordsTheFact() {
-        let assembled = KeymapAssembler.assemble(floats: [float(id: "x", key: "cmd+g")], keybinds: [])
+        let assembled = KeymapAssembler.assemble(floats: [float(id: "x", key: "cmd+j")], keybinds: [])
 
-        XCTAssertEqual(assembled.diagnostics.map(\.scope), [.keybind(.openDiffViewer)])
+        XCTAssertEqual(assembled.diagnostics.map(\.scope), [.keybind(.scrollToSelection)])
         XCTAssertEqual(assembled.unbound, [], "a displacement is not an intentional unbind")
     }
 

@@ -236,7 +236,7 @@ final class WindowController: NSObject {
     /// a kind discriminator rather than parallel per-overlay stacks. Window-level (they open/
     /// switch tabs) but presented over the active tab's tile region. Modal while open.
     private enum ModalKind {
-        case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue, diffViewer
+        case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
 
         /// The chord that closes this same modal when pressed again (its own toggle), or nil for a
         /// card with no dedicated chord (the workspace / tool-float / report forms, reached from a
@@ -247,15 +247,9 @@ final class WindowController: NSObject {
             case .repoPicker: return .toggleRepoPicker
             case .commandPalette: return .toggleCommandPalette
             case .settings: return .openSettings
-            case .diffViewer: return .openDiffViewer
             case .workspaceForm, .toolFloatForm, .reportIssue: return nil
             }
         }
-
-        /// Whether presenting this card takes the accent halo from the pane behind it — true only for
-        /// the diff viewer, which wears the halo itself (like a configured tool float). The transient
-        /// pickers and forms leave the pane's focus glow lit behind them.
-        var stealsHalo: Bool { self == .diffViewer }
     }
     private var modal: (overlay: ModalOverlay, kind: ModalKind)?
 
@@ -285,15 +279,6 @@ final class WindowController: NSObject {
     /// `handle(_:)`, but a palette pick reaches `handle` directly — where they'd otherwise be a
     /// no-op — so `handle` forwards them here instead. Injected by `AppDelegate`.
     var onAppGlobalCommand: ((KeyInterceptor.ReservedChord) -> Void)?
-
-    /// Resolves the enclosing git repo root off the main thread, injected so a test can drive a
-    /// deterministic or deliberately-slow resolver. **The completion must be delivered on the main
-    /// thread**, because the continuation presents the viewer and touches AppKit.
-    var resolveRepoRoot: (URL?, @escaping (URL?) -> Void) -> Void = GitRepoStatus.repoRoot
-    /// True while a diff-viewer open is waiting on its off-main repo-root resolve, so a second
-    /// ⌘D landing in that gap doesn't queue a second viewer (the top-of-`openDiffViewer` toggle
-    /// check can't catch it — nothing is presented yet).
-    private var isResolvingDiffRepo = false
 
     /// Whether a modal card is up right now. Read by `AppDelegate` so window-level chords (⌘N)
     /// and Copy/Paste routing respect the modal too, not just `handle(_:)`.
@@ -390,14 +375,12 @@ final class WindowController: NSObject {
         var onBottom: () -> Void = {}
         var onRight: () -> Void = {}
         var onZoom: () -> Void = {}
-        var onDiffViewer: () -> Void = {}
         var onToolFloat: (ToolFloat) -> Void = { _ in }
         dock = ToggleDock(
             onNewTab: { onNewTab() },
             onSplitH: { onSplitH() }, onSplitV: { onSplitV() },
             onPalette: { onPalette() }, onBottom: { onBottom() },
             onRight: { onRight() }, onZoom: { onZoom() },
-            onDiffViewer: { onDiffViewer() },
             // The float tail is the user's floats alone: the built-in Scratch float has its own
             // fixed button, and passing the whole catalog here would draw a second one.
             toolFloats: ToolFloatCatalog.userDefined, onToolFloat: { onToolFloat($0) },
@@ -419,7 +402,6 @@ final class WindowController: NSObject {
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
         onZoom = { [weak self] in self?.handle(.toggleZoom) }
-        onDiffViewer = { [weak self] in self?.handle(.openDiffViewer) }
         onToolFloat = { [weak self] spec in self?.handle(.toggleToolFloat(spec.id)) }
 
         let first = makeController(cwd: initialCWD)
@@ -1100,7 +1082,7 @@ final class WindowController: NSObject {
     /// Present a modal card over the active tab: mount it, store it in the single slot, focus its
     /// input, and spring it in. One path for all three cards. No-op if there's no active tab.
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
-        guard let active = activeController else { return }
+        guard activeController != nil else { return }
         endModes()  // the card takes the keyboard; see the float's `yieldFocus`
         // Anything else still on its way in would otherwise land on top of this card a moment from
         // now, leaving two modal surfaces stacked and the keyboard aimed at the wrong one: a float
@@ -1109,7 +1091,6 @@ final class WindowController: NSObject {
         floats.cancelPendingOpen()
         pendingModal = nil
         presentWindowModal(overlay)
-        if kind.stealsHalo { active.yieldFocusToFloat() }  // pane drops its glow; the card wears it
         modal = (overlay, kind)
         overlay.focusInitialResponder()
         overlay.animateIn()
@@ -1123,7 +1104,6 @@ final class WindowController: NSObject {
     private func closeModal() {
         pendingModal = nil  // a card still loading is closed by never being presented
         guard let overlay = modal?.overlay else { return }
-        stopDiffWatcher()
         modal = nil
         modalGutter = nil  // the constraints die with the view; don't re-inset a card on its way out
         overlay.animateOut { overlay.removeFromSuperview() }
@@ -1213,106 +1193,6 @@ final class WindowController: NSObject {
         presentModal(overlay, kind: .reportIssue)
     }
 
-    /// Open (or self-toggle closed) the diff viewer over the active tile. The git work is resolved
-    /// from the focused pane's directory; if that isn't inside a repo there's nothing to diff, so a
-    /// toast says so and the overlay never opens. The `GitDiffRunner` is captured by the loader
-    /// closure, so it lives as long as the overlay it serves.
-    func openDiffViewer() {
-        if modal?.kind == .diffViewer { closeModal(); return }
-        // The repo-root walk is filesystem I/O — resolve it off-main, then present
-        // on main. That gap means a second ⌘D before the resolve lands must be dropped, not queued.
-        if isResolvingDiffRepo { return }
-        isResolvingDiffRepo = true
-        resolveRepoRoot(focusedCWD) { [weak self] repoRoot in
-            guard let self else { return }
-            self.isResolvingDiffRepo = false
-            self.presentDiffViewer(repoRoot: repoRoot)
-        }
-    }
-
-    /// Present the diff viewer once the repo root is resolved, or toast if there's none. Split out
-    /// of `openDiffViewer` so the off-main resolve hands back to a plain main-thread body.
-    private func presentDiffViewer(repoRoot: URL?) {
-        guard let repoRoot else {
-            toasts.show(
-                ToastContent(
-                    variant: .info, title: "Diff Viewer",
-                    message: "This folder isn't a Git repository."))
-            return
-        }
-        guard let tab = activeController else { return }  // no tab, no viewer to mount it in
-        if modal != nil { closeModal() }  // single slot — dismiss whatever's up first
-        let runner = GitDiffRunner(repoRoot: repoRoot)
-        // One session per repo, reused across opens: it carries the last status, the highlight
-        // cache and where the reader left off, so a reopen renders instantly instead of flashing a
-        // spinner. On the tab rather than the window, because a window-level slot let two tabs on
-        // two repos share one session and discard each other's place.
-        let session: DiffViewerSession
-        if let existing = tab.diffViewerSession, existing.repoRoot == repoRoot {
-            session = existing
-        } else {
-            session = DiffViewerSession(repoRoot: repoRoot)
-            tab.diffViewerSession = session
-        }
-        let overlay = DiffViewerOverlay(
-            background: Theme.current.chrome.background.nsColor,
-            session: session,
-            loader: { base, head, completion in
-                // Picking a branch that has a worktree means reading a different directory, so it gets
-                // its own runner rooted there and all three slices stay live. A branch without one has
-                // no working tree to read, so the pinned runner answers with the branch as its head and
-                // only the committed slice comes back.
-                let target = head?.worktree.map(GitDiffRunner.init(repoRoot:)) ?? runner
-                let headRef = head?.hasWorktree == false ? head?.name : nil
-                target.loadStatus(base: base, head: headRef) { result in
-                    // Only the plain load restamps the cache — a picked base or branch is a transient
-                    // override, not the state a plain reopen should render.
-                    if base == nil, head == nil, case .success(let load) = result {
-                        session.lastStatus = load
-                    }
-                    completion(result)
-                }
-            },
-            branchesLoader: { completion in runner.loadBranches(completion: completion) },
-            headsLoader: { completion in runner.loadHeads(completion: completion) },
-            sendTargets: { [weak self] in self?.activeController?.sendTargets() ?? [] },
-            // Submit closes the viewer; queue leaves it open to stack another comment. Close before the
-            // send on submit — `closeModal` restores focus to the panel that had it, which would
-            // otherwise land *after* the send and pull focus off the terminal we just wrote to.
-            sender: { [weak self] message, target, action in
-                if action == .submit { self?.closeModal() }
-                self?.activeController?.send(message, to: target, action: action)
-            },
-            onRepoRootChange: { [weak self] root in self?.retargetDiffWatcher(to: root) },
-            onCancel: { [weak self] in self?.closeModal() })
-        presentModal(overlay, kind: .diffViewer)
-        startDiffWatcher(at: overlay.effectiveRepoRoot) { [weak overlay] in overlay?.refresh() }
-    }
-
-    /// Lives exactly as long as the open diff card. `closeModal` stops it before the overlay's close
-    /// animation, so a settled filesystem burst cannot reload a surface that is already leaving.
-    private var diffWatcher: RepoWatcher?
-    private var diffWatcherAction: (() -> Void)?
-
-    private func startDiffWatcher(at root: URL, onChange: @escaping () -> Void) {
-        stopDiffWatcher()
-        let watcher = RepoWatcher()
-        diffWatcherAction = onChange
-        watcher.start(repoRoot: root, onChange: onChange)
-        diffWatcher = watcher
-    }
-
-    private func retargetDiffWatcher(to root: URL) {
-        guard let watcher = diffWatcher, let action = diffWatcherAction else { return }
-        watcher.start(repoRoot: root, onChange: action)
-    }
-
-    private func stopDiffWatcher() {
-        diffWatcher?.stop()
-        diffWatcher = nil
-        diffWatcherAction = nil
-    }
-
     /// Which section the Settings card opens on. `.tools` / `.workspaces` are used when a sub-form
     /// (tool-float or workspace editor) hands back to the section it was launched from; the
     /// per-section cases are where the config-diagnostics toast lands.
@@ -1340,7 +1220,7 @@ final class WindowController: NSObject {
             return .terminal
         case "theme", "accent-color", "window-chrome", "backdrop-alpha", "window-gutter", "pane-gap",
             "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",
-            "reduce-motion", "diff-layout", "hide-toolbar-buttons":
+            "reduce-motion", "hide-toolbar-buttons":
             return .appearance
         case "agent-notifications", "attention-toast", "completion-toast", "toast-duration",
             "automatic-update-checks":
@@ -1905,27 +1785,11 @@ final class WindowController: NSObject {
                 closeModal()
                 return
             }
-            // The diff viewer navigates with the app's pane chords (⌘⌥arrows): forward them so it can
-            // move between its tree and diff and jump changes, instead of swallowing them like a form.
-            if modal.kind == .diffViewer, let diff = modal.overlay as? DiffViewerOverlay,
-                diff.handleNavChord(chord)
-            {
-                return
-            }
             switch chord {
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
-                .openDiffViewer, .newTool:
+                .newTool:
                 closingModalKind = modal.kind  // the surface opening below may have to hand back to it
                 closeModal()  // close the current card, then open the requested surface below
-            case .selectTab, .prevTab, .nextTab:
-                // The diff viewer is a reading surface, not a form waiting on an answer, so a tab
-                // switch acts instead of being swallowed. It closes rather than riding the switch
-                // the way a float does, because the diff belongs to the tab it was opened from and
-                // each tab keeps its own session.
-                //
-                // Every other card stays swallowed: a palette, form or confirm is mid-question.
-                guard modal.kind == .diffViewer else { return }
-                closeModal()
             default:
                 return
             }
@@ -1949,8 +1813,7 @@ final class WindowController: NSObject {
                 .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom:
                 toastFloatBlocked()
                 return
-            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .openDiffViewer,
-                .newTool:
+            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .newTool:
                 floats.close()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab, .fillScreen,
                 .increaseFontSize, .decreaseFontSize, .resetFontSize, .selectAll,
@@ -2059,7 +1922,6 @@ final class WindowController: NSObject {
         // The chord is bindable, so it can be pressed with Settings already up: the gate above closed
         // that card, and cancelling has to put it back rather than drop the user on a bare terminal.
         case .newTool: openToolFloatForm(editing: nil, returnTo: toolFormReturnForNewTool())
-        case .openDiffViewer: openDiffViewer()
         }
     }
 
@@ -2462,16 +2324,6 @@ final class WindowController: NSObject {
         return attentionStates[tabs.order[tabIndex]]
     }
 
-    /// Test hook: the diff-viewer session a given tab is holding. The overlay keeps its
-    /// `session` private, so identity across a tab round-trip is only reachable from the tab that owns
-    /// it — which is the thing the ticket is about.
-    func diffViewerSessionForTesting(tabIndex: Int) -> DiffViewerSession? {
-        guard tabs.order.indices.contains(tabIndex) else { return nil }
-        return controllers[tabs.order[tabIndex]]?.diffViewerSession
-    }
-
-    var hasDiffWatcherForTesting: Bool { diffWatcher != nil }
-
     /// Test hook: open `count` extra tabs, so a test can drive tab-order changes under a live toast.
     func newTabForTesting() { handle(.newTab) }
     func closeTabForTesting(index: Int) {
@@ -2544,7 +2396,6 @@ final class WindowController: NSObject {
         // The shown float is window-level, so it comes from `floats`, not the active tab's state.
         dock.render(
             overlay: overlay, floatID: floats.activeID, paletteOpen: modal?.kind == .commandPalette,
-            diffViewerOpen: modal?.kind == .diffViewer,
             isLiveInBackground: floats.isLiveInBackground)
         // Keep the poll's change-guard in sync with what's actually shown, so a tab switch to a
         // differently-busy tab re-evaluates instead of comparing against a stale value.
@@ -2569,7 +2420,6 @@ final class WindowController: NSObject {
         // arrive to a nil `activeController`, but only after constructing its overlay and kicking
         // off a git probe per workspace. `floats.shutdown()` below does the same for a float.
         pendingModal = nil
-        stopDiffWatcher()
         // Closing the window with a confirm still up must resolve its owner's pending state —
         // e.g. a quit confirm's `.terminateLater` reply — or the app hangs mid-quit.
         cancelConfirm()

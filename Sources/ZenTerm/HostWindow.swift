@@ -16,7 +16,7 @@ final class HostWindow: NSWindow {
         isMovableByWindowBackground = true
         // Fix the resize floor ourselves. With no explicit minimum, AppKit derives the window's
         // size range from the content view's constraint-based fitting size — and every modal overlay
-        // (palette, repo picker, diff viewer) pins edge-to-edge to the content and sizes its card
+        // (palette, repo picker) pins edge-to-edge to the content and sizes its card
         // *proportionally* to the container, so its constraints are satisfiable down to near-zero.
         // Mounting one then lets that derived minimum collapse, and the window gets clamped small
         // until the modal is removed. An explicit floor decouples the window from transient content

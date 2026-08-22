@@ -61,7 +61,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
                 reapplyUpdateCardTheme: {}, applyAutoCheckSetting: {}))
     }
 
-    /// A float on ⌘G, which is Find Next's default. It gets a card of its own, never a
+    /// A float on ⌘J, which is scroll-to-selection's default. It gets a card of its own, never a
     /// line in the shared list.
     ///
     /// Driven through `surfaceConfigNotices`, which is what launch calls. Calling the conflict half
@@ -69,12 +69,12 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
     /// three conflicts opened to nothing.
     func test_aChordConflict_getsACardAndNotTheSharedNotice() throws {
         let applier = makeApplier()
-        try seed("float = title:lazygit command:lazygit key:cmd+g\n")
+        try seed("float = title:lazygit command:lazygit key:cmd+j\n")
 
         applier.surfaceConfigNotices()
 
         XCTAssertEqual(announced, [], "nothing joins the shared list")
-        XCTAssertEqual(carded.map(\.loser), [.openDiffViewer])
+        XCTAssertEqual(carded.map(\.loser), [.scrollToSelection])
         XCTAssertFalse(carded[0].isRevertable, "a float's key: has nothing to back out to")
     }
 
@@ -84,7 +84,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
         let applier = makeApplier()
         try seed(
             """
-            float = order:1 title:lazygit command:lazygit key:cmd+g
+            float = order:1 title:lazygit command:lazygit key:cmd+j
             float = order:2 title:gitdash command:gd key:cmd+k
             float = order:3 title:nvim command:nvim key:cmd+e
             """)
@@ -153,13 +153,13 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
     /// on a card that then lists one, and the user would go looking for a second thing to fix.
     func test_aMixedConfig_announcesOnlyTheProblem() throws {
         let applier = makeApplier()
-        try seed("float = title:lazygit command:lazygit key:cmd+g\nkeybind = frobnicate=cmd+f\n")
+        try seed("float = title:lazygit command:lazygit key:cmd+j\nkeybind = frobnicate=cmd+f\n")
 
         applier.surfaceConfigNotices()
 
         XCTAssertEqual(announced.count, 1, "\(announced)")
         XCTAssertTrue(announced[0].message.contains("frobnicate"), announced[0].message)
-        XCTAssertFalse(announced[0].message.contains("find_next"), announced[0].message)
+        XCTAssertFalse(announced[0].message.contains("scroll_to_selection"), announced[0].message)
     }
 
     /// The retraction path, which is why the filter sits ahead of the empty check rather than inside
@@ -168,11 +168,11 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
     /// exists.
     func test_fixingTheProblem_retractsEvenWithAnExplanationLeft() throws {
         let applier = makeApplier()
-        try seed("float = title:lazygit command:lazygit key:cmd+g\nkeybind = frobnicate=cmd+f\n")
+        try seed("float = title:lazygit command:lazygit key:cmd+j\nkeybind = frobnicate=cmd+f\n")
         applier.surfaceConfigNotices()
         XCTAssertNotNil(showing)
 
-        try seed("float = title:lazygit command:lazygit key:cmd+g\n")
+        try seed("float = title:lazygit command:lazygit key:cmd+j\n")
         applier.surfaceConfigNotices()
 
         XCTAssertNil(showing, "the notice has to come down, not linger behind the explanation")

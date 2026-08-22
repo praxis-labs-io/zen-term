@@ -43,7 +43,6 @@ final class GeneralConfigParserTests: XCTestCase {
             drawer-resize-step = 60
             max-drawer-fraction = 0.8
             reduce-motion = on
-            diff-layout = inline
             shell = /bin/bash
             shell-args = -l -i
             tab-inherit-cwd = true
@@ -67,7 +66,6 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.drawerResizeStep, 60)
         XCTAssertEqual(config.maxDrawerFraction, 0.8)
         XCTAssertEqual(config.reduceMotion, .on)
-        XCTAssertEqual(config.diffLayout, .inline)
         XCTAssertEqual(config.shell, "/bin/bash")
         XCTAssertEqual(config.shellArgs, ["-l", "-i"])
         XCTAssertTrue(config.tabInheritCWD)
@@ -275,13 +273,13 @@ final class GeneralConfigParserTests: XCTestCase {
     func test_hideToolbarButtons_parsesEverySlug() {
         let config = parse(
             "hide-toolbar-buttons = new-tab,split-h,split-v,bottom-drawer,right-drawer,scratch,"
-                + "focus-mode,command-palette,diff-viewer\n")
+                + "focus-mode,command-palette\n")
         XCTAssertEqual(config.hiddenToolbarButtons, Set(ToolbarButton.allCases))
     }
 
     func test_hideToolbarButtons_toleratesWhitespaceAndStrayCommas() {
-        let config = parse("hide-toolbar-buttons = split-h , ,diff-viewer,\n")
-        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .diffViewer])
+        let config = parse("hide-toolbar-buttons = split-h , ,command-palette,\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .commandPalette])
         XCTAssertTrue(config.configDiagnostics.isEmpty)
     }
 
@@ -289,8 +287,8 @@ final class GeneralConfigParserTests: XCTestCase {
     /// default." while the known slugs on the line still apply — the message would contradict the
     /// visibly hidden button.
     func test_hideToolbarButtons_unknownSlug_diagnosesAndKeepsKnownOnes() {
-        let config = parse("hide-toolbar-buttons = split-h,zoom,diff-viewer\n")
-        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .diffViewer])
+        let config = parse("hide-toolbar-buttons = split-h,zoom,command-palette\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .commandPalette])
         XCTAssertEqual(
             config.configDiagnostics,
             [
@@ -313,7 +311,6 @@ final class GeneralConfigParserTests: XCTestCase {
             cursor-style = beam
             macos-option-as-alt = yep
             reduce-motion = maybe
-            diff-layout = sideways
             """
         ).configDiagnostics
         XCTAssertEqual(
@@ -328,9 +325,6 @@ final class GeneralConfigParserTests: XCTestCase {
                 ConfigDiagnostic(
                     scope: .setting(key: "reduce-motion"),
                     problem: .invalidValue(got: "maybe", expected: "system, on, or off")),
-                ConfigDiagnostic(
-                    scope: .setting(key: "diff-layout"),
-                    problem: .invalidValue(got: "sideways", expected: "side-by-side or inline")),
             ])
     }
 
@@ -406,7 +400,7 @@ final class GeneralConfigParserTests: XCTestCase {
 
     func test_validConfig_collectsNoDiagnostics() {
         XCTAssertTrue(
-            parse("font-size = 16\ncursor-style = bar\nreduce-motion = on\ndiff-layout = inline\n")
+            parse("font-size = 16\ncursor-style = bar\nreduce-motion = on\n")
                 .configDiagnostics.isEmpty)
     }
 
@@ -414,6 +408,30 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(
             parse("keybind = totally bogus\n").configDiagnostics,
             [ConfigDiagnostic(scope: .keybindLine, problem: .unparseableLine("totally bogus"))])
+    }
+
+    /// A removed action is not a typo. `diff_viewer` shipped a default chord for six versions, so
+    /// plenty of configs bind it; a card every launch saying only "unparseable" tells the user
+    /// their file is broken with no way to learn what replaced it. The migration goes to the log,
+    /// like `toggle_lazygit`, because the replacement is a `float =` recipe a toast cannot hold.
+    func test_retiredKeybindAction_takesNoDiagnostic() {
+        XCTAssertEqual(parse("keybind = diff_viewer=cmd+g\n").configDiagnostics, [])
+        XCTAssertEqual(parse("keybind = diff_viewer=cmd+shift+g\n").configDiagnostics, [])
+    }
+
+    /// The exact-match guard: only the retired token itself migrates, so a typo still reports.
+    func test_aTypoOnTheRetiredAction_stillReportsUnparseable() {
+        XCTAssertEqual(
+            parse("keybind = diff_viewer_old=cmd+g\n").configDiagnostics,
+            [ConfigDiagnostic(scope: .keybindLine, problem: .unparseableLine("diff_viewer_old=cmd+g"))])
+    }
+
+    /// Same reasoning on the other surface. The button it named is gone, so the line already does
+    /// what it says and the Appearance row has nothing to tell anyone.
+    func test_retiredToolbarSlug_isDroppedWithoutADiagnostic() {
+        let config = parse("hide-toolbar-buttons = split-h,diff-viewer\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal])
+        XCTAssertEqual(config.configDiagnostics, [])
     }
 
     func test_droppedFloatLine_collectsADiagnostic() {

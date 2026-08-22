@@ -4,10 +4,10 @@ import XCTest
 
 @testable import ZenTerm
 
-/// `focusedCWD` answers "which directory am I in", and three things ask it: ⌘D's repo walk, ⌘T and
-/// ⌘N under `tab-inherit-cwd`, and where a `persist:dir` tool float anchors. It used to read
-/// the pane canvas unconditionally, so a drawer you had `cd`'d elsewhere reported the pane's
-/// directory and every one of those three went to the wrong place.
+/// `focusedCWD` answers "which directory am I in", and two things ask it: ⌘T and ⌘N under
+/// `tab-inherit-cwd`, and where a `persist:dir` tool float anchors. It used to read the pane
+/// canvas unconditionally, so a drawer you had `cd`'d elsewhere reported the pane's directory
+/// and both of those went to the wrong place.
 ///
 /// Driven through the real drawer chord, because the bug was in which panel the tab *considered*
 /// focused: a test that read the canvas directly would agree with the bug.

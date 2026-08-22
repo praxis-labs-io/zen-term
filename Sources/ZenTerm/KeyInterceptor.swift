@@ -40,7 +40,6 @@ final class KeyInterceptor {
         case reloadConfig
         case checkForUpdates  // run a manual Sparkle update check (unbound by default)
         case reportIssue  // open the Report an Issue composer (unbound by default)
-        case openDiffViewer  // open the diff viewer overlay
         case newTool  // open the tool-float form in its create state (unbound by default)
         // Terminal font size, app-wide. Taken over from libghostty, which binds the same
         // chords itself but applies each to the one focused surface.

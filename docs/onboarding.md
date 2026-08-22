@@ -71,7 +71,6 @@ keys? Four lines in the config move it to `⌃HJKL` or anywhere else.
 | Tab 1 through 9                  | `⌘1` … `⌘9`                 |
 | Clear the screen                 | `⌘K`                        |
 | Select the whole buffer          | `⌘A`                        |
-| Diff viewer                      | `⌘G`                        |
 | Command palette                  | `⌘⇧P`                       |
 | Workspace picker                 | `⌘P`                        |
 | Reload config                    | `⌘⇧,`                       |
@@ -114,17 +113,16 @@ warm, so reopening it is instant. The same works for `btop`, a dev server, or
 
 ## Review a diff
 
-**⌘G** opens the diff viewer on the focused pane's repo. A file tree on the left,
-the diff on the right, side by side or inline.
+Reviewing is a tool float like any other. [zen-review](https://github.com/praxis-labs-io/zen-review)
+tracks which changes you have inspected and whether they are still the ones you
+inspected, and it runs in a pane. Install it, then add a line to your config:
 
-It has its own keys while it is open, and they are vim's. `j` and `k` move, `h`
-folds and `l` opens a file, `{` and `}` jump between changes, `V` selects lines,
-and `\` swaps between side by side and inline. `q` closes it. **Press `?` for the
-full sheet.** A narrow pane shows inline on its own, because two columns stop
-reading as code.
+```
+float = title:Review command:"zen-review" key:cmd+g git:true persist:dir icon:checklist
+```
 
-`y` yanks the selected code. `Y` yanks a `path:42-44` reference instead, so you can
-hand an agent the exact lines you mean, and `⏎` opens a comment on them.
+⌘G now floats it over the repo you are working in, with a session it picks back up
+next time.
 
 ## Read back through a pane
 

@@ -376,7 +376,7 @@ final class ScrollModeController {
         case .exit:
             end()
         case .cancel:
-            // Matches the diff viewer: without it the only way out of a mis-anchored selection is
+            // Without it the only way out of a mis-anchored selection is
             // out of the mode.
             if selection != nil { closeSelection() } else { end() }
         case .step(let delta):

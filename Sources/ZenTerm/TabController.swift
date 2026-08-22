@@ -65,12 +65,6 @@ final class TabController: NSObject {
     /// on a panel hidden behind a modal card.
     private let isToolFloatOpen: () -> Bool
 
-    /// What the diff viewer remembers about the repo this tab last opened — see `DiffViewerSession`.
-    /// Per tab, not per window: a window-level slot meant two tabs on two repos shared one
-    /// session, so opening the viewer in the second discarded the first's place, base, and highlight
-    /// cache. `WindowController` reads and writes it through the active tab; the tab only stores it.
-    var diffViewerSession: DiffViewerSession?
-
     /// Which panel currently holds the tab's single unified focus/halo.
     private enum PanelRef: Equatable {
         case pane, bottomDrawer, rightDrawer
@@ -364,65 +358,6 @@ final class TabController: NSObject {
         guard let text = surface.copySelection(), !text.isEmpty else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-    }
-
-    // MARK: send a diff comment
-
-    /// The terminals in this tab a diff comment can be sent to, **the focused one first** — the
-    /// composer defaults to index 0, so a comment with no target picked lands where you were working.
-    ///
-    /// Panes come in the tree's own order so their numbers read left to right; a drawer is listed only
-    /// while it's open, because pasting into a hidden one puts text somewhere you can't see it.
-    func sendTargets() -> [DiffSendTarget] {
-        var targets: [DiffSendTarget] = []
-        for (index, id) in paneCanvas.orderedLeafIDs.enumerated() {
-            targets.append(
-                DiffSendTarget(
-                    id: id, label: Self.targetLabel("pane \(index + 1)", surface: paneCanvas.surface(for: id))))
-        }
-        if isBottomOpen, let surface = bottomDrawerSurface {
-            targets.append(
-                DiffSendTarget(id: Self.bottomDrawerID, label: Self.targetLabel("bottom drawer", surface: surface)))
-        }
-        if isRightOpen, let surface = rightDrawerSurface {
-            targets.append(
-                DiffSendTarget(id: Self.rightDrawerID, label: Self.targetLabel("right drawer", surface: surface)))
-        }
-        let focused = currentPanelID
-        return targets.filter { $0.id == focused } + targets.filter { $0.id != focused }
-    }
-
-    /// The place plus what's running there ("pane 2 · claude"), so two shells in the same tab are
-    /// tellable apart. The place always leads: a terminal with no title is still `pane 2`.
-    private static func targetLabel(_ place: String, surface: TerminalSurface?) -> String {
-        guard let title = surface?.title, !title.isEmpty else { return place }
-        return "\(place) · \(title)"
-    }
-
-    /// Deliver a composed diff comment to `target`.
-    ///
-    /// `submit` focuses the target, pastes, and presses Return as a real keypress, since a pasted
-    /// `"\r"` lands inside the bracketed-paste block where a TUI reads it as a literal newline.
-    ///
-    /// `queue` pastes the message plus a newline **without** focusing or submitting, so several
-    /// comments stack in the target's input and fire together on a final submit.
-    func send(_ message: String, to target: DiffSendTarget, action: DiffSendAction) {
-        guard let surface = surface(for: target.id) else { return }
-        switch action {
-        case .submit:
-            focusPanel(target.id)
-            surface.paste(message)
-            surface.submitLine()
-        case .queue:
-            surface.paste(message + "\n")
-        }
-    }
-
-    /// The surface behind a panel id in the shared nav id space — a drawer sentinel or a pane leaf.
-    private func surface(for id: PaneID) -> TerminalSurface? {
-        if id == Self.bottomDrawerID { return bottomDrawerSurface }
-        if id == Self.rightDrawerID { return rightDrawerSurface }
-        return paneCanvas.surface(for: id)
     }
 
     /// Paste into whichever panel holds unified focus (mirrors
