@@ -34,7 +34,7 @@ enum CardChrome {
 
     /// `halo: true` swaps the neutral hairline for the accent focus ring — the same signal a focused
     /// terminal pane wears. Reserved for the surfaces that steal focus from the pane behind them
-    /// (the configured tool floats and the diff viewer), so the ring reads as "focus is here now";
+    /// (the configured tool floats), so the ring reads as "focus is here now";
     /// transient pickers and forms keep the neutral edge.
     ///
     static func apply(

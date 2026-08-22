@@ -7,7 +7,7 @@ import TerminalKit
 /// read live at every site that paints it (the pane focus halo and border, primary buttons, focus
 /// rings, the tab tracer, activity dots, the brand mark), so keeping this a slot means a theme swap
 /// re-resolves all of them against the new palette instead of stranding a color from the old one.
-/// Same reasoning as `SyntaxRole`, one level up: role → slot → color.
+/// Role → slot → color, so a bring-your-own theme recolors it.
 ///
 /// The names are the conventional ANSI hues, not literal color claims — a theme is free to put iris
 /// in the magenta slot, which is why the Settings picker shows a swatch beside each name.

@@ -1594,7 +1594,7 @@ symlinked into a dotfiles repo must keep pointing there). `ConfigWriter` preserv
 comments, blank lines, and unknown keys verbatim.
 
 **Theming is derived, never hardcoded.** `ChromeThemeDeriver` maps ANSI slots onto
-sixteen chrome roles. Nine carry chrome meaning: background and foreground come from
+nine chrome roles: background and foreground come from
 the theme's own, info is ansi[4], warning ansi[3], destructive ansi[1], accent ansi[5],
 attention ansi[6], positive ansi[2], and muted a blend of fg and bg.
 

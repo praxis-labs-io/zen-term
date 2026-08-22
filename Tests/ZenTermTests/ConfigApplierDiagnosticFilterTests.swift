@@ -61,7 +61,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
                 reapplyUpdateCardTheme: {}, applyAutoCheckSetting: {}))
     }
 
-    /// A float on ⌘G, which is Find Next's default. It gets a card of its own, never a
+    /// A float on ⌘J, which is scroll-to-selection's default. It gets a card of its own, never a
     /// line in the shared list.
     ///
     /// Driven through `surfaceConfigNotices`, which is what launch calls. Calling the conflict half

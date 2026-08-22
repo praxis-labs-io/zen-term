@@ -246,7 +246,7 @@ enum KeymapDefaults {
 
         // Panes, on ghostty's chords throughout: ⌘D and ⌘⇧D split, ⌘⌥arrows focus one, ⌘⌃arrows
         // resize one. ⌘D is the most-pressed chord in a ghostty split workflow after ⌘T, so landing
-        // somewhere else is a hard stop rather than a surprise, and the diff viewer gives it up.
+        // somewhere else is a hard stop rather than a surprise.
         map[Chord(command: true, key: "d")] = .splitVertical
         map[Chord(command: true, shift: true, key: "d")] = .splitHorizontal
         map[Chord(command: true, option: true, key: "←")] = .navLeft
@@ -289,8 +289,8 @@ enum KeymapDefaults {
 
         // ⌘⇧P is ghostty's command palette and VS Code's, so the workspace picker takes ⌘P.
         //
-        // The diff viewer wants a D and cannot have one: macOS claims ⌘⌥D and ⌃⌘D before any
-        // app-level monitor runs, so a chord bound there is dead and every test of it passes.
+        // Nothing may reach for a spare D: macOS claims ⌘⌥D and ⌃⌘D before any app-level monitor
+        // runs, so a chord bound there is dead and every test of it passes.
         map[Chord(command: true, shift: true, key: "p")] = .toggleCommandPalette
         map[Chord(command: true, key: "p")] = .toggleRepoPicker
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer

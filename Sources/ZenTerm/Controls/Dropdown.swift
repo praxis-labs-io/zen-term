@@ -156,10 +156,9 @@ final class Dropdown: NSView {
     /// Let the title yield and truncate rather than holding the control open at its natural width.
     ///
     /// Off by default, because most dropdowns sit in containers sized around them and a truncated
-    /// theme name would be a regression there. The diff viewer's branch pickers turn it on: they hold
-    /// branch names, which are unbounded, and the width of the column they sit in is the file tree's
-    /// to decide, not theirs. Same rule as the viewer's footer labels, and it has to be the
-    /// label that yields, not just its container, or the intrinsic width still holds the column open.
+    /// theme name would be a regression there. Turn it on for a dropdown holding an unbounded
+    /// value in a column something else sizes. It has to be the label that yields, not just its
+    /// container, or the intrinsic width still holds the column open.
     var titleTruncatesUnderPressure: Bool = false {
         didSet {
             let priority: NSLayoutConstraint.Priority = titleTruncatesUnderPressure ? .defaultLow : .defaultHigh

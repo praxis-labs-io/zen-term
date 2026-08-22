@@ -1,7 +1,7 @@
 import AppKit
 
 /// The footer toolbar (bottom-right of the tab-bar row): a row of `IconButton`s — new tab │
-/// split-h, split-v, bottom drawer, right drawer, focus mode │ palette, diff viewer │ one per
+/// split-h, split-v, bottom drawer, right drawer, focus mode │ palette │ one per
 /// `ToolFloatCatalog` entry — grouped by thin dividers. Active toggles tint iris. Buttons fire
 /// injected closures (routed through the window's chord handler, so they respect the modals).
 /// Any built-in button can be hidden by `hide-toolbar-buttons`, and a float's `toolbar:false`

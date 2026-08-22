@@ -177,35 +177,39 @@ enum GeneralConfigParser {
             .map(\.element)
     }
 
-    /// A keybind line that didn't parse. `toggle_lazygit` gets a named migration warning —
-    /// The built-in lazygit was removed, and "unparseable" would hide what changed. The
-    /// suggested replacement echoes the full documented parity recipe (icon/title/height match
-    /// the old built-in card) and keeps the chord from the user's own dropped line, so following
-    /// the log verbatim reproduces what they had. Exact-match on the action left of `=` (the same
-    /// split `KeybindParser` uses), so a typo like `toggle_lazygit_old` still reads unparseable.
-    ///
-    /// Only the generic case collects a `ConfigDiagnostic`: the lazygit branch is a transitional
-    /// migration whose whole value is the multi-line recipe, which a terse toast would lose — it
-    /// stays log-only on purpose.
+    /// A keybind line that didn't parse. A removed action gets a named migration warning, because
+    /// "unparseable" hides what changed: each carries the replacement `float =` recipe with the
+    /// chord from the user's own dropped line, so following the log reproduces what they had.
+    /// Those stay log-only, since a terse toast loses the recipe. Everything else takes a diagnostic.
     private static func warnUnparseableKeybind(_ value: String, _ diagnostics: inout [ConfigDiagnostic]) {
         let equals = value.firstIndex(of: "=")
+        // Exact-match on the action left of `=`, the same split `KeybindParser` uses, so a typo
+        // like `diff_viewer_old` still reads unparseable rather than claiming a migration.
         let action = (equals.map { value[..<$0] } ?? Substring(value))
             .trimmingCharacters(in: .whitespaces)
-        guard action == "toggle_lazygit" else {
-            Log.warning("GeneralConfig: unparseable keybind line `\(value)` — ignored", category: .keybinds)
-            diagnostics.append(ConfigDiagnostic(scope: .keybindLine, problem: .unparseableLine(value)))
-            return
-        }
         let bound = equals.map {
             value[value.index(after: $0)...].trimmingCharacters(in: .whitespaces)
         }
         let chord = bound.flatMap { $0.isEmpty ? nil : $0 } ?? "cmd+g"
-        Log.warning(
-            "GeneralConfig: `toggle_lazygit` was removed — lazygit is a regular tool float now; "
-                + "replace this keybind with: float = command:\"lazygit\" "
-                + "key:\(chord) git:true persist:dir icon:git title:\"Open Lazygit\" "
-                + "height:0.78 — ignored",
-            category: .config)
+        switch action {
+        case "toggle_lazygit":
+            // The recipe matches the old built-in card's icon, title and height, so it is parity.
+            Log.warning(
+                "GeneralConfig: `toggle_lazygit` was removed — lazygit is a regular tool float now; "
+                    + "replace this keybind with: float = command:\"lazygit\" "
+                    + "key:\(chord) git:true persist:dir icon:git title:\"Open Lazygit\" "
+                    + "height:0.78 — ignored",
+                category: .config)
+        case "diff_viewer":
+            Log.warning(
+                "GeneralConfig: `diff_viewer` was removed — reviewing is a tool float now; "
+                    + "replace this keybind with: float = title:Review command:\"zen-review\" "
+                    + "key:\(chord) git:true persist:dir icon:checklist — ignored",
+                category: .config)
+        default:
+            Log.warning("GeneralConfig: unparseable keybind line `\(value)` — ignored", category: .keybinds)
+            diagnostics.append(ConfigDiagnostic(scope: .keybindLine, problem: .unparseableLine(value)))
+        }
     }
 
     private static func parseBool(
@@ -272,6 +276,10 @@ enum GeneralConfigParser {
     /// (trailing/doubled commas) pass silently; an unknown slug is dropped with a diagnostic while
     /// the known slugs on the same line still apply. The expected-value list is built from
     /// `ToolbarButton.allCases` rather than spelled out, mirroring `parseAccentSlot`.
+    /// Slugs that named a button ZenTerm has since removed. They are not typos, and the button
+    /// they hid is already gone, so they pass without a diagnostic rather than nagging forever.
+    private static let retiredToolbarSlugs: Set<String> = ["diff-viewer"]
+
     private static func parseHiddenToolbarButtons(
         _ value: String, _ diagnostics: inout [ConfigDiagnostic]
     ) -> Set<ToolbarButton> {
@@ -280,6 +288,9 @@ enum GeneralConfigParser {
             let slug = raw.trimmingCharacters(in: .whitespaces).lowercased()
             guard !slug.isEmpty else { continue }
             guard let button = ToolbarButton(rawValue: slug) else {
+                // A retired slug is dropped silently. It named a button that no longer exists, so
+                // the line already does what it says, and a card every launch has nothing to offer.
+                guard !Self.retiredToolbarSlugs.contains(slug) else { continue }
                 let expected = ToolbarButton.allCases.map(\.rawValue).joined(separator: ", ")
                 Log.warning(
                     "GeneralConfig: `hide-toolbar-buttons` got unknown button `\(slug)` — ignored",

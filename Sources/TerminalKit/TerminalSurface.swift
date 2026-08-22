@@ -403,11 +403,6 @@ public protocol TerminalSurface: AnyObject {
     /// Tear the search engine down. Idempotent.
     func endSearch()
 
-    /// Deliver a Return **keypress** to the shell, not a pasted `"\r"`. A pasted carriage return
-    /// arrives inside bracketed paste, where a TUI reads it as a literal newline rather than a
-    /// submit. Paste the text, then call this.
-    func submitLine()
-
     /// What this backend would do with `key` if the chrome passed it through. Answers about the
     /// keymap as configured right now, so a chord's disposition can change under a config reload
     /// and is worth re-asking rather than caching.
@@ -454,9 +449,6 @@ public extension TerminalSurface {
 
     /// Default no-op: a backend with no live font-size path keeps the size it started with.
     func setFontSize(_ points: CGFloat) {}
-
-    /// Default no-op: a backend with no key-injection path can't submit for the chrome.
-    func submitLine() {}
 
     /// Default no-op: a backend that doesn't reflow on every frame change needs nothing here.
     func setSizeSyncSuspended(_ suspended: Bool) {}

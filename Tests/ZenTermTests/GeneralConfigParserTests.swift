@@ -410,6 +410,30 @@ final class GeneralConfigParserTests: XCTestCase {
             [ConfigDiagnostic(scope: .keybindLine, problem: .unparseableLine("totally bogus"))])
     }
 
+    /// A removed action is not a typo. `diff_viewer` shipped a default chord for six versions, so
+    /// plenty of configs bind it; a card every launch saying only "unparseable" tells the user
+    /// their file is broken with no way to learn what replaced it. The migration goes to the log,
+    /// like `toggle_lazygit`, because the replacement is a `float =` recipe a toast cannot hold.
+    func test_retiredKeybindAction_takesNoDiagnostic() {
+        XCTAssertEqual(parse("keybind = diff_viewer=cmd+g\n").configDiagnostics, [])
+        XCTAssertEqual(parse("keybind = diff_viewer=cmd+shift+g\n").configDiagnostics, [])
+    }
+
+    /// The exact-match guard: only the retired token itself migrates, so a typo still reports.
+    func test_aTypoOnTheRetiredAction_stillReportsUnparseable() {
+        XCTAssertEqual(
+            parse("keybind = diff_viewer_old=cmd+g\n").configDiagnostics,
+            [ConfigDiagnostic(scope: .keybindLine, problem: .unparseableLine("diff_viewer_old=cmd+g"))])
+    }
+
+    /// Same reasoning on the other surface. The button it named is gone, so the line already does
+    /// what it says and the Appearance row has nothing to tell anyone.
+    func test_retiredToolbarSlug_isDroppedWithoutADiagnostic() {
+        let config = parse("hide-toolbar-buttons = split-h,diff-viewer\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal])
+        XCTAssertEqual(config.configDiagnostics, [])
+    }
+
     func test_droppedFloatLine_collectsADiagnostic() {
         XCTAssertEqual(
             parse("float = title:Notes key:cmd+shift+n\n").configDiagnostics,  // no command:
