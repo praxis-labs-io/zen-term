@@ -33,12 +33,16 @@ Then propose the semver bump (`docs/releasing.md` under "Versioning" governs whi
 **get Drew's confirmation before going further**. The version becomes a permanent
 public tag and cannot be walked back, so it is never chosen silently.
 
-**Check the release-blocking tickets in the same breath, before anything publishes.**
-A blocker found in phase 7 is found after the tag, the DMG and the appcast are public
-and permanent. As of v1.0.0 that means ZEN-423, the website's `sync-docs` paths: it
-fails by syncing nothing rather than by erroring, so a cut against the old paths ships
-a release the site never shows, with every check in this flow green. If it is open,
-stop and say so.
+**Name what will be broken by this cut before anything publishes**, so it is a decision
+rather than a discovery. A surprise in phase 7 arrives after the tag, the DMG and the
+appcast are public and permanent.
+
+For **v1.0.0 specifically**: ZEN-423 repoints the website's `sync-docs`, and it cannot
+be verified until a v1.0.0 release exists to sync from, so the cut goes first on
+purpose. Expect phase 7 to publish nothing and do not treat that as a failure. The site
+holds at v0.10.0 until ZEN-423 lands, then a re-run picks v1.0.0 up. Nothing about the
+app, the feed, or the download is affected. Say this out loud at phase 1 rather than
+discovering it at phase 7.
 
 ## 2. Check the docs that ship with it
 
@@ -161,15 +165,21 @@ pulled), open a PR, and merge. Render deploys from `main`.
 *published* state: raw.githubusercontent for the docs, and the GitHub Releases API for
 the notes.
 
-**Check where `sync-docs.mjs` actually points before running it.** As of v1.0.0 it still
-reads `zen-term/zen-term-releases`, a repo this project no longer publishes to, and it
-fails by syncing nothing rather than by erroring. Repointing it is not a URL swap:
+**Check where `sync-docs.mjs` actually points before running it.** Until ZEN-423 lands
+it reads `zen-term/zen-term-releases`, a repo this project no longer publishes to, and
+it fails by syncing nothing rather than by erroring.
+
+**At the v1.0.0 cut that is expected.** The fix needs a published v1.0.0 to verify
+against, so the release goes first. Record that the site is unsynced, leave ZEN-423
+open, and re-run this phase once it merges. Do not hand-edit the site to paper over it.
+
+From v1.0.1 on, an unsynced site is a real failure. Repointing is not a URL swap:
 `docs/releasing.md`, under "The website reads the repo", lists the three paths that do
 not exist here and the one whose obvious fix publishes the wrong license document.
-ZEN-423 tracks it. If that ticket is still open, stop and say so rather than running
-this step. Run it before
-`bin/release` has published and it syncs the previous version, succeeds, and
-commits nothing new. This step always follows phase 6, never precedes it.
+
+Separately, ordering still matters: run it before `bin/release` has published and it
+syncs the previous version, succeeds, and commits nothing new. This step always follows
+phase 6, never precedes it.
 
 Verify the new `content/release-notes/vX.Y.Z.md` actually appeared before opening
 the PR. An empty diff here means the release had not published yet.

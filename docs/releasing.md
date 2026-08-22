@@ -91,10 +91,16 @@ not moved, then delete the repo and the `zen-term` org.
 ## The website reads the repo, and it is not a URL swap
 
 `zen-term-website`'s `scripts/sync-docs.mjs` still pulls the docs and the releases API
-from `zen-term/zen-term-releases`. **Fix it before the first release cut from this
-repo, not before deleting the old one.** It fails by syncing nothing rather than by
-erroring, so a v1.0.0 cut against the old path publishes no release notes and every
-check in the flow still passes. Tracked as ZEN-423.
+from `zen-term/zen-term-releases`. It fails by syncing nothing rather than by erroring,
+so nothing in the release flow notices. Tracked as ZEN-423.
+
+**v1.0.0 ships before that fix, deliberately.** The repoint has to be verified against
+a published v1.0.0, so the release comes first and the site holds at v0.10.0 until
+ZEN-423 lands. That costs a lagging marketing site for as long as the ticket is open,
+and it costs nothing else: the app, the appcast, and the download are untouched by it.
+Re-run `pnpm sync-docs` once it merges.
+
+**From v1.0.1 on this is a prerequisite, not a known gap.**
 
 Three of its source paths do not exist here, and one of them fails dangerously:
 
