@@ -28,8 +28,17 @@ bytes are identical, and `SUPublicEDKey` never changed, so the signature verifie
 **Pin the enclosure to the tag before uploading it.** `bin/release` writes the live
 appcast with a `releases/latest/download/` URL, which is right for a feed that is
 regenerated every release. The hand-off copy is written once and never again, so
-`latest` stops meaning 1.0.0 the moment 1.0.1 ships and the download 404s. Edit
-`dist/appcast.xml` to the tagged form first:
+`latest` stops meaning 1.0.0 the moment 1.0.1 ships and the download 404s.
+
+Work on a copy, never `dist/appcast.xml` itself: rerunning `bin/release` for the same
+tag uploads that path with `--clobber`, which would push the tag-pinned version over
+the live feed and freeze it on 1.0.0.
+
+```
+cp dist/appcast.xml dist/appcast-handoff.xml
+```
+
+Then edit the copy's enclosure to the tagged form:
 
 ```
 https://github.com/praxis-labs-io/zen-term/releases/download/v1.0.0/ZenTerm-1.0.0-arm64.dmg
@@ -41,20 +50,36 @@ Then publish it:
 gh release create v1.0.0 --repo zen-term/zen-term-releases \
     --title "ZenTerm 1.0.0" \
     --notes "ZenTerm moved to https://github.com/praxis-labs-io/zen-term. Releases are published there." \
-    dist/appcast.xml
+    dist/appcast-handoff.xml
 ```
 
 Every install picks 1.0.0 up on its next check and lands on the new feed. Give it a
 week, compare the 1.0.0 download count against the 0.10.0 one, message whoever has
 not moved, then delete the repo and the `zen-term` org.
 
-## The website reads the repo, and it has already moved
+## The website reads the repo, and it is not a URL swap
 
-`zen-term-website`'s `scripts/sync-docs.mjs` still pulls the docs and the releases
-API from `zen-term/zen-term-releases`. **Repoint it before the first release cut from
-this repo, not before deleting the old one.** It fails by syncing nothing rather than
-by erroring, so a v1.0.0 cut against the old path publishes no release notes to the
-site and every check in the flow still passes. Tracked as ZEN-423.
+`zen-term-website`'s `scripts/sync-docs.mjs` still pulls the docs and the releases API
+from `zen-term/zen-term-releases`. **Fix it before the first release cut from this
+repo, not before deleting the old one.** It fails by syncing nothing rather than by
+erroring, so a v1.0.0 cut against the old path publishes no release notes and every
+check in the flow still passes. Tracked as ZEN-423.
+
+Three of its source paths do not exist here, and one of them fails dangerously:
+
+- **`docs/THIRD-PARTY-NOTICES.md` never existed in this repo.** The deleted
+  `bin/release` block synthesized it in the releases repo by copying
+  `Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md`. What this repo has is
+  `docs/third-party-notices.md`, a maintainer re-probe doc twenty times smaller and
+  about something else. raw.githubusercontent is case-sensitive, so the repoint 404s,
+  **and lowercasing the path to make it pass publishes the wrong document as the app's
+  license disclosure.** Point it at `Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md`.
+  Check this on a case-sensitive filesystem or with `git ls-files`: APFS is
+  case-insensitive, so `ls` finds a file that is not there.
+- **`themes/rose-pine-moon` was renamed** to `rose-pine-zen` in ZEN-416.
+- The notices used to be republished per tag, which is what kept the license text
+  matched to the binary that shipped. Reading `main` loses that, so fetch these at the
+  release tag rather than at `main`.
 
 ## Versioning
 

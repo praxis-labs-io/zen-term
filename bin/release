@@ -7,9 +7,9 @@
 #   --notes-file  release notes markdown (default: curated git-log scaffold in $EDITOR)
 #   --skip-checks skip the bin/check gate
 #
-# One-time setup (see CLAUDE.md "Releasing"): Developer ID Application cert in
-# the keychain, `xcrun notarytool store-credentials zenterm-notary`, and the
-# public releases repo. Safe to rerun after a partial failure with the same
+# One-time setup (see docs/releasing.md): Developer ID Application cert in the
+# keychain, `xcrun notarytool store-credentials zenterm-notary`, and the Sparkle
+# EdDSA key imported, not generated. Safe to rerun after a partial failure with the same
 # version: tagging, notes curation, and release creation each detect and reuse
 # the prior run's state.
 set -euo pipefail

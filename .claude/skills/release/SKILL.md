@@ -151,8 +151,16 @@ Then commit the new `content/release-notes/vX.Y.Z.md` (plus any changed doc it
 pulled), open a PR, and merge. Render deploys from `main`.
 
 **Order matters and the failure is silent.** `scripts/sync-docs.mjs` reads the
-*published* state: `raw.githubusercontent.com/praxis-labs-io/zen-term/main/docs` for
-the docs, and the GitHub Releases API for the notes. Run it before
+*published* state: raw.githubusercontent for the docs, and the GitHub Releases API for
+the notes.
+
+**Check where `sync-docs.mjs` actually points before running it.** As of v1.0.0 it still
+reads `zen-term/zen-term-releases`, a repo this project no longer publishes to, and it
+fails by syncing nothing rather than by erroring. Repointing it is not a URL swap:
+`docs/releasing.md`, under "The website reads the repo", lists the three paths that do
+not exist here and the one whose obvious fix publishes the wrong license document.
+ZEN-423 tracks it. If that ticket is still open, stop and say so rather than running
+this step. Run it before
 `bin/release` has published and it syncs the previous version, succeeds, and
 commits nothing new. This step always follows phase 6, never precedes it.
 
