@@ -67,4 +67,37 @@ final class AcknowledgementsTests: XCTestCase {
         }
         XCTAssertGreaterThan(checked, 100, "expected the real notices to carry many fenced license lines")
     }
+
+    /// A bundled theme that ships with no attribution is the failure this cannot be allowed to
+    /// have: it builds, it passes, it signs, it notarizes, and it publishes a license obligation
+    /// we did not meet. ZEN-422 shipped sixteen of seventeen and nothing noticed. Each entry names
+    /// its tokens verbatim, so the token is what this looks for.
+    func test_everyBundledTheme_isNamedInTheNotices() throws {
+        let markdown = try String(contentsOf: Self.noticesURL, encoding: .utf8)
+        for entry in ThemeCatalog.bundled {
+            XCTAssertTrue(
+                markdown.contains(entry.token),
+                "\(entry.displayName) ships with no attribution in THIRD-PARTY-NOTICES.md")
+        }
+    }
+
+    /// The catalog and the resource directory are two hand-kept lists of the same thing. A file
+    /// with no entry ships unreachable; an entry with no file offers a theme that cannot load.
+    func test_theThemeCatalogAndTheShippedFiles_agree() throws {
+        let dir = Self.repoRoot.appendingPathComponent("Sources/ZenTerm/Themes")
+        let onDisk = Set(
+            try FileManager.default.contentsOfDirectory(atPath: dir.path)
+                .filter { $0.hasSuffix(".ghostty") }
+                .map { String($0.dropLast(".ghostty".count)) })
+        XCTAssertEqual(Set(ThemeCatalog.bundled.map(\.token)), onDisk)
+    }
+
+    private static let repoRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()  // ZenTermTests
+        .deletingLastPathComponent()  // Tests
+        .deletingLastPathComponent()  // repo root
+
+    private static let noticesURL =
+        repoRoot
+        .appendingPathComponent("Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md")
 }

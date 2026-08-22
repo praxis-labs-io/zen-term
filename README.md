@@ -27,7 +27,7 @@ which macOS does not ship:
 brew install --cask font-jetbrains-mono-nerd-font
 ```
 
-It updates itself from then on. [`docs/onboarding.md`](docs/onboarding.md) walks
+ZenTerm updates itself from then on. [`docs/onboarding.md`](docs/onboarding.md) walks
 through the first hour.
 
 ## What it does

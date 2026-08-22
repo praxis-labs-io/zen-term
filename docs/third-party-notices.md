@@ -130,8 +130,19 @@ own: the app icon is Lucide's `origami` pasted into `icon/make-icon.swift` as SV
 Ghostty's terminfo is ghostty's own and rides its MIT entry; `bash-preexec.sh` sits inside the
 same tree and does not.
 
-One root is known-uncovered as of this writing: `Sources/ZenTerm/Themes`, the 17 separately
-licensed themes in the Settings picker. It is tracked and is not in the notices yet.
+No root is known-uncovered as of this writing. The last one was
+`Sources/ZenTerm/Themes`, closed in ZEN-422.
+
+Two things learned attributing those, worth carrying into the next resource that lands:
+
+- **A collection is not cover for what it collects.** The iTerm2-Color-Schemes license,
+  which most of those palettes reached Ghostty through, says in its own text that each
+  theme's copyright stays with that theme's author. A permissive license on the bag does
+  not license what is in the bag. Read the wrapper's license before leaning on it.
+- **Record the gap rather than closing it with a guess.** Gruvbox publishes no license
+  file and no copyright line, only an `MIT` string in `package.json`. The notice says
+  exactly that. A synthesized copyright line would have read as verified and been
+  something nobody upstream ever wrote.
 
 ## 5. Regenerate and diff
 

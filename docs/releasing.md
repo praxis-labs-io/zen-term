@@ -49,21 +49,40 @@ Then edit the copy's enclosure to the tagged form:
 https://github.com/praxis-labs-io/zen-term/releases/download/v1.0.0/ZenTerm-1.0.0-arm64.dmg
 ```
 
-Then publish it:
+**Publish it as a draft first.** Creating this release moves `latest` on the old repo
+off v0.10.0 the instant it is public, so the asset becomes the feed for every pre-1.0.0
+install immediately. That is the intent, and it is also why a mistake here takes down
+the only feed those machines have rather than merely failing to add a new one. There is
+no error anywhere when it goes wrong, and no way for those installs to recover except a
+manual download. Draft, check, then publish:
 
 ```
-gh release create v1.0.0 --repo zen-term/zen-term-releases \
+gh release create v1.0.0 --repo zen-term/zen-term-releases --draft \
     --title "ZenTerm 1.0.0" \
     --notes "ZenTerm moved to https://github.com/praxis-labs-io/zen-term. Releases are published there." \
     dist/handoff/appcast.xml
 ```
 
-**Publishing this release moves `latest` on the old repo off v0.10.0**, so the asset
-above becomes the feed for every pre-1.0.0 install the moment it lands. That is the
-intent, and it is also why a wrong filename here breaks the working feed rather than
-merely failing to add a new one. Fetch
-`https://github.com/zen-term/zen-term-releases/releases/latest/download/appcast.xml`
-after uploading and confirm it returns the 1.0.0 item before you walk away.
+Confirm the asset kept its name and the enclosure resolves:
+
+```
+gh release view v1.0.0 --repo zen-term/zen-term-releases --json assets \
+    --jq '.assets[].name'          # must print exactly: appcast.xml
+curl -sI "$(grep -o 'https://[^"]*\.dmg' dist/handoff/appcast.xml)" | head -1
+```
+
+The `curl` must return `200` or a `302`, not `404`. Then release it:
+
+```
+gh release edit v1.0.0 --repo zen-term/zen-term-releases --draft=false
+```
+
+Finally, fetch the feed the old builds actually poll and confirm it returns the 1.0.0
+item before you walk away:
+
+```
+curl -sL https://github.com/zen-term/zen-term-releases/releases/latest/download/appcast.xml | head -20
+```
 
 Every install picks 1.0.0 up on its next check and lands on the new feed. Give it a
 week, compare the 1.0.0 download count against the 0.10.0 one, message whoever has
@@ -72,10 +91,16 @@ not moved, then delete the repo and the `zen-term` org.
 ## The website reads the repo, and it is not a URL swap
 
 `zen-term-website`'s `scripts/sync-docs.mjs` still pulls the docs and the releases API
-from `zen-term/zen-term-releases`. **Fix it before the first release cut from this
-repo, not before deleting the old one.** It fails by syncing nothing rather than by
-erroring, so a v1.0.0 cut against the old path publishes no release notes and every
-check in the flow still passes. Tracked as ZEN-423.
+from `zen-term/zen-term-releases`. It fails by syncing nothing rather than by erroring,
+so nothing in the release flow notices. Tracked as ZEN-423.
+
+**v1.0.0 ships before that fix, deliberately.** The repoint has to be verified against
+a published v1.0.0, so the release comes first and the site holds at v0.10.0 until
+ZEN-423 lands. That costs a lagging marketing site for as long as the ticket is open,
+and it costs nothing else: the app, the appcast, and the download are untouched by it.
+Re-run `pnpm sync-docs` once it merges.
+
+**From v1.0.1 on this is a prerequisite, not a known gap.**
 
 Three of its source paths do not exist here, and one of them fails dangerously:
 

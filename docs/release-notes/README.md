@@ -15,3 +15,12 @@ person downloading it.
 Voice is governed by `../brand-voice.md`, under the "Release notes" surface:
 curated, not a git log. State what changed, name the actor, no em-dashes, no
 hype, no adverbs.
+
+## One edit was made to shipped notes
+
+Notes are per version and are never edited once published. v1.0.0 made a single
+deliberate exception: every link into `zen-term/zen-term-releases` was repointed at
+`praxis-labs-io/zen-term`. That repo is being deleted, and two of those links (the
+onboarding and config references in v0.1.0) had no redirect target at all. The rule
+exists to stop history being rewritten for cosmetics, not to preserve links to a repo
+we removed ourselves. Nothing else in those files changed.
