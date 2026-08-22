@@ -37,10 +37,10 @@ public tag and cannot be walked back, so it is never chosen silently.
 
 Run the `update-documentation` skill across the release range.
 
-This matters more here than at merge time. `bin/release` publishes
-`docs/onboarding.md`, `docs/config/*`, and `THIRD-PARTY-NOTICES.md` into the
-public releases repo as part of the run, so a doc that is wrong at this moment
-becomes the public documentation for a shipped version. v0.2.1 was itself a case
+This matters more here than at merge time. `docs/onboarding.md`, `docs/config/*`,
+and the shipped `THIRD-PARTY-NOTICES.md` are public the moment the tag lands, and
+the marketing site reads them from it, so a doc that is wrong at this moment becomes
+the public documentation for a shipped version. v0.2.1 was itself a case
 of this: a Settings row and the config reference both named a drawer-resize chord
 that does nothing.
 

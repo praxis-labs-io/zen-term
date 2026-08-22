@@ -8,8 +8,8 @@ description: Use when a change ships that could make documentation wrong: a new 
 ## Overview
 
 ZenTerm's docs have **one authoring source of truth: this repo's `docs/`**.
-Automation carries most of it downstream to the public releases repo and the
-marketing site. Your job on any change:
+This repo is public, so `docs/` is what users read. Automation carries some of it
+downstream to the marketing site. Your job on any change:
 
 1. Edit the affected source doc **here**, in `docs/`.
 2. **Flag** only the downstream work automation won't carry. Never reach into
@@ -49,9 +49,9 @@ not carry it:
 | The change | Why it doesn't flow | Flag |
 |---|---|---|
 | A theme concept | the example theme file syncs on its own, but the website `theming` Guide is authored MDX | edit the website `theming` Guide |
-| A **new** `docs/config/<file>` | `sync-docs` FILES is `config`, `workspaces`, `themes/rose-pine-moon`, so a new file is never fetched and no reference page exists | add it to `sync-docs.mjs` FILES + a website reference page |
+| A **new** `docs/config/<file>` | `sync-docs` FILES is `config`, `workspaces`, `themes/rose-pine-zen`, so a new file is never fetched and no reference page exists | add it to `sync-docs.mjs` FILES + a website reference page |
 | Behavior a Guide narrates (install, panes, shortcuts, workspaces, tool-floats, neovim) | those are authored MDX (`app/docs/*/page.mdx`), not parsed from facts | edit that website Guide |
-| Install steps, download link, or positioning copy | releases + website READMEs are hand-kept | ZEN-123 |
+| Install steps, download link, or positioning copy | this repo's README and the website's are hand-kept, separately | flag it |
 
 **A flag is a Linear ticket (ZenTerm team) plus a line in your ship summary.**
 Never a silent gap, never an in-code `TODO`. You can't commit another repo's
@@ -60,11 +60,10 @@ change from this branch, so name it and move on.
 ## Common mistakes
 
 - **Treating "docs" as this repo only.** The strong instinct is to edit
-  `docs/config/config` and stop. That file feeds a public mirror and a website;
-  a new-file change, or behavior a Guide narrates, needs a flag or it silently
-  never reaches users.
-- **Hand-editing the releases mirror or `content/reference/`.** Both are
-  regenerated; your edit is lost and the drift check reddens CI.
+  `docs/config/config` and stop. That file feeds the website; a new-file change, or
+  behavior a Guide narrates, needs a flag or it silently never reaches users.
+- **Hand-editing `content/reference/` on the website.** It is regenerated from this
+  repo; your edit is lost and the drift check reddens CI.
 - **Fabricating a doc for a key that already exists** (or under a wrong
   spelling). Grep the reference and read the code first.
 - **Editing a shipped `release-notes/vX.Y.Z.md`.** Those are per-version and
