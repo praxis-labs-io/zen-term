@@ -98,7 +98,7 @@ final class ReportIssueOverlayTests: WindowTestCase {
         let url = sink.opened[0]
         XCTAssertEqual(
             URLComponents(url: url, resolvingAgainstBaseURL: false)?.path,
-            "/zen-term/zen-term-releases/issues/new")
+            "/praxis-labs-io/zen-term/issues/new")
         XCTAssertEqual(query(url, "title"), "Split closes the pane")
         XCTAssertEqual(
             query(url, "body"),

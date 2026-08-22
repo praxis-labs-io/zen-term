@@ -37,10 +37,10 @@ public tag and cannot be walked back, so it is never chosen silently.
 
 Run the `update-documentation` skill across the release range.
 
-This matters more here than at merge time. `bin/release` publishes
-`docs/onboarding.md`, `docs/config/*`, and `THIRD-PARTY-NOTICES.md` into the
-public releases repo as part of the run, so a doc that is wrong at this moment
-becomes the public documentation for a shipped version. v0.2.1 was itself a case
+This matters more here than at merge time. `docs/onboarding.md`, `docs/config/*`,
+and the shipped `THIRD-PARTY-NOTICES.md` are public the moment the tag lands, and
+the marketing site reads them from it, so a doc that is wrong at this moment becomes
+the public documentation for a shipped version. v0.2.1 was itself a case
 of this: a Settings row and the config reference both named a drawer-resize chord
 that does nothing.
 
@@ -124,14 +124,12 @@ Stop here. Do not run it.
 Resume once Drew reports the run finished, and verify what actually landed
 instead of trusting the exit code:
 
-- `gh release view vX.Y.Z --repo zen-term/zen-term-releases --json assets` shows
+- `gh release view vX.Y.Z --repo praxis-labs-io/zen-term --json assets` shows
   **both** the DMG and `appcast.xml`. A release missing the appcast leaves every
   installed copy unable to see the update.
-- The releases repo carries the docs this version ships. `bin/release` commits
-  only on a real change, so a release that touched no published doc correctly
-  leaves the last `docs: sync from ZenTerm vX.Y.Z` commit naming an **older**
-  version. Absence of a commit for this version is not a failure: check that the
-  content is right, not that a commit exists. (v0.2.2 was exactly this case.)
+- **v1.0.0 only:** the hand-off in `docs/releasing.md` under "Retiring
+  zen-term-releases". Nothing in `bin/release` does it, and an install from
+  v0.10.0 or earlier has no other path to the update.
 - The appcast's `sparkle:version` matches the shipped build.
 - Mount the DMG and check the volume root: only the app, the Applications
   symlink, `.background`, and `.DS_Store`. See `bin/make-dmg`'s header for why
@@ -153,8 +151,16 @@ Then commit the new `content/release-notes/vX.Y.Z.md` (plus any changed doc it
 pulled), open a PR, and merge. Render deploys from `main`.
 
 **Order matters and the failure is silent.** `scripts/sync-docs.mjs` reads the
-*published* state: `raw.githubusercontent.com/zen-term/zen-term-releases/main/docs`
-for the docs, and the GitHub Releases API for the notes. Run it before
+*published* state: raw.githubusercontent for the docs, and the GitHub Releases API for
+the notes.
+
+**Check where `sync-docs.mjs` actually points before running it.** As of v1.0.0 it still
+reads `zen-term/zen-term-releases`, a repo this project no longer publishes to, and it
+fails by syncing nothing rather than by erroring. Repointing it is not a URL swap:
+`docs/releasing.md`, under "The website reads the repo", lists the three paths that do
+not exist here and the one whose obvious fix publishes the wrong license document.
+ZEN-423 tracks it. If that ticket is still open, stop and say so rather than running
+this step. Run it before
 `bin/release` has published and it syncs the previous version, succeeds, and
 commits nothing new. This step always follows phase 6, never precedes it.
 

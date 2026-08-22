@@ -1,10 +1,9 @@
 import Foundation
 
-/// Where in-app "Report an Issue" sends people. This repo is private, so bugs are filed against the
-/// public `zen-term/zen-term-releases` tracker, where the downloads live.
+/// Where in-app "Report an Issue" sends people: this repo's own tracker.
 enum SupportLinks {
-    static let issuesOwner = "zen-term"
-    static let issuesRepo = "zen-term-releases"
+    static let issuesOwner = "praxis-labs-io"
+    static let issuesRepo = "zen-term"
 
     /// GitHub's prefilled "new issue" URL with the title and body baked in. Built with
     /// `URLComponents`/`URLQueryItem` so a title or body carrying spaces, `#`, `&`, emoji, or

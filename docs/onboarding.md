@@ -9,7 +9,7 @@ libghostty core, which renders the text and runs the shell.
 ## Install
 
 1. Download `ZenTerm-<version>-arm64.dmg` from the
-   [releases page](https://github.com/zen-term/zen-term-releases/releases).
+   [releases page](https://github.com/praxis-labs-io/zen-term/releases).
 2. Open it and drag **ZenTerm** onto **Applications**.
 3. Launch it.
 
@@ -240,8 +240,8 @@ means downloading the DMG by hand. From v0.2.0 on, updates come to you.
 
 Everything in Settings is a plain text file in `~/.config/zen-term/`, and the app
 picks up hand-edits. Annotated references for every option ship with the release:
-[`config`](https://github.com/zen-term/zen-term-releases/blob/main/docs/config/config)
+[`config`](https://github.com/praxis-labs-io/zen-term/blob/main/docs/config/config)
 covers appearance, behavior, tools, and shortcuts, and
-[`workspaces`](https://github.com/zen-term/zen-term-releases/blob/main/docs/config/workspaces)
+[`workspaces`](https://github.com/praxis-labs-io/zen-term/blob/main/docs/config/workspaces)
 covers workspaces. Copy them to `~/.config/zen-term/` if you want. Copying
 changes nothing on its own, since every line starts commented out.

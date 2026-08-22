@@ -5,11 +5,93 @@ load-bearing. The `release` skill drives the flow; this file is the reference
 behind it.
 
 Public releases are cut locally with `bin/release`: preflight (clean main, cert,
-notary profile, releases repo) → `bin/check` → assemble and Developer ID sign
-(`bin/package-app`) → notarize and staple app and DMG → verify gates → curated
-notes → tag `vX.Y.Z` on this repo → publish the DMG to the **public**
-`zen-term/zen-term-releases` repo. This repo is private, so its own Releases are
-not downloadable. arm64-only. The version's source of truth is the git tag.
+notary profile) → `bin/check` → assemble and Developer ID sign (`bin/package-app`)
+→ notarize and staple app and DMG → verify gates → curated notes → tag `vX.Y.Z` →
+publish the DMG and the appcast to this repo's Releases. arm64-only. The version's
+source of truth is the git tag.
+
+## Retiring zen-term-releases
+
+Through v0.10.0 the downloads lived in a second repo, `zen-term/zen-term-releases`,
+because a private repo's Releases are not downloadable. v1.0.0 moved them here.
+
+`SUFeedURL` is frozen into each build's Info.plist, so a copy installed before 1.0.0
+polls the old appcast forever and no change to `bin/package-app` reaches it. At the
+1.0.0 cut that was **7 downloads of the 0.10.0 DMG** and around 18 appcast polls a
+day: three to five machines, all of them people we can message. So this is a
+one-time hand-off rather than anything `bin/release` carries.
+
+**When 1.0.0 publishes**, upload that release's `dist/appcast.xml` to the old repo by
+hand. It needs no DMG: the enclosure inside already points at the asset here, the
+bytes are identical, and `SUPublicEDKey` never changed, so the signature verifies.
+
+**Pin the enclosure to the tag before uploading it.** `bin/release` writes the live
+appcast with a `releases/latest/download/` URL, which is right for a feed that is
+regenerated every release. The hand-off copy is written once and never again, so
+`latest` stops meaning 1.0.0 the moment 1.0.1 ships and the download 404s.
+
+Work on a copy, not `dist/appcast.xml` itself: a `bin/release` rerun regenerates that
+file from a heredoc and your edit is gone without a word.
+
+**The copy has to keep the name `appcast.xml`,** so put it in a subdirectory rather
+than renaming it. `gh release create` names each asset by its basename, and the feed
+every pre-1.0.0 build polls is literally `latest/download/appcast.xml`. Upload it as
+`appcast-handoff.xml` and that URL 404s, which is the one thing this hand-off exists
+to prevent.
+
+```
+mkdir -p dist/handoff && cp dist/appcast.xml dist/handoff/appcast.xml
+```
+
+Then edit the copy's enclosure to the tagged form:
+
+```
+https://github.com/praxis-labs-io/zen-term/releases/download/v1.0.0/ZenTerm-1.0.0-arm64.dmg
+```
+
+Then publish it:
+
+```
+gh release create v1.0.0 --repo zen-term/zen-term-releases \
+    --title "ZenTerm 1.0.0" \
+    --notes "ZenTerm moved to https://github.com/praxis-labs-io/zen-term. Releases are published there." \
+    dist/handoff/appcast.xml
+```
+
+**Publishing this release moves `latest` on the old repo off v0.10.0**, so the asset
+above becomes the feed for every pre-1.0.0 install the moment it lands. That is the
+intent, and it is also why a wrong filename here breaks the working feed rather than
+merely failing to add a new one. Fetch
+`https://github.com/zen-term/zen-term-releases/releases/latest/download/appcast.xml`
+after uploading and confirm it returns the 1.0.0 item before you walk away.
+
+Every install picks 1.0.0 up on its next check and lands on the new feed. Give it a
+week, compare the 1.0.0 download count against the 0.10.0 one, message whoever has
+not moved, then delete the repo and the `zen-term` org.
+
+## The website reads the repo, and it is not a URL swap
+
+`zen-term-website`'s `scripts/sync-docs.mjs` still pulls the docs and the releases API
+from `zen-term/zen-term-releases`. **Fix it before the first release cut from this
+repo, not before deleting the old one.** It fails by syncing nothing rather than by
+erroring, so a v1.0.0 cut against the old path publishes no release notes and every
+check in the flow still passes. Tracked as ZEN-423.
+
+Three of its source paths do not exist here, and one of them fails dangerously:
+
+- **`docs/THIRD-PARTY-NOTICES.md` never existed in this repo.** The deleted
+  `bin/release` block synthesized it in the releases repo by copying
+  `Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md`. What this repo has is
+  `docs/third-party-notices.md`, a maintainer re-probe doc twenty times smaller and
+  about something else. raw.githubusercontent is case-sensitive, so the repoint 404s,
+  **and lowercasing the path to make it pass publishes the wrong document as the app's
+  license disclosure.** Point it at `Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md`.
+  Check this on a case-sensitive filesystem or with `git ls-files`: APFS is
+  case-insensitive, so `ls` finds a file that is not there.
+- **`themes/rose-pine-moon` was renamed** to `rose-pine-zen` in ZEN-416.
+- The notices used to be republished per tag, which is what kept the license text
+  matched to the binary that shipped. Reading `main` loses that, so fetch these at the
+  release tag rather than at `main`.
 
 ## Versioning
 
@@ -63,7 +145,7 @@ A "Developer ID Application" cert in the keychain, and:
 xcrun notarytool store-credentials zenterm-notary --apple-id <id> --team-id <team>
 ```
 
-with an app-specific password.
+with an app-specific password, plus `gh auth login` with push access to this repo.
 
 Keychain reachability from the tool shell is not a fixed property: password items
 are ACL-gated to the requesting context and the grant persists once made. Run the

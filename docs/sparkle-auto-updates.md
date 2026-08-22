@@ -16,9 +16,11 @@ keycap, and the manual-check toasts are here, by eye.
   the top-right toast stack, which morphs in place: available → downloading →
   ready. There is no stock Sparkle window, so nothing follows `effectiveAppearance`
   instead of `Theme.current`.
-- **Feed:** `SUFeedURL` is `.../zen-term-releases/releases/latest/download/appcast.xml`.
+- **Feed:** `SUFeedURL` is `.../praxis-labs-io/zen-term/releases/latest/download/appcast.xml`.
   `bin/release` uploads a single-item `appcast.xml` beside each DMG, so `latest/`
   always resolves to the newest release. Sparkle only ever offers the newest item.
+  A copy installed through v0.10.0 polls the old `zen-term-releases` feed instead;
+  `docs/releasing.md` covers the one-time hand-off that brings those across.
 - **Inert in dev.** A `swift run` build has no `SUFeedURL`, so `UpdateController`
   never starts. Only a packaged app checks for updates (hourly, `SUScheduledCheckInterval`).
 - **The card never takes focus.** It is non-modal, like a sticky toast: its buttons
