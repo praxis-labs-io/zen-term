@@ -11,6 +11,9 @@ The chrome is the product. libghostty sits behind a `TerminalSurface` seam that
 one target owns, and the 142 files above it are panes, tabs, drawers, floats,
 themes, and the keyboard that reaches them.
 
+The release notes, the full documentation, and the guides live at
+[zenterm.io](https://zenterm.io).
+
 ## Install
 
 Download `ZenTerm-<version>-arm64.dmg` from the
