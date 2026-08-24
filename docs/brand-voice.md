@@ -11,14 +11,23 @@ copy it out. Anything else drifts.
 
 ## What ZenTerm is
 
-**A dev-first terminal.**
+**A modern terminal for developers.**
+
+The headline form, used by the site's `SITE_HEADLINE` and its OG image:
+
+> A terminal, built to the pixel.
 
 The longer version, when a sentence isn't enough:
 
-> ZenTerm is a dev-first terminal on a libghostty core. libghostty renders the
-> text and runs the shell; ZenTerm adds the rest: pixel-perfect panes, drawers,
-> and tool floats, orchestrated into workspaces a keystroke away, and a
-> keyboard-first way through all of it.
+> ZenTerm is a modern macOS terminal for developers: tiled panes, drawers, and
+> tool floats, orchestrated into workspaces a keystroke away, with a
+> keyboard-first way through all of it. Terminal emulation, font handling, and
+> rendering come from libghostty, the core the Ghostty project publishes so
+> other terminals can be built on a shared engine.
+
+"A dev-first terminal" survives as an eyebrow and a subtitle, above the headline
+or under it. It is no longer the primary form: it says who the product is for
+and leaves what it is unstated.
 
 The purpose is polish, delight, and functionality for terminal devs of all kinds.
 
@@ -36,12 +45,19 @@ identity, and it is not the audience.
 
 Agents are one thing people run. They get their share of the copy, not the frame.
 
-## What we don't claim
+## How we credit the core
 
-ZenTerm runs on a libghostty core, and it credits libghostty plainly. But the
-core is the engine, not the identity: it belongs in a spec line, a comparison, or
-the docs, never the headline, and never framed so ZenTerm reads as an accessory.
-Don't overclaim what ZenTerm renders itself.
+ZenTerm runs on a libghostty core and credits it plainly, with a link to
+ghostty.org wherever the credit appears. Ghostty publishes libghostty so other
+terminals can be built on a shared engine, and ZenTerm is one of them. Say that,
+and say it in Ghostty's own terms: libghostty handles terminal emulation, font
+handling, and rendering.
+
+The credit is a spec line. It goes below the claim, in a comparison, or in the
+docs. It is never the headline, never the opening premise, and never framed so
+ZenTerm reads as an accessory to it. Don't overclaim what ZenTerm renders
+itself, and don't hand away what it does own: the layout engine, the input
+routing, scroll mode, the theming, and the chrome.
 
 ---
 
@@ -101,6 +117,49 @@ Mechanical and checkable. A reviewer should be able to fail copy on these.
 8. **No lazy extremes.** every, always, never, nobody. Use the specific number.
 9. **Vary sentence length.** Plain does not mean staccato.
 10. **Second person.** "You" beats "users" and "people."
+11. **Say what the product is, and name what it is built on with confidence.**
+    Both, in that order. "Built on libghostty" is a credential: the core
+    underneath is Ghostty's, that is worth knowing at first glance, and it
+    belongs high on the page in a spec position, linked to ghostty.org. What
+    never ships is the same fact in disclaimer form. "libghostty renders the
+    text and runs the shell; ZenTerm is everything around that" defines the
+    product as a remainder and reads as an accessory. A credential is something
+    ZenTerm has. A remainder is something it lacks. Banned constructions:
+    "everything around that", "on top of that", "adds the rest", and any
+    sentence where ZenTerm is what is left over. The test is whether the
+    sentence names something ZenTerm owns: the layout engine, the input
+    routing, scroll mode, the theming, the chrome.
+12. **Positioning by contrast is rule 5 at document scale.** A page whose
+    premise is a comparison fails the same way a sentence does. Open with the
+    claim, and let the contrast come later, if at all.
+
+---
+
+## How we talk about other projects
+
+Name the incumbent. Describe what it does well, in its own terms. Then state
+what ours does differently. Three steps, in that order.
+
+Never make a claim whose only content is that someone else lacks something. "The
+only terminal with real panes" is not a claim about ZenTerm. "Panes tile, and
+your shells keep running as you rearrange them" is.
+
+The site's comparison section is the standard:
+
+> "No knock on the classics. ZenTerm makes different bets, and this is where
+> they show up."
+
+It concedes the ground, names the bets as bets, and lets a table carry the rest.
+The table has rows ZenTerm does not win, which is what makes the rows it does
+win worth reading. Copy that reads as a put-down of iTerm2, Warp, Kitty,
+Terminal.app, or Ghostty does not ship.
+
+The same rule governs the rest of the suite. zen-linear began as a fork of
+linear-tui, zen-octo took its config shape from gh-dash, and zen-review took
+ideas from hunk and tuicr. Each of those debts is stated in its own repo, in its
+own sentences, above the first capability claim or in an Acknowledgments
+section. A debt stated in a subordinate clause under a claim about doing better
+is not a credit.
 
 ---
 
@@ -248,3 +307,8 @@ Before any copy ships:
 - [ ] One word per concept, matching the table above?
 - [ ] Does every error name the fix?
 - [ ] Strip the adjectives. Is the claim still true and still worth making?
+- [ ] Does the first sentence say what the product is, or only what it adds to
+      something else? Say what it is.
+- [ ] Is a dependency in the headline instead of a spec line? Move it down.
+- [ ] Does any claim rest on another project lacking something? State what ours
+      does.

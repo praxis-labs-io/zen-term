@@ -1,18 +1,29 @@
 # ZenTerm
 
-A dev-first terminal for macOS.
+A modern macOS terminal for developers, built to the pixel.
 
-Pixel-perfect panes, drawers, and tool floats, orchestrated into workspaces a
-keystroke away, with a keyboard-first way through all of it. It runs on a
-libghostty core, which renders the text and runs the shell. ZenTerm is
-everything around that.
+**Built on [libghostty](https://ghostty.org)**, the core the Ghostty project
+publishes so other terminals can share one engine: terminal emulation, font
+handling, and rendering. ZenTerm builds it from a pinned `vendor/ghostty`
+submodule, so the emulation under your shell is Ghostty's from first launch.
 
-The chrome is the product. libghostty sits behind a `TerminalSurface` seam that
-one target owns, and the 142 files above it are panes, tabs, drawers, floats,
-themes, and the keyboard that reaches them.
+ZenTerm tiles panes with a cursor that moves by direction, holds two drawers per
+tab, summons tool floats on a chord, and opens a project from a workspace with
+its layout and its processes already running. Each of those sits on a keystroke
+you can rebind, and seventeen themes color the terminal, the tabs, and the chrome
+around them. The layout engine, the input routing, scroll mode, the theming, and
+the chrome are ZenTerm's own.
 
 The release notes, the full documentation, and the guides live at
 [zenterm.io](https://zenterm.io).
+
+![Neovim in the main pane, a dev server in the bottom drawer, and an agent in the right drawer, in one tab](docs/images/drawers.png)
+
+One tab, three shells. ⌘B opens the drawer along the bottom and ⌘\ opens the one
+down the right side, each with its own shell and its own chord printed in the
+corner. Hide a drawer and its process keeps running, so the dev server here is
+still serving while the drawer is gone. The numbered tabs along the bottom are
+⌘1 through ⌘9.
 
 ## Install
 
@@ -44,20 +55,38 @@ through the first hour.
   can stay warm between opens, or die on dismiss.
 - **Workspaces.** A folder plus a layout on ⌘P, so a project opens the way you
   left it.
+- **A command palette over every action.** ⌘⇧P lists them by group with each
+  one's live shortcut, filters as you type, and runs the selection on Enter. A
+  rebind shows up in the row, so the palette never advertises a stale chord.
 - **Scroll mode and Find, in vim keys.** ⌘⇧S moves through the scrollback with
   `hjkl`, `w`/`b`/`e`, and `{`/`}`; `v` and `V` select, `y` copies.
+- **One motion across Neovim splits and ZenTerm panes.** Bind `ctrl+hjkl` to the
+  `nav_*` actions and install
+  [zen-navigator.nvim](https://github.com/praxis-labs-io/zen-navigator.nvim):
+  nvim walks its own splits and hands off to ZenTerm at the edge. ⌘⌥ arrows keep
+  working either way.
 - **Seventeen themes**, and a bring-your-own theme file. A theme colors the whole
   app, not the terminal text alone.
+- **A notification when an agent needs you.** With ZenTerm in the background and
+  an agent stopped for input, macOS posts a banner and the tab's number takes the
+  theme's attention color until you visit it.
 - **No telemetry, no analytics, no account.** The only request ZenTerm makes on its
   own is an update check, which asks GitHub for a version number and sends nothing
   about you.
 
 ## Configure it
 
-One file, `~/.config/zen-term/config`, in ghostty's syntax. Settings (⌘,) writes
-the same file, so the two never disagree.
+One file, `~/.config/zen-term/config`, in Ghostty's config syntax. Settings (⌘,)
+writes the same file, so the two never disagree.
 [`docs/config/config`](docs/config/config) is the annotated reference: every key,
 its default, and what a bad line does.
+
+![The Appearance pane of Settings: theme, accent color, window buttons, toolbar buttons, backdrop alpha, window gutter, and pane gap](docs/images/settings.png)
+
+Picking a theme here writes the `theme =` line you would have typed. The row says
+it applies instantly, and it recolors the terminal, the tabs, and the chrome
+while the pane is still open. The pane and the file hold the same keys, so
+neither one can tell you something the other contradicts.
 
 ## Build from source
 
@@ -82,8 +111,8 @@ Tools alone.
   [`docs/config/workspaces`](docs/config/workspaces) are the reference files.
 - [`docs/architecture.md`](docs/architecture.md) is how the app fits together,
   and it describes what exists rather than what was planned.
-- [`docs/swift-conventions.md`](docs/swift-conventions.md) is the AppKit traps
-  that cost us a release each.
+- [`docs/swift-conventions.md`](docs/swift-conventions.md) collects the AppKit
+  traps that cost us a release each.
 - [`docs/releasing.md`](docs/releasing.md) is how a build reaches an Applications
   folder.
 - [`docs/release-notes/`](docs/release-notes) is every version, curated.
