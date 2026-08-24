@@ -74,6 +74,13 @@ through the first hour.
   own is an update check, which asks GitHub for a version number and sends nothing
   about you.
 
+![lazygit open as a tool float over the panes, with its own numbered panes, and the work still visible around it](docs/images/tool-float.png)
+
+A float is one `float =` line in the config: a command, a chord, and an icon for
+the toolbar. It opens over the work instead of taking a pane, so the panes and
+drawers underneath keep their places. `persist:dir` keeps one warm per
+repository, which makes the first open cold and every reopen instant.
+
 ## Configure it
 
 One file, `~/.config/zen-term/config`, in Ghostty's config syntax. Settings (⌘,)
