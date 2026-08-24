@@ -2,11 +2,11 @@
 
 The durable contract between ZenTerm and the companion Neovim plugin
 (`zen-navigator.nvim`). ZenTerm implements this side; the plugin is written
-against it. Both ends are backend-agnostic — nothing here depends on the terminal
+against it. Both ends are backend-agnostic: nothing here depends on the terminal
 backend behind the seam.
 
 The goal: `Ctrl-hjkl` walks across nvim splits and ZenTerm panes as one motion.
-It is **opt-in** — default `⌘-hjkl` pane nav is untouched. A user enables it by
+It is **opt-in**: default `⌘-hjkl` pane nav is untouched. A user enables it by
 (a) binding `ctrl+hjkl → nav_*` in their ZenTerm keybind config and
 (b) installing the plugin.
 
@@ -17,7 +17,7 @@ ZenTerm injects two variables into every pane's shell:
 | Var        | Value                                                        |
 | ---------- | ----------------------------------------------------------- |
 | `ZEN_SOCK` | Absolute path to the nav command socket (see below).        |
-| `ZEN_PANE` | This pane's integer token — stable for the pane's lifetime. |
+| `ZEN_PANE` | This pane's integer token, stable for the pane's lifetime. |
 
 The plugin **degrades to plain `wincmd`** when either is absent (i.e. Neovim is
 not running under ZenTerm).
@@ -30,11 +30,11 @@ not running under ZenTerm).
 ## Socket
 
 - Path: `$ZEN_SOCK` (currently
-  `~/Library/Application Support/ZenTerm/nav.<pid>.sock` — per app instance, so
+  `~/Library/Application Support/ZenTerm/nav.<pid>.sock`, one per app instance, so
   two running ZenTerms never fight over one socket). Always discover it via the
   env var, never hardcode.
 - Type: `AF_UNIX`, `SOCK_STREAM`. Neovim connects natively with
-  `sockconnect('pipe', $ZEN_SOCK)` — no per-keystroke process spawn.
+  `sockconnect('pipe', $ZEN_SOCK)`, with no per-keystroke process spawn.
 - Framing: newline-delimited (`\n`) UTF-8 JSON, one command per line. A
   short-lived connection that writes one line and closes is fine.
 - ZenTerm silently drops malformed lines, unknown commands, unknown directions,
@@ -42,7 +42,7 @@ not running under ZenTerm).
 
 ## Commands (plugin → ZenTerm)
 
-### `focus` — hand off at an nvim edge
+### `focus`: hand off at an nvim edge
 
 Sent when nvim is at its edge split and can't move further, so ZenTerm should
 move pane focus in that direction, starting from the sending pane.
@@ -56,7 +56,7 @@ move pane focus in that direction, starting from the sending pane.
 
 Direction mapping the plugin uses: `h→left`, `j→down`, `k→up`, `l→right`.
 
-### `setvim` — advertise nvim presence
+### `setvim`: advertise nvim presence
 
 Sent so ZenTerm knows not to steal `Ctrl-hjkl` from a pane running nvim (the key
 pass-through guard). Send `true` on `VimEnter`/`VimResume`, `false` on
@@ -76,7 +76,7 @@ pass-through guard). Send `true` on `VimEnter`/`VimResume`, `false` on
 
 ## Plugin behavior (reference)
 
-For the crossing to be seamless, the plugin:
+For the crossing to hold, the plugin:
 
 1. On the mapped `Ctrl-h/j/k/l`: `let nr = winnr()` → `wincmd h/j/k/l` →
    `at_edge = (nr == winnr())` (the `vim-tmux-navigator` edge test).
