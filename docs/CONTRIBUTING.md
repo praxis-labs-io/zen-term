@@ -39,6 +39,10 @@ Instruments; everything else is the terminal.
 Green means all four, not build and test. Format-lint and swiftlint fail CI on
 their own.
 
+Releases are cut by maintainers. `bin/release` needs signing, notarization, and
+update-signing credentials, so it stops at its preflight anywhere else.
+`bin/package-app` is the local build to hand someone.
+
 ## Layout
 
 ```
