@@ -17,7 +17,7 @@ Release notes, documentation, and guides live at
 
 One tab, three shells. ⌘B opens the drawer along the bottom, ⌘\ opens the one
 down the right side, and each runs its own shell with its chord printed in the
-corner. Hiding a drawer does not stop its process. The dev server here keeps
+corner. Hiding a drawer doesn't stop its process. The dev server here keeps
 running while the drawer is hidden. The numbered tabs along the bottom are ⌘1
 through ⌘9.
 

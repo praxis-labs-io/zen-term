@@ -29,7 +29,7 @@ The longer version, when a sentence isn't enough:
 or under it. It is no longer the primary form: it says who the product is for
 and leaves what it is unstated.
 
-The purpose is polish, delight, and functionality for terminal devs of all kinds.
+The purpose is polish and functionality for terminal devs of all kinds.
 
 ## Who it's for
 
@@ -73,7 +73,9 @@ Five heuristics carry most of it:
 2. **A heading names an outcome**, usually verb-first. "Split a pane without
    leaving home row" over "Panes", and over "Supercharge your workflow".
 3. **Specificity replaces description.** A number beats an adjective every time.
-   "Seventeen built-in themes" does work that "beautifully themed" does not.
+   "17 built-in themes" does work that "beautifully themed" does not. Write
+   numbers as digits, including under ten: a digit is what gets scanned, and a
+   spelled-out number reads as decoration.
 4. **A button is a verb.** "Download". "Quit". "Retry". Never "Get started for
    free today".
 5. **Confidence lives in the claim, not the adjectives.** If the claim is true,
@@ -110,14 +112,36 @@ Mechanical and checkable. A reviewer should be able to fail copy on these.
 4. **Active voice, and name the actor.** "Collisions are reported" hides who.
    "The app tells you" doesn't. Inanimate things don't act: a complaint doesn't
    become a fix, a decision doesn't emerge.
-5. **No "not X, it's Y" contrasts.** State Y.
+5. **No "not X, it's Y" contrasts.** State Y. This extends to any contrast whose
+   alternative nobody proposed: "it describes what exists rather than what was
+   planned" invents an assumption in order to defeat it. The test is whether a
+   reader would have made that assumption unprompted. "Moves by direction rather
+   than by order" passes, because order-based movement is what other terminals
+   do. If the alternative is a strawman, state the claim alone.
 6. **No fragments for drama.** "One window, one pane, your shell. That's it."
-   Write complete sentences and trust them.
+   A fragment used for density is fine and often better: a list of noun phrases
+   reads as a spec sheet, which is what someone scanning wants. The failing kind
+   is the one that exists for a beat of emphasis.
 7. **No rhetorical questions**, no "Here's the thing," no "Let that sink in."
 8. **No lazy extremes.** every, always, never, nobody. Use the specific number.
 9. **Vary sentence length.** Plain does not mean staccato.
 10. **Second person.** "You" beats "users" and "people."
-11. **Say what the product is, and name what it is built on with confidence.**
+11. **No designed final clauses.** A paragraph that resolves on a balanced
+    closing beat reads as composed rather than written, and it is the single
+    clearest sign copy was drafted by a machine. "So neither one can tell you
+    something the other contradicts." "So nothing you did not write appears
+    here." "Which makes the first open cold and every reopen instant." Each
+    states a real fact wearing a cadence. Say the fact and start a new sentence.
+    The check: read only the last clause of each paragraph in a row. If they
+    sound like a set, cut them.
+12. **No writerly constructions where a plain verb exists.** "A cursor that
+    knows where it is" is a cursor that moves by direction. "Summons a float on
+    a chord" is a chord that opens a float. "Reads the app to someone opening it
+    for the first time" walks through the app. The literal version is the one
+    that ships.
+13. **Contractions are fine.** "Doesn't", "you're", "it's". Removing them does
+    not add authority, it adds starch.
+14. **Say what the product is, and name what it is built on with confidence.**
     Both, in that order. "Built on libghostty" is a credential: the core
     underneath is Ghostty's, that is worth knowing at first glance, and it
     belongs high on the page in a spec position, linked to ghostty.org. What
@@ -129,7 +153,7 @@ Mechanical and checkable. A reviewer should be able to fail copy on these.
     sentence where ZenTerm is what is left over. The test is whether the
     sentence names something ZenTerm owns: the layout engine, the input
     routing, scroll mode, the theming, the chrome.
-12. **Positioning by contrast is rule 5 at document scale.** A page whose
+15. **Positioning by contrast is rule 5 at document scale.** A page whose
     premise is a comparison fails the same way a sentence does. Open with the
     claim, and let the contrast come later, if at all.
 
@@ -300,6 +324,11 @@ Before any copy ships:
 
 - [ ] Any em-dash or dot spacer (`·`)? Replace it with a colon.
 - [ ] Any hype word or adverb? Cut it.
+- [ ] Read the last clause of each paragraph in a row. Do they sound like a set?
+      Cut the cadence and state the fact.
+- [ ] Any contrast whose alternative nobody would have assumed? State the claim
+      alone.
+- [ ] A spelled-out number where a digit would be scanned? Use the digit.
 - [ ] Passive voice, or an object doing a human verb? Name the actor.
 - [ ] "Not X, it's Y"? State Y.
 - [ ] Fragments stacked for drama? Write sentences.
