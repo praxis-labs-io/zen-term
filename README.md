@@ -68,10 +68,10 @@ through the first hour.
   own is an update check, which asks GitHub for a version number and sends nothing
   about you.
 
-## Keybindings
+## Shortcuts
 
 Defaults. Every one is rebindable in the config, and the command palette lists
-your current binding for each action.
+your current shortcut for each action.
 
 | Action | Default |
 | --- | --- |
