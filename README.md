@@ -74,6 +74,27 @@ through the first hour.
   own is an update check, which asks GitHub for a version number and sends nothing
   about you.
 
+## A look around
+
+![Three panes tiled in one tab, the focused one carrying a colored halo](docs/images/panes.png)
+
+⌘D splits right and ⌘⇧D splits down. The focused pane carries the halo, so where
+the next keystroke lands is visible without hunting for a cursor. ⌘⌥ plus an
+arrow moves by direction rather than by order, and the gap between panes and the
+padding around them are both yours to set.
+
+![The command palette open over an empty pane, its Tools group listing each command with the shortcut that runs it](docs/images/palette.png)
+
+⌘⇧P filters as you type and runs the selection on Enter. Each row carries the
+shortcut that runs it, read from your config, so a rebind shows up here instead
+of leaving the palette advertising a chord that stopped working.
+
+![The workspace picker open, listing named workspaces with a search field above them](docs/images/workspaces.png)
+
+⌘P lists the workspaces you named, each one a folder plus a layout. The list is
+deliberate: ZenTerm does not scan a directory to fill it, so nothing you did not
+write appears here.
+
 ![lazygit open as a tool float over the panes, with its own numbered panes, and the work still visible around it](docs/images/tool-float.png)
 
 A float is one `float =` line in the config: a command, a chord, and an icon for
