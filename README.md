@@ -83,6 +83,13 @@ the next keystroke lands is visible without hunting for a cursor. ⌘⌥ plus an
 arrow moves by direction rather than by order, and the gap between panes and the
 padding around them are both yours to set.
 
+![The same three panes on a light theme, with the theme picker open over them listing bundled themes marked Dark or Light](docs/images/themes-light.png)
+
+The same window on Catppuccin Latte. A theme colors the terminal, the tab bar,
+the toolbar, the focus halo, and Settings itself, so a light theme stays light
+through the whole app. Seventeen ship, each marked Dark or Light in the picker,
+and a `theme = ` line pointed at any Ghostty theme file works the same way.
+
 ![The command palette open over an empty pane, its Tools group listing each command with the shortcut that runs it](docs/images/palette.png)
 
 ⌘⇧P filters as you type and runs the selection on Enter. Each row carries the
