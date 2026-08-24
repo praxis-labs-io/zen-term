@@ -157,8 +157,7 @@ Tools alone.
   opening it for the first time.
 - [`docs/config/config`](docs/config/config) and
   [`docs/config/workspaces`](docs/config/workspaces) are the reference files.
-- [`docs/architecture.md`](docs/architecture.md) is how the app fits together,
-  and it describes what exists rather than what was planned.
+- [`docs/architecture.md`](docs/architecture.md) is how the app fits together.
 - [`docs/swift-conventions.md`](docs/swift-conventions.md) collects the AppKit
   traps that cost us a release each.
 - [`docs/releasing.md`](docs/releasing.md) is how a build gets released.
