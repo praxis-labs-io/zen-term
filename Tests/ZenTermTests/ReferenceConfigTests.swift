@@ -39,4 +39,20 @@ final class ReferenceConfigTests: XCTestCase {
         XCTAssertEqual(terminal.selectionBackground, expected.selectionBackground)
         XCTAssertEqual(terminal.ansi, expected.ansi)
     }
+
+    /// The reference file is what a user copies to start their own theme, so its
+    /// `nvim-colorscheme` has to name what the bundled default names. Drift here hands the editor
+    /// a different colorscheme than the theme the user picked, and the parser drops the key, so
+    /// `test_referenceTheme_matchesBuiltInDefault` above stays green through it.
+    func test_referenceTheme_namesTheSameColorschemeAsTheBundledDefault() throws {
+        let bundled = try XCTUnwrap(ThemeCatalog.bundledURL(for: ThemeCatalog.defaultThemeName))
+        let reference =
+            docsConfig
+            .appendingPathComponent("themes")
+            .appendingPathComponent(ThemeCatalog.defaultThemeName)
+
+        XCTAssertEqual(
+            ThemePublisher.nvimColorscheme(inThemeAt: reference),
+            ThemePublisher.nvimColorscheme(inThemeAt: bundled))
+    }
 }

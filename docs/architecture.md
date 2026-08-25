@@ -926,6 +926,16 @@ depends on it. The wire contract is `docs/nvim-navigator-protocol.md`.
 `NavGuard.shouldPassThrough` passes through only Ctrl-nav, never ⌘-nav, so default
 pane nav is untouched whether or not the pane runs nvim.
 
+**The theme state file** backs [zen-theme.nvim](https://github.com/praxis-labs-io/zen-theme.nvim).
+`ThemePublisher` writes `~/Library/Application Support/ZenTerm/theme.json` at launch
+and on every `.theme` change, so an editor recolors with the chrome. **A fixed path,
+not per-pid and not exported in the environment**: a float launches with no
+environment, so a reader inside one could never be handed a path. Two instances are
+last-writer-wins, which a theme change corrects. Each bundled theme names its Neovim
+colorscheme in an `nvim-colorscheme` key that `GhosttyThemeParser` drops as unknown,
+so the mapping ships in the theme file and a user's own theme takes one line. The
+wire contract is `docs/nvim-theme-protocol.md`.
+
 Two things claim a Ctrl-nav chord ahead of pane nav: a pane running nvim, and **an
 open tool float**, whatever it is running. A float is modal, so `handle` swallows nav
 while one is up; consuming the chord took it from the tool and then dropped it, which
