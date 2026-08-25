@@ -37,7 +37,7 @@ bound to the old one stops firing after the first swap.
   "foreground": "#d8dee9",
   "cursor": "#eceff4",
   "selectionBackground": "#eceff4",
-  "accent": "#88c0d0",
+  "accent": "#b48ead",
   "ansi": ["#3b4252", "#bf616a", "…14 more"]
 }
 ```
