@@ -3125,7 +3125,7 @@ The copyright/license for each individual theme belongs to the author of that th
 
 ### The Settings theme catalog
 
-Thirty themes in Settings → Appearance, separate from the 463 above. Each is a
+Thirty-seven themes in Settings → Appearance, separate from the 463 above. Each is a
 palette file under `Sources/ZenTerm/Themes`, carrying sixteen ANSI colors plus
 background, foreground, cursor, and selection. The upstream project for each is
 credited below, with the license that project publishes.
@@ -3136,6 +3136,36 @@ copyright for each individual theme belongs to that theme's author, so it is a
 credit alongside these entries rather than a substitute for them. The four
 Catppuccin palettes did not come that way: they differ from Ghostty's in half their
 ANSI slots, so they are attributed to Catppuccin directly.
+
+### Aura
+
+**MIT**
+
+`aura`, the Aura Dark variant, from `daltonmenezes/aura-theme`, by Dalton Menezes.
+
+```text
+MIT License
+
+Copyright (c) 2021 - * Dalton Menezes
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ### Catppuccin
 
@@ -3336,8 +3366,8 @@ SOFTWARE.
 
 **MIT**
 
-`nightfox`, the Nightfox variant, from `EdenEast/nightfox.nvim`. The project ships several
-palettes under that name; the values here are the base one.
+`nightfox`, `carbonfox`, `duskfox`, `nordfox`, `terafox`, `dawnfox`, and `dayfox`: the seven
+palettes `EdenEast/nightfox.nvim` ships, each under its own name.
 
 ```text
 MIT License
