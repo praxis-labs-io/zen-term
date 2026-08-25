@@ -20,3 +20,4 @@ cursor-color = #3760bf
 cursor-text = #e1e2e7
 selection-background = #99a7df
 selection-foreground = #3760bf
+nvim-colorscheme = tokyonight-day

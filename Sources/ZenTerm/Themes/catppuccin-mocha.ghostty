@@ -20,3 +20,4 @@ cursor-color = #f5e0dc
 cursor-text = #1e1e2e
 selection-background = #f5e0dc
 selection-foreground = #1e1e2e
+nvim-colorscheme = catppuccin-mocha

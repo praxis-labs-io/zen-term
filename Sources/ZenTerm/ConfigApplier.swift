@@ -42,6 +42,8 @@ final class ConfigApplier {
         var reapplyUpdateCardTheme: @MainActor () -> Void
         /// Re-point Sparkle's background check schedule at the config.
         var applyAutoCheckSetting: @MainActor () -> Void
+        /// Republish `theme.json` for an editor running inside a pane.
+        var publishTheme: @MainActor () -> Void
     }
 
     private let sinks: Sinks
@@ -85,6 +87,9 @@ final class ConfigApplier {
         if change.contains(.theme) || change.contains(.keymap) { sinks.reapplyUpdateCardTheme() }
         // Pick up a flipped auto-update toggle with no relaunch.
         if change.contains(.updates) { sinks.applyAutoCheckSetting() }
+        // Tell an editor inside a pane the theme moved. Gated on `.theme` alone: the payload is
+        // resolved from `Theme.current`, and nothing else in the config reaches it.
+        if change.contains(.theme) { sinks.publishTheme() }
     }
 
     /// Everything the config says out loud: the shared problems notice, and a card per chord

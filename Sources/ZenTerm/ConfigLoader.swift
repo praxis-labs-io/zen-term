@@ -39,7 +39,7 @@ enum ConfigLoader {
         let builtIn = Theme.rosePineZen
 
         var terminal: TerminalTheme
-        if let themeURL = resolveThemeURL(configRoot: configRoot, general: general) {
+        if let themeURL = activeThemeURL(configRoot: configRoot, themeName: general.themeName) {
             do {
                 let text = try String(contentsOf: themeURL, encoding: .utf8)
                 terminal = GhosttyThemeParser.parse(
@@ -64,8 +64,11 @@ enum ConfigLoader {
 
     /// Locate the active theme file, or nil for the compiled-in default. No key means the legacy
     /// single `theme` file if present, else the default token resolved like any other.
-    private static func resolveThemeURL(configRoot: URL, general: GeneralConfig) -> URL? {
-        if let name = general.themeName {
+    ///
+    /// Takes the token rather than the whole config, and is not `@MainActor`, so `ThemePublisher`
+    /// can resolve the file off the main thread.
+    static func activeThemeURL(configRoot: URL, themeName: String?) -> URL? {
+        if let name = themeName {
             if let url = namedThemeURL(configRoot: configRoot, name: name) { return url }
             Log.warning(
                 "ConfigLoader: theme `\(name)` not found in user themes/ or the bundled catalog — using built-in theme",

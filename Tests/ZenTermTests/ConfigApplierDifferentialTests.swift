@@ -64,11 +64,16 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         /// Whether a window is there to take a notice. The real sink returns false when the key
         /// window isn't one of ours (an open panel).
         var canDeliver = true
+        /// The payload `theme.json` holds. Seeded with the *old* theme, because that is what the
+        /// file on disk already carries — nil would model "was it called", and re-publishing an
+        /// unchanged theme is a no-op that would then read as a divergence.
+        var published: ThemePublisher.Payload
         let card: UpdateCardView
 
         /// Built while `GeneralConfig.current` is still the *old* config, so the card bakes in the
         /// old keycap and every field starts where the running app would have it.
         init(old: GeneralConfig) {
+            published = ThemePublisher.payload(for: Theme.current, themeName: old.themeName)
             keymap = old.keymap
             shadowKeymap = old.keymap
             motion = old.reduceMotion
@@ -100,6 +105,12 @@ final class ConfigApplierDifferentialTests: XCTestCase {
                 // The real sink re-reads the live config rather than taking a value.
                 applyAutoCheckSetting: { [unowned self] in
                     self.autoChecks = GeneralConfig.current.automaticUpdateChecks
+                },
+                // The real sink resolves the payload from the live statics, so this does too. The
+                // `nvimColorscheme` half needs the filesystem and is asserted in `ThemePublisherTests`.
+                publishTheme: { [unowned self] in
+                    self.published = ThemePublisher.payload(
+                        for: Theme.current, themeName: GeneralConfig.current.themeName)
                 })
         }
     }
@@ -123,6 +134,8 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         /// The notice left on screen. Distinct from `announced`: a gate that raised the right
         /// warning but failed to retract it lands here, not there.
         var showing: ToastContent?
+        /// What `theme.json` holds after the fan-out.
+        var published: ThemePublisher.Payload
 
         /// Which fields moved, for the failure message. Equality above is what makes the assertion
         /// correct; this only makes it readable, so a field missing here degrades to a vaguer
@@ -155,6 +168,11 @@ final class ConfigApplierDifferentialTests: XCTestCase {
                 diffs.append(
                     "notice on screen (\(showing?.title ?? "none") vs \(other.showing?.title ?? "none"))")
             }
+            if published != other.published {
+                diffs.append(
+                    "published theme (\(published.name) \(published.background) vs "
+                        + "\(other.published.name) \(other.published.background))")
+            }
             return diffs
         }
     }
@@ -171,7 +189,7 @@ final class ConfigApplierDifferentialTests: XCTestCase {
             motion: doubles.motion, autoChecks: doubles.autoChecks,
             cardKeycap: views.compactMap { ($0 as? KeycapView)?.shortcut }.joined(separator: "+"),
             cardText: views.compactMap { ($0 as? NSTextField)?.stringValue },
-            announced: doubles.announced, showing: doubles.showing)
+            announced: doubles.announced, showing: doubles.showing, published: doubles.published)
     }
 
     // MARK: - harness

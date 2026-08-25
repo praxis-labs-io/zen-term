@@ -20,3 +20,4 @@ cursor-color = #eceff4
 cursor-text = #282828
 selection-background = #eceff4
 selection-foreground = #4c566a
+nvim-colorscheme = nord

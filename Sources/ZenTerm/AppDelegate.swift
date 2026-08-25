@@ -48,7 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.windows.forEach { $0.dismissConflictToasts() }
             },
             reapplyUpdateCardTheme: { [weak self] in self?.updateController?.reapplyTheme() },
-            applyAutoCheckSetting: { [weak self] in self?.updateController?.applyAutoCheckSetting() }))
+            applyAutoCheckSetting: { [weak self] in self?.updateController?.applyAutoCheckSetting() },
+            publishTheme: { ThemePublisher.publish() }))
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Install the on-disk log sink now that this is a real app run, before the first config
@@ -87,6 +88,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // is for. It also seeds the change-gate, so a pre-existing problem can't ambush them later,
         // attached to an unrelated edit that didn't cause it.
         configApplier.surfaceConfigNotices()
+        // Publish the launch theme, so an editor started in the first pane has an answer before any
+        // theme change happens. Called directly rather than through `apply(_:)`, which launch skips.
+        ThemePublisher.publish()
 
         keys.onReservedChord = { [weak self] chord in self?.route(chord) }
         // Let a `Ctrl`-nav chord fall through to the terminal that owns it: a pane running nvim
