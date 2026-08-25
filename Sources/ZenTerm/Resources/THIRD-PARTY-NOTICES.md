@@ -3125,7 +3125,7 @@ The copyright/license for each individual theme belongs to the author of that th
 
 ### The Settings theme catalog
 
-Seventeen themes in Settings → Appearance, separate from the 463 above. Each is a
+Thirty themes in Settings → Appearance, separate from the 463 above. Each is a
 palette file under `Sources/ZenTerm/Themes`, carrying sixteen ANSI colors plus
 background, foreground, cursor, and selection. The upstream project for each is
 credited below, with the license that project publishes.
@@ -3201,7 +3201,7 @@ SOFTWARE.
 
 **MIT**
 
-`everforest`, the Dark Hard variant. The palette originates with `sainnhe/everforest` and reached Ghostty through an iTerm2 port, `icewind/everforest.iterm2`. Both are MIT and both copyrights are reproduced: the values that ship are the port's.
+`everforest` and `everforest-light`, the Dark Hard and Light Medium variants. The palette originates with `sainnhe/everforest` and reached Ghostty through an iTerm2 port, `icewind/everforest.iterm2`. Both are MIT and both copyrights are reproduced: the values that ship are the port's.
 
 ```text
 MIT License
@@ -3228,11 +3228,41 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### Flexoki
+
+**MIT**
+
+`flexoki-dark` and `flexoki-light`, from `kepano/flexoki`, by Steph Ango.
+
+```text
+MIT License
+
+Copyright (c) 2023 Steph Ango
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### Gruvbox
 
 **MIT, asserted without a license file**
 
-`gruvbox-dark`, from `morhetz/gruvbox`, by Pavel Pertsev.
+`gruvbox-dark` and `gruvbox-light`, from `morhetz/gruvbox`, by Pavel Pertsev.
 
 The repository publishes **no license file and no copyright line**. Its
 `package.json` declares `"license": "MIT"` and its README links the MIT/X11
@@ -3245,12 +3275,74 @@ notice upstream never wrote.
 
 **MIT**
 
-`kanagawa`, the Wave variant, from `rebelot/kanagawa.nvim`.
+`kanagawa`, `kanagawa-dragon`, and `kanagawa-lotus`: the Wave, Dragon, and Lotus variants, from
+`rebelot/kanagawa.nvim`.
 
 ```text
 MIT License
 
 Copyright (c) 2021 Tommaso Laurenzi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### Melange
+
+**MIT**
+
+`melange-dark` and `melange-light`, from `savq/melange-nvim`.
+
+```text
+MIT License
+
+Copyright (c) 2021 Sergio Alejandro Vargas
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### Nightfox
+
+**MIT**
+
+`nightfox`, the Nightfox variant, from `EdenEast/nightfox.nvim`. The project ships several
+palettes under that name; the values here are the base one.
+
+```text
+MIT License
+
+Copyright (c) 2021 James Simpson
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -3281,6 +3373,38 @@ SOFTWARE.
 MIT License (MIT)
 
 Copyright (c) 2016-present Sven Greb <development@svengreb.de> (https://www.svengreb.de)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### Oxocarbon
+
+**MIT**
+
+`oxocarbon`, from `nyoom-engineering/oxocarbon.nvim`, the reference implementation. Its README
+describes the palette as a subset of the broader IBM Carbon palette, which is credited here as
+the source of the colors rather than as a licensor of this file.
+
+```text
+MIT License
+
+Copyright (c) 2022 Riccardo Mazzarini
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -3335,9 +3459,9 @@ SOFTWARE.
 
 **MIT**
 
-`solarized-dark`, from `altercation/solarized` by Ethan Schoonover. The values that ship are
-the "Solarized Dark Patched" variant carried by iTerm2-Color-Schemes rather than the base
-Solarized palette; that collection publishes no separate attribution for the patch, so there
+`solarized-dark` and `solarized-light`, from `altercation/solarized` by Ethan Schoonover. The
+values that ship are the "Solarized Dark Patched" and "iTerm2 Solarized Light" variants carried
+by iTerm2-Color-Schemes rather than the base Solarized palette; that collection publishes no separate attribution for the patch, so there
 is no further author to name. The upstream LICENSE file carries no license name; its body is the
 unmodified MIT text, which is where the name here comes from.
 
@@ -3367,7 +3491,8 @@ THE SOFTWARE.
 
 **MIT and Apache-2.0: two upstreams**
 
-`tokyo-night`, `tokyo-night-storm`, and `tokyo-night-day`. Two projects have a
+`tokyo-night`, `tokyo-night-storm`, `tokyo-night-moon`, and `tokyo-night-day`. Moon is the
+Neovim port's own variant; the VS Code original has no counterpart to it. Two projects have a
 claim and both are credited, because the palette values ZenTerm ships match the
 Neovim port while the theme originates with the VS Code one.
 
@@ -3674,4 +3799,63 @@ Referenced by SPIRV-Cross, Highway, and Tokyo Night above.
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+```
+
+### Vesper
+
+**MIT**
+
+`vesper`. Two projects have a claim and both are credited: the theme originates with the VS Code
+one and reached terminals through the Neovim port.
+
+The original, `raunofreiberg/vesper`, is MIT:
+
+```text
+MIT License
+
+Copyright (c) 2023 Rauno Freiberg
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+The port, `datsfilipe/vesper.nvim`, is MIT:
+
+```text
+MIT License
+
+Copyright (c) 2023 datsfilipe
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
