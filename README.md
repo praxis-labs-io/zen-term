@@ -1,5 +1,7 @@
 # ZenTerm
 
+![ZenTerm going from a single pane to a full tab: nvim in the main pane, a dev server in the bottom drawer, an agent in the right drawer, and tool floats over the top](docs/images/demo.gif)
+
 ZenTerm is a modern macOS terminal built on a libghostty core. Native panes and
 windows, hideable drawers and floats, tools bound to the keys you pick, and
 workspaces you define.
