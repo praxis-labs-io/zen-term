@@ -73,6 +73,7 @@ final class ToggleDock: NSView {
             scratch.icon, scratch.title, .toggleToolFloat(scratch.id), { onToolFloat(scratch) })
         zoomBtn = button("arrow.up.left.and.arrow.down.right", "Focus mode", .toggleZoom, onZoom)
         super.init(frame: .zero)
+        wantsLayer = true
         translatesAutoresizingMaskIntoConstraints = false
         fixedButtons = [
             .newTab: newTab, .splitHorizontal: splitH, .splitVertical: splitV,
@@ -105,6 +106,7 @@ final class ToggleDock: NSView {
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
         setToolFloats(toolFloats)
+        applyFill()  // the strip is built once; without this it is bare until the first re-apply
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -276,11 +278,44 @@ final class ToggleDock: NSView {
     /// Re-apply the live chrome colors to every button + divider after a config change — no
     /// relaunch. Each `IconButton` already reads `Theme.current` fresh; this just re-triggers
     /// that read. The dividers bake their color in once at build time, so it's reset explicitly.
+    /// The floor the strip's own fill brings the shell up to under the footer.
+    ///
+    /// The dock is chrome, and its ink is the only thing in the window that has to stay readable at
+    /// any `backdrop-alpha`. Below this the tint is thin enough that the blurred desktop drives the
+    /// contrast instead of the theme: a light theme over a dark desktop, or the inverse, leaves the
+    /// icons unreadable. Tune here — it is the single knob for footer legibility.
+    static let legibilityFloor: CGFloat = 0.92
+
+    /// How opaque the dock paints its own fill so the shell beneath reaches `legibilityFloor`.
+    ///
+    /// Source-over: painting `a` over a backdrop of `b` lands at `a + b(1 - a)`. Solving that for
+    /// the floor gives the top-up below. Zero once the backdrop already clears the floor, so a solid
+    /// shell is left exactly as it was.
+    static func fillAlpha(backdropAlpha: CGFloat, floor: CGFloat = legibilityFloor) -> CGFloat {
+        guard backdropAlpha < floor else { return 0 }
+        guard backdropAlpha < 1 else { return 0 }
+        return (floor - backdropAlpha) / (1 - backdropAlpha)
+    }
+
     func reapplyTheme() {
         for button in allButtons { button.reapplyTheme() }
         let dividerColor = Theme.current.chrome.ink(alpha: 0.10).cgColor
         for divider in dividers { divider.layer?.backgroundColor = dividerColor }
+        applyFill()
     }
+
+    /// Paint the strip in the theme's own background, at whatever alpha brings the shell under it up
+    /// to the legibility floor. Same hue as the backdrop tint, so this reads as the shell being a
+    /// shade more solid here rather than as a separate bar.
+    private func applyFill() {
+        let alpha = Self.fillAlpha(backdropAlpha: GeneralConfig.current.backdropAlpha)
+        layer?.backgroundColor =
+            alpha > 0
+            ? Theme.current.chrome.background.nsColor.withAlphaComponent(alpha).cgColor : nil
+    }
+
+    /// Test hook: the fill actually painted, read off the layer rather than the inputs.
+    var paintedFillForTesting: CGColor? { layer?.backgroundColor }
 
     /// A thin 1×12 vertical divider matching the demo's group separators.
     private static func divider() -> NSView {

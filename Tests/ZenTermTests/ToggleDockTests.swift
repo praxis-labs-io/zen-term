@@ -302,4 +302,45 @@ final class ToggleDockTests: XCTestCase {
     func test_toolbarButtonGroups_coverEveryCaseInOrder() {
         XCTAssertEqual(ToolbarButton.groups.flatMap { $0 }, ToolbarButton.allCases)
     }
+
+    // MARK: - footer legibility
+
+    /// The footer's ink is the only thing in the window that has to stay readable at any
+    /// `backdrop-alpha`, and a composited alpha is exactly the budget an eye cannot check: a light
+    /// theme over a dark desktop reads as "slightly dim" right up until it is unreadable.
+    ///
+    /// Source-over: `a` over `b` lands at `a + b(1 - a)`. Asserts the strip's own fill brings the
+    /// shell to the floor across the range, rather than asserting the top-up numbers themselves.
+    func test_theStripsFill_bringsTheShellToTheLegibilityFloor() {
+        let floor = ToggleDock.legibilityFloor
+        for backdrop in stride(from: CGFloat(0), through: 0.9, by: 0.1) {
+            let fill = ToggleDock.fillAlpha(backdropAlpha: backdrop, floor: floor)
+            let combined = fill + backdrop * (1 - fill)
+            XCTAssertEqual(
+                combined, floor, accuracy: 0.0001,
+                "backdrop-alpha \(backdrop) composites to \(combined), not the \(floor) floor")
+        }
+    }
+
+    /// A shell already at or past the floor is left exactly as it was, so the default look does not
+    /// gain a bar that was never there.
+    func test_aShellPastTheFloor_paintsNothing() {
+        XCTAssertEqual(ToggleDock.fillAlpha(backdropAlpha: ToggleDock.legibilityFloor), 0)
+        XCTAssertEqual(ToggleDock.fillAlpha(backdropAlpha: 1), 0)
+    }
+
+    /// The painted color, not the computed number: the strip has to actually carry a fill, and it has
+    /// to be the theme's own background so it reads as the shell rather than a separate surface.
+    @MainActor
+    func test_theStrip_paintsTheThemeBackground_notATint() {
+        let dock = makeDock([])
+        let painted = try? XCTUnwrap(dock.paintedFillForTesting)
+        XCTAssertNotNil(painted, "the strip carries a fill")
+        guard let painted, let color = NSColor(cgColor: painted)?.usingColorSpace(.sRGB),
+            let background = Theme.current.chrome.background.nsColor.usingColorSpace(.sRGB)
+        else { return XCTFail("could not read the painted fill") }
+        XCTAssertEqual(color.redComponent, background.redComponent, accuracy: 0.01)
+        XCTAssertEqual(color.greenComponent, background.greenComponent, accuracy: 0.01)
+        XCTAssertEqual(color.blueComponent, background.blueComponent, accuracy: 0.01)
+    }
 }
