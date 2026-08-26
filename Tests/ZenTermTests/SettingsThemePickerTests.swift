@@ -92,16 +92,18 @@ final class SettingsThemePickerTests: WindowTestCase {
         let dropdown = mountThemeDropdown()
         hostWindow?.makeFirstResponder(dropdown)
 
-        dropdown.keyDown(with: key(Self.returnKey, arrow: false))
-        dropdown.keyDown(with: key(Self.downKey, arrow: true))
-        dropdown.keyDown(with: key(Self.returnKey, arrow: false))
+        dropdown.keyDown(with: key(Self.returnKey, arrow: false))  // opens: the button holds focus
+        // Past here the query field holds it, so the keys route through the field editor. Driving
+        // `keyDown` instead would exercise a fallback no user reaches.
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveDown(_:)))
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
 
         XCTAssertTrue(configText().contains("theme = \(next.name)"), "got: \(configText())")
         XCTAssertEqual(dropdown.buttonTitleForTesting, next.displayName)
 
         dropdown.keyDown(with: key(Self.returnKey, arrow: false))
-        dropdown.keyDown(with: key(Self.upKey, arrow: true))
-        dropdown.keyDown(with: key(Self.returnKey, arrow: false))
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveUp(_:)))
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
 
         XCTAssertTrue(configText().contains("theme = rose-pine-zen"), "got: \(configText())")
         XCTAssertEqual(dropdown.buttonTitleForTesting, "Rosé Pine Zen")
@@ -123,9 +125,11 @@ final class SettingsThemePickerTests: WindowTestCase {
         hostWindow?.makeFirstResponder(dropdown)
         XCTAssertEqual(Theme.current.terminal.ansi[2], TerminalColor(red: 0x3E, green: 0x8F, blue: 0xB0))
 
-        dropdown.keyDown(with: key(Self.returnKey, arrow: false))
-        dropdown.keyDown(with: key(Self.downKey, arrow: true))
-        dropdown.keyDown(with: key(Self.returnKey, arrow: false))
+        dropdown.keyDown(with: key(Self.returnKey, arrow: false))  // opens: the button holds focus
+        // Past here the query field holds it, so the keys route through the field editor. Driving
+        // `keyDown` instead would exercise a fallback no user reaches.
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveDown(_:)))
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
 
         XCTAssertEqual(Theme.current.terminal.ansi, expected.ansi)
         XCTAssertEqual(Theme.current.terminal.background, expected.background)

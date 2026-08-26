@@ -119,10 +119,11 @@ final class IconButton: NSView {
         if window == nil { tooltip.hide(from: self) }
     }
 
-    /// Test hooks for the tooltip content.
     /// Test hook: the tint actually painted on the glyph, read off the image view rather than the
     /// inputs that chose it.
     var iconTintForTesting: NSColor? { icon.contentTintColor }
+
+    /// Test hooks for the tooltip content.
 
     var tooltipLabelForTesting: String { tooltip.label }
     var tooltipShortcutForTesting: String? { tooltip.shortcutForTesting }

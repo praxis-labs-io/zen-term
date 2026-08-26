@@ -51,8 +51,12 @@ final class Dropdown: NSView {
     /// and because the self-close hook it carries reaches back through `self` too.
     private lazy var popover: ListPopover = {
         let popover = ListPopover(anchor: self)
-        // A window resize closes the list on its own; drop the lit border and the stale rows with it.
+        // A window resize closes the list on its own. Tear down the same way an Esc does: the field
+        // has to be handed back too, or the button is left looking like an empty search box holding a
+        // query that typing can no longer change, because `rerenderList` bails on a closed list.
         popover.onSelfClose = { [weak self] in
+            self?.query = ""
+            self?.endEditing()
             self?.rowViews = []
             self?.restyle()
         }
@@ -215,6 +219,13 @@ final class Dropdown: NSView {
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
         swatch.layer?.borderColor = Theme.current.chrome.ink(alpha: 0.15).cgColor
+        // The field outlives a theme change while the list is open, so its text and placeholder go
+        // stale in the old theme's foreground otherwise.
+        queryField.textColor = Theme.current.chrome.foreground.nsColor
+        if !queryField.isHidden {
+            renderQueryPlaceholder()
+            queryField.applyThemedCaret()
+        }
     }
 
     // MARK: focus
@@ -253,6 +264,12 @@ final class Dropdown: NSView {
 
     // MARK: keyboard
 
+    /// **The open branch is a fallback, not the normal path.** Opening hands first responder to the
+    /// query field, so a real keystroke reaches the field editor and
+    /// `control(_:textView:doCommandBy:)` routes it. This still runs when `makeFirstResponder` was
+    /// refused, which leaves the list open with the button holding focus. Drive it from a test only
+    /// to cover that case — asserting the list's keys through here proves nothing about the keys a
+    /// user presses.
     override func keyDown(with event: NSEvent) {
         if popover.isOpen {
             switch KeyboardFocus.key(for: event) {
@@ -303,6 +320,9 @@ final class Dropdown: NSView {
         control(queryField, textView: NSTextView(), doCommandBy: selector)
     }
 
+    /// Test hook: the colour the field's own text is painted in, so a theme swap is assertable.
+    var queryFieldTextColorForTesting: NSColor? { queryField.textColor }
+
     /// Test hook: the live filter query.
     var queryForTesting: String { query }
 
@@ -312,9 +332,14 @@ final class Dropdown: NSView {
     /// Test hook: whether the floating list is open right now.
     var isPopoverOpen: Bool { popover.isOpen }
 
+    /// Read `isOpen` **before** touching first responder. Taking focus ends the query field's editing
+    /// session, which closes the list synchronously through `controlTextDidEndEditing`, so a ternary
+    /// tested afterwards always sees a closed list and reopens the one it just shut. That took
+    /// click-to-dismiss off every dropdown in Settings.
     override func mouseDown(with event: NSEvent) {
+        let wasOpen = popover.isOpen
         window?.makeFirstResponder(self)
-        popover.isOpen ? closeList() : openList()
+        if wasOpen { closeList() } else { openList() }
     }
 
     /// The whole control is one click target. Without this the title label and chevron subviews
@@ -439,7 +464,11 @@ final class Dropdown: NSView {
     /// so the card is rebuilt: the list shrinks as you type and has to be re-placed anyway.
     private func rerenderList() {
         guard popover.isOpen else { return }
+        let before = visible
         refilter()
+        // Rebuilding the card costs about 22 ms at sixty-five rows and 3 ms at six, so skip it when
+        // the query narrowed nothing: typing on past a unique match is the common way to hit this.
+        guard visible != before else { return }
         if !visible.contains(highlighted) { highlighted = visible.first ?? highlighted }
         popover.close()
         popover.open(rows: buildRows())
@@ -602,6 +631,16 @@ extension Dropdown: NSTextFieldDelegate {
         case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)):
             commitHighlight()
         case #selector(NSResponder.cancelOperation(_:)): escapePressed()
+        // Taken back from the field editor for the same reason arrows are. Left to AppKit,
+        // `selectNextKeyView` ends editing (closing the list, which hands focus back) and then
+        // overwrites that with its own choice — and no form in this app builds a `nextKeyView`
+        // chain, so focus landed on the hidden field and the keyboard went dead until a click.
+        case #selector(NSResponder.insertTab(_:)):
+            closeList()
+            onTab?()
+        case #selector(NSResponder.insertBacktab(_:)):
+            closeList()
+            onBacktab?()
         default: return false
         }
         return true

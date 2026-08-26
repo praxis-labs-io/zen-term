@@ -1,4 +1,5 @@
 import AppKit
+import TerminalKit
 import XCTest
 
 @testable import ZenTerm
@@ -148,7 +149,7 @@ final class DropdownTests: WindowTestCase {
 
         XCTAssertTrue(dropdown.isEditingForTesting)
 
-        dropdown.keyDown(with: escape())
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.cancelOperation(_:)))
         XCTAssertFalse(dropdown.isEditingForTesting, "closing hands the button back to its title")
     }
 
@@ -307,11 +308,13 @@ final class DropdownTests: WindowTestCase {
     }
 
     /// The card is placed once, at open, so a resize leaves it stranded where the button used to be.
-    /// It closes instead, and the button has to stop wearing its open border with it: a lit button
-    /// under no list reads as a control that stopped responding.
-    func test_resizingTheWindow_closesTheListAndUnlightsTheButton() {
-        // Deliberately not the first responder: a focused button stays lit either way, which would
-        // make the border assertion below pass whether or not the close ran.
+    /// It closes instead, and the whole editing session has to come down with it.
+    ///
+    /// The border no longer discriminates: opening a combo box always takes first responder, and
+    /// `lit` is `isFocused || isOpen`, so the button stays lit either way. What a resize can still get
+    /// wrong is the *field* — left showing, holding a stale query, with focus stranded on it and
+    /// typing dead because `rerenderList` bails on a closed list. That is asserted instead.
+    func test_resizingTheWindow_closesTheListAndTearsDownTheField() {
         let dropdown = Self.dropdown(rows: 4)
         let window = Self.window(height: 400)
         window.contentView?.addSubview(dropdown)
@@ -326,8 +329,9 @@ final class DropdownTests: WindowTestCase {
         XCTAssertFalse(
             window.contentView!.subviews.contains { $0 is ShadowCardView },
             "no card left drawn on the content view after the resize")
-        XCTAssertEqual(
-            dropdown.layer?.borderWidth, 1, "the button is still lit under a list that is gone")
+        XCTAssertFalse(
+            dropdown.isEditingForTesting, "the field is still showing under a list that is gone")
+        XCTAssertEqual(dropdown.queryForTesting, "", "a stale query survived the resize")
     }
 
     private static func dropdown(rows: Int) -> Dropdown {
@@ -343,5 +347,85 @@ final class DropdownTests: WindowTestCase {
         NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: height),
             styleMask: [.borderless], backing: .buffered, defer: false)
+    }
+
+    // MARK: - closing paths
+
+    /// Clicking the button while the list is open closes it. Taking first responder ends the field's
+    /// editing session, which closes the list synchronously, so a ternary tested *after* that always
+    /// saw a closed list and reopened the one it had just shut. Click-to-dismiss was gone from every
+    /// dropdown in Settings, and `hitTest` routes clicks on the field here too, so nothing inside the
+    /// control could dismiss it.
+    @MainActor
+    func test_clickingAnOpenList_closesIt_ratherThanReopening() {
+        let dropdown = filterFixture()
+        XCTAssertTrue(dropdown.isPopoverOpen, "precondition")
+
+        dropdown.mouseDown(with: click())
+
+        XCTAssertFalse(dropdown.isPopoverOpen, "the click reopened the list it just closed")
+        XCTAssertFalse(dropdown.isEditingForTesting)
+    }
+
+    /// Tab has to reach the form's focus stop. Left to AppKit, `selectNextKeyView` ends editing —
+    /// closing the list, which hands focus back — and then overwrites that with its own choice. No
+    /// form in this app builds a `nextKeyView` chain, so focus landed on the hidden field and the
+    /// keyboard was dead until the user clicked.
+    @MainActor
+    func test_tabbingOutOfAnOpenList_reachesTheFocusStop() {
+        var tabbed = false
+        let dropdown = filterFixture()
+        dropdown.onTab = { tabbed = true }
+
+        XCTAssertTrue(dropdown.fieldCommandForTesting(#selector(NSResponder.insertTab(_:))))
+
+        XCTAssertTrue(tabbed, "Tab never reached the focus stop")
+        XCTAssertFalse(dropdown.isPopoverOpen)
+        XCTAssertFalse(dropdown.isEditingForTesting, "focus was left on the hidden field")
+    }
+
+    @MainActor
+    func test_shiftTabbingOutOfAnOpenList_reachesTheBackFocusStop() {
+        var backtabbed = false
+        let dropdown = filterFixture()
+        dropdown.onBacktab = { backtabbed = true }
+
+        XCTAssertTrue(dropdown.fieldCommandForTesting(#selector(NSResponder.insertBacktab(_:))))
+
+        XCTAssertTrue(backtabbed)
+        XCTAssertFalse(dropdown.isEditingForTesting)
+    }
+
+    /// The field outlives a theme change while the list is open, so its text and placeholder go stale
+    /// in the previous theme's foreground — the hardcoded-colour failure this repo bans. On a
+    /// dark-to-light swap the typed query goes near-invisible.
+    @MainActor
+    func test_reapplyTheme_recolorsTheOpenFieldsText() throws {
+        let original = Theme.current
+        defer { Theme.setCurrentForTesting(original) }
+        let dropdown = filterFixture()
+        dropdown.typeForTesting("nor")
+        let before = dropdown.queryFieldTextColorForTesting
+
+        Theme.setCurrentForTesting(AppTheme(terminal: Self.contrastingTheme()))
+        dropdown.reapplyTheme()
+
+        XCTAssertNotEqual(
+            dropdown.queryFieldTextColorForTesting, before, "the query stayed in the old theme")
+        XCTAssertEqual(
+            dropdown.queryFieldTextColorForTesting, Theme.current.chrome.foreground.nsColor)
+    }
+
+    private static func contrastingTheme() -> TerminalTheme {
+        var theme = Theme.rosePineZen
+        theme.background = TerminalColor(red: 0xFA, green: 0xF4, blue: 0xED)
+        theme.foreground = TerminalColor(red: 0x57, green: 0x52, blue: 0x79)
+        return theme
+    }
+
+    private func click() -> NSEvent {
+        NSEvent.mouseEvent(
+            with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
     }
 }
