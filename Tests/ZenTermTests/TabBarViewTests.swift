@@ -223,18 +223,53 @@ final class TabBarViewTests: WindowTestCase {
 
     // MARK: - resting weight
 
-    /// The weight hierarchy inside the bar, asserted as an ordering rather than as three numbers.
-    /// Every one of these is a "grey" an eye cannot rank, and the failure that matters is a swap:
-    /// the tab number was at hint weight while being the ⌘1-9 wayfinding, and lifting it on its own
-    /// would have made it louder than the title it belongs to.
-    func test_theBarsInks_rankNumberUnderIdleTitleUnderActiveTitle() {
-        let number = TabBarView.numberInkForTesting.alphaComponent
-        let idleTitle = TabBarView.idleInkForTesting.alphaComponent
-        let activeTitle = TabBarView.activeInkForTesting.alphaComponent
-        let secondary = Theme.current.chrome.ink(alpha: 0.5).alphaComponent
+    /// The number and the title are one label and must read as one: same color per state, full
+    /// bright on the active tab and resting on the others. Read off the rendered runs rather than the
+    /// constants, so a test cannot restate the values and pass against its own copy of them.
+    @MainActor
+    func test_theNumberAndTitle_shareOneColorPerState() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        mount(tabBar)
+        tabBar.render([item(1, "active", index: 1, active: true), item(2, "idle", index: 2)])
+        let labels = tabBar.chipLabelsForTesting
+        XCTAssertEqual(labels.count, 2)
 
-        XCTAssertGreaterThan(number, secondary, "the tab number is back at hint weight")
-        XCTAssertGreaterThan(idleTitle, number, "an inactive title must outrank its own number")
-        XCTAssertGreaterThan(activeTitle, idleTitle, "the active tab must still stand out")
+        for (position, label) in labels.enumerated() {
+            let numberColor = try XCTUnwrap(
+                label.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)
+            let titleColor = try XCTUnwrap(
+                label.attribute(.foregroundColor, at: label.length - 1, effectiveRange: nil) as? NSColor)
+            XCTAssertEqual(
+                numberColor, titleColor,
+                "chip \(position): the number and the title are one label, at one weight")
+        }
+
+        let activeColor = try XCTUnwrap(
+            labels[0].attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)
+        let idleColor = try XCTUnwrap(
+            labels[1].attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)
+        XCTAssertEqual(activeColor, TabBarView.activeInkForTesting)
+        XCTAssertEqual(idleColor, TabBarView.idleInkForTesting)
+        XCTAssertGreaterThan(
+            activeColor.alphaComponent, idleColor.alphaComponent, "the active tab still stands out")
+    }
+
+    /// The attention states still speak through the number alone: that is a signal about the tab, not
+    /// a weight, so it survives the two halves sharing one ink.
+    @MainActor
+    func test_aWaitingTab_stillMarksItsNumberWithTheAttentionColor() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        mount(tabBar)
+        tabBar.render([
+            TabBarItem(id: TabID(1), index: 1, title: "waiting", isActive: false, attentionState: .waiting)
+        ])
+        let label = try XCTUnwrap(tabBar.chipLabelsForTesting.first)
+        let numberColor = try XCTUnwrap(
+            label.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)
+        let titleColor = try XCTUnwrap(
+            label.attribute(.foregroundColor, at: label.length - 1, effectiveRange: nil) as? NSColor)
+
+        XCTAssertEqual(numberColor, Theme.current.chrome.attention.nsColor)
+        XCTAssertEqual(titleColor, TabBarView.idleInkForTesting)
     }
 }
