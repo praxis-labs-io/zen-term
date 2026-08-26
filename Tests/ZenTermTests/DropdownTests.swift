@@ -114,15 +114,15 @@ final class DropdownTests: WindowTestCase {
 
     // MARK: - type to filter
 
-    /// Sixty-five themes is past what arrowing can manage, so the open list takes typed characters
-    /// as a filter. Driven through the real control's `keyDown`, because a state-only test passes
-    /// while the keys never reach it.
-    private func filterFixture() -> Dropdown {
+    /// Sixty-five themes is past what arrowing can manage, so the button becomes a search field when
+    /// the list opens: a combo box. Driven through the real field and the real delegate, because a
+    /// state-only test passes while the field is never wired to the filter.
+    private func filterFixture(onChange: @escaping (Int) -> Void = { _ in }) -> Dropdown {
         let titles = ["Gruvbox Dark", "Gruvbox Light", "Nord", "Rosé Pine", "Tokyo Night"]
         let items = titles.enumerated().map {
             DropdownItem(title: $0.element, group: nil, note: nil, isSelected: $0.offset == 0)
         }
-        let dropdown = Dropdown(items: items, selectedIndex: 0) { _ in }
+        let dropdown = Dropdown(items: items, selectedIndex: 0, onChange: onChange)
         dropdown.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
@@ -134,15 +134,6 @@ final class DropdownTests: WindowTestCase {
         return dropdown
     }
 
-    /// A real `keyDown`, not a synthesized `.option` chord: the filter reads
-    /// `charactersIgnoringModifiers`, so a character has to actually be on the event.
-    private func typeKey(_ character: String) -> NSEvent {
-        NSEvent.keyEvent(
-            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
-            context: nil, characters: character, charactersIgnoringModifiers: character,
-            isARepeat: false, keyCode: 0)!
-    }
-
     private func escape() -> NSEvent {
         NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
@@ -150,76 +141,72 @@ final class DropdownTests: WindowTestCase {
             isARepeat: false, keyCode: 53)!
     }
 
-    private func enter() -> NSEvent {
-        NSEvent.keyEvent(
-            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
-            context: nil, characters: "\r", charactersIgnoringModifiers: "\r",
-            isARepeat: false, keyCode: 36)!
-    }
+    /// Opening turns the button into an input. Without this the filter has no caret and no field,
+    /// which is a hint rather than a control.
+    func test_openingTheList_turnsTheButtonIntoAField() {
+        let dropdown = filterFixture()
 
-    private func backspace() -> NSEvent {
-        NSEvent.keyEvent(
-            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
-            context: nil, characters: "\u{8}", charactersIgnoringModifiers: "\u{8}",
-            isARepeat: false, keyCode: 51)!
+        XCTAssertTrue(dropdown.isEditingForTesting)
+
+        dropdown.keyDown(with: escape())
+        XCTAssertFalse(dropdown.isEditingForTesting, "closing hands the button back to its title")
     }
 
     func test_typing_filtersTheListToMatches() {
         let dropdown = filterFixture()
 
-        for character in ["n", "o", "r"] { dropdown.keyDown(with: typeKey(character)) }
+        dropdown.typeForTesting("nor")
 
         XCTAssertEqual(dropdown.queryForTesting, "nor")
         XCTAssertEqual(
             dropdown.visibleIndicesForTesting.map { dropdown.itemsForTesting[$0].title }, ["Nord"])
     }
 
-    func test_backspace_restoresTheWiderList() {
+    func test_clearingTheField_restoresTheWiderList() {
         let dropdown = filterFixture()
-        for character in ["n", "o", "r"] { dropdown.keyDown(with: typeKey(character)) }
+        dropdown.typeForTesting("nor")
 
-        dropdown.keyDown(with: backspace())
-        dropdown.keyDown(with: backspace())
-        dropdown.keyDown(with: backspace())
+        dropdown.typeForTesting("")
 
-        XCTAssertEqual(dropdown.queryForTesting, "")
         XCTAssertEqual(dropdown.visibleIndicesForTesting.count, 5)
     }
 
     /// Esc clears a mistyped filter before it closes anything, so recovering does not mean reopening.
     func test_escape_clearsTheQueryBeforeClosingTheList() {
         let dropdown = filterFixture()
-        dropdown.keyDown(with: typeKey("n"))
+        dropdown.typeForTesting("n")
 
-        dropdown.keyDown(with: escape())
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.cancelOperation(_:)))
         XCTAssertEqual(dropdown.queryForTesting, "")
         XCTAssertTrue(dropdown.isPopoverOpen, "the first Esc clears the filter, it does not close")
 
-        dropdown.keyDown(with: escape())
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.cancelOperation(_:)))
         XCTAssertFalse(dropdown.isPopoverOpen)
     }
 
+    /// The field editor swallows arrows and Return, so the list's own keys have to be taken back
+    /// from it. Without that the highlight cannot move and nothing can be committed by keyboard.
+    func test_arrowsAndReturn_reachTheListWhileTheFieldHasFocus() {
+        var picked: Int?
+        let dropdown = filterFixture { picked = $0 }
+        dropdown.typeForTesting("gruvbox")
+
+        XCTAssertTrue(dropdown.fieldCommandForTesting(#selector(NSResponder.moveDown(_:))))
+        XCTAssertTrue(dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:))))
+
+        XCTAssertEqual(picked, 1, "Down then Return took the second Gruvbox row")
+        XCTAssertEqual(dropdown.buttonTitleForTesting, "Gruvbox Light")
+    }
+
     /// The bug this design invites: rows are rebuilt in filtered order, so committing by position
-    /// would report whatever item sat at that index unfiltered. "Tokyo Night" is index 4 of 5, and
-    /// the only match for "tok" — so a position-based commit hands back index 0.
+    /// would report whatever item sat at that index unfiltered. "Tokyo Night" is index 4 of 5 and
+    /// the only match for "tok", so a position-based commit hands back index 0.
     func test_committingAFilteredRow_selectsThatItem_notItsPosition() {
         var picked: Int?
-        let titles = ["Gruvbox Dark", "Gruvbox Light", "Nord", "Rosé Pine", "Tokyo Night"]
-        let items = titles.enumerated().map {
-            DropdownItem(title: $0.element, group: nil, note: nil, isSelected: $0.offset == 0)
-        }
-        let dropdown = Dropdown(items: items, selectedIndex: 0) { picked = $0 }
-        dropdown.translatesAutoresizingMaskIntoConstraints = true
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
-            styleMask: [.borderless], backing: .buffered, defer: false)
-        window.contentView?.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 20, y: 400, width: 220, height: 30)
-        window.makeFirstResponder(dropdown)
-        dropdown.openListForTesting()
+        let dropdown = filterFixture { picked = $0 }
 
-        for character in ["t", "o", "k"] { dropdown.keyDown(with: typeKey(character)) }
-        dropdown.keyDown(with: enter())
+        dropdown.typeForTesting("tok")
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
 
         XCTAssertEqual(picked, 4, "committed the filtered row's own index")
         XCTAssertEqual(dropdown.buttonTitleForTesting, "Tokyo Night")
@@ -228,21 +215,10 @@ final class DropdownTests: WindowTestCase {
     /// A query matching nothing commits nothing rather than picking a stale highlight.
     func test_aQueryWithNoMatches_commitsNothing() {
         var picked: Int?
-        let items = ["Nord", "Rosé Pine"].enumerated().map {
-            DropdownItem(title: $0.element, group: nil, note: nil, isSelected: $0.offset == 0)
-        }
-        let dropdown = Dropdown(items: items, selectedIndex: 0) { picked = $0 }
-        dropdown.translatesAutoresizingMaskIntoConstraints = true
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
-            styleMask: [.borderless], backing: .buffered, defer: false)
-        window.contentView?.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 20, y: 400, width: 220, height: 30)
-        window.makeFirstResponder(dropdown)
-        dropdown.openListForTesting()
+        let dropdown = filterFixture { picked = $0 }
 
-        for character in ["z", "z", "z"] { dropdown.keyDown(with: typeKey(character)) }
-        dropdown.keyDown(with: enter())
+        dropdown.typeForTesting("zzz")
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
 
         XCTAssertEqual(dropdown.visibleIndicesForTesting, [])
         XCTAssertNil(picked)

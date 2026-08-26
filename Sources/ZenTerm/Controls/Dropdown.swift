@@ -62,6 +62,10 @@ final class Dropdown: NSView {
     private var highlighted = 0
     /// Type-to-filter query, live only while the list is open. Sixty-five themes is past what
     /// arrowing can manage, and the same list is the accent picker and every other long row.
+    private let queryField = NSTextField()
+    /// True while the button is showing its field, so `resignFirstResponder` can tell a hand-off to
+    /// that field from focus genuinely leaving the control.
+    private var isEditing = false
     private var query = ""
     /// Original `items` indices the query admits, in the order they are shown. `highlighted` and
     /// `DropdownRowView.index` stay original indices throughout, so `onChange` reports the item the
@@ -109,6 +113,18 @@ final class Dropdown: NSView {
         layer?.borderWidth = 1
         layer?.borderColor = Theme.current.chrome.ink(alpha: 0.10).cgColor
 
+        // The button becomes the search input while the list is open: a combo box, so the thing you
+        // clicked is the thing you type into. Borderless and laid over the title, matching
+        // `PaletteOverlay`'s search row rather than introducing a second look for the same job.
+        queryField.font = .systemFont(ofSize: 13)
+        queryField.textColor = Theme.current.chrome.foreground.nsColor
+        queryField.isBordered = false
+        queryField.drawsBackground = false
+        queryField.focusRingType = .none
+        queryField.isHidden = true
+        queryField.delegate = self
+        queryField.translatesAutoresizingMaskIntoConstraints = false
+
         titleLabel.font = .systemFont(ofSize: 13)
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -128,6 +144,7 @@ final class Dropdown: NSView {
 
         addSubview(swatch)
         addSubview(titleLabel)
+        addSubview(queryField)
         addSubview(chevron)
         titleAfterSwatch = titleLabel.leadingAnchor.constraint(
             equalTo: swatch.trailingAnchor, constant: 7)
@@ -143,6 +160,9 @@ final class Dropdown: NSView {
             chevron.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 6),
             chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
             chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
+            queryField.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            queryField.centerYAnchor.constraint(equalTo: centerYAnchor),
+            queryField.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -6),
         ])
         renderTitle()
     }
@@ -205,9 +225,13 @@ final class Dropdown: NSView {
         restyle()
         return true
     }
+    /// Losing focus closes the list, which is what makes clicking away dismiss it. Handing focus to
+    /// this control's *own* field is not losing it: the combo box does exactly that on open, and
+    /// closing there would shut the list in the same breath as opening it. The click-away case while
+    /// editing is caught by `controlTextDidEndEditing` instead.
     override func resignFirstResponder() -> Bool {
         isFocusedStop = false
-        closeList()
+        if !isEditing { closeList() }
         restyle()
         return super.resignFirstResponder()
     }
@@ -238,18 +262,8 @@ final class Dropdown: NSView {
             // This local Esc is what makes layered dismissal work: a bare Esc reaches the focused
             // control's keyDown before any card-root performKeyEquivalent, so closing the list here
             // keeps the card open. Don't hoist Esc to the card root — that's the dead-end.
-            // Esc clears the query first, so a mistyped filter is recoverable without reopening.
-            case .escape: if query.isEmpty { closeList() } else { query = ""; rerenderList() }
-            case .delete:
-                if !query.isEmpty {
-                    query.removeLast()
-                    rerenderList()
-                }
-            default:
-                if let typed = Self.printable(event) {
-                    query += typed
-                    rerenderList()
-                }
+            case .escape: escapePressed()
+            default: break  // consume every other key while the list is open
             }
             return
         }
@@ -263,16 +277,30 @@ final class Dropdown: NSView {
         }
     }
 
-    /// A single printable character the filter should take, or nil. Modified chords are never text:
-    /// `⌘A` and `⌃N` must keep reaching their own handlers rather than typing into the query.
-    private static func printable(_ event: NSEvent) -> String? {
-        guard !event.modifierFlags.contains(.command), !event.modifierFlags.contains(.control),
-            let characters = event.charactersIgnoringModifiers, characters.count == 1,
-            let scalar = characters.unicodeScalars.first,
-            scalar.properties.isAlphabetic || scalar == " "
-                || CharacterSet.alphanumerics.contains(scalar) || "-_.".unicodeScalars.contains(scalar)
-        else { return nil }
-        return characters
+    /// Esc clears a mistyped filter before it closes anything, so recovering does not mean reopening.
+    private func escapePressed() {
+        if query.isEmpty {
+            closeList()
+        } else {
+            query = ""
+            queryField.stringValue = ""
+            rerenderList()
+        }
+    }
+
+    /// Test hook: type into the combo box's field the way a person does, through the delegate the
+    /// field really calls, so a test cannot pass against a query the field never received.
+    func typeForTesting(_ text: String) {
+        queryField.stringValue = text
+        controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: queryField))
+    }
+
+    /// Test hook: whether the button is showing its field rather than its static title.
+    var isEditingForTesting: Bool { !queryField.isHidden }
+
+    /// Test hook: route a field-editor command the way the real field editor does.
+    func fieldCommandForTesting(_ selector: Selector) -> Bool {
+        control(queryField, textView: NSTextView(), doCommandBy: selector)
     }
 
     /// Test hook: the live filter query.
@@ -307,6 +335,7 @@ final class Dropdown: NSView {
         query = ""
         refilter()
         highlighted = selectedIndex
+        beginEditing()
         popover.open(rows: buildRows())
         refreshListHighlight()
         scrollHighlightIntoView()  // open scrolled to the current selection when it's below the fold
@@ -316,8 +345,41 @@ final class Dropdown: NSView {
     private func closeList() {
         popover.close()
         query = ""
+        endEditing()
         rowViews = []
         restyle()
+    }
+
+    /// Hand the button over to the field: the placeholder keeps the current selection readable while
+    /// the field is empty, so the row never looks blanked out.
+    private func beginEditing() {
+        queryField.stringValue = ""
+        renderQueryPlaceholder()
+        titleLabel.isHidden = true
+        queryField.isHidden = false
+        isEditing = true
+        window?.makeFirstResponder(queryField)
+        queryField.applyThemedCaret()  // the field editor exists only once the field has focus
+    }
+
+    private func endEditing() {
+        isEditing = false
+        queryField.isHidden = true
+        titleLabel.isHidden = false
+        // Focus returns to the dropdown so arrowing and tabbing continue from here.
+        if window?.firstResponder is NSTextView { window?.makeFirstResponder(self) }
+    }
+
+    /// AppKit's `placeholderString` draws in `placeholderTextColor`, which follows
+    /// `effectiveAppearance` rather than `Theme.current`. Build it attributed, from the chrome ink.
+    private func renderQueryPlaceholder() {
+        let title = items.indices.contains(selectedIndex) ? items[selectedIndex].title : ""
+        queryField.placeholderAttributedString = NSAttributedString(
+            string: title,
+            attributes: [
+                .foregroundColor: Theme.current.chrome.ink(alpha: 0.45),
+                .font: NSFont.systemFont(ofSize: 13),
+            ])
     }
 
     private func moveHighlight(_ delta: Int) {
@@ -384,12 +446,6 @@ final class Dropdown: NSView {
         rowViews = []
         var lines: [ListPopover.Row] = []
         var previousGroup: String?
-        if !query.isEmpty {
-            lines.append(
-                ListPopover.Row(
-                    view: Self.groupHeaderView("Search: \(query)", chrome: chrome),
-                    height: Self.headerHeight))
-        }
         if visible.isEmpty {
             lines.append(
                 ListPopover.Row(
@@ -514,5 +570,34 @@ private final class DropdownRowView: NSView {
 
     func setHighlighted(_ isHighlighted: Bool, chrome: ChromeTheme) {
         layer?.backgroundColor = (isHighlighted ? chrome.ink(alpha: 0.10) : NSColor.clear).cgColor
+    }
+}
+
+/// The field owns text while the list is open, so the list's own keys have to be taken back from
+/// the field editor: an `NSTextView` swallows arrows and Return, and Esc would otherwise cancel the
+/// field rather than the filter.
+extension Dropdown: NSTextFieldDelegate {
+    /// Focus leaving the field while the list is open is the click-away case, which `Dropdown`'s own
+    /// `resignFirstResponder` no longer sees now that it ignores the hand-off.
+    func controlTextDidEndEditing(_ obj: Notification) {
+        guard isEditing, window?.firstResponder !== self else { return }
+        closeList()
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        query = queryField.stringValue
+        rerenderList()
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        switch selector {
+        case #selector(NSResponder.moveUp(_:)): moveHighlight(-1)
+        case #selector(NSResponder.moveDown(_:)): moveHighlight(1)
+        case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)):
+            commitHighlight()
+        case #selector(NSResponder.cancelOperation(_:)): escapePressed()
+        default: return false
+        }
+        return true
     }
 }
