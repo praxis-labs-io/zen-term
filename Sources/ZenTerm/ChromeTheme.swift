@@ -17,12 +17,22 @@ struct ChromeTheme: Equatable {
     let muted: TerminalColor
     /// Green "added / success" role. Named for meaning, not hue, like the other roles.
     let positive: TerminalColor
+    /// Readability multiplier applied to every level. Dark ink on a light theme reads fainter than
+    /// light ink on a dark one at equal opacity, and this lifts both rather than only the case that
+    /// needs it, which is the cheap version of that compensation.
+    ///
+    /// **1.15, not the 1.3 this replaced.** The clamp only bites where a declared value lands above
+    /// `1 / boost`; at 1.3 that threshold was 0.77, so four of the old hand-tuned alphas collapsed
+    /// into full opacity and `0.95` painted the same colour as `1`. At 1.15 the threshold is 0.87
+    /// and only `normal` is above it, where clamping to 1 is the intent. Raise this and check that
+    /// number before anything else.
+    static let inkBoost: CGFloat = 1.15
+
     /// The three weights chrome text and icons are drawn at. **There is no fourth.**
     ///
     /// Every site asks for a level, never a number, so the scale is set once here and a new site
-    /// cannot invent a weight between two of these. It replaced twenty-one hand-tuned alphas and a
-    /// 1.3 multiplier that clamped everything past ~0.77 to full opacity, which made `0.95` and `1`
-    /// the same colour and hid the ceiling from anyone tuning a value.
+    /// cannot invent a weight between two of these. The declared value is the intent; `inkBoost`
+    /// carries it to what gets painted.
     enum InkLevel {
         /// Recedes: captions, hints, subtitles, counts, placeholders, search glyphs.
         case muted
@@ -43,14 +53,17 @@ struct ChromeTheme: Equatable {
     /// Foreground-toned ink at one of the three weights. Sourced from the theme's foreground, so it
     /// adapts on its own: light on a dark theme, dark on a light one.
     func ink(_ level: InkLevel) -> NSColor {
-        foreground.nsColor.withAlphaComponent(level.alpha)
+        foreground.nsColor.withAlphaComponent(min(1, level.alpha * Self.inkBoost))
     }
 
     /// A foreground-toned **fill**: a hover wash, a hairline, a divider, a border. Not for text or
     /// icons, which take one of the three levels above — these run an order of magnitude fainter
     /// (0.04 to 0.16) and a shared scale would either wash them out or make them read as content.
+    ///
+    /// Boosted like the levels are: these were tuned alongside them under the same multiplier, and
+    /// exempting them would quietly re-weight every hairline in the app.
     func ink(alpha: CGFloat) -> NSColor {
-        foreground.nsColor.withAlphaComponent(alpha)
+        foreground.nsColor.withAlphaComponent(min(1, alpha * Self.inkBoost))
     }
 
     /// `tint` composited over `base`, source-over. A chrome surface inside a pane paints its tint on

@@ -83,16 +83,24 @@ final class ChromeThemeDeriverTests: XCTestCase {
             ChromeThemeDeriver.derive(from: short, accent: .brightWhite).accent, short.foreground)
     }
 
-    /// Ink is the theme's own foreground at the level's alpha, with nothing in between. A multiplier
-    /// used to sit here and clamped everything past ~0.77 to full opacity, so the declared number and
-    /// the painted one disagreed and the top of the scale was silently flat.
-    func test_inkIsThemeForegroundAtTheLevelsAlpha() {
+    func test_inkIsThemeForegroundAtTheBoostedLevelAlpha() {
         let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
         for level in [ChromeTheme.InkLevel.muted, .subtle, .normal] {
             assertEqualRGBA(
                 chrome.ink(level),
-                Theme.rosePineZen.foreground.nsColor.withAlphaComponent(level.alpha))
+                Theme.rosePineZen.foreground.nsColor
+                    .withAlphaComponent(min(1, level.alpha * ChromeTheme.inkBoost)))
         }
+    }
+
+    /// The multiplier must not clamp a level that is not meant to be full opacity. At 1.3 four of the
+    /// old hand-tuned alphas collapsed into 1 and the ceiling was invisible to anyone tuning a value;
+    /// this fails the moment a raised boost pulls `subtle` up into `normal`.
+    func test_theBoost_clampsOnlyTheNormalLevel() {
+        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
+        XCTAssertLessThan(chrome.ink(.muted).alphaComponent, 1)
+        XCTAssertLessThan(chrome.ink(.subtle).alphaComponent, 1, "subtle has been boosted into normal")
+        XCTAssertEqual(chrome.ink(.normal).alphaComponent, 1, accuracy: 0.0001)
     }
 
     /// The scale has to stay ordered and distinct: three levels that collapse are one level, and a
