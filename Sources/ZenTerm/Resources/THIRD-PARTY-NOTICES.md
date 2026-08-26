@@ -3125,7 +3125,7 @@ The copyright/license for each individual theme belongs to the author of that th
 
 ### The Settings theme catalog
 
-Thirty-seven themes in Settings → Appearance, separate from the 463 above. Each is a
+Fifty-nine themes in Settings → Appearance, separate from the 463 above. Each is a
 palette file under `Sources/ZenTerm/Themes`, carrying sixteen ANSI colors plus
 background, foreground, cursor, and selection. The upstream project for each is
 credited below, with the license that project publishes.
@@ -3288,6 +3288,40 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### GitHub
+
+**MIT**
+
+`github-dark-default`, `github-dark-dimmed`, `github-dark-high-contrast`, `github-light-default`,
+and `github-light-high-contrast`, from `projekt0n/github-nvim-theme`. The project also ships
+colorblind and tritanopia variants, which are not bundled: a terminal palette cannot carry the
+editor-side semantics those depend on, so shipping them would name an accommodation without
+providing it.
+
+```text
+MIT License
+
+Copyright (c) 2021 projekt0n̅
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### Gruvbox
 
 **MIT, asserted without a license file**
@@ -3300,6 +3334,79 @@ license, and GitHub's own license detection reports none. There is therefore no
 license text to reproduce here and no copyright holder stated upstream to quote.
 This entry records the assertion as upstream makes it rather than synthesizing a
 notice upstream never wrote.
+
+### Gruvbox Material
+
+**MIT**
+
+`gruvbox-material`, `gruvbox-material-dark`, and `gruvbox-material-light`, from
+`sainnhe/gruvbox-material`. A separate project from `morhetz/gruvbox` above, with its own license.
+
+```text
+MIT License
+
+Copyright (c) 2020 sainnhe
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### Iceberg
+
+**MIT**
+
+`iceberg-dark` and `iceberg-light`, from `cocopon/iceberg.vim`. The upstream `LICENSE.txt` opens
+with the copyright line rather than a license name; its body is the unmodified MIT text, which is
+where the name here comes from.
+
+```text
+Copyright (c) 2014 cocopon <cocopon@me.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### Jellybeans
+
+**MIT, asserted without a license file**
+
+`jellybeans`, from `nanotech/jellybeans.vim`, maintained by NanoTech.
+
+The repository publishes **no license file**, and GitHub's own license detection reports none.
+The assertion lives in a header comment in `colors/jellybeans.vim`, which reads
+`" License:      MIT` above a list of contributors. There is no license text to reproduce and no
+copyright line stated upstream to quote. This entry records the assertion as upstream makes it
+rather than synthesizing a notice upstream never wrote.
 
 ### Kanagawa
 
@@ -3332,6 +3439,36 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### Kanso
+
+**MIT**
+
+`kanso-zen`, `kanso-ink`, `kanso-mist`, and `kanso-pearl`, from `webhooked/kanso.nvim`.
+
+```text
+MIT License
+
+Copyright (c) 2025 Webhooked
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### Melange
 
 **MIT**
@@ -3342,6 +3479,36 @@ SOFTWARE.
 MIT License
 
 Copyright (c) 2021 Sergio Alejandro Vargas
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### Moonfly
+
+**MIT**
+
+`moonfly`, from `bluz71/vim-moonfly-colors`.
+
+```text
+MIT License
+
+Copyright (c) 2017-present vim-moonfly-colors authors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -3435,6 +3602,37 @@ the source of the colors rather than as a licensor of this file.
 MIT License
 
 Copyright (c) 2022 Riccardo Mazzarini
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### Zenbones
+
+**MIT**
+
+`kanagawabones`, `neobones-dark`, `neobones-light`, `seoulbones-dark`, `seoulbones-light`, and
+`duckbones`, from `zenbones-theme/zenbones.nvim`, by Michael Chris Lopez.
+
+```text
+MIT License
+
+Copyright (c) 2022 Michael Chris Lopez
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
