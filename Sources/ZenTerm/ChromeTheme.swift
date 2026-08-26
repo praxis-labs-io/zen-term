@@ -17,6 +17,18 @@ struct ChromeTheme: Equatable {
     let muted: TerminalColor
     /// Green "added / success" role. Named for meaning, not hue, like the other roles.
     let positive: TerminalColor
+    /// Multiplier on every **fill** so a hairline is equally visible in any theme.
+    ///
+    /// A fill is our invention, not the theme author's: a 0.10 wash of their foreground over their
+    /// background lands wherever those two happen to sit. Across the catalog that separation ranges
+    /// from 0.40 to 0.94, so the same 0.10 produced a border more than twice as faint in one theme as
+    /// another, and the muted-foreground ones read as almost nothing.
+    ///
+    /// Derived per theme in `ChromeThemeDeriver` so the achieved delta is constant instead of the
+    /// declared alpha being constant. Text is deliberately left out: at `normal` the ink *is* the
+    /// author's foreground, picked to be legible on their own background, and scaling it would
+    /// overrule that.
+    let fillScale: CGFloat
     /// Readability multiplier applied to every level. Dark ink on a light theme reads fainter than
     /// light ink on a dark one at equal opacity, and this lifts both rather than only the case that
     /// needs it, which is the cheap version of that compensation.
@@ -60,10 +72,10 @@ struct ChromeTheme: Equatable {
     /// icons, which take one of the three levels above — these run an order of magnitude fainter
     /// (0.04 to 0.16) and a shared scale would either wash them out or make them read as content.
     ///
-    /// Boosted like the levels are: these were tuned alongside them under the same multiplier, and
-    /// exempting them would quietly re-weight every hairline in the app.
+    /// Boosted like the levels are, then scaled by `fillScale` so the visible result is the same
+    /// whatever the theme's own foreground-to-background separation is.
     func ink(alpha: CGFloat) -> NSColor {
-        foreground.nsColor.withAlphaComponent(min(1, alpha * Self.inkBoost))
+        foreground.nsColor.withAlphaComponent(min(1, alpha * Self.inkBoost * fillScale))
     }
 
     /// `tint` composited over `base`, source-over. A chrome surface inside a pane paints its tint on

@@ -1,3 +1,4 @@
+import CoreGraphics
 import TerminalKit
 
 /// Maps a `TerminalTheme` to `ChromeTheme` roles. The accent slots are the exact ANSI
@@ -22,7 +23,39 @@ enum ChromeThemeDeriver {
             accent: (accent ?? .themeDefault).color(in: terminal),
             attention: slot(6),
             muted: blend(terminal.foreground, terminal.background, 0.55),
-            positive: slot(2))
+            positive: slot(2),
+            fillScale: fillScale(for: terminal))
+    }
+
+    /// The foreground-to-background separation a fill's declared alpha was tuned against.
+    ///
+    /// **A fixed anchor, not the catalog's live median.** Deriving it from the bundled set would
+    /// re-weight every existing theme's chrome each time a theme is added, which is a silent
+    /// regression nobody would connect to the addition.
+    private static let referenceSeparation: CGFloat = 0.714
+
+    /// How much to lift this theme's fills so a hairline lands at the same visible distance from the
+    /// background as it does in a theme at `referenceSeparation`.
+    ///
+    /// Never scales *down*. A theme whose foreground is further from its background than the
+    /// reference already shows a border clearly, and dimming it to hit the target exactly would make
+    /// the themes that look right look worse to fix the ones that do not. The cost is that those
+    /// themes overshoot, which is the whole of the residual spread the catalog test allows.
+    ///
+    /// Capped at 1.8, which no bundled theme reaches: `solarized-dark` has the narrowest separation
+    /// at 0.40 and needs 1.77. The cap is there for a user theme with almost no separation, where a
+    /// border bright enough to see would read as content.
+    static func fillScale(for terminal: TerminalTheme) -> CGFloat {
+        let separation = abs(perceivedLuminance(terminal.foreground) - perceivedLuminance(terminal.background))
+        guard separation > 0.01 else { return 1.8 }
+        return min(1.8, max(1, referenceSeparation / separation))
+    }
+
+    /// The W3C perceived-luminance formula `TerminalColor.isDark` uses, so light/dark decisions and
+    /// fill weighting read the same colors the same way.
+    private static func perceivedLuminance(_ color: TerminalColor) -> CGFloat {
+        0.299 * CGFloat(color.red) / 255 + 0.587 * CGFloat(color.green) / 255
+            + 0.114 * CGFloat(color.blue) / 255
     }
 
     /// Fill in whatever a theme leaves unsaid about the two things drawn *over* its text: a

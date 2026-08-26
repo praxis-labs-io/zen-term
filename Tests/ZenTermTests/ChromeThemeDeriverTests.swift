@@ -143,4 +143,55 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(
             lhsRGB.alphaComponent, rhsRGB.alphaComponent, accuracy: 0.001, file: file, line: line)
     }
+
+    // MARK: - fill normalisation across the catalog
+
+    /// **This test is why nobody has to walk sixty-five themes.**
+    ///
+    /// A fill's declared alpha is constant, but what it *looks like* depends on how far a theme's
+    /// foreground sits from its background, and across the catalog that ranges from 0.40 to 0.94. So
+    /// the same 0.10 border was more than twice as faint in one theme as another. `fillScale`
+    /// normalises the achieved luminance delta instead; this asserts it landed, for every bundled
+    /// theme, which is a budget no glance can check even one theme at a time.
+    func test_everyBundledTheme_landsAHairlineAtTheSameVisibleDelta() throws {
+        func perceived(_ c: TerminalColor) -> CGFloat {
+            0.299 * CGFloat(c.red) / 255 + 0.587 * CGFloat(c.green) / 255 + 0.114 * CGFloat(c.blue) / 255
+        }
+        var deltas: [(String, CGFloat)] = []
+        for entry in ThemeCatalog.bundled {
+            let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: entry.token))
+            let terminal = GhosttyThemeParser.parse(
+                try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
+                fallback: Theme.rosePineZen)
+            let chrome = ChromeThemeDeriver.derive(from: terminal)
+            let alpha = chrome.ink(alpha: 0.10).alphaComponent
+            let background = perceived(terminal.background)
+            let painted = perceived(terminal.foreground) * alpha + background * (1 - alpha)
+            deltas.append((entry.token, abs(painted - background)))
+        }
+        let values = deltas.map(\.1)
+        let low = try XCTUnwrap(deltas.min { $0.1 < $1.1 })
+        let high = try XCTUnwrap(deltas.max { $0.1 < $1.1 })
+        // A spread bound rather than an equality, and the reason is the *floor*, not the cap: no
+        // bundled theme hits the 1.8 ceiling, but themes already better separated than the reference
+        // are deliberately never scaled down, so they overshoot. Without normalising the ratio was
+        // above 2; the remaining 1.31 is entirely that no-dimming choice.
+        XCTAssertLessThan(
+            high.1 / low.1, 1.35,
+            "hairline visibility still varies by theme: \(low.0) \(low.1) vs \(high.0) \(high.1)")
+        XCTAssertEqual(values.count, ThemeCatalog.bundled.count)
+    }
+
+    /// A theme whose foreground and background are well separated must be left exactly as it was, or
+    /// normalising becomes a global brightening wearing a per-theme disguise.
+    func test_aWellSeparatedTheme_isNotScaled() {
+        XCTAssertEqual(ChromeThemeDeriver.fillScale(for: Theme.rosePineZen), 1, accuracy: 0.0001)
+    }
+
+    /// And the cap holds, so a theme with almost no separation cannot demand an opaque border.
+    func test_theScale_isCapped() {
+        var flat = Theme.rosePineZen
+        flat.foreground = flat.background
+        XCTAssertEqual(ChromeThemeDeriver.fillScale(for: flat), 1.8, accuracy: 0.0001)
+    }
 }
