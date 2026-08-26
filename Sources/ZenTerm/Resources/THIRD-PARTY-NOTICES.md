@@ -3125,7 +3125,7 @@ The copyright/license for each individual theme belongs to the author of that th
 
 ### The Settings theme catalog
 
-Fifty-nine themes in Settings → Appearance, separate from the 463 above. Each is a
+Sixty-six themes in Settings → Appearance, separate from the 463 above. Each is a
 palette file under `Sources/ZenTerm/Themes`, carrying sixteen ANSI colors plus
 background, foreground, cursor, and selection. The upstream project for each is
 credited below, with the license that project publishes.
@@ -3479,6 +3479,46 @@ SOFTWARE.
 MIT License
 
 Copyright (c) 2021 Sergio Alejandro Vargas
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### Monokai Pro
+
+**MIT for the port. The palettes originate with a commercial product.**
+
+`monokai-pro`, `monokai-pro-machine`, `monokai-pro-octagon`, `monokai-pro-ristretto`,
+`monokai-pro-spectrum`, `monokai-pro-light`, and `monokai-pro-light-sun`. The values reached
+ZenTerm through Ghostty's bundled set, and the Neovim project that publishes them under a
+license is `loctvl842/monokai-pro.nvim`, whose MIT text is below.
+
+**Read that MIT as covering the port, not the palettes.** Monokai Pro is a paid product by
+Wimer Hazenberg, and its filter palettes (Machine, Octagon, Ristretto, Spectrum, and the two
+light ones) are that product's own content. The port states MIT without crediting the product
+or citing a grant from it, so there is no permission upstream that this entry can point to.
+Recorded as it stands rather than resolved: the same reasoning the Gruvbox entry applies to a
+missing license file applies here to a license asserted over someone else's work.
+
+```text
+MIT License
+
+Copyright (c) 2023 Loc
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
