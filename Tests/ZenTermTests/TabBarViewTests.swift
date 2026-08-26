@@ -221,4 +221,20 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertTrue(tabBar.isLeadingFadedForTesting, "scrolling tabs off the left must fade that edge")
     }
 
+    // MARK: - resting weight
+
+    /// The weight hierarchy inside the bar, asserted as an ordering rather than as three numbers.
+    /// Every one of these is a "grey" an eye cannot rank, and the failure that matters is a swap:
+    /// the tab number was at hint weight while being the ⌘1-9 wayfinding, and lifting it on its own
+    /// would have made it louder than the title it belongs to.
+    func test_theBarsInks_rankNumberUnderIdleTitleUnderActiveTitle() {
+        let number = TabBarView.numberInkForTesting.alphaComponent
+        let idleTitle = TabBarView.idleInkForTesting.alphaComponent
+        let activeTitle = TabBarView.activeInkForTesting.alphaComponent
+        let secondary = Theme.current.chrome.ink(alpha: 0.5).alphaComponent
+
+        XCTAssertGreaterThan(number, secondary, "the tab number is back at hint weight")
+        XCTAssertGreaterThan(idleTitle, number, "an inactive title must outrank its own number")
+        XCTAssertGreaterThan(activeTitle, idleTitle, "the active tab must still stand out")
+    }
 }

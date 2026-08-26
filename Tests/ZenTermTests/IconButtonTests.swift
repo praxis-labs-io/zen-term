@@ -52,7 +52,7 @@ final class IconButtonTests: XCTestCase {
     /// raising the resting value too far silently collapses the two into one.
     @MainActor
     func test_theRestingIcon_staysBelowTheHoverTint() {
-        let resting = Theme.current.chrome.ink(alpha: IconButton.restingInk)
+        let resting = Theme.current.chrome.ink(alpha: ChromeTheme.restingControlAlpha)
         let hover = Theme.current.chrome.ink(alpha: 0.95)
         XCTAssertLessThan(resting.alphaComponent, hover.alphaComponent)
     }

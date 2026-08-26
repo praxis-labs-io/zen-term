@@ -132,15 +132,6 @@ final class IconButton: NSView {
     /// changed (hover/active state didn't) to fire it on its own.
     func reapplyTheme() { update() }
 
-    /// The resting icon tint. **A toolbar icon is a primary control, not secondary text.** This sat
-    /// at 0.55, the same weight as the hints and subtitles that use `ink(alpha: 0.5)`, which read it
-    /// as de-emphasized when it is the thing you click. macOS draws enabled toolbar icons around
-    /// 0.85; `inkBoost` carries this to roughly that.
-    ///
-    /// Kept below the hover tint so the hover shift stays visible: `inkBoost` clamps anything past
-    /// ~0.77 to full opacity, and rest and hover reading identically is what removes the cue.
-    static let restingInk: CGFloat = 0.65
-
     private func update() {
         let bg: NSColor
         let tint: NSColor
@@ -151,7 +142,7 @@ final class IconButton: NSView {
             bg = Theme.current.chrome.ink(alpha: 0.10); tint = Theme.current.chrome.ink(alpha: 0.95)
         } else {
             bg = restsFilled ? Theme.current.chrome.ink(alpha: 0.06) : .clear
-            tint = Theme.current.chrome.ink(alpha: Self.restingInk)
+            tint = Theme.current.chrome.ink(alpha: ChromeTheme.restingControlAlpha)
         }
         if let layer { Motion.ease(layer, keyPath: "backgroundColor", to: bg.cgColor) }
         icon.contentTintColor = tint  // NSImageView tint isn't layer-animatable; the shift is barely visible

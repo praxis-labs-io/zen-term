@@ -40,8 +40,18 @@ final class TabBarView: NSView {
     private static let fadeWidth: CGFloat = 28
 
     fileprivate static var activeInk: NSColor { Theme.current.chrome.ink(alpha: 1) }
-    fileprivate static var idleInk: NSColor { Theme.current.chrome.ink(alpha: 0.55) }
-    fileprivate static var numberInk: NSColor { Theme.current.chrome.ink(alpha: 0.5) }
+    fileprivate static var idleInk: NSColor {
+        Theme.current.chrome.ink(alpha: ChromeTheme.restingControlAlpha)
+    }
+    /// The tab's ⌘1-9 number when nothing needs attention. A notch under its own title so the
+    /// hierarchy inside a tab holds, but off the hint weight it shared with subtitles and counts.
+    fileprivate static var numberInk: NSColor { Theme.current.chrome.ink(alpha: 0.58) }
+
+    /// Test hooks: the inks the bar really paints, so a test cannot restate the numbers and pass
+    /// against its own copy of them.
+    static var activeInkForTesting: NSColor { activeInk }
+    static var idleInkForTesting: NSColor { idleInk }
+    static var numberInkForTesting: NSColor { numberInk }
 
     /// Horizontal scroll host for the chips — no visible scroller; overflow scrolls and fades.
     private let scrollView = NSScrollView()
