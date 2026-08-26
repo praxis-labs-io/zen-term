@@ -80,39 +80,60 @@ final class SettingsThemePickerTests: WindowTestCase {
         XCTAssertFalse(configText().contains("theme"))
     }
 
-    /// Index 1 is Rosé Pine, so one Down from the default lands on it. Returning to the default
-    /// writes its token rather than clearing the key, which is what changed with the nil row.
-    func test_selectingATheme_writesTheToken_andReturningWritesTheDefaultsOwn() {
+    /// Steps from the default to whichever theme the alphabetical list puts after it. Resolved from
+    /// the catalog rather than hardcoded: the list is sorted by display name, so a magic index means
+    /// a different theme every time a theme is added.
+    func test_selectingATheme_writesTheToken_andReturningWritesTheDefaultsOwn() throws {
+        let entries = ThemeCatalog.entries(configRoot: tempRoot)
+        let defaultIndex = try XCTUnwrap(entries.firstIndex { $0.name == ThemeCatalog.defaultThemeName })
+        XCTAssertTrue(entries.indices.contains(defaultIndex + 1), "the default is last; nothing to step to")
+        let next = entries[defaultIndex + 1]
+
         let dropdown = mountThemeDropdown()
         hostWindow?.makeFirstResponder(dropdown)
 
-        dropdown.keyDown(with: key(Self.returnKey, arrow: false))
-        dropdown.keyDown(with: key(Self.downKey, arrow: true))
-        dropdown.keyDown(with: key(Self.returnKey, arrow: false))
+        dropdown.keyDown(with: key(Self.returnKey, arrow: false))  // opens: the button holds focus
+        // Past here the query field holds it, so the keys route through the field editor. Driving
+        // `keyDown` instead would exercise a fallback no user reaches.
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveDown(_:)))
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
 
-        XCTAssertTrue(configText().contains("theme = rose-pine"), "got: \(configText())")
-        XCTAssertEqual(dropdown.buttonTitleForTesting, "Rosé Pine")
+        XCTAssertTrue(configText().contains("theme = \(next.name)"), "got: \(configText())")
+        XCTAssertEqual(dropdown.buttonTitleForTesting, next.displayName)
 
         dropdown.keyDown(with: key(Self.returnKey, arrow: false))
-        dropdown.keyDown(with: key(Self.upKey, arrow: true))
-        dropdown.keyDown(with: key(Self.returnKey, arrow: false))
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveUp(_:)))
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
 
         XCTAssertTrue(configText().contains("theme = rose-pine-zen"), "got: \(configText())")
         XCTAssertEqual(dropdown.buttonTitleForTesting, "Rosé Pine Zen")
     }
 
-    /// Committing has to move the colors the app paints with, not just the file. Rosé Pine Main's
-    /// pine is the slot that separates it from the default, whose palette is Moon's.
-    func test_committingASelection_movesTheLiveTheme() {
+    /// Committing has to move the colors the app paints with, not just the file. Asserts the live
+    /// palette lands on the *stepped-to* theme's own values, read from its file, so the check holds
+    /// whatever the alphabetical list puts next to the default.
+    func test_committingASelection_movesTheLiveTheme() throws {
+        let entries = ThemeCatalog.entries(configRoot: tempRoot)
+        let defaultIndex = try XCTUnwrap(entries.firstIndex { $0.name == ThemeCatalog.defaultThemeName })
+        XCTAssertTrue(entries.indices.contains(defaultIndex + 1), "the default is last; nothing to step to")
+        let next = entries[defaultIndex + 1]
+        var general = GeneralConfig.builtIn
+        general.themeName = next.name
+        let expected = ConfigLoader.loadAppTheme(configRoot: tempRoot, general: general).terminal
+
         let dropdown = mountThemeDropdown()
         hostWindow?.makeFirstResponder(dropdown)
         XCTAssertEqual(Theme.current.terminal.ansi[2], TerminalColor(red: 0x3E, green: 0x8F, blue: 0xB0))
 
-        dropdown.keyDown(with: key(Self.returnKey, arrow: false))
-        dropdown.keyDown(with: key(Self.downKey, arrow: true))
-        dropdown.keyDown(with: key(Self.returnKey, arrow: false))
+        dropdown.keyDown(with: key(Self.returnKey, arrow: false))  // opens: the button holds focus
+        // Past here the query field holds it, so the keys route through the field editor. Driving
+        // `keyDown` instead would exercise a fallback no user reaches.
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveDown(_:)))
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
 
-        XCTAssertEqual(Theme.current.terminal.ansi[2], TerminalColor(red: 0x31, green: 0x74, blue: 0x8F))
+        XCTAssertEqual(Theme.current.terminal.ansi, expected.ansi)
+        XCTAssertEqual(Theme.current.terminal.background, expected.background)
+        XCTAssertNotEqual(Theme.current.terminal.ansi[2], TerminalColor(red: 0x3E, green: 0x8F, blue: 0xB0))
     }
 
     /// A user file named for the default shadows the bundled row in the picker, so resolution has

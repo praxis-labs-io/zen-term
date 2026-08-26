@@ -15,6 +15,8 @@
 #
 # Both the terminal AND the chrome recolor from these values: the chrome derives
 # its color roles from the palette entries listed at the bottom of this file.
+#
+# One non-color key is read, at the bottom of this file: `nvim-colorscheme`.
 
 # Base surfaces.
 background = #191724
@@ -69,3 +71,14 @@ palette = 15=#e0def4
 #
 # `accent` is the one you can repoint without editing this file: `accent-color`
 # in `config` sends it to any palette entry by ANSI hue name.
+
+
+# The Neovim colorscheme to wear alongside this theme. Read by
+# zen-theme.nvim, which recolors your editor when you switch themes here:
+#
+#   https://github.com/praxis-labs-io/zen-theme.nvim
+#
+# Set it on your own theme files too, and they stay in step with the bundled
+# ones. Leave it out and the plugin leaves your colorscheme alone. It changes no
+# color, so a theme file carrying it is still a valid ghostty theme.
+nvim-colorscheme = rose-pine-main

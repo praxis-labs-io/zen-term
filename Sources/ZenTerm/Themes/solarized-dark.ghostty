@@ -20,3 +20,4 @@ cursor-color = #708284
 cursor-text = #002831
 selection-background = #002831
 selection-foreground = #819090
+nvim-colorscheme = solarized

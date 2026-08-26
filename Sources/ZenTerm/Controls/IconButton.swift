@@ -119,7 +119,12 @@ final class IconButton: NSView {
         if window == nil { tooltip.hide(from: self) }
     }
 
+    /// Test hook: the tint actually painted on the glyph, read off the image view rather than the
+    /// inputs that chose it.
+    var iconTintForTesting: NSColor? { icon.contentTintColor }
+
     /// Test hooks for the tooltip content.
+
     var tooltipLabelForTesting: String { tooltip.label }
     var tooltipShortcutForTesting: String? { tooltip.shortcutForTesting }
 
@@ -138,7 +143,7 @@ final class IconButton: NSView {
             bg = Theme.current.chrome.ink(alpha: 0.10); tint = Theme.current.chrome.ink(alpha: 0.95)
         } else {
             bg = restsFilled ? Theme.current.chrome.ink(alpha: 0.06) : .clear
-            tint = Theme.current.chrome.ink(alpha: 0.55)
+            tint = Theme.current.chrome.ink(alpha: ChromeTheme.restingControlAlpha)
         }
         if let layer { Motion.ease(layer, keyPath: "backgroundColor", to: bg.cgColor) }
         icon.contentTintColor = tint  // NSImageView tint isn't layer-animatable; the shift is barely visible

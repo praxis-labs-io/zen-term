@@ -40,8 +40,13 @@ final class TabBarView: NSView {
     private static let fadeWidth: CGFloat = 28
 
     fileprivate static var activeInk: NSColor { Theme.current.chrome.ink(alpha: 1) }
-    fileprivate static var idleInk: NSColor { Theme.current.chrome.ink(alpha: 0.55) }
-    fileprivate static var numberInk: NSColor { Theme.current.chrome.ink(alpha: 0.5) }
+    fileprivate static var idleInk: NSColor {
+        Theme.current.chrome.ink(alpha: ChromeTheme.restingControlAlpha)
+    }
+    /// Test hooks: the inks the bar really paints, so a test cannot restate the numbers and pass
+    /// against its own copy of them.
+    static var activeInkForTesting: NSColor { activeInk }
+    static var idleInkForTesting: NSColor { idleInk }
 
     /// Horizontal scroll host for the chips — no visible scroller; overflow scrolls and fades.
     private let scrollView = NSScrollView()
@@ -374,7 +379,10 @@ final class TabBarView: NSView {
         let ink = item.isActive ? activeInk : idleInk
         let numberColor: NSColor
         switch item.attentionState {
-        case .idle: numberColor = numberInk
+        // The number carries its tab's own weight, not a weight of its own: full bright on the
+        // active tab, resting on the others. A separate value for it made the two halves of one
+        // label read as two things.
+        case .idle: numberColor = ink
         case .completed: numberColor = Theme.current.chrome.positive.nsColor
         case .waiting: numberColor = Theme.current.chrome.attention.nsColor
         }

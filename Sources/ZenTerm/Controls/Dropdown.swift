@@ -51,8 +51,12 @@ final class Dropdown: NSView {
     /// and because the self-close hook it carries reaches back through `self` too.
     private lazy var popover: ListPopover = {
         let popover = ListPopover(anchor: self)
-        // A window resize closes the list on its own; drop the lit border and the stale rows with it.
+        // A window resize closes the list on its own. Tear down the same way an Esc does: the field
+        // has to be handed back too, or the button is left looking like an empty search box holding a
+        // query that typing can no longer change, because `rerenderList` bails on a closed list.
         popover.onSelfClose = { [weak self] in
+            self?.query = ""
+            self?.endEditing()
             self?.rowViews = []
             self?.restyle()
         }
@@ -60,6 +64,17 @@ final class Dropdown: NSView {
     }()
     private var rowViews: [DropdownRowView] = []
     private var highlighted = 0
+    /// Type-to-filter query, live only while the list is open. Sixty-five themes is past what
+    /// arrowing can manage, and the same list is the accent picker and every other long row.
+    private let queryField = NSTextField()
+    /// True while the button is showing its field, so `resignFirstResponder` can tell a hand-off to
+    /// that field from focus genuinely leaving the control.
+    private var isEditing = false
+    private var query = ""
+    /// Original `items` indices the query admits, in the order they are shown. `highlighted` and
+    /// `DropdownRowView.index` stay original indices throughout, so `onChange` reports the item the
+    /// user picked rather than the position it happened to occupy while filtered.
+    private var visible: [Int] = []
     private var isFocusedStop = false
 
     static let swatchSize: CGFloat = 10
@@ -102,6 +117,18 @@ final class Dropdown: NSView {
         layer?.borderWidth = 1
         layer?.borderColor = Theme.current.chrome.ink(alpha: 0.10).cgColor
 
+        // The button becomes the search input while the list is open: a combo box, so the thing you
+        // clicked is the thing you type into. Borderless and laid over the title, matching
+        // `PaletteOverlay`'s search row rather than introducing a second look for the same job.
+        queryField.font = .systemFont(ofSize: 13)
+        queryField.textColor = Theme.current.chrome.foreground.nsColor
+        queryField.isBordered = false
+        queryField.drawsBackground = false
+        queryField.focusRingType = .none
+        queryField.isHidden = true
+        queryField.delegate = self
+        queryField.translatesAutoresizingMaskIntoConstraints = false
+
         titleLabel.font = .systemFont(ofSize: 13)
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -121,6 +148,7 @@ final class Dropdown: NSView {
 
         addSubview(swatch)
         addSubview(titleLabel)
+        addSubview(queryField)
         addSubview(chevron)
         titleAfterSwatch = titleLabel.leadingAnchor.constraint(
             equalTo: swatch.trailingAnchor, constant: 7)
@@ -136,6 +164,9 @@ final class Dropdown: NSView {
             chevron.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 6),
             chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
             chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
+            queryField.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            queryField.centerYAnchor.constraint(equalTo: centerYAnchor),
+            queryField.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -6),
         ])
         renderTitle()
     }
@@ -180,14 +211,25 @@ final class Dropdown: NSView {
     }
 
     /// Re-apply the live chrome colors after a config change — no relaunch. `restyle()` already
-    /// reads `Theme.current` fresh, but doesn't touch the title/chevron (set once in init); the
-    /// open list popover needs nothing here since it's rebuilt fresh (reading Theme fresh) on
-    /// every open.
+    /// reads `Theme.current` fresh, but doesn't touch the title/chevron (set once in init).
+    ///
+    /// **The open list is rebuilt too.** Its rows bake in the theme at build time, and it used to be
+    /// true that a theme could not change while one was up. `⌘⇧,` reloads the config with a list
+    /// open, which left the card painted in the previous theme: a dark popover hanging under a light
+    /// Settings card.
     func reapplyTheme() {
         restyle()
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
         swatch.layer?.borderColor = Theme.current.chrome.ink(alpha: 0.15).cgColor
+        // The field outlives a theme change while the list is open, so its text and placeholder go
+        // stale in the old theme's foreground otherwise.
+        queryField.textColor = Theme.current.chrome.foreground.nsColor
+        if !queryField.isHidden {
+            renderQueryPlaceholder()
+            queryField.applyThemedCaret()
+        }
+        rebuildOpenList()
     }
 
     // MARK: focus
@@ -198,9 +240,13 @@ final class Dropdown: NSView {
         restyle()
         return true
     }
+    /// Losing focus closes the list, which is what makes clicking away dismiss it. Handing focus to
+    /// this control's *own* field is not losing it: the combo box does exactly that on open, and
+    /// closing there would shut the list in the same breath as opening it. The click-away case while
+    /// editing is caught by `controlTextDidEndEditing` instead.
     override func resignFirstResponder() -> Bool {
         isFocusedStop = false
-        closeList()
+        if !isEditing { closeList() }
         restyle()
         return super.resignFirstResponder()
     }
@@ -222,6 +268,12 @@ final class Dropdown: NSView {
 
     // MARK: keyboard
 
+    /// **The open branch is a fallback, not the normal path.** Opening hands first responder to the
+    /// query field, so a real keystroke reaches the field editor and
+    /// `control(_:textView:doCommandBy:)` routes it. This still runs when `makeFirstResponder` was
+    /// refused, which leaves the list open with the button holding focus. Drive it from a test only
+    /// to cover that case — asserting the list's keys through here proves nothing about the keys a
+    /// user presses.
     override func keyDown(with event: NSEvent) {
         if popover.isOpen {
             switch KeyboardFocus.key(for: event) {
@@ -231,7 +283,7 @@ final class Dropdown: NSView {
             // This local Esc is what makes layered dismissal work: a bare Esc reaches the focused
             // control's keyDown before any card-root performKeyEquivalent, so closing the list here
             // keeps the card open. Don't hoist Esc to the card root — that's the dead-end.
-            case .escape: closeList()
+            case .escape: escapePressed()
             default: break  // consume every other key while the list is open
             }
             return
@@ -246,12 +298,57 @@ final class Dropdown: NSView {
         }
     }
 
+    /// Esc clears a mistyped filter before it closes anything, so recovering does not mean reopening.
+    private func escapePressed() {
+        if query.isEmpty {
+            closeList()
+        } else {
+            query = ""
+            queryField.stringValue = ""
+            rerenderList()
+        }
+    }
+
+    /// Test hook: type into the combo box's field the way a person does, through the delegate the
+    /// field really calls, so a test cannot pass against a query the field never received.
+    func typeForTesting(_ text: String) {
+        queryField.stringValue = text
+        controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: queryField))
+    }
+
+    /// Test hook: whether the button is showing its field rather than its static title.
+    var isEditingForTesting: Bool { !queryField.isHidden }
+
+    /// Test hook: route a field-editor command the way the real field editor does.
+    func fieldCommandForTesting(_ selector: Selector) -> Bool {
+        control(queryField, textView: NSTextView(), doCommandBy: selector)
+    }
+
+    /// Test hook: the colour the field's own text is painted in, so a theme swap is assertable.
+    var queryFieldTextColorForTesting: NSColor? { queryField.textColor }
+
+    /// Test hook: the colour each mounted row is painted in, so a stale card is assertable.
+    var rowFillsForTesting: [NSColor?] {
+        rowViews.map { $0.layer?.backgroundColor.flatMap(NSColor.init(cgColor:)) }
+    }
+
+    /// Test hook: the live filter query.
+    var queryForTesting: String { query }
+
+    /// Test hook: the item indices the query admits, in shown order.
+    var visibleIndicesForTesting: [Int] { visible }
+
     /// Test hook: whether the floating list is open right now.
     var isPopoverOpen: Bool { popover.isOpen }
 
+    /// Read `isOpen` **before** touching first responder. Taking focus ends the query field's editing
+    /// session, which closes the list synchronously through `controlTextDidEndEditing`, so a ternary
+    /// tested afterwards always sees a closed list and reopens the one it just shut. That took
+    /// click-to-dismiss off every dropdown in Settings.
     override func mouseDown(with event: NSEvent) {
+        let wasOpen = popover.isOpen
         window?.makeFirstResponder(self)
-        popover.isOpen ? closeList() : openList()
+        if wasOpen { closeList() } else { openList() }
     }
 
     /// The whole control is one click target. Without this the title label and chevron subviews
@@ -269,7 +366,10 @@ final class Dropdown: NSView {
         // pointing at fresh views that are in no card, so the mounted rows stop repainting and the
         // arrow keys move a highlight nobody can see.
         guard !popover.isOpen, window?.contentView != nil else { return }
+        query = ""
+        refilter()
         highlighted = selectedIndex
+        beginEditing()
         popover.open(rows: buildRows())
         refreshListHighlight()
         scrollHighlightIntoView()  // open scrolled to the current selection when it's below the fold
@@ -278,25 +378,67 @@ final class Dropdown: NSView {
 
     private func closeList() {
         popover.close()
+        query = ""
+        endEditing()
         rowViews = []
         restyle()
     }
 
+    /// Hand the button over to the field: the placeholder keeps the current selection readable while
+    /// the field is empty, so the row never looks blanked out.
+    private func beginEditing() {
+        queryField.stringValue = ""
+        renderQueryPlaceholder()
+        titleLabel.isHidden = true
+        queryField.isHidden = false
+        isEditing = true
+        window?.makeFirstResponder(queryField)
+        queryField.applyThemedCaret()  // the field editor exists only once the field has focus
+    }
+
+    /// Focus returns to the dropdown so arrowing and tabbing continue from here.
+    ///
+    /// **Restored before the field is hidden, and gated on `isEditing` rather than on who holds
+    /// focus now.** Hiding a view that holds first responder makes AppKit dump focus to the window,
+    /// so a check afterwards reads false and the restore never runs: Esc closed the list and left
+    /// focus nowhere, with no arrow key reaching anything.
+    private func endEditing() {
+        let wasEditing = isEditing
+        isEditing = false
+        if wasEditing { window?.makeFirstResponder(self) }
+        queryField.isHidden = true
+        titleLabel.isHidden = false
+    }
+
+    /// AppKit's `placeholderString` draws in `placeholderTextColor`, which follows
+    /// `effectiveAppearance` rather than `Theme.current`. Build it attributed, from the chrome ink.
+    private func renderQueryPlaceholder() {
+        let title = items.indices.contains(selectedIndex) ? items[selectedIndex].title : ""
+        queryField.placeholderAttributedString = NSAttributedString(
+            string: title,
+            attributes: [
+                .foregroundColor: Theme.current.chrome.ink(alpha: 0.45),
+                .font: NSFont.systemFont(ofSize: 13),
+            ])
+    }
+
     private func moveHighlight(_ delta: Int) {
-        guard let next = KeyboardFocus.step(from: highlighted, delta: delta, count: items.count) else { return }
-        highlighted = next
+        guard let position = visible.firstIndex(of: highlighted),
+            let nextPosition = KeyboardFocus.step(from: position, delta: delta, count: visible.count)
+        else { return }
+        highlighted = visible[nextPosition]
         refreshListHighlight()
         scrollHighlightIntoView()
     }
 
     /// Keep the highlighted row visible as arrow keys move it past the scroll view's capped height.
     private func scrollHighlightIntoView() {
-        guard rowViews.indices.contains(highlighted) else { return }
-        let row = rowViews[highlighted]
+        guard let row = rowViews.first(where: { $0.index == highlighted }) else { return }
         row.scrollToVisible(row.bounds)
     }
 
     private func commitHighlight() {
+        guard visible.contains(highlighted) else { return }  // committing a filtered-out row picks nothing
         selectedIndex = highlighted
         renderTitle()
         closeList()
@@ -309,13 +451,60 @@ final class Dropdown: NSView {
     /// The list's contents, in order: a faint group header wherever the group changes, then the
     /// rows. `ListPopover` sizes each line and assembles the card around them; a row draws an
     /// optional leading swatch, the title, a trailing note, and a check when it is the selection.
+    /// Recompute `visible` from `query`. An empty query admits everything in catalog order; a query
+    /// ranks by `FuzzyMatch`, the same scorer the command palette uses, so "gvl" finds Gruvbox Light.
+    private func refilter() {
+        guard !query.isEmpty else {
+            visible = Array(items.indices)
+            return
+        }
+        visible =
+            items.indices
+            .compactMap { index -> (index: Int, score: Int)? in
+                guard let score = FuzzyMatch.score(query, items[index].title) else { return nil }
+                return (index, score)
+            }
+            // Stable on ties so equally-scored rows keep catalog order rather than shuffling per keystroke.
+            .sorted { $0.score == $1.score ? $0.index < $1.index : $0.score > $1.score }
+            .map(\.index)
+    }
+
+    /// Rebuild the open card from scratch. `ListPopover.open` no-ops while one is up, so it comes
+    /// down first. Query and highlight survive because they live here, not in the card.
+    private func rebuildOpenList() {
+        guard popover.isOpen else { return }
+        popover.close()
+        popover.open(rows: buildRows())
+        refreshListHighlight()
+        scrollHighlightIntoView()
+    }
+
+    /// Re-render the open list after the query moved.
+    private func rerenderList() {
+        guard popover.isOpen else { return }
+        let before = visible
+        refilter()
+        // Rebuilding the card costs about 22 ms at sixty-five rows and 3 ms at six, so skip it when
+        // the query narrowed nothing: typing on past a unique match is the common way to hit this.
+        guard visible != before else { return }
+        if !visible.contains(highlighted) { highlighted = visible.first ?? highlighted }
+        rebuildOpenList()
+    }
+
     private func buildRows() -> [ListPopover.Row] {
         let chrome = Theme.current.chrome
         rowViews = []
         var lines: [ListPopover.Row] = []
         var previousGroup: String?
-        for (index, item) in items.enumerated() {
-            if let group = item.group, group != previousGroup {
+        if visible.isEmpty {
+            lines.append(
+                ListPopover.Row(
+                    view: Self.groupHeaderView("No matches", chrome: chrome), height: Self.headerHeight))
+            return lines
+        }
+        for index in visible {
+            let item = items[index]
+            if query.isEmpty, let group = item.group, group != previousGroup {
                 lines.append(
                     ListPopover.Row(
                         view: Self.groupHeaderView(group, chrome: chrome), height: Self.headerHeight))
@@ -431,5 +620,44 @@ private final class DropdownRowView: NSView {
 
     func setHighlighted(_ isHighlighted: Bool, chrome: ChromeTheme) {
         layer?.backgroundColor = (isHighlighted ? chrome.ink(alpha: 0.10) : NSColor.clear).cgColor
+    }
+}
+
+/// The field owns text while the list is open, so the list's own keys have to be taken back from
+/// the field editor: an `NSTextView` swallows arrows and Return, and Esc would otherwise cancel the
+/// field rather than the filter.
+extension Dropdown: NSTextFieldDelegate {
+    /// Focus leaving the field while the list is open is the click-away case, which `Dropdown`'s own
+    /// `resignFirstResponder` no longer sees now that it ignores the hand-off.
+    func controlTextDidEndEditing(_ obj: Notification) {
+        guard isEditing, window?.firstResponder !== self else { return }
+        closeList()
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        query = queryField.stringValue
+        rerenderList()
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        switch selector {
+        case #selector(NSResponder.moveUp(_:)): moveHighlight(-1)
+        case #selector(NSResponder.moveDown(_:)): moveHighlight(1)
+        case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)):
+            commitHighlight()
+        case #selector(NSResponder.cancelOperation(_:)): escapePressed()
+        // Taken back from the field editor for the same reason arrows are. Left to AppKit,
+        // `selectNextKeyView` ends editing (closing the list, which hands focus back) and then
+        // overwrites that with its own choice — and no form in this app builds a `nextKeyView`
+        // chain, so focus landed on the hidden field and the keyboard went dead until a click.
+        case #selector(NSResponder.insertTab(_:)):
+            closeList()
+            onTab?()
+        case #selector(NSResponder.insertBacktab(_:)):
+            closeList()
+            onBacktab?()
+        default: return false
+        }
+        return true
     }
 }

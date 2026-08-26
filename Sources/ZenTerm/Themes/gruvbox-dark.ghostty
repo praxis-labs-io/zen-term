@@ -20,3 +20,4 @@ cursor-color = #ebdbb2
 cursor-text = #282828
 selection-background = #665c54
 selection-foreground = #ebdbb2
+nvim-colorscheme = gruvbox

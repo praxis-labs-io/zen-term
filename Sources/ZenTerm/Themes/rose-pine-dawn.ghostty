@@ -20,3 +20,4 @@ cursor-color = #575279
 cursor-text = #faf4ed
 selection-background = #dfdad9
 selection-foreground = #575279
+nvim-colorscheme = rose-pine-dawn

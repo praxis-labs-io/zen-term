@@ -23,10 +23,17 @@ final class ThemeCatalogTests: XCTestCase {
     func test_entries_areTheBundledCatalog_whenTheUserDirIsEmpty() throws {
         let root = try makeTempRoot()
         let entries = ThemeCatalog.entries(configRoot: root)
-        XCTAssertEqual(entries.map(\.name), ThemeCatalog.bundled.map(\.token))
+        XCTAssertEqual(Set(entries.map(\.name)), Set(ThemeCatalog.bundled.map(\.token)))
         XCTAssertTrue(entries.allSatisfy { $0.source == .bundled })
-        // The default is a real token now, so an unset `theme` key has something to select.
-        XCTAssertEqual(entries.first?.name, ThemeCatalog.defaultThemeName)
+        // The default is a real token, so an unset `theme` key has something to select. It is no
+        // longer first: the list is alphabetical, and sixty-five entries need finding by name.
+        XCTAssertTrue(entries.contains { $0.name == ThemeCatalog.defaultThemeName })
+        // Alphabetical by display name, the string the picker renders.
+        XCTAssertEqual(
+            entries.map(\.displayName),
+            entries.map(\.displayName).sorted {
+                $0.localizedStandardCompare($1) == .orderedAscending
+            })
     }
 
     func test_userFile_shadowsBundledName_asUserSource() throws {
@@ -71,6 +78,24 @@ final class ThemeCatalogTests: XCTestCase {
         return GhosttyThemeParser.parse(
             try String(contentsOf: url, encoding: .utf8),
             fontName: fallback.fontName, fontSize: fallback.fontSize, fallback: fallback)
+    }
+
+    /// The catalog's `isDark` is hand-declared per entry and drives the "Dark"/"Light" note beside
+    /// every row in the theme picker. Nothing else reads it, so a wrong one mislabels a row and
+    /// stays wrong: catching it by eye means checking sixty-five rows against sixty-five files.
+    ///
+    /// Held to `TerminalColor.isDark` on the theme's own background, which is what `ThemePublisher`
+    /// sends nvim as `dark`. Two independent readings of the same property can disagree otherwise,
+    /// and then the picker says Light while the editor goes dark.
+    func test_everyBundledTheme_declaresTheLightnessItsBackgroundReports() throws {
+        for entry in ThemeCatalog.bundled {
+            let theme = try parseBundled(entry.token)
+            XCTAssertEqual(
+                entry.isDark, theme.background.isDark,
+                "\(entry.token) is catalogued as \(entry.isDark ? "Dark" : "Light") "
+                    + "but its background \(theme.background.hex) reads as "
+                    + "\(theme.background.isDark ? "Dark" : "Light")")
+        }
     }
 
     func test_everyBundledTheme_setsEveryColorItShips() throws {

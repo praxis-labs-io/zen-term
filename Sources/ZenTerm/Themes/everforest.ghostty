@@ -20,3 +20,4 @@ cursor-color = #e69875
 cursor-text = #543a48
 selection-background = #543a48
 selection-foreground = #d3c6aa
+nvim-colorscheme = everforest

@@ -20,3 +20,4 @@ cursor-color = #f2d5cf
 cursor-text = #303446
 selection-background = #f2d5cf
 selection-foreground = #303446
+nvim-colorscheme = catppuccin-frappe

@@ -192,7 +192,7 @@ config works anywhere.
 
 ## Change how it looks
 
-**Themes:** press ⌘, and choose **Appearance**. Seventeen ship with the app,
+**Themes:** press ⌘, and choose **Appearance**. Sixty-five ship with the app,
 including Rosé Pine, Catppuccin, Tokyo Night, Nord, Gruvbox, and Dracula. A theme
 colors the whole app, not only the terminal text.
 

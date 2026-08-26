@@ -23,6 +23,14 @@ struct ChromeTheme: Equatable {
     /// secondary text too). Tune here — it's the single knob for chrome ink contrast.
     static let inkBoost: CGFloat = 1.3
 
+    /// Ink opacity for a **control at rest**: a toolbar icon, an inactive tab's title. Distinct from
+    /// the `ink(alpha: 0.5)` used for hints, subtitles and counts, which are meant to recede. Both
+    /// of these sat at that weight, so the things you click read as the things you skim.
+    ///
+    /// Kept below the hover and active weights: `inkBoost` clamps anything past ~0.77 to full
+    /// opacity, so raising this collapses rest into hover and removes the cue.
+    static let restingControlAlpha: CGFloat = 0.65
+
     /// A foreground-toned chrome ink at a given opacity — icon tints, text, hairlines, and
     /// hover fills. Sourced from the theme's foreground so it adapts automatically (light on a
     /// dark theme, dark on a light one), lifted by `inkBoost` for readability.

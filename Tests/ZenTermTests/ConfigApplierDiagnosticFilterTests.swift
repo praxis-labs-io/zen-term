@@ -58,7 +58,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
                     return true
                 },
                 retractConflicts: { [unowned self] in self.carded = [] },
-                reapplyUpdateCardTheme: {}, applyAutoCheckSetting: {}))
+                reapplyUpdateCardTheme: {}, applyAutoCheckSetting: {}, publishTheme: {}))
     }
 
     /// A float on ⌘J, which is scroll-to-selection's default. It gets a card of its own, never a
