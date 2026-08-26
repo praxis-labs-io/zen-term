@@ -198,6 +198,32 @@ final class DropdownTests: WindowTestCase {
         XCTAssertEqual(dropdown.buttonTitleForTesting, "Gruvbox Light")
     }
 
+    /// Closing the combo box has to hand focus back, or the row is a dead end: Esc shut the list and
+    /// left focus on the window, where no arrow key reaches anything. Asserts the responder *and*
+    /// that an arrow actually moves from here, which is the thing the user notices.
+    func test_closingTheComboBox_returnsFocusSoArrowsStillWork() {
+        var movedDown = false
+        let dropdown = filterFixture()
+        dropdown.onArrowDown = { movedDown = true }
+        let window = dropdown.window
+
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.cancelOperation(_:)))  // closes, query empty
+
+        XCTAssertFalse(dropdown.isPopoverOpen)
+        XCTAssertFalse(dropdown.isEditingForTesting)
+        XCTAssertTrue(window?.firstResponder === dropdown, "focus came back to the row, not the window")
+
+        dropdown.keyDown(with: arrowDown())
+        XCTAssertTrue(movedDown, "an arrow key moves on from the row once it has focus again")
+    }
+
+    private func arrowDown() -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [.function, .numericPad], timestamp: 0,
+            windowNumber: 0, context: nil, characters: "\u{F701}",
+            charactersIgnoringModifiers: "\u{F701}", isARepeat: false, keyCode: 125)!
+    }
+
     /// The bug this design invites: rows are rebuilt in filtered order, so committing by position
     /// would report whatever item sat at that index unfiltered. "Tokyo Night" is index 4 of 5 and
     /// the only match for "tok", so a position-based commit hands back index 0.

@@ -362,12 +362,18 @@ final class Dropdown: NSView {
         queryField.applyThemedCaret()  // the field editor exists only once the field has focus
     }
 
+    /// Focus returns to the dropdown so arrowing and tabbing continue from here.
+    ///
+    /// **Restored before the field is hidden, and gated on `isEditing` rather than on who holds
+    /// focus now.** Hiding a view that holds first responder makes AppKit dump focus to the window,
+    /// so a check afterwards reads false and the restore never runs: Esc closed the list and left
+    /// focus nowhere, with no arrow key reaching anything.
     private func endEditing() {
+        let wasEditing = isEditing
         isEditing = false
+        if wasEditing { window?.makeFirstResponder(self) }
         queryField.isHidden = true
         titleLabel.isHidden = false
-        // Focus returns to the dropdown so arrowing and tabbing continue from here.
-        if window?.firstResponder is NSTextView { window?.makeFirstResponder(self) }
     }
 
     /// AppKit's `placeholderString` draws in `placeholderTextColor`, which follows
