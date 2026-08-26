@@ -108,6 +108,11 @@
 
 # Opacity of the on-brand tint over the behind-window blur. 1 = solid shell,
 # 0 = raw system blur showing your desktop through the whole window.
+#
+# Below 1, part of what you see through the shell is your desktop, and the chrome
+# on top of it (the footer icons, the tab titles) reads against that. A strongly
+# contrasting wallpaper costs some of their legibility, which is the trade a lower
+# value buys. Set 1 for a solid shell if you would rather keep the contrast.
 # In-app Settings edit: applies live.
 # backdrop-alpha = 0.82               # clamped to 0…1
 

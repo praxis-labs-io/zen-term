@@ -430,9 +430,6 @@ final class WindowController: NSObject {
                     self.tint.layer?.backgroundColor =
                         Theme.current.chrome.background.nsColor.withAlphaComponent(Self.backdropTintAlpha)
                         .cgColor
-                    // The dock tops the shell up to its legibility floor, so it tracks the same two
-                    // inputs the tint does: a `backdrop-alpha` edit is a `.chromeLayout` change.
-                    self.dock.reapplyTheme()
                 }
                 if change.contains(.chromeLayout) {
                     // Show/hide the traffic lights live; `reapplyChromeLayout()` below re-applies the
