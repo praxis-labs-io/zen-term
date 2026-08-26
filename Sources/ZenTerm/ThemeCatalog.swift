@@ -87,11 +87,18 @@ enum ThemeCatalog {
     ]
 
     /// Bundled entries (minus any shadowed by a user file), then the user's own files.
+    ///
+    /// Bundled entries sort by display name, which is what the picker shows, and
+    /// `localizedStandardCompare` rather than `<`: "Rosé Pine" sorts after "Z" under a plain
+    /// comparison. Sorting by name keeps families adjacent for free, since a family shares a prefix.
     static func entries(configRoot: URL = ConfigLoader.defaultRoot) -> [ThemeEntry] {
         var entries: [ThemeEntry] = []
         let userTokens = userThemeTokens(configRoot: configRoot)
         let userSet = Set(userTokens)
-        for entry in bundled where !userSet.contains(entry.token) {
+        let sorted = bundled.sorted {
+            $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
+        }
+        for entry in sorted where !userSet.contains(entry.token) {
             entries.append(
                 ThemeEntry(name: entry.token, displayName: entry.displayName, isDark: entry.isDark, source: .bundled))
         }

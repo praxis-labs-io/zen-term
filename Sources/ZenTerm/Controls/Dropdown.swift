@@ -60,6 +60,13 @@ final class Dropdown: NSView {
     }()
     private var rowViews: [DropdownRowView] = []
     private var highlighted = 0
+    /// Type-to-filter query, live only while the list is open. Sixty-five themes is past what
+    /// arrowing can manage, and the same list is the accent picker and every other long row.
+    private var query = ""
+    /// Original `items` indices the query admits, in the order they are shown. `highlighted` and
+    /// `DropdownRowView.index` stay original indices throughout, so `onChange` reports the item the
+    /// user picked rather than the position it happened to occupy while filtered.
+    private var visible: [Int] = []
     private var isFocusedStop = false
 
     static let swatchSize: CGFloat = 10
@@ -231,8 +238,18 @@ final class Dropdown: NSView {
             // This local Esc is what makes layered dismissal work: a bare Esc reaches the focused
             // control's keyDown before any card-root performKeyEquivalent, so closing the list here
             // keeps the card open. Don't hoist Esc to the card root — that's the dead-end.
-            case .escape: closeList()
-            default: break  // consume every other key while the list is open
+            // Esc clears the query first, so a mistyped filter is recoverable without reopening.
+            case .escape: if query.isEmpty { closeList() } else { query = ""; rerenderList() }
+            case .delete:
+                if !query.isEmpty {
+                    query.removeLast()
+                    rerenderList()
+                }
+            default:
+                if let typed = Self.printable(event) {
+                    query += typed
+                    rerenderList()
+                }
             }
             return
         }
@@ -245,6 +262,24 @@ final class Dropdown: NSView {
         default: super.keyDown(with: event)
         }
     }
+
+    /// A single printable character the filter should take, or nil. Modified chords are never text:
+    /// `⌘A` and `⌃N` must keep reaching their own handlers rather than typing into the query.
+    private static func printable(_ event: NSEvent) -> String? {
+        guard !event.modifierFlags.contains(.command), !event.modifierFlags.contains(.control),
+            let characters = event.charactersIgnoringModifiers, characters.count == 1,
+            let scalar = characters.unicodeScalars.first,
+            scalar.properties.isAlphabetic || scalar == " "
+                || CharacterSet.alphanumerics.contains(scalar) || "-_.".unicodeScalars.contains(scalar)
+        else { return nil }
+        return characters
+    }
+
+    /// Test hook: the live filter query.
+    var queryForTesting: String { query }
+
+    /// Test hook: the item indices the query admits, in shown order.
+    var visibleIndicesForTesting: [Int] { visible }
 
     /// Test hook: whether the floating list is open right now.
     var isPopoverOpen: Bool { popover.isOpen }
@@ -269,6 +304,8 @@ final class Dropdown: NSView {
         // pointing at fresh views that are in no card, so the mounted rows stop repainting and the
         // arrow keys move a highlight nobody can see.
         guard !popover.isOpen, window?.contentView != nil else { return }
+        query = ""
+        refilter()
         highlighted = selectedIndex
         popover.open(rows: buildRows())
         refreshListHighlight()
@@ -278,25 +315,28 @@ final class Dropdown: NSView {
 
     private func closeList() {
         popover.close()
+        query = ""
         rowViews = []
         restyle()
     }
 
     private func moveHighlight(_ delta: Int) {
-        guard let next = KeyboardFocus.step(from: highlighted, delta: delta, count: items.count) else { return }
-        highlighted = next
+        guard let position = visible.firstIndex(of: highlighted),
+            let nextPosition = KeyboardFocus.step(from: position, delta: delta, count: visible.count)
+        else { return }
+        highlighted = visible[nextPosition]
         refreshListHighlight()
         scrollHighlightIntoView()
     }
 
     /// Keep the highlighted row visible as arrow keys move it past the scroll view's capped height.
     private func scrollHighlightIntoView() {
-        guard rowViews.indices.contains(highlighted) else { return }
-        let row = rowViews[highlighted]
+        guard let row = rowViews.first(where: { $0.index == highlighted }) else { return }
         row.scrollToVisible(row.bounds)
     }
 
     private func commitHighlight() {
+        guard visible.contains(highlighted) else { return }  // committing a filtered-out row picks nothing
         selectedIndex = highlighted
         renderTitle()
         closeList()
@@ -309,13 +349,56 @@ final class Dropdown: NSView {
     /// The list's contents, in order: a faint group header wherever the group changes, then the
     /// rows. `ListPopover` sizes each line and assembles the card around them; a row draws an
     /// optional leading swatch, the title, a trailing note, and a check when it is the selection.
+    /// Recompute `visible` from `query`. An empty query admits everything in catalog order; a query
+    /// ranks by `FuzzyMatch`, the same scorer the command palette uses, so "gvl" finds Gruvbox Light.
+    private func refilter() {
+        guard !query.isEmpty else {
+            visible = Array(items.indices)
+            return
+        }
+        visible =
+            items.indices
+            .compactMap { index -> (index: Int, score: Int)? in
+                guard let score = FuzzyMatch.score(query, items[index].title) else { return nil }
+                return (index, score)
+            }
+            // Stable on ties so equally-scored rows keep catalog order rather than shuffling per keystroke.
+            .sorted { $0.score == $1.score ? $0.index < $1.index : $0.score > $1.score }
+            .map(\.index)
+    }
+
+    /// Re-render the open list after the query moved. `ListPopover.open` no-ops while a card is up,
+    /// so the card is rebuilt: the list shrinks as you type and has to be re-placed anyway.
+    private func rerenderList() {
+        guard popover.isOpen else { return }
+        refilter()
+        if !visible.contains(highlighted) { highlighted = visible.first ?? highlighted }
+        popover.close()
+        popover.open(rows: buildRows())
+        refreshListHighlight()
+        scrollHighlightIntoView()
+    }
+
     private func buildRows() -> [ListPopover.Row] {
         let chrome = Theme.current.chrome
         rowViews = []
         var lines: [ListPopover.Row] = []
         var previousGroup: String?
-        for (index, item) in items.enumerated() {
-            if let group = item.group, group != previousGroup {
+        if !query.isEmpty {
+            lines.append(
+                ListPopover.Row(
+                    view: Self.groupHeaderView("Search: \(query)", chrome: chrome),
+                    height: Self.headerHeight))
+        }
+        if visible.isEmpty {
+            lines.append(
+                ListPopover.Row(
+                    view: Self.groupHeaderView("No matches", chrome: chrome), height: Self.headerHeight))
+            return lines
+        }
+        for index in visible {
+            let item = items[index]
+            if query.isEmpty, let group = item.group, group != previousGroup {
                 lines.append(
                     ListPopover.Row(
                         view: Self.groupHeaderView(group, chrome: chrome), height: Self.headerHeight))

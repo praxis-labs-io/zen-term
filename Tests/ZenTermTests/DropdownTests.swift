@@ -112,6 +112,142 @@ final class DropdownTests: WindowTestCase {
             "no orphaned list card left drawn on the content view")
     }
 
+    // MARK: - type to filter
+
+    /// Sixty-five themes is past what arrowing can manage, so the open list takes typed characters
+    /// as a filter. Driven through the real control's `keyDown`, because a state-only test passes
+    /// while the keys never reach it.
+    private func filterFixture() -> Dropdown {
+        let titles = ["Gruvbox Dark", "Gruvbox Light", "Nord", "Rosé Pine", "Tokyo Night"]
+        let items = titles.enumerated().map {
+            DropdownItem(title: $0.element, group: nil, note: nil, isSelected: $0.offset == 0)
+        }
+        let dropdown = Dropdown(items: items, selectedIndex: 0) { _ in }
+        dropdown.translatesAutoresizingMaskIntoConstraints = true
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView?.addSubview(dropdown)
+        dropdown.frame = NSRect(x: 20, y: 400, width: 220, height: 30)
+        window.makeFirstResponder(dropdown)
+        dropdown.openListForTesting()
+        return dropdown
+    }
+
+    /// A real `keyDown`, not a synthesized `.option` chord: the filter reads
+    /// `charactersIgnoringModifiers`, so a character has to actually be on the event.
+    private func typeKey(_ character: String) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: character, charactersIgnoringModifiers: character,
+            isARepeat: false, keyCode: 0)!
+    }
+
+    private func escape() -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+            isARepeat: false, keyCode: 53)!
+    }
+
+    private func enter() -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "\r", charactersIgnoringModifiers: "\r",
+            isARepeat: false, keyCode: 36)!
+    }
+
+    private func backspace() -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "\u{8}", charactersIgnoringModifiers: "\u{8}",
+            isARepeat: false, keyCode: 51)!
+    }
+
+    func test_typing_filtersTheListToMatches() {
+        let dropdown = filterFixture()
+
+        for character in ["n", "o", "r"] { dropdown.keyDown(with: typeKey(character)) }
+
+        XCTAssertEqual(dropdown.queryForTesting, "nor")
+        XCTAssertEqual(
+            dropdown.visibleIndicesForTesting.map { dropdown.itemsForTesting[$0].title }, ["Nord"])
+    }
+
+    func test_backspace_restoresTheWiderList() {
+        let dropdown = filterFixture()
+        for character in ["n", "o", "r"] { dropdown.keyDown(with: typeKey(character)) }
+
+        dropdown.keyDown(with: backspace())
+        dropdown.keyDown(with: backspace())
+        dropdown.keyDown(with: backspace())
+
+        XCTAssertEqual(dropdown.queryForTesting, "")
+        XCTAssertEqual(dropdown.visibleIndicesForTesting.count, 5)
+    }
+
+    /// Esc clears a mistyped filter before it closes anything, so recovering does not mean reopening.
+    func test_escape_clearsTheQueryBeforeClosingTheList() {
+        let dropdown = filterFixture()
+        dropdown.keyDown(with: typeKey("n"))
+
+        dropdown.keyDown(with: escape())
+        XCTAssertEqual(dropdown.queryForTesting, "")
+        XCTAssertTrue(dropdown.isPopoverOpen, "the first Esc clears the filter, it does not close")
+
+        dropdown.keyDown(with: escape())
+        XCTAssertFalse(dropdown.isPopoverOpen)
+    }
+
+    /// The bug this design invites: rows are rebuilt in filtered order, so committing by position
+    /// would report whatever item sat at that index unfiltered. "Tokyo Night" is index 4 of 5, and
+    /// the only match for "tok" — so a position-based commit hands back index 0.
+    func test_committingAFilteredRow_selectsThatItem_notItsPosition() {
+        var picked: Int?
+        let titles = ["Gruvbox Dark", "Gruvbox Light", "Nord", "Rosé Pine", "Tokyo Night"]
+        let items = titles.enumerated().map {
+            DropdownItem(title: $0.element, group: nil, note: nil, isSelected: $0.offset == 0)
+        }
+        let dropdown = Dropdown(items: items, selectedIndex: 0) { picked = $0 }
+        dropdown.translatesAutoresizingMaskIntoConstraints = true
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView?.addSubview(dropdown)
+        dropdown.frame = NSRect(x: 20, y: 400, width: 220, height: 30)
+        window.makeFirstResponder(dropdown)
+        dropdown.openListForTesting()
+
+        for character in ["t", "o", "k"] { dropdown.keyDown(with: typeKey(character)) }
+        dropdown.keyDown(with: enter())
+
+        XCTAssertEqual(picked, 4, "committed the filtered row's own index")
+        XCTAssertEqual(dropdown.buttonTitleForTesting, "Tokyo Night")
+    }
+
+    /// A query matching nothing commits nothing rather than picking a stale highlight.
+    func test_aQueryWithNoMatches_commitsNothing() {
+        var picked: Int?
+        let items = ["Nord", "Rosé Pine"].enumerated().map {
+            DropdownItem(title: $0.element, group: nil, note: nil, isSelected: $0.offset == 0)
+        }
+        let dropdown = Dropdown(items: items, selectedIndex: 0) { picked = $0 }
+        dropdown.translatesAutoresizingMaskIntoConstraints = true
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView?.addSubview(dropdown)
+        dropdown.frame = NSRect(x: 20, y: 400, width: 220, height: 30)
+        window.makeFirstResponder(dropdown)
+        dropdown.openListForTesting()
+
+        for character in ["z", "z", "z"] { dropdown.keyDown(with: typeKey(character)) }
+        dropdown.keyDown(with: enter())
+
+        XCTAssertEqual(dropdown.visibleIndicesForTesting, [])
+        XCTAssertNil(picked)
+    }
+
     func test_arrowNavigation_scrollsHighlightIntoView() {
         // 15 rows overflow the ~260pt list cap, so the last row starts below the fold.
         let items = (0..<15).map {
