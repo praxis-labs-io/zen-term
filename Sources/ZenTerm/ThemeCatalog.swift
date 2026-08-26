@@ -44,7 +44,6 @@ enum ThemeCatalog {
         ("gruvbox-dark", "Gruvbox Dark", true),
         ("gruvbox-light", "Gruvbox Light", false),
         ("dracula", "Dracula", true),
-        ("aura", "Aura", true),
         ("solarized-dark", "Solarized Dark", true),
         ("solarized-light", "Solarized Light", false),
         ("everforest", "Everforest", true),

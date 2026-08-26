@@ -61,7 +61,7 @@ through the first hour.
   `nav_*` actions and install
   [zen-navigator.nvim](https://github.com/praxis-labs-io/zen-navigator.nvim):
   nvim walks its own splits and hands off to ZenTerm at the edge.
-- **66 themes**, and a bring-your-own theme file. A theme colors the whole app,
+- **65 themes**, and a bring-your-own theme file. A theme colors the whole app,
   not the terminal text alone.
 - **Neovim recolors with the terminal.** Install
   [zen-theme.nvim](https://github.com/praxis-labs-io/zen-theme.nvim) and switching

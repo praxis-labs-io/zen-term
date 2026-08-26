@@ -1610,7 +1610,7 @@ attention ansi[6], positive ansi[2], and muted a blend of fg and bg.
 
 Roles are named for meaning, not hue, which is why they are separate fields rather than
 aliases onto a slot: repointing one leaves the others alone.
-Sixty-six themes ship bundled; a user file shadows a bundled one of the same name. See
+Sixty-five themes ship bundled; a user file shadows a bundled one of the same name. See
 CLAUDE.md for the rule that the chrome never hardcodes a color.
 
 **A program can move one color, and only inside its own pane.** OSC 11 (and OSC 4/10/12) is
