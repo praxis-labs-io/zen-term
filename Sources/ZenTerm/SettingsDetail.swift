@@ -38,7 +38,7 @@ enum SettingsDetail {
     static func groupCaption(_ title: String) -> NSTextField {
         let caption = NSTextField(labelWithString: title.uppercased())
         caption.font = .systemFont(ofSize: 10, weight: .semibold)
-        caption.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        caption.textColor = Theme.current.chrome.ink(.muted)
         return caption
     }
 
@@ -49,7 +49,7 @@ enum SettingsDetail {
     static func reorderHint() -> NSTextField {
         let hint = NSTextField(labelWithString: "⌥↑ ⌥↓ to reorder")
         hint.font = .systemFont(ofSize: 10, weight: .medium)
-        hint.textColor = Theme.current.chrome.ink(alpha: 0.35)
+        hint.textColor = Theme.current.chrome.ink(.muted)
         hint.setContentHuggingPriority(.required, for: .horizontal)
         return hint
     }

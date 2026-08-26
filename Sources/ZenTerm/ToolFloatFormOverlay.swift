@@ -245,7 +245,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         heightField.onBacktab = { [weak self] in self?.focus(self?.widthField.field) }
         let times = NSTextField(labelWithString: "×")
         times.font = .systemFont(ofSize: 13)
-        times.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        times.textColor = Theme.current.chrome.ink(.muted)
         times.setContentHuggingPriority(.required, for: .horizontal)
         // Two compact, equal-width fields left-aligned; a trailing spacer absorbs the rest of the
         // group so they don't stretch to the full card width.

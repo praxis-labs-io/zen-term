@@ -116,7 +116,7 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         CardChrome.reapplyTheme(to: card)
         header.textColor = chrome.foreground.nsColor
         envText.textColor = chrome.muted.nsColor
-        envNote.textColor = chrome.ink(alpha: 0.4)
+        envNote.textColor = chrome.ink(.muted)
         let controls: [ThemeReapplying] = [titleField, whatHappened, exportButton, cancelButton, openButton]
         controls.forEach { $0.reapplyTheme() }
         titleGroup?.reapplyTheme()
@@ -151,7 +151,7 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         envText.isSelectable = true
         envText.stringValue = report.plainText
         envNote.font = .systemFont(ofSize: 11)
-        envNote.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        envNote.textColor = Theme.current.chrome.ink(.muted)
         let envGroup = Self.vStack([envCaption, envText, envNote], spacing: 5)
 
         let footer = buildFooter()

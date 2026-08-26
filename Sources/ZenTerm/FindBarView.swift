@@ -134,9 +134,9 @@ final class FindBarView: NSView {
         let chrome = Theme.current.chrome
         applyFill()
         field.applyThemedCaret()  // a field holding focus across the swap keeps the old ink otherwise
-        glyph.contentTintColor = chrome.ink(alpha: 0.4)
+        glyph.contentTintColor = chrome.ink(.muted)
         field.textColor = chrome.foreground.nsColor
-        count.textColor = chrome.ink(alpha: 0.5)
+        count.textColor = chrome.ink(.muted)
         applyPlaceholder()
     }
 
@@ -147,7 +147,7 @@ final class FindBarView: NSView {
         field.placeholderAttributedString = NSAttributedString(
             string: "Find in scrollback",
             attributes: [
-                .foregroundColor: Theme.current.chrome.ink(alpha: 0.4),
+                .foregroundColor: Theme.current.chrome.ink(.muted),
                 .font: field.font ?? .systemFont(ofSize: 13),
             ]
         )

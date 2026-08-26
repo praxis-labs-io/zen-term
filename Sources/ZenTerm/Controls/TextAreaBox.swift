@@ -78,7 +78,7 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         // The text view draws the placeholder itself, at the origin its own first glyph takes (kept
         // muted rather than the system placeholder tint, which follows the appearance, not the theme).
         textView.placeholder = placeholder
-        textView.placeholderColor = Theme.current.chrome.ink(alpha: 0.4)
+        textView.placeholderColor = Theme.current.chrome.ink(.muted)
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(greaterThanOrEqualToConstant: minHeight),
@@ -144,7 +144,7 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         setFocused(window?.firstResponder === textView)
         textView.textColor = Theme.current.chrome.foreground.nsColor
         textView.insertionPointColor = Theme.current.chrome.foreground.nsColor
-        textView.placeholderColor = Theme.current.chrome.ink(alpha: 0.4)
+        textView.placeholderColor = Theme.current.chrome.ink(.muted)
     }
 
     private func updatePlaceholderVisibility() {

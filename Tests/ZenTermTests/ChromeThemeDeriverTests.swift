@@ -83,12 +83,25 @@ final class ChromeThemeDeriverTests: XCTestCase {
             ChromeThemeDeriver.derive(from: short, accent: .brightWhite).accent, short.foreground)
     }
 
-    func test_inkIsThemeForegroundAtBoostedAlpha() {
+    /// Ink is the theme's own foreground at the level's alpha, with nothing in between. A multiplier
+    /// used to sit here and clamped everything past ~0.77 to full opacity, so the declared number and
+    /// the painted one disagreed and the top of the scale was silently flat.
+    func test_inkIsThemeForegroundAtTheLevelsAlpha() {
         let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
-        let expected = min(1, 0.55 * ChromeTheme.inkBoost)
-        assertEqualRGBA(
-            chrome.ink(alpha: 0.55),
-            Theme.rosePineZen.foreground.nsColor.withAlphaComponent(expected))
+        for level in [ChromeTheme.InkLevel.muted, .subtle, .normal] {
+            assertEqualRGBA(
+                chrome.ink(level),
+                Theme.rosePineZen.foreground.nsColor.withAlphaComponent(level.alpha))
+        }
+    }
+
+    /// The scale has to stay ordered and distinct: three levels that collapse are one level, and a
+    /// swap inverts every hierarchy built on them.
+    func test_theThreeLevels_areOrderedAndDistinct() {
+        let alphas = [ChromeTheme.InkLevel.muted, .subtle, .normal].map(\.alpha)
+        XCTAssertEqual(alphas, alphas.sorted())
+        XCTAssertEqual(Set(alphas).count, 3)
+        XCTAssertEqual(ChromeTheme.InkLevel.normal.alpha, 1, "normal is full strength or it is not normal")
     }
 
     func test_aThemeSilentOnSelectedTextGetsItsOwnForeground() {

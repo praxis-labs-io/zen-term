@@ -157,7 +157,7 @@ final class AppButton: NSButton {
         var background: NSColor
         switch variant {
         case .primary:
-            textColor = isEnabled ? chrome.accent.nsColor : chrome.ink(alpha: 0.25)
+            textColor = isEnabled ? chrome.accent.nsColor : chrome.ink(.muted)
             background = isHovered && isEnabled ? chrome.ink(alpha: 0.16) : chrome.ink(alpha: 0.09)
         case .secondary:
             textColor = chrome.muted.nsColor

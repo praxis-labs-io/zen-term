@@ -79,7 +79,7 @@ final class CheckboxDropdown: NSView {
 
         chevron.image = NSImage(systemSymbolName: "chevron.up.chevron.down", accessibilityDescription: nil)
         chevron.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
-        chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
+        chevron.contentTintColor = Theme.current.chrome.ink(.muted)
         chevron.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(titleLabel)
@@ -110,7 +110,7 @@ final class CheckboxDropdown: NSView {
     func reapplyTheme() {
         restyle()
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
-        chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
+        chevron.contentTintColor = Theme.current.chrome.ink(.muted)
     }
 
     // MARK: focus
@@ -275,7 +275,7 @@ final class CheckboxDropdown: NSView {
 
         func render(item: CheckboxDropdownItem, isHighlighted: Bool, chrome: ChromeTheme) {
             title.stringValue = item.title
-            title.textColor = item.isChecked ? chrome.foreground.nsColor : chrome.ink(alpha: 0.5)
+            title.textColor = item.isChecked ? chrome.foreground.nsColor : chrome.ink(.muted)
             check.isHidden = !item.isChecked
             check.contentTintColor = chrome.accent.nsColor
             layer?.backgroundColor = (isHighlighted ? chrome.ink(alpha: 0.10) : NSColor.clear).cgColor

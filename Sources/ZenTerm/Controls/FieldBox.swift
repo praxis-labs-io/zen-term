@@ -97,7 +97,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         field.placeholderAttributedString = NSAttributedString(
             string: placeholder,
             attributes: [
-                .foregroundColor: Theme.current.chrome.ink(alpha: 0.4),
+                .foregroundColor: Theme.current.chrome.ink(.muted),
                 .font: field.font ?? .systemFont(ofSize: 13),
             ]
         )

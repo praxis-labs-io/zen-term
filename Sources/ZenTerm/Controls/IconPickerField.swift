@@ -57,7 +57,7 @@ final class IconPickerField: NSView {
         let chevron = NSImageView()
         chevron.image = NSImage(systemSymbolName: "chevron.up.chevron.down", accessibilityDescription: nil)
         chevron.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
-        chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
+        chevron.contentTintColor = Theme.current.chrome.ink(.muted)
         chevron.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(glyph)

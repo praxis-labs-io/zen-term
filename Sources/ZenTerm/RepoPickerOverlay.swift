@@ -165,7 +165,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             gitBadge.image = IconCatalog.gitBadge()
             gitBadge.setAccessibilityLabel("git repository")
-            gitBadge.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
+            gitBadge.contentTintColor = Theme.current.chrome.ink(.muted)
             gitBadge.translatesAutoresizingMaskIntoConstraints = false
             addSubview(gitBadge)
 

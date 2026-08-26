@@ -155,7 +155,7 @@ final class KeybindHintBubble: ShadowCardView {
         if glyph.isEmpty {
             let label = NSTextField(labelWithString: "Press keys…")
             label.font = .systemFont(ofSize: 12)
-            label.textColor = Theme.current.chrome.ink(alpha: 0.4)
+            label.textColor = Theme.current.chrome.ink(.muted)
             content = label
         } else {
             content = KeycapView(shortcut: glyph, showsBackground: false)
@@ -238,7 +238,7 @@ final class KeybindHintBubble: ShadowCardView {
     private static func keyCap(_ text: String) -> NSView {
         let label = NSTextField(labelWithString: text)
         label.font = .monospacedSystemFont(ofSize: 10, weight: .medium)
-        label.textColor = Theme.current.chrome.ink(alpha: 0.7)
+        label.textColor = Theme.current.chrome.ink(.subtle)
         label.translatesAutoresizingMaskIntoConstraints = false
         let box = NSView()
         box.wantsLayer = true
@@ -258,7 +258,7 @@ final class KeybindHintBubble: ShadowCardView {
     private static func muted(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: 11)
-        label.textColor = Theme.current.chrome.ink(alpha: 0.5)
+        label.textColor = Theme.current.chrome.ink(.muted)
         return label
     }
 }

@@ -24,7 +24,7 @@ final class KeycapView: NSView {
         "⇞": "chevron.up.2", "⇟": "chevron.down.2",
         "⇥": "arrow.right.to.line",
     ]
-    private static var ink: NSColor { Theme.current.chrome.ink(alpha: 0.55) }
+    private static var ink: NSColor { Theme.current.chrome.ink(.muted) }
 
     /// The chord this keycap draws. Baked at construction (every token colors itself then), so a
     /// host whose glyph can change re-reads this and rebuilds rather than mutating in place.

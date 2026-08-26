@@ -53,9 +53,9 @@ final class SettingsWorkspacesSection: SettingsSection {
     func detailStops() -> [NSView] { rows + [addButton] }
 
     func reapplyTheme() {
-        caption?.textColor = Theme.current.chrome.ink(alpha: 0.4)
-        emptyHint?.textColor = Theme.current.chrome.ink(alpha: 0.5)
-        reorderHint?.textColor = Theme.current.chrome.ink(alpha: 0.35)
+        caption?.textColor = Theme.current.chrome.ink(.muted)
+        emptyHint?.textColor = Theme.current.chrome.ink(.muted)
+        reorderHint?.textColor = Theme.current.chrome.ink(.muted)
         rows.forEach { $0.reapplyTheme() }
         addButton.reapplyTheme()
     }
@@ -115,7 +115,7 @@ final class SettingsWorkspacesSection: SettingsSection {
             let hint = NSTextField(
                 labelWithString: "No workspaces yet. Add one to launch a folder with its own layout from ⌘P.")
             hint.font = .systemFont(ofSize: 12)
-            hint.textColor = Theme.current.chrome.ink(alpha: 0.5)
+            hint.textColor = Theme.current.chrome.ink(.muted)
             hint.lineBreakMode = .byWordWrapping
             hint.maximumNumberOfLines = 0
             emptyHint = hint
@@ -248,7 +248,7 @@ final class WorkspaceRow: NSView {
         titleLabel.font = .systemFont(ofSize: 13)
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         subtitleLabel.font = .systemFont(ofSize: 11)
-        subtitleLabel.textColor = Theme.current.chrome.ink(alpha: 0.5)
+        subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         subtitleLabel.lineBreakMode = .byTruncatingMiddle
         let labels = NSStackView(views: [titleLabel, subtitleLabel])
         labels.orientation = .vertical
@@ -260,7 +260,7 @@ final class WorkspaceRow: NSView {
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         gitBadge.image = IconCatalog.gitBadge()
         gitBadge.setAccessibilityLabel("Git repository")
-        gitBadge.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
+        gitBadge.contentTintColor = Theme.current.chrome.ink(.muted)
         gitBadge.setContentHuggingPriority(.required, for: .horizontal)
         applyGitStatus()
         let controls = NSStackView(views: [labels, spacer, gitBadge])
@@ -282,8 +282,8 @@ final class WorkspaceRow: NSView {
 
     func reapplyTheme() {
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
-        subtitleLabel.textColor = Theme.current.chrome.ink(alpha: 0.5)
-        gitBadge.contentTintColor = Theme.current.chrome.ink(alpha: 0.35)
+        subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
+        gitBadge.contentTintColor = Theme.current.chrome.ink(.muted)
         restyle()
     }
 

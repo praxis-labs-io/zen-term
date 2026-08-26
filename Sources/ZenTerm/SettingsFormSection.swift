@@ -99,7 +99,7 @@ class SettingsFormSection: SettingsSection {
     /// the persistent Reset-all button + its flash message — the two views that were previously only
     /// re-parented (never recolored) by a rebuild.
     func reapplyTheme() {
-        groupCaptions.forEach { $0.textColor = Theme.current.chrome.ink(alpha: 0.4) }
+        groupCaptions.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
         rows.forEach { $0.reapplyTheme() }
         controlForKey.values.compactMap { $0 as? ThemeReapplying }.forEach { $0.reapplyTheme() }
         resetAllButton.reapplyTheme()

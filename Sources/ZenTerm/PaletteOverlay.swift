@@ -118,7 +118,7 @@ class PaletteOverlay: NSView, ModalOverlay {
 
         // Search row: a magnifier glyph + a borderless field.
         searchGlyph.font = .systemFont(ofSize: 16)
-        searchGlyph.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        searchGlyph.textColor = Theme.current.chrome.ink(.muted)
         searchField.font = .systemFont(ofSize: 15)
         applyPlaceholder()
         searchField.isBordered = false
@@ -159,7 +159,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
         emptyLabel.font = .systemFont(ofSize: 13)
-        emptyLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        emptyLabel.textColor = Theme.current.chrome.ink(.muted)
         emptyLabel.alignment = .center
         emptyLabel.translatesAutoresizingMaskIntoConstraints = false
         emptyLabel.isHidden = true
@@ -281,15 +281,15 @@ class PaletteOverlay: NSView, ModalOverlay {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
-        searchGlyph.textColor = chrome.ink(alpha: 0.4)
+        searchGlyph.textColor = chrome.ink(.muted)
         searchField.textColor = chrome.foreground.nsColor
         searchField.applyThemedCaret()  // the field holds focus across the swap, so re-tint in place
         applyPlaceholder()
         for hairline in [divider, footerDivider] {
             hairline.layer?.backgroundColor = chrome.ink(alpha: 0.08).cgColor
         }
-        emptyLabel.textColor = chrome.ink(alpha: 0.4)
-        footerHintLabels.forEach { $0.textColor = chrome.ink(alpha: 0.5) }
+        emptyLabel.textColor = chrome.ink(.muted)
+        footerHintLabels.forEach { $0.textColor = chrome.ink(.muted) }
         footerKeycaps.forEach { $0.reapplyTheme() }
         // Drop every built row first: the reload reuses a row whose identity survives, and a row
         // bakes its colors in at construction, so reusing one here would leave it in the old theme.
@@ -307,7 +307,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         searchField.placeholderAttributedString = NSAttributedString(
             string: searchPlaceholder,
             attributes: [
-                .foregroundColor: Theme.current.chrome.ink(alpha: 0.4),
+                .foregroundColor: Theme.current.chrome.ink(.muted),
                 .font: searchField.font ?? .systemFont(ofSize: 15),
             ]
         )
@@ -474,7 +474,7 @@ class PaletteOverlay: NSView, ModalOverlay {
             let keycap = KeycapView(shortcut: hint.keys)
             let label = NSTextField(labelWithString: hint.label)
             label.font = .systemFont(ofSize: 11, weight: .medium)
-            label.textColor = Theme.current.chrome.ink(alpha: 0.5)
+            label.textColor = Theme.current.chrome.ink(.muted)
             keycaps.append(keycap)
             labels.append(label)
             let item = NSStackView(views: [keycap, label])

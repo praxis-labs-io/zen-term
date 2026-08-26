@@ -34,7 +34,7 @@ final class IconButtonTests: XCTestCase {
     // MARK: - resting weight
 
     /// A toolbar icon is the thing you click, so it must not read at the weight of the hints and
-    /// subtitles beside it. It sat at 0.55, the same as `ink(alpha: 0.5)` secondary text, which is
+    /// subtitles beside it. It shared their weight exactly, which is
     /// the kind of drift no assertion catches and no glance reliably does either: both look "grey".
     @MainActor
     func test_theRestingIcon_readsStrongerThanSecondaryText() {
@@ -42,18 +42,17 @@ final class IconButtonTests: XCTestCase {
         guard let tint = button.iconTintForTesting?.usingColorSpace(.sRGB) else {
             return XCTFail("no tint painted on the glyph")
         }
-        let secondary = Theme.current.chrome.ink(alpha: 0.5).usingColorSpace(.sRGB)
+        let secondary = Theme.current.chrome.ink(.muted).usingColorSpace(.sRGB)
         XCTAssertGreaterThan(
             tint.alphaComponent, secondary?.alphaComponent ?? 1,
             "the resting icon is at or below secondary-text weight")
     }
 
-    /// And below the hover tint, or the hover shift stops reading. `inkBoost` clamps past ~0.77, so
-    /// raising the resting value too far silently collapses the two into one.
+    /// And below the hover weight, or the hover shift stops reading at all.
     @MainActor
     func test_theRestingIcon_staysBelowTheHoverTint() {
-        let resting = Theme.current.chrome.ink(alpha: ChromeTheme.restingControlAlpha)
-        let hover = Theme.current.chrome.ink(alpha: 0.95)
-        XCTAssertLessThan(resting.alphaComponent, hover.alphaComponent)
+        XCTAssertLessThan(
+            Theme.current.chrome.ink(.subtle).alphaComponent,
+            Theme.current.chrome.ink(.normal).alphaComponent)
     }
 }

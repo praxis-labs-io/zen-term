@@ -136,7 +136,7 @@ final class Dropdown: NSView {
 
         chevron.image = NSImage(systemSymbolName: "chevron.up.chevron.down", accessibilityDescription: nil)
         chevron.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
-        chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
+        chevron.contentTintColor = Theme.current.chrome.ink(.muted)
         chevron.translatesAutoresizingMaskIntoConstraints = false
 
         swatch.wantsLayer = true
@@ -220,7 +220,7 @@ final class Dropdown: NSView {
     func reapplyTheme() {
         restyle()
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
-        chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
+        chevron.contentTintColor = Theme.current.chrome.ink(.muted)
         swatch.layer?.borderColor = Theme.current.chrome.ink(alpha: 0.15).cgColor
         // The field outlives a theme change while the list is open, so its text and placeholder go
         // stale in the old theme's foreground otherwise.
@@ -417,7 +417,7 @@ final class Dropdown: NSView {
         queryField.placeholderAttributedString = NSAttributedString(
             string: title,
             attributes: [
-                .foregroundColor: Theme.current.chrome.ink(alpha: 0.45),
+                .foregroundColor: Theme.current.chrome.ink(.muted),
                 .font: NSFont.systemFont(ofSize: 13),
             ])
     }
@@ -528,7 +528,7 @@ final class Dropdown: NSView {
     private static func groupHeaderView(_ text: String, chrome: ChromeTheme) -> NSView {
         let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: 10, weight: .semibold)
-        label.textColor = chrome.ink(alpha: 0.4)
+        label.textColor = chrome.ink(.muted)
         label.translatesAutoresizingMaskIntoConstraints = false
         let host = NSView()
         host.translatesAutoresizingMaskIntoConstraints = false
@@ -588,7 +588,7 @@ private final class DropdownRowView: NSView {
         if let note = item.note {
             let noteLabel = NSTextField(labelWithString: note)
             noteLabel.font = .systemFont(ofSize: 11)
-            noteLabel.textColor = chrome.ink(alpha: 0.4)
+            noteLabel.textColor = chrome.ink(.muted)
             trailing.append(noteLabel)
         }
         if item.isSelected {
