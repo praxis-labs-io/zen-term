@@ -211,9 +211,12 @@ final class Dropdown: NSView {
     }
 
     /// Re-apply the live chrome colors after a config change — no relaunch. `restyle()` already
-    /// reads `Theme.current` fresh, but doesn't touch the title/chevron (set once in init); the
-    /// open list popover needs nothing here since it's rebuilt fresh (reading Theme fresh) on
-    /// every open.
+    /// reads `Theme.current` fresh, but doesn't touch the title/chevron (set once in init).
+    ///
+    /// **The open list is rebuilt too.** Its rows bake in the theme at build time, and it used to be
+    /// true that a theme could not change while one was up. `⌘⇧,` reloads the config with a list
+    /// open, which left the card painted in the previous theme: a dark popover hanging under a light
+    /// Settings card.
     func reapplyTheme() {
         restyle()
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
@@ -226,6 +229,7 @@ final class Dropdown: NSView {
             renderQueryPlaceholder()
             queryField.applyThemedCaret()
         }
+        rebuildOpenList()
     }
 
     // MARK: focus
@@ -322,6 +326,11 @@ final class Dropdown: NSView {
 
     /// Test hook: the colour the field's own text is painted in, so a theme swap is assertable.
     var queryFieldTextColorForTesting: NSColor? { queryField.textColor }
+
+    /// Test hook: the colour each mounted row is painted in, so a stale card is assertable.
+    var rowFillsForTesting: [NSColor?] {
+        rowViews.map { $0.layer?.backgroundColor.flatMap(NSColor.init(cgColor:)) }
+    }
 
     /// Test hook: the live filter query.
     var queryForTesting: String { query }
@@ -460,8 +469,17 @@ final class Dropdown: NSView {
             .map(\.index)
     }
 
-    /// Re-render the open list after the query moved. `ListPopover.open` no-ops while a card is up,
-    /// so the card is rebuilt: the list shrinks as you type and has to be re-placed anyway.
+    /// Rebuild the open card from scratch. `ListPopover.open` no-ops while one is up, so it comes
+    /// down first. Query and highlight survive because they live here, not in the card.
+    private func rebuildOpenList() {
+        guard popover.isOpen else { return }
+        popover.close()
+        popover.open(rows: buildRows())
+        refreshListHighlight()
+        scrollHighlightIntoView()
+    }
+
+    /// Re-render the open list after the query moved.
     private func rerenderList() {
         guard popover.isOpen else { return }
         let before = visible
@@ -470,10 +488,7 @@ final class Dropdown: NSView {
         // the query narrowed nothing: typing on past a unique match is the common way to hit this.
         guard visible != before else { return }
         if !visible.contains(highlighted) { highlighted = visible.first ?? highlighted }
-        popover.close()
-        popover.open(rows: buildRows())
-        refreshListHighlight()
-        scrollHighlightIntoView()
+        rebuildOpenList()
     }
 
     private func buildRows() -> [ListPopover.Row] {

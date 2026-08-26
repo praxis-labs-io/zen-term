@@ -416,6 +416,26 @@ final class DropdownTests: WindowTestCase {
             dropdown.queryFieldTextColorForTesting, Theme.current.chrome.foreground.nsColor)
     }
 
+    /// The rows bake in the theme at build time, and a theme *can* change with a list open: `⌘⇧,`
+    /// reloads the config. That left a dark popover hanging under a light Settings card, with the
+    /// field beside it correctly recoloured, which is how it was spotted.
+    @MainActor
+    func test_reapplyTheme_rebuildsTheOpenListSoItIsNotStale() throws {
+        let original = Theme.current
+        defer { Theme.setCurrentForTesting(original) }
+        let dropdown = filterFixture()
+        dropdown.typeForTesting("nor")
+        let staleRow = try XCTUnwrap(dropdown.rowFillsForTesting.first)
+
+        Theme.setCurrentForTesting(AppTheme(terminal: Self.contrastingTheme()))
+        dropdown.reapplyTheme()
+
+        XCTAssertTrue(dropdown.isPopoverOpen, "the list has to survive the recolour")
+        XCTAssertEqual(dropdown.queryForTesting, "nor", "the query survives the rebuild")
+        XCTAssertNotEqual(
+            dropdown.rowFillsForTesting.first, staleRow, "the list is still painted in the old theme")
+    }
+
     private static func contrastingTheme() -> TerminalTheme {
         var theme = Theme.rosePineZen
         theme.background = TerminalColor(red: 0xFA, green: 0xF4, blue: 0xED)
