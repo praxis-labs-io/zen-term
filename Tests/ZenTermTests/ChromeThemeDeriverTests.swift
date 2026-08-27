@@ -85,7 +85,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
 
     func test_inkIsThemeForegroundAtTheBoostedLevelAlpha() {
         let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
-        for level in [ChromeTheme.InkLevel.muted, .subtle, .normal] {
+        for level in ChromeTheme.InkLevel.allCases {
             assertEqualRGBA(
                 chrome.ink(level),
                 Theme.rosePineZen.foreground.nsColor
@@ -95,21 +95,38 @@ final class ChromeThemeDeriverTests: XCTestCase {
 
     /// The multiplier must not clamp a level that is not meant to be full opacity. At 1.3 four of the
     /// old hand-tuned alphas collapsed into 1 and the ceiling was invisible to anyone tuning a value;
-    /// this fails the moment a raised boost pulls `subtle` up into `normal`.
+    /// this fails the moment a raised boost pulls a level up into `normal`.
     func test_theBoost_clampsOnlyTheNormalLevel() {
         let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
-        XCTAssertLessThan(chrome.ink(.muted).alphaComponent, 1)
-        XCTAssertLessThan(chrome.ink(.subtle).alphaComponent, 1, "subtle has been boosted into normal")
+        for level in ChromeTheme.InkLevel.allCases where level != .normal {
+            XCTAssertLessThan(
+                chrome.ink(level).alphaComponent, 1, "\(level) has been boosted into normal")
+        }
         XCTAssertEqual(chrome.ink(.normal).alphaComponent, 1, accuracy: 0.0001)
     }
 
-    /// The scale has to stay ordered and distinct: three levels that collapse are one level, and a
-    /// swap inverts every hierarchy built on them.
-    func test_theThreeLevels_areOrderedAndDistinct() {
-        let alphas = [ChromeTheme.InkLevel.muted, .subtle, .normal].map(\.alpha)
-        XCTAssertEqual(alphas, alphas.sorted())
-        XCTAssertEqual(Set(alphas).count, 3)
+    /// The scale has to stay ordered and distinct: two levels that collapse are one level, and a
+    /// swap inverts every hierarchy built on them. Reads `allCases` so adding a level cannot skip
+    /// this, which is the whole reason the enum is `CaseIterable`.
+    func test_theInkLevels_areOrderedAndDistinct() {
+        let alphas = ChromeTheme.InkLevel.allCases.map(\.alpha)
+        XCTAssertEqual(alphas, alphas.sorted(), "declaration order is the weight order")
+        XCTAssertEqual(Set(alphas).count, alphas.count, "two levels share an alpha")
         XCTAssertEqual(ChromeTheme.InkLevel.normal.alpha, 1, "normal is full strength or it is not normal")
+        XCTAssertEqual(ChromeTheme.InkLevel.allCases.last, .normal, "normal is the top of the ramp")
+    }
+
+    /// `faint` is the bottom of the ramp, and it has to stay clear of the `1 / inkBoost` ceiling —
+    /// a level declared above 0.87 paints as `normal` while reading in source like a quiet one.
+    func test_faint_isTheQuietestLevelAndClearsTheClamp() {
+        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
+        XCTAssertEqual(ChromeTheme.InkLevel.allCases.first, .faint)
+        XCTAssertLessThan(
+            chrome.ink(.faint).alphaComponent, chrome.ink(.muted).alphaComponent,
+            "faint has collapsed into muted")
+        XCTAssertLessThan(
+            ChromeTheme.InkLevel.faint.alpha, 1 / ChromeTheme.inkBoost,
+            "faint is above the clamp and paints opaque")
     }
 
     func test_aThemeSilentOnSelectedTextGetsItsOwnForeground() {

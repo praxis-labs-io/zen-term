@@ -28,11 +28,13 @@ struct ChromeTheme: Equatable {
     /// See `docs/architecture.md`.
     static let inkBoost: CGFloat = 1.15
 
-    /// The three weights chrome text and icons are drawn at. **There is no fourth.**
+    /// The four weights chrome text and icons are drawn at. **There is no fifth.**
     ///
     /// Every site asks for a level, never a number, so the scale is set once and a new site cannot
     /// invent a weight between two of these. See `docs/architecture.md`.
-    enum InkLevel {
+    enum InkLevel: CaseIterable {
+        /// Quieter than the thing it sits beside: a disabled label, a hint under a caption.
+        case faint
         /// Recedes: captions, hints, subtitles, counts, placeholders, search glyphs.
         case muted
         /// A control at rest: a toolbar icon, an inactive tab, a chevron.
@@ -42,6 +44,7 @@ struct ChromeTheme: Equatable {
 
         var alpha: CGFloat {
             switch self {
+            case .faint: return 0.35
             case .muted: return 0.5
             case .subtle: return 0.7
             case .normal: return 1
@@ -49,7 +52,7 @@ struct ChromeTheme: Equatable {
         }
     }
 
-    /// Foreground-toned ink at one of the three weights. Sourced from the theme's foreground, so it
+    /// Foreground-toned ink at one of the four weights. Sourced from the theme's foreground, so it
     /// adapts on its own: light on a dark theme, dark on a light one.
     func ink(_ level: InkLevel) -> NSColor {
         foreground.nsColor.withAlphaComponent(min(1, level.alpha * Self.inkBoost))

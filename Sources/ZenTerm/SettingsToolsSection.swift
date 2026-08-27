@@ -54,7 +54,7 @@ final class SettingsToolsSection: SettingsSection {
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(.muted)
         emptyHint?.textColor = Theme.current.chrome.ink(.muted)
-        reorderHint?.textColor = Theme.current.chrome.ink(.muted)
+        reorderHint?.textColor = Theme.current.chrome.ink(.faint)
         droppedFloatNotice?.textColor = Theme.current.chrome.warning.nsColor
         rows.forEach { $0.reapplyTheme() }
         addButton.reapplyTheme()

@@ -1615,13 +1615,17 @@ CLAUDE.md for the rule that the chrome never hardcodes a color.
 
 **A role answers which color. Two other things answer how strongly.**
 
-**Text and icons take one of three ink levels**, `muted` 0.5, `subtle` 0.7, `normal` 1.0.
-Every site asks for a level and never for a number, which is what stops a new site inventing
-a weight between two of them: twenty-one hand-tuned alphas is what that produced, and the
-things you click ended up at the weight of the hints beside them. There is no fourth level,
-and a site that wants one is the signal that the surface has too many tiers.
+**Text and icons take one of four ink levels**, `faint` 0.35, `muted` 0.5, `subtle` 0.7,
+`normal` 1.0. Every site asks for a level and never for a number, which is what stops a new
+site inventing a weight between two of them: twenty-one hand-tuned alphas is what that
+produced, and the things you click ended up at the weight of the hints beside them.
 
-`inkBoost` (1.15) lifts all three, because dark ink on a light theme reads fainter at equal
+`faint` is for a thing quieter than what it sits beside: a disabled label, a hint opposite a
+caption. It is the bottom of the ramp and the ramp is closed. A fifth level has nowhere to go
+anyway, since `normal` pins the top at 1.0 and `subtle` is already 0.7, so a site that wants
+one is the signal that the surface has too many tiers.
+
+`inkBoost` (1.15) lifts all four, because dark ink on a light theme reads fainter at equal
 opacity. **Check `1 / boost` before raising it.** A level above that threshold clamps to full
 opacity, which is how the previous 1.3 made `0.95` and `1` paint the same color while looking
 like two values.
@@ -1650,7 +1654,7 @@ out-weighed a fixed accent active fill at 0.14, so "recording your chord" read f
 the pointer merely being over it.
 
 **Text is deliberately not normalized.** At `normal` the ink is the theme author's own
-foreground, chosen to be legible on their own background. Normalizing it collapses all three
+foreground, chosen to be legible on their own background. Normalizing it collapses all four
 levels into one color on a narrow-separation theme and buys no contrast, because `normal` pins
 the top at 1.0 and the theme's own foreground-to-background distance is the real ceiling.
 

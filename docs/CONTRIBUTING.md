@@ -66,7 +66,7 @@ do stays below the seam. The protocol grows to hold what the chrome needs from
 
 **No hardcoded colors in the chrome.** Everything resolves from `Theme.current`:
 `chrome.background`, `chrome.foreground`, `chrome.accent`, and the rest. Text and
-icons take `chrome.ink(.muted / .subtle / .normal)`, never a raw alpha; fills (hover
+icons take `chrome.ink(.faint / .muted / .subtle / .normal)`, never a raw alpha; fills (hover
 washes, hairlines, borders) take `chrome.fill(alpha:)`. `NSColor(white:)`, `.white`, raw hex, and AppKit's semantic colors
 (`.secondaryLabelColor`, a field editor's default insertion point) all follow
 `effectiveAppearance` rather than the theme, so they wash out on a light theme and

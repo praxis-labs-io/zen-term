@@ -141,11 +141,12 @@ bring-your-own theme and washes out on light themes. Everything resolves from
 - **Terminal surfaces:** build `TerminalSurfaceConfig(theme: Theme.current.terminal)`.
 - **Chrome UI:** use `Theme.current.chrome` roles (`background`, `foreground`,
   `info`, `warning`, `destructive`, `accent`, `attention`, `muted`).
-- **Text and icons take `chrome.ink(.muted / .subtle / .normal)`, never an alpha.**
-  Three weights, no fourth: `muted` recedes (captions, hints, counts), `subtle` is a
-  control at rest (a toolbar icon, an inactive tab), `normal` is active or hovered.
-  A site that wants a weight between two of these is the signal that the surface has
-  too many tiers, not that the scale is short.
+- **Text and icons take `chrome.ink(.faint / .muted / .subtle / .normal)`, never an
+  alpha.** Four weights, no fifth: `faint` is quieter than what it sits beside (a
+  disabled label, a hint opposite a caption), `muted` recedes (captions, hints,
+  counts), `subtle` is a control at rest (a toolbar icon, an inactive tab), `normal`
+  is active or hovered. A site that wants a weight between two of these is the signal
+  that the surface has too many tiers, not that the scale is short.
 - **Fills take `chrome.fill(alpha:)`**, an order of magnitude fainter: hover washes,
   hairlines, dividers, borders. Pass a role colour as `chrome.fill(chrome.accent,
   alpha:)` rather than applying alpha yourself, or that fill escapes the per-theme
