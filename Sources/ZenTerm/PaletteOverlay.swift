@@ -134,7 +134,7 @@ class PaletteOverlay: NSView, ModalOverlay {
 
         for hairline in [divider, footerDivider] {
             hairline.wantsLayer = true
-            hairline.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+            hairline.layer?.backgroundColor = Theme.current.chrome.fill(alpha: 0.08).cgColor
             hairline.translatesAutoresizingMaskIntoConstraints = false
             hairline.heightAnchor.constraint(equalToConstant: 1).isActive = true
         }
@@ -286,7 +286,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         searchField.applyThemedCaret()  // the field holds focus across the swap, so re-tint in place
         applyPlaceholder()
         for hairline in [divider, footerDivider] {
-            hairline.layer?.backgroundColor = chrome.ink(alpha: 0.08).cgColor
+            hairline.layer?.backgroundColor = chrome.fill(alpha: 0.08).cgColor
         }
         emptyLabel.textColor = chrome.ink(.muted)
         footerHintLabels.forEach { $0.textColor = chrome.ink(.muted) }

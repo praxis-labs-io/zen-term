@@ -117,7 +117,7 @@ final class LayoutRow: NSView {
     }
 
     /// Re-apply the live chrome colors after a config change — no relaunch. Matches the exact
-    /// roles set at construction: caption foreground, both note labels at `ink(0.4)`, message tone
+    /// roles set at construction: caption foreground, both note labels at `ink(.muted)`, message tone
     /// by its current kind.
     func reapplyTheme() {
         captionLabel.textColor = Theme.current.chrome.foreground.nsColor

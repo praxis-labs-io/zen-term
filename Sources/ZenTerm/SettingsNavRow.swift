@@ -56,7 +56,7 @@ final class SettingsNavRow: NSView {
             // Share the palette/repo-picker row highlight so every focus background matches.
             layer?.backgroundColor = PaletteOverlay.selectionBackground.cgColor
         } else if isSelected {
-            layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.06).cgColor
+            layer?.backgroundColor = Theme.current.chrome.fill(alpha: 0.06).cgColor
         } else {
             layer?.backgroundColor = NSColor.clear.cgColor
         }

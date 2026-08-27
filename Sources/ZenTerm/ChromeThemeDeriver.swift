@@ -27,24 +27,14 @@ enum ChromeThemeDeriver {
             fillScale: fillScale(for: terminal))
     }
 
-    /// The foreground-to-background separation a fill's declared alpha was tuned against.
-    ///
-    /// **A fixed anchor, not the catalog's live median.** Deriving it from the bundled set would
-    /// re-weight every existing theme's chrome each time a theme is added, which is a silent
-    /// regression nobody would connect to the addition.
+    /// The separation a fill's declared alpha was tuned against. **A fixed anchor, not the
+    /// catalog's live median**: deriving it would re-weight every existing theme each time one is
+    /// added.
     private static let referenceSeparation: CGFloat = 0.714
 
-    /// How much to lift this theme's fills so a hairline lands at the same visible distance from the
-    /// background as it does in a theme at `referenceSeparation`.
-    ///
-    /// Never scales *down*. A theme whose foreground is further from its background than the
-    /// reference already shows a border clearly, and dimming it to hit the target exactly would make
-    /// the themes that look right look worse to fix the ones that do not. The cost is that those
-    /// themes overshoot, which is the whole of the residual spread the catalog test allows.
-    ///
-    /// Capped at 1.8, which no bundled theme reaches: `solarized-dark` has the narrowest separation
-    /// at 0.40 and needs 1.77. The cap is there for a user theme with almost no separation, where a
-    /// border bright enough to see would read as content.
+    /// Lift this theme's fills so a hairline lands the same visible distance from the background as
+    /// it does at `referenceSeparation`. Never scales down, and caps at 1.8; see
+    /// `docs/architecture.md` for why both.
     static func fillScale(for terminal: TerminalTheme) -> CGFloat {
         let separation = abs(perceivedLuminance(terminal.foreground) - perceivedLuminance(terminal.background))
         guard separation > 0.01 else { return 1.8 }

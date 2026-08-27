@@ -17,34 +17,21 @@ struct ChromeTheme: Equatable {
     let muted: TerminalColor
     /// Green "added / success" role. Named for meaning, not hue, like the other roles.
     let positive: TerminalColor
-    /// Multiplier on every **fill** so a hairline is equally visible in any theme.
-    ///
-    /// A fill is our invention, not the theme author's: a 0.10 wash of their foreground over their
-    /// background lands wherever those two happen to sit. Across the catalog that separation ranges
-    /// from 0.40 to 0.94, so the same 0.10 produced a border more than twice as faint in one theme as
-    /// another, and the muted-foreground ones read as almost nothing.
-    ///
-    /// Derived per theme in `ChromeThemeDeriver` so the achieved delta is constant instead of the
-    /// declared alpha being constant. Text is deliberately left out: at `normal` the ink *is* the
-    /// author's foreground, picked to be legible on their own background, and scaling it would
-    /// overrule that.
+    /// Multiplier on every fill so a hairline is equally visible in any theme. A theme's foreground
+    /// to background separation runs 0.40 to 0.94 across the catalog, so a constant alpha was not a
+    /// constant border. Derived per theme in `ChromeThemeDeriver`; see `docs/architecture.md`.
     let fillScale: CGFloat
-    /// Readability multiplier applied to every level. Dark ink on a light theme reads fainter than
-    /// light ink on a dark one at equal opacity, and this lifts both rather than only the case that
-    /// needs it, which is the cheap version of that compensation.
+    /// Readability multiplier on every level. Dark ink on a light theme reads fainter at equal
+    /// opacity, and this lifts both rather than only the case that needs it.
     ///
-    /// **1.15, not the 1.3 this replaced.** The clamp only bites where a declared value lands above
-    /// `1 / boost`; at 1.3 that threshold was 0.77, so four of the old hand-tuned alphas collapsed
-    /// into full opacity and `0.95` painted the same colour as `1`. At 1.15 the threshold is 0.87
-    /// and only `normal` is above it, where clamping to 1 is the intent. Raise this and check that
-    /// number before anything else.
+    /// **Check `1 / boost` before raising it**: a level above that threshold clamps to full opacity.
+    /// See `docs/architecture.md`.
     static let inkBoost: CGFloat = 1.15
 
     /// The three weights chrome text and icons are drawn at. **There is no fourth.**
     ///
-    /// Every site asks for a level, never a number, so the scale is set once here and a new site
-    /// cannot invent a weight between two of these. The declared value is the intent; `inkBoost`
-    /// carries it to what gets painted.
+    /// Every site asks for a level, never a number, so the scale is set once and a new site cannot
+    /// invent a weight between two of these. See `docs/architecture.md`.
     enum InkLevel {
         /// Recedes: captions, hints, subtitles, counts, placeholders, search glyphs.
         case muted
@@ -68,14 +55,13 @@ struct ChromeTheme: Equatable {
         foreground.nsColor.withAlphaComponent(min(1, level.alpha * Self.inkBoost))
     }
 
-    /// A foreground-toned **fill**: a hover wash, a hairline, a divider, a border. Not for text or
-    /// icons, which take one of the three levels above — these run an order of magnitude fainter
-    /// (0.04 to 0.16) and a shared scale would either wash them out or make them read as content.
+    /// A **fill**: a hover wash, a hairline, a divider, a border, an active tint. Named apart from
+    /// `ink(_:)` so the fill path cannot colour text by accident.
     ///
-    /// Boosted like the levels are, then scaled by `fillScale` so the visible result is the same
-    /// whatever the theme's own foreground-to-background separation is.
-    func ink(alpha: CGFloat) -> NSColor {
-        foreground.nsColor.withAlphaComponent(min(1, alpha * Self.inkBoost * fillScale))
+    /// **Pass a role colour as `tint` rather than applying alpha to it yourself**, or that fill
+    /// escapes `fillScale` and stops being comparable to the others in the same control.
+    func fill(_ tint: TerminalColor? = nil, alpha: CGFloat) -> NSColor {
+        (tint ?? foreground).nsColor.withAlphaComponent(min(1, alpha * Self.inkBoost * fillScale))
     }
 
     /// `tint` composited over `base`, source-over. A chrome surface inside a pane paints its tint on

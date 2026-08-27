@@ -247,7 +247,7 @@ final class PanelHostView: NSView, TerminalModeHost {
         chrome.setHeader(modeMeta ?? (isZoomed ? zoomMeta : nil) ?? baseMeta)
     }
 
-    private static var idleBorder: NSColor { Theme.current.chrome.ink(alpha: 0.08) }
+    private static var idleBorder: NSColor { Theme.current.chrome.fill(alpha: 0.08) }
 
     /// Re-apply the live pane border / focus-halo colors after a config change, no relaunch. The
     /// glow's color is set once at init (only its opacity is toggled elsewhere), so it's reset

@@ -332,7 +332,7 @@ final class WorkspaceRow: NSView {
 
     private func restyle() {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = isFocused ? chrome.ink(alpha: 0.10).cgColor : nil
+        layer?.backgroundColor = isFocused ? chrome.fill(alpha: 0.10).cgColor : nil
         layer?.borderWidth = isFocused ? 1.5 : 0
         layer?.borderColor = isFocused ? chrome.accent.nsColor.cgColor : nil
     }

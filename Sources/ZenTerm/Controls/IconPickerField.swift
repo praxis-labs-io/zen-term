@@ -29,7 +29,7 @@ final class IconPickerField: NSView {
     private static let cellSize: CGFloat = 34
     private static let cellSpacing: CGFloat = 4
     private static let maxGridHeight: CGFloat = 320
-    private static var restFill: NSColor { Theme.current.chrome.ink(alpha: 0.06) }
+    private static var restFill: NSColor { Theme.current.chrome.fill(alpha: 0.06) }
     private static var focusFill: NSColor { PaletteOverlay.selectionBackground }
 
     /// Test hooks: open the grid and drive it without a live event loop.
@@ -96,7 +96,7 @@ final class IconPickerField: NSView {
         let chrome = Theme.current.chrome
         let active = isFocusedStop || popover != nil
         layer?.backgroundColor = (active ? Self.focusFill : Self.restFill).cgColor
-        layer?.borderColor = (active ? chrome.accent.nsColor : chrome.ink(alpha: 0.10)).cgColor
+        layer?.borderColor = (active ? chrome.accent.nsColor : chrome.fill(alpha: 0.10)).cgColor
         layer?.borderWidth = active ? 1.5 : 1
     }
 

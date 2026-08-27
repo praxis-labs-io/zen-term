@@ -513,7 +513,7 @@ final class TabBarView: NSView {
             guard let layer else { return }
             Motion.ease(
                 layer, keyPath: "backgroundColor",
-                to: (isHovered ? Theme.current.chrome.ink(alpha: 0.08) : .clear).cgColor)
+                to: (isHovered ? Theme.current.chrome.fill(alpha: 0.08) : .clear).cgColor)
         }
     }
 }

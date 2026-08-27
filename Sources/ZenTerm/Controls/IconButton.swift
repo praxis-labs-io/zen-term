@@ -134,16 +134,16 @@ final class IconButton: NSView {
     func reapplyTheme() { update() }
 
     private func update() {
+        let chrome = Theme.current.chrome
         let bg: NSColor
         let tint: NSColor
         if isActive {
-            let accent = Theme.current.chrome.accent.nsColor
-            bg = accent.withAlphaComponent(0.15); tint = accent
+            bg = chrome.fill(chrome.accent, alpha: 0.15); tint = chrome.accent.nsColor
         } else if isHovered {
-            bg = Theme.current.chrome.ink(alpha: 0.10); tint = Theme.current.chrome.ink(.normal)
+            bg = chrome.fill(alpha: 0.10); tint = chrome.ink(.normal)
         } else {
-            bg = restsFilled ? Theme.current.chrome.ink(alpha: 0.06) : .clear
-            tint = Theme.current.chrome.ink(.subtle)
+            bg = restsFilled ? chrome.fill(alpha: 0.06) : .clear
+            tint = chrome.ink(.subtle)
         }
         if let layer { Motion.ease(layer, keyPath: "backgroundColor", to: bg.cgColor) }
         icon.contentTintColor = tint  // NSImageView tint isn't layer-animatable; the shift is barely visible

@@ -164,22 +164,22 @@ final class ChromeThemeDeriverTests: XCTestCase {
                 try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
                 fallback: Theme.rosePineZen)
             let chrome = ChromeThemeDeriver.derive(from: terminal)
-            let alpha = chrome.ink(alpha: 0.10).alphaComponent
+            let alpha = chrome.fill(alpha: 0.10).alphaComponent
             let background = perceived(terminal.background)
             let painted = perceived(terminal.foreground) * alpha + background * (1 - alpha)
             deltas.append((entry.token, abs(painted - background)))
         }
-        let values = deltas.map(\.1)
-        let low = try XCTUnwrap(deltas.min { $0.1 < $1.1 })
-        let high = try XCTUnwrap(deltas.max { $0.1 < $1.1 })
-        // A spread bound rather than an equality, and the reason is the *floor*, not the cap: no
-        // bundled theme hits the 1.8 ceiling, but themes already better separated than the reference
-        // are deliberately never scaled down, so they overshoot. Without normalising the ratio was
-        // above 2; the remaining 1.31 is entirely that no-dimming choice.
-        XCTAssertLessThan(
-            high.1 / low.1, 1.35,
-            "hairline visibility still varies by theme: \(low.0) \(low.1) vs \(high.0) \(high.1)")
-        XCTAssertEqual(values.count, ThemeCatalog.bundled.count)
+        // Asserted per theme against the target, not theme against theme. A ratio bound tightens as
+        // the catalog grows: well-separated themes are deliberately never scaled down, so adding a
+        // high-contrast theme pushes the spread up and fails a test that has nothing to do with the
+        // addition. Each theme reaching the floor is stable however many arrive.
+        let target = 0.10 * ChromeTheme.inkBoost * 0.714  // reference separation
+        for (token, delta) in deltas {
+            XCTAssertGreaterThan(
+                delta, target * 0.92,
+                "\(token) paints a hairline at \(delta), under the \(target) every theme should reach")
+        }
+        XCTAssertEqual(deltas.count, ThemeCatalog.bundled.count)
     }
 
     /// A theme whose foreground and background are well separated must be left exactly as it was, or
@@ -193,5 +193,23 @@ final class ChromeThemeDeriverTests: XCTestCase {
         var flat = Theme.rosePineZen
         flat.foreground = flat.background
         XCTAssertEqual(ChromeThemeDeriver.fillScale(for: flat), 1.8, accuracy: 0.0001)
+    }
+
+    /// A role colour used as a fill has to go through `fill(_:alpha:)` so `fillScale` reaches it.
+    /// A fixed accent fill beside a scaled foreground hover inverts on a narrow-separation theme:
+    /// the active state reads fainter than the pointer merely being over the control.
+    func test_aRoleTintedFill_isScaledLikeAForegroundOne() {
+        var narrow = Theme.rosePineZen
+        narrow.foreground = TerminalColor(red: 0x70, green: 0x70, blue: 0x70)  // close to its background
+        let chrome = ChromeThemeDeriver.derive(from: narrow)
+        XCTAssertGreaterThan(ChromeThemeDeriver.fillScale(for: narrow), 1, "precondition: it scales")
+
+        let hover = chrome.fill(alpha: 0.10).alphaComponent
+        let active = chrome.fill(chrome.accent, alpha: 0.14).alphaComponent
+        let unscaledActive = chrome.accent.nsColor.withAlphaComponent(0.14).alphaComponent
+
+        XCTAssertGreaterThan(active, hover, "the active state must out-weigh hover")
+        XCTAssertGreaterThan(unscaledActive, 0)
+        XCTAssertLessThan(unscaledActive, hover, "and unscaled it would not, which is the bug")
     }
 }

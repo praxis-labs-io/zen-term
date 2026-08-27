@@ -1613,6 +1613,47 @@ aliases onto a slot: repointing one leaves the others alone.
 Sixty-five themes ship bundled; a user file shadows a bundled one of the same name. See
 CLAUDE.md for the rule that the chrome never hardcodes a color.
 
+**A role answers which color. Two other things answer how strongly.**
+
+**Text and icons take one of three ink levels**, `muted` 0.5, `subtle` 0.7, `normal` 1.0.
+Every site asks for a level and never for a number, which is what stops a new site inventing
+a weight between two of them: twenty-one hand-tuned alphas is what that produced, and the
+things you click ended up at the weight of the hints beside them. There is no fourth level,
+and a site that wants one is the signal that the surface has too many tiers.
+
+`inkBoost` (1.15) lifts all three, because dark ink on a light theme reads fainter at equal
+opacity. **Check `1 / boost` before raising it.** A level above that threshold clamps to full
+opacity, which is how the previous 1.3 made `0.95` and `1` paint the same color while looking
+like two values.
+
+**Fills are separate and an order of magnitude fainter** (0.04 to 0.16): hover washes,
+hairlines, dividers, borders, active tints. They keep a raw alpha, on `chrome.fill(alpha:)`,
+because their differences are structural rather than emphasis.
+
+**`fillScale` normalizes them per theme.** A fill is our invention, not the theme author's: a
+0.10 wash of their foreground over their background lands wherever those two happen to sit,
+and across the catalog that separation runs 0.40 to 0.94. The same border was 2.3 times
+fainter in Solarized Dark than in Vesper. `ChromeThemeDeriver` derives a scale that holds the
+achieved luminance delta constant instead, anchored to a fixed reference separation rather
+than the catalog's median, so adding a theme cannot re-weight the existing ones.
+
+It never scales *down*. A theme already better separated than the reference shows its borders
+clearly, and dimming it to hit the target exactly would make what looks right look worse to
+fix what does not. That floor is the whole residual spread, not the 1.8 cap, which no bundled
+theme reaches. One test walks all sixty-five themes, which is what makes any of this
+checkable without inspecting them by hand.
+
+**A role color used as a fill goes through `chrome.fill(chrome.accent, alpha:)`**, not
+`accent.withAlphaComponent`. `fillScale` has to reach every fill inside one control or their
+weights stop being comparable: a foreground hover scaled to 0.20 on a narrow-separation theme
+out-weighed a fixed accent active fill at 0.14, so "recording your chord" read fainter than
+the pointer merely being over it.
+
+**Text is deliberately not normalized.** At `normal` the ink is the theme author's own
+foreground, chosen to be legible on their own background. Normalizing it collapses all three
+levels into one color on a narrow-separation theme and buys no contrast, because `normal` pins
+the top at 1.0 and the theme's own foreground-to-background distance is the real ceiling.
+
 **A program can move one color, and only inside its own pane.** OSC 11 (and OSC 4/10/12) is
 applied by libghostty *below* the seam. It writes the color into `terminal.colors` and its
 renderer draws from there, so the grid follows a program whether the chrome reacts or not,

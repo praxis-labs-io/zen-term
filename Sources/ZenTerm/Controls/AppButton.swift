@@ -158,22 +158,22 @@ final class AppButton: NSButton {
         switch variant {
         case .primary:
             textColor = isEnabled ? chrome.accent.nsColor : chrome.ink(.muted)
-            background = isHovered && isEnabled ? chrome.ink(alpha: 0.16) : chrome.ink(alpha: 0.09)
+            background = isHovered && isEnabled ? chrome.fill(alpha: 0.16) : chrome.fill(alpha: 0.09)
         case .secondary:
             textColor = chrome.muted.nsColor
-            background = isHovered ? chrome.ink(alpha: 0.09) : .clear
+            background = isHovered ? chrome.fill(alpha: 0.09) : .clear
         case .muted:
             textColor = chrome.muted.nsColor
-            background = isHovered ? chrome.ink(alpha: 0.14) : chrome.ink(alpha: 0.09)
+            background = isHovered ? chrome.fill(alpha: 0.14) : chrome.fill(alpha: 0.09)
         case .destructive:
             textColor = chrome.destructive.nsColor
-            background = isHovered ? chrome.ink(alpha: 0.12) : chrome.ink(alpha: 0.07)
+            background = isHovered ? chrome.fill(alpha: 0.12) : chrome.fill(alpha: 0.07)
         case .segment:
             textColor = isOn ? chrome.accent.nsColor : chrome.muted.nsColor
             background =
                 isOn
-                ? chrome.accent.nsColor.withAlphaComponent(0.18)  // match the command palette selection tint
-                : (isHovered ? chrome.ink(alpha: 0.09) : chrome.ink(alpha: 0.05))
+                ? chrome.fill(chrome.accent, alpha: 0.18)  // match the command palette selection tint
+                : (isHovered ? chrome.fill(alpha: 0.09) : chrome.fill(alpha: 0.05))
         case .link:
             textColor =
                 isFocusedStop

@@ -140,8 +140,16 @@ bring-your-own theme and washes out on light themes. Everything resolves from
 
 - **Terminal surfaces:** build `TerminalSurfaceConfig(theme: Theme.current.terminal)`.
 - **Chrome UI:** use `Theme.current.chrome` roles (`background`, `foreground`,
-  `info`, `warning`, `destructive`, `accent`, `attention`, `muted`) and
-  `chrome.ink(alpha:)` for foreground-toned inks, hairlines, and hover fills.
+  `info`, `warning`, `destructive`, `accent`, `attention`, `muted`).
+- **Text and icons take `chrome.ink(.muted / .subtle / .normal)`, never an alpha.**
+  Three weights, no fourth: `muted` recedes (captions, hints, counts), `subtle` is a
+  control at rest (a toolbar icon, an inactive tab), `normal` is active or hovered.
+  A site that wants a weight between two of these is the signal that the surface has
+  too many tiers, not that the scale is short.
+- **Fills take `chrome.fill(alpha:)`**, an order of magnitude fainter: hover washes,
+  hairlines, dividers, borders. Pass a role colour as `chrome.fill(chrome.accent,
+  alpha:)` rather than applying alpha yourself, or that fill escapes the per-theme
+  `fillScale` and stops being comparable to the others in the same control.
 
 **Banned in the chrome:** `NSColor(white:…)`, `.white` / `.black`, raw hex, literal
 palette values, and AppKit system/semantic colors (`.secondaryLabelColor`,

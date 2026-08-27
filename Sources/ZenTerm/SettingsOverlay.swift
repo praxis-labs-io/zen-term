@@ -121,7 +121,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
     func reapplyTheme() {
         CardChrome.reapplyTheme(to: card)
         heading.textColor = Theme.current.chrome.ink(.muted)
-        divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        divider.layer?.backgroundColor = Theme.current.chrome.fill(alpha: 0.08).cgColor
         brandMark.contentTintColor = Theme.current.chrome.accent.nsColor
         versionLabel.textColor = Theme.current.chrome.ink(.muted)
         reportButton.reapplyTheme()
@@ -169,7 +169,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
         detailContainer.translatesAutoresizingMaskIntoConstraints = false
 
         divider.wantsLayer = true
-        divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        divider.layer?.backgroundColor = Theme.current.chrome.fill(alpha: 0.08).cgColor
         divider.translatesAutoresizingMaskIntoConstraints = false
 
         let footer = makeNavFooter()
