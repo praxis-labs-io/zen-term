@@ -1,3 +1,4 @@
+import CoreGraphics
 import TerminalKit
 
 /// Maps a `TerminalTheme` to `ChromeTheme` roles. The accent slots are the exact ANSI
@@ -22,7 +23,29 @@ enum ChromeThemeDeriver {
             accent: (accent ?? .themeDefault).color(in: terminal),
             attention: slot(6),
             muted: blend(terminal.foreground, terminal.background, 0.55),
-            positive: slot(2))
+            positive: slot(2),
+            fillScale: fillScale(for: terminal))
+    }
+
+    /// The separation a fill's declared alpha was tuned against. **A fixed anchor, not the
+    /// catalog's live median**: deriving it would re-weight every existing theme each time one is
+    /// added.
+    private static let referenceSeparation: CGFloat = 0.714
+
+    /// Lift this theme's fills so a hairline lands the same visible distance from the background as
+    /// it does at `referenceSeparation`. Never scales down, and caps at 1.8; see
+    /// `docs/architecture.md` for why both.
+    static func fillScale(for terminal: TerminalTheme) -> CGFloat {
+        let separation = abs(perceivedLuminance(terminal.foreground) - perceivedLuminance(terminal.background))
+        guard separation > 0.01 else { return 1.8 }
+        return min(1.8, max(1, referenceSeparation / separation))
+    }
+
+    /// The W3C perceived-luminance formula `TerminalColor.isDark` uses, so light/dark decisions and
+    /// fill weighting read the same colors the same way.
+    private static func perceivedLuminance(_ color: TerminalColor) -> CGFloat {
+        0.299 * CGFloat(color.red) / 255 + 0.587 * CGFloat(color.green) / 255
+            + 0.114 * CGFloat(color.blue) / 255
     }
 
     /// Fill in whatever a theme leaves unsaid about the two things drawn *over* its text: a

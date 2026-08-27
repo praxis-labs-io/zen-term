@@ -39,9 +39,9 @@ final class TabBarView: NSView {
     /// The last ~28pt at each edge over which overflowing tabs dissolve into the backdrop.
     private static let fadeWidth: CGFloat = 28
 
-    fileprivate static var activeInk: NSColor { Theme.current.chrome.ink(alpha: 1) }
+    fileprivate static var activeInk: NSColor { Theme.current.chrome.ink(.normal) }
     fileprivate static var idleInk: NSColor {
-        Theme.current.chrome.ink(alpha: ChromeTheme.restingControlAlpha)
+        Theme.current.chrome.ink(.subtle)
     }
     /// Test hooks: the inks the bar really paints, so a test cannot restate the numbers and pass
     /// against its own copy of them.
@@ -513,7 +513,7 @@ final class TabBarView: NSView {
             guard let layer else { return }
             Motion.ease(
                 layer, keyPath: "backgroundColor",
-                to: (isHovered ? Theme.current.chrome.ink(alpha: 0.08) : .clear).cgColor)
+                to: (isHovered ? Theme.current.chrome.fill(alpha: 0.08) : .clear).cgColor)
         }
     }
 }

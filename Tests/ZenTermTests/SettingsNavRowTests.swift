@@ -24,7 +24,7 @@ final class SettingsNavRowTests: WindowTestCase {
         let (row, window) = mountedRow()
 
         row.setSelected(true)
-        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.ink(alpha: 0.06).cgColor)
+        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(alpha: 0.06).cgColor)
 
         window.makeFirstResponder(row)
         // A focused row shows the palette focus fill even when it's the selected section.

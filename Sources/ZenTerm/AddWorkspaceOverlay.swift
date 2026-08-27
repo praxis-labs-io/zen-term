@@ -167,7 +167,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
         header.textColor = chrome.foreground.nsColor
-        layoutCaption.textColor = chrome.ink(alpha: 0.45)
+        layoutCaption.textColor = chrome.ink(.muted)
         envError.textColor = chrome.destructive.nsColor
 
         let controls: [ThemeReapplying] = [
@@ -214,7 +214,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         wireSegment(layoutSegment)
         wireSegment(focusSegment)
         layoutCaption.font = .systemFont(ofSize: 11)
-        layoutCaption.textColor = Theme.current.chrome.ink(alpha: 0.45)
+        layoutCaption.textColor = Theme.current.chrome.ink(.muted)
         let layoutGroup = Self.vStack(
             [caption("LAYOUT", required: false), layoutSegment, layoutCaption], spacing: 6)
 
@@ -667,7 +667,7 @@ final class EnvRow: NSView {
         valueBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         equals.font = .systemFont(ofSize: 13)
-        equals.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        equals.textColor = Theme.current.chrome.ink(.muted)
         equals.setContentHuggingPriority(.required, for: .horizontal)
 
         removeButton.setContentHuggingPriority(.required, for: .horizontal)
@@ -697,6 +697,6 @@ final class EnvRow: NSView {
         keyBox.reapplyTheme()
         valueBox.reapplyTheme()
         removeButton.reapplyTheme()
-        equals.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        equals.textColor = Theme.current.chrome.ink(.muted)
     }
 }

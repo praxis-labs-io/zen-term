@@ -83,7 +83,7 @@ final class ScrollCursorView: NSView {
         let band = bounds.intersection(
             metrics.cellFrame(row: row, columns: Self.columns(0, metrics.columns - 1, metrics)))
         guard !band.isEmpty else { return }
-        Theme.current.chrome.ink(alpha: Self.bandAlpha).setFill()
+        Theme.current.chrome.fill(alpha: Self.bandAlpha).setFill()
         NSBezierPath(roundedRect: band, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius).fill()
     }
 

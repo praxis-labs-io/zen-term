@@ -102,7 +102,7 @@ final class ReapplyThemeTests: WindowTestCase {
     /// The system `placeholderString` draws in AppKit's own `placeholderTextColor`, which tracks
     /// the view's `effectiveAppearance` rather than `Theme.current` — near-white on a light theme
     /// under a dark appearance. `FieldBox` builds a `placeholderAttributedString` colored
-    /// from `chrome.ink(alpha: 0.4)` instead, so it must both match that role and actually change
+    /// from `chrome.ink(.muted)` instead, so it must both match that role and actually change
     /// on a live theme swap.
     func test_reapplyTheme_recolorsFieldBoxPlaceholder() throws {
         let field = FieldBox(placeholder: "0.82")
@@ -113,13 +113,13 @@ final class ReapplyThemeTests: WindowTestCase {
 
         let colorBefore = placeholderColor(field.field)
         XCTAssertNotNil(colorBefore)
-        XCTAssertEqual(colorBefore, Theme.current.chrome.ink(alpha: 0.4))
+        XCTAssertEqual(colorBefore, Theme.current.chrome.ink(.muted))
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         field.reapplyTheme()
 
         let colorAfter = placeholderColor(field.field)
-        XCTAssertEqual(colorAfter, Theme.current.chrome.ink(alpha: 0.4))
+        XCTAssertEqual(colorAfter, Theme.current.chrome.ink(.muted))
         XCTAssertNotEqual(colorBefore, colorAfter)
     }
 

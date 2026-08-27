@@ -83,12 +83,33 @@ final class ChromeThemeDeriverTests: XCTestCase {
             ChromeThemeDeriver.derive(from: short, accent: .brightWhite).accent, short.foreground)
     }
 
-    func test_inkIsThemeForegroundAtBoostedAlpha() {
+    func test_inkIsThemeForegroundAtTheBoostedLevelAlpha() {
         let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
-        let expected = min(1, 0.55 * ChromeTheme.inkBoost)
-        assertEqualRGBA(
-            chrome.ink(alpha: 0.55),
-            Theme.rosePineZen.foreground.nsColor.withAlphaComponent(expected))
+        for level in [ChromeTheme.InkLevel.muted, .subtle, .normal] {
+            assertEqualRGBA(
+                chrome.ink(level),
+                Theme.rosePineZen.foreground.nsColor
+                    .withAlphaComponent(min(1, level.alpha * ChromeTheme.inkBoost)))
+        }
+    }
+
+    /// The multiplier must not clamp a level that is not meant to be full opacity. At 1.3 four of the
+    /// old hand-tuned alphas collapsed into 1 and the ceiling was invisible to anyone tuning a value;
+    /// this fails the moment a raised boost pulls `subtle` up into `normal`.
+    func test_theBoost_clampsOnlyTheNormalLevel() {
+        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
+        XCTAssertLessThan(chrome.ink(.muted).alphaComponent, 1)
+        XCTAssertLessThan(chrome.ink(.subtle).alphaComponent, 1, "subtle has been boosted into normal")
+        XCTAssertEqual(chrome.ink(.normal).alphaComponent, 1, accuracy: 0.0001)
+    }
+
+    /// The scale has to stay ordered and distinct: three levels that collapse are one level, and a
+    /// swap inverts every hierarchy built on them.
+    func test_theThreeLevels_areOrderedAndDistinct() {
+        let alphas = [ChromeTheme.InkLevel.muted, .subtle, .normal].map(\.alpha)
+        XCTAssertEqual(alphas, alphas.sorted())
+        XCTAssertEqual(Set(alphas).count, 3)
+        XCTAssertEqual(ChromeTheme.InkLevel.normal.alpha, 1, "normal is full strength or it is not normal")
     }
 
     func test_aThemeSilentOnSelectedTextGetsItsOwnForeground() {
@@ -121,5 +142,74 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(lhsRGB.blueComponent, rhsRGB.blueComponent, accuracy: 0.001, file: file, line: line)
         XCTAssertEqual(
             lhsRGB.alphaComponent, rhsRGB.alphaComponent, accuracy: 0.001, file: file, line: line)
+    }
+
+    // MARK: - fill normalisation across the catalog
+
+    /// **This test is why nobody has to walk sixty-five themes.**
+    ///
+    /// A fill's declared alpha is constant, but what it *looks like* depends on how far a theme's
+    /// foreground sits from its background, and across the catalog that ranges from 0.40 to 0.94. So
+    /// the same 0.10 border was more than twice as faint in one theme as another. `fillScale`
+    /// normalises the achieved luminance delta instead; this asserts it landed, for every bundled
+    /// theme, which is a budget no glance can check even one theme at a time.
+    func test_everyBundledTheme_landsAHairlineAtTheSameVisibleDelta() throws {
+        func perceived(_ c: TerminalColor) -> CGFloat {
+            0.299 * CGFloat(c.red) / 255 + 0.587 * CGFloat(c.green) / 255 + 0.114 * CGFloat(c.blue) / 255
+        }
+        var deltas: [(String, CGFloat)] = []
+        for entry in ThemeCatalog.bundled {
+            let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: entry.token))
+            let terminal = GhosttyThemeParser.parse(
+                try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
+                fallback: Theme.rosePineZen)
+            let chrome = ChromeThemeDeriver.derive(from: terminal)
+            let alpha = chrome.fill(alpha: 0.10).alphaComponent
+            let background = perceived(terminal.background)
+            let painted = perceived(terminal.foreground) * alpha + background * (1 - alpha)
+            deltas.append((entry.token, abs(painted - background)))
+        }
+        // Asserted per theme against the target, not theme against theme. A ratio bound tightens as
+        // the catalog grows: well-separated themes are deliberately never scaled down, so adding a
+        // high-contrast theme pushes the spread up and fails a test that has nothing to do with the
+        // addition. Each theme reaching the floor is stable however many arrive.
+        let target = 0.10 * ChromeTheme.inkBoost * 0.714  // reference separation
+        for (token, delta) in deltas {
+            XCTAssertGreaterThan(
+                delta, target * 0.92,
+                "\(token) paints a hairline at \(delta), under the \(target) every theme should reach")
+        }
+        XCTAssertEqual(deltas.count, ThemeCatalog.bundled.count)
+    }
+
+    /// A theme whose foreground and background are well separated must be left exactly as it was, or
+    /// normalising becomes a global brightening wearing a per-theme disguise.
+    func test_aWellSeparatedTheme_isNotScaled() {
+        XCTAssertEqual(ChromeThemeDeriver.fillScale(for: Theme.rosePineZen), 1, accuracy: 0.0001)
+    }
+
+    /// And the cap holds, so a theme with almost no separation cannot demand an opaque border.
+    func test_theScale_isCapped() {
+        var flat = Theme.rosePineZen
+        flat.foreground = flat.background
+        XCTAssertEqual(ChromeThemeDeriver.fillScale(for: flat), 1.8, accuracy: 0.0001)
+    }
+
+    /// A role colour used as a fill has to go through `fill(_:alpha:)` so `fillScale` reaches it.
+    /// A fixed accent fill beside a scaled foreground hover inverts on a narrow-separation theme:
+    /// the active state reads fainter than the pointer merely being over the control.
+    func test_aRoleTintedFill_isScaledLikeAForegroundOne() {
+        var narrow = Theme.rosePineZen
+        narrow.foreground = TerminalColor(red: 0x70, green: 0x70, blue: 0x70)  // close to its background
+        let chrome = ChromeThemeDeriver.derive(from: narrow)
+        XCTAssertGreaterThan(ChromeThemeDeriver.fillScale(for: narrow), 1, "precondition: it scales")
+
+        let hover = chrome.fill(alpha: 0.10).alphaComponent
+        let active = chrome.fill(chrome.accent, alpha: 0.14).alphaComponent
+        let unscaledActive = chrome.accent.nsColor.withAlphaComponent(0.14).alphaComponent
+
+        XCTAssertGreaterThan(active, hover, "the active state must out-weigh hover")
+        XCTAssertGreaterThan(unscaledActive, 0)
+        XCTAssertLessThan(unscaledActive, hover, "and unscaled it would not, which is the bug")
     }
 }

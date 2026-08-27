@@ -262,7 +262,7 @@ private final class PanelHeader: NSView {
             string: title.uppercased(),
             attributes: [
                 .font: Self.font,
-                .foregroundColor: Theme.current.chrome.ink(alpha: 0.4),
+                .foregroundColor: Theme.current.chrome.ink(.muted),
                 .kern: 1.2,
             ])
     }

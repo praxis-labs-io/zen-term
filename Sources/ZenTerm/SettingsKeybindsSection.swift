@@ -205,7 +205,7 @@ final class SettingsKeybindsSection: SettingsSection {
     /// open Settings card observes. Recolors every group caption, every row (title/message/chip
     /// glyphs), and the persistent Reset-all button + its flash message.
     func reapplyTheme() {
-        groupCaptions.forEach { $0.textColor = Theme.current.chrome.ink(alpha: 0.4) }
+        groupCaptions.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
         rows.forEach { $0.reapplyTheme() }
         resetAllButton.reapplyTheme()
         resetAllMessage.reapplyTheme()

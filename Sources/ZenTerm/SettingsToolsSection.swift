@@ -52,9 +52,9 @@ final class SettingsToolsSection: SettingsSection {
     func detailStops() -> [NSView] { rows + [addButton] }
 
     func reapplyTheme() {
-        caption?.textColor = Theme.current.chrome.ink(alpha: 0.4)
-        emptyHint?.textColor = Theme.current.chrome.ink(alpha: 0.5)
-        reorderHint?.textColor = Theme.current.chrome.ink(alpha: 0.35)
+        caption?.textColor = Theme.current.chrome.ink(.muted)
+        emptyHint?.textColor = Theme.current.chrome.ink(.muted)
+        reorderHint?.textColor = Theme.current.chrome.ink(.muted)
         droppedFloatNotice?.textColor = Theme.current.chrome.warning.nsColor
         rows.forEach { $0.reapplyTheme() }
         addButton.reapplyTheme()
@@ -122,7 +122,7 @@ final class SettingsToolsSection: SettingsSection {
             let hint = NSTextField(
                 labelWithString: "No tool floats yet. Add one to get a toolbar button and a shortcut.")
             hint.font = .systemFont(ofSize: 12)
-            hint.textColor = Theme.current.chrome.ink(alpha: 0.5)
+            hint.textColor = Theme.current.chrome.ink(.muted)
             hint.lineBreakMode = .byWordWrapping
             hint.maximumNumberOfLines = 0
             emptyHint = hint
@@ -244,13 +244,13 @@ final class ToolFloatRow: NSView {
         layer?.cornerRadius = 8
 
         iconView.image = IconCatalog.image(float.icon)
-        iconView.contentTintColor = Theme.current.chrome.ink(alpha: 0.75)
+        iconView.contentTintColor = Theme.current.chrome.ink(.subtle)
         iconView.setContentHuggingPriority(.required, for: .horizontal)
 
         titleLabel.font = .systemFont(ofSize: 13)
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         subtitleLabel.font = .systemFont(ofSize: 11)
-        subtitleLabel.textColor = Theme.current.chrome.ink(alpha: 0.5)
+        subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         subtitleLabel.lineBreakMode = .byTruncatingTail
         let labels = NSStackView(views: [titleLabel, subtitleLabel])
         labels.orientation = .vertical
@@ -293,16 +293,16 @@ final class ToolFloatRow: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func reapplyTheme() {
-        iconView.contentTintColor = Theme.current.chrome.ink(alpha: 0.75)
+        iconView.contentTintColor = Theme.current.chrome.ink(.subtle)
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
-        subtitleLabel.textColor = Theme.current.chrome.ink(alpha: 0.5)
+        subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         messageLabel.textColor = Theme.current.chrome.warning.nsColor
         (shortcutView as? KeycapView)?.reapplyTheme()
         (shortcutView as? NSTextField)?.textColor = Self.unsetInk
         restyle()
     }
 
-    private static var unsetInk: NSColor { Theme.current.chrome.ink(alpha: 0.4) }
+    private static var unsetInk: NSColor { Theme.current.chrome.ink(.muted) }
 
     private static func unsetLabel() -> NSTextField {
         let label = NSTextField(labelWithString: "Not set")
@@ -368,7 +368,7 @@ final class ToolFloatRow: NSView {
 
     private func restyle() {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = isFocused ? chrome.ink(alpha: 0.10).cgColor : nil
+        layer?.backgroundColor = isFocused ? chrome.fill(alpha: 0.10).cgColor : nil
         layer?.borderWidth = isFocused ? 1.5 : 0
         layer?.borderColor = isFocused ? chrome.accent.nsColor.cgColor : nil
     }

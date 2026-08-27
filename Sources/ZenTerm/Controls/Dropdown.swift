@@ -115,7 +115,7 @@ final class Dropdown: NSView {
         layer?.cornerRadius = 6
         PopoverButtonStyle.applyRestFill(to: self)
         layer?.borderWidth = 1
-        layer?.borderColor = Theme.current.chrome.ink(alpha: 0.10).cgColor
+        layer?.borderColor = Theme.current.chrome.fill(alpha: 0.10).cgColor
 
         // The button becomes the search input while the list is open: a combo box, so the thing you
         // clicked is the thing you type into. Borderless and laid over the title, matching
@@ -136,13 +136,13 @@ final class Dropdown: NSView {
 
         chevron.image = NSImage(systemSymbolName: "chevron.up.chevron.down", accessibilityDescription: nil)
         chevron.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
-        chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
+        chevron.contentTintColor = Theme.current.chrome.ink(.muted)
         chevron.translatesAutoresizingMaskIntoConstraints = false
 
         swatch.wantsLayer = true
         swatch.layer?.cornerRadius = Self.swatchSize / 2
         swatch.layer?.borderWidth = 1
-        swatch.layer?.borderColor = Theme.current.chrome.ink(alpha: 0.15).cgColor
+        swatch.layer?.borderColor = Theme.current.chrome.fill(alpha: 0.15).cgColor
         swatch.isHidden = true
         swatch.translatesAutoresizingMaskIntoConstraints = false
 
@@ -220,8 +220,8 @@ final class Dropdown: NSView {
     func reapplyTheme() {
         restyle()
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
-        chevron.contentTintColor = Theme.current.chrome.ink(alpha: 0.5)
-        swatch.layer?.borderColor = Theme.current.chrome.ink(alpha: 0.15).cgColor
+        chevron.contentTintColor = Theme.current.chrome.ink(.muted)
+        swatch.layer?.borderColor = Theme.current.chrome.fill(alpha: 0.15).cgColor
         // The field outlives a theme change while the list is open, so its text and placeholder go
         // stale in the old theme's foreground otherwise.
         queryField.textColor = Theme.current.chrome.foreground.nsColor
@@ -417,7 +417,7 @@ final class Dropdown: NSView {
         queryField.placeholderAttributedString = NSAttributedString(
             string: title,
             attributes: [
-                .foregroundColor: Theme.current.chrome.ink(alpha: 0.45),
+                .foregroundColor: Theme.current.chrome.ink(.muted),
                 .font: NSFont.systemFont(ofSize: 13),
             ])
     }
@@ -528,7 +528,7 @@ final class Dropdown: NSView {
     private static func groupHeaderView(_ text: String, chrome: ChromeTheme) -> NSView {
         let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: 10, weight: .semibold)
-        label.textColor = chrome.ink(alpha: 0.4)
+        label.textColor = chrome.ink(.muted)
         label.translatesAutoresizingMaskIntoConstraints = false
         let host = NSView()
         host.translatesAutoresizingMaskIntoConstraints = false
@@ -570,7 +570,7 @@ private final class DropdownRowView: NSView {
             dot.layer?.backgroundColor = swatchColor.cgColor
             // A dark theme's black slot would vanish against the list card, so ring every dot.
             dot.layer?.borderWidth = 1
-            dot.layer?.borderColor = chrome.ink(alpha: 0.15).cgColor
+            dot.layer?.borderColor = chrome.fill(alpha: 0.15).cgColor
             dot.translatesAutoresizingMaskIntoConstraints = false
             addSubview(dot)
             NSLayoutConstraint.activate([
@@ -588,7 +588,7 @@ private final class DropdownRowView: NSView {
         if let note = item.note {
             let noteLabel = NSTextField(labelWithString: note)
             noteLabel.font = .systemFont(ofSize: 11)
-            noteLabel.textColor = chrome.ink(alpha: 0.4)
+            noteLabel.textColor = chrome.ink(.muted)
             trailing.append(noteLabel)
         }
         if item.isSelected {
@@ -619,7 +619,7 @@ private final class DropdownRowView: NSView {
     override func mouseDown(with event: NSEvent) { onSelect(index) }
 
     func setHighlighted(_ isHighlighted: Bool, chrome: ChromeTheme) {
-        layer?.backgroundColor = (isHighlighted ? chrome.ink(alpha: 0.10) : NSColor.clear).cgColor
+        layer?.backgroundColor = (isHighlighted ? chrome.fill(alpha: 0.10) : NSColor.clear).cgColor
     }
 }
 

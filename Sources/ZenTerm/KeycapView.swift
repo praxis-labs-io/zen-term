@@ -24,7 +24,11 @@ final class KeycapView: NSView {
         "⇞": "chevron.up.2", "⇟": "chevron.down.2",
         "⇥": "arrow.right.to.line",
     ]
-    private static var ink: NSColor { Theme.current.chrome.ink(alpha: 0.55) }
+    /// A chord is read, not skimmed. `.subtle` rather than `.muted`: a keycap sits beside a command
+    /// name and tells you what to press, so it belongs with the controls at rest rather than with the
+    /// captions and counts. It carried the muted weight through the three-level migration only
+    /// because its old raw alpha happened to sit in that band.
+    private static var ink: NSColor { Theme.current.chrome.ink(.subtle) }
 
     /// The chord this keycap draws. Baked at construction (every token colors itself then), so a
     /// host whose glyph can change re-reads this and rebuilds rather than mutating in place.
@@ -49,7 +53,7 @@ final class KeycapView: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = Self.cornerRadius
-        if showsBackground { layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor }
+        if showsBackground { layer?.backgroundColor = Theme.current.chrome.fill(alpha: 0.08).cgColor }
         translatesAutoresizingMaskIntoConstraints = false
 
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -79,7 +83,7 @@ final class KeycapView: NSView {
     /// `Theme.current` rather than mutate in place — the same pattern `KeybindRow.reapplyTheme()`
     /// already uses for its nested `KeycapView` (re-render, don't patch).
     func reapplyTheme() {
-        if showsBackground { layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor }
+        if showsBackground { layer?.backgroundColor = Theme.current.chrome.fill(alpha: 0.08).cgColor }
         tokenStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         Self.tokens(for: shortcut).forEach { tokenStack.addArrangedSubview($0) }
         invalidateIntrinsicContentSize()  // the token run changed, so the reported width may have too

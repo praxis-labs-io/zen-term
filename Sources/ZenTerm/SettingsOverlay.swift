@@ -120,10 +120,10 @@ final class SettingsOverlay: NSView, ModalOverlay {
     /// its persistent Reset-all button/flash must be right for when it's next shown.
     func reapplyTheme() {
         CardChrome.reapplyTheme(to: card)
-        heading.textColor = Theme.current.chrome.ink(alpha: 0.4)
-        divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        heading.textColor = Theme.current.chrome.ink(.muted)
+        divider.layer?.backgroundColor = Theme.current.chrome.fill(alpha: 0.08).cgColor
         brandMark.contentTintColor = Theme.current.chrome.accent.nsColor
-        versionLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        versionLabel.textColor = Theme.current.chrome.ink(.muted)
         reportButton.reapplyTheme()
         navRows.forEach { $0.reapplyTheme() }
         sections.forEach { $0.reapplyTheme() }
@@ -140,7 +140,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
         // Top-level "SETTINGS" heading, styled like the detail pane's section captions. Wrapped so
         // its text is inset the same 10pt as the nav rows' labels, keeping them left-aligned.
         heading.font = .systemFont(ofSize: 10, weight: .semibold)
-        heading.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        heading.textColor = Theme.current.chrome.ink(.muted)
         heading.translatesAutoresizingMaskIntoConstraints = false
         let headingRow = NSView()
         headingRow.translatesAutoresizingMaskIntoConstraints = false
@@ -169,7 +169,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
         detailContainer.translatesAutoresizingMaskIntoConstraints = false
 
         divider.wantsLayer = true
-        divider.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.08).cgColor
+        divider.layer?.backgroundColor = Theme.current.chrome.fill(alpha: 0.08).cgColor
         divider.translatesAutoresizingMaskIntoConstraints = false
 
         let footer = makeNavFooter()
@@ -269,7 +269,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
         versionLabel.stringValue = Self.versionText
         versionLabel.font = Self.versionFont
-        versionLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        versionLabel.textColor = Theme.current.chrome.ink(.muted)
         versionLabel.lineBreakMode = .byTruncatingTail
 
         let stack = NSStackView(views: [brandMark, versionLabel])

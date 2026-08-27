@@ -70,4 +70,18 @@ final class KeycapViewTests: XCTestCase {
         XCTAssertEqual(glyphs(in: second)[0].contentTintColor, secondTint)
         XCTAssertNotNil(glyphs(in: first)[0].image, "the rebuilt token still resolves its glyph")
     }
+
+    /// A keycap tells you what to press, so it reads as a control at rest rather than as a caption.
+    /// It carried the muted weight through the three-level migration only because its old raw alpha
+    /// landed in that band, and on the narrowest-separation theme in the catalog that made the chord
+    /// genuinely hard to read.
+    func test_theGlyphReadsAsAControl_notACaption() {
+        let keycap = KeycapView(shortcut: "⌘")
+        let tint = glyphs(in: keycap)[0].contentTintColor?.usingColorSpace(.sRGB)
+
+        XCTAssertEqual(tint?.alphaComponent, Theme.current.chrome.ink(.subtle).alphaComponent)
+        XCTAssertGreaterThan(
+            tint?.alphaComponent ?? 0, Theme.current.chrome.ink(.muted).alphaComponent,
+            "a chord is read, not skimmed")
+    }
 }

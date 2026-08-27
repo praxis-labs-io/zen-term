@@ -85,7 +85,7 @@ final class LayoutRow: NSView {
         guard let note else { return (primary, nil) }
         let noteLabel = NSTextField(labelWithString: note)
         noteLabel.font = .systemFont(ofSize: 10)
-        noteLabel.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        noteLabel.textColor = Theme.current.chrome.ink(.muted)
         let stack = NSStackView(views: [primary, noteLabel])
         stack.orientation = .vertical
         stack.spacing = 2
@@ -117,12 +117,12 @@ final class LayoutRow: NSView {
     }
 
     /// Re-apply the live chrome colors after a config change — no relaunch. Matches the exact
-    /// roles set at construction: caption foreground, both note labels at `ink(0.4)`, message tone
+    /// roles set at construction: caption foreground, both note labels at `ink(.muted)`, message tone
     /// by its current kind.
     func reapplyTheme() {
         captionLabel.textColor = Theme.current.chrome.foreground.nsColor
-        descriptionLabel?.textColor = Theme.current.chrome.ink(alpha: 0.4)
-        controlNoteLabel?.textColor = Theme.current.chrome.ink(alpha: 0.4)
+        descriptionLabel?.textColor = Theme.current.chrome.ink(.muted)
+        controlNoteLabel?.textColor = Theme.current.chrome.ink(.muted)
         messageLabel.textColor = LayoutRow.ink(for: messageKind)
     }
 }

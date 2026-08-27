@@ -94,7 +94,7 @@ final class KeybindRow: NSView {
     private static func ink(for kind: MessageKind?) -> NSColor {
         switch kind {
         case .diagnostic, .notice: return Theme.current.chrome.warning.nsColor
-        case .explanation: return Theme.current.chrome.ink(alpha: 0.45)
+        case .explanation: return Theme.current.chrome.ink(.muted)
         case .failure, nil: return Theme.current.chrome.destructive.nsColor
         }
     }

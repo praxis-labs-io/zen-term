@@ -29,7 +29,7 @@ final class FieldCaption: NSTextField, ThemeReapplying {
             string: text.uppercased(),
             attributes: [
                 .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
-                .foregroundColor: Theme.current.chrome.ink(alpha: 0.4),
+                .foregroundColor: Theme.current.chrome.ink(.muted),
                 .kern: 0.6,
             ])
         if isRequired {

@@ -68,7 +68,7 @@ final class KeybindHintBubble: ShadowCardView {
         let previewBox = NSView()
         previewBox.wantsLayer = true
         previewBox.layer?.cornerRadius = 6
-        previewBox.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.06).cgColor
+        previewBox.layer?.backgroundColor = Theme.current.chrome.fill(alpha: 0.06).cgColor
         // The accent ring says the input is listening, the same signal a focused chip carries.
         previewBox.layer?.borderWidth = 1.5
         previewBox.layer?.borderColor = Theme.current.chrome.accent.nsColor.cgColor
@@ -155,7 +155,7 @@ final class KeybindHintBubble: ShadowCardView {
         if glyph.isEmpty {
             let label = NSTextField(labelWithString: "Press keys…")
             label.font = .systemFont(ofSize: 12)
-            label.textColor = Theme.current.chrome.ink(alpha: 0.4)
+            label.textColor = Theme.current.chrome.ink(.muted)
             content = label
         } else {
             content = KeycapView(shortcut: glyph, showsBackground: false)
@@ -238,12 +238,12 @@ final class KeybindHintBubble: ShadowCardView {
     private static func keyCap(_ text: String) -> NSView {
         let label = NSTextField(labelWithString: text)
         label.font = .monospacedSystemFont(ofSize: 10, weight: .medium)
-        label.textColor = Theme.current.chrome.ink(alpha: 0.7)
+        label.textColor = Theme.current.chrome.ink(.subtle)
         label.translatesAutoresizingMaskIntoConstraints = false
         let box = NSView()
         box.wantsLayer = true
         box.layer?.cornerRadius = 4
-        box.layer?.backgroundColor = Theme.current.chrome.ink(alpha: 0.10).cgColor
+        box.layer?.backgroundColor = Theme.current.chrome.fill(alpha: 0.10).cgColor
         box.translatesAutoresizingMaskIntoConstraints = false
         box.addSubview(label)
         NSLayoutConstraint.activate([
@@ -258,7 +258,7 @@ final class KeybindHintBubble: ShadowCardView {
     private static func muted(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: 11)
-        label.textColor = Theme.current.chrome.ink(alpha: 0.5)
+        label.textColor = Theme.current.chrome.ink(.muted)
         return label
     }
 }

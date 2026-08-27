@@ -17,25 +17,51 @@ struct ChromeTheme: Equatable {
     let muted: TerminalColor
     /// Green "added / success" role. Named for meaning, not hue, like the other roles.
     let positive: TerminalColor
-    /// Readability multiplier applied to every ink opacity. The chrome's per-site opacities
-    /// were tuned for light-on-dark; a dark ink at the same opacity on a light theme reads
-    /// fainter, so we lift them all. Applied in both modes (a small lift helps dark's faint
-    /// secondary text too). Tune here — it's the single knob for chrome ink contrast.
-    static let inkBoost: CGFloat = 1.3
-
-    /// Ink opacity for a **control at rest**: a toolbar icon, an inactive tab's title. Distinct from
-    /// the `ink(alpha: 0.5)` used for hints, subtitles and counts, which are meant to recede. Both
-    /// of these sat at that weight, so the things you click read as the things you skim.
+    /// Multiplier on every fill so a hairline is equally visible in any theme. A theme's foreground
+    /// to background separation runs 0.40 to 0.94 across the catalog, so a constant alpha was not a
+    /// constant border. Derived per theme in `ChromeThemeDeriver`; see `docs/architecture.md`.
+    let fillScale: CGFloat
+    /// Readability multiplier on every level. Dark ink on a light theme reads fainter at equal
+    /// opacity, and this lifts both rather than only the case that needs it.
     ///
-    /// Kept below the hover and active weights: `inkBoost` clamps anything past ~0.77 to full
-    /// opacity, so raising this collapses rest into hover and removes the cue.
-    static let restingControlAlpha: CGFloat = 0.65
+    /// **Check `1 / boost` before raising it**: a level above that threshold clamps to full opacity.
+    /// See `docs/architecture.md`.
+    static let inkBoost: CGFloat = 1.15
 
-    /// A foreground-toned chrome ink at a given opacity — icon tints, text, hairlines, and
-    /// hover fills. Sourced from the theme's foreground so it adapts automatically (light on a
-    /// dark theme, dark on a light one), lifted by `inkBoost` for readability.
-    func ink(alpha: CGFloat) -> NSColor {
-        foreground.nsColor.withAlphaComponent(min(1, alpha * Self.inkBoost))
+    /// The three weights chrome text and icons are drawn at. **There is no fourth.**
+    ///
+    /// Every site asks for a level, never a number, so the scale is set once and a new site cannot
+    /// invent a weight between two of these. See `docs/architecture.md`.
+    enum InkLevel {
+        /// Recedes: captions, hints, subtitles, counts, placeholders, search glyphs.
+        case muted
+        /// A control at rest: a toolbar icon, an inactive tab, a chevron.
+        case subtle
+        /// Active, hovered, or primary.
+        case normal
+
+        var alpha: CGFloat {
+            switch self {
+            case .muted: return 0.5
+            case .subtle: return 0.7
+            case .normal: return 1
+            }
+        }
+    }
+
+    /// Foreground-toned ink at one of the three weights. Sourced from the theme's foreground, so it
+    /// adapts on its own: light on a dark theme, dark on a light one.
+    func ink(_ level: InkLevel) -> NSColor {
+        foreground.nsColor.withAlphaComponent(min(1, level.alpha * Self.inkBoost))
+    }
+
+    /// A **fill**: a hover wash, a hairline, a divider, a border, an active tint. Named apart from
+    /// `ink(_:)` so the fill path cannot colour text by accident.
+    ///
+    /// **Pass a role colour as `tint` rather than applying alpha to it yourself**, or that fill
+    /// escapes `fillScale` and stops being comparable to the others in the same control.
+    func fill(_ tint: TerminalColor? = nil, alpha: CGFloat) -> NSColor {
+        (tint ?? foreground).nsColor.withAlphaComponent(min(1, alpha * Self.inkBoost * fillScale))
     }
 
     /// `tint` composited over `base`, source-over. A chrome surface inside a pane paints its tint on

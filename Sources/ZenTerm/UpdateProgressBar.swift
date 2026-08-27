@@ -40,7 +40,7 @@ final class UpdateProgressBar: NSView {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = chrome.ink(alpha: 0.09).cgColor
+        layer?.backgroundColor = chrome.fill(alpha: 0.09).cgColor
         fill.backgroundColor = chrome.accent.nsColor.cgColor
     }
 
